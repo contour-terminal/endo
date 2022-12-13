@@ -1,9 +1,5 @@
-add_executable(contrair-shell
-    contrair.cpp
-    AST.h
-    Executor.h
-    Lexer.cpp Lexer.h
-    Parser.cpp Parser.h
-    Visitor.h
-)
-target_link_libraries(contrair PUBLIC vtparser)
+add_subdirectory(CoreVM)
+
+add_subdirectory(crispy)
+add_subdirectory(vtparser)
+add_subdirectory(shell)

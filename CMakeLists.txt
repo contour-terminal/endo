@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
-project(contrair VERSION "0.0.0" LANGUAGES CXX)
+project(crush VERSION "0.0.0" LANGUAGES CXX)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+include(CrushThirdParties)
+include(PedanticCompiler)
 
 # setting defaults
 if (NOT(CMAKE_CXX_STANDARD))
@@ -25,3 +30,4 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 add_subdirectory(src)
+CrushThirdPartiesSummary2()

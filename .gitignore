@@ -1,3 +1,7 @@
-compile_commands.json
-build/
 .cache/
+_deps/
+_ucd/
+build/
+target/
+
+compile_commands.json
