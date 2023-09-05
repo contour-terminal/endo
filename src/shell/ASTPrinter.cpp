@@ -61,6 +61,11 @@ void ASTPrinter::visit(BuiltinExitStmt const& node)
     }
 }
 
+void ASTPrinter::visit(BuiltinExportStmt const& node)
+{
+    _result += "export " + node.name;
+}
+
 void ASTPrinter::visit(BuiltinReadStmt const& node)
 {
     _result += "read";

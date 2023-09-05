@@ -113,6 +113,19 @@ struct BuiltinExitStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+struct BuiltinExportStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::string name;
+
+    BuiltinExportStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback, std::string name):
+        callback { callback }, name { std::move(name) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 struct BuiltinTrueStmt final: public Statement
 {
     void accept(Visitor& visitor) const override { visitor.visit(*this); }

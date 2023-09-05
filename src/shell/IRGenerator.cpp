@@ -84,6 +84,13 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
     _result = createCallFunction(getBuiltinFunction(node.callback.get()), { exitCode }, "exit");
 }
 
+void IRGenerator::visit(ast::BuiltinExportStmt const& node)
+{
+    auto callArguments = std::vector<CoreVM::Value*> {};
+    callArguments.push_back(get(node.name));
+    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "export");
+}
+
 void IRGenerator::visit(ast::BuiltinReadStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};

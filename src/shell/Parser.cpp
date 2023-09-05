@@ -119,6 +119,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
                 return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
             }
+            else if (_lexer.isDirective("export"))
+            {
+                _lexer.nextToken();
+                auto name = consumeLiteral();
+                return std::make_unique<ast::BuiltinExportStmt>(*_runtime.find("export(S)V"), name);
+            }
             else if (_lexer.isDirective("cd"))
             {
                 _lexer.nextToken();

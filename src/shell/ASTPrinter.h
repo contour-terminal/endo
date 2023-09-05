@@ -23,6 +23,7 @@ class ASTPrinter: public Visitor
 
     void visit(BuiltinChDirStmt const&) override;
     void visit(BuiltinExitStmt const&) override;
+    void visit(BuiltinExportStmt const&) override;
     void visit(BuiltinFalseStmt const&) override;
     void visit(BuiltinReadStmt const&) override;
     void visit(BuiltinTrueStmt const&) override;

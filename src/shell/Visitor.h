@@ -5,6 +5,7 @@ namespace crush::ast
 {
 
 struct BuiltinChDirStmt;
+struct BuiltinExportStmt;
 struct BuiltinFalseStmt;
 struct BuiltinExitStmt;
 struct BuiltinReadStmt;
@@ -40,6 +41,7 @@ struct Visitor
 
     // builtin statements
     virtual void visit(BuiltinExitStmt const&) = 0;
+    virtual void visit(BuiltinExportStmt const&) = 0;
     virtual void visit(BuiltinTrueStmt const&) = 0;
     virtual void visit(BuiltinFalseStmt const&) = 0;
     virtual void visit(BuiltinReadStmt const&) = 0;
