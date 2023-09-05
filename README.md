@@ -39,7 +39,8 @@ There is no timeline, as Contour Terminal still remains the top priority. Crush 
 - [ ] file descriptor redirects
 - [ ] job management
 - [x] builtin `read` function (basic version)
-- [ ] set variable and export to inheritable environment
+- [x] export variable to inheritable environment
+- [ ] set variable to local(/global) scope
 - [ ] variable substitution
 - [x] bash-like if-statement
 - [x] bash-like while-statement

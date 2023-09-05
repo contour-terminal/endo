@@ -151,6 +151,9 @@ Shell::Shell(TTY& tty, Environment& env): _env { env }, _tty { tty }
     _traceVM = _env.get("SHELL_VM_TRACE").value_or("0") != "0";
 
     registerBuiltinFunctions();
+
+    // for (CoreVM::NativeCallback const* callback: builtins())
+    //      fmt::print("builtin: {}\n", callback->signature().to_s());
 }
 
 void Shell::registerBuiltinFunctions()
