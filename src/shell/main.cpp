@@ -15,16 +15,11 @@ int main(int argc, char const* argv[])
 {
     auto shell = crush::Shell {};
 
+    setsid();
+
     if (argc == 2)
         // This here only exists for early-development debugging purposes.
         return shell.execute(argv[1]);
     else
         return shell.run();
-        // return shell.execute(R"(
-        //     if true; then
-        //         echo YES;
-        //     else
-        //         echo NO;
-        //     fi
-        // )");
 }

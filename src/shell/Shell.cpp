@@ -53,6 +53,33 @@ namespace
         argv.push_back(nullptr);
         return argv;
     }
+
+    std::string readLine(TTY& tty, std::string_view prompt)
+    {
+        // Most super-native implementation, yet to be replaced by a proper line editor.
+        tty.writeToStdout(fmt::format("{}", prompt));
+        std::string line;
+        while (true)
+        {
+            char ch {};
+            ssize_t const n = read(tty.inputFd(), &ch, 1);
+            if (n == 0)
+                break;
+            else if (n == -1)
+            {
+                if (errno == EINTR)
+                    continue;
+                else
+                    break;
+            }
+            else if (ch == '\n')
+                break;
+            else
+                line += ch;
+        }
+        return line;
+    }
+
 } // namespace
 
 // {{{ SystemEnvironment
@@ -106,13 +133,17 @@ void TestEnvironment::exportVariable(std::string_view name)
 }
 // }}}
 
-Shell::Shell(): Shell(std::cin, std::cout, std::cerr, SystemEnvironment::instance())
+Shell::Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance())
 {
 }
 
-Shell::Shell(std::istream& input, std::ostream& output, std::ostream& error, Environment& env):
-    _env { env }, _input { input }, _output { output }, _error { error }
+Shell::Shell(TTY& tty, Environment& env): _env { env }, _tty { tty }
 {
+    _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
+    _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
+
+    _env.setAndExport("SHELL", "crush");
+
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
     _optimize = _env.get("SHELL_IR_OPTIMIZE").value_or("0") != "0";
@@ -132,9 +163,14 @@ void Shell::registerBuiltinFunctions()
 
     registerFunction("export")
         .param<std::string>("name")
-        .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinExport, this);
+
+    registerFunction("export")
+        .param<std::string>("name")
+        .param<std::string>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&Shell::builtinSetAndExport, this);
 
     registerFunction("true")
         .returnType(CoreVM::LiteralType::Boolean)
@@ -159,6 +195,22 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCallProcess, this);
 
+    registerFunction("callproc")
+        .param<bool>("last_in_chain")
+        .param<std::vector<std::string>>("args")
+        //.param<std::vector<CoreVM::CoreNumber>>("redirects")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinCallProcessShellPiped, this);
+
+    registerFunction("read")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(&Shell::builtinReadDefault, this);
+
+    registerFunction("read")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(&Shell::builtinRead, this);
+
     // used to redirect file to stdin
     registerFunction("internal.open_read")
         .param<std::string>("path")
@@ -171,50 +223,7 @@ void Shell::registerBuiltinFunctions()
         .param<CoreVM::CoreNumber>("oflags")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinOpenWrite, this);
-
-    // used to remap a file descriptor to a specific number
-    registerFunction("internal.dup2")
-        .param<CoreVM::CoreNumber>("oldfd")
-        .param<CoreVM::CoreNumber>("newfd")
-        .bind(&Shell::builtinDup2, this);
-
-    // used to create a pipe for connecting commands in a process group (call chain)
-    registerFunction("internal.pipe")
-        .param<CoreVM::CoreNumber>("fd")
-        .returnType(CoreVM::LiteralType::IntPair)
-        .bind(&Shell::builtinPipe, this);
     // clang-format on
-}
-
-void Shell::builtinDup2(CoreVM::Params& context)
-{
-    int const oldfd = static_cast<int>(context.getInt(1));
-    int const newfd = static_cast<int>(context.getInt(2));
-    int const result = dup2(oldfd, newfd);
-
-    if (result == -1)
-    {
-        error("Failed to dup2({}, {}): {}", oldfd, newfd, strerror(errno));
-        context.setResult(CoreVM::CoreNumber(-1));
-        return;
-    }
-
-    context.setResult(CoreVM::CoreNumber(result));
-}
-
-void Shell::builtinPipe(CoreVM::Params& context)
-{
-    int fds[2];
-    int const result = pipe(fds);
-
-    if (result != 0)
-    {
-        error("Failed to create pipe: {}", strerror(errno));
-        context.setResult(CoreVM::CoreNumber(-1));
-        return;
-    }
-
-    // TODO: context.setResult(CoreVM::CoreIntPair(fds[0], fds[1]));
 }
 
 void Shell::builtinOpenRead(CoreVM::Params& context)
@@ -278,10 +287,15 @@ void Shell::builtinExit(CoreVM::Params& context)
     _quit = true;
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+void Shell::builtinSetAndExport(CoreVM::Params& context)
+{
+    _env.set(context.getString(1), context.getString(2));
+    _env.exportVariable(context.getString(1));
+}
+
 void Shell::builtinExport(CoreVM::Params& context)
 {
-    setenv(context.getString(1).data(), context.getString(2).data(), 1);
+    _env.exportVariable(context.getString(1));
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -294,6 +308,22 @@ void Shell::builtinTrue(CoreVM::Params& context)
 void Shell::builtinFalse(CoreVM::Params& context)
 {
     context.setResult(false);
+}
+
+void Shell::builtinReadDefault(CoreVM::Params& context)
+{
+    std::string const line = readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+    _env.set("REPLY", line);
+    context.setResult(line);
+}
+
+void Shell::builtinRead(CoreVM::Params& context)
+{
+    CoreVM::CoreStringArray const& args = context.getStringArray(1);
+    std::string const& variable = args.at(0);
+    std::string const line = readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+    _env.set(variable, line);
+    context.setResult(line);
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -320,13 +350,15 @@ std::optional<std::filesystem::path> Shell::resolveProgram(std::string const& pr
     return std::nullopt;
 }
 
-// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 void Shell::builtinCallProcess(CoreVM::Params& context)
 {
     CoreVM::CoreStringArray const& args = context.getStringArray(1);
     std::vector<char const*> const argv = constructArgv(args);
     std::string const& program = args.at(0);
     std::optional<std::filesystem::path> const programPath = resolveProgram(program);
+
+    int const stdinFd = _currentPipelineBuilder.defaultStdinFd;
+    int const stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
 
     if (!programPath.has_value())
     {
@@ -349,6 +381,10 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
             return;
         case 0: {
             // child process
+            if (stdinFd != STDIN_FILENO)
+                dup2(stdinFd, STDIN_FILENO);
+            if (stdoutFd != STDOUT_FILENO)
+                dup2(stdoutFd, STDOUT_FILENO);
             execvp(programPath->c_str(), const_cast<char* const*>(argv.data()));
             error("Failed to execve({}): {}", programPath->string(), strerror(errno));
             _exit(EXIT_FAILURE);
@@ -371,6 +407,78 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     context.setResult(CoreVM::CoreNumber(_exitCode));
 }
 
+void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
+{
+    bool const lastInChain = context.getBool(1);
+    CoreVM::CoreStringArray const& args = context.getStringArray(2);
+
+    std::vector<char const*> const argv = constructArgv(args);
+    std::string const& program = args.at(0);
+    std::optional<std::filesystem::path> const programPath = resolveProgram(program);
+
+    if (!programPath.has_value())
+    {
+        error("Failed to resolve program '{}'", program);
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+    // TODO: setup redirects
+    // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
+    // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
+    //     DEBUGF("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
+
+    pid_t const pid = fork();
+    switch (pid)
+    {
+        case -1:
+            error("Failed to fork(): {}", strerror(errno));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        case 0: {
+            // child process
+            setpgid(0, !_currentProcessGroupPids.empty() ? _currentProcessGroupPids.front() : 0);
+            if (stdinFd != STDIN_FILENO)
+                dup2(stdinFd, STDIN_FILENO);
+            if (stdoutFd != STDOUT_FILENO)
+                dup2(stdoutFd, STDOUT_FILENO);
+            execvp(programPath->c_str(), const_cast<char* const*>(argv.data()));
+            error("Failed to execve({}): {}", programPath->string(), strerror(errno));
+            _exit(EXIT_FAILURE);
+        }
+        default:
+            // parent process
+            _leftPid = _rightPid;
+            _rightPid = pid;
+            _currentProcessGroupPids.push_back(pid);
+            if (lastInChain)
+            {
+                // This is the last process in the chain, so we need to wait for all
+                for (pid_t const pid: _currentProcessGroupPids)
+                {
+                    int wstatus = 0;
+                    waitpid(pid, &wstatus, 0);
+                    if (WIFSIGNALED(wstatus))
+                        error("child process {}, exited with signal {}", pid, WTERMSIG(wstatus));
+                    else if (WIFEXITED(wstatus))
+                        error("child process {} exited with code {}", pid, _exitCode = WEXITSTATUS(wstatus));
+                    else if (WIFSTOPPED(wstatus))
+                        error("child process {} stopped with signal {}", pid, WSTOPSIG(wstatus));
+                    else
+                        error("child process {} exited with unknown status {}", pid, wstatus);
+                }
+                _currentProcessGroupPids.clear();
+                _leftPid = std::nullopt;
+                _rightPid = std::nullopt;
+            }
+            break;
+    }
+
+    context.setResult(CoreVM::CoreNumber(_exitCode));
+}
+
 int Shell::run()
 {
     while (!_quit && prompt.ready())
@@ -379,7 +487,7 @@ int Shell::run()
         DEBUGF("input buffer: {}", lineBuffer);
 
         _exitCode = execute(lineBuffer);
-        _error << fmt::format("exit code: {}\n", _exitCode);
+        // _tty.writeToStdout("exit code: {}\n", _exitCode);
     }
 
     return _quit ? _exitCode : EXIT_SUCCESS;
@@ -389,8 +497,8 @@ int Shell::run()
 void Shell::trace(CoreVM::Instruction instr, size_t ip, size_t sp)
 {
     if (_traceVM)
-        _error << fmt::format("trace: {}\n",
-                              CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
+        std::cerr << fmt::format("trace: {}\n",
+                                 CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
 }
 
 int Shell::execute(std::string const& lineBuffer) // NOLINT
@@ -431,6 +539,7 @@ int Shell::execute(std::string const& lineBuffer) // NOLINT
 
             pm.run(irProgram);
         }
+
         if (_debugIR)
         {
             DEBUG("================================================\n");

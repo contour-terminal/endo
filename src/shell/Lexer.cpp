@@ -123,6 +123,12 @@ Token Lexer::nextToken()
                 return consumeCharAndConfirmToken(Token::DollarDollar);
             else if (_currentChar == '!')
                 return consumeCharAndConfirmToken(Token::DollarNot);
+            else if (_currentChar == '?')
+                return consumeCharAndConfirmToken(Token::DollarQuestion);
+            else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+                return consumeIdentifier(Token::DollarName);
+            else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
+                return consumeCharAndConfirmToken(Token::DollarNumber);
             else
                 return confirmToken(Token::Invalid);
         case '0':
@@ -145,6 +151,11 @@ Token Lexer::nextToken()
 
 Token Lexer::consumeIdentifier()
 {
+    return consumeIdentifier(Token::Identifier);
+}
+
+Token Lexer::consumeIdentifier(Token token)
+{
     auto constexpr ReservedSymbols = U"|<>()[]{}!$'\"\t\r\n ;"sv;
 
     while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
@@ -154,7 +165,7 @@ Token Lexer::consumeIdentifier()
         // TRACE("consumeIdentifier: '{}'\n", (char) _currentChar);
     }
     TRACE("consumeIdentifier: result: '{}'\n", _nextToken.literal);
-    return confirmToken(Token::Identifier);
+    return confirmToken(token);
 }
 
 Token Lexer::consumeString()

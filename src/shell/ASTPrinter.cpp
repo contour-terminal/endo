@@ -61,6 +61,16 @@ void ASTPrinter::visit(BuiltinExitStmt const& node)
     }
 }
 
+void ASTPrinter::visit(BuiltinReadStmt const& node)
+{
+    _result += "read";
+    for (auto const& param: node.parameters)
+    {
+        _result += ' ';
+        param->accept(*this);
+    }
+}
+
 void ASTPrinter::visit(BuiltinTrueStmt const&)
 {
     _result += "true";
@@ -84,7 +94,12 @@ void ASTPrinter::visit(BuiltinChDirStmt const& node)
 
 void ASTPrinter::visit(CallPipeline const& node)
 {
-    crispy::ignore_unused(node);
+    for (size_t i = 0; i < node.calls.size(); ++i)
+    {
+        if (i > 0)
+            _result += " | ";
+        node.calls[i]->accept(*this);
+    }
 }
 
 void ASTPrinter::visit(CompoundStmt const& node)

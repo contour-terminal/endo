@@ -52,8 +52,9 @@ bool Parser::isEndOfStmt() const noexcept
 {
     // clang-format off
     return _lexer.currentToken() == Token::EndOfInput
-        || _lexer.currentToken() == Token::EndOfLine
-        || _lexer.currentToken() == Token::Pipe;
+        || _lexer.currentToken() == Token::LineFeed
+        || _lexer.currentToken() == Token::Pipe
+        || _lexer.currentToken() == Token::Semicolon;
     // clang-format on
 }
 
@@ -110,6 +111,14 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 _lexer.nextToken();
                 return std::make_unique<ast::BuiltinFalseStmt>();
             }
+            else if (_lexer.isDirective("read"))
+            {
+                _lexer.nextToken();
+                std::vector<std::unique_ptr<ast::Expr>> parameters = parseParameterList();
+                CoreVM::NativeCallback const& callback =
+                    *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
+                return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
+            }
             else if (_lexer.isDirective("cd"))
             {
                 _lexer.nextToken();
@@ -124,11 +133,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             }
             else
             {
-                std::unique_ptr<ast::ProgramCall> call = parseCall();
-                if (_lexer.currentToken() == Token::Pipe)
-                    return parseCallPipeline(std::move(call));
-                else
-                    return call;
+                return parseCallPipeline();
             }
         case Token::EndOfInput:
             _report.syntaxError(CoreVM::SourceLocation(), "Unexpected end of input");
@@ -177,7 +182,7 @@ std::unique_ptr<ast::IfStmt> Parser::parseIf()
 
     if (!consumeOneOf(Token::Semicolon, Token::LineFeed))
     {
-        TRACE_FMT("Expected ';' or LF after if condition but got '{}'\n", _lexer.currentLiteral());
+        TRACE_FMT("Expected ';' or LF after if condition but got '{}'", _lexer.currentLiteral());
         return nullptr;
     }
 
@@ -219,7 +224,7 @@ std::unique_ptr<ast::IfStmt> Parser::parseIf()
 }
 
 // Syntax: Call ::= Identifier ParameterList
-std::unique_ptr<ast::ProgramCall> Parser::parseCall()
+std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
 {
     TRACE_SCOPE("parseCall");
     std::string program = consumeLiteral();
@@ -230,7 +235,9 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall()
     // outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
     //     std::make_unique<ast::FileDescriptor>(1), std::make_unique<ast::FileDescriptor>(2)));
 
-    CoreVM::NativeCallback const* builtinCallProcess = _runtime.find("callproc(s)I");
+    CoreVM::NativeCallback const* builtinCallProcess = _lexer.currentToken() == Token::Pipe || piped
+                                                           ? _runtime.find("callproc(Bs)I")
+                                                           : _runtime.find("callproc(s)I");
     assert(builtinCallProcess != nullptr);
 
     return std::make_unique<ast::ProgramCall>(
@@ -241,8 +248,7 @@ std::vector<std::unique_ptr<ast::Expr>> Parser::parseParameterList()
 {
     TRACE_SCOPE("parseParameterList");
     std::vector<std::unique_ptr<ast::Expr>> parameters;
-    while (_lexer.currentToken() != Token::EndOfInput && _lexer.currentToken() != Token::LineFeed
-           && _lexer.currentToken() != Token::Semicolon)
+    while (!isEndOfStmt())
     {
         auto arg = parseParameter();
         if (arg)
@@ -256,7 +262,7 @@ std::vector<std::unique_ptr<ast::Expr>> Parser::parseParameterList()
 
 std::unique_ptr<ast::Expr> Parser::parseParameter()
 {
-    TRACE_FMT("parseParameter: {} \"{}\"\n", _lexer.currentToken(), _lexer.currentLiteral());
+    TRACE_FMT("parseParameter: {} \"{}\"", _lexer.currentToken(), _lexer.currentLiteral());
     switch (_lexer.currentToken())
     {
         case Token::String:
@@ -266,16 +272,32 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
     }
 }
 
-std::unique_ptr<ast::CallPipeline> Parser::parseCallPipeline(std::unique_ptr<ast::ProgramCall> call)
+std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
 {
+    TRACE_SCOPE("parseCallPipeline");
+
+    auto call = parseCall();
     if (!call)
         return nullptr;
 
-    std::vector<ast::ProgramCall> calls;
-    calls.emplace_back(std::move(*call));
-    while (tryConsumeToken(Token::Pipe))
-        if (auto nextCall = parseCall(); nextCall)
-            calls.emplace_back(std::move(*nextCall));
+    if (_lexer.currentToken() != Token::Pipe)
+        return call;
+
+    std::vector<std::unique_ptr<ast::ProgramCall>> calls;
+    calls.emplace_back(std::move(call));
+    while (_lexer.currentToken() == Token::Pipe)
+    {
+        _lexer.nextToken();
+        TRACE_FMT("Parsing call pipeline item (NT: {})", _lexer.currentLiteral());
+        if (auto nextCall = parseCall(true); nextCall)
+        {
+            calls.emplace_back(std::move(nextCall));
+            TRACE_FMT("Parsed call pipeline item: {} (NT: {})",
+                      ast::ASTPrinter::print(*calls.back()),
+                      _lexer.currentLiteral());
+        }
+    }
+
     return std::make_unique<ast::CallPipeline>(std::move(calls));
 }
 

@@ -9,6 +9,7 @@
 
 namespace crush::ast
 {
+struct Expr;
 struct Node;
 struct Statement;
 } // namespace crush::ast
@@ -29,6 +30,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::BuiltinExitStmt const&) override;
     void visit(ast::BuiltinChDirStmt const&) override;
     void visit(ast::BuiltinFalseStmt const&) override;
+    void visit(ast::BuiltinReadStmt const&) override;
     void visit(ast::BuiltinTrueStmt const&) override;
     void visit(ast::CallPipeline const&) override;
     void visit(ast::CommandFileSubst const&) override;
@@ -43,6 +45,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::WhileStmt const&) override;
 
     CoreVM::Value* toBool(CoreVM::Value* value);
+    std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args);
+    std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
+                                                  std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     CoreVM::Value* _result = nullptr;
     // CoreVM::NativeCallback _processCallCallback;

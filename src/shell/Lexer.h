@@ -20,9 +20,10 @@ enum class Token
     DollarDollar,   // $$
     DollarName,     // $NAME
     DollarNot,      // $!
+    DollarQuestion, // $?
     DollarNumber,   // '$' DIGIT+
     EndOfInput,     // EOF
-    EndOfLine,      // LF
+    LineFeed,       // LF
     Equal,          // =
     Greater,        // >
     GreaterEqual,   // >=
@@ -37,7 +38,6 @@ enum class Token
     RndClose,       // )
     RndOpen,        // (
     Semicolon,      // ;
-    LineFeed,       // LF
     String,         // "..." and '...'
     Identifier,     // space delimited text not containing any of the unescaped symbols above
 };
@@ -132,6 +132,7 @@ class Lexer
 
     void consumeWhitespace();
     Token consumeNumber();
+    Token consumeIdentifier(Token token);
     Token consumeIdentifier();
     Token consumeString();
     char32_t nextChar();
@@ -190,9 +191,9 @@ struct fmt::formatter<crush::Token>: fmt::formatter<std::string_view>
             case DollarDollar: name = "$$"; break;
             case DollarName: name = "DollarName"; break;
             case DollarNot: name = "$!"; break;
+            case DollarQuestion: name = "$?"; break;
             case DollarNumber: name = "DollarNumber"; break;
             case EndOfInput: name = "EndOfInput"; break;
-            case EndOfLine: name = "EndOfLine"; break;
             case Equal: name = "="; break;
             case Greater: name = ">"; break;
             case GreaterEqual: name = ">="; break;

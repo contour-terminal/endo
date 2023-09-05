@@ -99,7 +99,7 @@ struct Statement: public Node
 {
 };
 
-struct BuiltinExitStmt: public Statement
+struct BuiltinExitStmt final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> code;
@@ -113,17 +113,31 @@ struct BuiltinExitStmt: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-struct BuiltinTrueStmt: public Statement
+struct BuiltinTrueStmt final: public Statement
 {
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-struct BuiltinFalseStmt: public Statement
+struct BuiltinFalseStmt final: public Statement
 {
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-struct BuiltinChDirStmt: public Statement
+struct BuiltinReadStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::vector<std::unique_ptr<Expr>> parameters;
+
+    BuiltinReadStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                    std::vector<std::unique_ptr<Expr>> parameters = {}):
+        callback { callback }, parameters { std::move(parameters) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+struct BuiltinChDirStmt final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> path;
@@ -181,9 +195,9 @@ struct SubstitutionExpr final: public Expr
 // It is a sequence of program calls, separated by pipes.
 struct CallPipeline final: public Statement
 {
-    std::vector<ProgramCall> calls;
+    std::vector<std::unique_ptr<ProgramCall>> calls;
 
-    CallPipeline(std::vector<ProgramCall> calls): calls(std::move(calls)) {}
+    CallPipeline(std::vector<std::unique_ptr<ProgramCall>> calls): calls(std::move(calls)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

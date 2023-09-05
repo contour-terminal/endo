@@ -21,10 +21,11 @@ class ASTPrinter: public Visitor
     void visit(ProgramCall const&) override;
     void visit(CallPipeline const&) override;
 
-    void visit(BuiltinExitStmt const&) override;
-    void visit(BuiltinTrueStmt const&) override;
-    void visit(BuiltinFalseStmt const&) override;
     void visit(BuiltinChDirStmt const&) override;
+    void visit(BuiltinExitStmt const&) override;
+    void visit(BuiltinFalseStmt const&) override;
+    void visit(BuiltinReadStmt const&) override;
+    void visit(BuiltinTrueStmt const&) override;
 
     void visit(CompoundStmt const&) override;
     void visit(IfStmt const&) override;

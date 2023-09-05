@@ -7,6 +7,7 @@ namespace crush::ast
 struct BuiltinChDirStmt;
 struct BuiltinFalseStmt;
 struct BuiltinExitStmt;
+struct BuiltinReadStmt;
 struct BuiltinTrueStmt;
 struct CallPipeline;
 struct CommandFileSubst;
@@ -41,6 +42,7 @@ struct Visitor
     virtual void visit(BuiltinExitStmt const&) = 0;
     virtual void visit(BuiltinTrueStmt const&) = 0;
     virtual void visit(BuiltinFalseStmt const&) = 0;
+    virtual void visit(BuiltinReadStmt const&) = 0;
     virtual void visit(BuiltinChDirStmt const&) = 0;
 
     // epxressions

@@ -6,6 +6,8 @@ add_library(Shell STATIC
     Parser.cpp Parser.h
     Prompt.cpp Prompt.h
     Shell.cpp Shell.h
+    TTY.cpp TTY.h
+    UnixPipe.cpp UnixPipe.h
     Visitor.h
 )
 target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM)

@@ -34,9 +34,13 @@ Design modern interactive shell with first-class UX in mind.
 There is no timeline, as Contour Terminal still remains the top priority. Crush comes second.
 
 - [x] basic process execution
-- [ ] pipes
-- [ ] redirects
+- [x] shell pipes with processes
+- [ ] shell pipes with builtin commands
+- [ ] file descriptor redirects
 - [ ] job management
+- [x] builtin `read` function (basic version)
+- [ ] set variable and export to inheritable environment
+- [ ] variable substitution
 - [x] bash-like if-statement
 - [x] bash-like while-statement
 - [ ] bash-like functions
@@ -48,7 +52,6 @@ There is no timeline, as Contour Terminal still remains the top priority. Crush 
 - [ ] bash-like command substitution: `$()` and its backtick version
 - [ ] bash-like process substitution: `<(cmd)` and `>(cmd)`
 - [ ] operator && and ||
-- [ ] variable substitution
 - [ ] export and unset variables
 
 ## status: terminal UX (milestone 2)

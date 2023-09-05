@@ -36,10 +36,10 @@ class Parser
     std::string consumeLiteral();
     std::unique_ptr<ast::IfStmt> parseIf();
     std::unique_ptr<ast::WhileStmt> parseWhile();
-    std::unique_ptr<ast::ProgramCall> parseCall();
+    std::unique_ptr<ast::ProgramCall> parseCall(bool piped = false);
     std::vector<std::unique_ptr<ast::Expr>> parseParameterList();
     std::unique_ptr<ast::Expr> parseParameter();
-    std::unique_ptr<ast::CallPipeline> parseCallPipeline(std::unique_ptr<ast::ProgramCall> call);
+    std::unique_ptr<ast::Statement> parseCallPipeline();
 
     bool tryConsumeToken(Token token)
     {

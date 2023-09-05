@@ -1,24 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.h>
 
+#include <crispy/escape.h>
+
 #include <catch2/catch.hpp>
+
+using namespace std::string_literals;
+using namespace std::string_view_literals;
+
+using crispy::escape;
 
 namespace
 {
 struct TestShell
 {
-    std::stringstream in;
-    std::stringstream out;
-    std::stringstream err;
+    crush::TestPTY pty;
     crush::TestEnvironment env;
     int exitCode = -1;
 
-    crush::Shell shell { in, out, err, env }; // TODO: pass custom reporter
+    crush::Shell shell { pty, env };
+
+    std::string_view output() const noexcept { return pty.output(); }
 
     TestShell& operator()(std::string_view cmd)
     {
         exitCode = shell.execute(std::string(cmd));
-        UNSCOPED_INFO("stderr: " + err.str());
+        // UNSCOPED_INFO("output: " + std::string(pty.output()));
         // TODO: print report if it is not empty
         return *this;
     }
@@ -42,11 +49,48 @@ TEST_CASE("shell.syntax.if")
 
 TEST_CASE("shell.syntax.pipes")
 {
-    TestShell shell;
-    CHECK(shell("echo -n hello | grep ll").out.str() == "hello");
+    CHECK(escape(TestShell()("echo hello | grep ll").output()) == escape("hello\r\n"));
+    CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\r\n"));
 }
 
-// TEST_CASE("shell.syntax.&& ||")
+TEST_CASE("shell.builtin.read.DefaultVar")
+{
+    static auto constexpr input = "hello world"s;
+    TestShell shell;
+    shell.pty.writeToStdin(input + "\r\n"s);
+    shell("read");
+    CHECK(shell.env.get("REPLY").value_or("NONE") == input);
+}
+
+TEST_CASE("shell.builtin.read.CustomVar")
+{
+    static auto constexpr input = "hello world"s;
+    TestShell shell;
+    shell.pty.writeToStdin(input + "\r\n"s);
+    shell("read BRU");
+    CHECK(shell.env.get("BRU").value_or("NONE") == input);
+}
+
+// TEST_CASE("shell.builtin.variable") TODO
+// {
+//     TestShell shell;
+//     shell("set BRU hello");
+//     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
+//
+//     shell("export $BRU");
+//     CHECK(shell("echo $BRU").output() == "hello\r\n");
+// }
+
+// TEST_CASE("shell.builtin.read.prompt") TODO
+// {
+//     TestShell shell;
+//     shell.pty.writeToStdin("hello\r\n");
+//     shell("read -p 'Enter your name: ' NAME");
+//     CHECK(shell.output() == "Enter your name: ");
+//     CHECK(shell.env.get("NAME").value_or("NONE") == "hello");
+// }
+
+// TEST_CASE("shell.syntax.&& ||") TODO
 // {
 //     TestShell shell;
 //     CHECK(shell("true && exit 2 || exit 3") == 2);

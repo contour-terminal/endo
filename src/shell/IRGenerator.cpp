@@ -84,6 +84,15 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
     _result = createCallFunction(getBuiltinFunction(node.callback.get()), { exitCode }, "exit");
 }
 
+void IRGenerator::visit(ast::BuiltinReadStmt const& node)
+{
+    auto callArguments = std::vector<CoreVM::Value*> {};
+    if (!node.parameters.empty())
+        callArguments.emplace_back(get(createCallArgs(node.parameters)));
+
+    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "read");
+}
+
 void IRGenerator::visit(ast::BuiltinTrueStmt const&)
 {
     _result = get(CoreVM::CoreNumber(0));
@@ -103,21 +112,43 @@ void IRGenerator::visit(ast::BuiltinFalseStmt const&)
     _result = get(CoreVM::CoreNumber(1));
 }
 
-void IRGenerator::visit(ast::ProgramCall const& node)
+std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args)
 {
-    TRACE_SCOPE("ProgramCall");
-    auto callParametersArg = std::vector<CoreVM::Constant*>();
-    TRACE("ProgramCall: {}", ast::ASTPrinter::print(node));
-    callParametersArg.push_back(get(node.program));
-    for (auto const& arg: node.parameters)
+    TRACE_SCOPE("createCallArgs");
+    auto callArguments = std::vector<CoreVM::Constant*> {};
+    for (auto const& arg: args)
     {
         TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*arg)));
         auto* value = codegen(arg.get());
         if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
-            callParametersArg.push_back(constant);
+            callArguments.push_back(constant);
         else
-            fmt::print("Warning: non-constant argument passed to program call\n");
+            fmt::print("Warning: non-constant argument passed to builtin function\n");
     }
+    return callArguments;
+}
+
+std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
+    std::string const& programName, std::vector<std::unique_ptr<ast::Expr>> const& args)
+{
+    TRACE_SCOPE("createCallArgs");
+    auto callArguments = std::vector<CoreVM::Constant*> {};
+    callArguments.push_back(get(programName));
+    for (auto const& arg: args)
+    {
+        TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*arg)));
+        auto* value = codegen(arg.get());
+        if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
+            callArguments.push_back(constant);
+        else
+            fmt::print("Warning: non-constant argument passed to builtin function\n");
+    }
+    return callArguments;
+}
+
+void IRGenerator::visit(ast::ProgramCall const& node)
+{
+    TRACE_SCOPE("ProgramCall");
 
     // auto redirectsArg = std::vector<CoreVM::Constant*> {};
     // redirectsArg.push_back(get(STDOUT_FILENO));
@@ -132,15 +163,32 @@ void IRGenerator::visit(ast::ProgramCall const& node)
     // }
 
     auto callArguments = std::vector<CoreVM::Value*> {};
-    callArguments.push_back(get(callParametersArg));
+    callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
     // callArguments.push_back(get(redirectsArg));
 
     _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
 }
 
-void IRGenerator::visit(ast::CallPipeline const&)
+void IRGenerator::visit(ast::CallPipeline const& node)
 {
-    // TODO: Create pipe for each connection, then spawn processes and connect them to the pipes in order
+    // A | B | C | D
+    //
+    // process      | stdin             |   stdout
+    // -------------------------------------------------------
+    // A            | STDIN             |   pipe 1 (write end)
+    // B            | pipe 1 (read end) |   pipe 2 (write end)
+    // C            | pipe 2 (read end) |   pipe 3 (write end)
+    // D            | pipe 3 (read end) |   STDOUT
+
+    for (size_t i = 0; i < node.calls.size(); ++i)
+    {
+        std::unique_ptr<ast::ProgramCall> const& call = node.calls[i];
+        bool const lastInChain = i == node.calls.size() - 1;
+        std::vector<CoreVM::Value*> callArguments {};
+        callArguments.push_back(get(lastInChain));
+        callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
+        _result = createCallFunction(getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+    }
 }
 
 void IRGenerator::visit(ast::CompoundStmt const& node)

@@ -3,14 +3,21 @@
 
 #include <shell/ProcessGroup.h>
 #include <shell/Prompt.h>
+#include <shell/UnixPipe.h>
+#include <shell/TTY.h>
 
 #include <CoreVM/NativeCallback.h>
 #include <CoreVM/Params.h>
 #include <CoreVM/vm/Runtime.h>
 
+#include <fmt/format.h>
+
 #include <filesystem>
 
-#include <fmt/format.h>
+#include <sys/ioctl.h>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 namespace crush
 {
@@ -24,7 +31,36 @@ class Environment
     [[nodiscard]] virtual std::optional<std::string_view> get(std::string_view name) const = 0;
 
     virtual void exportVariable(std::string_view name) = 0;
+
+    void setAndExport(std::string_view name, std::string_view value)
+    {
+        set(name, value);
+        exportVariable(name);
+    }
 };
+
+struct PipelineBuilder
+{
+    struct IODescriptors
+    {
+        int reader;
+        int writer;
+    };
+
+    int defaultStdinFd = STDIN_FILENO;
+    int defaultStdoutFd = STDOUT_FILENO;
+    std::optional<UnixPipe> currentPipe = std::nullopt;
+
+    auto requestShellPipe(bool lastInChain) -> IODescriptors;
+};
+
+inline auto PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
+{
+    int const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
+    currentPipe = lastInChain ? std::nullopt : std::make_optional<UnixPipe>();
+    int const stdoutFd = lastInChain ? defaultStdoutFd : currentPipe->writer();
+    return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
+}
 
 class TestEnvironment: public Environment
 {
@@ -54,7 +90,7 @@ class Shell final: public CoreVM::Runtime
 {
   public:
     Shell();
-    Shell(std::istream& input, std::ostream& output, std::ostream& error, Environment& env);
+    Shell(TTY& tty, Environment& env);
 
     [[nodiscard]] Environment& environment() noexcept { return _env; }
     [[nodiscard]] Environment const& environment() const noexcept { return _env; }
@@ -73,15 +109,17 @@ class Shell final: public CoreVM::Runtime
     // builtins that match to shell commands
     void builtinExit(CoreVM::Params& context);
     void builtinCallProcess(CoreVM::Params& context);
+    void builtinCallProcessShellPiped(CoreVM::Params& context);
     void builtinChDirHome(CoreVM::Params& context);
     void builtinChDir(CoreVM::Params& context);
+    void builtinSetAndExport(CoreVM::Params& context);
     void builtinExport(CoreVM::Params& context);
     void builtinTrue(CoreVM::Params& context);
     void builtinFalse(CoreVM::Params& context);
+    void builtinReadDefault(CoreVM::Params& context);
+    void builtinRead(CoreVM::Params& context);
 
     // helper-builtins for redirects and pipes
-    void builtinPipe(CoreVM::Params& context);
-    void builtinDup2(CoreVM::Params& context);
     void builtinOpenRead(CoreVM::Params& context);
     void builtinOpenWrite(CoreVM::Params& context);
 
@@ -92,14 +130,13 @@ class Shell final: public CoreVM::Runtime
     template <typename... Args>
     void error(fmt::format_string<Args...> const& message, Args&&... args)
     {
-        _error << fmt::format(message, std::forward<Args>(args)...) << std::endl;
+        std::cerr << fmt::format(message, std::forward<Args>(args)...) + "\n";
     }
 
   private:
     Environment& _env;
-    std::istream& _input;
-    std::ostream& _output;
-    std::ostream& _error;
+
+    TTY& _tty;
 
     std::unique_ptr<CoreVM::Program> _currentProgram;
     CoreVM::Runner::Globals _globals;
@@ -108,9 +145,19 @@ class Shell final: public CoreVM::Runtime
     bool _traceVM = false;
     bool _optimize = false;
 
+    PipelineBuilder _currentPipelineBuilder;
+
+    // This stores the PIDs of all processes in the pipeline's process group.
+    std::vector<pid_t> _currentProcessGroupPids;
+    std::optional<pid_t> _leftPid;
+    std::optional<pid_t> _rightPid;
+
+    // This stores the exit code of the last process in the pipeline.
+    // TODO: remember exit codes from all processes in the pipeline's process group
+    int _exitCode = -1;
+
     CoreVM::Runner* _runner = nullptr;
     bool _quit = false;
-    int _exitCode = -1;
 };
 
 } // namespace crush
