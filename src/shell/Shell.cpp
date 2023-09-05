@@ -260,10 +260,12 @@ void Shell::builtinOpenWrite(CoreVM::Params& context)
 
 void Shell::builtinChDirHome(CoreVM::Params& context)
 {
-    char const* home = getenv("HOME");
-    int const result = chdir(home);
+    auto const path = _env.get("HOME").value_or("/");
+    _env.set("OLDPWD", std::filesystem::current_path().string());
+    _env.set("PWD", path);
+    int const result = chdir(path.data());
     if (result != 0)
-        error("Failed to change directory to '{}'", home);
+        error("Failed to change directory to '{}'", path);
 
     context.setResult(result == 0);
 }
