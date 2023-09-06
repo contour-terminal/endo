@@ -29,5 +29,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-D_GLIBCXX_ASSERTIONS)
 endif()
 
+enable_testing()
+
 add_subdirectory(src)
 CrushThirdPartiesSummary2()

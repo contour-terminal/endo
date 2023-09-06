@@ -10,7 +10,7 @@ add_library(Shell STATIC
     UnixPipe.cpp UnixPipe.h
     Visitor.h
 )
-target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM)
+target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM InputEditor)
 
 add_executable(crush
     main.cpp
@@ -23,3 +23,5 @@ add_executable(test-crush
     Shell_test.cpp
 )
 target_link_libraries(test-crush Shell Catch2::Catch2)
+
+add_test(NAME test-crush COMMAND test-crush)
