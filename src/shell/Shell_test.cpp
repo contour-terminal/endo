@@ -49,24 +49,24 @@ TEST_CASE("shell.syntax.if")
 
 TEST_CASE("shell.syntax.pipes")
 {
-    CHECK(escape(TestShell()("echo hello | grep ll").output()) == escape("hello\r\n"));
-    CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\r\n"));
+    CHECK(escape(TestShell()("echo hello | grep ll").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\n"));
 }
 
 TEST_CASE("shell.builtin.read.DefaultVar")
 {
-    static auto constexpr input = "hello world"s;
+    auto const input = "hello world"s;
     TestShell shell;
-    shell.pty.writeToStdin(input + "\r\n"s);
+    shell.pty.writeToStdin(input + "\n"s);
     shell("read");
     CHECK(shell.env.get("REPLY").value_or("NONE") == input);
 }
 
 TEST_CASE("shell.builtin.read.CustomVar")
 {
-    static auto constexpr input = "hello world"s;
+    auto const input = "hello world"s;
     TestShell shell;
-    shell.pty.writeToStdin(input + "\r\n"s);
+    shell.pty.writeToStdin(input + "\n"s);
     shell("read BRU");
     CHECK(shell.env.get("BRU").value_or("NONE") == input);
 }
@@ -78,13 +78,13 @@ TEST_CASE("shell.builtin.read.CustomVar")
 //     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
 //
 //     shell("export $BRU");
-//     CHECK(shell("echo $BRU").output() == "hello\r\n");
+//     CHECK(shell("echo $BRU").output() == "hello\n");
 // }
 
 // TEST_CASE("shell.builtin.read.prompt") TODO
 // {
 //     TestShell shell;
-//     shell.pty.writeToStdin("hello\r\n");
+//     shell.pty.writeToStdin("hello\n");
 //     shell("read -p 'Enter your name: ' NAME");
 //     CHECK(shell.output() == "Enter your name: ");
 //     CHECK(shell.env.get("NAME").value_or("NONE") == "hello");

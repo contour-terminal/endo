@@ -146,7 +146,7 @@ Token Lexer::nextToken()
         default: return consumeIdentifier();
     }
     return confirmToken(Token::Invalid);
-    //crispy::unreachable();
+    // crispy::unreachable();
 }
 
 Token Lexer::consumeIdentifier()
@@ -235,7 +235,7 @@ std::vector<TokenInfo> Lexer::tokenize(std::unique_ptr<Source> source)
 
     while (lexer.currentToken() != Token::EndOfInput)
     {
-        tokens.emplace_back(lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange());
+        tokens.emplace_back(TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
         lexer.nextToken();
     }
 

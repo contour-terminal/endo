@@ -43,8 +43,10 @@ RealTTY& RealTTY::instance()
 
 RealTTY::RealTTY()
 {
-    if (tcgetattr(STDIN_FILENO, &_originalTermios) == -1)
-        throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
+    for (int fd: {STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO})
+        if (isatty(fd) && tcgetattr(fd, &_originalTermios) == 0)
+            return;
+    throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
 }
 
 RealTTY::~RealTTY()
@@ -92,11 +94,8 @@ void RealTTY::writeToStdout(std::string_view str) const
 // {{{ TestPTY
 TestPTY::TestPTY(): _windowSize { .ws_row = 25, .ws_col = 80, .ws_xpixel = 0, .ws_ypixel = 0 }
 {
-    if (tcgetattr(STDIN_FILENO, &_originalTermios) == -1)
-        throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
-
     char name[256];
-    if (openpty(&_ptyMaster, &_ptySlave, name, &_originalTermios, &_windowSize) == -1)
+    if (openpty(&_ptyMaster, &_ptySlave, name, &_baseTermios, &_windowSize) == -1)
         throw std::runtime_error("openpty: " + std::string(strerror(errno)));
 
     fmt::print("TestPTY opened: {} (master {}, slave {})\n", name, _ptyMaster, _ptySlave);
@@ -119,15 +118,17 @@ void TestPTY::outputUpdateLoop()
     {
         char buffer[1024];
         ssize_t const writeResult = read(_ptyMaster, buffer, sizeof(buffer));
-        if (writeResult == -1)
-            throw std::runtime_error("read: " + std::string(strerror(errno)));
-        else if (writeResult == 0)
+        if (writeResult == 0)
             break;
-        else
+        else if (writeResult > 0)
         {
             auto _ = std::lock_guard { _outputMutex };
             _output.append(buffer, writeResult);
         }
+        else if (errno == EINTR || errno == EAGAIN)
+            continue;
+        else
+            throw std::runtime_error("read: " + std::string(strerror(errno)));
     }
 }
 
@@ -148,7 +149,7 @@ void TestPTY::setRawMode()
 
 void TestPTY::restoreMode()
 {
-    int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_originalTermios);
+    int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_baseTermios);
     if (result == -1)
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
 }

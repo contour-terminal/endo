@@ -6,6 +6,8 @@
 #include <CoreVM/ir/InstructionVisitor.h>
 #include <CoreVM/ir/Instructions.h>
 
+#include <crispy/assert.h>
+
 #include <cassert>
 #include <utility> // make_pair
 
@@ -34,6 +36,7 @@ const char* cstr(UnaryOperator op) // {{{
         case UnaryOperator::SLen: return "slen";
         case UnaryOperator::SIsEmpty: return "sisempty";
     }
+    crispy::unreachable();
 }
 // }}}
 const char* cstr(BinaryOperator op) // {{{

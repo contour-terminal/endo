@@ -1,7 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+
 #pragma once
 
-#include <boxed-cpp/boxed.hpp>
 #include <compare>
+#include <string>
+#include <vector>
+
+#include <boxed-cpp/boxed.hpp>
+#include <libunicode/scan.h>
 
 namespace InputEditor
 {
@@ -36,17 +42,47 @@ struct TTY
     int outputFd;
 };
 
+struct GraphemeCluster
+{
+    std::vector<char32_t> codepoints;
+
+    [[nodiscard]] std::string as_utf8() const
+    {
+        std::string result;
+        result.reserve(codepoints.size() * 4);
+        for (auto const codepoint: codepoints)
+            result += unicode::to_utf8(codepoint);
+        return result;
+    }
+};
+
+struct StyledGraphemeCluster
+{
+    GraphemeCluster grapheme;
+    std::string style;
+};
+
+struct Prompt
+{
+    std::string text;
+    std::vector<StyledGraphemeCluster> styledGraphemes;
+};
+
 class InputEditor
 {
   public:
-    InputEditor(TTY& tty, Rect rect);
+    InputEditor(TTY tty, Rect rect, Prompt prompt);
     ~InputEditor();
 
     void run();
 
   private:
-    TTY& _tty;
+    TTY _tty;
     Rect _rect;
+    Prompt _prompt;
+
+    std::string _buffer;
+    std::vector<GraphemeCluster> _graphemes;
 };
 
 } // namespace InputEditor

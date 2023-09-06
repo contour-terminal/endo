@@ -101,7 +101,7 @@ class TestPTY final: public TTY
 
     int _ptyMaster = -1;
     int _ptySlave = -1;
-    termios _originalTermios {};
+    termios _baseTermios {};
     winsize _windowSize {};
 
     bool _closed = false;
