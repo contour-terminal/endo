@@ -27,7 +27,7 @@
 #define COREVM_DEBUG(msg, ...) \
     do                         \
     {                          \
-    } while (1)
+    } while (0)
 
 namespace CoreVM
 {
