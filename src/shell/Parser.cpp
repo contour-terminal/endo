@@ -24,7 +24,7 @@
 // clang-format on
 // }}}
 
-namespace crush
+namespace endo
 {
 
 Parser::Parser(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report, std::unique_ptr<Source> source):
@@ -318,4 +318,4 @@ void Parser::consumeDirective(const std::string& directive)
                             _lexer.currentLiteral());
 }
 
-} // namespace crush
+} // namespace endo

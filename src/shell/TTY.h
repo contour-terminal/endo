@@ -10,7 +10,7 @@
 
 #include <termios.h>
 
-namespace crush
+namespace endo
 {
 
 class TTY
@@ -107,4 +107,4 @@ class TestPTY final: public TTY
     bool _closed = false;
 };
 
-} // namespace crush
+} // namespace endo

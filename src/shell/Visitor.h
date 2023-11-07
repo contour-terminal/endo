@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-namespace crush::ast
+namespace endo::ast
 {
 
 struct BuiltinChDirStmt;
@@ -53,4 +53,4 @@ struct Visitor
     virtual void visit(CommandFileSubst const&) = 0;
 };
 
-} // namespace crush::ast
+} // namespace endo::ast

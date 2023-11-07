@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 
-namespace crush
+namespace endo
 {
 
 enum class Token
@@ -146,21 +146,21 @@ class Lexer
     SourceLocationRange _currentRange {};
 };
 
-} // namespace crush
+} // namespace endo
 
 template <>
-struct fmt::formatter<crush::LineColumn>: fmt::formatter<std::string>
+struct fmt::formatter<endo::LineColumn>: fmt::formatter<std::string>
 {
-    auto format(const crush::LineColumn lineColumn, format_context& ctx) -> format_context::iterator
+    auto format(const endo::LineColumn lineColumn, format_context& ctx) -> format_context::iterator
     {
         return formatter<std::string>::format(fmt::format("{}:{}", lineColumn.line, lineColumn.column), ctx);
     }
 };
 
 template <>
-struct fmt::formatter<crush::SourceLocation>: fmt::formatter<std::string>
+struct fmt::formatter<endo::SourceLocation>: fmt::formatter<std::string>
 {
-    auto format(const crush::SourceLocation location, format_context& ctx) -> format_context::iterator
+    auto format(const endo::SourceLocation location, format_context& ctx) -> format_context::iterator
     {
         return formatter<std::string>::format(
             fmt::format("{}:{}:{}", location.name, location.line, location.column), ctx);
@@ -168,9 +168,9 @@ struct fmt::formatter<crush::SourceLocation>: fmt::formatter<std::string>
 };
 
 template <>
-struct fmt::formatter<crush::SourceLocationRange>: fmt::formatter<std::string>
+struct fmt::formatter<endo::SourceLocationRange>: fmt::formatter<std::string>
 {
-    auto format(const crush::SourceLocationRange range, format_context& ctx) -> format_context::iterator
+    auto format(const endo::SourceLocationRange range, format_context& ctx) -> format_context::iterator
     {
         return formatter<std::string>::format(fmt::format("{}({} - {})", range.name, range.begin, range.end),
                                               ctx);
@@ -178,12 +178,12 @@ struct fmt::formatter<crush::SourceLocationRange>: fmt::formatter<std::string>
 };
 
 template <>
-struct fmt::formatter<crush::Token>: fmt::formatter<std::string_view>
+struct fmt::formatter<endo::Token>: fmt::formatter<std::string_view>
 {
-    auto format(const crush::Token token, format_context& ctx) -> format_context::iterator
+    auto format(const endo::Token token, format_context& ctx) -> format_context::iterator
     {
         string_view name;
-        using enum crush::Token;
+        using enum endo::Token;
         switch (token)
         {
             case AmpNumber: name = "AmpNumber"; break;
@@ -218,10 +218,10 @@ struct fmt::formatter<crush::Token>: fmt::formatter<std::string_view>
 };
 
 template <>
-struct fmt::formatter<crush::TokenInfo>
+struct fmt::formatter<endo::TokenInfo>
 {
     static auto parse(format_parse_context& ctx) -> format_parse_context::iterator { return ctx.begin(); }
-    static auto format(crush::TokenInfo const& info, format_context& ctx) -> format_context::iterator
+    static auto format(endo::TokenInfo const& info, format_context& ctx) -> format_context::iterator
     {
         return fmt::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);
     }

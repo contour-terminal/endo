@@ -20,7 +20,7 @@
 // clang-format on
 // }}}
 
-namespace crush
+namespace endo
 {
 
 #define GLOBAL_SCOPE_INIT_NAME "@main"
@@ -266,4 +266,4 @@ void IRGenerator::visit(ast::CommandFileSubst const&)
     // TODO
 }
 
-} // namespace crush
+} // namespace endo

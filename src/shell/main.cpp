@@ -13,7 +13,7 @@ std::string_view getEnvironment(std::string_view name, std::string_view defaultV
 
 int main(int argc, char const* argv[])
 {
-    auto shell = crush::Shell {};
+    auto shell = endo::Shell {};
 
     setsid();
 

@@ -11,7 +11,7 @@
 
 #include "shell/UnixPipe.h"
 
-namespace crush
+namespace endo
 {
 
 namespace
@@ -66,7 +66,7 @@ int RealTTY::outputFd() const noexcept
 
 void RealTTY::setRawMode()
 {
-    crush::setRawMode(STDIN_FILENO);
+    endo::setRawMode(STDIN_FILENO);
 }
 
 void RealTTY::restoreMode()
@@ -144,7 +144,7 @@ int TestPTY::outputFd() const noexcept
 
 void TestPTY::setRawMode()
 {
-    crush::setRawMode(STDIN_FILENO);
+    endo::setRawMode(STDIN_FILENO);
 }
 
 void TestPTY::restoreMode()
@@ -175,4 +175,4 @@ std::string_view TestPTY::output() const noexcept
 }
 // }}}
 
-} // namespace crush
+} // namespace endo

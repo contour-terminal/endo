@@ -16,7 +16,7 @@
 
 using namespace std::string_view_literals;
 
-namespace crush
+namespace endo
 {
 
 // {{{ StringSource
@@ -243,4 +243,4 @@ std::vector<TokenInfo> Lexer::tokenize(std::unique_ptr<Source> source)
 }
 // }}}
 
-} // namespace crush
+} // namespace endo

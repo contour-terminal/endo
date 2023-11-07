@@ -1,4 +1,4 @@
-# Crush Shell
+# Endo Shell
 
 **Companion shell to Contour Terminal.**
 
@@ -12,7 +12,7 @@ It aims to be primarily used as an interactive shell, similar to `fish` shell,
 however, utilizing the more modern terminal features you might think of,
 while retaining most of the well known good syntax features of Bash.
 
-Crush shell aims to be as close as reasonably possible compatible with bash,
+Endo shell aims to be as close as reasonably possible compatible with bash,
 but explicitly does not attempt to be a bash clone.
 
 ## Mission
@@ -31,7 +31,7 @@ Design modern interactive shell with first-class UX in mind.
 
 ## status: core & language (milestone 1)
 
-There is no timeline, as Contour Terminal still remains the top priority. Crush comes second.
+There is no timeline, as Contour Terminal still remains the top priority. Endo comes second.
 
 - [x] basic process execution
 - [x] shell pipes with processes

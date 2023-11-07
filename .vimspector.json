@@ -5,7 +5,7 @@
             "adapter": "vscode-cpptools",
             "configuration": {
                 "request": "launch",
-                "program": "${workspaceRoot}/target/aarch64-Linux-clang++-Debug/src/shell/crush",
+                "program": "${workspaceRoot}/target/aarch64-Linux-clang++-Debug/src/shell/endo",
                 "args": [
                 ],
                 "cwd": "${workspaceRoot}",

@@ -6,7 +6,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace crush
+namespace endo
 {
 
 using namespace std::string_literals;
@@ -26,4 +26,4 @@ UnixPipe::UnixPipe(unsigned flags): pfd { -1, -1 }
      fmt::print("Created pipe: {} {}\n", pfd[0], pfd[1]);
 }
 
-} // namespace crush
+} // namespace endo

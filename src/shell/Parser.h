@@ -16,7 +16,7 @@ namespace CoreVM
 class Runtime;
 }
 
-namespace crush
+namespace endo
 {
 
 class Parser
@@ -82,4 +82,4 @@ class Parser
     Lexer _lexer;
 };
 
-} // namespace crush
+} // namespace endo

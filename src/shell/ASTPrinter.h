@@ -4,7 +4,7 @@
 #include <shell/AST.h>
 #include <shell/Visitor.h>
 
-namespace crush::ast
+namespace endo::ast
 {
 
 class ASTPrinter: public Visitor
@@ -37,4 +37,4 @@ class ASTPrinter: public Visitor
     void visit(CommandFileSubst const&) override;
 };
 
-} // namespace crush::ast
+} // namespace endo::ast

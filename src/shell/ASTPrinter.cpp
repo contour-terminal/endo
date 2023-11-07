@@ -3,7 +3,7 @@
 
 #include <crispy/assert.h>
 
-namespace crush::ast
+namespace endo::ast
 {
 
 std::string ASTPrinter::print(Node const& node)
@@ -156,4 +156,4 @@ void ASTPrinter::visit(CommandFileSubst const& node)
     crispy::ignore_unused(node);
 }
 
-} // namespace crush::ast
+} // namespace endo::ast

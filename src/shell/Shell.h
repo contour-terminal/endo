@@ -19,7 +19,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-namespace crush
+namespace endo
 {
 
 class Environment
@@ -160,4 +160,4 @@ class Shell final: public CoreVM::Runtime
     bool _quit = false;
 };
 
-} // namespace crush
+} // namespace endo

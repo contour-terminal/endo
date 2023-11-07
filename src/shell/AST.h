@@ -13,7 +13,7 @@
 #include <variant>
 #include <vector>
 
-namespace crush::ast
+namespace endo::ast
 {
 
 struct Visitor;
@@ -85,7 +85,7 @@ struct OutputRedirect final: public Expr
 
 // <(command)
 //
-// This is a bashism, but it's useful for crush.
+// This is a bashism, but it's useful for endo.
 // It's a way to pass the output of a command as a file (e.g. to a program that expects a file).
 // It is the path to the file descriptor of the command's output, which is a pipe.
 struct CommandFileSubst final: public Expr
@@ -263,4 +263,4 @@ struct WhileStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-} // namespace crush::ast
+} // namespace endo::ast

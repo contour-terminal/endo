@@ -7,7 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-namespace crush
+namespace endo
 {
 
 inline void saveClose(int* fd) noexcept
@@ -80,4 +80,4 @@ inline void UnixPipe::closeWriter() noexcept
     saveClose(&pfd[1]);
 }
 
-} // namespace crush
+} // namespace endo

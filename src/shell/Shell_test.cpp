@@ -14,11 +14,11 @@ namespace
 {
 struct TestShell
 {
-    crush::TestPTY pty;
-    crush::TestEnvironment env;
+    endo::TestPTY pty;
+    endo::TestEnvironment env;
     int exitCode = -1;
 
-    crush::Shell shell { pty, env };
+    endo::Shell shell { pty, env };
 
     std::string_view output() const noexcept { return pty.output(); }
 

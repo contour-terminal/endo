@@ -23,7 +23,7 @@
 
 #include <fcntl.h>
 
-namespace crush
+namespace endo
 {
 
 // {{{ trace macros
@@ -142,7 +142,7 @@ Shell::Shell(TTY& tty, Environment& env): _env { env }, _tty { tty }
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
-    _env.setAndExport("SHELL", "crush");
+    _env.setAndExport("SHELL", "endo");
 
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
@@ -511,7 +511,7 @@ int Shell::execute(std::string const& lineBuffer) // NOLINT
     try
     {
         CoreVM::diagnostics::ConsoleReport report;
-        auto parser = crush::Parser(*this, report, std::make_unique<crush::StringSource>(lineBuffer));
+        auto parser = endo::Parser(*this, report, std::make_unique<endo::StringSource>(lineBuffer));
         auto const rootNode = parser.parse();
         if (!rootNode)
         {
@@ -519,7 +519,7 @@ int Shell::execute(std::string const& lineBuffer) // NOLINT
             return EXIT_FAILURE;
         }
 
-        DEBUGF("Parsed & printed: {}", crush::ast::ASTPrinter::print(*rootNode));
+        DEBUGF("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
         CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode);
         if (irProgram == nullptr)
@@ -583,4 +583,4 @@ int Shell::execute(std::string const& lineBuffer) // NOLINT
     return EXIT_SUCCESS;
 }
 
-} // namespace crush
+} // namespace endo

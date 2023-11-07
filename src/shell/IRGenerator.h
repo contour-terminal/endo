@@ -7,14 +7,14 @@
 #include <CoreVM/ir/IRBuilder.h>
 #include <CoreVM/ir/IRProgram.h>
 
-namespace crush::ast
+namespace endo::ast
 {
 struct Expr;
 struct Node;
 struct Statement;
-} // namespace crush::ast
+} // namespace endo::ast
 
-namespace crush
+namespace endo
 {
 
 class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
@@ -56,4 +56,4 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     CoreVM::Signature _processCallSignature;
 };
 
-} // namespace crush
+} // namespace endo
