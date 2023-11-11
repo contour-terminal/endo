@@ -63,8 +63,8 @@ fetch_and_unpack()
     if test x$MACRO = x; then
         echo "add_subdirectory($NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
     else
-        echo "macro(CrushThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
-        echo "    add_subdirectory(\${CrushThirdParties_SRCDIR}/$NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
+        echo "macro(EndoThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
+        echo "    add_subdirectory(\${EndoThirdParties_SRCDIR}/$NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
         echo "endmacro()" >> $SYSDEPS_CMAKE_FILE
     fi
 }
@@ -96,7 +96,7 @@ fetch_and_unpack_gsl()
 fetch_and_unpack_embeds()
 {
     if test x$LIBUNICODE_SRC_DIR = x; then
-        local libunicode_git_sha="b1b017c466038655872e1968acfc6a9880cf5d9f"
+        local libunicode_git_sha="c1474ddc3a90366629d61863628b8d41cd764fa8"
         fetch_and_unpack \
             libunicode-$libunicode_git_sha \
             libunicode-$libunicode_git_sha.tar.gz \
@@ -105,7 +105,7 @@ fetch_and_unpack_embeds()
     else
         echo "Hard linking external libunicode source directory to: $LIBUNICODE_SRC_DIR"
         MACRO="libunicode"
-        echo "macro(CrushThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
+        echo "macro(EndoThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
         echo "    add_subdirectory($LIBUNICODE_SRC_DIR libunicode EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
         echo "endmacro()" >> $SYSDEPS_CMAKE_FILE
     fi
@@ -120,12 +120,20 @@ fetch_and_unpack_yaml_cpp()
 
 fetch_and_unpack_boxed()
 {
-    local boxed_cpp_git_sha="daa702e22e71f3da3eef838e4946b6c3df1f16b1"
+    local boxed_cpp_git_sha="783cb74e95cbe06a52b468a73c14467e8f082cd1"
     fetch_and_unpack \
         boxed-cpp-$boxed_cpp_git_sha \
         boxed-cpp-$boxed_cpp_git_sha.tar.gz \
         https://github.com/contour-terminal/boxed-cpp/archive/$boxed_cpp_git_sha.tar.gz \
         boxed_cpp
+}
+
+fetch_and_unpack_range()
+{
+    fetch_and_unpack \
+        range-v3-0.12.0 \
+        range-v3-0.12.0.tar.gz \
+        https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz
 }
 
 prepare_fetch_and_unpack()
@@ -359,6 +367,7 @@ main()
             fetch_and_unpack_gsl
             fetch_and_unpack_yaml_cpp
             fetch_and_unpack_boxed
+            fetch_and_unpack_range
             echo "OS $ID not supported."
             echo "Please install the remaining dependencies manually."
             ;;

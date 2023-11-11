@@ -53,4 +53,4 @@ target_include_directories(CoreVM PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(CoreVM PUBLIC fmt::fmt-header-only)
+target_link_libraries(CoreVM PUBLIC fmt::fmt-header-only range-v3::range-v3)

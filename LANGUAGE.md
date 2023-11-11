@@ -1,8 +1,8 @@
-# Crush Language Design
+# Endo Language Design
 
 **This file should sketch some example syntax that we'd like to consider supporting.**
 
-This document is used to bootstrap and and formulate the idea of how the Crush's shell syntax might look like.
+This document is used to bootstrap and and formulate the idea of how the Endo's shell syntax might look like.
 
 ## POSIX / Bash-style control flow
 

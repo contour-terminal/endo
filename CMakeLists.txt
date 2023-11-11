@@ -5,7 +5,7 @@ project(endo VERSION "0.0.0" LANGUAGES CXX)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(EnableCcache)
-include(CrushThirdParties)
+include(EndoThirdParties)
 include(PedanticCompiler)
 
 # setting defaults
@@ -33,4 +33,4 @@ endif()
 enable_testing()
 
 add_subdirectory(src)
-CrushThirdPartiesSummary2()
+EndoThirdPartiesSummary2()

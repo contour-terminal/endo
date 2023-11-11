@@ -5,3 +5,5 @@ build/
 target/
 
 compile_commands.json
+/src/vtparser/
+/src/crispy/
