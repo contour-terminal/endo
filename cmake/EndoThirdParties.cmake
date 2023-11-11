@@ -94,32 +94,8 @@ else()
     set(THIRDPARTY_BUILTIN_unicode_core "system package")
 endif()
 
-
 EndoThirdParties_Embed_boxed_cpp()
 set(THIRDPARTY_BUILDIN_boxed_cpp "embedded")
-
-
-if (TARGET boxed-cpp::boxed-cpp)
-    message("TARGET BOXED CPP")
-else()
-    message("NO TARGET BOXED CPP")
-endif()
-
-
-
-if (TARGET unicode::core)
-    message("TARGET unicode core ")
-else()
-    message("NO TARGET unicode core")
-endif()
-
-
-if (TARGET unicode::unicode)
-    message("TARGET unicode unicode ")
-else()
-    message("NO TARGET unicode unicode")
-endif()
-
 
 macro(EndoThirdPartiesSummary2)
     message(STATUS "==============================================================================")
