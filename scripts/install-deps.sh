@@ -63,8 +63,8 @@ fetch_and_unpack()
     if test x$MACRO = x; then
         echo "add_subdirectory($NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
     else
-        echo "macro(CrushThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
-        echo "    add_subdirectory(\${CrushThirdParties_SRCDIR}/$NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
+        echo "macro(EndoThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
+        echo "    add_subdirectory(\${EndoThirdParties_SRCDIR}/$NAME EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
         echo "endmacro()" >> $SYSDEPS_CMAKE_FILE
     fi
 }
@@ -105,7 +105,7 @@ fetch_and_unpack_embeds()
     else
         echo "Hard linking external libunicode source directory to: $LIBUNICODE_SRC_DIR"
         MACRO="libunicode"
-        echo "macro(CrushThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
+        echo "macro(EndoThirdParties_Embed_$MACRO)" >> $SYSDEPS_CMAKE_FILE
         echo "    add_subdirectory($LIBUNICODE_SRC_DIR libunicode EXCLUDE_FROM_ALL)" >> $SYSDEPS_CMAKE_FILE
         echo "endmacro()" >> $SYSDEPS_CMAKE_FILE
     fi
