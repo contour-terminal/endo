@@ -128,6 +128,14 @@ fetch_and_unpack_boxed()
         boxed_cpp
 }
 
+fetch_and_unpack_range()
+{
+    fetch_and_unpack \
+        range-v3-0.12.0 \
+        range-v3-0.12.0.tar.gz \
+        https://github.com/ericniebler/range-v3/archive/refs/tags/0.12.0.tar.gz
+}
+
 prepare_fetch_and_unpack()
 {
     mkdir -p "${SYSDEPS_BASE_DIR}"
@@ -359,6 +367,7 @@ main()
             fetch_and_unpack_gsl
             fetch_and_unpack_yaml_cpp
             fetch_and_unpack_boxed
+            fetch_and_unpack_range
             echo "OS $ID not supported."
             echo "Please install the remaining dependencies manually."
             ;;
