@@ -10,7 +10,10 @@ add_library(Shell STATIC
     UnixPipe.cpp UnixPipe.h
     Visitor.h
 )
-target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM InputEditor)
+
+find_package(Threads REQUIRED)
+# util for pty.h
+target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM InputEditor Threads::Threads util)
 
 add_executable(endo
     main.cpp
