@@ -97,6 +97,23 @@ void ASTPrinter::visit(BuiltinChDirStmt const& node)
     }
 }
 
+void ASTPrinter::visit(BuiltinSetStmt const& node)
+{
+    _result += "set";
+
+    if (node.name)
+    {
+        _result += ' ';
+        node.name->accept(*this);
+    }
+    if (node.value)
+    {
+        _result += ' ';
+        node.value->accept(*this);
+    }
+    fmt::print(" I AM HERE \n");
+}
+
 void ASTPrinter::visit(CallPipeline const& node)
 {
     for (size_t i = 0; i < node.calls.size(); ++i)

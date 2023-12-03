@@ -30,6 +30,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::BuiltinExitStmt const&) override;
     void visit(ast::BuiltinExportStmt const&) override;
     void visit(ast::BuiltinChDirStmt const&) override;
+    void visit(ast::BuiltinSetStmt const&) override;
     void visit(ast::BuiltinFalseStmt const&) override;
     void visit(ast::BuiltinReadStmt const&) override;
     void visit(ast::BuiltinTrueStmt const&) override;

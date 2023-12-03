@@ -10,6 +10,7 @@
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -144,6 +145,22 @@ struct BuiltinReadStmt final: public Statement
     BuiltinReadStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
                     std::vector<std::unique_ptr<Expr>> parameters = {}):
         callback { callback }, parameters { std::move(parameters) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+struct BuiltinSetStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::unique_ptr<Expr> name;
+    std::unique_ptr<Expr> value;
+
+    BuiltinSetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                   std::unique_ptr<Expr> name,
+                   std::unique_ptr<Expr> value):
+        callback { callback }, name {std::move( name )}, value { std::move(value) }
     {
     }
 

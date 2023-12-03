@@ -71,7 +71,15 @@ TEST_CASE("shell.builtin.read.CustomVar")
     CHECK(shell.env.get("BRU").value_or("NONE") == input);
 }
 
-// TEST_CASE("shell.builtin.variable") TODO
+TEST_CASE("shell.builtin.set_variable")
+{
+    TestShell shell;
+    shell("set BRU hello");
+    CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
+}
+
+
+// TEST_CASE("shell.builtin.set_and_export_variable")
 // {
 //     TestShell shell;
 //     shell("set BRU hello");
