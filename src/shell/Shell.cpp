@@ -193,7 +193,8 @@ void Shell::registerBuiltinFunctions()
         .bind(&Shell::builtinChDir, this);
 
     registerFunction("set")
-        .param<std::string>("param")
+        .param<std::string>("name")
+        .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinSet, this);
 
@@ -279,6 +280,7 @@ void Shell::builtinSet(CoreVM::Params& context)
 {
     fmt::print("CALL THIS \n");
     _env.set(context.getString(1), context.getString(2));
+    context.setResult(true);
 }
 
 void Shell::builtinChDir(CoreVM::Params& context)
