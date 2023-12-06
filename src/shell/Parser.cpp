@@ -125,6 +125,14 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 auto name = consumeLiteral();
                 return std::make_unique<ast::BuiltinExportStmt>(*_runtime.find("export(S)V"), name);
             }
+            else if (_lexer.isDirective("set"))
+            {
+                _lexer.nextToken();
+                auto name = parseParameter();
+                auto value = parseParameter();
+                return std::make_unique<ast::BuiltinSetStmt>(
+                    *_runtime.find("set(SS)B"), std::move(name), std::move(value));
+            }
             else if (_lexer.isDirective("cd"))
             {
                 _lexer.nextToken();

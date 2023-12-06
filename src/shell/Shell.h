@@ -112,6 +112,7 @@ class Shell final: public CoreVM::Runtime
     void builtinCallProcessShellPiped(CoreVM::Params& context);
     void builtinChDirHome(CoreVM::Params& context);
     void builtinChDir(CoreVM::Params& context);
+    void builtinSet(CoreVM::Params& context);
     void builtinSetAndExport(CoreVM::Params& context);
     void builtinExport(CoreVM::Params& context);
     void builtinTrue(CoreVM::Params& context);

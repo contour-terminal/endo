@@ -192,6 +192,12 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinChDir, this);
 
+    registerFunction("set")
+        .param<std::string>("name")
+        .param<std::string>("value")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(&Shell::builtinSet, this);
+
     registerFunction("callproc")
         .param<std::vector<std::string>>("args")
         //.param<std::vector<CoreVM::CoreNumber>>("redirects")
@@ -270,6 +276,12 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
     context.setResult(result == 0);
 }
 
+void Shell::builtinSet(CoreVM::Params& context)
+{
+    _env.set(context.getString(1), context.getString(2));
+    context.setResult(true);
+}
+
 void Shell::builtinChDir(CoreVM::Params& context)
 {
     std::string const& path = context.getString(1);
@@ -317,7 +329,8 @@ void Shell::builtinFalse(CoreVM::Params& context)
 
 void Shell::builtinReadDefault(CoreVM::Params& context)
 {
-    std::string const line = readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+    std::string const line =
+        readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
     _env.set("REPLY", line);
     context.setResult(line);
 }
@@ -326,7 +339,8 @@ void Shell::builtinRead(CoreVM::Params& context)
 {
     CoreVM::CoreStringArray const& args = context.getStringArray(1);
     std::string const& variable = args.at(0);
-    std::string const line = readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+    std::string const line =
+        readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
     _env.set(variable, line);
     context.setResult(line);
 }

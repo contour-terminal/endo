@@ -91,6 +91,20 @@ void IRGenerator::visit(ast::BuiltinExportStmt const& node)
     _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "export");
 }
 
+void IRGenerator::visit(ast::BuiltinSetStmt const& node)
+{
+
+    auto callArguments = std::vector<CoreVM::Value*> {};
+    if (node.name && node.value)
+    {
+
+        callArguments.push_back(codegen(node.name.get()));
+        callArguments.push_back(codegen(node.value.get()));
+    }
+
+    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "set");
+}
+
 void IRGenerator::visit(ast::BuiltinReadStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};
@@ -119,7 +133,8 @@ void IRGenerator::visit(ast::BuiltinFalseStmt const&)
     _result = get(CoreVM::CoreNumber(1));
 }
 
-std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args)
+std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
+    std::vector<std::unique_ptr<ast::Expr>> const& args)
 {
     TRACE_SCOPE("createCallArgs");
     auto callArguments = std::vector<CoreVM::Constant*> {};
