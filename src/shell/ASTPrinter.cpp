@@ -111,7 +111,6 @@ void ASTPrinter::visit(BuiltinSetStmt const& node)
         _result += ' ';
         node.value->accept(*this);
     }
-    fmt::print(" I AM HERE \n");
 }
 
 void ASTPrinter::visit(CallPipeline const& node)

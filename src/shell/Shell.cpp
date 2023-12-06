@@ -278,7 +278,6 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
 
 void Shell::builtinSet(CoreVM::Params& context)
 {
-    fmt::print("CALL THIS \n");
     _env.set(context.getString(1), context.getString(2));
     context.setResult(true);
 }
