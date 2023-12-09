@@ -4,15 +4,16 @@ project(endo VERSION "0.0.0" LANGUAGES CXX)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
-include(EnableCcache)
-include(EndoThirdParties)
-include(PedanticCompiler)
 
 # setting defaults
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(EnableCcache)
+include(EndoThirdParties)
+include(PedanticCompiler)
 
 if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
     set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
