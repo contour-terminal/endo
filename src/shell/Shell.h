@@ -3,7 +3,6 @@
 
 #include <shell/ProcessGroup.h>
 #include <shell/Prompt.h>
-#include <shell/UnixPipe.h>
 #include <shell/TTY.h>
 
 #include <CoreVM/NativeCallback.h>
@@ -18,6 +17,8 @@
 
 #include <fcntl.h>
 #include <unistd.h>
+
+import UnixPipe;
 
 namespace endo
 {

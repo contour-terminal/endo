@@ -9,7 +9,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "shell/UnixPipe.h"
+import UnixPipe;
 
 namespace endo
 {

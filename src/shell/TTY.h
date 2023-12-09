@@ -1,11 +1,10 @@
 #pragma once
 
-#include <shell/UnixPipe.h>
-
 #include <mutex>
 #include <sstream>
 #include <thread>
 
+#include <fmt/format.h>
 #include <sys/ioctl.h>
 
 #include <termios.h>

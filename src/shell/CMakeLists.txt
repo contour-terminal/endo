@@ -7,8 +7,14 @@ add_library(Shell STATIC
     Prompt.cpp Prompt.h
     Shell.cpp Shell.h
     TTY.cpp TTY.h
-    UnixPipe.cpp UnixPipe.h
     Visitor.h
+)
+
+
+target_sources(Shell
+  PUBLIC
+    FILE_SET CXX_MODULES FILES
+      UnixPipe.cpp
 )
 
 find_package(Threads REQUIRED)
