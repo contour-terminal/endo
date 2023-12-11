@@ -19,6 +19,10 @@ target_sources(Shell
 
 find_package(Threads REQUIRED)
 # util for pty.h
+
+# see https://github.com/llvm/llvm-project/issues/75108
+# and https://github.com/ericniebler/range-v3/blob/f013aef2ae81f3661a560e7922a968665bedebff/include/meta/meta_fwd.hpp#L37
+target_compile_definitions(Shell PUBLIC META_WORKAROUND_LLVM_28385)
 target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM InputEditor Threads::Threads util)
 
 add_executable(endo
