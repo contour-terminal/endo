@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Shell.h>
 
 #include <crispy/escape.h>
 
@@ -9,6 +8,8 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 using crispy::escape;
+import Shell;
+import TTY;
 
 namespace
 {

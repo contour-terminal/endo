@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Shell.h>
-
 #include <crispy/utils.h>
 
 using namespace std::string_literals;
+
+import Shell;
+
 
 std::string_view getEnvironment(std::string_view name, std::string_view defaultValue)
 {

@@ -1,12 +1,8 @@
 add_library(Shell STATIC
     AST.h
-    ASTPrinter.cpp ASTPrinter.h
     IRGenerator.cpp IRGenerator.h
     Lexer.cpp Lexer.h
     Parser.cpp Parser.h
-    Prompt.cpp Prompt.h
-    Shell.cpp Shell.h
-    TTY.cpp TTY.h
     Visitor.h
 )
 
@@ -15,6 +11,10 @@ target_sources(Shell
   PUBLIC
     FILE_SET CXX_MODULES FILES
       UnixPipe.cpp
+      TTY.cpp
+      Shell.cpp
+      Prompt.cpp
+      ASTPrinter.cpp
 )
 
 find_package(Threads REQUIRED)

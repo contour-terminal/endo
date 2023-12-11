@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/ASTPrinter.h>
 #include <shell/Parser.h>
 #include <shell/ScopedLogger.h>
 
@@ -24,6 +23,7 @@
 // clang-format on
 // }}}
 
+import ASTPrinter;
 namespace endo
 {
 
