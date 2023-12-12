@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <shell/Parser.h>
 #include <shell/ProcessGroup.h>
 
 #include <CoreVM/Diagnostics.h>
@@ -32,6 +31,7 @@ import Prompt;
 import Lexer;
 import ASTPrinter;
 import IRGenerator;
+import Parser;
 
 export module Shell;
 

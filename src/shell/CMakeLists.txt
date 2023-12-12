@@ -1,6 +1,5 @@
 add_library(Shell STATIC
     AST.h
-    Parser.cpp Parser.h
     Visitor.h
 )
 
@@ -15,6 +14,7 @@ target_sources(Shell
       Prompt.cpp
       ASTPrinter.cpp
       IRGenerator.cpp
+      Parser.cpp
 )
 
 find_package(Threads REQUIRED)
