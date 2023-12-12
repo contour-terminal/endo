@@ -30,34 +30,7 @@ jobs:
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
         os: [ubuntu-latest]
-        # os: [ubuntu-latest, macos-latest]
-        # os: [ubuntu-latest, macos-latest, windows-latest]
         build_type: [RelWithDebInfo]
-        c_compiler: [gcc, clang-14]
-        include:
-          # - os: windows-latest
-          #   c_compiler: cl
-          #   cpp_compiler: cl
-          # - os: macos-latest
-          #   c_compiler: clang-14
-          #   cpp_compiler: clang++
-          - os: ubuntu-latest
-            c_compiler: gcc
-            cpp_compiler: g++
-          - os: ubuntu-latest
-            c_compiler: clang-14
-            cpp_compiler: clang++-14
-        # exclude:
-        #   # - os: windows-latest
-        #   #   c_compiler: gcc
-        #   # - os: windows-latest
-        #   #   c_compiler: clang
-        #   - os: macos-latest
-        #     c_compiler: gcc
-        #   - os: macos-latest
-        #     c_compiler: cl
-        #   - os: ubuntu-latest
-        #     c_compiler: cl
 
     steps:
     - uses: actions/checkout@v3
@@ -77,9 +50,7 @@ jobs:
     - name: "Get library crispy & vtparser"
       run: |
         set -ex
-        git clone --depth=1 https://github.com/contour-terminal/contour.git
-        ln -s $PWD/contour/src/crispy src/crispy
-        ln -s $PWD/contour/src/vtparser src/vtparser
+        ./get_contour_dirs.sh
 
     - name: "install dependencies"
       run: |
@@ -87,14 +58,39 @@ jobs:
         ./scripts/install-deps.sh
         sudo apt install -y librange-v3-dev
 
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Check cmake version
+      run: cmake --version
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Check Ninja version
+      run: ninja --version
+
+    - name: Install clang
+      run: |
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x llvm.sh
+            sudo ./llvm.sh all
+
+    - name: Check clang version
+      run: clang++ --version
+
+    - name: Check clang version
+      run: clang++-17 --version
+
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_CXX_COMPILER=clang++-17
+        -DCMAKE_C_COMPILER=clang-17
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -GNinja
         -S ${{ github.workspace }}
 
     - name: Build
