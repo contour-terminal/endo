@@ -14,6 +14,7 @@ module;
 #include <unistd.h>
 
 import UnixPipe;
+import IRGenerator;
 
 export module TTY;
 namespace endo
@@ -184,7 +185,7 @@ export class TestPTY final: public TTY
                 break;
             else if (writeResult > 0)
             {
-                auto _ = std::lock_guard { _outputMutex };
+                auto _ = std::lock_guard<std::mutex> { _outputMutex };
                 _output.append(buffer, writeResult);
             }
             else if (errno == EINTR || errno == EAGAIN)

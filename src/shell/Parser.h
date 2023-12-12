@@ -2,7 +2,6 @@
 #pragma once
 
 #include <shell/AST.h>
-#include <shell/Lexer.h>
 
 #include <CoreVM/Diagnostics.h>
 
@@ -10,6 +9,8 @@
 #include <optional>
 #include <string>
 #include <vector>
+
+import Lexer;
 
 namespace CoreVM
 {

@@ -6,6 +6,8 @@ module;
 
 #include <crispy/assert.h>
 
+import Lexer;
+
 export module ASTPrinter;
 
 namespace endo::ast
