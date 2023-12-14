@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include <CoreVM/Signature.h>
-
+module;
 #include <cstdlib>
 #include <string>
 #include <vector>
 
+module CoreVM;
 namespace CoreVM
 {
 

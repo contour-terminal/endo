@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/BasicBlock.h>
-#include <CoreVM/ir/IRHandler.h>
-#include <CoreVM/ir/Instructions.h>
-#include <CoreVM/transform/UnusedBlockPass.h>
-
+module;
 #include <list>
 
+module CoreVM;
 namespace CoreVM::transform
 {
 

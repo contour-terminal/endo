@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+module;
+#include <vector>
+#include <cstdint>
 
-#include <CoreVM/vm/Handler.h>
-#include <CoreVM/vm/Match.h>
-#include <CoreVM/vm/Program.h>
-#include <CoreVM/vm/Runner.h>
-
+module CoreVM;
 namespace CoreVM
 {
 
@@ -16,7 +15,7 @@ Match::Match(MatchDef def): _def(std::move(def))
 // {{{ MatchSame
 MatchSame::MatchSame(const MatchDef& def, Program* program): Match(def)
 {
-    for (const auto& one: def.cases)
+    for (auto one: def.cases)
     {
         _map[program->constants().getString(one.label)] = one.pc;
     }
@@ -34,7 +33,7 @@ uint64_t MatchSame::evaluate(const CoreString* condition, Runner* /*env*/) const
 // {{{ MatchHead
 MatchHead::MatchHead(const MatchDef& def, Program* program): Match(def)
 {
-    for (const auto& one: def.cases)
+    for (auto one: def.cases)
     {
         _map.insert(program->constants().getString(one.label), one.pc);
     }
@@ -52,7 +51,7 @@ uint64_t MatchHead::evaluate(const CoreString* condition, Runner* /*env*/) const
 // {{{ MatchTail
 MatchTail::MatchTail(const MatchDef& def, Program* program): Match(def)
 {
-    for (const auto& one: def.cases)
+    for (auto& one: def.cases)
     {
         _map.insert(program->constants().getString(one.label), one.pc);
     }
@@ -70,7 +69,7 @@ uint64_t MatchTail::evaluate(const CoreString* condition, Runner* /*env*/) const
 // {{{ MatchRegEx
 MatchRegEx::MatchRegEx(const MatchDef& def, Program* program): Match(def)
 {
-    for (const auto& one: def.cases)
+    for (auto& one: def.cases)
     {
         _map.emplace_back(program->constants().getRegExp(one.label), one.pc);
     }

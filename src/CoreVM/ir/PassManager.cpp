@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/IRProgram.h>
-#include <CoreVM/ir/PassManager.h>
-
+module;
 #include <fmt/format.h>
 
 #include <cstdio>
 #include <cstdlib>
 
+module CoreVM;
 namespace CoreVM
 {
 

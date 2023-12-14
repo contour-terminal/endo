@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/util/RegExp.h>
+module;
 
 #include <cstring>
 #include <regex>
 
+module CoreVM;
 namespace CoreVM::util
 {
 

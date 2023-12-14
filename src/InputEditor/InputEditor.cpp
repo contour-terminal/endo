@@ -3,5 +3,4 @@
 module input_editor;
 namespace InputEditor
 {
-
 }

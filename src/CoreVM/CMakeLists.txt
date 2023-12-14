@@ -7,7 +7,6 @@ add_library(CoreVM STATIC
     Diagnostics.cpp
     LiteralType.cpp
     MatchClass.cpp
-    NativeCallback.cpp
     Signature.cpp
     SourceLocation.cpp
     TargetCodeGenerator.cpp
@@ -37,6 +36,14 @@ add_library(CoreVM STATIC
     vm/Runner.cpp
     vm/Runtime.cpp
 )
+
+target_sources(CoreVM
+    PRIVATE
+        NativeCallback.cpp
+    PUBLIC
+      FILE_SET CXX_MODULES FILES
+        CoreVM.cppm
+  )
 
 target_compile_definitions(CoreVM PUBLIC
     $<$<BOOL:${COREVM_DIRECT_THREADED_VM}>:COREVM_DIRECT_THREADED_VM>

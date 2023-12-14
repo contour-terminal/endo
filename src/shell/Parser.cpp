@@ -4,9 +4,6 @@ module;
 #include <shell/ScopedLogger.h>
 #include <shell/AST.h>
 
-#include <CoreVM/vm/Runtime.h>
-#include <CoreVM/Diagnostics.h>
-
 #include <crispy/utils.h>
 
 #include <memory>
@@ -28,6 +25,7 @@ module;
 
 import ASTPrinter;
 import Lexer;
+import CoreVM;
 
 export module Parser;
 

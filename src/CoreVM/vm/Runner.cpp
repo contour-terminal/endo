@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/NativeCallback.h>
-#include <CoreVM/Params.h>
+module;
 #include <CoreVM/sysconfig.h>
 #include <CoreVM/util/strings.h>
-#include <CoreVM/vm/Handler.h>
-#include <CoreVM/vm/Instruction.h>
-#include <CoreVM/vm/Match.h>
-#include <CoreVM/vm/Program.h>
-#include <CoreVM/vm/Runner.h>
+#include <CoreVM/util/IPAddress.h>
+#include <CoreVM/util/assert.h>
 
 #include <cinttypes>
 #include <cmath>
@@ -18,6 +13,8 @@
 #include <memory>
 #include <utility>
 #include <vector>
+
+module CoreVM;
 
 // XXX Visual Studio doesn't support computed goto statements
 #if defined(_MSC_VER)

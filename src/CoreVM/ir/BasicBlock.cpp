@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/BasicBlock.h>
-#include <CoreVM/ir/IRBuiltinFunction.h>
-#include <CoreVM/ir/IRBuiltinHandler.h>
-#include <CoreVM/ir/IRHandler.h>
-#include <CoreVM/ir/Instr.h>
-#include <CoreVM/ir/Instructions.h>
+module;
 #include <CoreVM/util/assert.h>
+
+#include <fmt/format.h>
 
 #include <algorithm>
 #include <cassert>
@@ -14,11 +10,13 @@
 #include <iostream>
 #include <iterator>
 #include <sstream>
+#include <vector>
 
 /*
  * TODO assert() on last instruction in current BB is not a terminator instr.
  */
 
+module CoreVM;
 namespace CoreVM
 {
 
