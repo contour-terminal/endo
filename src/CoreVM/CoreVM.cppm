@@ -7,6 +7,7 @@ module;
 #include <CoreVM/util/SuffixTree.h>
 
 #include <functional>
+#include <utility>
 #include <vector>
 #include <optional>
 #include <string>
@@ -17,152 +18,13 @@ module;
 #include <cassert>
 
 export module CoreVM;
-
-export namespace CoreVM::util
-{
-
-/**
- * @brief CIDR network notation object.
- *
- * @see IPAddress
- */
-class Cidr
-{
-  public:
-    /**
-     * @brief Initializes an empty cidr notation.
-     *
-     * e.g. 0.0.0.0/0
-     */
-    Cidr(): _ipaddr(), _prefix(0) {}
-
-    /**
-     * @brief Initializes this CIDR notation with given IP address and prefix.
-     */
-    Cidr(const char* ipaddress, size_t prefix): _ipaddr(ipaddress), _prefix(prefix) {}
-
-    /**
-     * @brief Initializes this CIDR notation with given IP address and prefix.
-     */
-    Cidr(const IPAddress& ipaddress, size_t prefix): _ipaddr(ipaddress), _prefix(prefix) {}
-
-    /**
-     * @brief Retrieves the address part of this CIDR notation.
-     */
-    const IPAddress& address() const { return _ipaddr; }
-
-    /**
-     * @brief Sets the address part of this CIDR notation.
-     */
-    bool setAddress(const std::string& text, IPAddress::Family family)
-    {
-        return _ipaddr.assign(text, family);
-    }
-
-    /**
-     * @brief Retrieves the prefix part of this CIDR notation.
-     */
-    size_t prefix() const { return _prefix; }
-
-    /**
-     * @brief Sets the prefix part of this CIDR notation.
-     */
-    void setPrefix(size_t n) { _prefix = n; }
-
-    /**
-     * @brief Retrieves the string-form of this network in CIDR notation.
-     */
-    std::string str() const;
-
-    /**
-     * @brief test whether or not given IP address is inside the network.
-     *
-     * @retval true it is inside this network.
-     * @retval false it is not inside this network.
-     */
-    bool contains(const IPAddress& ipaddr) const;
-
-    /**
-     * @brief compares 2 CIDR notations for equality.
-     */
-    friend bool operator==(const Cidr& a, const Cidr& b);
-
-    /**
-     * @brief compares 2 CIDR notations for inequality.
-     */
-    friend bool operator!=(const Cidr& a, const Cidr& b);
-
-  private:
-    IPAddress _ipaddr;
-    size_t _prefix;
-};
-
-class BufferRef;
-
-class RegExp
-{
-  private:
-    std::string _pattern;
-    std::regex _re;
-
-  public:
-    using Result = std::smatch;
-
-  public:
-    explicit RegExp(std::string const& pattern);
-    RegExp() = default;
-    RegExp(RegExp const& v) = default;
-    ~RegExp() = default;
-
-    RegExp(RegExp&& v) noexcept = default;
-    RegExp& operator=(RegExp&& v) noexcept = default;
-
-    bool match(const std::string& target, Result* result = nullptr) const;
-
-    [[nodiscard]] const std::string& pattern() const { return _pattern; }
-    [[nodiscard]] const char* c_str() const;
-
-    operator const std::string&() const { return _pattern; }
-
-    friend bool operator==(const RegExp& a, const RegExp& b) { return a.pattern() == b.pattern(); }
-    friend bool operator!=(const RegExp& a, const RegExp& b) { return a.pattern() != b.pattern(); }
-    friend bool operator<=(const RegExp& a, const RegExp& b) { return a.pattern() <= b.pattern(); }
-    friend bool operator>=(const RegExp& a, const RegExp& b) { return a.pattern() >= b.pattern(); }
-    friend bool operator<(const RegExp& a, const RegExp& b) { return a.pattern() < b.pattern(); }
-    friend bool operator>(const RegExp& a, const RegExp& b) { return a.pattern() > b.pattern(); }
-};
-
-class RegExpContext
-{
-  public:
-    const RegExp::Result* regexMatch() const
-    {
-        if (!_regexMatch)
-            _regexMatch = std::make_unique<RegExp::Result>();
-
-        return _regexMatch.get();
-    }
-
-    RegExp::Result* regexMatch()
-    {
-        if (!_regexMatch)
-            _regexMatch = std::make_unique<RegExp::Result>();
-
-        return _regexMatch.get();
-    }
-
-  private:
-    mutable std::unique_ptr<RegExp::Result> _regexMatch;
-};
-
-} // namespace CoreVM::util
-
+export import :enums;
+export import :util;
 
 export namespace CoreVM::diagnostics
 {
     class Report;
 }
-
 
 export namespace CoreVM
 {
@@ -187,208 +49,6 @@ class Program;
 class Handler;
 class Runner;
 class Runtime;
-
-
-using Quota = int64_t;
-constexpr Quota NoQuota = -1;
-
-
-enum Opcode : uint16_t
-{
-    // misc
-    NOP = 0,  // NOP                 ; no operation
-    ALLOCA,   // ALLOCA imm         ; pushes A default-initialized items onto the stack
-    DISCARD,  // DISCARD imm        ; pops A items from the stack
-    STACKROT, // STACKROT imm       ; rotate stack at stack[imm], moving stack[imm] to top
-
-    GALLOCA, // GALLOCA imm        ; appends A default-initialized items to the global scope
-    GLOAD,   // GLOAD imm          ; stack[sp++] = globals[imm]
-    GSTORE,  // GSTORE imm         ; globals[imm] = stack[--sp]
-
-    // control
-    EXIT, // EXIT imm           ; exit program
-    JMP,  // JMP imm            ; unconditional jump to A
-    JN,   // JN imm             ; conditional jump to A if (pop() != 0)
-    JZ,   // JZ imm             ; conditional jump to A if (pop() == 0)
-
-    // const arrays
-    ITLOAD, // stack[sp++] = intArray[imm]
-    STLOAD, // stack[sp++] = stringArray[imm]
-    PTLOAD, // stack[sp++] = ipaddrArray[imm]
-    CTLOAD, // stack[sp++] = cidrArray[imm]
-
-    LOAD,  // LOAD imm, imm      ; stack[++op1] = stack[op2]
-    STORE, // STORE imm, imm     ; stack[op1] = stack[op2]
-
-    // numerical
-    ILOAD,  // ILOAD imm
-    NLOAD,  // NLOAD numberConstants[imm]
-    NNEG,   //                    ; stack[SP] = -stack[SP]
-    NNOT,   //                    ; stack[SP] = ~stack[SP]
-    NADD,   //                    ; npush(npop() + npop())
-    NSUB,   //                    ; npush(npop() - npop())
-    NMUL,   //                    ; npush(npop() * npop())
-    NDIV,   //                    ; npush(npop() / npop())
-    NREM,   //                    ; npush(npop() % npop())
-    NSHL,   // t = stack[SP-2] << stack[SP-1]; pop(2); npush(t);
-    NSHR,   // A = B >> C
-    NPOW,   // A = B ** C
-    NAND,   // A = B & C
-    NOR,    // A = B | C
-    NXOR,   // A = B ^ C
-    NCMPZ,  // A = B == 0
-    NCMPEQ, // A = B == C
-    NCMPNE, // A = B != C
-    NCMPLE, // A = B <= C
-    NCMPGE, // A = B >= C
-    NCMPLT, // A = B < C
-    NCMPGT, // A = B > C
-
-    // boolean
-    BNOT, // A = !A
-    BAND, // A = B and C
-    BOR,  // A = B or C
-    BXOR, // A = B xor C
-
-    // string
-    SLOAD,     // SLOAD stringConstants[imm]
-    SADD,      // b = pop(); a = pop(); push(a + b);
-    SSUBSTR,   // A = substr(B, C /*offset*/, C+1 /*count*/)
-    SCMPEQ,    // A = B == C
-    SCMPNE,    // A = B != C
-    SCMPLE,    // A = B <= C
-    SCMPGE,    // A = B >= C
-    SCMPLT,    // A = B < C
-    SCMPGT,    // A = B > C
-    SCMPBEG,   // A = B =^ C           /* B begins with C */
-    SCMPEND,   // A = B =$ C           /* B ends with C */
-    SCONTAINS, // A = B in C           /* B is contained in C */
-    SLEN,      // A = strlen(B)
-    SISEMPTY,  // A = strlen(B) == 0
-    SMATCHEQ,  // $pc = MatchSame[A].evaluate(B);
-    SMATCHBEG, // $pc = MatchBegin[A].evaluate(B);
-    SMATCHEND, // $pc = MatchEnd[A].evaluate(B);
-    SMATCHR,   // $pc = MatchRegEx[A].evaluate(B);
-
-    // IP address
-    PLOAD,   // PLOAD ipaddrConstants[imm]
-    PCMPEQ,  // A = ip(B) == ip(C)
-    PCMPNE,  // A = ip(B) != ip(C)
-    PINCIDR, // A = cidr(C).contains(ip(B))
-
-    // CIDR
-    CLOAD, // CLOAD  cidrConstants[imm]
-
-    // regex
-    SREGMATCH, // A = B =~ C           /* regex match against regexPool[C] */
-    SREGGROUP, // A = regex.match(B)   /* regex match result */
-
-    // conversion
-    N2S, // push(itoa(pop()))
-    P2S, // push(ip(pop()).toString())
-    C2S, // push(cidr(pop()).toString()
-    R2S, // push(regex(pop()).toString()
-    S2N, // push(atoi(pop()))
-
-    // invokation
-    // CALL A = id, B = argc
-    CALL,    // calls A with B arguments, always pushes result to stack
-    HANDLER, // calls A with B arguments (never leaves result on stack)
-};
-
-using Instruction = uint64_t;
-using Operand = uint16_t;
-
-
-enum class MatchClass
-{
-    Same,
-    Head,
-    Tail,
-    RegExp,
-};
-
-
-std::string tos(MatchClass c);
-
-
-enum class LiteralType
-{
-    Void = 0,
-    Boolean = 1,      // bool (int64)
-    Number = 2,       // int64
-    String = 3,       // std::string*
-    IPAddress = 5,    // IPAddress*
-    Cidr = 6,         // Cidr*
-    RegExp = 7,       // RegExp*
-    Handler = 8,      // bool (*native_handler)(CoreContext*);
-    IntArray = 9,     // array<int>
-    StringArray = 10, // array<string>
-    IPAddrArray = 11, // array<IPAddress>
-    CidrArray = 12,   // array<Cidr>
-    IntPair = 13,     // array<int, 2>
-};
-
-
-
-enum class UnaryOperator
-{
-    // numerical
-    INeg,
-    INot,
-    // boolean
-    BNot,
-    // string
-    SLen,
-    SIsEmpty,
-};
-
-enum class BinaryOperator
-{
-    // numerical
-    IAdd,
-    ISub,
-    IMul,
-    IDiv,
-    IRem,
-    IPow,
-    IAnd,
-    IOr,
-    IXor,
-    IShl,
-    IShr,
-    ICmpEQ,
-    ICmpNE,
-    ICmpLE,
-    ICmpGE,
-    ICmpLT,
-    ICmpGT,
-    // boolean
-    BAnd,
-    BOr,
-    BXor,
-    // string
-    SAdd,
-    SSubStr,
-    SCmpEQ,
-    SCmpNE,
-    SCmpLE,
-    SCmpGE,
-    SCmpLT,
-    SCmpGT,
-    SCmpRE,
-    SCmpBeg,
-    SCmpEnd,
-    SIn,
-    // ip
-    PCmpEQ,
-    PCmpNE,
-    PInCidr,
-};
-
-const char* cstr(BinaryOperator op);
-const char* cstr(UnaryOperator op);
-
 class NopInstr;
 class AllocaInstr;
 class StoreInstr;
@@ -403,164 +63,12 @@ class MatchInstr;
 class RegExpGroupInstr;
 class CastInstr;
 
-template <const UnaryOperator Operator, const LiteralType ResultType>
-class UnaryInstr;
 
-template <const BinaryOperator Operator, const LiteralType ResultType>
-class BinaryInstr;
-
-// numeric
-using INegInstr = UnaryInstr<UnaryOperator::INeg, LiteralType::Number>;
-using INotInstr = UnaryInstr<UnaryOperator::INot, LiteralType::Number>;
-using IAddInstr = BinaryInstr<BinaryOperator::IAdd, LiteralType::Number>;
-using ISubInstr = BinaryInstr<BinaryOperator::ISub, LiteralType::Number>;
-using IMulInstr = BinaryInstr<BinaryOperator::IMul, LiteralType::Number>;
-using IDivInstr = BinaryInstr<BinaryOperator::IDiv, LiteralType::Number>;
-using IRemInstr = BinaryInstr<BinaryOperator::IRem, LiteralType::Number>;
-using IPowInstr = BinaryInstr<BinaryOperator::IPow, LiteralType::Number>;
-using IAndInstr = BinaryInstr<BinaryOperator::IAnd, LiteralType::Number>;
-using IOrInstr = BinaryInstr<BinaryOperator::IOr, LiteralType::Number>;
-using IXorInstr = BinaryInstr<BinaryOperator::IXor, LiteralType::Number>;
-using IShlInstr = BinaryInstr<BinaryOperator::IShl, LiteralType::Number>;
-using IShrInstr = BinaryInstr<BinaryOperator::IShr, LiteralType::Number>;
-
-using ICmpEQInstr = BinaryInstr<BinaryOperator::ICmpEQ, LiteralType::Boolean>;
-using ICmpNEInstr = BinaryInstr<BinaryOperator::ICmpNE, LiteralType::Boolean>;
-using ICmpLEInstr = BinaryInstr<BinaryOperator::ICmpLE, LiteralType::Boolean>;
-using ICmpGEInstr = BinaryInstr<BinaryOperator::ICmpGE, LiteralType::Boolean>;
-using ICmpLTInstr = BinaryInstr<BinaryOperator::ICmpLT, LiteralType::Boolean>;
-using ICmpGTInstr = BinaryInstr<BinaryOperator::ICmpGT, LiteralType::Boolean>;
-
-// binary
-using BNotInstr = UnaryInstr<UnaryOperator::BNot, LiteralType::Boolean>;
-using BAndInstr = BinaryInstr<BinaryOperator::BAnd, LiteralType::Boolean>;
-using BOrInstr = BinaryInstr<BinaryOperator::BOr, LiteralType::Boolean>;
-using BXorInstr = BinaryInstr<BinaryOperator::BXor, LiteralType::Boolean>;
-
-// string
-using SLenInstr = UnaryInstr<UnaryOperator::SLen, LiteralType::Number>;
-using SIsEmptyInstr = UnaryInstr<UnaryOperator::SIsEmpty, LiteralType::Boolean>;
-using SAddInstr = BinaryInstr<BinaryOperator::SAdd, LiteralType::String>;
-using SSubStrInstr = BinaryInstr<BinaryOperator::SSubStr, LiteralType::String>;
-using SCmpEQInstr = BinaryInstr<BinaryOperator::SCmpEQ, LiteralType::Boolean>;
-using SCmpNEInstr = BinaryInstr<BinaryOperator::SCmpNE, LiteralType::Boolean>;
-using SCmpLEInstr = BinaryInstr<BinaryOperator::SCmpLE, LiteralType::Boolean>;
-using SCmpGEInstr = BinaryInstr<BinaryOperator::SCmpGE, LiteralType::Boolean>;
-using SCmpLTInstr = BinaryInstr<BinaryOperator::SCmpLT, LiteralType::Boolean>;
-using SCmpGTInstr = BinaryInstr<BinaryOperator::SCmpGT, LiteralType::Boolean>;
-using SCmpREInstr = BinaryInstr<BinaryOperator::SCmpRE, LiteralType::Boolean>;
-using SCmpBegInstr = BinaryInstr<BinaryOperator::SCmpBeg, LiteralType::Boolean>;
-using SCmpEndInstr = BinaryInstr<BinaryOperator::SCmpEnd, LiteralType::Boolean>;
-using SInInstr = BinaryInstr<BinaryOperator::SIn, LiteralType::Boolean>;
-
-// ip
-using PCmpEQInstr = BinaryInstr<BinaryOperator::PCmpEQ, LiteralType::Boolean>;
-using PCmpNEInstr = BinaryInstr<BinaryOperator::PCmpNE, LiteralType::Boolean>;
-using PInCidrInstr = BinaryInstr<BinaryOperator::PInCidr, LiteralType::Boolean>;
-
-
-enum class OperandSig
-{
-    V,   // no operands
-    I,   // imm16
-    II,  // imm16, imm16
-    III, // imm16, imm16, imm16
-};
-
-// --------------------------------------------------------------------------
-// opcode pricing
-
-constexpr inline unsigned getPrice(Opcode opcode)
-{
-    switch (opcode)
-    {
-        case Opcode::EXIT: return 0;
-        case Opcode::JMP: return 1;
-        case Opcode::JN:
-        case Opcode::JZ: return 2;
-        case Opcode::GSTORE:
-        case Opcode::STORE: return 4;
-        case Opcode::CALL:
-        case Opcode::HANDLER: return 8;
-        default: return 1;
-    }
-}
-
-// --------------------------------------------------------------------------
-// encoder
-
-
-/** Creates an instruction with no operands. */
-constexpr Instruction makeInstruction(Opcode opc)
-{
-    return (Instruction) opc;
-}
-
-/** Creates an instruction with one operand. */
-constexpr Instruction makeInstruction(Opcode opc, Operand op1)
-{
-    return (opc | (op1 << 16));
-}
-
-/** Creates an instruction with two operands. */
-constexpr Instruction makeInstruction(Opcode opc, Operand op1, Operand op2)
-{
-    return (opc | (op1 << 16) | (Instruction(op2) << 32));
-}
-
-/** Creates an instruction with three operands. */
-constexpr Instruction makeInstruction(Opcode opc, Operand op1, Operand op2, Operand op3)
-{
-    return (opc | (op1 << 16) | (Instruction(op2) << 32) | (Instruction(op3) << 48));
-}
-
-// --------------------------------------------------------------------------
-// decoder
-
-/** decodes the opcode from the instruction. */
-constexpr Opcode opcode(Instruction instr)
-{
-    return static_cast<Opcode>(instr & 0xFF);
-}
-
-/** Decodes the first operand from the instruction. */
-constexpr Operand operandA(Instruction instr)
-{
-    return static_cast<Operand>((instr >> 16) & 0xFFFF);
-}
-
-/** Decodes the second operand from the instruction. */
-constexpr Operand operandB(Instruction instr)
-{
-    return static_cast<Operand>((instr >> 32) & 0xFFFF);
-}
-
-/** Decodes the third operand from the instruction. */
-constexpr Operand operandC(Instruction instr)
-{
-    return static_cast<Operand>((instr >> 48) & 0xFFFF);
-}
-
-/** Determines the operand signature of the given instruction. */
-OperandSig operandSignature(Opcode opc);
-
-/** Returns the mnemonic string representing the opcode. */
-const char* mnemonic(Opcode opc);
-
-/**
- * Determines the data type of the result being pushed onto the stack, if any.
- */
-LiteralType resultType(Opcode opc);
-
-/**
- * Computes the stack height after the execution of the given instruction.
- */
-int getStackChange(Instruction instr);
-
-/**
- * Computes the highest stack size needed to run the given program.
- */
-size_t computeStackSize(const Instruction* program, size_t programSize);
+using Register = uint64_t; // vm
+using CoreNumber = int64_t;
+using CoreString = std::string;
+using Quota = int64_t;
+constexpr Quota NoQuota = -1;
 
 /**
  * Disassembles the @p program with @p n instructions.
@@ -590,11 +98,6 @@ std::string disassemble(const Instruction* program,
  */
 std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool* cp);
 
-
-using Register = uint64_t; // vm
-
-using CoreNumber = int64_t;
-using CoreString = std::string;
 
 std::string tos(LiteralType type);
 
@@ -1008,20 +511,20 @@ class ConstantPool
     void setModules(const std::vector<std::pair<std::string, std::string>>& modules) { _modules = modules; }
 
     // accessor
-    CoreNumber getInteger(size_t id) const { return _numbers[id]; }
-    const CoreString& getString(size_t id) const { return _strings[id]; }
-    const util::IPAddress& getIPAddress(size_t id) const { return _ipaddrs[id]; }
-    const util::Cidr& getCidr(size_t id) const { return _cidrs[id]; }
-    const util::RegExp& getRegExp(size_t id) const { return _regularExpressions[id]; }
+    [[nodiscard]] CoreNumber getInteger(size_t id) const { return _numbers[id]; }
+    [[nodiscard]] const CoreString& getString(size_t id) const { return _strings[id]; }
+    [[nodiscard]] const util::IPAddress& getIPAddress(size_t id) const { return _ipaddrs[id]; }
+    [[nodiscard]] const util::Cidr& getCidr(size_t id) const { return _cidrs[id]; }
+    [[nodiscard]] const util::RegExp& getRegExp(size_t id) const { return _regularExpressions[id]; }
 
-    const std::vector<CoreNumber>& getIntArray(size_t id) const { return _intArrays[id]; }
-    const std::vector<std::string>& getStringArray(size_t id) const { return _stringArrays[id]; }
-    const std::vector<util::IPAddress>& getIPAddressArray(size_t id) const { return _ipaddrArrays[id]; }
-    const std::vector<util::Cidr>& getCidrArray(size_t id) const { return _cidrArrays[id]; }
+    [[nodiscard]] const std::vector<CoreNumber>& getIntArray(size_t id) const { return _intArrays[id]; }
+    [[nodiscard]] const std::vector<std::string>& getStringArray(size_t id) const { return _stringArrays[id]; }
+    [[nodiscard]] const std::vector<util::IPAddress>& getIPAddressArray(size_t id) const { return _ipaddrArrays[id]; }
+    [[nodiscard]] const std::vector<util::Cidr>& getCidrArray(size_t id) const { return _cidrArrays[id]; }
 
-    const MatchDef& getMatchDef(size_t id) const { return _matchDefs[id]; }
+    [[nodiscard]] const MatchDef& getMatchDef(size_t id) const { return _matchDefs[id]; }
 
-    const std::pair<std::string, Code>& getHandler(size_t id) const { return _handlers[id]; }
+    [[nodiscard]] const std::pair<std::string, Code>& getHandler(size_t id) const { return _handlers[id]; }
     std::pair<std::string, Code>& getHandler(size_t id) { return _handlers[id]; }
 
     size_t setHandler(const std::string& name, Code&& code)
@@ -1032,11 +535,11 @@ class ConstantPool
     }
 
     // bulk accessors
-    const std::vector<std::pair<std::string, std::string>>& getModules() const { return _modules; }
-    const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
-    const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
-    const std::vector<std::string>& getNativeHandlerSignatures() const { return _nativeHandlerSignatures; }
-    const std::vector<std::string>& getNativeFunctionSignatures() const { return _nativeFunctionSignatures; }
+    [[nodiscard]] const std::vector<std::pair<std::string, std::string>>& getModules() const { return _modules; }
+    [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
+    [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
+    [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const { return _nativeHandlerSignatures; }
+    [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const { return _nativeFunctionSignatures; }
 
     void dump() const;
 
@@ -1587,7 +1090,7 @@ template <typename T, const LiteralType Ty>
 class ConstantValue: public Constant
 {
   public:
-    ConstantValue(const T& value, const std::string& name = ""): Constant(Ty, name), _value(value) {}
+    ConstantValue(T  value, const std::string& name = ""): Constant(Ty, name), _value(std::move(value)) {}
 
     [[nodiscard]] T get() const { return _value; }
 
@@ -2005,8 +1508,6 @@ class MatchInstr: public TerminateInstr
     std::vector<std::pair<Constant*, BasicBlock*>> _cases;
 };
 
-class Instr;
-
 class IsSameInstruction: public InstructionVisitor
 {
   public:
@@ -2163,8 +1664,8 @@ class IRBuiltinHandler: public Constant
     {
     }
 
-    const Signature& signature() const { return _native.signature(); }
-    const NativeCallback& getNative() const { return _native; }
+    [[nodiscard]] const Signature& signature() const { return _native.signature(); }
+    [[nodiscard]] const NativeCallback& getNative() const { return _native; }
 
   private:
     const NativeCallback& _native;

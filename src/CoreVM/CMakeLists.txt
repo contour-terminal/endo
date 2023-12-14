@@ -4,12 +4,17 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sysconfig.h.cmake
                ${CMAKE_CURRENT_BINARY_DIR}/sysconfig.h)
 
 add_library(CoreVM STATIC
+)
+
+target_sources(CoreVM
+    PRIVATE
     Diagnostics.cpp
     LiteralType.cpp
     MatchClass.cpp
     Signature.cpp
     SourceLocation.cpp
     TargetCodeGenerator.cpp
+    NativeCallback.cpp
     ir/BasicBlock.cpp
     ir/Constant.cpp
     ir/ConstantArray.cpp
@@ -35,14 +40,11 @@ add_library(CoreVM STATIC
     vm/Program.cpp
     vm/Runner.cpp
     vm/Runtime.cpp
-)
-
-target_sources(CoreVM
-    PRIVATE
-        NativeCallback.cpp
     PUBLIC
       FILE_SET CXX_MODULES FILES
         CoreVM.cppm
+        util.cppm
+        enums.cppm
   )
 
 target_compile_definitions(CoreVM PUBLIC
