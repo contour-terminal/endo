@@ -1,25 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0
-
-#pragma once
-
-#include <CoreVM/LiteralType.h>
-
-#include <cstddef>
+module;
 #include <cstdint>
-#include <vector>
+#include <string>
+export module CoreVM:enums;
 
-namespace CoreVM
+export namespace CoreVM
 {
-
-class ConstantPool;
-
-enum class OperandSig
-{
-    V,   // no operands
-    I,   // imm16
-    II,  // imm16, imm16
-    III, // imm16, imm16, imm16
-};
 
 enum Opcode : uint16_t
 {
@@ -124,8 +109,158 @@ enum Opcode : uint16_t
     HANDLER, // calls A with B arguments (never leaves result on stack)
 };
 
-using Instruction = uint64_t;
-using Operand = uint16_t;
+enum class MatchClass
+{
+    Same,
+    Head,
+    Tail,
+    RegExp,
+};
+
+
+std::string tos(MatchClass c);
+
+
+enum class UnaryOperator
+{
+    // numerical
+    INeg,
+    INot,
+    // boolean
+    BNot,
+    // string
+    SLen,
+    SIsEmpty,
+};
+
+enum class BinaryOperator
+{
+    // numerical
+    IAdd,
+    ISub,
+    IMul,
+    IDiv,
+    IRem,
+    IPow,
+    IAnd,
+    IOr,
+    IXor,
+    IShl,
+    IShr,
+    ICmpEQ,
+    ICmpNE,
+    ICmpLE,
+    ICmpGE,
+    ICmpLT,
+    ICmpGT,
+    // boolean
+    BAnd,
+    BOr,
+    BXor,
+    // string
+    SAdd,
+    SSubStr,
+    SCmpEQ,
+    SCmpNE,
+    SCmpLE,
+    SCmpGE,
+    SCmpLT,
+    SCmpGT,
+    SCmpRE,
+    SCmpBeg,
+    SCmpEnd,
+    SIn,
+    // ip
+    PCmpEQ,
+    PCmpNE,
+    PInCidr,
+};
+
+const char* cstr(BinaryOperator op);
+const char* cstr(UnaryOperator op);
+
+enum class LiteralType
+{
+    Void = 0,
+    Boolean = 1,      // bool (int64)
+    Number = 2,       // int64
+    String = 3,       // std::string*
+    IPAddress = 5,    // IPAddress*
+    Cidr = 6,         // Cidr*
+    RegExp = 7,       // RegExp*
+    Handler = 8,      // bool (*native_handler)(CoreContext*);
+    IntArray = 9,     // array<int>
+    StringArray = 10, // array<string>
+    IPAddrArray = 11, // array<IPAddress>
+    CidrArray = 12,   // array<Cidr>
+    IntPair = 13,     // array<int, 2>
+};
+
+
+
+template <const UnaryOperator Operator, const LiteralType ResultType>
+class UnaryInstr;
+
+template <const BinaryOperator Operator, const LiteralType ResultType>
+class BinaryInstr;
+
+// numeric
+using INegInstr = UnaryInstr<UnaryOperator::INeg, LiteralType::Number>;
+using INotInstr = UnaryInstr<UnaryOperator::INot, LiteralType::Number>;
+using IAddInstr = BinaryInstr<BinaryOperator::IAdd, LiteralType::Number>;
+using ISubInstr = BinaryInstr<BinaryOperator::ISub, LiteralType::Number>;
+using IMulInstr = BinaryInstr<BinaryOperator::IMul, LiteralType::Number>;
+using IDivInstr = BinaryInstr<BinaryOperator::IDiv, LiteralType::Number>;
+using IRemInstr = BinaryInstr<BinaryOperator::IRem, LiteralType::Number>;
+using IPowInstr = BinaryInstr<BinaryOperator::IPow, LiteralType::Number>;
+using IAndInstr = BinaryInstr<BinaryOperator::IAnd, LiteralType::Number>;
+using IOrInstr = BinaryInstr<BinaryOperator::IOr, LiteralType::Number>;
+using IXorInstr = BinaryInstr<BinaryOperator::IXor, LiteralType::Number>;
+using IShlInstr = BinaryInstr<BinaryOperator::IShl, LiteralType::Number>;
+using IShrInstr = BinaryInstr<BinaryOperator::IShr, LiteralType::Number>;
+
+using ICmpEQInstr = BinaryInstr<BinaryOperator::ICmpEQ, LiteralType::Boolean>;
+using ICmpNEInstr = BinaryInstr<BinaryOperator::ICmpNE, LiteralType::Boolean>;
+using ICmpLEInstr = BinaryInstr<BinaryOperator::ICmpLE, LiteralType::Boolean>;
+using ICmpGEInstr = BinaryInstr<BinaryOperator::ICmpGE, LiteralType::Boolean>;
+using ICmpLTInstr = BinaryInstr<BinaryOperator::ICmpLT, LiteralType::Boolean>;
+using ICmpGTInstr = BinaryInstr<BinaryOperator::ICmpGT, LiteralType::Boolean>;
+
+// binary
+using BNotInstr = UnaryInstr<UnaryOperator::BNot, LiteralType::Boolean>;
+using BAndInstr = BinaryInstr<BinaryOperator::BAnd, LiteralType::Boolean>;
+using BOrInstr = BinaryInstr<BinaryOperator::BOr, LiteralType::Boolean>;
+using BXorInstr = BinaryInstr<BinaryOperator::BXor, LiteralType::Boolean>;
+
+// string
+using SLenInstr = UnaryInstr<UnaryOperator::SLen, LiteralType::Number>;
+using SIsEmptyInstr = UnaryInstr<UnaryOperator::SIsEmpty, LiteralType::Boolean>;
+using SAddInstr = BinaryInstr<BinaryOperator::SAdd, LiteralType::String>;
+using SSubStrInstr = BinaryInstr<BinaryOperator::SSubStr, LiteralType::String>;
+using SCmpEQInstr = BinaryInstr<BinaryOperator::SCmpEQ, LiteralType::Boolean>;
+using SCmpNEInstr = BinaryInstr<BinaryOperator::SCmpNE, LiteralType::Boolean>;
+using SCmpLEInstr = BinaryInstr<BinaryOperator::SCmpLE, LiteralType::Boolean>;
+using SCmpGEInstr = BinaryInstr<BinaryOperator::SCmpGE, LiteralType::Boolean>;
+using SCmpLTInstr = BinaryInstr<BinaryOperator::SCmpLT, LiteralType::Boolean>;
+using SCmpGTInstr = BinaryInstr<BinaryOperator::SCmpGT, LiteralType::Boolean>;
+using SCmpREInstr = BinaryInstr<BinaryOperator::SCmpRE, LiteralType::Boolean>;
+using SCmpBegInstr = BinaryInstr<BinaryOperator::SCmpBeg, LiteralType::Boolean>;
+using SCmpEndInstr = BinaryInstr<BinaryOperator::SCmpEnd, LiteralType::Boolean>;
+using SInInstr = BinaryInstr<BinaryOperator::SIn, LiteralType::Boolean>;
+
+// ip
+using PCmpEQInstr = BinaryInstr<BinaryOperator::PCmpEQ, LiteralType::Boolean>;
+using PCmpNEInstr = BinaryInstr<BinaryOperator::PCmpNE, LiteralType::Boolean>;
+using PInCidrInstr = BinaryInstr<BinaryOperator::PInCidr, LiteralType::Boolean>;
+
+
+enum class OperandSig
+{
+    V,   // no operands
+    I,   // imm16
+    II,  // imm16, imm16
+    III, // imm16, imm16, imm16
+};
 
 // --------------------------------------------------------------------------
 // opcode pricing
@@ -148,6 +283,13 @@ constexpr inline unsigned getPrice(Opcode opcode)
 
 // --------------------------------------------------------------------------
 // encoder
+
+
+
+using Instruction = uint64_t;
+using Operand = uint16_t;
+
+
 
 /** Creates an instruction with no operands. */
 constexpr Instruction makeInstruction(Opcode opc)
@@ -221,32 +363,5 @@ int getStackChange(Instruction instr);
  */
 size_t computeStackSize(const Instruction* program, size_t programSize);
 
-/**
- * Disassembles the @p program with @p n instructions.
- *
- * @param program pointer to the first instruction to disassemble
- * @param n       number of instructions to disassemble
- * @param indent  prefix to inject in front of every new instruction line
- * @param cp      pointer to ConstantPool for pretty-printing or @c nullptr
- *
- * @returns       disassembled program in text form.
- */
-std::string disassemble(const Instruction* program,
-                        size_t n,
-                        const std::string& indent,
-                        const ConstantPool* cp);
 
-/**
- * Disassembles a single instruction.
- *
- * @param pc      Instruction to disassemble.
- * @param ip      The instruction pointer at which position the instruction is
- *                located within the program.
- * @param sp      current stack size (depth) before executing given instruction.
- *                This value will be modified as if the instruction would have
- *                been executed.
- * @param cp      pointer to ConstantPool for pretty-printing or @c nullptr
- */
-std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool* cp);
-
-} // namespace CoreVM
+}

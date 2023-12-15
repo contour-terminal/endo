@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/InstructionVisitor.h>
-#include <CoreVM/ir/Instructions.h>
-
+module;
+#include <cstddef>
+module CoreVM;
 namespace CoreVM
 {
 

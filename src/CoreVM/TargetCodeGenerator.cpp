@@ -1,25 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/LiteralType.h>
-#include <CoreVM/TargetCodeGenerator.h>
-#include <CoreVM/ir/BasicBlock.h>
-#include <CoreVM/ir/ConstantArray.h>
-#include <CoreVM/ir/ConstantValue.h>
-#include <CoreVM/ir/IRBuiltinFunction.h>
-#include <CoreVM/ir/IRBuiltinHandler.h>
-#include <CoreVM/ir/IRHandler.h>
-#include <CoreVM/ir/IRProgram.h>
-#include <CoreVM/ir/Instructions.h>
+module;
 #include <CoreVM/util/assert.h>
-#include <CoreVM/vm/ConstantPool.h>
-#include <CoreVM/vm/Match.h>
-#include <CoreVM/vm/Program.h>
+#include <CoreVM/util/IPAddress.h>
+
+#include <fmt/core.h>
 
 #include <array>
 #include <cstdarg>
 #include <limits>
+#include <optional>
 #include <unordered_map>
+#include <vector>
 
+module CoreVM;
 namespace CoreVM
 {
 

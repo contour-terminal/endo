@@ -1,16 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
+module;
+#include <CoreVM/util/IPAddress.h>
 
-#include <CoreVM/vm/ConstantPool.h>
-#include <CoreVM/vm/Instruction.h>
+#include <fmt/format.h>
 
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <iterator>
 #include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
+module CoreVM;
 namespace CoreVM
 {
 

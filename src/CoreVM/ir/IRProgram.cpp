@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/ConstantArray.h>
-#include <CoreVM/ir/IRHandler.h>
-#include <CoreVM/ir/IRProgram.h>
-
+module;
 #include <cassert>
-
+#include <memory>
+#include <algorithm>
+module CoreVM;
 namespace CoreVM
 {
 

@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/BasicBlock.h>
-#include <CoreVM/ir/IRHandler.h>
-#include <CoreVM/ir/Instructions.h>
-#include <CoreVM/transform/MergeBlockPass.h>
+module;
 
 #include <list>
-#include <unordered_map>
 
+module CoreVM;
 namespace CoreVM
 {
 

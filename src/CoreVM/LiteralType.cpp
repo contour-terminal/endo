@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/LiteralType.h>
+module;
 #include <CoreVM/util/assert.h>
 
+module CoreVM;
 namespace CoreVM
 {
 

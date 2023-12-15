@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/ir/BasicBlock.h>
-#include <CoreVM/ir/IRBuiltinFunction.h>
-#include <CoreVM/ir/IRBuiltinHandler.h>
-#include <CoreVM/ir/InstructionVisitor.h>
-#include <CoreVM/ir/Instructions.h>
-
+module;
 #include <crispy/assert.h>
+
+#include <fmt/format.h>
 
 #include <cassert>
 #include <utility> // make_pair
-
+module CoreVM;
 namespace CoreVM
 {
 

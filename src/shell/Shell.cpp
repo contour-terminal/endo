@@ -2,24 +2,12 @@
 module;
 #include <shell/ProcessGroup.h>
 
-#include <CoreVM/Diagnostics.h>
-#include <CoreVM/NativeCallback.h>
-#include <CoreVM/Params.h>
-#include <CoreVM/TargetCodeGenerator.h>
-#include <CoreVM/ir/PassManager.h>
-#include <CoreVM/transform/EmptyBlockElimination.h>
-#include <CoreVM/transform/InstructionElimination.h>
-#include <CoreVM/transform/MergeBlockPass.h>
-#include <CoreVM/transform/UnusedBlockPass.h>
-#include <CoreVM/vm/Instruction.h>
-#include <CoreVM/vm/Program.h>
-#include <CoreVM/vm/Runtime.h>
-
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
 #include <cstdio>
 #include <iostream>
+#include <map>
 
 #include <sys/wait.h>
 
@@ -32,6 +20,8 @@ import Lexer;
 import ASTPrinter;
 import IRGenerator;
 import Parser;
+
+import CoreVM;
 
 export module Shell;
 

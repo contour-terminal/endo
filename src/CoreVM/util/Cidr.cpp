@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/util/Cidr.h>
+module;
 #include <CoreVM/util/IPAddress.h>
 
+module CoreVM;
 namespace CoreVM::util
 {
 

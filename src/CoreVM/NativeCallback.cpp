@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+module;
+#include <string>
+#include <vector>
 
-#include <CoreVM/NativeCallback.h>
-
+module CoreVM;
 namespace CoreVM
 {
 

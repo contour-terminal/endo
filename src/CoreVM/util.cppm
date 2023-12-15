@@ -1,14 +1,13 @@
-// SPDX-License-Identifier: Apache-2.0
+module;
 
-#pragma once
-
+#include <cstdint>
+#include <regex>
 #include <CoreVM/util/IPAddress.h>
 
-#include <fmt/format.h>
+export module CoreVM:util;
 
-namespace CoreVM::util
+export namespace CoreVM::util
 {
-
 /**
  * @brief CIDR network notation object.
  *
@@ -85,31 +84,64 @@ class Cidr
     size_t _prefix;
 };
 
-} // namespace CoreVM::util
 
-namespace std
-{
+class BufferRef;
 
-template <>
-struct hash<CoreVM::util::Cidr>
+class RegExp
 {
-    size_t operator()(const CoreVM::util::Cidr& v) const noexcept
-    {
-        // TODO: let it honor IPv6 better
-        return static_cast<size_t>(*(uint32_t*) (v.address().data()) + v.prefix());
-    }
+  private:
+    std::string _pattern;
+    std::regex _re;
+
+  public:
+    using Result = std::smatch;
+
+  public:
+    explicit RegExp(std::string const& pattern);
+    RegExp() = default;
+    RegExp(RegExp const& v) = default;
+    ~RegExp() = default;
+
+    RegExp(RegExp&& v) noexcept = default;
+    RegExp& operator=(RegExp&& v) noexcept = default;
+
+    bool match(const std::string& target, Result* result = nullptr) const;
+
+    [[nodiscard]] const std::string& pattern() const { return _pattern; }
+    [[nodiscard]] const char* c_str() const;
+
+    operator const std::string&() const { return _pattern; }
+
+    friend bool operator==(const RegExp& a, const RegExp& b) { return a.pattern() == b.pattern(); }
+    friend bool operator!=(const RegExp& a, const RegExp& b) { return a.pattern() != b.pattern(); }
+    friend bool operator<=(const RegExp& a, const RegExp& b) { return a.pattern() <= b.pattern(); }
+    friend bool operator>=(const RegExp& a, const RegExp& b) { return a.pattern() >= b.pattern(); }
+    friend bool operator<(const RegExp& a, const RegExp& b) { return a.pattern() < b.pattern(); }
+    friend bool operator>(const RegExp& a, const RegExp& b) { return a.pattern() > b.pattern(); }
 };
 
-} // namespace std
-
-namespace fmt
+class RegExpContext
 {
-template <>
-struct formatter<CoreVM::util::Cidr>: formatter<std::string>
-{
-    auto format(CoreVM::util::Cidr const& value, format_context& ctx) -> format_context::iterator
+  public:
+    const RegExp::Result* regexMatch() const
     {
-        return formatter<std::string>::format(value.str(), ctx);
+        if (!_regexMatch)
+            _regexMatch = std::make_unique<RegExp::Result>();
+
+        return _regexMatch.get();
     }
+
+    RegExp::Result* regexMatch()
+    {
+        if (!_regexMatch)
+            _regexMatch = std::make_unique<RegExp::Result>();
+
+        return _regexMatch.get();
+    }
+
+  private:
+    mutable std::unique_ptr<RegExp::Result> _regexMatch;
 };
-} // namespace fmt
+
+
+}

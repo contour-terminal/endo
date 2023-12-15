@@ -3,10 +3,6 @@ module;
 #include <shell/AST.h>
 #include <shell/ScopedLogger.h>
 
-#include <CoreVM/ir/ConstantArray.h>
-#include <CoreVM/ir/IRBuilder.h>
-#include <CoreVM/ir/IRProgram.h>
-
 #include <typeinfo>
 
 // {{{ trace macros
@@ -21,6 +17,7 @@ module;
 // clang-format on
 // }}}
 
+import CoreVM;
 import ASTPrinter;
 
 export module IRGenerator;

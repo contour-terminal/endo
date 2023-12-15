@@ -1,16 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/vm/ConstantPool.h>
-#include <CoreVM/vm/Handler.h>
-#include <CoreVM/vm/Instruction.h>
-#include <CoreVM/vm/Program.h>
-#include <CoreVM/vm/Runner.h>
-
 #include <xzero/testing.h>
 
+import CoreVM;
 using namespace xzero;
 using namespace CoreVM;
-
 using Code = ConstantPool::Code;
 
 std::unique_ptr<Runner> run(Code&& code)

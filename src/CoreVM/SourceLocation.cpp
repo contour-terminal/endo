@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include <CoreVM/SourceLocation.h>
-
+module;
 #include <fmt/format.h>
 
 #include <sys/stat.h>
@@ -11,6 +10,7 @@
 
 #include <fcntl.h>
 
+module CoreVM;
 namespace CoreVM
 {
 

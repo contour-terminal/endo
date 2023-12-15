@@ -3,7 +3,6 @@
 
 #include <shell/Visitor.h>
 
-#include <CoreVM/NativeCallback.h>
 
 #include <fmt/format.h>
 
@@ -13,6 +12,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+import CoreVM;
 
 namespace endo::ast
 {

@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-
-#include <CoreVM/Diagnostics.h>
-
+module;
 #include <fmt/format.h>
 
 #include <iostream>
 
+module CoreVM;
 namespace CoreVM::diagnostics
 {
 
