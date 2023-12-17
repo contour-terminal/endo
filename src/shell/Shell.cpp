@@ -641,7 +641,7 @@ export class Shell final: public CoreVM::Runtime
     std::unique_ptr<CoreVM::Program> _currentProgram;
     CoreVM::Runner::Globals _globals;
 
-#if defined(ENDO_TRACE)
+#if defined(ENDO_TRACE_VM)
     bool _debugIR = true;
     bool _traceVM = true;
 #else

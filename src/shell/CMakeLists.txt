@@ -26,8 +26,8 @@ target_compile_definitions(Shell PUBLIC META_WORKAROUND_LLVM_28385)
 target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core CoreVM InputEditor Threads::Threads util)
 
 
-if(ENDO_TRACE)
-  target_compile_definitions(Shell PUBLIC ENDO_TRACE)
+if(ENDO_TRACE_VM)
+  target_compile_definitions(Shell PUBLIC ENDO_TRACE_VM)
 endif()
 if(ENDO_TRACE_PARSER)
   target_compile_definitions(Shell PUBLIC ENDO_TRACE_PARSER)
