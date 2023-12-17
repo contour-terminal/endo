@@ -27,7 +27,6 @@ target_link_libraries(Shell PUBLIC fmt::fmt-header-only vtparser crispy::core Co
 
 
 if(ENDO_TRACE)
-  message("HERE")
   target_compile_definitions(Shell PUBLIC ENDO_TRACE)
 endif()
 if(ENDO_TRACE_PARSER)
