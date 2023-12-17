@@ -12,6 +12,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
+option(ENDO_TRACE "Enables debug output" ON)
+option(ENDO_TRACE_PARSER "Enables debug output for Parser" ON)
+option(ENDO_TRACE_LEXER "Enables debug output for Lexer" ON)
 
 include(EnableCcache)
 include(EndoThirdParties)
@@ -35,3 +38,7 @@ enable_testing()
 
 add_subdirectory(src)
 EndoThirdPartiesSummary2()
+message(" flags ")
+message(" ENDO_TRACE :  ${ENDO_TRACE}")
+message(" ENDO_TRACE_PARSER :  ${ENDO_TRACE_PARSER}")
+message(" ENDO_TRACE_LEXER :  ${ENDO_TRACE_LEXER}")

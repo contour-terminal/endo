@@ -11,7 +11,7 @@ module;
 
 // {{{ trace macros
 // clang-format off
-#if 0 // defined(TRACE_PARSER)
+#if defined(ENDO_TRACE_PARSER)
     #define TRACE_SCOPE(message) ScopedLogger _logger { message }
     #define TRACE_FMT(message, ...) do { ScopedLogger::write(::fmt::format(message, __VA_ARGS__)); } while (0)
     #define TRACE(message) do { ScopedLogger::write(::fmt::format(message)); } while (0)

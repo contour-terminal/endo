@@ -27,7 +27,7 @@ export module Shell;
 
 // {{{ trace macros
 // clang-format off
-#if 0
+#if defined(ENDO_TRACE)
     #define DEBUG(msg) do { fmt::print("{}\n", (msg)); } while (0)
     #define DEBUGF(msg, ...) do { fmt::print("{}\n", fmt::format((msg), __VA_ARGS__)); } while (0)
 #else
@@ -192,10 +192,6 @@ export class Shell final: public CoreVM::Runtime
 
         // NB: These lines could go away once we have a proper command line parser and
         //     the ability to set these options from the command line.
-        _optimize = _env.get("SHELL_IR_OPTIMIZE").value_or("0") != "0";
-        _debugIR = _env.get("SHELL_IR_DEBUG").value_or("0") != "0";
-        _traceVM = _env.get("SHELL_VM_TRACE").value_or("0") != "0";
-
         registerBuiltinFunctions();
 
         // for (CoreVM::NativeCallback const* callback: builtins())
@@ -645,8 +641,13 @@ export class Shell final: public CoreVM::Runtime
     std::unique_ptr<CoreVM::Program> _currentProgram;
     CoreVM::Runner::Globals _globals;
 
+#if defined(ENDO_TRACE)
+    bool _debugIR = true;
+    bool _traceVM = true;
+#else
     bool _debugIR = false;
     bool _traceVM = false;
+#endif
     bool _optimize = false;
 
     PipelineBuilder _currentPipelineBuilder;
