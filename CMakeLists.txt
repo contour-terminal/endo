@@ -12,14 +12,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
-option(ENDO_TRACE_VM "Enables debug output" OFF)
-option(ENDO_TRACE_PARSER "Enables debug output for Parser" OFF)
-option(ENDO_TRACE_LEXER "Enables debug output for Lexer" OFF)
+if(NOT DEFINED ENDO_TRACE_VM)
+    option(ENDO_TRACE_VM "Enables debug output" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_VM ON)
+    endif()
+endif()
 
-if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-    set(ENDO_TRACE_VM ON)
-    set(ENDO_TRACE_PARSER ON)
-    set(ENDO_TRACE_LEXER ON)
+if(NOT DEFINED ENDO_TRACE_PARSER)
+    option(ENDO_TRACE_PARSER "Enables debug output for Parser" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_PARSER ON)
+    endif()
+endif()
+
+
+if(NOT DEFINED ENDO_TRACE_LEXER)
+    option(ENDO_TRACE_LEXER "Enables debug output for Lexer" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_LEXER ON)
+    endif()
 endif()
 
 
