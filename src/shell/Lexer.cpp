@@ -10,7 +10,7 @@ module;
 #include <vector>
 
 // clang-format off
-#if 0 // defined(TRACE_LEXER)
+#if defined(ENDO_TRACE_LEXER)
     #define TRACE(message, ...) do { ::fmt::print("Lexer: " message, __VA_ARGS__); } while (0)
 #else
     #define TRACE(message, ...) do {} while (0)

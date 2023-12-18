@@ -79,13 +79,21 @@ TEST_CASE("shell.builtin.set_variable")
     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
 }
 
+TEST_CASE("shell.builtin.get_variable")
+{
+    TestShell shell;
+    shell("set BRU hello");
+    CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
+    shell("$BRU");
+}
+
 
 // TEST_CASE("shell.builtin.set_and_export_variable")
 // {
 //     TestShell shell;
 //     shell("set BRU hello");
 //     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
-//
+
 //     shell("export $BRU");
 //     CHECK(shell("echo $BRU").output() == "hello\n");
 // }

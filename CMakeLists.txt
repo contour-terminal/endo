@@ -12,6 +12,28 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
+if(NOT DEFINED ENDO_TRACE_VM)
+    option(ENDO_TRACE_VM "Enables debug output" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_VM ON)
+    endif()
+endif()
+
+if(NOT DEFINED ENDO_TRACE_PARSER)
+    option(ENDO_TRACE_PARSER "Enables debug output for Parser" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_PARSER ON)
+    endif()
+endif()
+
+
+if(NOT DEFINED ENDO_TRACE_LEXER)
+    option(ENDO_TRACE_LEXER "Enables debug output for Lexer" OFF)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+        set(ENDO_TRACE_LEXER ON)
+    endif()
+endif()
+
 
 include(EnableCcache)
 include(EndoThirdParties)
@@ -35,3 +57,10 @@ enable_testing()
 
 add_subdirectory(src)
 EndoThirdPartiesSummary2()
+message(STATUS "--------------------------------")
+message(STATUS "          output flags          ")
+message(STATUS "--------------------------------")
+message(STATUS "endo trace vm       ${ENDO_TRACE_VM}")
+message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
+message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
+message(STATUS "--------------------------------")
