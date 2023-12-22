@@ -326,10 +326,10 @@ export class Shell final: public CoreVM::Runtime
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinSet, this);
 
-    registerFunction("get")
+    registerFunction("substitute")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::String)
-        .bind(&Shell::builtinGet, this);
+        .bind(&Shell::builtinVariableSubst, this);
 
 
     registerFunction("callproc")
@@ -535,7 +535,7 @@ export class Shell final: public CoreVM::Runtime
         _env.set(context.getString(1), context.getString(2));
         context.setResult(true);
     }
-    void builtinGet(CoreVM::Params& context)
+    void builtinVariableSubst(CoreVM::Params& context)
     {
         auto res = _env.get(context.getString(1));
         if(res.has_value())

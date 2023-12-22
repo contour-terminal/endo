@@ -169,12 +169,12 @@ struct BuiltinSetStmt final: public Statement
 };
 
 
-struct BuiltinGetStmt final: public Statement
+struct VariableSubstExpr final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
     std::unique_ptr<Expr> name;
 
-    BuiltinGetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+    VariableSubstExpr(std::reference_wrapper<CoreVM::NativeCallback const> callback,
                    std::unique_ptr<Expr> name):
         callback { callback }, name {std::move( name )}
     {

@@ -5,7 +5,7 @@ import Lexer;
 
 TEST_CASE("Lexer.basic")
 {
-    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo hello world $PATH"));
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo hello world $PATH ${PATH}"));
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "echo");
 
@@ -16,6 +16,10 @@ TEST_CASE("Lexer.basic")
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "world");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "PATH");
 
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::DollarName);

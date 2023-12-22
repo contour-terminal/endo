@@ -90,9 +90,9 @@ export class ASTPrinter: public Visitor
         }
     }
 
-    void visit(BuiltinGetStmt const& node) override
+    void visit(VariableSubstExpr const& node) override
     {
-        _result += "get";
+        _result += "substitute";
 
         if (node.name)
         {
