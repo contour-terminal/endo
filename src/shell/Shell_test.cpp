@@ -87,6 +87,15 @@ TEST_CASE("shell.builtin.get_variable")
     shell("$BRU");
 }
 
+TEST_CASE("shell.builtin.get_variable_inside_curl_brackets")
+{
+    TestShell shell;
+    shell("set BRU hello");
+    CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
+    fmt::print("=======================================\n");
+    shell("${BRU}");
+}
+
 
 // TEST_CASE("shell.builtin.set_and_export_variable")
 // {

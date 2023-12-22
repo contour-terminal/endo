@@ -168,6 +168,22 @@ struct BuiltinSetStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+
+struct BuiltinGetStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::unique_ptr<Expr> name;
+
+    BuiltinGetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                   std::unique_ptr<Expr> name):
+        callback { callback }, name {std::move( name )}
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+
 struct BuiltinChDirStmt final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;

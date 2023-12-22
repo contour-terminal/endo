@@ -90,6 +90,17 @@ export class ASTPrinter: public Visitor
         }
     }
 
+    void visit(BuiltinGetStmt const& node) override
+    {
+        _result += "get";
+
+        if (node.name)
+        {
+            _result += ' ';
+            node.name->accept(*this);
+        }
+    }
+
     void visit(BuiltinExitStmt const& node) override
     {
         _result += "exit";

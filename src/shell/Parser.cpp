@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <shell/ScopedLogger.h>
 #include <shell/AST.h>
+#include <shell/ScopedLogger.h>
 
 #include <crispy/utils.h>
 #include <crispy/logstore.h>
@@ -89,6 +89,11 @@ export class Parser
         TRACE_SCOPE("parseStmt");
         switch (_lexer.currentToken())
         {
+            case Token::DollarName: {
+                auto name = std::make_unique<ast::LiteralExpr>(_lexer.currentLiteral());
+               _lexer.nextToken();
+                return std::make_unique<ast::BuiltinGetStmt>(*_runtime.find("get(S)S"), std::move(name));
+            }
             case Token::String:
             case Token::Identifier:
                 if (_lexer.isDirective("if"))

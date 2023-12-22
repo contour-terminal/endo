@@ -104,6 +104,18 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "set");
     }
 
+    void visit(ast::BuiltinGetStmt const& node) override
+    {
+        auto callArguments = std::vector<CoreVM::Value*> {};
+        if (node.name )
+        {
+
+            callArguments.push_back(codegen(node.name.get()));
+        }
+
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "get");
+    }
+
     void visit(ast::BuiltinFalseStmt const&) override { _result = get(CoreVM::CoreNumber(1)); }
 
     void visit(ast::BuiltinReadStmt const& node) override
