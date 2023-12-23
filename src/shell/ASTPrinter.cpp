@@ -92,7 +92,7 @@ export class ASTPrinter: public Visitor
 
     void visit(VariableSubstExpr const& node) override
     {
-        _result += "substitute";
+        _result += "getenv";
 
         if (node.name)
         {

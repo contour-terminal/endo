@@ -92,7 +92,7 @@ export class Parser
             case Token::DollarName: {
                 auto name = std::make_unique<ast::LiteralExpr>(_lexer.currentLiteral());
                _lexer.nextToken();
-                return std::make_unique<ast::VariableSubstExpr>(*_runtime.find("substitute(S)S"), std::move(name));
+                return std::make_unique<ast::VariableSubstExpr>(*_runtime.find("getenv(S)S"), std::move(name));
             }
             case Token::String:
             case Token::Identifier:

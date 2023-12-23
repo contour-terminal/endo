@@ -113,7 +113,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
             callArguments.push_back(codegen(node.name.get()));
         }
 
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "get");
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "getenv");
     }
 
     void visit(ast::BuiltinFalseStmt const&) override { _result = get(CoreVM::CoreNumber(1)); }

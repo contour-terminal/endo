@@ -326,7 +326,7 @@ export class Shell final: public CoreVM::Runtime
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinSet, this);
 
-    registerFunction("substitute")
+    registerFunction("getenv")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinVariableSubst, this);
