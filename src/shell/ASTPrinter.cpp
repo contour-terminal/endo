@@ -100,7 +100,7 @@ export class ASTPrinter: public Visitor
         }
     }
     void visit(BuiltinExportStmt const& node) override { _result += "export " + node.name; }
-    void visit(BuiltinFalseStmt const& node) override { _result += "false"; }
+    void visit(BuiltinFalseStmt const&) override { _result += "false"; }
     void visit(BuiltinReadStmt const& node) override
     {
         _result += "read";
@@ -110,7 +110,7 @@ export class ASTPrinter: public Visitor
             param->accept(*this);
         }
     }
-    void visit(BuiltinTrueStmt const& node) override { _result += "true"; }
+    void visit(BuiltinTrueStmt const&) override { _result += "true"; }
 
     void visit(CompoundStmt const& node) override
     {
