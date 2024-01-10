@@ -96,7 +96,6 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         auto callArguments = std::vector<CoreVM::Value*> {};
         if (node.name && node.value)
         {
-
             callArguments.push_back(codegen(node.name.get()));
             callArguments.push_back(codegen(node.value.get()));
         }
@@ -109,7 +108,6 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         auto callArguments = std::vector<CoreVM::Value*> {};
         if (node.name )
         {
-
             callArguments.push_back(codegen(node.name.get()));
         }
 
@@ -221,9 +219,9 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
     }
 
-    void visit(ast::SubstitutionExpr const&) override
+    void visit(ast::SubstitutionExpr const& node) override
     {
-        // TODO
+        node.pipeline->accept(*this);
     }
     void visit(ast::WhileStmt const& node) override
     {

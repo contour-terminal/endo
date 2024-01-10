@@ -233,6 +233,7 @@ struct SubstitutionExpr final: public Expr
 {
     std::unique_ptr<Statement> pipeline;
 
+    SubstitutionExpr(std::unique_ptr<Statement> pipeline): pipeline(std::move(pipeline)) {}
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 

@@ -91,8 +91,9 @@ export class Parser
         {
             case Token::DollarName: {
                 auto name = std::make_unique<ast::LiteralExpr>(_lexer.currentLiteral());
-               _lexer.nextToken();
-                return std::make_unique<ast::VariableSubstExpr>(*_runtime.find("getenv(S)S"), std::move(name));
+                _lexer.nextToken();
+                return std::make_unique<ast::VariableSubstExpr>(*_runtime.find("getenv(S)S"),
+                                                                std::move(name));
             }
             case Token::String:
             case Token::Identifier:
@@ -291,6 +292,12 @@ export class Parser
             case Token::String:
             case Token::Number:
             case Token::Identifier: return std::make_unique<ast::LiteralExpr>(consumeLiteral()); break;
+            case Token::DollarName: {
+                auto name = std::make_unique<ast::LiteralExpr>(consumeLiteral());
+                return std::make_unique<ast::SubstitutionExpr>(
+                    std::make_unique<ast::VariableSubstExpr>(*_runtime.find("getenv(S)S"), std::move(name)));
+            }
+            break;
             default: _report.syntaxError(CoreVM::SourceLocation(), "Expected parameter"); return nullptr;
         }
     }
