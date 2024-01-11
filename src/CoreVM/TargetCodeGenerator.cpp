@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <CoreVM/util/assert.h>
-#include <CoreVM/util/IPAddress.h>
 
 #include <fmt/core.h>
 
@@ -13,6 +12,7 @@ module;
 #include <vector>
 
 module CoreVM;
+import CoreVM.util;
 namespace CoreVM
 {
 

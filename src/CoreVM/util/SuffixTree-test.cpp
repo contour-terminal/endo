@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include <CoreVM/util/SuffixTree.h>
-
+import CoreVM;
 #include <xzero/testing.h>
 
 TEST(SuffixTree, exactMatch)
