@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <fmt/format.h>
+#include <crispy/logstore.h>
 
 #include <cstring>
 #include <stdexcept>
@@ -13,13 +14,14 @@ export module UnixPipe;
 namespace endo
 {
 
+auto inline pipeLog = logstore::category("pipe  ", "Unix pipe log", logstore::category::state::Enabled);
 using namespace std::string_literals;
 
 export inline void saveClose(int* fd) noexcept
 {
     if (fd && *fd != -1)
     {
-        fmt::print("Closing fd {}\n", *fd);
+        pipeLog()("Closing fd {}\n", *fd);
         ::close(*fd);
         *fd = -1;
     }
@@ -41,7 +43,7 @@ export struct UnixPipe
             if (!detail::setFileFlags(fd, flags))
                 break;
 #endif
-        fmt::print("Created pipe: {} {}\n", pfd[0], pfd[1]);
+        pipeLog()("Created pipe: {} {}\n", pfd[0], pfd[1]);
     }
 
     inline UnixPipe(UnixPipe&& v) noexcept: pfd { v.pfd[0], v.pfd[1] }

@@ -25,17 +25,7 @@ import CoreVM;
 
 export module Shell;
 
-// {{{ trace macros
-// clang-format off
-#if defined(ENDO_TRACE)
-    #define DEBUG(msg) do { fmt::print("{}\n", (msg)); } while (0)
-    #define DEBUGF(msg, ...) do { fmt::print("{}\n", fmt::format((msg), __VA_ARGS__)); } while (0)
-#else
-    #define DEBUG(msg) do {} while (0)
-    #define DEBUGF(msg, ...) do {} while (0)
-#endif
-// clang-format on
-// }}}
+auto inline debugLog = logstore::category("debug ", "Debug log", logstore::category::state::Enabled);
 
 namespace endo
 {
@@ -208,7 +198,7 @@ export class Shell final: public CoreVM::Runtime
         while (!_quit && prompt.ready())
         {
             auto const lineBuffer = prompt.read();
-            DEBUGF("input buffer: {}", lineBuffer);
+            debugLog()("input buffer: {}", lineBuffer);
 
             _exitCode = execute(lineBuffer);
             // _tty.writeToStdout("exit code: {}\n", _exitCode);
@@ -229,7 +219,7 @@ export class Shell final: public CoreVM::Runtime
                 return EXIT_FAILURE;
             }
 
-            DEBUGF("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
+            debugLog()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
             CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode);
             if (irProgram == nullptr)
@@ -255,12 +245,10 @@ export class Shell final: public CoreVM::Runtime
                 pm.run(irProgram);
             }
 
-            if (_debugIR)
-            {
-                DEBUG("================================================\n");
-                DEBUG("Optimized IR program:\n");
+            debugLog()("================================================\n");
+            debugLog()("Optimized IR program:\n");
+            if (debugLog.is_enabled())
                 irProgram->dump();
-            }
 
             _currentProgram = CoreVM::TargetCodeGenerator {}.generate(irProgram);
             if (!_currentProgram)
@@ -270,12 +258,10 @@ export class Shell final: public CoreVM::Runtime
             }
             _currentProgram->link(this, &report);
 
-            if (_debugIR)
-            {
-                DEBUG("================================================\n");
-                DEBUG("Linked target code:\n");
+            debugLog()("================================================\n");
+            debugLog()("Linked target code:\n");
+            if (debugLog.is_enabled())
                 _currentProgram->dump();
-            }
 
             CoreVM::Handler* main = _currentProgram->findHandler("@main");
             assert(main != nullptr);
@@ -404,7 +390,7 @@ export class Shell final: public CoreVM::Runtime
         // TODO: setup redirects
         // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     DEBUGF("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
+        //     debugLog()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
         pid_t const pid = fork();
         switch (pid)
@@ -461,7 +447,7 @@ export class Shell final: public CoreVM::Runtime
         // TODO: setup redirects
         // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     DEBUGF("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
+        //     debugLog()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
         pid_t const pid = fork();
         switch (pid)
@@ -612,7 +598,7 @@ export class Shell final: public CoreVM::Runtime
             auto const programPath = path / program;
             if (std::filesystem::exists(programPath))
             {
-                DEBUGF("Found program: {}", programPath.string());
+                debugLog()("Found program: {}", programPath.string());
                 return programPath;
             }
         }
@@ -622,9 +608,8 @@ export class Shell final: public CoreVM::Runtime
 
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp)
     {
-        if (_traceVM)
-            std::cerr << fmt::format("trace: {}\n",
-                                     CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
+        debugLog()(
+            fmt::format("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants())));
     }
 
     template <typename... Args>
@@ -641,13 +626,6 @@ export class Shell final: public CoreVM::Runtime
     std::unique_ptr<CoreVM::Program> _currentProgram;
     CoreVM::Runner::Globals _globals;
 
-#if defined(ENDO_TRACE_VM)
-    bool _debugIR = true;
-    bool _traceVM = true;
-#else
-    bool _debugIR = false;
-    bool _traceVM = false;
-#endif
     bool _optimize = false;
 
     PipelineBuilder _currentPipelineBuilder;
