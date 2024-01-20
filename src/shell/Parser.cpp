@@ -5,23 +5,16 @@ module;
 #include <shell/AST.h>
 
 #include <crispy/utils.h>
+#include <crispy/logstore.h>
 
 #include <memory>
 #include <optional>
 
-// {{{ trace macros
-// clang-format off
-#if defined(ENDO_TRACE_PARSER)
-    #define TRACE_SCOPE(message) ScopedLogger _logger { message }
-    #define TRACE_FMT(message, ...) do { ScopedLogger::write(::fmt::format(message, __VA_ARGS__)); } while (0)
-    #define TRACE(message) do { ScopedLogger::write(::fmt::format(message)); } while (0)
-#else
-    #define TRACE_SCOPE(message) do {} while (0)
-    #define TRACE_FMT(message, ...) do {} while (0)
-    #define TRACE(message) do {} while (0)
-#endif
-// clang-format on
-// }}}
+auto inline parserLog = logstore::category("parser", "Parser logger", logstore::category::state::Enabled);
+#define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog };
+#define TRACE_FMT(message, ...) do { parserLog()(ScopedLogger::write(::fmt::format(message, __VA_ARGS__))); } while (0)
+#define TRACE(message) do { parserLog()(ScopedLogger::write(::fmt::format(message))); } while (0)
+
 
 import ASTPrinter;
 import Lexer;

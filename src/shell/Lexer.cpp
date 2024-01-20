@@ -2,20 +2,15 @@
 module;
 
 #include <fmt/format.h>
-
+#include <crispy/logstore.h>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
-// clang-format off
-#if defined(ENDO_TRACE_LEXER)
-    #define TRACE(message, ...) do { ::fmt::print("Lexer: " message, __VA_ARGS__); } while (0)
-#else
-    #define TRACE(message, ...) do {} while (0)
-#endif
-// clang-format on
+
+auto inline lexerLog = logstore::category("lexer ", "Lexer logger ", logstore::category::state::Enabled );
 
 using namespace std::string_view_literals;
 
@@ -160,7 +155,7 @@ export class Lexer
     Token nextToken()
     {
         // auto const postLogger = crispy::finally { [this]() mutable {
-        //     TRACE("Lexer.nextToken ~> {}\n", _currentToken);
+        //     lexerLog()("Lexer.nextToken ~> {}\n", _currentToken);
         // } };
 
         consumeWhitespace();
@@ -291,9 +286,9 @@ export class Lexer
         {
             _nextToken.literal += static_cast<char>(_currentChar); // TODO: UTF-8
             nextChar();
-            // TRACE("consumeIdentifier: '{}'\n", (char) _currentChar);
+            // lexerLog()("consumeIdentifier: '{}'\n", (char) _currentChar);
         }
-        TRACE("consumeIdentifier: result: '{}'\n", _nextToken.literal);
+        lexerLog()("consumeIdentifier: result: '{}'\n", _nextToken.literal);
         return confirmToken(token);
     }
 
@@ -315,7 +310,7 @@ export class Lexer
     char32_t nextChar()
     {
         _currentChar = _source->readChar();
-        // TRACE("Lexer.nextChar: '{}'\n", (char) _currentChar);
+        // lexerLog()("Lexer.nextChar: '{}'\n", (char) _currentChar);
         return _currentChar;
     }
 

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <fmt/format.h>
+#include <crispy/logstore.h>
 #include <string>
 
 struct ScopedLogger
@@ -16,19 +17,21 @@ struct ScopedLogger
         return result;
     }
 
-    static void write(std::string message) { fmt::print("{}{}\n", indentation(), message); }
+    static auto write(std::string message) { return fmt::format("{}{}\n", indentation(), message); }
+    auto writeInternal(std::string message) { _category()("{}{}\n", indentation(), message); }
 
-    ScopedLogger(std::string message): _message(std::move(message))
+    ScopedLogger(std::string message, auto&& log): _message(std::move(message)), _category(log)
     {
         ++depth;
-        write("{{ " + _message);
+        writeInternal("{{ " + _message);
     }
 
     ~ScopedLogger()
     {
-        write("}} " + _message);
+        writeInternal("}} " + _message);
         --depth;
     }
 
     std::string _message;
+    logstore::category const& _category;
 };
