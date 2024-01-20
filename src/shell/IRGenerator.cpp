@@ -233,37 +233,32 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     CoreVM::Value* toBool(CoreVM::Value* value) { return createNCmpEQ(value, get(CoreVM::CoreNumber(0))); }
 
+    static std::vector<CoreVM::Constant*> createArray(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
+    {
+        auto irArray = std::vector<CoreVM::Constant*> {};
+        for (auto const& expr: expressions)
+        {
+            TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*expr)));
+            if (auto* constant = dynamic_cast<CoreVM::Constant*>(expr.get()); constant != nullptr)
+                irArray.push_back(constant);
+            else
+                assert(!"TODO");
+        }
+        return irArray;
+    }
+
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        auto callArguments = std::vector<CoreVM::Constant*> {};
-        for (auto const& arg: args)
-        {
-            TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*arg)));
-            auto* value = codegen(arg.get());
-            if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
-                callArguments.push_back(constant);
-            else
-                fmt::print("Warning: non-constant argument passed to builtin function\n");
-        }
-        return callArguments;
+        return IRGenerator::createArray(args);
     }
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
                                                   std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        auto callArguments = std::vector<CoreVM::Constant*> {};
-        callArguments.push_back(get(programName));
-        for (auto const& arg: args)
-        {
-            TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*arg)));
-            auto* value = codegen(arg.get());
-            if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
-                callArguments.push_back(constant);
-            else
-                fmt::print("Warning: non-constant argument passed to builtin function\n");
-        }
+        auto callArguments = IRGenerator::createArray(args);
+        callArguments.insert(callArguments.begin(), get(programName));
         return callArguments;
     }
 
