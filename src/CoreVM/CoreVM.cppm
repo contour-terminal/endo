@@ -1,29 +1,38 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <CoreVM/util/IPAddress.h>
-#include <CoreVM/util/unbox.h>
-#include <CoreVM/util/PrefixTree.h>
-#include <CoreVM/util/SuffixTree.h>
+#include <fmt/format.h>
 
-#include <functional>
-#include <utility>
-#include <vector>
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring> // memset()
+#include <functional> // hash<>
+#include <iostream>
+#include <list>
 #include <optional>
+#include <regex>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
-#include <regex>
-#include <list>
-#include <cassert>
+
+#if defined(_WIN32) || defined(_WIN64)
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <arpa/inet.h>  // ntohl(), htonl()
+    #include <netinet/in.h> // in_addr, in6_addr
+#endif
 
 export module CoreVM;
 export import :enums;
-export import :util;
+export import CoreVM.util;
 
 export namespace CoreVM::diagnostics
 {
-    class Report;
+class Report;
 }
 
 export namespace CoreVM
@@ -63,7 +72,6 @@ class MatchInstr;
 class RegExpGroupInstr;
 class CastInstr;
 
-
 using Register = uint64_t; // vm
 using CoreNumber = int64_t;
 using CoreString = std::string;
@@ -98,12 +106,10 @@ std::string disassemble(const Instruction* program,
  */
 std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool* cp);
 
-
 std::string tos(LiteralType type);
 
 bool isArrayType(LiteralType type);
 LiteralType elementTypeOf(LiteralType type);
-
 
 class InstructionVisitor
 {
@@ -183,8 +189,6 @@ class InstructionVisitor
     virtual void visit(PInCidrInstr& instr) = 0;
 };
 
-
-
 // {{{ array types
 class CoreArray
 {
@@ -207,8 +211,6 @@ using CoreIPAddrArray = std::vector<util::IPAddress>;
 using CoreCidrArray = std::vector<util::Cidr>;
 
 // }}}
-
-
 
 struct FilePos
 { // {{{
@@ -259,7 +261,6 @@ inline size_t operator-(const FilePos& a, const FilePos& b)
         return 1 + a.offset - b.offset;
 }
 // }}}
-
 
 // ExecutionEngine
 // VM
@@ -424,8 +425,6 @@ class Runner
     std::list<std::string> _stringGarbage;
 };
 
-
-
 struct MatchCaseDef
 {
     //!< offset into the string pool (or regexp pool) of the associated program.
@@ -447,7 +446,6 @@ class MatchDef
     std::vector<MatchCaseDef> cases;
 };
 
-
 class Match
 {
   public:
@@ -465,7 +463,6 @@ class Match
   protected:
     MatchDef _def;
 };
-
 
 /**
  * Provides a pool of constant that can be built dynamically during code
@@ -518,8 +515,14 @@ class ConstantPool
     [[nodiscard]] const util::RegExp& getRegExp(size_t id) const { return _regularExpressions[id]; }
 
     [[nodiscard]] const std::vector<CoreNumber>& getIntArray(size_t id) const { return _intArrays[id]; }
-    [[nodiscard]] const std::vector<std::string>& getStringArray(size_t id) const { return _stringArrays[id]; }
-    [[nodiscard]] const std::vector<util::IPAddress>& getIPAddressArray(size_t id) const { return _ipaddrArrays[id]; }
+    [[nodiscard]] const std::vector<std::string>& getStringArray(size_t id) const
+    {
+        return _stringArrays[id];
+    }
+    [[nodiscard]] const std::vector<util::IPAddress>& getIPAddressArray(size_t id) const
+    {
+        return _ipaddrArrays[id];
+    }
     [[nodiscard]] const std::vector<util::Cidr>& getCidrArray(size_t id) const { return _cidrArrays[id]; }
 
     [[nodiscard]] const MatchDef& getMatchDef(size_t id) const { return _matchDefs[id]; }
@@ -535,11 +538,20 @@ class ConstantPool
     }
 
     // bulk accessors
-    [[nodiscard]] const std::vector<std::pair<std::string, std::string>>& getModules() const { return _modules; }
+    [[nodiscard]] const std::vector<std::pair<std::string, std::string>>& getModules() const
+    {
+        return _modules;
+    }
     [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
-    [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const { return _nativeHandlerSignatures; }
-    [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const { return _nativeFunctionSignatures; }
+    [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const
+    {
+        return _nativeHandlerSignatures;
+    }
+    [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const
+    {
+        return _nativeFunctionSignatures;
+    }
 
     void dump() const;
 
@@ -564,7 +576,6 @@ class ConstantPool
     std::vector<std::string> _nativeHandlerSignatures;
     std::vector<std::string> _nativeFunctionSignatures;
 };
-
 
 class Program
 {
@@ -613,7 +624,6 @@ class Program
     std::vector<NativeCallback*> _nativeFunctions;
 };
 
-
 class Handler
 {
   public:
@@ -654,7 +664,6 @@ class Handler
     std::vector<uint64_t> _directThreadedCode;
 #endif
 };
-
 
 class Params
 {
@@ -749,15 +758,12 @@ class Params
     std::vector<Value> _argv;
 };
 
-
-
 enum class Attribute : unsigned
 {
     Experimental = 0x0001,   // implementation is experimental, hence, parser can warn on use
     NoReturn = 0x0002,       // implementation never returns to program code
     SideEffectFree = 0x0004, // implementation is side effect free
 };
-
 
 class Signature
 {
@@ -795,9 +801,6 @@ class Signature
 
 LiteralType typeSignature(char ch);
 char signatureType(LiteralType t);
-
-
-
 
 class NativeCallback
 {
@@ -883,7 +886,6 @@ class NativeCallback
     void invoke(Params& args) const;
 };
 
-
 struct SourceLocation // {{{
 {
     SourceLocation() = default;
@@ -925,9 +927,7 @@ inline SourceLocation operator-(const SourceLocation& end, const SourceLocation&
     return SourceLocation(beg.filename, beg.begin, end.end);
 }
 
-
 //!@}
-
 
 class PassManager
 {
@@ -965,7 +965,6 @@ class PassManager
   private:
     std::list<std::pair<std::string, HandlerPass>> _handlerPasses;
 };
-
 
 /**
  * Defines an immutable IR value.
@@ -1028,7 +1027,6 @@ class Value
     std::vector<Instr*> _uses; //! list of instructions that <b>use</b> this value.
 };
 
-
 class Constant: public Value
 {
   public:
@@ -1066,8 +1064,6 @@ class ConstantArray: public Constant
     LiteralType makeArrayType(LiteralType elementType);
 };
 
-
-
 class IRBuiltinFunction: public Constant
 {
   public:
@@ -1083,14 +1079,11 @@ class IRBuiltinFunction: public Constant
     const NativeCallback& _native;
 };
 
-
-
-
 template <typename T, const LiteralType Ty>
 class ConstantValue: public Constant
 {
   public:
-    ConstantValue(T  value, const std::string& name = ""): Constant(Ty, name), _value(std::move(value)) {}
+    ConstantValue(T value, const std::string& name = ""): Constant(Ty, name), _value(std::move(value)) {}
 
     [[nodiscard]] T get() const { return _value; }
 
@@ -1109,7 +1102,6 @@ using ConstantString = ConstantValue<std::string, LiteralType::String>;
 using ConstantIP = ConstantValue<util::IPAddress, LiteralType::IPAddress>;
 using ConstantCidr = ConstantValue<util::Cidr, LiteralType::Cidr>;
 using ConstantRegExp = ConstantValue<util::RegExp, LiteralType::RegExp>;
-
 
 /**
  * Base class for native instructions.
@@ -1211,7 +1203,6 @@ class Instr: public Value
     BasicBlock* _basicBlock;
     std::vector<Value*> _operands;
 };
-
 
 class NopInstr: public Instr
 {
@@ -1671,7 +1662,6 @@ class IRBuiltinHandler: public Constant
     const NativeCallback& _native;
 };
 
-
 class IRProgram
 {
   public:
@@ -1773,8 +1763,6 @@ class IRProgram
 
     friend class IRBuilder;
 };
-
-
 
 class IRBuilder
 {
@@ -2431,7 +2419,6 @@ inline const NativeCallback::DefaultValue& NativeCallback::getDefaultParamAt(siz
 }
 // }}}
 
-
 using StackPointer = size_t;
 
 class TargetCodeGenerator: public InstructionVisitor
@@ -2622,7 +2609,6 @@ class TargetCodeGenerator: public InstructionVisitor
     ConstantPool _cp;
 };
 
-
 /** Implements SMATCHEQ instruction. */
 class MatchSame: public Match
 {
@@ -2671,7 +2657,6 @@ class MatchRegEx: public Match
     std::vector<std::pair<util::RegExp, uint64_t>> _map;
 };
 
-
 } // namespace CoreVM
 
 export namespace CoreVM::transform
@@ -2700,7 +2685,6 @@ bool mergeSameBlocks(IRHandler* handler);
 bool eliminateUnusedBlocks(IRHandler* handler);
 
 } // namespace CoreVM::transform
-
 
 export namespace CoreVM::diagnostics
 {
@@ -2891,8 +2875,6 @@ struct formatter<CoreVM::util::Cidr>: formatter<std::string>
     }
 };
 
-
-
 template <>
 struct formatter<CoreVM::Signature>
 {
@@ -2908,7 +2890,6 @@ struct formatter<CoreVM::Signature>
         return format_to(ctx.begin(), v.to_s());
     }
 };
-
 
 } // namespace fmt
 
@@ -2984,27 +2965,24 @@ export
         }
     };
 
-
-template <>
-struct fmt::formatter<CoreVM::FilePos>: fmt::formatter<std::string>
-{
-    auto format(const CoreVM::FilePos& value, format_context& ctx) -> format_context::iterator
+    template <>
+    struct fmt::formatter<CoreVM::FilePos>: fmt::formatter<std::string>
     {
-        return formatter<std::string>::format(fmt::format("{}:{}", value.line, value.column), ctx);
-    }
-};
+        auto format(const CoreVM::FilePos& value, format_context& ctx) -> format_context::iterator
+        {
+            return formatter<std::string>::format(fmt::format("{}:{}", value.line, value.column), ctx);
+        }
+    };
 
-template <>
-struct fmt::formatter<CoreVM::SourceLocation>: fmt::formatter<std::string>
-{
-    auto format(const CoreVM::SourceLocation& value, format_context& ctx) -> format_context::iterator
+    template <>
+    struct fmt::formatter<CoreVM::SourceLocation>: fmt::formatter<std::string>
     {
-        if (!value.filename.empty())
-            return formatter<std::string>::format(fmt::format("{}:{}", value.filename, value.begin), ctx);
-        else
-            return formatter<std::string>::format(fmt::format("{}", value.begin), ctx);
-    }
-};
-
-
+        auto format(const CoreVM::SourceLocation& value, format_context& ctx) -> format_context::iterator
+        {
+            if (!value.filename.empty())
+                return formatter<std::string>::format(fmt::format("{}:{}", value.filename, value.begin), ctx);
+            else
+                return formatter<std::string>::format(fmt::format("{}", value.begin), ctx);
+        }
+    };
 }

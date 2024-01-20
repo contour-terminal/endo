@@ -7,9 +7,9 @@ module;
 #include <vector>
 #include <fmt/core.h>
 
-#include <CoreVM/util/IPAddress.h>
 
 module CoreVM;
+import CoreVM.util;
 namespace CoreVM
 {
 

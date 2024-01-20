@@ -4,7 +4,7 @@ module;
 #include <cstring>
 #include <regex>
 
-module CoreVM;
+module CoreVM.util;
 namespace CoreVM::util
 {
 

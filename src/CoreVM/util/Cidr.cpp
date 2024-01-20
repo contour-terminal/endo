@@ -1,8 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <CoreVM/util/IPAddress.h>
 
-module CoreVM;
+#include <fmt/format.h>
+
+#include <cstdint>
+
+#if defined(_WIN32) || defined(_WIN64)
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+#else
+    #include <arpa/inet.h>  // ntohl(), htonl()
+    #include <netinet/in.h> // in_addr, in6_addr
+#endif
+
+module CoreVM.util;
+
 namespace CoreVM::util
 {
 

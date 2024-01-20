@@ -2,7 +2,6 @@
 module;
 #include <CoreVM/sysconfig.h>
 #include <CoreVM/util/strings.h>
-#include <CoreVM/util/IPAddress.h>
 #include <CoreVM/util/assert.h>
 
 #include <cinttypes>
@@ -15,7 +14,7 @@ module;
 #include <vector>
 
 module CoreVM;
-
+import CoreVM.util;
 // XXX Visual Studio doesn't support computed goto statements
 #if defined(_MSC_VER)
     #define COREVM_VM_LOOP_SWITCH 1
