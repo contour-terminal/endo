@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28 FATAL_ERROR)
 
-project(endo VERSION "0.0.0" LANGUAGES CXX)
+project(endo VERSION "0.0.0")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -11,6 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+
+option(ENDO_USE_LLVM "Use llvm as a backend for the shell" ON)
 
 if(NOT DEFINED ENDO_TRACE_VM)
     option(ENDO_TRACE_VM "Enables debug output" OFF)

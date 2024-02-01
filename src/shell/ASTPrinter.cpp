@@ -4,7 +4,7 @@ module;
 #include <shell/Visitor.h>
 #include <fmt/format.h>
 
-#include <crispy/assert.h>
+#include <crispy/utils.h>
 
 import Lexer;
 
@@ -146,8 +146,8 @@ export class ASTPrinter: public Visitor
     }
 
     void visit(LiteralExpr const& node) override { _result += fmt::format("{}", node.value); }
-    void visit(SubstitutionExpr const& node) override { crispy::ignore_unused(node); }
-    void visit(CommandFileSubst const& node) override { crispy::ignore_unused(node); }
+    void visit(SubstitutionExpr const& node) override {}
+    void visit(CommandFileSubst const& node) override {}
 };
 
 } // namespace endo::ast

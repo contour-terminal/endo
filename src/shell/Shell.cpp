@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <shell/ProcessGroup.h>
-
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
@@ -20,8 +19,9 @@ import Lexer;
 import ASTPrinter;
 import IRGenerator;
 import Parser;
-
 import CoreVM;
+
+import LLVMBack;
 
 export module Shell;
 
@@ -206,7 +206,16 @@ export class Shell final: public CoreVM::Runtime
 
         return _quit ? _exitCode : EXIT_SUCCESS;
     }
+
     int execute(std::string const& lineBuffer)
+    {
+#if defined(ENDO_USE_LLVM)
+        return llvm_backend::executeLLVM(lineBuffer);
+#else
+        return executeCoreVM(lineBuffer);
+#endif
+    }
+    int executeCoreVM(std::string const& lineBuffer)
     {
         try
         {
