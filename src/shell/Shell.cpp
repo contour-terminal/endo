@@ -21,7 +21,7 @@ import IRGenerator;
 import Parser;
 import CoreVM;
 
-import LLVMBack;
+import LLVMBackend;
 
 export module Shell;
 
@@ -210,7 +210,7 @@ export class Shell final: public CoreVM::Runtime
     int execute(std::string const& lineBuffer)
     {
 #if defined(ENDO_USE_LLVM)
-        return llvm_backend::executeLLVM(lineBuffer);
+        return LLVMBackend::executeLLVM(lineBuffer);
 #else
         return executeCoreVM(lineBuffer);
 #endif
