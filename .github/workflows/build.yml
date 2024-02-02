@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
 
-    name: "${{ matrix.cpp_compiler }}-${{ matrix.os }}-${{ matrix.build_type }}"
+    name: "${{ matrix.build_type }}; LLVM: ${{ matrix.llvm_backend }}"
 
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
@@ -30,7 +30,8 @@ jobs:
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
         os: [ubuntu-latest]
-        build_type: [RelWithDebInfo]
+        build_type: [Release,Debug]
+        llvm_backend: [ON,OFF]
 
     steps:
     - uses: actions/checkout@v3
@@ -90,6 +91,7 @@ jobs:
         -DCMAKE_CXX_COMPILER=clang++-18
         -DCMAKE_C_COMPILER=clang-18
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DENDO_USE_LLVM=${{ matrix.llvm_backend }}
         -GNinja
         -S ${{ github.workspace }}
 

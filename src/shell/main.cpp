@@ -4,7 +4,7 @@
 using namespace std::string_literals;
 
 import Shell;
-import LLVMBackend;
+
 
 std::string_view getEnvironment(std::string_view name, std::string_view defaultValue)
 {
@@ -18,7 +18,6 @@ int main(int argc, char const* argv[])
 
     setsid();
 
-    LLVMBackend::init();
 
     if (argc == 2)
         // This here only exists for early-development debugging purposes.

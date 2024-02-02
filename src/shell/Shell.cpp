@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <shell/ProcessGroup.h>
+
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
@@ -21,7 +22,9 @@ import IRGenerator;
 import Parser;
 import CoreVM;
 
+#if defined(ENDO_USE_LLVM)
 import LLVMBackend;
+#endif
 
 export module Shell;
 
@@ -171,7 +174,13 @@ export class SystemEnvironment: public Environment
 export class Shell final: public CoreVM::Runtime
 {
   public:
-    Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance()) {}
+    Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance())
+    {
+
+#if defined(ENDO_USE_LLVM)
+        LLVMBackend::init();
+#endif
+    }
 
     Shell(TTY& tty, Environment& env): _env { env }, _tty { tty }
     {

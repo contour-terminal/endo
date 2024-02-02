@@ -15,7 +15,6 @@ target_sources(Shell
       ASTPrinter.cpp
       IRGenerator.cpp
       Parser.cpp
-      llvm_executor.cpp
 )
 
 find_package(Threads REQUIRED)
@@ -35,24 +34,24 @@ set(shell_libs
 
 
 if(ENDO_USE_LLVM)
-  find_package(LLVM)
-  if(LLVM_FOUND)
+  find_package(LLVM REQUIRED)
+  message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+  message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+  include("${LLVM_DIR}/AddLLVM.cmake")
 
-    message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-    message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-    include("${LLVM_DIR}/AddLLVM.cmake")
-
-    include_directories(${LLVM_INCLUDE_DIRS})
-    add_definitions(${LLVM_DEFINITIONS})
-    llvm_map_components_to_libnames(llvm_libs analysis core executionengine instcombine object orcjit runtimedyld scalaropts support native)
+  include_directories(${LLVM_INCLUDE_DIRS})
+  add_definitions(${LLVM_DEFINITIONS})
+  llvm_map_components_to_libnames(llvm_libs analysis core executionengine instcombine object orcjit runtimedyld scalaropts support native)
     # Link against LLVM libraries
-    set(shell_libs
-      ${shell_libs}
-      ${llvm_libs})
+  set(shell_libs
+    ${shell_libs}
+    ${llvm_libs})
 
-    target_compile_definitions(Shell PUBLIC ENDO_USE_LLVM)
-  endif()
-else()
+  target_sources(Shell
+    PUBLIC
+    FILE_SET CXX_MODULES FILES
+    llvm_executor.cpp)
+  target_compile_definitions(Shell PUBLIC    ENDO_USE_LLVM)
 endif()
 
 
