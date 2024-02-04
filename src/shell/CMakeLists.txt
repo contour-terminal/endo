@@ -50,7 +50,7 @@ if(ENDO_USE_LLVM)
   target_sources(Shell
     PUBLIC
     FILE_SET CXX_MODULES FILES
-    llvm_executor.cpp)
+    LLVMBackend.cpp)
   target_compile_definitions(Shell PUBLIC    ENDO_USE_LLVM)
 endif()
 
