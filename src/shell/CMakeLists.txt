@@ -23,6 +23,7 @@ find_package(Threads REQUIRED)
 # see https://github.com/llvm/llvm-project/issues/75108
 # and https://github.com/ericniebler/range-v3/blob/f013aef2ae81f3661a560e7922a968665bedebff/include/meta/meta_fwd.hpp#L37
 target_compile_definitions(Shell PUBLIC META_WORKAROUND_LLVM_28385)
+target_compile_definitions(Shell PUBLIC ENDO_VERSION_STRING="0.0.1")
 set(shell_libs
   fmt::fmt-header-only
   vtparser

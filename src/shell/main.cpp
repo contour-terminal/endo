@@ -11,7 +11,6 @@ using Shell = endo::ShellLLVM;
 using Shell = endo::ShellCoreVM;
 #endif
 
-
 std::string_view getEnvironment(std::string_view name, std::string_view defaultValue)
 {
     auto const* const value = getenv(name.data());
@@ -24,10 +23,5 @@ int main(int argc, char const* argv[])
 
     setsid();
 
-
-    if (argc == 2)
-        // This here only exists for early-development debugging purposes.
-        return shell.execute(argv[1]);
-    else
-        return shell.run();
+    return shell.run(argc, argv);
 }

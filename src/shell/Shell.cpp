@@ -2,6 +2,7 @@
 module;
 #include <shell/ProcessGroup.h>
 
+#include <crispy/App.h>
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
@@ -172,11 +173,17 @@ export class SystemEnvironment: public Environment
     std::map<std::string, std::string> _values;
 };
 
-class ShellBase
+class ShellBase: public crispy::app
 {
   public:
-    ShellBase() = delete;
-    ShellBase(TTY& tty, Environment& env): _env { env }, _tty { tty }
+    ShellBase():
+        app("endo", "Endo shell", ENDO_VERSION_STRING, "Apache-2.0"),
+        _env { SystemEnvironment::instance() },
+        _tty { RealTTY::instance() }
+    {
+    }
+    ShellBase(TTY& tty, Environment& env):
+        app("endo", "Endo shell", ENDO_VERSION_STRING, "Apache-2.0"), _env { env }, _tty { tty }
     {
 
         _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
@@ -185,22 +192,42 @@ class ShellBase
         _env.setAndExport("SHELL", "endo");
     }
     virtual ~ShellBase() = default;
-
-    virtual int execute(std::string const& lineBuffer) = 0;
-    int run()
+    [[nodiscard]] crispy::cli::command parameterDefinition() const override
     {
-        while (!_quit && prompt.ready())
-        {
-            auto const lineBuffer = prompt.read();
-            debugLog()("input buffer: {}", lineBuffer);
 
-            _exitCode = execute(lineBuffer);
-            // _tty.writeToStdout("exit code: {}\n", _exitCode);
-        }
-
-        return _quit ? _exitCode : EXIT_SUCCESS;
+        return crispy::cli::command {
+            "endo",
+            "Endo Terminal " ENDO_VERSION_STRING
+            " - a shell for the 21st century",
+            crispy::cli::option_list {},
+            crispy::cli::command_list {},
+        };
     }
 
+    virtual int execute(std::string const& lineBuffer) = 0;
+    int run(int argc, char const* argv[])
+    {
+        try
+        {
+            customizeLogStoreOutput();
+
+            while (!_quit && prompt.ready())
+            {
+                auto const lineBuffer = prompt.read();
+                debugLog()("input buffer: {}", lineBuffer);
+
+                _exitCode = execute(lineBuffer);
+                // _tty.writeToStdout("exit code: {}\n", _exitCode);
+            }
+
+            return _quit ? _exitCode : EXIT_SUCCESS;
+        }
+        catch (std::exception const& e)
+        {
+            std::cerr << fmt::format("Unhandled error caught. {}", e.what()) << '\n';
+            return EXIT_FAILURE;
+        }
+    }
     [[nodiscard]] Environment& environment() noexcept { return _env; }
     [[nodiscard]] Environment const& environment() const noexcept { return _env; }
 
@@ -698,6 +725,18 @@ int ShellLLVM::execute(std::string const& lineBuffer)
 {
     try
     {
+        auto tokens = Lexer::tokenize(std::make_unique<endo::StringSource>(lineBuffer));
+        for (auto const& tokenInfo: tokens)
+        {
+            if (tokenInfo.token == Token::Identifier)
+                if (tokenInfo.literal == "exit")
+                {
+                    _quit = true;
+                    return EXIT_SUCCESS;
+                }
+            debugLog()("token: {}\n", tokenInfo.literal);
+        }
+
         // Look up the JIT'd function, cast it to a function pointer, then call it.
         _backend.exec(
             lineBuffer, _currentPipelineBuilder.defaultStdinFd, _currentPipelineBuilder.defaultStdoutFd);

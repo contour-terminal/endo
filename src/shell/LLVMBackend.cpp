@@ -1,11 +1,16 @@
 module;
 
+#include <crispy/logstore.h>
+
+#include <fmt/core.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -13,7 +18,7 @@ module;
 #include <string>
 #include <utility>
 #include <vector>
-#include <fmt/core.h>
+
 #include <sys/wait.h>
 
 #include <unistd.h>
@@ -58,10 +63,14 @@ module;
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Utils.h>
 
+using std::unique_ptr;
+
 using namespace llvm;
 using namespace llvm::orc;
 
 export module LLVMBackend;
+
+auto inline llvmLog = logstore::category("llvm", "Debug log", logstore::category::state::Enabled);
 
 class TestJIT
 {
@@ -145,20 +154,21 @@ std::vector<std::string> tokenizer(const std::string& p_pcstStr, char delim)
     return tokens;
 }
 
-extern "C" void execute_llvmbackend(const char* prog, const char* params, int stdinFd, int stdoutFd)
+extern "C" void execute(const char* prog, const char* params, int stdinFd, int stdoutFd)
 {
-
     std::vector<const char*> argv;
     argv.push_back(prog);
-    argv.push_back(params);
+    if (strlen(params) > 0)
+        argv.push_back(params);
+    argv.push_back(nullptr);
+
+    fmt::print("program to execute {} with args: {} \n ", prog, params);
 
     pid_t const pid = fork();
 
-    fmt::print("program to execute {} with args: {} \b", prog, params);
-    
     switch (pid)
     {
-        case -1: fmt::print("Failed to fork(): {} \n", strerror(errno)); return;
+        case -1: llvmLog()("Failed to fork(): {} \n", strerror(errno)); return;
         case 0: {
             // child process
             if (stdinFd != STDIN_FILENO)
@@ -170,185 +180,120 @@ extern "C" void execute_llvmbackend(const char* prog, const char* params, int st
         default: {
             // parent process
             int wstatus = 0;
-                waitpid(pid, &wstatus, 0);
-                if (WIFSIGNALED(wstatus))
-                    fmt::print("child process exited with signal {} \n", WTERMSIG(wstatus));
-                else if (WIFEXITED(wstatus))
-                    fmt::print("child process exited with code {} \n", WEXITSTATUS(wstatus));
-                else if (WIFSTOPPED(wstatus))
-                    fmt::print("child process stopped with signal {} \n", WSTOPSIG(wstatus));
-                else
-                    fmt::print("child process exited with unknown status {} \n", wstatus);
-                break;
+            waitpid(pid, &wstatus, 0);
+            if (WIFSIGNALED(wstatus))
+                llvmLog()("child process exited with signal {} \n", WTERMSIG(wstatus));
+            else if (WIFEXITED(wstatus))
+                llvmLog()("child process exited with code {} \n", WEXITSTATUS(wstatus));
+            else if (WIFSTOPPED(wstatus))
+                llvmLog()("child process stopped with signal {} \n", WSTOPSIG(wstatus));
+            else
+                llvmLog()("child process exited with unknown status {} \n", wstatus);
+            break;
         }
     }
 }
-
-// int jitPart(std::string input)
-// {
-//     using namespace llvm;
-//     using namespace llvm::orc;
-
-//     std::unique_ptr<IRBuilder<>> builder;
-
-//     // Create an LLJIT instance.
-//     ExitOnError ExitOnErr;
-//     auto J = ExitOnErr(TestJIT::Create());
-
-//     auto Context = std::make_unique<LLVMContext>();
-
-//     builder = std::make_unique<IRBuilder<>>(*Context);
-
-//     auto TheModule = std::make_unique<Module>("test", *Context);
-//     TheModule->setDataLayout(J->getDataLayout());
-
-//     auto byteptr = builder->getPtrTy();
-//     // llvm::Type::getInt8Ty(*Context)->getPo;
-//     auto FunctionType = llvm::FunctionType::get(llvm::Type::getVoidTy(*Context), { byteptr, byteptr },
-//     false);
-
-//     auto fun = TheModule->getOrInsertFunction("execute", FunctionType);
-
-//     Function* F = Function::Create(FunctionType, Function::ExternalLinkage, "__anon_expr",
-//     TheModule.get());
-
-//     // Add a basic block to the function. As before, it automatically inserts
-//     // because of the last argument.
-//     BasicBlock* BB = BasicBlock::Create(*Context, "EntryBlock", F);
-
-//     builder->SetInsertPoint(BB);
-
-//     // Get pointers to the constant `1'.
-
-//     const auto [prog, args] = SeparateProg(input);
-
-//     auto CalRes =
-//         builder->CreateCall(fun, { builder->CreateGlobalString(prog), builder->CreateGlobalString(args) });
-
-//     // Value *One = builder.getInt32(1);
-//     // Value *Add = builder.CreateAdd(One, One);
-
-//     builder->CreateRet(builder->getInt32(1));
-
-//     auto RT = J->getMainJITDylib().createResourceTracker();
-
-//     auto M = ThreadSafeModule(std::move(TheModule), std::move(Context));
-
-//     M.getModuleUnlocked()->print(llvm::outs(), nullptr);
-
-//     ExitOnErr(J->addModule(std::move(M), RT));
-
-//     // Look up the JIT'd function, cast it to a function pointer, then call it.
-//     auto ExprSymbol = ExitOnErr(J->lookup("__anon_expr"));
-
-//     void (*FP)() = ExprSymbol.getAddress().toPtr<void (*)()>();
-//     FP();
-
-//     return EXIT_SUCCESS;
-// }
 
 std::tuple<std::string, std::string> SeparateProg(const std::string input)
 {
 
     std::stringstream inStream(input);
-    std::string prog;
+    std::string program;
     std::string args;
-    getline(inStream, prog, ' ');
+    getline(inStream, program, ' ');
     getline(inStream, args, '\n');
 
-    return { prog, args };
+    return { "/usr/bin/" + program, args };
 }
 
 export class LLVMBackend
 {
+
   public:
     LLVMBackend()
     {
         InitializeNativeTarget();
         InitializeNativeTargetAsmPrinter();
+        InitializeNativeTargetAsmParser();
         // Create an LLJIT instance.
+        _jit = ExitOnErr(TestJIT::Create());
     }
 
-    auto exec(std::string const& input, const int stdinFd, const int stdoutFd)
+    void initializeModule()
+    {
+        _context = std::make_unique<LLVMContext>();
+        _builder = std::make_unique<IRBuilder<>>(*_context);
+
+        _module = std::make_unique<Module>("test", *_context);
+        _module->setDataLayout(_jit->getDataLayout());
+    }
+
+    void HandleExternalCall(std::string const& input, const int stdinFd, const int stdoutFd)
     {
 
-        using namespace llvm;
-        using namespace llvm::orc;
-        std::unique_ptr<IRBuilder<>> builder;
-
-        // Create an LLJIT instance.
-        ExitOnError ExitOnErr;
-        auto J = ExitOnErr(TestJIT::Create());
-
-        auto Context = std::make_unique<LLVMContext>();
-
-        builder = std::make_unique<IRBuilder<>>(*Context);
-
-        auto TheModule = std::make_unique<Module>("test", *Context);
-        TheModule->setDataLayout(J->getDataLayout());
-
-        // Create new pass and analysis managers.
-        auto TheFPM = std::make_unique<FunctionPassManager>();
-        auto TheLAM = std::make_unique<LoopAnalysisManager>();
-        auto TheFAM = std::make_unique<FunctionAnalysisManager>();
-        auto TheCGAM = std::make_unique<CGSCCAnalysisManager>();
-        auto TheMAM = std::make_unique<ModuleAnalysisManager>();
-        auto ThePIC = std::make_unique<PassInstrumentationCallbacks>();
-        auto TheSI = std::make_unique<StandardInstrumentations>(*Context, /*DebugLogging*/ true);
-        TheSI->registerCallbacks(*ThePIC, TheMAM.get());
-
-        TheFPM->addPass(ReassociatePass());
-        TheFPM->addPass(GVNPass());
-        TheFPM->addPass(SimplifyCFGPass());
-
-        PassBuilder PB;
-        PB.registerModuleAnalyses(*TheMAM);
-        PB.registerFunctionAnalyses(*TheFAM);
-        PB.crossRegisterProxies(*TheLAM, *TheFAM, *TheCGAM, *TheMAM);
-
-        auto byteptr = builder->getPtrTy();
-        auto inttype = builder->getInt64Ty();
+        auto byteptr = _builder->getPtrTy();
+        auto inttype = _builder->getInt64Ty();
         // llvm::Type::getInt8Ty(*Context)->getPo;
-        auto FunctionType = llvm::FunctionType::get(
-            llvm::Type::getVoidTy(*Context), { byteptr, byteptr, inttype, inttype }, false);
+        _execvpFunctionType = llvm::FunctionType::get(
+            llvm::Type::getVoidTy(*_context), { byteptr, byteptr, inttype, inttype }, false);
 
-        auto fun = TheModule->getOrInsertFunction("execute_llvmbackend", FunctionType);
+        _mainFunctionType = llvm::FunctionType::get(
+            llvm::Type::getVoidTy(*_context), { llvm::Type::getVoidTy(*_context) }, false);
+
+        auto fun = _module->getOrInsertFunction("execute", _execvpFunctionType);
 
         Function* F =
-            Function::Create(FunctionType, Function::ExternalLinkage, "__anon_expr", TheModule.get());
+            Function::Create(_mainFunctionType, Function::ExternalLinkage, "__anon_expr", _module.get());
 
         // Add a basic block to the function. As before, it automatically inserts
         // because of the last argument.
-        BasicBlock* BB = BasicBlock::Create(*Context, "EntryBlock", F);
+        BasicBlock* BB = BasicBlock::Create(*_context, "EntryBlock", F);
 
-        builder->SetInsertPoint(BB);
+        _builder->SetInsertPoint(BB);
 
         // Get pointers to the constant `1'.
 
         const auto [prog, args] = SeparateProg(input);
 
-        auto CalRes = builder->CreateCall(fun,
-                                          { builder->CreateGlobalString(prog),
-                                            builder->CreateGlobalString(args),
-                                            builder->getInt64(stdinFd),
-                                            builder->getInt64(stdoutFd) });
+        auto CalRes = _builder->CreateCall(fun,
+                                           { _builder->CreateGlobalString(prog),
+                                             _builder->CreateGlobalString(args),
+                                             _builder->getInt64(stdinFd),
+                                             _builder->getInt64(stdoutFd) });
 
-        // Value *One = builder.getInt32(1);
-        // Value *Add = builder.CreateAdd(One, One);
+        _builder->CreateRet(_builder->getInt32(1));
+    }
 
-        builder->CreateRet(builder->getInt32(1));
+    auto exec(std::string const& input, const int stdinFd, const int stdoutFd)
+    {
+        initializeModule();
 
-        auto RT = J->getMainJITDylib().createResourceTracker();
+        HandleExternalCall(input, stdinFd, stdoutFd);
 
-        auto M = ThreadSafeModule(std::move(TheModule), std::move(Context));
+        auto RT = _jit->getMainJITDylib().createResourceTracker();
+
+        auto M = ThreadSafeModule(std::move(_module), std::move(_context));
 
         M.getModuleUnlocked()->print(llvm::outs(), nullptr);
 
-        ExitOnErr(J->addModule(std::move(M), RT));
-
+        ExitOnErr(_jit->addModule(std::move(M), RT));
         // Look up the JIT'd function, cast it to a function pointer, then call it.
-        auto ExprSymbol = ExitOnErr(J->lookup("__anon_expr"));
-
+        auto ExprSymbol = ExitOnErr(_jit->lookup("__anon_expr"));
         (ExprSymbol.getAddress().toPtr<void (*)()>())();
+
+        // Delete the anonymous expression module from the JIT.
+        ExitOnErr(RT->remove());
     }
+
+    std::unique_ptr<LLVMContext> _context;
+    std::unique_ptr<IRBuilder<>> _builder;
+    std::unique_ptr<TestJIT> _jit;
+    std::unique_ptr<Module> _module;
+    ExitOnError ExitOnErr;
+
+    // types of some functions
+    llvm::FunctionType* _execvpFunctionType;
+    llvm::FunctionType* _mainFunctionType;
+
+    ~LLVMBackend() { llvm::llvm_shutdown(); }
 };
