@@ -197,8 +197,7 @@ class ShellBase: public crispy::app
 
         return crispy::cli::command {
             "endo",
-            "Endo Terminal " ENDO_VERSION_STRING
-            " - a shell for the 21st century",
+            "Endo Terminal " ENDO_VERSION_STRING ,
             crispy::cli::option_list {},
             crispy::cli::command_list {},
         };
@@ -726,15 +725,10 @@ int ShellLLVM::execute(std::string const& lineBuffer)
     try
     {
         auto tokens = Lexer::tokenize(std::make_unique<endo::StringSource>(lineBuffer));
-        for (auto const& tokenInfo: tokens)
+        if (tokens[0].literal == "exit")
         {
-            if (tokenInfo.token == Token::Identifier)
-                if (tokenInfo.literal == "exit")
-                {
-                    _quit = true;
-                    return EXIT_SUCCESS;
-                }
-            debugLog()("token: {}\n", tokenInfo.literal);
+            _quit = true;
+            return EXIT_SUCCESS;
         }
 
         // Look up the JIT'd function, cast it to a function pointer, then call it.

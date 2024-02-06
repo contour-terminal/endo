@@ -223,52 +223,58 @@ export class LLVMBackend
     {
         _context = std::make_unique<LLVMContext>();
         _builder = std::make_unique<IRBuilder<>>(*_context);
-
         _module = std::make_unique<Module>("test", *_context);
         _module->setDataLayout(_jit->getDataLayout());
     }
 
-    void HandleExternalCall(std::string const& input, const int stdinFd, const int stdoutFd)
+    void HandleExternalCall(std::string const& input) const
     {
 
-        auto byteptr = _builder->getPtrTy();
-        auto inttype = _builder->getInt64Ty();
-        // llvm::Type::getInt8Ty(*Context)->getPo;
-        _execvpFunctionType = llvm::FunctionType::get(
+        auto* byteptr = _builder->getPtrTy();
+        auto* inttype = _builder->getInt64Ty();
+        auto* execvpFunctionType = llvm::FunctionType::get(
             llvm::Type::getVoidTy(*_context), { byteptr, byteptr, inttype, inttype }, false);
 
-        _mainFunctionType = llvm::FunctionType::get(
+        auto fun = _module->getOrInsertFunction("execute", execvpFunctionType);
+
+        const auto [prog, args] = SeparateProg(input);
+
+        auto* CalRes = _builder->CreateCall(fun,
+                                           { _builder->CreateGlobalString(prog),
+                                             _builder->CreateGlobalString(args),
+                                             _builder->getInt64(_stdinFd),
+                                             _builder->getInt64(_stdoutFd) });
+    }
+
+    void HandleAfterParse(std::string const& input) const {
+        HandleExternalCall(input);
+    }
+
+    void HandleGlobalPart(std::string const& input) const
+    {
+        auto* mainFunctionType = llvm::FunctionType::get(
             llvm::Type::getVoidTy(*_context), { llvm::Type::getVoidTy(*_context) }, false);
-
-        auto fun = _module->getOrInsertFunction("execute", _execvpFunctionType);
-
         Function* F =
-            Function::Create(_mainFunctionType, Function::ExternalLinkage, "__anon_expr", _module.get());
+            Function::Create(mainFunctionType, Function::ExternalLinkage, "__anon_expr", _module.get());
 
-        // Add a basic block to the function. As before, it automatically inserts
-        // because of the last argument.
         BasicBlock* BB = BasicBlock::Create(*_context, "EntryBlock", F);
 
         _builder->SetInsertPoint(BB);
 
-        // Get pointers to the constant `1'.
-
-        const auto [prog, args] = SeparateProg(input);
-
-        auto CalRes = _builder->CreateCall(fun,
-                                           { _builder->CreateGlobalString(prog),
-                                             _builder->CreateGlobalString(args),
-                                             _builder->getInt64(stdinFd),
-                                             _builder->getInt64(stdoutFd) });
+        HandleAfterParse(input);
 
         _builder->CreateRet(_builder->getInt32(1));
     }
 
     auto exec(std::string const& input, const int stdinFd, const int stdoutFd)
     {
+        // TODO move it somewhere
+        _stdinFd = stdinFd;
+        _stdoutFd = stdoutFd;
+
         initializeModule();
 
-        HandleExternalCall(input, stdinFd, stdoutFd);
+        HandleGlobalPart(input);
 
         auto RT = _jit->getMainJITDylib().createResourceTracker();
 
@@ -291,9 +297,7 @@ export class LLVMBackend
     std::unique_ptr<Module> _module;
     ExitOnError ExitOnErr;
 
-    // types of some functions
-    llvm::FunctionType* _execvpFunctionType;
-    llvm::FunctionType* _mainFunctionType;
-
+    int _stdinFd{};
+    int _stdoutFd{};
     ~LLVMBackend() { llvm::llvm_shutdown(); }
 };
