@@ -2,6 +2,8 @@
 module;
 
 #include <list>
+#include <algorithm>
+
 
 module CoreVM;
 namespace CoreVM

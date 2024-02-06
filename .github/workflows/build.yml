@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}
 
-    name: "${{ matrix.cpp_compiler }}-${{ matrix.os }}-${{ matrix.build_type }}"
+    name: "${{ matrix.build_type }}; LLVM: ${{ matrix.llvm_backend }}"
 
     strategy:
       # Set fail-fast to false to ensure that feedback is delivered for all matrix combinations. Consider changing this to true when your workflow is stable.
@@ -30,7 +30,8 @@ jobs:
       # To add more build types (Release, Debug, RelWithDebInfo, etc.) customize the build_type list.
       matrix:
         os: [ubuntu-latest]
-        build_type: [RelWithDebInfo]
+        build_type: [Release,Debug]
+        llvm_backend: [ON,OFF]
 
     steps:
     - uses: actions/checkout@v3
@@ -80,16 +81,17 @@ jobs:
       run: clang++ --version
 
     - name: Check clang version
-      run: clang++-17 --version
+      run: clang++-18 --version
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
       # See https://cmake.org/cmake/help/latest/variable/CMAKE_BUILD_TYPE.html?highlight=cmake_build_type
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=clang++-17
-        -DCMAKE_C_COMPILER=clang-17
+        -DCMAKE_CXX_COMPILER=clang++-18
+        -DCMAKE_C_COMPILER=clang-18
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DENDO_USE_LLVM=${{ matrix.llvm_backend }}
         -GNinja
         -S ${{ github.workspace }}
 

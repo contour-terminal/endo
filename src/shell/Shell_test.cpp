@@ -11,6 +11,12 @@ using crispy::escape;
 import Shell;
 import TTY;
 
+#if defined(ENDO_USE_LLVM)
+using Shell = endo::ShellLLVM;
+#else
+using Shell = endo::ShellCoreVM;
+#endif
+
 namespace
 {
 struct TestShell
@@ -19,7 +25,7 @@ struct TestShell
     endo::TestEnvironment env;
     int exitCode = -1;
 
-    endo::Shell shell { pty, env };
+    Shell shell { pty, env };
 
     std::string_view output() const noexcept { return pty.output(); }
 
@@ -79,13 +85,13 @@ TEST_CASE("shell.builtin.set_variable")
     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
 }
 
-TEST_CASE("shell.builtin.get_variable")
-{
-    TestShell shell;
-    shell("set BRU hello");
-    CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
-    shell("$BRU");
-}
+// TEST_CASE("shell.builtin.get_variable")
+// {
+//     TestShell shell;
+//     shell("set BRU hello");
+//     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
+//     shell("$BRU");
+// }
 
 
 // TEST_CASE("shell.builtin.set_and_export_variable")

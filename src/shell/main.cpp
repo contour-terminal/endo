@@ -5,6 +5,11 @@ using namespace std::string_literals;
 
 import Shell;
 
+#if defined(ENDO_USE_LLVM)
+using Shell = endo::ShellLLVM;
+#else
+using Shell = endo::ShellCoreVM;
+#endif
 
 std::string_view getEnvironment(std::string_view name, std::string_view defaultValue)
 {
@@ -14,13 +19,9 @@ std::string_view getEnvironment(std::string_view name, std::string_view defaultV
 
 int main(int argc, char const* argv[])
 {
-    auto shell = endo::Shell {};
+    auto shell = Shell {};
 
     setsid();
 
-    if (argc == 2)
-        // This here only exists for early-development debugging purposes.
-        return shell.execute(argv[1]);
-    else
-        return shell.run();
+    return shell.run(argc, argv);
 }
