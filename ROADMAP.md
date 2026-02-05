@@ -248,11 +248,11 @@ Windows support.
 
 ### Phase 2.1: Rich Text Editor Foundation
 
-**Status:** In Progress
+**Status:** Complete
 
 **Dependency:** Milestone 1 complete (need full language for practical editing)
 
-**Current State:** A comprehensive TUI library has been integrated into the project (`src/tui/`).
+**Implementation Summary:** A comprehensive TUI library has been integrated into the project (`src/tui/`).
 The library includes:
 - Terminal input/output abstraction (`Terminal`, `TerminalInput`, `TerminalOutput`)
 - VT sequence parser (`VtParser`) with support for CSI, SGR mouse, bracketed paste, UTF-8
@@ -260,18 +260,22 @@ The library includes:
 - Various UI components (Box, Dialog, List, LogPanel, StatusBar, Spinner, Text, Theme)
 - Sixel image support and Markdown rendering
 
-**Completed Tasks:**
+**Tasks:**
 - [x] Add GUI-style selection model (Shift+arrows, Ctrl+A select all, Ctrl+C copy, Ctrl+X cut)
 - [x] Implement undo/redo history (Ctrl+Z undo, Ctrl+Shift+Z redo)
 - [x] Implement clipboard integration via OSC 52 (`TerminalOutput::copyToClipboard()` + callback)
 - [x] Add mouse click-to-position cursor support (`InputField::setCursorFromClick()`)
 - [x] Rewrite `Prompt` class to use `tui::Terminal` + `tui::InputField`
 - [x] Remove `InputEditor` dependency from Shell (superseded by TUI library)
+- [x] Implement fixed editor region that auto-grows up to 50% of terminal height
+- [x] Add multiline editing support with proper rendering and selection highlighting
+- [x] Add comprehensive editor unit tests (47 tests covering basic editing, cursor movement, selection, undo/redo, multiline, history, kill ring, clipboard, and UTF-8)
 
-**Remaining Tasks:**
-- [ ] Implement fixed editor region that auto-grows up to 50% of terminal height
-- [ ] Add multiline editing support with proper rendering
-- [ ] Add or improve editor unit tests
+**Implementation Notes:**
+- Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
+- Editor region scrolls to keep cursor visible when content exceeds max height
+- Selection highlighting uses inverse video (SGR 7/27)
+- Display width calculation uses libunicode for proper Unicode handling
 
 ### Phase 2.2: Mouse Integration
 
