@@ -37,9 +37,9 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     /// @param report Diagnostics report for error messages
     /// @param runtime Runtime instance for accessing builtins
     /// @return The generated IR program, or nullptr if errors occurred
-    static CoreVM::IRProgram* generate(ast::Statement const& rootNode,
-                                       CoreVM::diagnostics::Report& report,
-                                       CoreVM::Runtime& runtime)
+    static std::unique_ptr<CoreVM::IRProgram> generate(ast::Statement const& rootNode,
+                                                       CoreVM::diagnostics::Report& report,
+                                                       CoreVM::Runtime& runtime)
     {
         IRGenerator generator(report, runtime);
 
@@ -53,7 +53,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
         generator.createRet(generator.get(CoreVM::CoreNumber(0)));
 
-        return generator.program();
+        return generator.takeProgram();
     }
 
   private:

@@ -326,13 +326,13 @@ export class Shell final: public CoreVM::Runtime
 
             debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-            CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode, report, *this);
+            auto irProgram = IRGenerator::generate(*rootNode, report, *this);
 
             // Check for IR generation errors
             if (report.containsFailures())
                 return EXIT_FAILURE;
 
-            if (irProgram == nullptr)
+            if (!irProgram)
                 return EXIT_FAILURE;
 
             if (_optimize)
@@ -349,7 +349,7 @@ export class Shell final: public CoreVM::Runtime
             pm.registerPass("rewrite-cond-br-to-same-branches", &CoreVM::transform::rewriteCondBrToSameBranches);
                 // clang-format on
 
-                pm.run(irProgram);
+                pm.run(irProgram.get());
             }
 
             debugLog()()("================================================\n");
@@ -357,7 +357,7 @@ export class Shell final: public CoreVM::Runtime
             if (debugLog().is_enabled())
                 irProgram->dump();
 
-            _currentProgram = CoreVM::TargetCodeGenerator {}.generate(irProgram);
+            _currentProgram = CoreVM::TargetCodeGenerator {}.generate(irProgram.get());
             if (!_currentProgram)
             {
                 error("Failed to generate target code");

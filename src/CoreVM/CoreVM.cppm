@@ -1875,6 +1875,15 @@ class IRBuilder
 
     IRProgram* program() const { return _program; }
 
+    /// Takes ownership of the program, returning it as a unique_ptr.
+    /// After calling this, program() will return nullptr.
+    std::unique_ptr<IRProgram> takeProgram()
+    {
+        auto result = std::unique_ptr<IRProgram>(_program);
+        _program = nullptr;
+        return result;
+    }
+
     IRHandler* setHandler(IRHandler* hn);
 
     IRHandler* handler() const { return _handler; }
