@@ -48,9 +48,11 @@ class UnboxedRange
         explicit iterator(BoxedIterator boxed): _it(boxed) {}
 
         [[nodiscard]] const element_type& operator->() const { return **_it; }
+
         [[nodiscard]] element_type& operator->() { return **_it; }
 
         [[nodiscard]] const element_type* operator*() const { return (*_it).get(); }
+
         [[nodiscard]] element_type* operator*() { return (*_it).get(); }
 
         iterator& operator++()
@@ -58,6 +60,7 @@ class UnboxedRange
             ++_it;
             return *this;
         }
+
         iterator& operator++(int)
         {
             ++_it;
@@ -65,6 +68,7 @@ class UnboxedRange
         }
 
         [[nodiscard]] bool operator==(const iterator& other) const { return _it == other._it; }
+
         [[nodiscard]] bool operator!=(const iterator& other) const { return _it != other._it; }
 
       private:
@@ -72,10 +76,13 @@ class UnboxedRange
     }; // }}}
 
     UnboxedRange(BoxedIterator begin, BoxedIterator end): _begin(begin), _end(end) {}
+
     explicit UnboxedRange(BoxedContainer& c): _begin(c.begin()), _end(c.end()) {}
 
     [[nodiscard]] iterator begin() const { return _begin; }
+
     [[nodiscard]] iterator end() const { return _end; }
+
     [[nodiscard]] size_t size() const
     {
         auto it = _begin;
@@ -135,6 +142,7 @@ class SuffixTree
         Value value;
 
         Node(): parent(nullptr), element(), children(), value() {}
+
         Node(Node* p, Elem e): parent(p), element(e), children(), value() {}
     }; // }}}
 
@@ -226,6 +234,7 @@ class PrefixTree
         Value value;
 
         Node(): parent(nullptr), element(), children(), value() {}
+
         Node(Node* p, Elem e): parent(p), element(e), children(), value() {}
     }; // }}}
 
@@ -293,6 +302,7 @@ bool PrefixTree<K, V>::lookup(const Key& key, Value* value) const
 
     return false;
 }
+
 // }}}
 
 /**
@@ -606,15 +616,21 @@ class RegExp
     bool match(const std::string& target, Result* result = nullptr) const;
 
     [[nodiscard]] const std::string& pattern() const { return _pattern; }
+
     [[nodiscard]] const char* c_str() const;
 
     operator const std::string&() const { return _pattern; }
 
     friend bool operator==(const RegExp& a, const RegExp& b) { return a.pattern() == b.pattern(); }
+
     friend bool operator!=(const RegExp& a, const RegExp& b) { return a.pattern() != b.pattern(); }
+
     friend bool operator<=(const RegExp& a, const RegExp& b) { return a.pattern() <= b.pattern(); }
+
     friend bool operator>=(const RegExp& a, const RegExp& b) { return a.pattern() >= b.pattern(); }
+
     friend bool operator<(const RegExp& a, const RegExp& b) { return a.pattern() < b.pattern(); }
+
     friend bool operator>(const RegExp& a, const RegExp& b) { return a.pattern() > b.pattern(); }
 };
 

@@ -11,6 +11,7 @@ module;
 #include <fcntl.h>
 
 module CoreVM;
+
 namespace CoreVM
 {
 

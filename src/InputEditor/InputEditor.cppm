@@ -10,6 +10,7 @@ module;
 #include <libunicode/scan.h>
 
 export module input_editor;
+
 export namespace InputEditor
 {
 
@@ -19,6 +20,7 @@ namespace detail
     struct LineOffset {};
     struct ColumnOffset {};
 }
+
 // clang-format on
 using LineOffset = boxed::boxed<unsigned, detail::LineOffset>;
 using ColumnOffset = boxed::boxed<unsigned, detail::ColumnOffset>;

@@ -13,6 +13,7 @@ module;
 
 module CoreVM;
 import CoreVM.util;
+
 namespace CoreVM
 {
 
@@ -782,6 +783,7 @@ void TargetCodeGenerator::visit(PInCidrInstr& instr)
 {
     emitBinary(instr, Opcode::PINCIDR);
 }
+
 // }}}
 
 } // namespace CoreVM

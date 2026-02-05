@@ -6,6 +6,7 @@ module;
 #include <print>
 
 module CoreVM;
+
 namespace CoreVM::diagnostics
 {
 
@@ -25,6 +26,7 @@ bool Message::operator==(const Message& other) const noexcept
     // XXX ignore SourceLocation's filename & end
     return type == other.type && sourceLocation.begin == other.sourceLocation.begin && text == other.text;
 }
+
 // }}}
 // {{{ ConsoleReport
 ConsoleReport::ConsoleReport(): _errorCount { 0 }
@@ -47,6 +49,7 @@ void ConsoleReport::push_back(Message message)
         default: std::cerr << std::format("Error: {}\n", message); break;
     }
 }
+
 // }}}
 // {{{ BufferedReport
 void BufferedReport::push_back(Message msg)
@@ -124,6 +127,7 @@ std::ostream& operator<<(std::ostream& os, const BufferedReport& report)
     }
     return os;
 }
+
 // }}}
 
 } // namespace CoreVM::diagnostics

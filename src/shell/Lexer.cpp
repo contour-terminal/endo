@@ -106,11 +106,13 @@ export class StringSource final: public Source
 {
   public:
     explicit StringSource(std::string source): _source { std::move(source) } {}
+
     void rewind() override
     {
         _location.line = 0;
         _location.column = 0;
     }
+
     [[nodiscard]] char32_t readChar() override
     {
         if (_offset >= _source.size())
@@ -136,6 +138,7 @@ export class StringSource final: public Source
 
         return std::string_view(_source.data() + _offset, 1);
     }
+
     [[nodiscard]] SourceLocation currentSourceLocation() const noexcept override { return _location; }
 
   private:
@@ -152,6 +155,7 @@ export class Lexer
         nextChar();
         nextToken();
     }
+
     Token nextToken()
     {
         // auto const postLogger = crispy::finally { [this]() mutable {
@@ -226,7 +230,9 @@ export class Lexer
     }
 
     [[nodiscard]] Token currentToken() const noexcept { return _currentToken.token; }
+
     [[nodiscard]] std::string const& currentLiteral() const noexcept { return _currentToken.literal; }
+
     [[nodiscard]] SourceLocationRange currentRange() const noexcept { return _currentRange; }
 
     [[nodiscard]] bool isDirective(std::string_view name) const noexcept
@@ -251,6 +257,7 @@ export class Lexer
 
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
+
     [[nodiscard]] char32_t currentChar() const noexcept { return _currentChar; }
 
     void consumeWhitespace()
@@ -420,6 +427,7 @@ struct std::formatter<endo::TokenInfo>
     {
         return ctx.begin();
     }
+
     auto format(endo::TokenInfo const& info, format_context& ctx) const -> format_context::iterator
     {
         return std::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);

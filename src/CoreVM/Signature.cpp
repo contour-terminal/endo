@@ -6,6 +6,7 @@ module;
 #include <vector>
 
 module CoreVM;
+
 namespace CoreVM
 {
 

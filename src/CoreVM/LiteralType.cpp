@@ -3,6 +3,7 @@ module;
 #include <CoreVM/util/assert.h>
 
 module CoreVM;
+
 namespace CoreVM
 {
 

@@ -144,6 +144,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     {
         // TODO
     }
+
     void visit(ast::CompoundStmt const& node) override
     {
         for (auto const& stmt: node.statements)
@@ -180,12 +181,14 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     {
         // TODO
     }
+
     void visit(ast::LiteralExpr const& node) override { _result = get(node.value); }
 
     void visit(ast::OutputRedirect const&) override
     {
         // TODO
     }
+
     void visit(ast::ProgramCall const& node) override
     {
         TRACE_SCOPE("ProgramCall");
@@ -213,6 +216,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     {
         // TODO
     }
+
     void visit(ast::WhileStmt const& node) override
     {
         CoreVM::BasicBlock* cond = createBlock("while.cond");

@@ -71,15 +71,18 @@ export struct UnixPipe
     [[nodiscard]] bool good() const noexcept { return pfd[0] != -1 && pfd[1] != -1; }
 
     [[nodiscard]] int reader() const noexcept { return pfd[0]; }
+
     [[nodiscard]] int releaseReader() noexcept
     {
         int const fd = pfd[0];
         pfd[0] = -1;
         return fd;
     }
+
     [[nodiscard]] int writer() const noexcept { return pfd[1]; }
 
     void closeReader() noexcept { saveClose(&pfd[0]); }
+
     void closeWriter() noexcept { saveClose(&pfd[1]); }
 
     void close()

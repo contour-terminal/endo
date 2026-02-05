@@ -4,6 +4,7 @@ module;
 #include <string>
 
 module CoreVM;
+
 namespace CoreVM
 {
 

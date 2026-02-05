@@ -28,7 +28,9 @@ export class ASTPrinter: public Visitor
     }
 
     void visit(FileDescriptor const& node) override { _result += std::format("{}", node.value); }
+
     void visit(InputRedirect const& node) override { crispy::ignore_unused(node); }
+
     void visit(OutputRedirect const& node) override
     {
         if (std::holds_alternative<std::unique_ptr<LiteralExpr>>(node.target))
@@ -40,6 +42,7 @@ export class ASTPrinter: public Visitor
             _result += std::format(
                 " {}>&{}", node.source->value, std::get<std::unique_ptr<FileDescriptor>>(node.target)->value);
     }
+
     void visit(ProgramCall const& node) override
     {
         _result += std::format("{}", node.program);
@@ -55,6 +58,7 @@ export class ASTPrinter: public Visitor
             redirect->accept(*this);
         }
     }
+
     void visit(CallPipeline const& node) override
     {
         for (size_t i = 0; i < node.calls.size(); ++i)
@@ -75,6 +79,7 @@ export class ASTPrinter: public Visitor
             node.path->accept(*this);
         }
     }
+
     void visit(BuiltinSetStmt const& node) override
     {
         _result += "set";
@@ -100,8 +105,11 @@ export class ASTPrinter: public Visitor
             node.code->accept(*this);
         }
     }
+
     void visit(BuiltinExportStmt const& node) override { _result += "export " + node.name; }
+
     void visit(BuiltinFalseStmt const&) override { _result += "false"; }
+
     void visit(BuiltinReadStmt const& node) override
     {
         _result += "read";
@@ -111,6 +119,7 @@ export class ASTPrinter: public Visitor
             param->accept(*this);
         }
     }
+
     void visit(BuiltinTrueStmt const&) override { _result += "true"; }
 
     void visit(CompoundStmt const& node) override
@@ -137,6 +146,7 @@ export class ASTPrinter: public Visitor
         }
         _result += "fi";
     }
+
     void visit(WhileStmt const& node) override
     {
         _result += "while ";
@@ -147,7 +157,9 @@ export class ASTPrinter: public Visitor
     }
 
     void visit(LiteralExpr const& node) override { _result += std::format("{}", node.value); }
+
     void visit(SubstitutionExpr const& node) override { (void) node; }
+
     void visit(CommandFileSubst const& node) override { (void) node; }
 };
 
