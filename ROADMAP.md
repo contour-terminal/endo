@@ -43,6 +43,11 @@ the primary project; Endo development follows as resources permit.
 | TTY abstraction with raw mode | ✅ |
 | Platform abstraction layer (Pipe, Process, TTY) | ✅ |
 | Grapheme cluster support for Unicode | ✅ |
+| Tilde expansion (`~`, `~user`) | ✅ |
+| Brace expansion (`{a,b,c}`, `{1..10}`) | ✅ |
+| Parameter expansion (`${var:-default}`, `${#var}`, etc.) | ✅ |
+| Arithmetic expansion (`$((expr))`) | ✅ |
+| Pathname expansion (globbing) `*`, `?`, `[...]`, `**` | ✅ |
 | Builtin command: `cat` | TODO |
 
 ### Not Yet Implemented
@@ -153,19 +158,28 @@ Windows support.
 - [x] Handle nested substitutions
 - [x] Add substitution tests
 
-### Phase 1.5: Expansions
+### Phase 1.5: Expansions ✅
+
+**Status:** Complete
 
 **Dependency:** Phase 1.1 (variables), Phase 1.4 (substitution for arithmetic)
 
 **Tasks:**
-- [ ] Implement tilde expansion `~`, `~user`
-- [ ] Implement brace expansion `{a,b,c}`, `{1..10}`
-- [ ] Implement parameter expansion `${var:-default}`, `${var:+alt}`, `${#var}`, etc.
-- [ ] Implement arithmetic expansion `$((expr))`
-- [ ] Implement pathname expansion (globbing) `*`, `?`, `[...]`
-- [ ] Implement extended globbing `**` (recursive)
-- [ ] Define and document expansion order
-- [ ] Add expansion tests
+- [x] Implement tilde expansion `~`, `~user`
+- [x] Implement brace expansion `{a,b,c}`, `{1..10}`
+- [x] Implement parameter expansion `${var:-default}`, `${var:+alt}`, `${#var}`, etc.
+- [x] Implement arithmetic expansion `$((expr))`
+- [x] Implement pathname expansion (globbing) `*`, `?`, `[...]`
+- [x] Implement extended globbing `**` (recursive)
+- [x] Define and document expansion order
+- [x] Add expansion tests
+
+**Implementation Notes:**
+- Tilde expansion: `~` expands to `$HOME`, `~user` expands to user's home directory
+- Brace expansion: Handled at parse time for efficiency (no runtime overhead)
+- Parameter expansion: Supports length (`${#VAR}`), defaults (`${VAR:-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR:?error}`), prefix/suffix removal (`${VAR#pattern}`, `${VAR##pattern}`, `${VAR%pattern}`, `${VAR%%pattern}`), and replacement (`${VAR/pattern/replacement}`, `${VAR//pattern/replacement}`)
+- Arithmetic expansion: Supports `+`, `-`, `*`, `/`, `%`, `**`, comparisons (`<`, `>`, `<=`, `>=`, `==`, `!=`), logical operators (`&&`, `||`, `!`), and bitwise operators
+- Pathname expansion: Cross-platform implementation using `<filesystem>`, supports `*`, `?`, `[...]` bracket expressions with ranges and `**` recursive globbing
 
 ### Phase 1.6: Control Flow Completion
 

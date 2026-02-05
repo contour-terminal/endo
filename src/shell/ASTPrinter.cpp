@@ -226,6 +226,144 @@ export class ASTPrinter: public Visitor
         _result += ')';
     }
 
+    void visit(TildeExpr const& node) override
+    {
+        _result += '~';
+        _result += node.user;
+        _result += node.suffix;
+    }
+
+    void visit(GlobExpr const& node) override { _result += node.pattern; }
+
+    void visit(ArithExpansionExpr const& node) override
+    {
+        _result += "$((";
+        printArithExpr(node.expression.get());
+        _result += "))";
+    }
+
+    void printArithExpr(ArithExpr const* expr)
+    {
+        if (auto const* lit = dynamic_cast<ArithLiteralExpr const*>(expr))
+        {
+            _result += std::to_string(lit->value);
+        }
+        else if (auto const* var = dynamic_cast<ArithVarExpr const*>(expr))
+        {
+            _result += var->name;
+        }
+        else if (auto const* binary = dynamic_cast<ArithBinaryExpr const*>(expr))
+        {
+            _result += '(';
+            printArithExpr(binary->left.get());
+            _result += ' ';
+            switch (binary->op)
+            {
+                case ArithOp::Add: _result += '+'; break;
+                case ArithOp::Sub: _result += '-'; break;
+                case ArithOp::Mul: _result += '*'; break;
+                case ArithOp::Div: _result += '/'; break;
+                case ArithOp::Mod: _result += '%'; break;
+                case ArithOp::Pow: _result += "**"; break;
+                case ArithOp::Lt: _result += '<'; break;
+                case ArithOp::Gt: _result += '>'; break;
+                case ArithOp::Le: _result += "<="; break;
+                case ArithOp::Ge: _result += ">="; break;
+                case ArithOp::Eq: _result += "=="; break;
+                case ArithOp::Ne: _result += "!="; break;
+                case ArithOp::And: _result += "&&"; break;
+                case ArithOp::Or: _result += "||"; break;
+                case ArithOp::BitAnd: _result += '&'; break;
+                case ArithOp::BitOr: _result += '|'; break;
+                case ArithOp::BitXor: _result += '^'; break;
+                case ArithOp::Shl: _result += "<<"; break;
+                case ArithOp::Shr: _result += ">>"; break;
+                default: break;
+            }
+            _result += ' ';
+            printArithExpr(binary->right.get());
+            _result += ')';
+        }
+        else if (auto const* unary = dynamic_cast<ArithUnaryExpr const*>(expr))
+        {
+            switch (unary->op)
+            {
+                case ArithOp::Not: _result += '!'; break;
+                case ArithOp::Neg: _result += '-'; break;
+                case ArithOp::BitNot: _result += '~'; break;
+                default: break;
+            }
+            printArithExpr(unary->operand.get());
+        }
+    }
+
+    void visit(ParamExpansionExpr const& node) override
+    {
+        _result += "${";
+        switch (node.op)
+        {
+            case ParamExpansionOp::Length:
+                _result += '#';
+                _result += node.variable;
+                break;
+            case ParamExpansionOp::DefaultValue:
+                _result += node.variable;
+                _result += ":-";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::AlternateValue:
+                _result += node.variable;
+                _result += ":+";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::AssignDefault:
+                _result += node.variable;
+                _result += ":=";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::ErrorIfUnset:
+                _result += node.variable;
+                _result += ":?";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::RemovePrefixShort:
+                _result += node.variable;
+                _result += '#';
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::RemovePrefixLong:
+                _result += node.variable;
+                _result += "##";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::RemoveSuffixShort:
+                _result += node.variable;
+                _result += '%';
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::RemoveSuffixLong:
+                _result += node.variable;
+                _result += "%%";
+                _result += node.operand1;
+                break;
+            case ParamExpansionOp::ReplaceFirst:
+                _result += node.variable;
+                _result += '/';
+                _result += node.operand1;
+                _result += '/';
+                _result += node.operand2;
+                break;
+            case ParamExpansionOp::ReplaceAll:
+                _result += node.variable;
+                _result += "//";
+                _result += node.operand1;
+                _result += '/';
+                _result += node.operand2;
+                break;
+        }
+        _result += '}';
+    }
+
     void visit(VariableExpr const& node) override
     {
         switch (node.type)

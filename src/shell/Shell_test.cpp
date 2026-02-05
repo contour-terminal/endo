@@ -558,3 +558,444 @@ TEST_CASE("shell.subst.process_read_multiple_lines")
     CHECK(escape(shell("cat <(cat /tmp/endo_test_procsubst.txt)").output()) == escape("line1\nline2\n"));
     std::filesystem::remove("/tmp/endo_test_procsubst.txt");
 }
+
+// ============================================================================
+// Tilde Expansion
+// ============================================================================
+
+TEST_CASE("shell.expand.tilde_home")
+{
+    // ~ should expand to $HOME
+    TestShell shell;
+    shell.env.set("HOME", "/home/testuser");
+    CHECK(escape(shell("echo ~").output()) == escape("/home/testuser\n"));
+}
+
+TEST_CASE("shell.expand.tilde_in_path")
+{
+    // ~/Documents should expand to $HOME/Documents
+    TestShell shell;
+    shell.env.set("HOME", "/home/testuser");
+    CHECK(escape(shell("echo ~/Documents").output()) == escape("/home/testuser/Documents\n"));
+}
+
+TEST_CASE("shell.expand.tilde_user")
+{
+    // ~root should expand to root's home directory
+    TestShell shell;
+    // Note: This test assumes root exists on the system
+    shell("echo ~root");
+    auto const output = std::string(shell.output());
+    // Should either be /root or /var/root (macOS) - either way, not ~root
+    CHECK(output.find("~root") == std::string::npos);
+}
+
+TEST_CASE("shell.expand.tilde_nonexistent_user")
+{
+    // ~nonexistentuser12345 should stay unexpanded
+    TestShell shell;
+    CHECK(escape(shell("echo ~nonexistentuser12345").output()) == escape("~nonexistentuser12345\n"));
+}
+
+TEST_CASE("shell.expand.tilde_multiple")
+{
+    // Multiple tildes in one command
+    TestShell shell;
+    shell.env.set("HOME", "/home/testuser");
+    CHECK(escape(shell("echo ~ ~").output()) == escape("/home/testuser /home/testuser\n"));
+}
+
+// ============================================================================
+// Brace Expansion
+// ============================================================================
+
+TEST_CASE("shell.expand.brace_comma_list")
+{
+    // {a,b,c} → a b c
+    TestShell shell;
+    CHECK(escape(shell("echo {a,b,c}").output()) == escape("a b c\n"));
+}
+
+TEST_CASE("shell.expand.brace_numeric_range")
+{
+    // {1..5} → 1 2 3 4 5
+    TestShell shell;
+    CHECK(escape(shell("echo {1..5}").output()) == escape("1 2 3 4 5\n"));
+}
+
+TEST_CASE("shell.expand.brace_alpha_range")
+{
+    // {a..e} → a b c d e
+    TestShell shell;
+    CHECK(escape(shell("echo {a..e}").output()) == escape("a b c d e\n"));
+}
+
+TEST_CASE("shell.expand.brace_with_prefix")
+{
+    // file{1,2}.txt → file1.txt file2.txt
+    TestShell shell;
+    CHECK(escape(shell("echo file{1,2}.txt").output()) == escape("file1.txt file2.txt\n"));
+}
+
+TEST_CASE("shell.expand.brace_with_suffix")
+{
+    // {test,prod}_db → test_db prod_db
+    TestShell shell;
+    CHECK(escape(shell("echo {test,prod}_db").output()) == escape("test_db prod_db\n"));
+}
+
+TEST_CASE("shell.expand.brace_nested")
+{
+    // {a,b{1,2}} → a b1 b2
+    TestShell shell;
+    CHECK(escape(shell("echo {a,b{1,2}}").output()) == escape("a b1 b2\n"));
+}
+
+TEST_CASE("shell.expand.brace_reverse_range")
+{
+    // {5..1} → 5 4 3 2 1
+    TestShell shell;
+    CHECK(escape(shell("echo {5..1}").output()) == escape("5 4 3 2 1\n"));
+}
+
+TEST_CASE("shell.expand.brace_alpha_reverse_range")
+{
+    // {e..a} → e d c b a
+    TestShell shell;
+    CHECK(escape(shell("echo {e..a}").output()) == escape("e d c b a\n"));
+}
+
+TEST_CASE("shell.expand.brace_empty_items")
+{
+    // {a,,c} → a (empty) c
+    TestShell shell;
+    CHECK(escape(shell("echo {a,,c}").output()) == escape("a  c\n"));
+}
+
+TEST_CASE("shell.expand.brace_single_item")
+{
+    // {a} stays as-is (no expansion without comma or range)
+    TestShell shell;
+    CHECK(escape(shell("echo {a}").output()) == escape("{a}\n"));
+}
+
+// ============================================================================
+// Parameter Expansion
+// ============================================================================
+
+TEST_CASE("shell.expand.param_length")
+{
+    // ${#VAR} returns length of variable value
+    TestShell shell;
+    shell("set GREETING hello");
+    CHECK(escape(shell("echo ${#GREETING}").output()) == escape("5\n"));
+}
+
+TEST_CASE("shell.expand.param_length_empty")
+{
+    // ${#VAR} for empty variable returns 0
+    TestShell shell;
+    CHECK(escape(shell("echo ${#UNDEFINED}").output()) == escape("0\n"));
+}
+
+TEST_CASE("shell.expand.param_default_unset")
+{
+    // ${UNSET:-default} returns default when variable is unset
+    TestShell shell;
+    CHECK(escape(shell("echo ${UNSET:-default}").output()) == escape("default\n"));
+}
+
+TEST_CASE("shell.expand.param_default_set")
+{
+    // ${VAR:-default} returns VAR when set
+    TestShell shell;
+    shell("set VAR value");
+    CHECK(escape(shell("echo ${VAR:-default}").output()) == escape("value\n"));
+}
+
+TEST_CASE("shell.expand.param_default_empty")
+{
+    // ${VAR:-default} returns default when VAR is empty string
+    TestShell shell;
+    shell("set VAR \"\"");
+    CHECK(escape(shell("echo ${VAR:-default}").output()) == escape("default\n"));
+}
+
+TEST_CASE("shell.expand.param_alternate_unset")
+{
+    // ${UNSET:+alt} returns empty when variable is unset
+    TestShell shell;
+    // Note: empty string expansion becomes a space-separated argument
+    // so we check that the alternate is not used
+    shell("set RESULT ${UNSET:+alt}");
+    CHECK(shell.env.get("RESULT").value_or("FAIL") == "");
+}
+
+TEST_CASE("shell.expand.param_alternate_set")
+{
+    // ${VAR:+alt} returns alt when VAR is set
+    TestShell shell;
+    shell("set VAR value");
+    CHECK(escape(shell("echo ${VAR:+alt}").output()) == escape("alt\n"));
+}
+
+TEST_CASE("shell.expand.param_assign")
+{
+    // ${VAR:=default} assigns default when unset
+    TestShell shell;
+    shell("echo ${NEWVAR:=assigned}");
+    CHECK(shell.env.get("NEWVAR").value_or("NONE") == "assigned");
+}
+
+TEST_CASE("shell.expand.param_replace_first")
+{
+    // ${VAR/old/new} replaces first occurrence
+    TestShell shell;
+    shell("set TEXT one:two:one");
+    CHECK(escape(shell("echo ${TEXT/one/ONE}").output()) == escape("ONE:two:one\n"));
+}
+
+TEST_CASE("shell.expand.param_replace_all")
+{
+    // ${VAR//old/new} replaces all occurrences
+    TestShell shell;
+    shell("set TEXT one:two:one");
+    CHECK(escape(shell("echo ${TEXT//one/ONE}").output()) == escape("ONE:two:ONE\n"));
+}
+
+TEST_CASE("shell.expand.param_remove_prefix")
+{
+    // ${VAR#pattern} removes shortest prefix match
+    TestShell shell;
+    shell("set FILE path/to/file.txt");
+    CHECK(escape(shell("echo ${FILE#*/}").output()) == escape("to/file.txt\n"));
+}
+
+TEST_CASE("shell.expand.param_remove_prefix_long")
+{
+    // ${VAR##pattern} removes longest prefix match
+    TestShell shell;
+    shell("set FILE path/to/file.txt");
+    CHECK(escape(shell("echo ${FILE##*/}").output()) == escape("file.txt\n"));
+}
+
+TEST_CASE("shell.expand.param_remove_suffix")
+{
+    // ${VAR%pattern} removes shortest suffix match
+    TestShell shell;
+    shell("set FILE file.tar.gz");
+    CHECK(escape(shell("echo ${FILE%.*}").output()) == escape("file.tar\n"));
+}
+
+TEST_CASE("shell.expand.param_remove_suffix_long")
+{
+    // ${VAR%%pattern} removes longest suffix match
+    TestShell shell;
+    shell("set FILE file.tar.gz");
+    CHECK(escape(shell("echo ${FILE%%.*}").output()) == escape("file\n"));
+}
+
+// ========================================================================
+// Glob (Pathname) Expansion Tests
+// ========================================================================
+
+TEST_CASE("shell.expand.glob_star")
+{
+    // *.txt should match .txt files in current directory
+    // We use /tmp to create test files
+    TestShell shell;
+
+    // Create test files
+    shell("echo test > /tmp/glob_test_a.txt");
+    shell("echo test > /tmp/glob_test_b.txt");
+    shell("echo test > /tmp/glob_test_c.log");
+
+    // Run glob expansion
+    auto result = shell("echo /tmp/glob_test_*.txt").output();
+
+    // Should contain both .txt files but not the .log file
+    CHECK(result.find("glob_test_a.txt") != std::string::npos);
+    CHECK(result.find("glob_test_b.txt") != std::string::npos);
+    CHECK(result.find("glob_test_c.log") == std::string::npos);
+
+    // Cleanup
+    shell("rm /tmp/glob_test_*.txt /tmp/glob_test_*.log");
+}
+
+TEST_CASE("shell.expand.glob_question")
+{
+    // ? matches single character
+    TestShell shell;
+
+    // Create test files
+    shell("echo test > /tmp/glob_qtest_a.txt");
+    shell("echo test > /tmp/glob_qtest_b.txt");
+    shell("echo test > /tmp/glob_qtest_aa.txt");
+
+    // Run glob expansion - should match single character only
+    auto result = shell("echo /tmp/glob_qtest_?.txt").output();
+
+    CHECK(result.find("glob_qtest_a.txt") != std::string::npos);
+    CHECK(result.find("glob_qtest_b.txt") != std::string::npos);
+    CHECK(result.find("glob_qtest_aa.txt") == std::string::npos);
+
+    // Cleanup
+    shell("rm /tmp/glob_qtest_*.txt");
+}
+
+TEST_CASE("shell.expand.glob_bracket")
+{
+    // [abc] matches any character in set
+    TestShell shell;
+
+    // Create test files
+    shell("echo test > /tmp/glob_btest_a.txt");
+    shell("echo test > /tmp/glob_btest_b.txt");
+    shell("echo test > /tmp/glob_btest_c.txt");
+    shell("echo test > /tmp/glob_btest_d.txt");
+
+    // Run glob expansion - should match a, b, c but not d
+    auto result = shell("echo /tmp/glob_btest_[abc].txt").output();
+
+    CHECK(result.find("glob_btest_a.txt") != std::string::npos);
+    CHECK(result.find("glob_btest_b.txt") != std::string::npos);
+    CHECK(result.find("glob_btest_c.txt") != std::string::npos);
+    CHECK(result.find("glob_btest_d.txt") == std::string::npos);
+
+    // Cleanup
+    shell("rm /tmp/glob_btest_*.txt");
+}
+
+TEST_CASE("shell.expand.glob_no_match")
+{
+    // When no files match, keep pattern literal (standard shell behavior)
+    TestShell shell;
+    auto result = shell("echo /nonexistent/path/*.xyz").output();
+    CHECK(result.find("/nonexistent/path/*.xyz") != std::string::npos);
+}
+
+TEST_CASE("shell.expand.glob_bracket_range")
+{
+    // [a-z] matches a range of characters
+    TestShell shell;
+
+    // Create test files with letters
+    shell("echo test > /tmp/glob_rtest_a.txt");
+    shell("echo test > /tmp/glob_rtest_c.txt");
+    shell("echo test > /tmp/glob_rtest_z.txt");
+    shell("echo test > /tmp/glob_rtest_1.txt");
+
+    // Run glob expansion - should match a, c, z but not 1
+    auto result = shell("echo /tmp/glob_rtest_[a-z].txt").output();
+
+    CHECK(result.find("glob_rtest_a.txt") != std::string::npos);
+    CHECK(result.find("glob_rtest_c.txt") != std::string::npos);
+    CHECK(result.find("glob_rtest_z.txt") != std::string::npos);
+    CHECK(result.find("glob_rtest_1.txt") == std::string::npos);
+
+    // Cleanup
+    shell("rm /tmp/glob_rtest_*.txt");
+}
+
+TEST_CASE("shell.expand.glob_recursive_starstar")
+{
+    // ** matches files recursively
+    TestShell shell;
+
+    // Create directory structure
+    shell("mkdir -p /tmp/glob_rec_test/sub1/sub2");
+    shell("echo test > /tmp/glob_rec_test/file1.cpp");
+    shell("echo test > /tmp/glob_rec_test/sub1/file2.cpp");
+    shell("echo test > /tmp/glob_rec_test/sub1/sub2/file3.cpp");
+    shell("echo test > /tmp/glob_rec_test/file4.txt");
+
+    // Run recursive glob expansion
+    auto result = shell("echo /tmp/glob_rec_test/**/*.cpp").output();
+
+    // Should find all .cpp files recursively
+    CHECK(result.find("file1.cpp") != std::string::npos);
+    CHECK(result.find("file2.cpp") != std::string::npos);
+    CHECK(result.find("file3.cpp") != std::string::npos);
+    CHECK(result.find("file4.txt") == std::string::npos);
+
+    // Cleanup
+    shell("rm -rf /tmp/glob_rec_test");
+}
+
+// ========================================================================
+// Arithmetic Expansion Tests
+// ========================================================================
+
+TEST_CASE("shell.expand.arith_basic")
+{
+    // Basic arithmetic: $((1 + 2))
+    TestShell shell;
+    CHECK(escape(shell("echo $((1 + 2))").output()) == escape("3\n"));
+}
+
+TEST_CASE("shell.expand.arith_subtraction")
+{
+    TestShell shell;
+    CHECK(escape(shell("echo $((10 - 3))").output()) == escape("7\n"));
+}
+
+TEST_CASE("shell.expand.arith_multiplication")
+{
+    TestShell shell;
+    CHECK(escape(shell("echo $((4 * 5))").output()) == escape("20\n"));
+}
+
+TEST_CASE("shell.expand.arith_division")
+{
+    TestShell shell;
+    CHECK(escape(shell("echo $((20 / 4))").output()) == escape("5\n"));
+}
+
+TEST_CASE("shell.expand.arith_modulo")
+{
+    TestShell shell;
+    CHECK(escape(shell("echo $((17 % 5))").output()) == escape("2\n"));
+}
+
+TEST_CASE("shell.expand.arith_precedence")
+{
+    // Test operator precedence: * before +
+    TestShell shell;
+    CHECK(escape(shell("echo $((2 + 3 * 4))").output()) == escape("14\n"));
+}
+
+TEST_CASE("shell.expand.arith_parentheses")
+{
+    // Parentheses override precedence
+    TestShell shell;
+    CHECK(escape(shell("echo $(((2 + 3) * 4))").output()) == escape("20\n"));
+}
+
+TEST_CASE("shell.expand.arith_variable")
+{
+    // Variable reference in arithmetic
+    TestShell shell;
+    shell("set X 10");
+    CHECK(escape(shell("echo $((X + 5))").output()) == escape("15\n"));
+}
+
+TEST_CASE("shell.expand.arith_comparison_lt")
+{
+    // Comparison: 5 < 10 is true (1)
+    TestShell shell;
+    CHECK(escape(shell("echo $((5 < 10))").output()) == escape("1\n"));
+}
+
+TEST_CASE("shell.expand.arith_comparison_gt")
+{
+    // Comparison: 10 > 5 is true (1)
+    TestShell shell;
+    CHECK(escape(shell("echo $((10 > 5))").output()) == escape("1\n"));
+}
+
+TEST_CASE("shell.expand.arith_unary_negation")
+{
+    // Unary negation
+    TestShell shell;
+    CHECK(escape(shell("echo $((-5))").output()) == escape("-5\n"));
+}

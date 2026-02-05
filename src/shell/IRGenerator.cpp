@@ -404,6 +404,224 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     void visit(ast::LiteralExpr const& node) override { _result = get(node.value); }
 
+    void visit(ast::TildeExpr const& node) override
+    {
+        if (node.user.empty())
+        {
+            // Standalone ~ or ~/path - expand to home directory
+            auto* callback = findCallback("expand.tilde(S)S");
+            if (!callback)
+            {
+                reportTypeError("Internal error: expand.tilde builtin not found");
+                return;
+            }
+            _result = createCallFunction(getBuiltinFunction(*callback), { get(node.suffix) }, "expand.tilde");
+        }
+        else
+        {
+            // ~user or ~user/path - expand to user's home directory
+            auto* callback = findCallback("expand.tilde_user(SS)S");
+            if (!callback)
+            {
+                reportTypeError("Internal error: expand.tilde_user builtin not found");
+                return;
+            }
+            _result = createCallFunction(
+                getBuiltinFunction(*callback), { get(node.user), get(node.suffix) }, "expand.tilde_user");
+        }
+    }
+
+    void visit(ast::GlobExpr const& node) override
+    {
+        auto* callback = findCallback("expand.glob(S)V");
+        if (!callback)
+        {
+            reportTypeError("Internal error: expand.glob builtin not found");
+            return;
+        }
+        // Glob expansion is handled specially - it adds multiple arguments to the command builder
+        createCallFunction(getBuiltinFunction(*callback), { get(node.pattern) }, "expand.glob");
+        _result = nullptr; // Result is captured via cmdBuilderArgs
+    }
+
+    void visit(ast::ArithExpansionExpr const& node) override
+    {
+        // Evaluate the arithmetic expression and return the result as a string
+        auto* result = codegenArith(node.expression.get());
+        if (!result)
+            return;
+
+        // Convert the integer result to a string
+        auto* callback = findCallback("expand.arith_to_string(I)S");
+        if (!callback)
+        {
+            reportTypeError("Internal error: expand.arith_to_string builtin not found");
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(*callback), { result }, "expand.arith_to_string");
+    }
+
+    /// Generates code for an arithmetic expression, returning an integer value.
+    CoreVM::Value* codegenArith(ast::ArithExpr const* expr)
+    {
+        if (auto const* lit = dynamic_cast<ast::ArithLiteralExpr const*>(expr))
+        {
+            return get(CoreVM::CoreNumber(lit->value));
+        }
+        else if (auto const* var = dynamic_cast<ast::ArithVarExpr const*>(expr))
+        {
+            // Get variable value and convert to integer
+            auto* callback = findCallback("expand.arith_getvar(S)I");
+            if (!callback)
+            {
+                reportTypeError("Internal error: expand.arith_getvar builtin not found");
+                return nullptr;
+            }
+            return createCallFunction(
+                getBuiltinFunction(*callback), { get(var->name) }, "expand.arith_getvar");
+        }
+        else if (auto const* binary = dynamic_cast<ast::ArithBinaryExpr const*>(expr))
+        {
+            auto* left = codegenArith(binary->left.get());
+            auto* right = codegenArith(binary->right.get());
+            if (!left || !right)
+                return nullptr;
+
+            switch (binary->op)
+            {
+                case ast::ArithOp::Add: return createAdd(left, right);
+                case ast::ArithOp::Sub: return createSub(left, right);
+                case ast::ArithOp::Mul: return createMul(left, right);
+                case ast::ArithOp::Div: return createDiv(left, right);
+                case ast::ArithOp::Mod: return createRem(left, right);
+                case ast::ArithOp::Pow: {
+                    // Power operation via builtin
+                    auto* callback = findCallback("expand.arith_pow(II)I");
+                    if (!callback)
+                    {
+                        reportTypeError("Internal error: expand.arith_pow builtin not found");
+                        return nullptr;
+                    }
+                    return createCallFunction(
+                        getBuiltinFunction(*callback), { left, right }, "expand.arith_pow");
+                }
+                case ast::ArithOp::Lt: return createNCmpLT(left, right);
+                case ast::ArithOp::Gt: return createNCmpGT(left, right);
+                case ast::ArithOp::Le: return createNCmpLE(left, right);
+                case ast::ArithOp::Ge: return createNCmpGE(left, right);
+                case ast::ArithOp::Eq: return createNCmpEQ(left, right);
+                case ast::ArithOp::Ne: return createNCmpNE(left, right);
+                case ast::ArithOp::And: return createAnd(left, right);
+                case ast::ArithOp::Or: return createOr(left, right);
+                case ast::ArithOp::BitAnd: return createAnd(left, right);
+                case ast::ArithOp::BitOr: return createOr(left, right);
+                case ast::ArithOp::BitXor: return createXor(left, right);
+                case ast::ArithOp::Shl: return createShl(left, right);
+                case ast::ArithOp::Shr: return createShr(left, right);
+                default: reportTypeError("Unsupported arithmetic operator"); return nullptr;
+            }
+        }
+        else if (auto const* unary = dynamic_cast<ast::ArithUnaryExpr const*>(expr))
+        {
+            auto* operand = codegenArith(unary->operand.get());
+            if (!operand)
+                return nullptr;
+
+            switch (unary->op)
+            {
+                case ast::ArithOp::Neg:
+                    // Implement negation as 0 - operand for proper signed behavior
+                    return createSub(get(CoreVM::CoreNumber(0)), operand);
+                case ast::ArithOp::Not: return createNot(operand);
+                case ast::ArithOp::BitNot: return createNot(operand); // Bitwise NOT
+                default: reportTypeError("Unsupported unary arithmetic operator"); return nullptr;
+            }
+        }
+
+        reportTypeError("Unknown arithmetic expression type");
+        return nullptr;
+    }
+
+    void visit(ast::ParamExpansionExpr const& node) override
+    {
+        std::string callbackName;
+        std::vector<CoreVM::Value*> args;
+
+        switch (node.op)
+        {
+            case ast::ParamExpansionOp::Length:
+                callbackName = "expand.param_length(S)S";
+                args.push_back(get(node.variable));
+                break;
+            case ast::ParamExpansionOp::DefaultValue:
+                callbackName = "expand.param_default(SS)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                break;
+            case ast::ParamExpansionOp::AlternateValue:
+                callbackName = "expand.param_alternate(SS)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                break;
+            case ast::ParamExpansionOp::AssignDefault:
+                callbackName = "expand.param_assign(SS)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                break;
+            case ast::ParamExpansionOp::ErrorIfUnset:
+                callbackName = "expand.param_error(SS)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                break;
+            case ast::ParamExpansionOp::RemovePrefixShort:
+                callbackName = "expand.param_remove_prefix(SSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(false)); // shortest
+                break;
+            case ast::ParamExpansionOp::RemovePrefixLong:
+                callbackName = "expand.param_remove_prefix(SSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(true)); // longest
+                break;
+            case ast::ParamExpansionOp::RemoveSuffixShort:
+                callbackName = "expand.param_remove_suffix(SSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(false)); // shortest
+                break;
+            case ast::ParamExpansionOp::RemoveSuffixLong:
+                callbackName = "expand.param_remove_suffix(SSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(true)); // longest
+                break;
+            case ast::ParamExpansionOp::ReplaceFirst:
+                callbackName = "expand.param_replace(SSSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(node.operand2));
+                args.push_back(get(false)); // first only
+                break;
+            case ast::ParamExpansionOp::ReplaceAll:
+                callbackName = "expand.param_replace(SSSB)S";
+                args.push_back(get(node.variable));
+                args.push_back(get(node.operand1));
+                args.push_back(get(node.operand2));
+                args.push_back(get(true)); // all
+                break;
+        }
+
+        auto* callback = findCallback(callbackName);
+        if (!callback)
+        {
+            reportTypeError("Internal error: parameter expansion builtin not found");
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(*callback), args, "expand.param");
+    }
+
     void visit(ast::VariableExpr const& node) override
     {
         switch (node.type)
@@ -617,7 +835,8 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     }
 
     /// Checks if any expression in the list contains a runtime-evaluated expression.
-    /// This includes variable expressions, command substitutions, and process substitutions.
+    /// This includes variable expressions, command substitutions, process substitutions, tilde and param
+    /// expansion.
     [[nodiscard]] bool containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
     {
         for (auto const& expr: expressions)
@@ -627,6 +846,14 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
             if (dynamic_cast<ast::SubstitutionExpr const*>(expr.get()) != nullptr)
                 return true;
             if (dynamic_cast<ast::CommandFileSubst const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::TildeExpr const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::ParamExpansionExpr const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::GlobExpr const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::ArithExpansionExpr const*>(expr.get()) != nullptr)
                 return true;
         }
         return false;

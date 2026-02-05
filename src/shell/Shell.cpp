@@ -8,6 +8,7 @@ module;
 #include <cstdio>
 #include <cstring>
 #include <expected>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <map>
@@ -18,6 +19,7 @@ module;
     #include <sys/wait.h>
 
     #include <fcntl.h>
+    #include <pwd.h>
     #include <unistd.h>
 #endif
 
@@ -604,6 +606,93 @@ export class Shell final: public CoreVM::Runtime
         registerFunction("internal.procsubst_cleanup")
             .returnType(CoreVM::LiteralType::Void)
             .bind(&Shell::builtinProcSubstCleanup, this);
+
+        // Tilde expansion functions
+        registerFunction("expand.tilde")
+            .param<std::string>("suffix")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandTilde, this);
+
+        registerFunction("expand.tilde_user")
+            .param<std::string>("user")
+            .param<std::string>("suffix")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandTildeUser, this);
+
+        // Glob expansion
+        registerFunction("expand.glob")
+            .param<std::string>("pattern")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinExpandGlob, this);
+
+        // Arithmetic expansion helpers
+        registerFunction("expand.arith_to_string")
+            .param<CoreVM::CoreNumber>("value")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinArithToString, this);
+
+        registerFunction("expand.arith_getvar")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinArithGetVar, this);
+
+        registerFunction("expand.arith_pow")
+            .param<CoreVM::CoreNumber>("base")
+            .param<CoreVM::CoreNumber>("exp")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinArithPow, this);
+
+        // Parameter expansion functions
+        registerFunction("expand.param_length")
+            .param<std::string>("var")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamLength, this);
+
+        registerFunction("expand.param_default")
+            .param<std::string>("var")
+            .param<std::string>("default_value")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamDefault, this);
+
+        registerFunction("expand.param_alternate")
+            .param<std::string>("var")
+            .param<std::string>("alternate")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamAlternate, this);
+
+        registerFunction("expand.param_assign")
+            .param<std::string>("var")
+            .param<std::string>("default_value")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamAssign, this);
+
+        registerFunction("expand.param_error")
+            .param<std::string>("var")
+            .param<std::string>("error_msg")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamError, this);
+
+        registerFunction("expand.param_remove_prefix")
+            .param<std::string>("var")
+            .param<std::string>("pattern")
+            .param<bool>("longest")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamRemovePrefix, this);
+
+        registerFunction("expand.param_remove_suffix")
+            .param<std::string>("var")
+            .param<std::string>("pattern")
+            .param<bool>("longest")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamRemoveSuffix, this);
+
+        registerFunction("expand.param_replace")
+            .param<std::string>("var")
+            .param<std::string>("pattern")
+            .param<std::string>("replacement")
+            .param<bool>("all")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinExpandParamReplace, this);
         // clang-format on
     }
 
@@ -1244,6 +1333,555 @@ export class Shell final: public CoreVM::Runtime
 
     /// Cleans up process substitution state: waits for children and closes fds.
     void builtinProcSubstCleanup(CoreVM::Params&) { cleanupProcSubst(); }
+
+    /// Expands ~ to the current user's home directory, appending optional suffix.
+    void builtinExpandTilde(CoreVM::Params& context)
+    {
+        auto const& suffix = context.getString(1);
+        std::string home = std::string(_env.get("HOME").value_or(""));
+        context.setResult(home + suffix);
+    }
+
+    /// Expands ~user to the specified user's home directory, appending optional suffix.
+    void builtinExpandTildeUser(CoreVM::Params& context)
+    {
+        auto const& user = context.getString(1);
+        auto const& suffix = context.getString(2);
+#if !defined(_WIN32)
+        if (auto* pw = getpwnam(user.c_str()); pw != nullptr)
+            context.setResult(std::string(pw->pw_dir) + suffix);
+        else
+            context.setResult("~" + user + suffix); // Return unexpanded on failure
+#else
+        // Windows: not yet implemented, return unexpanded
+        context.setResult("~" + user + suffix);
+#endif
+    }
+
+    /// Cross-platform glob pattern matching for a single path component.
+    /// Returns true if the filename matches the pattern.
+    [[nodiscard]] static bool globMatchFilename(std::string_view filename, std::string_view pattern)
+    {
+        size_t fi = 0;
+        size_t pi = 0;
+        size_t starIdx = std::string_view::npos;
+        size_t matchIdx = 0;
+
+        while (fi < filename.size())
+        {
+            if (pi < pattern.size() && pattern[pi] == '*')
+            {
+                starIdx = pi;
+                matchIdx = fi;
+                ++pi;
+            }
+            else if (pi < pattern.size() && (pattern[pi] == '?' || pattern[pi] == filename[fi]))
+            {
+                ++fi;
+                ++pi;
+            }
+            else if (pi < pattern.size() && pattern[pi] == '[')
+            {
+                // Bracket expression [abc] or [a-z]
+                bool negate = false;
+                bool matched = false;
+                ++pi;
+                if (pi < pattern.size() && (pattern[pi] == '!' || pattern[pi] == '^'))
+                {
+                    negate = true;
+                    ++pi;
+                }
+                auto const bracketStart = pi;
+                while (pi < pattern.size() && pattern[pi] != ']')
+                {
+                    if (pi + 2 < pattern.size() && pattern[pi + 1] == '-' && pattern[pi + 2] != ']')
+                    {
+                        // Range [a-z]
+                        if (filename[fi] >= pattern[pi] && filename[fi] <= pattern[pi + 2])
+                            matched = true;
+                        pi += 3;
+                    }
+                    else
+                    {
+                        if (filename[fi] == pattern[pi])
+                            matched = true;
+                        ++pi;
+                    }
+                }
+                if (pi < pattern.size())
+                    ++pi; // Skip closing ]
+
+                if (negate)
+                    matched = !matched;
+                if (!matched)
+                {
+                    if (starIdx != std::string_view::npos)
+                    {
+                        pi = starIdx + 1;
+                        ++matchIdx;
+                        fi = matchIdx;
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+                else
+                {
+                    ++fi;
+                }
+            }
+            else if (starIdx != std::string_view::npos)
+            {
+                pi = starIdx + 1;
+                ++matchIdx;
+                fi = matchIdx;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        // Consume remaining stars in pattern
+        while (pi < pattern.size() && pattern[pi] == '*')
+            ++pi;
+
+        return pi == pattern.size();
+    }
+
+    /// Cross-platform glob expansion using std::filesystem.
+    /// Expands patterns like *.txt, dir/*, file?.log, [abc].txt, **/*.cpp
+    [[nodiscard]] static std::vector<std::string> expandGlobPattern(std::string_view pattern)
+    {
+        namespace fs = std::filesystem;
+        std::vector<std::string> results;
+        std::string patternStr(pattern);
+
+        // Check for ** (recursive globbing)
+        auto const starstarPos = patternStr.find("**");
+        if (starstarPos != std::string::npos)
+        {
+            return expandRecursiveGlob(patternStr);
+        }
+
+        fs::path patternPath(patternStr);
+
+        // Split into directory and filename pattern
+        fs::path dirPath = patternPath.parent_path();
+        std::string filePattern = patternPath.filename().string();
+
+        // If no directory specified, use current directory
+        if (dirPath.empty())
+            dirPath = ".";
+
+        // Check if the pattern contains glob characters
+        bool hasGlobChars = filePattern.find_first_of("*?[") != std::string::npos;
+
+        if (!hasGlobChars)
+        {
+            // No glob chars - just return the pattern as-is if it doesn't exist
+            // (standard shell behavior: keep the literal)
+            return {};
+        }
+
+        std::error_code ec;
+        if (!fs::exists(dirPath, ec) || ec)
+        {
+            // Directory doesn't exist - return empty (no matches)
+            return {};
+        }
+
+        // Iterate directory and match files
+        for (auto const& entry: fs::directory_iterator(dirPath, ec))
+        {
+            if (ec)
+                break;
+
+            std::string filename = entry.path().filename().string();
+            if (globMatchFilename(filename, filePattern))
+            {
+                if (dirPath == ".")
+                    results.push_back(filename);
+                else
+                    results.push_back(entry.path().string());
+            }
+        }
+
+        // Sort results for consistent output
+        std::ranges::sort(results);
+
+        return results;
+    }
+
+    /// Expands ** recursive glob patterns like **/*.cpp
+    [[nodiscard]] static std::vector<std::string> expandRecursiveGlob(std::string_view pattern)
+    {
+        namespace fs = std::filesystem;
+        std::vector<std::string> results;
+        std::string patternStr(pattern);
+
+        // Split pattern at **
+        auto const starstarPos = patternStr.find("**");
+        if (starstarPos == std::string::npos)
+            return {};
+
+        // Get the base directory (before **)
+        std::string basePath = patternStr.substr(0, starstarPos);
+        // Remove trailing slash if present
+        while (!basePath.empty() && (basePath.back() == '/' || basePath.back() == '\\'))
+            basePath.pop_back();
+        if (basePath.empty())
+            basePath = ".";
+
+        // Get the suffix pattern (after **)
+        std::string suffixPattern = patternStr.substr(starstarPos + 2);
+        // Remove leading slash if present
+        while (!suffixPattern.empty() && (suffixPattern.front() == '/' || suffixPattern.front() == '\\'))
+            suffixPattern.erase(0, 1);
+
+        std::error_code ec;
+        if (!fs::exists(basePath, ec) || ec)
+            return {};
+
+        // Recursively iterate all files
+        for (auto const& entry: fs::recursive_directory_iterator(basePath, ec))
+        {
+            if (ec)
+                break;
+
+            if (!entry.is_regular_file())
+                continue;
+
+            // Get the relative path from base
+            std::string filePath = entry.path().string();
+            std::string filename = entry.path().filename().string();
+
+            // If there's a suffix pattern, match against filename
+            if (!suffixPattern.empty())
+            {
+                if (globMatchFilename(filename, suffixPattern))
+                    results.push_back(filePath);
+            }
+            else
+            {
+                results.push_back(filePath);
+            }
+        }
+
+        // Sort results for consistent output
+        std::ranges::sort(results);
+
+        return results;
+    }
+
+    /// Expands glob pattern to matching files, adding them to cmdBuilderArgs.
+    /// If no matches are found, the original pattern is kept (shell default behavior).
+    void builtinExpandGlob(CoreVM::Params& context)
+    {
+        auto const& pattern = context.getString(1);
+
+        auto matches = expandGlobPattern(pattern);
+        if (matches.empty())
+        {
+            // No matches - keep the pattern literal (standard shell behavior)
+            cmdBuilderArgs().push_back(pattern);
+        }
+        else
+        {
+            for (auto& match: matches)
+                cmdBuilderArgs().push_back(std::move(match));
+        }
+    }
+
+    /// Converts arithmetic result to string.
+    /// Handles signed 64-bit values properly (CoreVM stores as unsigned, but we interpret as signed).
+    void builtinArithToString(CoreVM::Params& context)
+    {
+        auto const unsignedValue = context.getInt(1);
+        // Interpret as signed for proper negative number display
+        auto const signedValue = static_cast<int64_t>(unsignedValue);
+        context.setResult(std::to_string(signedValue));
+    }
+
+    /// Gets variable value as integer for arithmetic expansion.
+    void builtinArithGetVar(CoreVM::Params& context)
+    {
+        auto const& name = context.getString(1);
+        auto const value = _env.get(name);
+        if (!value.has_value() || value->empty())
+        {
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+        int64_t result = 0;
+        auto [ptr, ec] = std::from_chars(value->data(), value->data() + value->size(), result);
+        context.setResult(CoreVM::CoreNumber(result));
+    }
+
+    /// Power operation for arithmetic expansion.
+    void builtinArithPow(CoreVM::Params& context)
+    {
+        auto const base = context.getInt(1);
+        auto const exp = context.getInt(2);
+        if (exp < 0)
+        {
+            context.setResult(CoreVM::CoreNumber(0)); // Integer division: negative exponent = 0
+            return;
+        }
+        int64_t result = 1;
+        for (int64_t i = 0; i < exp; ++i)
+            result *= base;
+        context.setResult(CoreVM::CoreNumber(result));
+    }
+
+    /// ${#VAR} - returns length of variable value
+    void builtinExpandParamLength(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const value = _env.get(varName);
+        context.setResult(std::to_string(value.value_or("").size()));
+    }
+
+    /// ${VAR:-default} - returns VAR if set and non-empty, otherwise default
+    void builtinExpandParamDefault(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& defaultValue = context.getString(2);
+        auto const value = _env.get(varName);
+        if (value.has_value() && !value->empty())
+            context.setResult(std::string(*value));
+        else
+            context.setResult(defaultValue);
+    }
+
+    /// ${VAR:+alternate} - returns alternate if VAR is set and non-empty, otherwise empty
+    void builtinExpandParamAlternate(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& alternate = context.getString(2);
+        auto const value = _env.get(varName);
+        if (value.has_value() && !value->empty())
+            context.setResult(alternate);
+        else
+            context.setResult("");
+    }
+
+    /// ${VAR:=default} - assigns and returns default if VAR is unset or empty
+    void builtinExpandParamAssign(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& defaultValue = context.getString(2);
+        auto const value = _env.get(varName);
+        if (value.has_value() && !value->empty())
+            context.setResult(std::string(*value));
+        else
+        {
+            _env.set(varName, defaultValue);
+            context.setResult(defaultValue);
+        }
+    }
+
+    /// ${VAR:?error} - returns VAR if set and non-empty, otherwise prints error and fails
+    void builtinExpandParamError(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& errorMsg = context.getString(2);
+        auto const value = _env.get(varName);
+        if (value.has_value() && !value->empty())
+            context.setResult(std::string(*value));
+        else
+        {
+            std::string const msg = errorMsg.empty() ? std::format("{}: parameter null or not set", varName)
+                                                     : std::format("{}: {}", varName, errorMsg);
+            error("{}", msg);
+            _exitCode = 1;
+            context.setResult("");
+        }
+    }
+
+    /// Helper for glob-style pattern matching (recursive implementation)
+    /// Returns true if pattern matches the entire text
+    [[nodiscard]] static bool globMatch(std::string_view text, std::string_view pattern)
+    {
+        size_t ti = 0;
+        size_t pi = 0;
+        size_t starIdx = std::string_view::npos;
+        size_t matchIdx = 0;
+
+        while (ti < text.size())
+        {
+            if (pi < pattern.size() && (pattern[pi] == '?' || pattern[pi] == text[ti]))
+            {
+                ++ti;
+                ++pi;
+            }
+            else if (pi < pattern.size() && pattern[pi] == '*')
+            {
+                starIdx = pi;
+                matchIdx = ti;
+                ++pi;
+            }
+            else if (starIdx != std::string_view::npos)
+            {
+                pi = starIdx + 1;
+                ++matchIdx;
+                ti = matchIdx;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        // Consume remaining stars in pattern
+        while (pi < pattern.size() && pattern[pi] == '*')
+            ++pi;
+
+        return pi == pattern.size();
+    }
+
+    /// Helper to find all possible prefix matches of a pattern in text
+    [[nodiscard]] static std::vector<size_t> findPrefixMatches(std::string_view text,
+                                                               std::string_view pattern)
+    {
+        std::vector<size_t> matches;
+
+        // For prefix matching, we try to match pattern against each prefix of text
+        for (size_t len = 0; len <= text.size(); ++len)
+        {
+            if (globMatch(text.substr(0, len), pattern))
+                matches.push_back(len);
+        }
+
+        return matches;
+    }
+
+    /// Helper to find all possible suffix matches of a pattern in text
+    [[nodiscard]] static std::vector<size_t> findSuffixMatches(std::string_view text,
+                                                               std::string_view pattern)
+    {
+        std::vector<size_t> matches;
+
+        // For suffix matching, we try to match pattern against each suffix of text
+        for (size_t start = 0; start <= text.size(); ++start)
+        {
+            if (globMatch(text.substr(start), pattern))
+                matches.push_back(start); // Store the start position
+        }
+
+        return matches;
+    }
+
+    /// Helper to find first pattern match and its length starting at pos
+    [[nodiscard]] static std::optional<size_t> findPatternMatchLength(std::string_view text,
+                                                                      std::string_view pattern)
+    {
+        // Try each possible match length starting from 1
+        for (size_t len = 1; len <= text.size(); ++len)
+        {
+            if (globMatch(text.substr(0, len), pattern))
+                return len;
+        }
+        return std::nullopt;
+    }
+
+    /// ${VAR#pattern} / ${VAR##pattern} - remove prefix matching pattern
+    void builtinExpandParamRemovePrefix(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& pattern = context.getString(2);
+        bool const longest = context.getBool(3);
+        auto const value = _env.get(varName);
+        std::string const val = std::string(value.value_or(""));
+
+        if (val.empty() || pattern.empty())
+        {
+            context.setResult(val);
+            return;
+        }
+
+        auto const matches = findPrefixMatches(val, pattern);
+        if (matches.empty())
+        {
+            context.setResult(val);
+            return;
+        }
+
+        // shortest = first match, longest = last match
+        size_t const matchLen = longest ? matches.back() : matches.front();
+        context.setResult(val.substr(matchLen));
+    }
+
+    /// ${VAR%pattern} / ${VAR%%pattern} - remove suffix matching pattern
+    void builtinExpandParamRemoveSuffix(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& pattern = context.getString(2);
+        bool const longest = context.getBool(3);
+        auto const value = _env.get(varName);
+        std::string const val = std::string(value.value_or(""));
+
+        if (val.empty() || pattern.empty())
+        {
+            context.setResult(val);
+            return;
+        }
+
+        auto const matches = findSuffixMatches(val, pattern);
+        if (matches.empty())
+        {
+            context.setResult(val);
+            return;
+        }
+
+        // For suffix: shortest match starts later (larger start), longest starts earlier (smaller start)
+        size_t const matchStart = longest ? matches.front() : matches.back();
+        context.setResult(val.substr(0, matchStart));
+    }
+
+    /// ${VAR/pattern/replacement} / ${VAR//pattern/replacement} - replace pattern
+    void builtinExpandParamReplace(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        auto const& pattern = context.getString(2);
+        auto const& replacement = context.getString(3);
+        bool const replaceAll = context.getBool(4);
+        auto const value = _env.get(varName);
+        std::string const val = std::string(value.value_or(""));
+
+        if (val.empty() || pattern.empty())
+        {
+            context.setResult(val);
+            return;
+        }
+
+        std::string result;
+        size_t pos = 0;
+
+        while (pos < val.size())
+        {
+            // Try to match pattern at current position
+            auto const matchResult = findPatternMatchLength(std::string_view(val).substr(pos), pattern);
+            if (matchResult.has_value())
+            {
+                result += replacement;
+                pos += *matchResult;
+                if (!replaceAll)
+                {
+                    result += val.substr(pos);
+                    break;
+                }
+            }
+            else
+            {
+                result += val[pos];
+                ++pos;
+            }
+        }
+
+        context.setResult(result);
+    }
 
     /// Helper to clean up process substitution state.
     void cleanupProcSubst()

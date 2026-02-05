@@ -48,15 +48,19 @@ export enum class Token
     Identifier,     // space delimited text not containing any of the unescaped symbols above
 
     // New tokens added below to avoid shifting existing enum values
-    DollarBraceName, // ${NAME}
-    LessLessLess,    // <<<
-    LessLessDash,    // <<-
-    GreaterAmp,      // >&
-    AmpAmp,          // &&
-    PipePipe,        // ||
-    DollarRndOpen,   // $(
-    GreaterRndOpen,  // >(
-    Backtick,        // `
+    DollarBraceName,  // ${NAME}
+    LessLessLess,     // <<<
+    LessLessDash,     // <<-
+    GreaterAmp,       // >&
+    AmpAmp,           // &&
+    PipePipe,         // ||
+    DollarRndOpen,    // $(
+    GreaterRndOpen,   // >(
+    Backtick,         // `
+    Tilde,            // ~ at word start (for tilde expansion)
+    DollarBraceParam, // ${VAR:-default}, ${#VAR}, etc. (parameter expansion)
+    DollarDblRndOpen, // $((  (arithmetic expansion)
+    DblRndClose,      // ))    (arithmetic expansion close)
 };
 
 export enum class BuiltinFunction
@@ -243,14 +247,24 @@ export class Lexer
                 else
                     return confirmToken(Token::Less);
             case '(': return consumeCharAndConfirmToken(Token::RndOpen);
-            case ')': return consumeCharAndConfirmToken(Token::RndClose);
+            case ')':
+                nextChar();
+                if (_currentChar == ')')
+                    return consumeCharAndConfirmToken(Token::DblRndClose);
+                return confirmToken(Token::RndClose);
             case '\\': return consumeCharAndConfirmToken(Token::Backslash);
             case '!': return consumeCharAndConfirmToken(Token::Not);
             case '`': return consumeCharAndConfirmToken(Token::Backtick);
+            case '~': return consumeTilde();
             case '$':
                 nextChar();
                 if (_currentChar == '(')
-                    return consumeCharAndConfirmToken(Token::DollarRndOpen);
+                {
+                    nextChar();
+                    if (_currentChar == '(')
+                        return consumeCharAndConfirmToken(Token::DollarDblRndOpen);
+                    return confirmToken(Token::DollarRndOpen);
+                }
                 else if (_currentChar == '$')
                     return consumeCharAndConfirmToken(Token::DollarDollar);
                 else if (_currentChar == '!')
@@ -344,7 +358,10 @@ export class Lexer
 
     Token consumeIdentifier(Token token)
     {
-        auto constexpr ReservedSymbols = U"|<>()[]{}!$'\"\t\r\n ;`"sv;
+        // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single
+        // tokens Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single
+        // tokens
+        auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
 
         while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
         {
@@ -369,10 +386,18 @@ export class Lexer
         return confirmToken(Token::String);
     }
 
-    /// Consumes a braced variable: ${NAME}
+    /// Consumes a braced variable: ${NAME} or parameter expansion ${NAME:-default}, ${#NAME}, etc.
     Token consumeBracedVariable()
     {
         nextChar(); // consume '{'
+
+        // Handle ${#VAR} (length) - starts with #
+        if (_currentChar == '#')
+        {
+            _nextToken.literal += '#';
+            nextChar();
+            // Fall through to consume the variable name and any trailing content
+        }
 
         // Handle special variables within braces: ${?}, ${!}, etc.
         if (_currentChar == '?')
@@ -381,6 +406,11 @@ export class Lexer
             if (_currentChar == '}')
             {
                 nextChar();
+                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+                {
+                    // ${#?} - length of $? (unusual but valid)
+                    return confirmToken(Token::DollarBraceParam);
+                }
                 return confirmToken(Token::DollarQuestion);
             }
             return confirmToken(Token::Invalid);
@@ -391,6 +421,11 @@ export class Lexer
             if (_currentChar == '}')
             {
                 nextChar();
+                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+                {
+                    // ${#!} - length of $!
+                    return confirmToken(Token::DollarBraceParam);
+                }
                 return confirmToken(Token::DollarNot);
             }
             return confirmToken(Token::Invalid);
@@ -401,6 +436,11 @@ export class Lexer
             if (_currentChar == '}')
             {
                 nextChar();
+                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+                {
+                    // ${#$} - length of $$
+                    return confirmToken(Token::DollarBraceParam);
+                }
                 return confirmToken(Token::DollarDollar);
             }
             return confirmToken(Token::Invalid);
@@ -412,28 +452,135 @@ export class Lexer
             if (_currentChar == '}')
             {
                 nextChar();
+                if (_nextToken.literal.size() > 1 && _nextToken.literal[0] == '#')
+                {
+                    // ${#0} - length of $0
+                    return confirmToken(Token::DollarBraceParam);
+                }
                 return confirmToken(Token::DollarNumber);
             }
-            return confirmToken(Token::Invalid);
+            // Fall through - might have more content like ${1:-default}
         }
 
-        // Regular variable name: must start with alpha or underscore
-        if (!(_currentChar < 0x80 && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
+        // Consume the variable name if we haven't started yet
+        if (_nextToken.literal.empty() || (_nextToken.literal.size() == 1 && _nextToken.literal[0] == '#'))
+        {
+            // Regular variable name: must start with alpha or underscore
+            if (!(_currentChar < 0x80
+                  && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
+            {
+                if (_nextToken.literal.empty())
+                    return confirmToken(Token::Invalid);
+                // Had # but no valid variable name - still invalid
+                return confirmToken(Token::Invalid);
+            }
+
+            // Consume the variable name
+            while (_currentChar < 0x80
+                   && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+        }
+
+        // Check for closing brace or parameter expansion operator
+        if (_currentChar == '}')
+        {
+            nextChar(); // consume '}'
+            // Check if we have a # prefix (length operator)
+            if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+                return confirmToken(Token::DollarBraceParam);
+            return confirmToken(Token::DollarBraceName);
+        }
+
+        // Parameter expansion operator detected - consume everything until closing brace
+        // Operators: :-, :+, :=, :?, #, ##, %, %%, /, //
+        // We store the full content in literal for the parser to handle
+        int braceDepth = 1;
+        while (!eof() && braceDepth > 0)
+        {
+            if (_currentChar == '{')
+                ++braceDepth;
+            else if (_currentChar == '}')
+                --braceDepth;
+
+            if (braceDepth > 0)
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+        }
+
+        if (braceDepth != 0)
             return confirmToken(Token::Invalid);
 
-        // Consume the variable name
-        while (_currentChar < 0x80 && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
+        nextChar(); // consume final '}'
+        return confirmToken(Token::DollarBraceParam);
+    }
+
+    /// Consumes a tilde token: ~, ~username, or ~/path
+    /// Returns Tilde token with optional username in the literal field
+    /// The suffix (path after ~/ or ~user/) is NOT consumed - it becomes a separate token
+    Token consumeTilde()
+    {
+        nextChar(); // consume '~'
+
+        // Check if followed by a path separator or whitespace (standalone ~)
+        // or followed by alphanumeric/underscore (username)
+        if (_currentChar == ' ' || _currentChar == '\t' || _currentChar == '\n' || _currentChar == '\r'
+            || eof() || _currentChar == ';' || _currentChar == '|' || _currentChar == '&'
+            || _currentChar == '>' || _currentChar == '<' || _currentChar == ')' || _currentChar == '"'
+            || _currentChar == '\'')
+        {
+            // Standalone ~ - no username
+            return confirmToken(Token::Tilde);
+        }
+
+        // If it starts with /, this is ~/path - return as identifier to be handled specially
+        // The tilde is recorded but the rest becomes part of the identifier
+        if (_currentChar == '/')
+        {
+            // Put a marker in the literal to indicate this was a tilde expansion
+            // The entire ~/path will be treated as one token
+            _nextToken.literal = "~";
+            while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
+                   && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
+                   && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
+                   && _currentChar != '"' && _currentChar != '\'')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+            return confirmToken(Token::Tilde);
+        }
+
+        // Consume username: alphanumeric, underscore, dash
+        while (
+            _currentChar < 0x80
+            && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_' || _currentChar == '-'))
         {
             _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
         }
 
-        // Expect closing brace
-        if (_currentChar != '}')
-            return confirmToken(Token::Invalid);
+        // If followed by /, consume the path too
+        if (_currentChar == '/')
+        {
+            std::string const username = _nextToken.literal;
+            _nextToken.literal.clear();
+            _nextToken.literal = username;
+            while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
+                   && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
+                   && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
+                   && _currentChar != '"' && _currentChar != '\'')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+        }
 
-        nextChar(); // consume '}'
-        return confirmToken(Token::DollarBraceName);
+        return confirmToken(Token::Tilde);
     }
 
     char32_t nextChar()
@@ -543,8 +690,12 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case AmpAmp: name = "&&"; break;
             case PipePipe: name = "||"; break;
             case DollarRndOpen: name = "$("; break;
+            case DollarDblRndOpen: name = "$(("; break;
+            case DblRndClose: name = "))"; break;
             case GreaterRndOpen: name = ">("; break;
             case Backtick: name = "`"; break;
+            case Tilde: name = "~"; break;
+            case DollarBraceParam: name = "DollarBraceParam"; break;
         }
         return formatter<std::string_view>::format(name, ctx);
     }

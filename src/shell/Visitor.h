@@ -4,6 +4,7 @@
 namespace endo::ast
 {
 
+struct ArithExpansionExpr;
 struct BuiltinChDirStmt;
 struct BuiltinSetStmt;
 struct BuiltinExportStmt;
@@ -16,6 +17,7 @@ struct CallPipeline;
 struct CommandFileSubst;
 struct CompoundStmt;
 struct FileDescriptor;
+struct GlobExpr;
 struct HereDocument;
 struct HereString;
 struct IfStmt;
@@ -24,8 +26,10 @@ struct LiteralExpr;
 struct LogicalAndStmt;
 struct LogicalOrStmt;
 struct OutputRedirect;
+struct ParamExpansionExpr;
 struct ProgramCall;
 struct SubstitutionExpr;
+struct TildeExpr;
 struct VariableExpr;
 struct WhileStmt;
 
@@ -61,9 +65,13 @@ struct Visitor
     virtual void visit(BuiltinUnsetStmt const&) = 0;
 
     // expressions
+    virtual void visit(ArithExpansionExpr const&) = 0;
+    virtual void visit(GlobExpr const&) = 0;
     virtual void visit(LiteralExpr const&) = 0;
+    virtual void visit(ParamExpansionExpr const&) = 0;
     virtual void visit(SubstitutionExpr const&) = 0;
     virtual void visit(CommandFileSubst const&) = 0;
+    virtual void visit(TildeExpr const&) = 0;
     virtual void visit(VariableExpr const&) = 0;
 };
 

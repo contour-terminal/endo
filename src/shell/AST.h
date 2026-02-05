@@ -103,6 +103,170 @@ struct VariableExpr final: Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Tilde expansion: ~, ~user, ~/path, or ~user/path
+///
+/// Expands to home directory:
+/// - ~ expands to current user's home directory ($HOME)
+/// - ~/path expands to $HOME/path
+/// - ~user expands to user's home directory (from passwd database)
+/// - ~user/path expands to user's home directory + path
+struct TildeExpr final: Expr
+{
+    std::string user;   ///< Empty for ~ (current user), username for ~user
+    std::string suffix; ///< Path suffix after tilde (e.g., "/Documents" for ~/Documents)
+
+    explicit TildeExpr(std::string user = "", std::string suffix = ""):
+        user(std::move(user)), suffix(std::move(suffix))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Parameter expansion operations
+enum class ParamExpansionOp
+{
+    Length,            ///< ${#VAR} - string length
+    DefaultValue,      ///< ${VAR:-default} - use default if unset or empty
+    AlternateValue,    ///< ${VAR:+alt} - use alt if set and non-empty
+    AssignDefault,     ///< ${VAR:=default} - assign default if unset or empty
+    ErrorIfUnset,      ///< ${VAR:?error} - error if unset or empty
+    RemovePrefixShort, ///< ${VAR#pattern} - remove shortest prefix match
+    RemovePrefixLong,  ///< ${VAR##pattern} - remove longest prefix match
+    RemoveSuffixShort, ///< ${VAR%pattern} - remove shortest suffix match
+    RemoveSuffixLong,  ///< ${VAR%%pattern} - remove longest suffix match
+    ReplaceFirst,      ///< ${VAR/pattern/replacement} - replace first match
+    ReplaceAll,        ///< ${VAR//pattern/replacement} - replace all matches
+};
+
+/// Parameter expansion: ${VAR:-default}, ${#VAR}, ${VAR/old/new}, etc.
+///
+/// Provides shell parameter expansion features:
+/// - Default values: ${VAR:-default}, ${VAR:+alt}, ${VAR:=default}, ${VAR:?error}
+/// - String length: ${#VAR}
+/// - Pattern removal: ${VAR#pattern}, ${VAR##pattern}, ${VAR%pattern}, ${VAR%%pattern}
+/// - Substitution: ${VAR/pattern/replacement}, ${VAR//pattern/replacement}
+struct ParamExpansionExpr final: Expr
+{
+    std::string variable; ///< Variable name
+    ParamExpansionOp op;  ///< Operation type
+    std::string operand1; ///< Pattern or default value
+    std::string operand2; ///< Replacement (for replace operations only)
+
+    ParamExpansionExpr(std::string var,
+                       ParamExpansionOp operation,
+                       std::string op1 = "",
+                       std::string op2 = ""):
+        variable(std::move(var)), op(operation), operand1(std::move(op1)), operand2(std::move(op2))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Glob expression: `*.txt`, `dir/*`, `[a-z].log`
+///
+/// Represents a pathname pattern that will be expanded at runtime
+/// to match files in the filesystem. Standard glob metacharacters:
+/// - `*` matches any sequence of characters
+/// - `?` matches any single character
+/// - `[...]` matches any character in the set
+struct GlobExpr final: Expr
+{
+    std::string pattern; ///< The glob pattern (e.g., "*.txt")
+
+    explicit GlobExpr(std::string p): pattern(std::move(p)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+// ============================================================================
+// Arithmetic Expansion $((expr))
+// ============================================================================
+
+/// Arithmetic operators for $((expr)) expansion
+enum class ArithOp
+{
+    Add,    // +
+    Sub,    // -
+    Mul,    // *
+    Div,    // /
+    Mod,    // %
+    Pow,    // **
+    Lt,     // <
+    Gt,     // >
+    Le,     // <=
+    Ge,     // >=
+    Eq,     // ==
+    Ne,     // !=
+    And,    // &&
+    Or,     // ||
+    BitAnd, // &
+    BitOr,  // |
+    BitXor, // ^
+    Shl,    // <<
+    Shr,    // >>
+    Not,    // ! (unary logical)
+    Neg,    // - (unary negation)
+    BitNot, // ~ (unary bitwise)
+};
+
+/// Base for arithmetic expressions within $((expr))
+struct ArithExpr
+{
+    virtual ~ArithExpr() = default;
+};
+
+/// Arithmetic literal: a numeric constant
+struct ArithLiteralExpr final: ArithExpr
+{
+    int64_t value;
+
+    explicit ArithLiteralExpr(int64_t v): value(v) {}
+};
+
+/// Arithmetic variable reference
+struct ArithVarExpr final: ArithExpr
+{
+    std::string name;
+
+    explicit ArithVarExpr(std::string n): name(std::move(n)) {}
+};
+
+/// Arithmetic binary expression: left op right
+struct ArithBinaryExpr final: ArithExpr
+{
+    ArithOp op;
+    std::unique_ptr<ArithExpr> left;
+    std::unique_ptr<ArithExpr> right;
+
+    ArithBinaryExpr(ArithOp operation, std::unique_ptr<ArithExpr> l, std::unique_ptr<ArithExpr> r):
+        op(operation), left(std::move(l)), right(std::move(r))
+    {
+    }
+};
+
+/// Arithmetic unary expression: op operand
+struct ArithUnaryExpr final: ArithExpr
+{
+    ArithOp op;
+    std::unique_ptr<ArithExpr> operand;
+
+    ArithUnaryExpr(ArithOp operation, std::unique_ptr<ArithExpr> e): op(operation), operand(std::move(e)) {}
+};
+
+/// Arithmetic expansion: $((expr))
+///
+/// Evaluates the arithmetic expression and expands to the result as a string.
+struct ArithExpansionExpr final: Expr
+{
+    std::unique_ptr<ArithExpr> expression;
+
+    explicit ArithExpansionExpr(std::unique_ptr<ArithExpr> e): expression(std::move(e)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Output redirect: `> FILE`, `>> FILE`, `N> FILE`, `N>&M`
 ///
 /// Redirects output from a file descriptor to a file or another file descriptor.

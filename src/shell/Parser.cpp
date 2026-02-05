@@ -35,6 +35,11 @@ import ASTPrinter;
 import Lexer;
 import CoreVM;
 
+#include <algorithm>
+#include <cctype>
+#include <charconv>
+#include <ranges>
+
 export module Parser;
 
 namespace endo
@@ -115,8 +120,10 @@ export class Parser
             case Token::DollarNot:
             case Token::DollarNumber:
             case Token::DollarRndOpen:
+            case Token::DollarBraceParam:
             case Token::LessRndOpen:
-            case Token::GreaterRndOpen: return true;
+            case Token::GreaterRndOpen:
+            case Token::Tilde: return true;
             case Token::Backtick:
                 // Backtick is a parameter token only at nesting level 0
                 return _backtickNestingLevel == 0;
@@ -553,7 +560,20 @@ export class Parser
             // Regular argument
             auto arg = parseParameter();
             if (arg)
+            {
+                // Check for brace expansion on literal arguments
+                if (auto* literal = dynamic_cast<ast::LiteralExpr*>(arg.get()))
+                {
+                    if (containsBracePattern(literal->value))
+                    {
+                        auto const expanded = expandBraces(literal->value);
+                        for (auto const& e: expanded)
+                            arguments.emplace_back(std::make_unique<ast::LiteralExpr>(e));
+                        continue;
+                    }
+                }
                 arguments.emplace_back(std::move(arg));
+            }
             else
                 break;
         }
@@ -660,18 +680,679 @@ export class Parser
         return std::make_unique<ast::CommandFileSubst>(std::move(command), mode);
     }
 
+    /// Parses a parameter expansion from DollarBraceParam token.
+    /// The literal contains the full content inside ${} including operators.
+    std::unique_ptr<ast::ParamExpansionExpr> parseParamExpansion()
+    {
+        TRACE_SCOPE("parseParamExpansion");
+        std::string const content = _lexer.currentLiteral();
+        _lexer.nextToken();
+
+        // Parse the content to determine operation type
+        // Content format:
+        //   #VAR           -> Length
+        //   VAR:-default   -> DefaultValue
+        //   VAR:+alt       -> AlternateValue
+        //   VAR:=default   -> AssignDefault
+        //   VAR:?error     -> ErrorIfUnset
+        //   VAR#pattern    -> RemovePrefixShort
+        //   VAR##pattern   -> RemovePrefixLong
+        //   VAR%pattern    -> RemoveSuffixShort
+        //   VAR%%pattern   -> RemoveSuffixLong
+        //   VAR/pattern/replacement  -> ReplaceFirst
+        //   VAR//pattern/replacement -> ReplaceAll
+
+        if (content.empty())
+            return nullptr;
+
+        // Check for length operator: #VAR
+        if (content[0] == '#')
+        {
+            std::string const variable = content.substr(1);
+            return std::make_unique<ast::ParamExpansionExpr>(variable, ast::ParamExpansionOp::Length);
+        }
+
+        // Find the variable name (alphanumeric and underscore)
+        size_t varEnd = 0;
+        while (varEnd < content.size()
+               && (std::isalnum(static_cast<unsigned char>(content[varEnd])) || content[varEnd] == '_'))
+        {
+            ++varEnd;
+        }
+
+        if (varEnd == 0)
+            return nullptr;
+
+        std::string const variable = content.substr(0, varEnd);
+        std::string const rest = content.substr(varEnd);
+
+        if (rest.empty())
+        {
+            // Just ${VAR} - but this should have been DollarBraceName
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::DefaultValue, "");
+        }
+
+        // Parse the operator
+        if (rest.starts_with(":-"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::DefaultValue, rest.substr(2));
+        }
+        else if (rest.starts_with(":+"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::AlternateValue, rest.substr(2));
+        }
+        else if (rest.starts_with(":="))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::AssignDefault, rest.substr(2));
+        }
+        else if (rest.starts_with(":?"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::ErrorIfUnset, rest.substr(2));
+        }
+        else if (rest.starts_with("##"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::RemovePrefixLong, rest.substr(2));
+        }
+        else if (rest.starts_with("#"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::RemovePrefixShort, rest.substr(1));
+        }
+        else if (rest.starts_with("%%"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::RemoveSuffixLong, rest.substr(2));
+        }
+        else if (rest.starts_with("%"))
+        {
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::RemoveSuffixShort, rest.substr(1));
+        }
+        else if (rest.starts_with("//"))
+        {
+            // ${VAR//pattern/replacement}
+            auto const patternStart = 2;
+            auto const slashPos = rest.find('/', patternStart);
+            if (slashPos != std::string::npos)
+            {
+                return std::make_unique<ast::ParamExpansionExpr>(
+                    variable,
+                    ast::ParamExpansionOp::ReplaceAll,
+                    rest.substr(patternStart, slashPos - patternStart),
+                    rest.substr(slashPos + 1));
+            }
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::ReplaceAll, rest.substr(patternStart), "");
+        }
+        else if (rest.starts_with("/"))
+        {
+            // ${VAR/pattern/replacement}
+            auto const patternStart = 1;
+            auto const slashPos = rest.find('/', patternStart);
+            if (slashPos != std::string::npos)
+            {
+                return std::make_unique<ast::ParamExpansionExpr>(
+                    variable,
+                    ast::ParamExpansionOp::ReplaceFirst,
+                    rest.substr(patternStart, slashPos - patternStart),
+                    rest.substr(slashPos + 1));
+            }
+            return std::make_unique<ast::ParamExpansionExpr>(
+                variable, ast::ParamExpansionOp::ReplaceFirst, rest.substr(patternStart), "");
+        }
+
+        // Unknown operator - treat as default value with empty string
+        return std::make_unique<ast::ParamExpansionExpr>(variable, ast::ParamExpansionOp::DefaultValue, "");
+    }
+
+    /// Parses a tilde expansion: `~`, `~user`, `~/path`, or `~user/path`
+    std::unique_ptr<ast::TildeExpr> parseTildeExpansion()
+    {
+        TRACE_SCOPE("parseTildeExpansion");
+        std::string const literal = _lexer.currentLiteral(); // May contain user and/or path suffix
+        _lexer.nextToken();                                  // consume ~ token
+
+        // Parse the literal to extract user and suffix
+        // Formats: "" (just ~), "user", "/path" (~/path), "user/path"
+        std::string user;
+        std::string suffix;
+
+        if (literal.empty())
+        {
+            // Just ~
+        }
+        else if (literal[0] == '~')
+        {
+            // Literal starts with ~ - check for ~/path
+            auto const slashPos = literal.find('/');
+            if (slashPos == 1)
+            {
+                // ~/path format
+                suffix = literal.substr(1); // Include the /
+            }
+            else if (slashPos != std::string::npos)
+            {
+                // ~user/path format (where literal is "~user/path")
+                user = literal.substr(1, slashPos - 1);
+                suffix = literal.substr(slashPos);
+            }
+            else
+            {
+                // ~user format (where literal is "~user")
+                user = literal.substr(1);
+            }
+        }
+        else
+        {
+            // Literal doesn't start with ~ - it's "user" or "user/path"
+            auto const slashPos = literal.find('/');
+            if (slashPos != std::string::npos)
+            {
+                user = literal.substr(0, slashPos);
+                suffix = literal.substr(slashPos);
+            }
+            else
+            {
+                user = literal;
+            }
+        }
+
+        return std::make_unique<ast::TildeExpr>(std::move(user), std::move(suffix));
+    }
+
+    // ========================================================================
+    // Arithmetic expression parser for $((expr))
+    // Uses recursive descent with operator precedence.
+    // ========================================================================
+
+    /// Parses $((expr)) arithmetic expansion
+    std::unique_ptr<ast::ArithExpansionExpr> parseArithmeticExpansion()
+    {
+        TRACE_SCOPE("parseArithmeticExpansion");
+        _lexer.nextToken(); // consume $((
+
+        auto expr = parseArithOr();
+        if (!expr)
+            return nullptr;
+
+        if (_lexer.currentToken() != Token::DblRndClose)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected ')) to close arithmetic expansion");
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ))
+
+        return std::make_unique<ast::ArithExpansionExpr>(std::move(expr));
+    }
+
+    /// Parses || (logical OR) - lowest precedence
+    std::unique_ptr<ast::ArithExpr> parseArithOr()
+    {
+        auto left = parseArithAnd();
+        if (!left)
+            return nullptr;
+
+        while (_lexer.currentToken() == Token::PipePipe)
+        {
+            _lexer.nextToken();
+            auto right = parseArithAnd();
+            if (!right)
+                return nullptr;
+            left =
+                std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Or, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses && (logical AND)
+    std::unique_ptr<ast::ArithExpr> parseArithAnd()
+    {
+        auto left = parseArithBitOr();
+        if (!left)
+            return nullptr;
+
+        while (_lexer.currentToken() == Token::AmpAmp)
+        {
+            _lexer.nextToken();
+            auto right = parseArithBitOr();
+            if (!right)
+                return nullptr;
+            left =
+                std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::And, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses | (bitwise OR)
+    std::unique_ptr<ast::ArithExpr> parseArithBitOr()
+    {
+        auto left = parseArithBitXor();
+        if (!left)
+            return nullptr;
+
+        while (_lexer.currentToken() == Token::Pipe)
+        {
+            _lexer.nextToken();
+            auto right = parseArithBitXor();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(
+                ast::ArithOp::BitOr, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses ^ (bitwise XOR)
+    std::unique_ptr<ast::ArithExpr> parseArithBitXor()
+    {
+        auto left = parseArithBitAnd();
+        if (!left)
+            return nullptr;
+
+        // ^ is not yet tokenized specially, we check as identifier
+        while (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "^")
+        {
+            _lexer.nextToken();
+            auto right = parseArithBitAnd();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(
+                ast::ArithOp::BitXor, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses & (bitwise AND) - Note: single & not &&
+    std::unique_ptr<ast::ArithExpr> parseArithBitAnd()
+    {
+        auto left = parseArithEquality();
+        if (!left)
+            return nullptr;
+
+        // Single & is not a distinct token yet, so we handle it within identifiers or skip for now
+        // In shell arithmetic, & is bitwise AND but our lexer doesn't separate it
+        return left;
+    }
+
+    /// Parses == and != (equality comparison)
+    std::unique_ptr<ast::ArithExpr> parseArithEquality()
+    {
+        auto left = parseArithComparison();
+        if (!left)
+            return nullptr;
+
+        while (true)
+        {
+            // Check for == or != as identifiers (since lexer doesn't tokenize these specially)
+            if (_lexer.currentToken() == Token::Identifier)
+            {
+                auto const& lit = _lexer.currentLiteral();
+                if (lit == "==")
+                {
+                    _lexer.nextToken();
+                    auto right = parseArithComparison();
+                    if (!right)
+                        return nullptr;
+                    left = std::make_unique<ast::ArithBinaryExpr>(
+                        ast::ArithOp::Eq, std::move(left), std::move(right));
+                    continue;
+                }
+                else if (lit == "!=")
+                {
+                    _lexer.nextToken();
+                    auto right = parseArithComparison();
+                    if (!right)
+                        return nullptr;
+                    left = std::make_unique<ast::ArithBinaryExpr>(
+                        ast::ArithOp::Ne, std::move(left), std::move(right));
+                    continue;
+                }
+            }
+            break;
+        }
+        return left;
+    }
+
+    /// Parses <, >, <=, >= (relational comparison)
+    std::unique_ptr<ast::ArithExpr> parseArithComparison()
+    {
+        auto left = parseArithShift();
+        if (!left)
+            return nullptr;
+
+        while (true)
+        {
+            ast::ArithOp op;
+            bool found = false;
+
+            switch (_lexer.currentToken())
+            {
+                case Token::Less:
+                    op = ast::ArithOp::Lt;
+                    found = true;
+                    break;
+                case Token::Greater:
+                    op = ast::ArithOp::Gt;
+                    found = true;
+                    break;
+                case Token::LessEqual:
+                    op = ast::ArithOp::Le;
+                    found = true;
+                    break;
+                case Token::GreaterEqual:
+                    op = ast::ArithOp::Ge;
+                    found = true;
+                    break;
+                default:
+                    // Check for <= and >= as identifiers
+                    if (_lexer.currentToken() == Token::Identifier)
+                    {
+                        auto const& lit = _lexer.currentLiteral();
+                        if (lit == "<=")
+                        {
+                            op = ast::ArithOp::Le;
+                            found = true;
+                        }
+                        else if (lit == ">=")
+                        {
+                            op = ast::ArithOp::Ge;
+                            found = true;
+                        }
+                    }
+                    break;
+            }
+
+            if (!found)
+                break;
+
+            _lexer.nextToken();
+            auto right = parseArithShift();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(op, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses << and >> (bit shifts)
+    std::unique_ptr<ast::ArithExpr> parseArithShift()
+    {
+        auto left = parseArithAddSub();
+        if (!left)
+            return nullptr;
+
+        while (true)
+        {
+            ast::ArithOp op;
+            bool found = false;
+
+            // << is LessLess token, >> would be GreaterGreater
+            switch (_lexer.currentToken())
+            {
+                case Token::LessLess:
+                    op = ast::ArithOp::Shl;
+                    found = true;
+                    break;
+                case Token::GreaterGreater:
+                    op = ast::ArithOp::Shr;
+                    found = true;
+                    break;
+                default: break;
+            }
+
+            if (!found)
+                break;
+
+            _lexer.nextToken();
+            auto right = parseArithAddSub();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(op, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses + and - (addition/subtraction)
+    std::unique_ptr<ast::ArithExpr> parseArithAddSub()
+    {
+        auto left = parseArithMulDiv();
+        if (!left)
+            return nullptr;
+
+        while (true)
+        {
+            ast::ArithOp op;
+            bool found = false;
+
+            if (_lexer.currentToken() == Token::Identifier)
+            {
+                auto const& lit = _lexer.currentLiteral();
+                if (lit == "+")
+                {
+                    op = ast::ArithOp::Add;
+                    found = true;
+                }
+                else if (lit == "-")
+                {
+                    op = ast::ArithOp::Sub;
+                    found = true;
+                }
+            }
+
+            if (!found)
+                break;
+
+            _lexer.nextToken();
+            auto right = parseArithMulDiv();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(op, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses *, /, % (multiplication/division/modulo)
+    std::unique_ptr<ast::ArithExpr> parseArithMulDiv()
+    {
+        auto left = parseArithPow();
+        if (!left)
+            return nullptr;
+
+        while (true)
+        {
+            ast::ArithOp op;
+            bool found = false;
+
+            if (_lexer.currentToken() == Token::Identifier)
+            {
+                auto const& lit = _lexer.currentLiteral();
+                if (lit == "*")
+                {
+                    op = ast::ArithOp::Mul;
+                    found = true;
+                }
+                else if (lit == "/")
+                {
+                    op = ast::ArithOp::Div;
+                    found = true;
+                }
+                else if (lit == "%")
+                {
+                    op = ast::ArithOp::Mod;
+                    found = true;
+                }
+            }
+
+            if (!found)
+                break;
+
+            _lexer.nextToken();
+            auto right = parseArithPow();
+            if (!right)
+                return nullptr;
+            left = std::make_unique<ast::ArithBinaryExpr>(op, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses ** (exponentiation) - right associative
+    std::unique_ptr<ast::ArithExpr> parseArithPow()
+    {
+        auto left = parseArithUnary();
+        if (!left)
+            return nullptr;
+
+        if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "**")
+        {
+            _lexer.nextToken();
+            auto right = parseArithPow(); // Right associative: 2**3**4 = 2**(3**4)
+            if (!right)
+                return nullptr;
+            return std::make_unique<ast::ArithBinaryExpr>(
+                ast::ArithOp::Pow, std::move(left), std::move(right));
+        }
+        return left;
+    }
+
+    /// Parses unary operators: -, !, ~
+    std::unique_ptr<ast::ArithExpr> parseArithUnary()
+    {
+        if (_lexer.currentToken() == Token::Not)
+        {
+            _lexer.nextToken();
+            auto operand = parseArithUnary();
+            if (!operand)
+                return nullptr;
+            return std::make_unique<ast::ArithUnaryExpr>(ast::ArithOp::Not, std::move(operand));
+        }
+
+        if (_lexer.currentToken() == Token::Identifier)
+        {
+            auto const& lit = _lexer.currentLiteral();
+            if (lit == "-")
+            {
+                _lexer.nextToken();
+                auto operand = parseArithUnary();
+                if (!operand)
+                    return nullptr;
+                return std::make_unique<ast::ArithUnaryExpr>(ast::ArithOp::Neg, std::move(operand));
+            }
+            else if (lit.size() > 1 && lit[0] == '-' && std::isdigit(static_cast<unsigned char>(lit[1])))
+            {
+                // Handle tokens like "-5" as a negative number literal
+                int64_t value = 0;
+                // Parse the whole number including the minus sign
+                auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+                if (ec == std::errc() && ptr == lit.data() + lit.size())
+                {
+                    _lexer.nextToken();
+                    return std::make_unique<ast::ArithLiteralExpr>(value);
+                }
+            }
+            else if (lit == "~")
+            {
+                _lexer.nextToken();
+                auto operand = parseArithUnary();
+                if (!operand)
+                    return nullptr;
+                return std::make_unique<ast::ArithUnaryExpr>(ast::ArithOp::BitNot, std::move(operand));
+            }
+        }
+
+        return parseArithPrimary();
+    }
+
+    /// Parses primary arithmetic expressions: numbers, variables, parenthesized expressions
+    std::unique_ptr<ast::ArithExpr> parseArithPrimary()
+    {
+        // Number literal
+        if (_lexer.currentToken() == Token::Number)
+        {
+            auto const& lit = _lexer.currentLiteral();
+            int64_t value = 0;
+            auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+            if (ec != std::errc())
+                value = 0;
+            _lexer.nextToken();
+            return std::make_unique<ast::ArithLiteralExpr>(value);
+        }
+
+        // Identifier-style number (operators like + are tokenized as identifiers with the number)
+        if (_lexer.currentToken() == Token::Identifier)
+        {
+            auto const& lit = _lexer.currentLiteral();
+            // Check if it's a number
+            int64_t value = 0;
+            auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+            if (ec == std::errc() && ptr == lit.data() + lit.size())
+            {
+                _lexer.nextToken();
+                return std::make_unique<ast::ArithLiteralExpr>(value);
+            }
+
+            // Otherwise it's a variable reference
+            std::string name = lit;
+            _lexer.nextToken();
+            return std::make_unique<ast::ArithVarExpr>(std::move(name));
+        }
+
+        // Variable reference $VAR or ${VAR}
+        if (_lexer.currentToken() == Token::DollarName || _lexer.currentToken() == Token::DollarBraceName)
+        {
+            std::string name = _lexer.currentLiteral();
+            _lexer.nextToken();
+            return std::make_unique<ast::ArithVarExpr>(std::move(name));
+        }
+
+        // Parenthesized expression
+        if (_lexer.currentToken() == Token::RndOpen)
+        {
+            _lexer.nextToken();
+            auto expr = parseArithOr();
+            if (!expr)
+                return nullptr;
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected ')' in arithmetic expression");
+                return nullptr;
+            }
+            _lexer.nextToken();
+            return expr;
+        }
+
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           {},
+                                           currentContextSnippet(),
+                                           "Expected number or variable in arithmetic expression");
+        return nullptr;
+    }
+
     std::unique_ptr<ast::Expr> parseParameter()
     {
         TRACE_FMT("parseParameter: {} \"{}\"", _lexer.currentToken(), _lexer.currentLiteral());
         switch (_lexer.currentToken())
         {
             case Token::String:
-            case Token::Number:
-            case Token::Identifier: return std::make_unique<ast::LiteralExpr>(consumeLiteral());
+            case Token::Number: return std::make_unique<ast::LiteralExpr>(consumeLiteral());
+            case Token::Identifier: {
+                auto const& literal = _lexer.currentLiteral();
+                if (containsGlobChars(literal))
+                    return std::make_unique<ast::GlobExpr>(consumeLiteral());
+                return std::make_unique<ast::LiteralExpr>(consumeLiteral());
+            }
             case Token::DollarName:
                 return std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, false);
             case Token::DollarBraceName:
                 return std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, true);
+            case Token::DollarBraceParam: return parseParamExpansion();
             case Token::DollarQuestion:
                 _lexer.nextToken();
                 return std::make_unique<ast::VariableExpr>("?", ast::VariableType::ExitStatus, false);
@@ -685,9 +1366,11 @@ export class Parser
                 return std::make_unique<ast::VariableExpr>(
                     consumeLiteral(), ast::VariableType::Positional, false);
             case Token::DollarRndOpen: return parseCommandSubstitution();
+            case Token::DollarDblRndOpen: return parseArithmeticExpansion();
             case Token::Backtick: return parseBacktickSubstitution();
             case Token::LessRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Read);
             case Token::GreaterRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Write);
+            case Token::Tilde: return parseTildeExpansion();
             default:
                 _report.syntaxErrorWithSuggestions(currentLocation(),
                                                    {},
@@ -879,6 +1562,234 @@ export class Parser
                                                "Expected '{}' but got '{}'",
                                                directive,
                                                _lexer.currentLiteral());
+    }
+
+    // ========================================================================
+    // Brace expansion helpers
+    // ========================================================================
+
+    /// Checks if a string contains glob metacharacters (*, ?, [...]).
+    [[nodiscard]] static bool containsGlobChars(std::string_view s)
+    {
+        for (size_t i = 0; i < s.size(); ++i)
+        {
+            switch (s[i])
+            {
+                case '*':
+                case '?': return true;
+                case '[': {
+                    // Check for valid bracket expression [...]
+                    auto const close = s.find(']', i + 1);
+                    if (close != std::string_view::npos && close > i + 1)
+                        return true;
+                    break;
+                }
+                default: break;
+            }
+        }
+        return false;
+    }
+
+    /// Checks if a string contains an unexpanded brace pattern.
+    [[nodiscard]] static bool containsBracePattern(std::string_view s)
+    {
+        size_t braceDepth = 0;
+        bool foundComma = false;
+        bool foundDotDot = false;
+
+        for (size_t i = 0; i < s.size(); ++i)
+        {
+            char const c = s[i];
+            if (c == '{')
+            {
+                ++braceDepth;
+            }
+            else if (c == '}' && braceDepth > 0)
+            {
+                --braceDepth;
+                if (braceDepth == 0 && (foundComma || foundDotDot))
+                    return true;
+            }
+            else if (braceDepth == 1)
+            {
+                if (c == ',')
+                    foundComma = true;
+                else if (c == '.' && i + 1 < s.size() && s[i + 1] == '.')
+                    foundDotDot = true;
+            }
+        }
+        return false;
+    }
+
+    /// Finds the matching closing brace for an opening brace at position `start`.
+    [[nodiscard]] static size_t findMatchingBrace(std::string_view s, size_t start)
+    {
+        int depth = 1;
+        for (size_t i = start + 1; i < s.size(); ++i)
+        {
+            if (s[i] == '{')
+                ++depth;
+            else if (s[i] == '}')
+            {
+                --depth;
+                if (depth == 0)
+                    return i;
+            }
+        }
+        return std::string_view::npos;
+    }
+
+    /// Splits brace content by commas, respecting nested braces.
+    [[nodiscard]] static std::vector<std::string> splitBraceItems(std::string_view content)
+    {
+        std::vector<std::string> items;
+        std::string current;
+        int depth = 0;
+
+        for (char const c: content)
+        {
+            if (c == '{')
+            {
+                ++depth;
+                current += c;
+            }
+            else if (c == '}')
+            {
+                --depth;
+                current += c;
+            }
+            else if (c == ',' && depth == 0)
+            {
+                items.push_back(std::move(current));
+                current.clear();
+            }
+            else
+            {
+                current += c;
+            }
+        }
+
+        if (!current.empty() || !items.empty())
+            items.push_back(std::move(current));
+
+        return items;
+    }
+
+    /// Expands a numeric or alphabetic range like "1..10" or "a..z".
+    [[nodiscard]] static std::vector<std::string> expandRange(std::string_view range)
+    {
+        // Find ".." separator
+        auto const dotPos = range.find("..");
+        if (dotPos == std::string_view::npos)
+            return { std::string(range) };
+
+        auto const startStr = range.substr(0, dotPos);
+        auto const endStr = range.substr(dotPos + 2);
+
+        if (startStr.empty() || endStr.empty())
+            return { std::string(range) };
+
+        std::vector<std::string> result;
+
+        // Check for numeric range
+        int startNum = 0;
+        int endNum = 0;
+        auto const startResult =
+            std::from_chars(startStr.data(), startStr.data() + startStr.size(), startNum);
+        auto const endResult = std::from_chars(endStr.data(), endStr.data() + endStr.size(), endNum);
+
+        if (startResult.ec == std::errc {} && endResult.ec == std::errc {}
+            && startResult.ptr == startStr.data() + startStr.size()
+            && endResult.ptr == endStr.data() + endStr.size())
+        {
+            // Numeric range
+            if (startNum <= endNum)
+            {
+                for (int i = startNum; i <= endNum; ++i)
+                    result.push_back(std::to_string(i));
+            }
+            else
+            {
+                for (int i = startNum; i >= endNum; --i)
+                    result.push_back(std::to_string(i));
+            }
+            return result;
+        }
+
+        // Check for single character alphabetic range
+        if (startStr.size() == 1 && endStr.size() == 1
+            && std::isalpha(static_cast<unsigned char>(startStr[0]))
+            && std::isalpha(static_cast<unsigned char>(endStr[0])))
+        {
+            char const startChar = startStr[0];
+            char const endChar = endStr[0];
+
+            if (startChar <= endChar)
+            {
+                for (char c = startChar; c <= endChar; ++c)
+                    result.push_back(std::string(1, c));
+            }
+            else
+            {
+                for (char c = startChar; c >= endChar; --c)
+                    result.push_back(std::string(1, c));
+            }
+            return result;
+        }
+
+        // Not a valid range, return as-is
+        return { std::string(range) };
+    }
+
+    /// Expands all brace patterns in a string.
+    [[nodiscard]] static std::vector<std::string> expandBraces(std::string const& input)
+    {
+        // Find the first brace pattern
+        auto const braceStart = input.find('{');
+        if (braceStart == std::string::npos)
+            return { input };
+
+        auto const braceEnd = findMatchingBrace(input, braceStart);
+        if (braceEnd == std::string::npos)
+            return { input };
+
+        std::string const prefix = input.substr(0, braceStart);
+        std::string const content = input.substr(braceStart + 1, braceEnd - braceStart - 1);
+        std::string const suffix = input.substr(braceEnd + 1);
+
+        std::vector<std::string> expansions;
+
+        // Check if it's a range pattern (contains ".." but no comma at depth 0)
+        if (content.find("..") != std::string::npos && content.find(',') == std::string::npos)
+        {
+            auto const rangeExpansion = expandRange(content);
+            for (auto const& item: rangeExpansion)
+                expansions.push_back(prefix + item + suffix);
+        }
+        else
+        {
+            // Comma-separated list
+            auto const items = splitBraceItems(content);
+            for (auto const& item: items)
+                expansions.push_back(prefix + item + suffix);
+        }
+
+        // Recursively expand any remaining brace patterns
+        std::vector<std::string> result;
+        for (auto const& expanded: expansions)
+        {
+            if (containsBracePattern(expanded))
+            {
+                auto const nested = expandBraces(expanded);
+                result.insert(result.end(), nested.begin(), nested.end());
+            }
+            else
+            {
+                result.push_back(expanded);
+            }
+        }
+
+        return result;
     }
 
     CoreVM::Runtime& _runtime;            // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)

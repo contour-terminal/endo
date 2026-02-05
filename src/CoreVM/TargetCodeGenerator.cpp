@@ -327,9 +327,10 @@ void TargetCodeGenerator::emitLoad(Value* value)
     {
         // FIXME this constant initialization should pretty much be done in the entry block
         CoreNumber number = integer->get();
-        if (number <= std::numeric_limits<Operand>::max())
+        // Only use ILOAD for non-negative numbers that fit in Operand (uint16_t)
+        if (number >= 0 && static_cast<uint64_t>(number) <= std::numeric_limits<Operand>::max())
         {
-            emitInstr(Opcode::ILOAD, number);
+            emitInstr(Opcode::ILOAD, static_cast<Operand>(number));
             changeStack(0, value);
         }
         else
