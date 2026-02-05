@@ -42,9 +42,19 @@ struct Expr: public Node
 {
 };
 
-// <FILE
+/// Input redirect: `< FILE` or `N< FILE`
+///
+/// Redirects input to a command from a file.
 struct InputRedirect final: public Node
 {
+    std::unique_ptr<FileDescriptor> targetFd; ///< Target fd (default: 0 = stdin)
+    std::unique_ptr<Expr> source;             ///< Source file path expression
+
+    InputRedirect(std::unique_ptr<FileDescriptor> targetFd, std::unique_ptr<Expr> source):
+        targetFd(std::move(targetFd)), source(std::move(source))
+    {
+    }
+
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
@@ -93,23 +103,27 @@ struct VariableExpr final: Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-// >FILE
-// 1>FILE
-// 1>&2
-//
-// This is an output redirect.
-// It is a file descriptor, followed by a target.
-// The target is either a file descriptor or a path.
-// If the target is a file descriptor, then the output of the file descriptor is redirected to the target.
-// If the target is a path, then the output of the file descriptor is redirected to the file at the path.
-// If the source is omitted, then the output of file descriptor 1 is redirected.
+/// Output redirect: `> FILE`, `>> FILE`, `N> FILE`, `N>&M`
+///
+/// Redirects output from a file descriptor to a file or another file descriptor.
+/// - If target is a FileDescriptor, performs fd duplication (e.g., `2>&1`)
+/// - If target is an Expr, redirects to file (e.g., `> file.txt`)
+/// - If append is true, appends to file (e.g., `>> file.txt`)
 struct OutputRedirect final: public Expr
 {
-    std::unique_ptr<FileDescriptor> source;
-    std::variant<std::unique_ptr<FileDescriptor>, std::unique_ptr<LiteralExpr>> target;
+    std::unique_ptr<FileDescriptor> source; ///< Source fd (default: 1 = stdout)
+    std::variant<std::unique_ptr<FileDescriptor>, std::unique_ptr<Expr>> target; ///< Target fd or file path
+    bool append = false; ///< True for >> (append mode)
 
+    /// Constructor for fd duplication: `N>&M`
     OutputRedirect(std::unique_ptr<FileDescriptor> source, std::unique_ptr<FileDescriptor> target):
-        source(std::move(source)), target(std::move(target))
+        source(std::move(source)), target(std::move(target)), append(false)
+    {
+    }
+
+    /// Constructor for file redirect: `> FILE` or `>> FILE`
+    OutputRedirect(std::unique_ptr<FileDescriptor> source, std::unique_ptr<Expr> target, bool append = false):
+        source(std::move(source)), target(std::move(target)), append(append)
     {
     }
 
@@ -124,6 +138,48 @@ struct OutputRedirect final: public Expr
 struct CommandFileSubst final: public Expr
 {
     std::unique_ptr<Node> command;
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Here-document: `<<EOF` or `<<-EOF`
+///
+/// Provides multi-line input to a command. The content is read until the delimiter
+/// is found on a line by itself.
+/// - If stripTabs is true (<<-), leading tabs are stripped from each line.
+struct HereDocument final: public Node
+{
+    std::unique_ptr<FileDescriptor> targetFd; ///< Target fd (default: 0 = stdin)
+    std::string delimiter;                    ///< End-of-document delimiter
+    std::string content;                      ///< Here-document content
+    bool stripTabs = false;                   ///< True for <<- (strip leading tabs)
+
+    HereDocument(std::unique_ptr<FileDescriptor> targetFd,
+                 std::string delimiter,
+                 std::string content,
+                 bool stripTabs = false):
+        targetFd(std::move(targetFd)),
+        delimiter(std::move(delimiter)),
+        content(std::move(content)),
+        stripTabs(stripTabs)
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Here-string: `<<< "string"`
+///
+/// Provides a single string as input to a command.
+struct HereString final: public Node
+{
+    std::unique_ptr<FileDescriptor> targetFd; ///< Target fd (default: 0 = stdin)
+    std::unique_ptr<Expr> content;            ///< Content expression (may contain variables)
+
+    HereString(std::unique_ptr<FileDescriptor> targetFd, std::unique_ptr<Expr> content):
+        targetFd(std::move(targetFd)), content(std::move(content))
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -241,25 +297,33 @@ struct BuiltinUnsetStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-// /bin/ls -hal
-//
-// This is a program call.
-// It is a path to an executable, followed by arguments.
-// It may also have input and output redirects.
+/// Program call: `/bin/ls -hal`
+///
+/// Represents a program call with its arguments and redirects.
+/// It is a path to an executable, followed by arguments, with optional redirects.
 struct ProgramCall final: public Statement
 {
-    std::string program;
-    std::vector<std::unique_ptr<Expr>> parameters;
-    std::vector<std::unique_ptr<OutputRedirect>> outputRedirects;
+    std::string program;                                          ///< Program name or path
+    std::vector<std::unique_ptr<Expr>> parameters;                ///< Command arguments
+    std::vector<std::unique_ptr<InputRedirect>> inputRedirects;   ///< Input redirects (< FILE)
+    std::vector<std::unique_ptr<OutputRedirect>> outputRedirects; ///< Output redirects (> FILE, >> FILE, >&)
+    std::vector<std::unique_ptr<HereDocument>> hereDocuments;     ///< Here-documents (<<EOF)
+    std::vector<std::unique_ptr<HereString>> hereStrings;         ///< Here-strings (<<<)
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
 
     ProgramCall(CoreVM::NativeCallback const& callback,
                 std::string program,
                 std::vector<std::unique_ptr<Expr>> parameters,
-                std::vector<std::unique_ptr<OutputRedirect>> outputRedirects):
+                std::vector<std::unique_ptr<InputRedirect>> inputRedirects,
+                std::vector<std::unique_ptr<OutputRedirect>> outputRedirects,
+                std::vector<std::unique_ptr<HereDocument>> hereDocuments,
+                std::vector<std::unique_ptr<HereString>> hereStrings):
         program(std::move(program)),
         parameters(std::move(parameters)),
+        inputRedirects(std::move(inputRedirects)),
         outputRedirects(std::move(outputRedirects)),
+        hereDocuments(std::move(hereDocuments)),
+        hereStrings(std::move(hereStrings)),
         callback(callback)
     {
     }

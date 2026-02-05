@@ -29,18 +29,49 @@ export class ASTPrinter: public Visitor
 
     void visit(FileDescriptor const& node) override { _result += std::format("{}", node.value); }
 
-    void visit(InputRedirect const& node) override { crispy::ignore_unused(node); }
+    void visit(InputRedirect const& node) override
+    {
+        if (node.targetFd->value != 0)
+            _result += std::format(" {}<", node.targetFd->value);
+        else
+            _result += " <";
+        node.source->accept(*this);
+    }
 
     void visit(OutputRedirect const& node) override
     {
-        if (std::holds_alternative<std::unique_ptr<LiteralExpr>>(node.target))
+        if (std::holds_alternative<std::unique_ptr<FileDescriptor>>(node.target))
         {
-            _result += std::format(
-                " {}>{}", node.source->value, std::get<std::unique_ptr<LiteralExpr>>(node.target)->value);
-        }
-        else
+            // fd duplication: 2>&1
             _result += std::format(
                 " {}>&{}", node.source->value, std::get<std::unique_ptr<FileDescriptor>>(node.target)->value);
+        }
+        else
+        {
+            // file redirect: > file or >> file
+            if (node.source->value != 1)
+                _result += std::format(" {}", node.source->value);
+            else
+                _result += " ";
+            _result += node.append ? ">>" : ">";
+            std::get<std::unique_ptr<Expr>>(node.target)->accept(*this);
+        }
+    }
+
+    void visit(HereDocument const& node) override
+    {
+        if (node.targetFd->value != 0)
+            _result += std::format(" {}", node.targetFd->value);
+        _result += node.stripTabs ? "<<-" : "<<";
+        _result += node.delimiter;
+    }
+
+    void visit(HereString const& node) override
+    {
+        if (node.targetFd->value != 0)
+            _result += std::format(" {}", node.targetFd->value);
+        _result += "<<<";
+        node.content->accept(*this);
     }
 
     void visit(ProgramCall const& node) override
@@ -53,10 +84,17 @@ export class ASTPrinter: public Visitor
             param->accept(*this);
         }
 
-        for (auto const& redirect: node.outputRedirects)
-        {
+        for (auto const& redirect: node.inputRedirects)
             redirect->accept(*this);
-        }
+
+        for (auto const& redirect: node.outputRedirects)
+            redirect->accept(*this);
+
+        for (auto const& heredoc: node.hereDocuments)
+            heredoc->accept(*this);
+
+        for (auto const& herestring: node.hereStrings)
+            herestring->accept(*this);
     }
 
     void visit(CallPipeline const& node) override
@@ -172,18 +210,10 @@ export class ASTPrinter: public Visitor
                 else
                     _result += std::format("${}", node.name);
                 break;
-            case VariableType::ExitStatus:
-                _result += "$?";
-                break;
-            case VariableType::ProcessId:
-                _result += "$$";
-                break;
-            case VariableType::BackgroundId:
-                _result += "$!";
-                break;
-            case VariableType::Positional:
-                _result += std::format("${}", node.name);
-                break;
+            case VariableType::ExitStatus: _result += "$?"; break;
+            case VariableType::ProcessId: _result += "$$"; break;
+            case VariableType::BackgroundId: _result += "$!"; break;
+            case VariableType::Positional: _result += std::format("${}", node.name); break;
         }
     }
 

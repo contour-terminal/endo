@@ -177,6 +177,30 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
             std::unique_ptr<ast::ProgramCall> const& call = node.calls[i];
             bool const lastInChain = i == node.calls.size() - 1;
 
+            bool const hasRedirects = !call->inputRedirects.empty() || !call->outputRedirects.empty()
+                                      || !call->hereDocuments.empty() || !call->hereStrings.empty();
+
+            // Start redirect context if we have any redirects
+            if (hasRedirects)
+            {
+                auto* startCallback = findCallback("internal.redirect_start()V");
+                if (startCallback)
+                    createCallFunction(getBuiltinFunction(*startCallback), {}, "redirect_start");
+            }
+
+            // Generate code for all redirects
+            for (auto const& redirect: call->inputRedirects)
+                codegen(redirect.get());
+
+            for (auto const& redirect: call->outputRedirects)
+                codegen(redirect.get());
+
+            for (auto const& heredoc: call->hereDocuments)
+                codegen(heredoc.get());
+
+            for (auto const& herestring: call->hereStrings)
+                codegen(herestring.get());
+
             if (containsVariableExpr(call->parameters))
             {
                 // Use dynamic argument building and execution
@@ -191,6 +215,14 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
                 callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
                 _result = createCallFunction(
                     getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+            }
+
+            // End redirect context
+            if (hasRedirects)
+            {
+                auto* endCallback = findCallback("internal.redirect_end()V");
+                if (endCallback)
+                    createCallFunction(getBuiltinFunction(*endCallback), {}, "redirect_end");
             }
         }
     }
@@ -232,9 +264,49 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         setInsertPoint(end);
     }
 
-    void visit(ast::InputRedirect const&) override
+    void visit(ast::InputRedirect const& node) override
     {
-        // TODO
+        auto* callback = findCallback("internal.redirect_input(IS)V");
+        if (!callback)
+        {
+            reportTypeError("Internal error: internal.redirect_input builtin not found");
+            return;
+        }
+        auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
+        auto* source = codegen(node.source.get());
+        if (!source)
+            return;
+        _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, source }, "redirect_input");
+    }
+
+    void visit(ast::HereDocument const& node) override
+    {
+        auto* callback = findCallback("internal.redirect_heredoc(IS)V");
+        if (!callback)
+        {
+            reportTypeError("Internal error: internal.redirect_heredoc builtin not found");
+            return;
+        }
+        auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
+        auto* content = get(node.content);
+        _result =
+            createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
+    }
+
+    void visit(ast::HereString const& node) override
+    {
+        auto* callback = findCallback("internal.redirect_herestring(IS)V");
+        if (!callback)
+        {
+            reportTypeError("Internal error: internal.redirect_herestring builtin not found");
+            return;
+        }
+        auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
+        auto* content = codegen(node.content.get());
+        if (!content)
+            return;
+        _result =
+            createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_herestring");
     }
 
     void visit(ast::LiteralExpr const& node) override { _result = get(node.value); }
@@ -310,26 +382,69 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "unset");
     }
 
-    void visit(ast::OutputRedirect const&) override
+    void visit(ast::OutputRedirect const& node) override
     {
-        // TODO
+        if (std::holds_alternative<std::unique_ptr<ast::FileDescriptor>>(node.target))
+        {
+            // fd duplication: 2>&1
+            auto* callback = findCallback("internal.redirect_fd_dup(II)V");
+            if (!callback)
+            {
+                reportTypeError("Internal error: internal.redirect_fd_dup builtin not found");
+                return;
+            }
+            auto* sourceFd = get(CoreVM::CoreNumber(node.source->value));
+            auto* targetFd =
+                get(CoreVM::CoreNumber(std::get<std::unique_ptr<ast::FileDescriptor>>(node.target)->value));
+            _result =
+                createCallFunction(getBuiltinFunction(*callback), { sourceFd, targetFd }, "redirect_fd_dup");
+        }
+        else
+        {
+            // file redirect: > file or >> file
+            auto* callback = findCallback("internal.redirect_output(ISB)V");
+            if (!callback)
+            {
+                reportTypeError("Internal error: internal.redirect_output builtin not found");
+                return;
+            }
+            auto* sourceFd = get(CoreVM::CoreNumber(node.source->value));
+            auto* target = codegen(std::get<std::unique_ptr<ast::Expr>>(node.target).get());
+            if (!target)
+                return;
+            auto* append = get(node.append);
+            _result = createCallFunction(
+                getBuiltinFunction(*callback), { sourceFd, target, append }, "redirect_output");
+        }
     }
 
     void visit(ast::ProgramCall const& node) override
     {
         TRACE_SCOPE("ProgramCall");
 
-        // auto redirectsArg = std::vector<CoreVM::Constant*> {};
-        // redirectsArg.push_back(get(STDOUT_FILENO));
-        // redirectsArg.push_back(get(STDERR_FILENO));
-        // for (auto const& redirect: node.outputRedirects)
-        // {
-        //     auto* value = codegen(redirect.target.get());
-        //     if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
-        //         redirectsArg.push_back(constant);
-        //     else
-        //         fmt::print("Warning: non-constant argument passed to program call\n");
-        // }
+        bool const hasRedirects = !node.inputRedirects.empty() || !node.outputRedirects.empty()
+                                  || !node.hereDocuments.empty() || !node.hereStrings.empty();
+
+        // Start redirect context if we have any redirects
+        if (hasRedirects)
+        {
+            auto* startCallback = findCallback("internal.redirect_start()V");
+            if (startCallback)
+                createCallFunction(getBuiltinFunction(*startCallback), {}, "redirect_start");
+        }
+
+        // Generate code for all redirects
+        for (auto const& redirect: node.inputRedirects)
+            codegen(redirect.get());
+
+        for (auto const& redirect: node.outputRedirects)
+            codegen(redirect.get());
+
+        for (auto const& heredoc: node.hereDocuments)
+            codegen(heredoc.get());
+
+        for (auto const& herestring: node.hereStrings)
+            codegen(herestring.get());
 
         if (containsVariableExpr(node.parameters))
         {
@@ -342,9 +457,16 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
             // Use constant array (fast path)
             auto callArguments = std::vector<CoreVM::Value*> {};
             callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
-            // callArguments.push_back(get(redirectsArg));
             _result =
                 createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
+        }
+
+        // End redirect context
+        if (hasRedirects)
+        {
+            auto* endCallback = findCallback("internal.redirect_end()V");
+            if (endCallback)
+                createCallFunction(getBuiltinFunction(*endCallback), {}, "redirect_end");
         }
     }
 

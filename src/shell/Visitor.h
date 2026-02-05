@@ -16,6 +16,8 @@ struct CallPipeline;
 struct CommandFileSubst;
 struct CompoundStmt;
 struct FileDescriptor;
+struct HereDocument;
+struct HereString;
 struct IfStmt;
 struct InputRedirect;
 struct LiteralExpr;
@@ -34,6 +36,8 @@ struct Visitor
     virtual void visit(FileDescriptor const&) = 0;
     virtual void visit(InputRedirect const&) = 0;
     virtual void visit(OutputRedirect const&) = 0;
+    virtual void visit(HereDocument const&) = 0;
+    virtual void visit(HereString const&) = 0;
     virtual void visit(ProgramCall const&) = 0;
     virtual void visit(CallPipeline const&) = 0;
 

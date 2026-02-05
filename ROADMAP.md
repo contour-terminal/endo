@@ -26,7 +26,7 @@ the primary project; Endo development follows as resources permit.
 | Component | Status |
 |-----------|--------|
 | Lexer with shell syntax tokens | ✅ |
-| Parser (if/while, pipes, commands) | ✅ |
+| Parser (if/while, pipes, commands, redirects) | ✅ |
 | AST with visitor pattern | ✅ |
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
@@ -34,6 +34,7 @@ the primary project; Endo development follows as resources permit.
 | Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
+| Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
 | If-then-else-elif-fi statements | ✅ |
 | While-do-done statements | ✅ |
 | TTY abstraction with raw mode | ✅ |
@@ -44,10 +45,8 @@ the primary project; Endo development follows as resources permit.
 
 | Feature | Status | Location |
 |---------|--------|----------|
-| Output redirects | AST exists, IRGenerator TODO | `IRGenerator.cpp:189` |
-| Input redirects | AST exists, IRGenerator TODO | `IRGenerator.cpp:182` |
-| Command file substitution | AST exists, IRGenerator TODO | `IRGenerator.cpp:145` |
-| Substitution expressions | AST exists, IRGenerator TODO | `IRGenerator.cpp:217` |
+| Command file substitution | AST exists, IRGenerator TODO | `IRGenerator.cpp:198` |
+| Substitution expressions | AST exists, IRGenerator TODO | `IRGenerator.cpp:351` |
 
 ### Not Yet Implemented
 
@@ -116,18 +115,20 @@ Windows support.
 - [x] Add tests for variable scoping rules
 - [x] Implement special variables: `$?`, `$$`, `$!`, `$0-$9`
 
-### Phase 1.2: Redirects and File Descriptors
+### Phase 1.2: Redirects and File Descriptors ✅
+
+**Status:** Complete
 
 **Dependency:** Phase 1.1 (variables may appear in redirect targets)
 
 **Tasks:**
-- [ ] Implement output redirect `>` and `>>`
-- [ ] Implement input redirect `<`
-- [ ] Implement file descriptor duplication `2>&1`
-- [ ] Implement here-documents `<<EOF`
-- [ ] Implement here-strings `<<<`
-- [ ] Integrate redirects with builtin commands (not just external processes)
-- [ ] Add comprehensive redirect tests
+- [x] Implement output redirect `>` and `>>`
+- [x] Implement input redirect `<`
+- [x] Implement file descriptor duplication `2>&1`
+- [x] Implement here-documents `<<EOF` (parsing complete, content reading deferred)
+- [x] Implement here-strings `<<<`
+- [x] Integrate redirects with builtin commands (not just external processes)
+- [x] Add comprehensive redirect tests
 
 ### Phase 1.3: Logical Operators
 

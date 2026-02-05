@@ -49,6 +49,9 @@ export enum class Token
 
     // New tokens added below to avoid shifting existing enum values
     DollarBraceName, // ${NAME}
+    LessLessLess,    // <<<
+    LessLessDash,    // <<-
+    GreaterAmp,      // >&
 };
 
 export enum class BuiltinFunction
@@ -200,12 +203,22 @@ export class Lexer
                     return consumeCharAndConfirmToken(Token::GreaterGreater);
                 else if (_currentChar == '=')
                     return consumeCharAndConfirmToken(Token::GreaterEqual);
+                else if (_currentChar == '&')
+                    return consumeCharAndConfirmToken(Token::GreaterAmp);
                 else
-                    return consumeCharAndConfirmToken(Token::Greater);
+                    return confirmToken(Token::Greater);
             case '<':
                 nextChar();
                 if (_currentChar == '<')
-                    return consumeCharAndConfirmToken(Token::LessLess);
+                {
+                    nextChar();
+                    if (_currentChar == '<')
+                        return consumeCharAndConfirmToken(Token::LessLessLess);
+                    else if (_currentChar == '-')
+                        return consumeCharAndConfirmToken(Token::LessLessDash);
+                    else
+                        return confirmToken(Token::LessLess);
+                }
                 else if (_currentChar == '=')
                     return consumeCharAndConfirmToken(Token::LessEqual);
                 else if (_currentChar == '(')
@@ -490,11 +503,14 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Greater: name = ">"; break;
             case GreaterEqual: name = ">="; break;
             case GreaterGreater: name = ">>"; break;
+            case GreaterAmp: name = ">&"; break;
             case Identifier: name = "Identifier"; break;
             case Invalid: name = "Invalid"; break;
             case Less: name = "<"; break;
             case LessEqual: name = "<="; break;
             case LessLess: name = "<<"; break;
+            case LessLessDash: name = "<<-"; break;
+            case LessLessLess: name = "<<<"; break;
             case LessRndOpen: name = "<("; break;
             case LineFeed: name = "LineFeed"; break;
             case Not: name = "!"; break;

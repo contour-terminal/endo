@@ -126,6 +126,63 @@ inline auto PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
 
+/// Stores redirect state during command execution.
+///
+/// Redirects are collected via builtins during IR execution, then applied
+/// just before spawning the process.
+struct RedirectState
+{
+    enum class Type
+    {
+        InputFile,  ///< < FILE
+        OutputFile, ///< > FILE or >> FILE
+        FdDup,      ///< N>&M
+        HereDoc,    ///< << EOF ... EOF
+        HereString, ///< <<< "string"
+    };
+
+    struct Entry
+    {
+        Type type;
+        int sourceFd = -1;          ///< Source fd for output redirects
+        int targetFd = -1;          ///< Target fd for input redirects or fd duplication
+        std::string path;           ///< File path for file redirects
+        std::string content;        ///< Content for heredoc/herestring
+        bool append = false;        ///< True for >> (append mode)
+        NativeHandle openedFd = -1; ///< Fd opened for this redirect (to close after spawn)
+    };
+
+    std::vector<Entry> entries;
+
+    void clear() { entries.clear(); }
+
+    void addInputFile(int targetFd, std::string path)
+    {
+        entries.push_back({ .type = Type::InputFile, .targetFd = targetFd, .path = std::move(path) });
+    }
+
+    void addOutputFile(int sourceFd, std::string path, bool append)
+    {
+        entries.push_back(
+            { .type = Type::OutputFile, .sourceFd = sourceFd, .path = std::move(path), .append = append });
+    }
+
+    void addFdDup(int sourceFd, int targetFd)
+    {
+        entries.push_back({ .type = Type::FdDup, .sourceFd = sourceFd, .targetFd = targetFd });
+    }
+
+    void addHereDoc(int targetFd, std::string content)
+    {
+        entries.push_back({ .type = Type::HereDoc, .targetFd = targetFd, .content = std::move(content) });
+    }
+
+    void addHereString(int targetFd, std::string content)
+    {
+        entries.push_back({ .type = Type::HereString, .targetFd = targetFd, .content = std::move(content) });
+    }
+};
+
 export class TestEnvironment: public Environment
 {
   public:
@@ -251,6 +308,9 @@ export class Shell final: public CoreVM::Runtime
 
     int execute(std::string const& lineBuffer)
     {
+        // Clear any leftover redirect state from previous commands
+        _redirectState.clear();
+
         try
         {
             CoreVM::diagnostics::ConsoleReport report;
@@ -454,6 +514,46 @@ export class Shell final: public CoreVM::Runtime
             .param<bool>("last_in_chain")
             .returnType(CoreVM::LiteralType::Number)
             .bind(&Shell::builtinCmdExecPiped, this);
+
+        // Redirect management functions
+        registerFunction("internal.redirect_start")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectStart, this);
+
+        registerFunction("internal.redirect_input")
+            .param<CoreVM::CoreNumber>("target_fd")
+            .param<std::string>("path")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectInput, this);
+
+        registerFunction("internal.redirect_output")
+            .param<CoreVM::CoreNumber>("source_fd")
+            .param<std::string>("path")
+            .param<bool>("append")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectOutput, this);
+
+        registerFunction("internal.redirect_fd_dup")
+            .param<CoreVM::CoreNumber>("source_fd")
+            .param<CoreVM::CoreNumber>("target_fd")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectFdDup, this);
+
+        registerFunction("internal.redirect_heredoc")
+            .param<CoreVM::CoreNumber>("target_fd")
+            .param<std::string>("content")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectHeredoc, this);
+
+        registerFunction("internal.redirect_herestring")
+            .param<CoreVM::CoreNumber>("target_fd")
+            .param<std::string>("content")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectHerestring, this);
+
+        registerFunction("internal.redirect_end")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinRedirectEnd, this);
         // clang-format on
     }
 
@@ -478,17 +578,15 @@ export class Shell final: public CoreVM::Runtime
             return;
         }
 
-        // TODO: setup redirects
-        // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
-        // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
-
         SpawnConfig config;
         config.program = *programPath;
         config.arguments = std::vector<std::string>(args.begin() + 1, args.end());
         config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
         config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
         config.closeExtraFds = true;
+
+        // Apply any redirects that were set up
+        applyRedirects(config);
 
         auto const spawnResult = _processManager.spawn(config);
         if (!spawnResult.has_value())
@@ -532,11 +630,6 @@ export class Shell final: public CoreVM::Runtime
 
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
 
-        // TODO: setup redirects
-        // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
-        // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
-
         SpawnConfig config;
         config.program = *programPath;
         config.arguments = std::vector<std::string>(args.begin() + 1, args.end());
@@ -546,6 +639,9 @@ export class Shell final: public CoreVM::Runtime
                                   ? std::make_optional(_currentProcessGroupPids.front())
                                   : std::make_optional<ProcessId>(0);
         config.closeExtraFds = true;
+
+        // Apply any redirects that were set up
+        applyRedirects(config);
 
         auto const spawnResult = _processManager.spawn(config);
         if (!spawnResult.has_value())
@@ -688,6 +784,9 @@ export class Shell final: public CoreVM::Runtime
         config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
         config.closeExtraFds = true;
 
+        // Apply any redirects that were set up
+        applyRedirects(config);
+
         auto const spawnResult = _processManager.spawn(config);
         if (!spawnResult.has_value())
         {
@@ -746,6 +845,9 @@ export class Shell final: public CoreVM::Runtime
                                   ? std::make_optional(_currentProcessGroupPids.front())
                                   : std::make_optional<ProcessId>(0);
         config.closeExtraFds = true;
+
+        // Apply any redirects that were set up
+        applyRedirects(config);
 
         auto const spawnResult = _processManager.spawn(config);
         if (!spawnResult.has_value())
@@ -855,6 +957,146 @@ export class Shell final: public CoreVM::Runtime
         context.setResult(CoreVM::CoreNumber(result.value()));
     }
 
+    // Redirect management builtins
+    void builtinRedirectStart(CoreVM::Params&) { _redirectState.clear(); }
+
+    void builtinRedirectInput(CoreVM::Params& context)
+    {
+        int const targetFd = static_cast<int>(context.getInt(1));
+        std::string path = context.getString(2);
+        _redirectState.addInputFile(targetFd, std::move(path));
+    }
+
+    void builtinRedirectOutput(CoreVM::Params& context)
+    {
+        int const sourceFd = static_cast<int>(context.getInt(1));
+        std::string path = context.getString(2);
+        bool const append = context.getBool(3);
+        _redirectState.addOutputFile(sourceFd, std::move(path), append);
+    }
+
+    void builtinRedirectFdDup(CoreVM::Params& context)
+    {
+        int const sourceFd = static_cast<int>(context.getInt(1));
+        int const targetFd = static_cast<int>(context.getInt(2));
+        _redirectState.addFdDup(sourceFd, targetFd);
+    }
+
+    void builtinRedirectHeredoc(CoreVM::Params& context)
+    {
+        int const targetFd = static_cast<int>(context.getInt(1));
+        std::string content = context.getString(2);
+        _redirectState.addHereDoc(targetFd, std::move(content));
+    }
+
+    void builtinRedirectHerestring(CoreVM::Params& context)
+    {
+        int const targetFd = static_cast<int>(context.getInt(1));
+        std::string content = context.getString(2);
+        _redirectState.addHereString(targetFd, std::move(content));
+    }
+
+    void builtinRedirectEnd(CoreVM::Params&)
+    {
+        // Close any fds that were opened for redirects
+        for (auto& entry: _redirectState.entries)
+        {
+            if (entry.openedFd >= 0 && entry.openedFd != STDIN_FILENO && entry.openedFd != STDOUT_FILENO
+                && entry.openedFd != STDERR_FILENO)
+            {
+                close(entry.openedFd);
+                entry.openedFd = -1;
+            }
+        }
+        _redirectState.clear();
+    }
+
+    /// Applies the collected redirects to a SpawnConfig.
+    ///
+    /// Opens files and creates pipes as needed, updating the spawn config
+    /// with the appropriate file descriptors.
+    void applyRedirects(SpawnConfig& config)
+    {
+        for (auto& entry: _redirectState.entries)
+        {
+            switch (entry.type)
+            {
+                case RedirectState::Type::InputFile: {
+                    auto const result = _processManager.openFile(entry.path, O_RDONLY);
+                    if (!result.has_value())
+                    {
+                        error("Failed to open '{}' for reading: {}", entry.path, toString(result.error()));
+                        continue;
+                    }
+                    entry.openedFd = result.value();
+                    if (entry.targetFd == STDIN_FILENO)
+                        config.stdinFd = entry.openedFd;
+                    break;
+                }
+                case RedirectState::Type::OutputFile: {
+                    int const oflags =
+                        entry.append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
+                    auto const result = _processManager.openFile(entry.path, oflags);
+                    if (!result.has_value())
+                    {
+                        error("Failed to open '{}' for writing: {}", entry.path, toString(result.error()));
+                        continue;
+                    }
+                    entry.openedFd = result.value();
+                    if (entry.sourceFd == STDOUT_FILENO)
+                        config.stdoutFd = entry.openedFd;
+                    else if (entry.sourceFd == STDERR_FILENO)
+                        config.stderrFd = entry.openedFd;
+                    break;
+                }
+                case RedirectState::Type::FdDup: {
+                    // For fd duplication like 2>&1, we need to make stderr point to stdout
+                    if (entry.sourceFd == STDERR_FILENO && entry.targetFd == STDOUT_FILENO)
+                        config.stderrFd = config.stdoutFd;
+                    else if (entry.sourceFd == STDOUT_FILENO && entry.targetFd == STDERR_FILENO)
+                        config.stdoutFd = config.stderrFd;
+                    break;
+                }
+                case RedirectState::Type::HereDoc:
+                case RedirectState::Type::HereString: {
+                    // Create a pipe and write content to it
+                    auto pipeResult = createPipe();
+                    if (!pipeResult.has_value())
+                    {
+                        error("Failed to create pipe for here-string: {}", toString(pipeResult.error()));
+                        continue;
+                    }
+                    auto pipe = std::move(pipeResult.value());
+
+                    // Write content to the pipe's write end
+                    std::string const& content = entry.content;
+                    ssize_t const written = write(pipe->writer(), content.data(), content.size());
+                    if (written < 0)
+                    {
+                        error("Failed to write to here-string pipe: {}", strerror(errno));
+                        continue;
+                    }
+
+                    // Add newline for here-strings if not present
+                    if (entry.type == RedirectState::Type::HereString && !content.empty()
+                        && content.back() != '\n')
+                    {
+                        write(pipe->writer(), "\n", 1);
+                    }
+
+                    // Close write end so reader gets EOF
+                    pipe->closeWriter();
+
+                    // Use reader as stdin
+                    entry.openedFd = pipe->releaseReader();
+                    if (entry.targetFd == STDIN_FILENO)
+                        config.stdinFd = entry.openedFd;
+                    break;
+                }
+            }
+        }
+    }
+
     /// Resolves a program name to its full path.
     ///
     /// @param program Program name or path to resolve
@@ -936,6 +1178,9 @@ export class Shell final: public CoreVM::Runtime
 
     // Command builder for dynamic argument construction
     std::vector<std::string> _cmdBuilderArgs;
+
+    // Redirect state for collecting redirects before process spawn
+    RedirectState _redirectState;
 
     CoreVM::Runner* _runner = nullptr;
     bool _quit = false;

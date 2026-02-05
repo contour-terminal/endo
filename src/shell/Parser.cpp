@@ -288,32 +288,325 @@ export class Parser
         return std::make_unique<ast::WhileStmt>(std::move(condition), std::move(body));
     }
 
+    /// Checks if the current token is a redirect token.
+    [[nodiscard]] bool isRedirectToken() const noexcept
+    {
+        switch (_lexer.currentToken())
+        {
+            case Token::Greater:        // >
+            case Token::GreaterGreater: // >>
+            case Token::GreaterAmp:     // >&
+            case Token::Less:           // <
+            case Token::LessLess:       // <<
+            case Token::LessLessDash:   // <<-
+            case Token::LessLessLess:   // <<<
+                return true;
+            default: return false;
+        }
+    }
+
+    /// Checks if the current token is a number that could be an fd prefix for a redirect.
+    [[nodiscard]] bool isNumberBeforeRedirect() const noexcept
+    {
+        if (_lexer.currentToken() != Token::Number)
+            return false;
+
+        // We need to look ahead to see if a redirect operator follows
+        // This is tricky without peeking, so for now we assume numbers followed by
+        // redirect tokens are fd prefixes. The lexer doesn't consume whitespace between them.
+        return true; // Will be validated in parseRedirects
+    }
+
+    /// Parses a redirect operator and its target.
+    /// Returns true if a redirect was parsed, false otherwise.
+    bool parseRedirect(std::vector<std::unique_ptr<ast::InputRedirect>>& inputRedirects,
+                       std::vector<std::unique_ptr<ast::OutputRedirect>>& outputRedirects,
+                       std::vector<std::unique_ptr<ast::HereDocument>>& hereDocuments,
+                       std::vector<std::unique_ptr<ast::HereString>>& hereStrings)
+    {
+        TRACE_SCOPE("parseRedirect");
+
+        // Check for optional fd prefix (e.g., "2>" for stderr)
+        int fdValue = -1;
+        if (_lexer.currentToken() == Token::Number)
+        {
+            fdValue = std::stoi(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+
+        switch (_lexer.currentToken())
+        {
+            case Token::Greater: {
+                // > FILE (stdout redirect)
+                _lexer.nextToken();
+                auto target = parseParameter();
+                if (!target)
+                    return false;
+                int const sourceFd = fdValue >= 0 ? fdValue : 1; // Default: stdout
+                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                    std::make_unique<ast::FileDescriptor>(sourceFd), std::move(target), false));
+                return true;
+            }
+            case Token::GreaterGreater: {
+                // >> FILE (append)
+                _lexer.nextToken();
+                auto target = parseParameter();
+                if (!target)
+                    return false;
+                int const sourceFd = fdValue >= 0 ? fdValue : 1; // Default: stdout
+                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                    std::make_unique<ast::FileDescriptor>(sourceFd), std::move(target), true));
+                return true;
+            }
+            case Token::GreaterAmp: {
+                // >& (fd duplication) - could be >&2 or >&FILE
+                _lexer.nextToken();
+                int const sourceFd = fdValue >= 0 ? fdValue : 1; // Default: stdout
+
+                // Check if next token is a number (fd duplication) or identifier (file)
+                if (_lexer.currentToken() == Token::Number)
+                {
+                    int const targetFd = std::stoi(_lexer.currentLiteral());
+                    _lexer.nextToken();
+                    outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                        std::make_unique<ast::FileDescriptor>(sourceFd),
+                        std::make_unique<ast::FileDescriptor>(targetFd)));
+                }
+                else
+                {
+                    // Redirect to file (e.g., >& file is equivalent to > file 2>&1 in some shells)
+                    auto target = parseParameter();
+                    if (!target)
+                        return false;
+                    outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                        std::make_unique<ast::FileDescriptor>(sourceFd), std::move(target), false));
+                }
+                return true;
+            }
+            case Token::Less: {
+                // < FILE (input redirect)
+                _lexer.nextToken();
+                auto source = parseParameter();
+                if (!source)
+                    return false;
+                int const targetFd = fdValue >= 0 ? fdValue : 0; // Default: stdin
+                inputRedirects.emplace_back(std::make_unique<ast::InputRedirect>(
+                    std::make_unique<ast::FileDescriptor>(targetFd), std::move(source)));
+                return true;
+            }
+            case Token::LessLess:
+            case Token::LessLessDash: {
+                // << DELIMITER or <<- DELIMITER (here-document)
+                bool const stripTabs = _lexer.currentToken() == Token::LessLessDash;
+                _lexer.nextToken();
+
+                // Get the delimiter
+                if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String)
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Provide a delimiter for the here-document" },
+                                                       currentContextSnippet(),
+                                                       "Expected here-document delimiter, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return false;
+                }
+                std::string delimiter = consumeLiteral();
+                int const targetFd = fdValue >= 0 ? fdValue : 0; // Default: stdin
+
+                // Here-document content will be parsed after the command line is complete
+                // For now, store with empty content - actual content parsing is deferred
+                hereDocuments.emplace_back(std::make_unique<ast::HereDocument>(
+                    std::make_unique<ast::FileDescriptor>(targetFd), std::move(delimiter), "", stripTabs));
+                return true;
+            }
+            case Token::LessLessLess: {
+                // <<< "string" (here-string)
+                _lexer.nextToken();
+                auto content = parseParameter();
+                if (!content)
+                    return false;
+                int const targetFd = fdValue >= 0 ? fdValue : 0; // Default: stdin
+                hereStrings.emplace_back(std::make_unique<ast::HereString>(
+                    std::make_unique<ast::FileDescriptor>(targetFd), std::move(content)));
+                return true;
+            }
+            default:
+                // Not a redirect - if we consumed an fd number, this is an error
+                if (fdValue >= 0)
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Use > for output or < for input redirect" },
+                                                       currentContextSnippet(),
+                                                       "Expected redirect operator after '{}', got '{}'",
+                                                       fdValue,
+                                                       _lexer.currentLiteral());
+                    return false;
+                }
+                return false;
+        }
+    }
+
     std::unique_ptr<ast::ProgramCall> parseCall(bool piped = false)
     {
         TRACE_SCOPE("parseCall");
         std::string program = consumeLiteral();
-        std::vector<std::unique_ptr<ast::Expr>> arguments = parseParameterList();
+        std::vector<std::unique_ptr<ast::Expr>> arguments;
+        std::vector<std::unique_ptr<ast::InputRedirect>> inputRedirects;
         std::vector<std::unique_ptr<ast::OutputRedirect>> outputRedirects;
+        std::vector<std::unique_ptr<ast::HereDocument>> hereDocuments;
+        std::vector<std::unique_ptr<ast::HereString>> hereStrings;
 
-        // TODO: parse outputRedirects
-        // outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-        //     std::make_unique<ast::FileDescriptor>(1), std::make_unique<ast::FileDescriptor>(2)));
+        // Parse arguments and redirects interleaved
+        while (!isEndOfStmt())
+        {
+            // Check for redirect tokens
+            if (isRedirectToken())
+            {
+                if (!parseRedirect(inputRedirects, outputRedirects, hereDocuments, hereStrings))
+                    break;
+                continue;
+            }
+
+            // Check for number that might be fd prefix for redirect
+            if (_lexer.currentToken() == Token::Number)
+            {
+                // Save position to potentially backtrack
+                std::string const numLiteral = _lexer.currentLiteral();
+                _lexer.nextToken();
+
+                if (isRedirectToken())
+                {
+                    // It's an fd prefix - put back and parse as redirect
+                    // We need to handle this differently since we've already consumed the number
+                    int const fdValue = std::stoi(numLiteral);
+
+                    switch (_lexer.currentToken())
+                    {
+                        case Token::Greater: {
+                            _lexer.nextToken();
+                            auto target = parseParameter();
+                            if (!target)
+                                break;
+                            outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), false));
+                            continue;
+                        }
+                        case Token::GreaterGreater: {
+                            _lexer.nextToken();
+                            auto target = parseParameter();
+                            if (!target)
+                                break;
+                            outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), true));
+                            continue;
+                        }
+                        case Token::GreaterAmp: {
+                            _lexer.nextToken();
+                            if (_lexer.currentToken() == Token::Number)
+                            {
+                                int const targetFd = std::stoi(_lexer.currentLiteral());
+                                _lexer.nextToken();
+                                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                    std::make_unique<ast::FileDescriptor>(fdValue),
+                                    std::make_unique<ast::FileDescriptor>(targetFd)));
+                            }
+                            else
+                            {
+                                auto target = parseParameter();
+                                if (!target)
+                                    break;
+                                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
+                                    std::make_unique<ast::FileDescriptor>(fdValue),
+                                    std::move(target),
+                                    false));
+                            }
+                            continue;
+                        }
+                        case Token::Less: {
+                            _lexer.nextToken();
+                            auto source = parseParameter();
+                            if (!source)
+                                break;
+                            inputRedirects.emplace_back(std::make_unique<ast::InputRedirect>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(source)));
+                            continue;
+                        }
+                        case Token::LessLess:
+                        case Token::LessLessDash: {
+                            bool const stripTabs = _lexer.currentToken() == Token::LessLessDash;
+                            _lexer.nextToken();
+                            if (_lexer.currentToken() != Token::Identifier
+                                && _lexer.currentToken() != Token::String)
+                            {
+                                _report.syntaxErrorWithSuggestions(
+                                    currentLocation(),
+                                    { "Provide a delimiter for the here-document" },
+                                    currentContextSnippet(),
+                                    "Expected here-document delimiter, got '{}'",
+                                    _lexer.currentLiteral());
+                                break;
+                            }
+                            std::string delimiter = consumeLiteral();
+                            hereDocuments.emplace_back(std::make_unique<ast::HereDocument>(
+                                std::make_unique<ast::FileDescriptor>(fdValue),
+                                std::move(delimiter),
+                                "",
+                                stripTabs));
+                            continue;
+                        }
+                        case Token::LessLessLess: {
+                            _lexer.nextToken();
+                            auto content = parseParameter();
+                            if (!content)
+                                break;
+                            hereStrings.emplace_back(std::make_unique<ast::HereString>(
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(content)));
+                            continue;
+                        }
+                        default: break;
+                    }
+                }
+
+                // Not followed by redirect - treat the number as a regular argument
+                arguments.emplace_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+                continue;
+            }
+
+            // Regular argument
+            auto arg = parseParameter();
+            if (arg)
+                arguments.emplace_back(std::move(arg));
+            else
+                break;
+        }
 
         CoreVM::NativeCallback const* builtinCallProcess = _lexer.currentToken() == Token::Pipe || piped
                                                                ? _runtime.find("callproc(Bs)I")
                                                                : _runtime.find("callproc(s)I");
         assert(builtinCallProcess != nullptr);
 
-        return std::make_unique<ast::ProgramCall>(
-            *builtinCallProcess, std::move(program), std::move(arguments), std::move(outputRedirects));
+        return std::make_unique<ast::ProgramCall>(*builtinCallProcess,
+                                                  std::move(program),
+                                                  std::move(arguments),
+                                                  std::move(inputRedirects),
+                                                  std::move(outputRedirects),
+                                                  std::move(hereDocuments),
+                                                  std::move(hereStrings));
     }
 
     std::vector<std::unique_ptr<ast::Expr>> parseParameterList()
     {
         TRACE_SCOPE("parseParameterList");
         std::vector<std::unique_ptr<ast::Expr>> parameters;
-        while (!isEndOfStmt())
+        while (!isEndOfStmt() && !isRedirectToken())
         {
+            // Don't consume numbers that might be fd prefixes for redirects
+            if (_lexer.currentToken() == Token::Number)
+            {
+                // This is a simplified check - in a full implementation we'd need lookahead
+                // For now, treat numbers as parameters in this context
+            }
+
             auto arg = parseParameter();
             if (arg)
                 parameters.emplace_back(std::move(arg));

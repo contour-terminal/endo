@@ -4,6 +4,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <fstream>
+
 using namespace std::string_literals;
 using namespace std::string_view_literals;
 
@@ -278,4 +281,117 @@ TEST_CASE("shell.variable.single_char_name")
     shell("set X value");
     CHECK(shell.env.get("X").value_or("NONE") == "value");
     CHECK(escape(shell("echo $X").output()) == escape("value\n"));
+}
+
+// ============================================================================
+// Redirects - Output Redirection
+// ============================================================================
+
+TEST_CASE("shell.redirect.output_to_file")
+{
+    TestShell shell;
+    shell("echo hello > /tmp/endo_test_output.txt");
+    // Read the file to verify content
+    std::ifstream file("/tmp/endo_test_output.txt");
+    std::string content;
+    std::getline(file, content);
+    CHECK(content == "hello");
+    std::filesystem::remove("/tmp/endo_test_output.txt");
+}
+
+TEST_CASE("shell.redirect.output_append")
+{
+    TestShell shell;
+    // Create initial file
+    shell("echo line1 > /tmp/endo_test_append.txt");
+    // Append to it
+    shell("echo line2 >> /tmp/endo_test_append.txt");
+    // Verify both lines present
+    std::ifstream file("/tmp/endo_test_append.txt");
+    std::string line1, line2;
+    std::getline(file, line1);
+    std::getline(file, line2);
+    CHECK(line1 == "line1");
+    CHECK(line2 == "line2");
+    std::filesystem::remove("/tmp/endo_test_append.txt");
+}
+
+TEST_CASE("shell.redirect.input_from_file")
+{
+    TestShell shell;
+    // Create test file
+    {
+        std::ofstream file("/tmp/endo_test_input.txt");
+        file << "test input content\n";
+    }
+    // Use cat to read from file via redirect
+    CHECK(escape(shell("cat < /tmp/endo_test_input.txt").output()) == escape("test input content\n"));
+    std::filesystem::remove("/tmp/endo_test_input.txt");
+}
+
+// ============================================================================
+// Redirects - Here-strings
+// ============================================================================
+
+TEST_CASE("shell.redirect.herestring")
+{
+    TestShell shell;
+    CHECK(escape(shell("cat <<< \"hello world\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.redirect.herestring_with_variable")
+{
+    TestShell shell;
+    shell("set GREETING hello");
+    CHECK(escape(shell("cat <<< $GREETING").output()) == escape("hello\n"));
+}
+
+// ============================================================================
+// Redirects - File Descriptor Duplication
+// ============================================================================
+
+TEST_CASE("shell.redirect.stderr_to_stdout")
+{
+    TestShell shell;
+    // Run ls on nonexistent file - stderr should go to stdout via 2>&1
+    // Note: This test relies on ls outputting error to stderr
+    shell("ls /nonexistent_path_12345 2>&1");
+    // Should have some output (the error message)
+    CHECK(!shell.output().empty());
+}
+
+TEST_CASE("shell.redirect.fd_to_file")
+{
+    TestShell shell;
+    // Redirect stderr (fd 2) to a file
+    shell("ls /nonexistent_path_12345 2> /tmp/endo_test_stderr.txt");
+    // Verify the error was written to the file
+    std::ifstream file("/tmp/endo_test_stderr.txt");
+    std::string content;
+    std::getline(file, content);
+    CHECK(!content.empty()); // Should contain error message
+    std::filesystem::remove("/tmp/endo_test_stderr.txt");
+}
+
+// ============================================================================
+// Redirects - Multiple Redirects
+// ============================================================================
+
+TEST_CASE("shell.redirect.multiple_redirects")
+{
+    TestShell shell;
+    // Create input file
+    {
+        std::ofstream file("/tmp/endo_test_multi_in.txt");
+        file << "input text\n";
+    }
+    // Redirect both input and output
+    shell("cat < /tmp/endo_test_multi_in.txt > /tmp/endo_test_multi_out.txt");
+    // Verify output
+    std::ifstream file("/tmp/endo_test_multi_out.txt");
+    std::string content;
+    std::getline(file, content);
+    CHECK(content == "input text");
+    std::filesystem::remove("/tmp/endo_test_multi_in.txt");
+    std::filesystem::remove("/tmp/endo_test_multi_out.txt");
 }
