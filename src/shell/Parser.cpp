@@ -82,13 +82,46 @@ export class Parser
     [[nodiscard]] bool isEndOfStmt() const noexcept
     {
         // clang-format off
-    return _lexer.currentToken() == Token::EndOfInput
+    if (_lexer.currentToken() == Token::EndOfInput
         || _lexer.currentToken() == Token::LineFeed
         || _lexer.currentToken() == Token::Pipe
         || _lexer.currentToken() == Token::Semicolon
         || _lexer.currentToken() == Token::AmpAmp
-        || _lexer.currentToken() == Token::PipePipe;
+        || _lexer.currentToken() == Token::PipePipe
+        || _lexer.currentToken() == Token::RndClose)
+        return true;
+
+    // Backtick is end-of-statement only when we're inside a backtick substitution
+    if (_lexer.currentToken() == Token::Backtick && _backtickNestingLevel > 0)
+        return true;
+
+    return false;
         // clang-format on
+    }
+
+    /// Checks if the current token can start a parameter expression.
+    /// Backtick is only a parameter token when we're NOT inside a backtick substitution.
+    [[nodiscard]] bool isParameterToken() const noexcept
+    {
+        switch (_lexer.currentToken())
+        {
+            case Token::String:
+            case Token::Number:
+            case Token::Identifier:
+            case Token::DollarName:
+            case Token::DollarBraceName:
+            case Token::DollarQuestion:
+            case Token::DollarDollar:
+            case Token::DollarNot:
+            case Token::DollarNumber:
+            case Token::DollarRndOpen:
+            case Token::LessRndOpen:
+            case Token::GreaterRndOpen: return true;
+            case Token::Backtick:
+                // Backtick is a parameter token only at nesting level 0
+                return _backtickNestingLevel == 0;
+            default: return false;
+        }
     }
 
     std::unique_ptr<ast::Statement> parseBlock(std::string_view traceMessage = {})
@@ -401,7 +434,8 @@ export class Parser
         std::vector<std::unique_ptr<ast::HereString>> hereStrings;
 
         // Parse arguments and redirects interleaved
-        while (!isEndOfStmt())
+        // Continue while we have parameter tokens or redirect tokens, and we're not at end of statement
+        while (!isEndOfStmt() || isParameterToken())
         {
             // Check for redirect tokens
             if (isRedirectToken())
@@ -561,6 +595,71 @@ export class Parser
         return parameters;
     }
 
+    /// Parses a command substitution: `$(command)`
+    std::unique_ptr<ast::SubstitutionExpr> parseCommandSubstitution()
+    {
+        TRACE_SCOPE("parseCommandSubstitution");
+        _lexer.nextToken(); // consume $(
+        auto command = parseLogicalExpr();
+        if (!command)
+            return nullptr;
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a closing ')' after the command" },
+                                               currentContextSnippet(),
+                                               "Expected ')' after command substitution, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume )
+        return std::make_unique<ast::SubstitutionExpr>(std::move(command), false);
+    }
+
+    /// Parses a backtick command substitution: `` `command` ``
+    std::unique_ptr<ast::SubstitutionExpr> parseBacktickSubstitution()
+    {
+        TRACE_SCOPE("parseBacktickSubstitution");
+        _lexer.nextToken(); // consume opening `
+        ++_backtickNestingLevel;
+        auto command = parseLogicalExpr();
+        --_backtickNestingLevel;
+        if (!command)
+            return nullptr;
+        if (_lexer.currentToken() != Token::Backtick)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a closing backtick" },
+                                               currentContextSnippet(),
+                                               "Expected closing backtick, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume closing `
+        return std::make_unique<ast::SubstitutionExpr>(std::move(command), true);
+    }
+
+    /// Parses a process substitution: `<(command)` or `>(command)`
+    std::unique_ptr<ast::CommandFileSubst> parseProcessSubstitution(ast::ProcessSubstMode mode)
+    {
+        TRACE_SCOPE("parseProcessSubstitution");
+        _lexer.nextToken(); // consume <( or >(
+        auto command = parseLogicalExpr();
+        if (!command)
+            return nullptr;
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a closing ')' after the command" },
+                                               currentContextSnippet(),
+                                               "Expected ')' after process substitution, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume )
+        return std::make_unique<ast::CommandFileSubst>(std::move(command), mode);
+    }
+
     std::unique_ptr<ast::Expr> parseParameter()
     {
         TRACE_FMT("parseParameter: {} \"{}\"", _lexer.currentToken(), _lexer.currentLiteral());
@@ -585,6 +684,10 @@ export class Parser
             case Token::DollarNumber:
                 return std::make_unique<ast::VariableExpr>(
                     consumeLiteral(), ast::VariableType::Positional, false);
+            case Token::DollarRndOpen: return parseCommandSubstitution();
+            case Token::Backtick: return parseBacktickSubstitution();
+            case Token::LessRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Read);
+            case Token::GreaterRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Write);
             default:
                 _report.syntaxErrorWithSuggestions(currentLocation(),
                                                    {},
@@ -781,7 +884,8 @@ export class Parser
     CoreVM::Runtime& _runtime;            // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::diagnostics::Report& _report; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     Lexer _lexer;
-    std::string_view _sourceText; ///< Original source text for context snippets
+    std::string_view _sourceText;  ///< Original source text for context snippets
+    int _backtickNestingLevel = 0; ///< Nesting level for backtick substitution
 };
 
 } // namespace endo

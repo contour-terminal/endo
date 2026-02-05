@@ -201,7 +201,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
             for (auto const& herestring: call->hereStrings)
                 codegen(herestring.get());
 
-            if (containsVariableExpr(call->parameters))
+            if (containsRuntimeExpr(call->parameters))
             {
                 // Use dynamic argument building and execution
                 buildCommandArgs(call->program, call->parameters);
@@ -227,9 +227,51 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         }
     }
 
-    void visit(ast::CommandFileSubst const&) override
+    void visit(ast::CommandFileSubst const& node) override
     {
-        // TODO
+        // Process substitution: <(command) or >(command)
+        // This requires forking: child runs the command, parent gets the fd path
+        bool const isWrite = (node.mode == ast::ProcessSubstMode::Write);
+
+        // Fork for process substitution
+        // Returns 0 in child process, fd number (> 0) in parent process
+        auto* forkCb = findCallback("internal.procsubst_fork(B)I");
+        if (!forkCb)
+        {
+            reportTypeError("Internal error: internal.procsubst_fork builtin not found");
+            return;
+        }
+
+        auto* forkResult =
+            createCallFunction(getBuiltinFunction(*forkCb), { get(isWrite) }, "procsubst_fork");
+
+        // Check if we're the child (result == 0)
+        auto* isChild = createNCmpEQ(forkResult, get(CoreVM::CoreNumber(0)));
+
+        CoreVM::BasicBlock* childBlock = createBlock("procsubst.child");
+        CoreVM::BasicBlock* contBlock = createBlock("procsubst.cont");
+
+        createCondBr(isChild, childBlock, contBlock);
+
+        // Child block: execute command, then exit
+        setInsertPoint(childBlock);
+        codegen(node.command.get());
+
+        // Child exits after running command
+        auto* exitCb = findCallback("internal.procsubst_exit()V");
+        if (exitCb)
+            createCallFunction(getBuiltinFunction(*exitCb), {}, "procsubst_exit");
+        createBr(contBlock); // Unreachable due to exit, but needed for valid IR
+
+        // Continue block: parent gets the fd path
+        setInsertPoint(contBlock);
+        auto* pathCb = findCallback("internal.procsubst_get_path()S");
+        if (!pathCb)
+        {
+            reportTypeError("Internal error: internal.procsubst_get_path builtin not found");
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(*pathCb), {}, "procsubst_get_path");
     }
 
     void visit(ast::CompoundStmt const& node) override
@@ -497,7 +539,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         for (auto const& herestring: node.hereStrings)
             codegen(herestring.get());
 
-        if (containsVariableExpr(node.parameters))
+        if (containsRuntimeExpr(node.parameters))
         {
             // Use dynamic argument building and execution
             buildCommandArgs(node.program, node.parameters);
@@ -521,9 +563,29 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         }
     }
 
-    void visit(ast::SubstitutionExpr const&) override
+    void visit(ast::SubstitutionExpr const& node) override
     {
-        // TODO
+        // Command substitution: $(command) or `command`
+        // 1. Start capture - redirects stdout to a pipe
+        auto* startCb = findCallback("internal.subst_start()V");
+        if (!startCb)
+        {
+            reportTypeError("Internal error: internal.subst_start builtin not found");
+            return;
+        }
+        createCallFunction(getBuiltinFunction(*startCb), {}, "subst_start");
+
+        // 2. Execute the command pipeline
+        codegen(node.pipeline.get());
+
+        // 3. End capture - reads captured output and returns as string
+        auto* endCb = findCallback("internal.subst_end()S");
+        if (!endCb)
+        {
+            reportTypeError("Internal error: internal.subst_end builtin not found");
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(*endCb), {}, "subst_end");
     }
 
     void visit(ast::WhileStmt const& node) override
@@ -554,12 +616,17 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         return createNCmpEQ(value, get(CoreVM::CoreNumber(0)));
     }
 
-    /// Checks if any expression in the list contains a variable expression that needs runtime evaluation.
-    [[nodiscard]] bool containsVariableExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
+    /// Checks if any expression in the list contains a runtime-evaluated expression.
+    /// This includes variable expressions, command substitutions, and process substitutions.
+    [[nodiscard]] bool containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
     {
         for (auto const& expr: expressions)
         {
             if (dynamic_cast<ast::VariableExpr const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::SubstitutionExpr const*>(expr.get()) != nullptr)
+                return true;
+            if (dynamic_cast<ast::CommandFileSubst const*>(expr.get()) != nullptr)
                 return true;
         }
         return false;

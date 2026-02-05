@@ -474,3 +474,87 @@ TEST_CASE("shell.logical.with_pipeline")
     TestShell shell;
     CHECK(escape(shell("echo hello | cat && echo world").output()) == escape("hello\nworld\n"));
 }
+
+// ============================================================================
+// Command Substitution
+// ============================================================================
+
+TEST_CASE("shell.subst.command_basic")
+{
+    // Basic command substitution: echo $(echo hello)
+    TestShell shell;
+    CHECK(escape(shell("echo $(echo hello)").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.command_multiple_words")
+{
+    // Command substitution with multiple words
+    TestShell shell;
+    CHECK(escape(shell("echo $(echo hello world)").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.subst.command_with_args")
+{
+    // Command substitution with arguments
+    TestShell shell;
+    CHECK(escape(shell("echo prefix $(echo middle) suffix").output()) == escape("prefix middle suffix\n"));
+}
+
+TEST_CASE("shell.subst.backtick_basic")
+{
+    // Backtick command substitution: echo `echo hello`
+    TestShell shell;
+    CHECK(escape(shell("echo `echo hello`").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.backtick_with_args")
+{
+    // Backtick substitution with surrounding arguments
+    TestShell shell;
+    CHECK(escape(shell("echo prefix `echo middle` suffix").output()) == escape("prefix middle suffix\n"));
+}
+
+TEST_CASE("shell.subst.newline_trim")
+{
+    // Trailing newlines should be trimmed from command substitution
+    // printf outputs without trailing newline, but echo inside adds one
+    TestShell shell;
+    // echo "hello\n" -> substitution trims -> "hello"
+    CHECK(escape(shell("echo $(echo hello)").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.with_variable")
+{
+    // Command substitution with variable expansion
+    TestShell shell;
+    shell("set MSG hello");
+    CHECK(escape(shell("echo $(echo $MSG)").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.in_pipeline")
+{
+    // Command substitution as part of a pipeline
+    TestShell shell;
+    CHECK(escape(shell("echo $(echo hello) | cat").output()) == escape("hello\n"));
+}
+
+// ============================================================================
+// Process Substitution
+// ============================================================================
+
+TEST_CASE("shell.subst.process_read_basic")
+{
+    // Process substitution read mode: cat <(echo hello)
+    TestShell shell;
+    CHECK(escape(shell("cat <(echo hello)").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.subst.process_read_multiple_lines")
+{
+    // Process substitution with multiple lines
+    TestShell shell;
+    shell("echo line1 > /tmp/endo_test_procsubst.txt");
+    shell("echo line2 >> /tmp/endo_test_procsubst.txt");
+    CHECK(escape(shell("cat <(cat /tmp/endo_test_procsubst.txt)").output()) == escape("line1\nline2\n"));
+    std::filesystem::remove("/tmp/endo_test_procsubst.txt");
+}

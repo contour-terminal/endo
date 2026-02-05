@@ -15,6 +15,8 @@ module;
 #include <print>
 
 #if !defined(_WIN32)
+    #include <sys/wait.h>
+
     #include <fcntl.h>
     #include <unistd.h>
 #endif
@@ -125,6 +127,27 @@ inline auto PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
     NativeHandle const stdoutFd = lastInChain || !currentPipe ? defaultStdoutFd : currentPipe->writer();
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
+
+/// Stores state during command substitution capture.
+///
+/// When executing a command substitution like $(command), we redirect the
+/// command's stdout to a pipe and capture the output.
+struct SubstitutionCapture
+{
+    std::unique_ptr<Pipe> pipe;    ///< Pipe to capture stdout
+    NativeHandle savedStdout = -1; ///< Original stdout fd saved during capture
+    std::string output;            ///< Accumulated output
+
+    void clear()
+    {
+        pipe.reset();
+        if (savedStdout != -1)
+        {
+            savedStdout = -1;
+        }
+        output.clear();
+    }
+};
 
 /// Stores redirect state during command execution.
 ///
@@ -554,6 +577,33 @@ export class Shell final: public CoreVM::Runtime
         registerFunction("internal.redirect_end")
             .returnType(CoreVM::LiteralType::Void)
             .bind(&Shell::builtinRedirectEnd, this);
+
+        // Command substitution functions
+        registerFunction("internal.subst_start")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinSubstStart, this);
+
+        registerFunction("internal.subst_end")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinSubstEnd, this);
+
+        // Process substitution functions
+        registerFunction("internal.procsubst_fork")
+            .param<bool>("is_write")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinProcSubstFork, this);
+
+        registerFunction("internal.procsubst_exit")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinProcSubstExit, this);
+
+        registerFunction("internal.procsubst_get_path")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinProcSubstGetPath, this);
+
+        registerFunction("internal.procsubst_cleanup")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinProcSubstCleanup, this);
         // clang-format on
     }
 
@@ -584,6 +634,7 @@ export class Shell final: public CoreVM::Runtime
         config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
         config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
         config.closeExtraFds = true;
+        config.keepOpenFds = _procSubstExposedFds; // Keep process substitution fds open
 
         // Apply any redirects that were set up
         applyRedirects(config);
@@ -609,6 +660,9 @@ export class Shell final: public CoreVM::Runtime
             debugLog()()("child process exited with signal {}\n", waitResult->signal);
         else
             debugLog()()("child process exited with code {}\n", _exitCode);
+
+        // Clean up process substitution state after command finishes
+        cleanupProcSubst();
 
         context.setResult(CoreVM::CoreNumber(_exitCode));
     }
@@ -639,6 +693,7 @@ export class Shell final: public CoreVM::Runtime
                                   ? std::make_optional(_currentProcessGroupPids.front())
                                   : std::make_optional<ProcessId>(0);
         config.closeExtraFds = true;
+        config.keepOpenFds = _procSubstExposedFds; // Keep process substitution fds open
 
         // Apply any redirects that were set up
         applyRedirects(config);
@@ -677,6 +732,9 @@ export class Shell final: public CoreVM::Runtime
             _currentProcessGroupPids.clear();
             _leftPid = std::nullopt;
             _rightPid = std::nullopt;
+
+            // Clean up process substitution state after pipeline finishes
+            cleanupProcSubst();
         }
 
         context.setResult(CoreVM::CoreNumber(_exitCode));
@@ -752,22 +810,23 @@ export class Shell final: public CoreVM::Runtime
     // Command builder functions for dynamic argument construction
     void builtinCmdStart(CoreVM::Params& context)
     {
-        _cmdBuilderArgs.clear();
-        _cmdBuilderArgs.push_back(context.getString(1));
+        // Push a new command builder onto the stack for nested command support
+        _cmdBuilderStack.emplace_back();
+        cmdBuilderArgs().push_back(context.getString(1));
     }
 
-    void builtinCmdArg(CoreVM::Params& context) { _cmdBuilderArgs.push_back(context.getString(1)); }
+    void builtinCmdArg(CoreVM::Params& context) { cmdBuilderArgs().push_back(context.getString(1)); }
 
     void builtinCmdExec(CoreVM::Params& context)
     {
-        if (_cmdBuilderArgs.empty())
+        if (cmdBuilderArgs().empty())
         {
             error("No command to execute");
             context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
             return;
         }
 
-        std::string const& program = _cmdBuilderArgs.at(0);
+        std::string const& program = cmdBuilderArgs().at(0);
         auto const programPath = resolveProgram(program);
 
         if (!programPath.has_value())
@@ -779,10 +838,11 @@ export class Shell final: public CoreVM::Runtime
 
         SpawnConfig config;
         config.program = *programPath;
-        config.arguments = std::vector<std::string>(_cmdBuilderArgs.begin() + 1, _cmdBuilderArgs.end());
+        config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
         config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
         config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
         config.closeExtraFds = true;
+        config.keepOpenFds = _procSubstExposedFds; // Keep process substitution fds open
 
         // Apply any redirects that were set up
         applyRedirects(config);
@@ -809,7 +869,12 @@ export class Shell final: public CoreVM::Runtime
         else
             debugLog()()("child process exited with code {}\n", _exitCode);
 
-        _cmdBuilderArgs.clear();
+        // Clean up process substitution state after command finishes
+        cleanupProcSubst();
+
+        // Pop this command builder from the stack
+        if (!_cmdBuilderStack.empty())
+            _cmdBuilderStack.pop_back();
         context.setResult(CoreVM::CoreNumber(_exitCode));
     }
 
@@ -817,14 +882,14 @@ export class Shell final: public CoreVM::Runtime
     {
         bool const lastInChain = context.getBool(1);
 
-        if (_cmdBuilderArgs.empty())
+        if (cmdBuilderArgs().empty())
         {
             error("No command to execute");
             context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
             return;
         }
 
-        std::string const& program = _cmdBuilderArgs.at(0);
+        std::string const& program = cmdBuilderArgs().at(0);
         auto const programPath = resolveProgram(program);
 
         if (!programPath.has_value())
@@ -838,13 +903,14 @@ export class Shell final: public CoreVM::Runtime
 
         SpawnConfig config;
         config.program = *programPath;
-        config.arguments = std::vector<std::string>(_cmdBuilderArgs.begin() + 1, _cmdBuilderArgs.end());
+        config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
         config.stdinFd = stdinFd;
         config.stdoutFd = stdoutFd;
         config.processGroup = !_currentProcessGroupPids.empty()
                                   ? std::make_optional(_currentProcessGroupPids.front())
                                   : std::make_optional<ProcessId>(0);
         config.closeExtraFds = true;
+        config.keepOpenFds = _procSubstExposedFds; // Keep process substitution fds open
 
         // Apply any redirects that were set up
         applyRedirects(config);
@@ -883,9 +949,14 @@ export class Shell final: public CoreVM::Runtime
             _currentProcessGroupPids.clear();
             _leftPid = std::nullopt;
             _rightPid = std::nullopt;
+
+            // Clean up process substitution state after pipeline finishes
+            cleanupProcSubst();
         }
 
-        _cmdBuilderArgs.clear();
+        // Pop this command builder from the stack
+        if (!_cmdBuilderStack.empty())
+            _cmdBuilderStack.pop_back();
         context.setResult(CoreVM::CoreNumber(_exitCode));
     }
 
@@ -1009,6 +1080,193 @@ export class Shell final: public CoreVM::Runtime
             }
         }
         _redirectState.clear();
+    }
+
+    /// Starts command substitution capture by creating a pipe and redirecting stdout.
+    void builtinSubstStart(CoreVM::Params&)
+    {
+        // Create a new capture state
+        _substitutionCapture.emplace();
+
+        // Create pipe for capturing output
+        auto pipeResult = createPipe();
+        if (!pipeResult.has_value())
+        {
+            error("Failed to create pipe for command substitution: {}", toString(pipeResult.error()));
+            _substitutionCapture.reset();
+            return;
+        }
+
+        _substitutionCapture->pipe = std::move(pipeResult.value());
+
+        // Save the current stdout and redirect to the pipe's write end
+        _substitutionCapture->savedStdout = _currentPipelineBuilder.defaultStdoutFd;
+        _currentPipelineBuilder.defaultStdoutFd = _substitutionCapture->pipe->writer();
+    }
+
+    /// Ends command substitution capture, reads the captured output, and returns it.
+    void builtinSubstEnd(CoreVM::Params& context)
+    {
+        if (!_substitutionCapture)
+        {
+            error("Command substitution end without matching start");
+            context.setResult(std::string {});
+            return;
+        }
+
+        // Restore original stdout
+        _currentPipelineBuilder.defaultStdoutFd = _substitutionCapture->savedStdout;
+
+        // Close the write end so we can read until EOF
+        _substitutionCapture->pipe->closeWriter();
+
+        // Read all output from the pipe
+        std::string output;
+        char buffer[4096];
+        while (true)
+        {
+            ssize_t const bytesRead = read(_substitutionCapture->pipe->reader(), buffer, sizeof(buffer));
+            if (bytesRead <= 0)
+                break;
+            output.append(buffer, static_cast<size_t>(bytesRead));
+        }
+
+        // Close the read end
+        _substitutionCapture->pipe->closeReader();
+
+        // Trim trailing newlines (standard shell behavior)
+        while (!output.empty() && output.back() == '\n')
+            output.pop_back();
+
+        _substitutionCapture.reset();
+
+        context.setResult(std::move(output));
+    }
+
+    /// Process substitution using fork: creates a pipe, forks, and returns 0 in child, non-zero in parent.
+    /// For <(command), is_write=false: child writes to pipe, parent reads via /dev/fd/N
+    /// For >(command), is_write=true: child reads from pipe, parent writes via /dev/fd/N
+    void builtinProcSubstFork(CoreVM::Params& context)
+    {
+        bool const isWrite = context.getBool(1);
+
+        // Create pipe for process substitution
+        auto pipeResult = createPipe();
+        if (!pipeResult.has_value())
+        {
+            error("Failed to create pipe for process substitution: {}", toString(pipeResult.error()));
+            context.setResult(CoreVM::CoreNumber(-1));
+            return;
+        }
+
+        auto pipe = std::move(pipeResult.value());
+
+#if !defined(_WIN32)
+        // Fork to create child process for the substituted command
+        pid_t const pid = fork();
+
+        if (pid < 0)
+        {
+            error("Failed to fork for process substitution: {}", strerror(errno));
+            context.setResult(CoreVM::CoreNumber(-1));
+            return;
+        }
+
+        if (pid == 0)
+        {
+            // Child process: will execute the inner command
+            if (isWrite)
+            {
+                // >(command) - child reads from pipe's read end via stdin
+                pipe->closeWriter();
+                dup2(pipe->reader(), STDIN_FILENO);
+                pipe->closeReader();
+            }
+            else
+            {
+                // <(command) - child writes to pipe's write end via stdout
+                pipe->closeReader();
+                dup2(pipe->writer(), STDOUT_FILENO);
+                pipe->closeWriter();
+            }
+
+            // Return 0 to indicate child
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+
+        // Parent process
+        _procSubstChildPids.push_back(static_cast<ProcessId>(pid));
+
+        NativeHandle exposedFd;
+        if (isWrite)
+        {
+            // >(command) - parent writes to the pipe's write end
+            pipe->closeReader();
+            exposedFd = pipe->releaseWriter();
+        }
+        else
+        {
+            // <(command) - parent reads from the pipe's read end
+            pipe->closeWriter();
+            exposedFd = pipe->releaseReader();
+        }
+
+        // Track the exposed fd for cleanup
+        _procSubstExposedFds.push_back(exposedFd);
+
+        // Build the /dev/fd/N or /proc/self/fd/N path
+    #if defined(__linux__)
+        _procSubstFdPath = std::format("/proc/self/fd/{}", exposedFd);
+    #else
+        _procSubstFdPath = std::format("/dev/fd/{}", exposedFd);
+    #endif
+
+        // Return non-zero to indicate parent
+        context.setResult(CoreVM::CoreNumber(1));
+#else
+        // Windows: not yet implemented
+        error("Process substitution not implemented on Windows");
+        context.setResult(CoreVM::CoreNumber(-1));
+#endif
+    }
+
+    /// Called by child process to exit after running the substituted command.
+    void builtinProcSubstExit(CoreVM::Params&)
+    {
+#if !defined(_WIN32)
+        _exit(0);
+#endif
+    }
+
+    /// Returns the fd path for the current process substitution (called by parent).
+    void builtinProcSubstGetPath(CoreVM::Params& context) { context.setResult(_procSubstFdPath); }
+
+    /// Cleans up process substitution state: waits for children and closes fds.
+    void builtinProcSubstCleanup(CoreVM::Params&) { cleanupProcSubst(); }
+
+    /// Helper to clean up process substitution state.
+    void cleanupProcSubst()
+    {
+#if !defined(_WIN32)
+        // Wait for all child processes
+        for (ProcessId childPid: _procSubstChildPids)
+        {
+            int status = 0;
+            waitpid(static_cast<pid_t>(childPid), &status, 0);
+        }
+        _procSubstChildPids.clear();
+
+        // Close all exposed fds
+        for (NativeHandle fd: _procSubstExposedFds)
+        {
+            if (fd >= 0)
+                close(fd);
+        }
+        _procSubstExposedFds.clear();
+
+        _procSubstFdPath.clear();
+#endif
     }
 
     /// Applies the collected redirects to a SpawnConfig.
@@ -1176,11 +1434,29 @@ export class Shell final: public CoreVM::Runtime
     // Positional parameters ($0, $1, $2, etc.)
     std::vector<std::string> _positionalParameters;
 
-    // Command builder for dynamic argument construction
-    std::vector<std::string> _cmdBuilderArgs;
+    // Command builder stack for dynamic argument construction
+    // Uses a stack to support nested command substitutions
+    std::vector<std::vector<std::string>> _cmdBuilderStack;
+
+    /// Gets the current command builder args (top of stack).
+    std::vector<std::string>& cmdBuilderArgs()
+    {
+        if (_cmdBuilderStack.empty())
+            _cmdBuilderStack.emplace_back();
+        return _cmdBuilderStack.back();
+    }
 
     // Redirect state for collecting redirects before process spawn
     RedirectState _redirectState;
+
+    // Command substitution capture state
+    std::optional<SubstitutionCapture> _substitutionCapture;
+
+    // Process substitution state
+    std::vector<std::unique_ptr<Pipe>> _processSubstitutionPipes;
+    std::string _procSubstFdPath;                   ///< Fd path for current process substitution
+    std::vector<ProcessId> _procSubstChildPids;     ///< Child pids for process substitution cleanup
+    std::vector<NativeHandle> _procSubstExposedFds; ///< Exposed fds to close after command
 
     CoreVM::Runner* _runner = nullptr;
     bool _quit = false;

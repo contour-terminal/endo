@@ -54,6 +54,9 @@ export enum class Token
     GreaterAmp,      // >&
     AmpAmp,          // &&
     PipePipe,        // ||
+    DollarRndOpen,   // $(
+    GreaterRndOpen,  // >(
+    Backtick,        // `
 };
 
 export enum class BuiltinFunction
@@ -217,6 +220,8 @@ export class Lexer
                     return consumeCharAndConfirmToken(Token::GreaterEqual);
                 else if (_currentChar == '&')
                     return consumeCharAndConfirmToken(Token::GreaterAmp);
+                else if (_currentChar == '(')
+                    return consumeCharAndConfirmToken(Token::GreaterRndOpen);
                 else
                     return confirmToken(Token::Greater);
             case '<':
@@ -241,9 +246,12 @@ export class Lexer
             case ')': return consumeCharAndConfirmToken(Token::RndClose);
             case '\\': return consumeCharAndConfirmToken(Token::Backslash);
             case '!': return consumeCharAndConfirmToken(Token::Not);
+            case '`': return consumeCharAndConfirmToken(Token::Backtick);
             case '$':
                 nextChar();
-                if (_currentChar == '$')
+                if (_currentChar == '(')
+                    return consumeCharAndConfirmToken(Token::DollarRndOpen);
+                else if (_currentChar == '$')
                     return consumeCharAndConfirmToken(Token::DollarDollar);
                 else if (_currentChar == '!')
                     return consumeCharAndConfirmToken(Token::DollarNot);
@@ -336,7 +344,7 @@ export class Lexer
 
     Token consumeIdentifier(Token token)
     {
-        auto constexpr ReservedSymbols = U"|<>()[]{}!$'\"\t\r\n ;"sv;
+        auto constexpr ReservedSymbols = U"|<>()[]{}!$'\"\t\r\n ;`"sv;
 
         while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
         {
@@ -534,6 +542,9 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case String: name = "String"; break;
             case AmpAmp: name = "&&"; break;
             case PipePipe: name = "||"; break;
+            case DollarRndOpen: name = "$("; break;
+            case GreaterRndOpen: name = ">("; break;
+            case Backtick: name = "`"; break;
         }
         return formatter<std::string_view>::format(name, ctx);
     }

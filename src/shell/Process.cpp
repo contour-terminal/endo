@@ -35,6 +35,7 @@ export struct SpawnConfig
     NativeHandle stderrFd = 2;                            ///< File descriptor/handle for stderr
     std::optional<ProcessId> processGroup = std::nullopt; ///< Process group ID (0 for new group)
     bool closeExtraFds = true;                            ///< Close file descriptors > 2 after fork
+    std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
 };
 
 /// Abstract interface for process management operations.
@@ -142,7 +143,12 @@ export class PosixProcessManager final: public ProcessManager
                 dup2(config.stderrFd, STDERR_FILENO);
 
             if (config.closeExtraFds)
-                closeExtraHandles();
+            {
+                if (config.keepOpenFds.empty())
+                    closeExtraHandles();
+                else
+                    closeExtraHandlesExcept(config.keepOpenFds);
+            }
 
             execvp(config.program.c_str(), const_cast<char* const*>(argv.data()));
             _exit(EXIT_FAILURE);
@@ -226,6 +232,18 @@ export class PosixProcessManager final: public ProcessManager
         for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
             ::close(fd);
     #endif
+    }
+
+    /// Closes all file descriptors > 2 except those in the keepOpen list.
+    void closeExtraHandlesExcept(std::vector<NativeHandle> const& keepOpen) noexcept
+    {
+        int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
+        for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
+        {
+            bool const shouldKeep = std::find(keepOpen.begin(), keepOpen.end(), fd) != keepOpen.end();
+            if (!shouldKeep)
+                ::close(fd);
+        }
     }
 };
 #endif // !_WIN32

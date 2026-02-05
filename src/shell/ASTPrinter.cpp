@@ -210,9 +210,21 @@ export class ASTPrinter: public Visitor
 
     void visit(LiteralExpr const& node) override { _result += std::format("{}", node.value); }
 
-    void visit(SubstitutionExpr const& node) override { (void) node; }
+    void visit(SubstitutionExpr const& node) override
+    {
+        _result += node.backtick ? "`" : "$(";
+        if (node.pipeline)
+            node.pipeline->accept(*this);
+        _result += node.backtick ? "`" : ")";
+    }
 
-    void visit(CommandFileSubst const& node) override { (void) node; }
+    void visit(CommandFileSubst const& node) override
+    {
+        _result += (node.mode == ProcessSubstMode::Read) ? "<(" : ">(";
+        if (node.command)
+            node.command->accept(*this);
+        _result += ')';
+    }
 
     void visit(VariableExpr const& node) override
     {

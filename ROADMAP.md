@@ -34,6 +34,9 @@ the primary project; Endo development follows as resources permit.
 | Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
+| Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |
+| Process substitution (`<(cmd)`, `>(cmd)`) | ✅ |
+| Logical operators (`&&`, `||`) | ✅ |
 | Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
 | If-then-else-elif-fi statements | ✅ |
 | While-do-done statements | ✅ |
@@ -41,13 +44,6 @@ the primary project; Endo development follows as resources permit.
 | Platform abstraction layer (Pipe, Process, TTY) | ✅ |
 | Grapheme cluster support for Unicode | ✅ |
 | Builtin command: `cat` | TODO |
-
-### Partially Implemented (Infrastructure Exists)
-
-| Feature | Status | Location |
-|---------|--------|----------|
-| Command file substitution | AST exists, IRGenerator TODO | `IRGenerator.cpp:198` |
-| Substitution expressions | AST exists, IRGenerator TODO | `IRGenerator.cpp:351` |
 
 ### Not Yet Implemented
 
@@ -143,17 +139,19 @@ Windows support.
 - [x] Implement proper short-circuit evaluation
 - [x] Add operator precedence tests
 
-### Phase 1.4: Command and Process Substitution
+### Phase 1.4: Command and Process Substitution ✅
+
+**Status:** Complete
 
 **Dependency:** Phase 1.2 (redirects), Phase 1.1 (variables)
 
 **Tasks:**
-- [ ] Implement command substitution `$(command)`
-- [ ] Implement backtick substitution `` `command` ``
-- [ ] Implement process substitution `<(command)` (read)
-- [ ] Implement process substitution `>(command)` (write)
-- [ ] Handle nested substitutions
-- [ ] Add substitution tests
+- [x] Implement command substitution `$(command)`
+- [x] Implement backtick substitution `` `command` ``
+- [x] Implement process substitution `<(command)` (read)
+- [x] Implement process substitution `>(command)` (write)
+- [x] Handle nested substitutions
+- [x] Add substitution tests
 
 ### Phase 1.5: Expansions
 

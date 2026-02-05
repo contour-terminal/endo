@@ -116,3 +116,104 @@ TEST_CASE("Lexer.pipe_vs_logical_or")
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "c");
 }
+
+// ============================================================================
+// Command Substitution Tokens
+// ============================================================================
+
+TEST_CASE("Lexer.dollar_rnd_open")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("$(echo hello)"));
+    CHECK(lexer.currentToken() == endo::Token::DollarRndOpen);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "hello");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::RndClose);
+}
+
+TEST_CASE("Lexer.backtick")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("`echo hello`"));
+    CHECK(lexer.currentToken() == endo::Token::Backtick);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "hello");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Backtick);
+}
+
+TEST_CASE("Lexer.greater_rnd_open")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>(">(cat)"));
+    CHECK(lexer.currentToken() == endo::Token::GreaterRndOpen);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cat");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::RndClose);
+}
+
+TEST_CASE("Lexer.less_rnd_open")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("<(echo test)"));
+    CHECK(lexer.currentToken() == endo::Token::LessRndOpen);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "test");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::RndClose);
+}
+
+TEST_CASE("Lexer.dollar_vs_dollar_rnd_open")
+{
+    // Ensure $ followed by variable is distinguished from $(
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("$VAR $(cmd)"));
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "VAR");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::DollarRndOpen);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd");
+}
+
+TEST_CASE("Lexer.greater_vs_greater_rnd_open")
+{
+    // Ensure > is distinguished from >(
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("> file >(cmd)"));
+    CHECK(lexer.currentToken() == endo::Token::Greater);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "file");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::GreaterRndOpen);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd");
+}

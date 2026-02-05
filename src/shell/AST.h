@@ -130,16 +130,11 @@ struct OutputRedirect final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-// <(command)
-//
-// This is a bashism, but it's useful for endo.
-// It's a way to pass the output of a command as a file (e.g. to a program that expects a file).
-// It is the path to the file descriptor of the command's output, which is a pipe.
-struct CommandFileSubst final: public Expr
+/// Mode for process substitution.
+enum class ProcessSubstMode
 {
-    std::unique_ptr<Node> command;
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+    Read,  ///< <(command) - read from command output
+    Write, ///< >(command) - write to command input
 };
 
 /// Here-document: `<<EOF` or `<<-EOF`
@@ -331,14 +326,36 @@ struct ProgramCall final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-// $(command)
-// `command`
-//
-// This is a substitution parameter.
-// It is a parameter, because it can be used as an argument to a program call.
+/// Command substitution: `$(command)` or `` `command` ``
+///
+/// This is a substitution parameter.
+/// It is a parameter, because it can be used as an argument to a program call.
+/// The command's stdout is captured and the result (with trailing newlines stripped)
+/// is substituted in place.
 struct SubstitutionExpr final: public Expr
 {
-    std::unique_ptr<Statement> pipeline;
+    std::unique_ptr<Statement> pipeline; ///< The command/pipeline to execute
+    bool backtick = false;               ///< True if using backtick syntax
+
+    explicit SubstitutionExpr(std::unique_ptr<Statement> p, bool bt = false):
+        pipeline(std::move(p)), backtick(bt)
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Process substitution: `<(command)` or `>(command)`
+///
+/// This is a bashism, but it's useful for endo.
+/// It's a way to pass the output of a command as a file (e.g. to a program that expects a file).
+/// It is the path to the file descriptor of the command's output, which is a pipe.
+struct CommandFileSubst final: public Expr
+{
+    std::unique_ptr<Statement> command; ///< The command to execute
+    ProcessSubstMode mode;              ///< Read or write mode
+
+    CommandFileSubst(std::unique_ptr<Statement> cmd, ProcessSubstMode m): command(std::move(cmd)), mode(m) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
