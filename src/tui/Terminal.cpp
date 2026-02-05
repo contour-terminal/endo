@@ -92,4 +92,21 @@ auto Terminal::rows() const noexcept -> int
     return _output.rows();
 }
 
+void Terminal::suspend()
+{
+    if (_initialized)
+        _input.suspend();
+}
+
+void Terminal::resume()
+{
+    if (_initialized)
+        _input.resume();
+}
+
+auto Terminal::isSuspended() const noexcept -> bool
+{
+    return _input.isSuspended();
+}
+
 } // namespace tui

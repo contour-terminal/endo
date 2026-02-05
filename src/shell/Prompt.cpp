@@ -217,6 +217,18 @@ void Prompt::display()
     render();
 }
 
+void Prompt::suspend()
+{
+    if (_initialized)
+        _terminal.suspend();
+}
+
+void Prompt::resume()
+{
+    if (_initialized)
+        _terminal.resume();
+}
+
 void Prompt::setMultilineEnabled(bool enable)
 {
     _multilineEnabled = enable;

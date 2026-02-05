@@ -50,11 +50,27 @@ class TerminalInput
     /// @brief Returns the file descriptor for the resize notification pipe (read end).
     [[nodiscard]] auto resizePipeReadFd() const noexcept -> int;
 
+    /// @brief Suspends terminal protocols and raw mode for external command execution.
+    ///
+    /// Call this before executing external commands to restore the terminal to
+    /// a normal state that programs expect. Call resume() after the command completes.
+    void suspend();
+
+    /// @brief Resumes terminal protocols and raw mode after external command execution.
+    ///
+    /// Call this after an external command completes to restore the shell's
+    /// terminal configuration.
+    void resume();
+
+    /// @brief Returns whether the terminal is currently suspended.
+    [[nodiscard]] auto isSuspended() const noexcept -> bool;
+
   private:
     VtParser _parser;
     int _fd = 0; // STDIN_FILENO
     struct termios _origTermios {};
     bool _rawMode = false;
+    bool _suspended = false;         ///< True when suspended for external command execution.
     int _resizePipe[2] = { -1, -1 }; ///< Self-pipe for SIGWINCH.
 
     void enableRawMode();

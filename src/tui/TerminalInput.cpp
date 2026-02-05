@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <array>
-#include <cstring>
+#include <string_view>
 
 #include <sys/ioctl.h>
 
@@ -16,6 +16,8 @@ namespace tui
 
 namespace
 {
+    using namespace std::string_view_literals;
+
     // Terminal protocol escape sequences
     //
     // Kitty keyboard protocol flags (CSI > flags u):
@@ -27,14 +29,20 @@ namespace
     //
     // We use flags 1|8=9 to ensure modifiers are reported for all keys including Enter.
     // Flag 8 is needed because some terminals only report Shift+Enter with this flag.
-    constexpr auto EnableCsiU = "\033[>9u";             // Kitty keyboard protocol (disambiguate + all keys)
-    constexpr auto DisableCsiU = "\033[<u";             // Pop Kitty keyboard protocol
-    constexpr auto EnableSgrMouse = "\033[?1006h";      // SGR mouse mode
-    constexpr auto DisableSgrMouse = "\033[?1006l";     // Disable SGR mouse mode
-    constexpr auto EnableMouseTracking = "\033[?1000h"; // Basic mouse tracking
-    constexpr auto DisableMouseTracking = "\033[?1000l";
-    constexpr auto EnableBracketedPaste = "\033[?2004h";
-    constexpr auto DisableBracketedPaste = "\033[?2004l";
+    constexpr auto EnableCsiU = "\033[>9u"sv;             // Kitty keyboard protocol (disambiguate + all keys)
+    constexpr auto DisableCsiU = "\033[<u"sv;             // Pop Kitty keyboard protocol
+    constexpr auto EnableSgrMouse = "\033[?1006h"sv;      // SGR mouse mode
+    constexpr auto DisableSgrMouse = "\033[?1006l"sv;     // Disable SGR mouse mode
+    constexpr auto EnableMouseTracking = "\033[?1000h"sv; // Basic mouse tracking
+    constexpr auto DisableMouseTracking = "\033[?1000l"sv;
+    constexpr auto EnableBracketedPaste = "\033[?2004h"sv;
+    constexpr auto DisableBracketedPaste = "\033[?2004l"sv;
+
+    /// Writes a string_view to the terminal (stdout).
+    void writeToTerminal(std::string_view data)
+    {
+        static_cast<void>(write(STDOUT_FILENO, data.data(), data.size()));
+    }
 } // namespace
 
 TerminalInput::TerminalInput() = default;
@@ -143,6 +151,31 @@ auto TerminalInput::resizePipeReadFd() const noexcept -> int
     return _resizePipe[0];
 }
 
+void TerminalInput::suspend()
+{
+    if (_suspended || !_rawMode)
+        return;
+
+    disableProtocols();
+    disableRawMode();
+    _suspended = true;
+}
+
+void TerminalInput::resume()
+{
+    if (!_suspended)
+        return;
+
+    enableRawMode();
+    enableProtocols();
+    _suspended = false;
+}
+
+auto TerminalInput::isSuspended() const noexcept -> bool
+{
+    return _suspended;
+}
+
 void TerminalInput::enableRawMode()
 {
     tcgetattr(_fd, &_origTermios);
@@ -165,21 +198,18 @@ void TerminalInput::disableRawMode()
 
 void TerminalInput::enableProtocols()
 {
-    // Enable Kitty keyboard protocol (level 1: disambiguate)
-    static_cast<void>(write(STDOUT_FILENO, EnableCsiU, std::strlen(EnableCsiU)));
-    // Enable SGR mouse mode
-    static_cast<void>(write(STDOUT_FILENO, EnableMouseTracking, std::strlen(EnableMouseTracking)));
-    static_cast<void>(write(STDOUT_FILENO, EnableSgrMouse, std::strlen(EnableSgrMouse)));
-    // Enable bracketed paste
-    static_cast<void>(write(STDOUT_FILENO, EnableBracketedPaste, std::strlen(EnableBracketedPaste)));
+    writeToTerminal(EnableCsiU);
+    writeToTerminal(EnableMouseTracking);
+    writeToTerminal(EnableSgrMouse);
+    writeToTerminal(EnableBracketedPaste);
 }
 
 void TerminalInput::disableProtocols()
 {
-    static_cast<void>(write(STDOUT_FILENO, DisableBracketedPaste, std::strlen(DisableBracketedPaste)));
-    static_cast<void>(write(STDOUT_FILENO, DisableSgrMouse, std::strlen(DisableSgrMouse)));
-    static_cast<void>(write(STDOUT_FILENO, DisableMouseTracking, std::strlen(DisableMouseTracking)));
-    static_cast<void>(write(STDOUT_FILENO, DisableCsiU, std::strlen(DisableCsiU)));
+    writeToTerminal(DisableBracketedPaste);
+    writeToTerminal(DisableSgrMouse);
+    writeToTerminal(DisableMouseTracking);
+    writeToTerminal(DisableCsiU);
 }
 
 } // namespace tui

@@ -63,6 +63,38 @@ class Prompt
     /// @brief Returns whether multiline editing is enabled.
     [[nodiscard]] bool isMultilineEnabled() const noexcept;
 
+    /// @brief Suspends terminal modes for external command execution.
+    ///
+    /// Disables raw mode and terminal protocols (CSI u, mouse, bracketed paste)
+    /// so that external programs see a normal terminal state.
+    /// Call resume() after the command completes.
+    void suspend();
+
+    /// @brief Resumes terminal modes after external command execution.
+    ///
+    /// Re-enables raw mode and terminal protocols.
+    void resume();
+
+    /// @brief RAII helper for suspend/resume scoping.
+    ///
+    /// Automatically calls suspend() on construction and resume() on destruction,
+    /// ensuring terminal modes are properly restored even if exceptions occur.
+    class [[nodiscard]] ScopedSuspend
+    {
+      public:
+        explicit ScopedSuspend(Prompt& prompt) noexcept: _prompt(prompt) { _prompt.suspend(); }
+
+        ~ScopedSuspend() { _prompt.resume(); }
+
+        ScopedSuspend(ScopedSuspend const&) = delete;
+        ScopedSuspend& operator=(ScopedSuspend const&) = delete;
+        ScopedSuspend(ScopedSuspend&&) = delete;
+        ScopedSuspend& operator=(ScopedSuspend&&) = delete;
+
+      private:
+        Prompt& _prompt;
+    };
+
   private:
     tui::Terminal _terminal;
     tui::InputField _inputField;

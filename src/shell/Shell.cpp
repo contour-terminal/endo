@@ -328,6 +328,7 @@ int Shell::run()
             auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
+            auto const _ = Prompt::ScopedSuspend(prompt);
             _exitCode = execute(lineBuffer);
         }
     }
@@ -338,6 +339,7 @@ int Shell::run()
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
 
+        auto const _ = Prompt::ScopedSuspend(prompt);
         _exitCode = execute(lineBuffer);
     }
 #endif
