@@ -1,5 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/ProcessGroup.hpp>
+
+#include <CoreVM/CoreVM.hpp>
+
+#include <crispy/assert.h>
+#include <crispy/utils.h>
+
+#include <csignal>
+#include <cstdio>
+#include <cstring>
+#include <expected>
+#include <filesystem>
+#include <format>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <print>
+#include <set>
 
 #include "ASTPrinter.hpp"
 #include "Error.hpp"
@@ -13,28 +31,11 @@
 #include "Prompt.hpp"
 #include "TTY.hpp"
 
-#include <shell/ProcessGroup.hpp>
-
-#include <crispy/assert.h>
-#include <crispy/utils.h>
-
-#include <CoreVM/CoreVM.hpp>
-
-#include <cstdio>
-#include <cstring>
-#include <expected>
-#include <filesystem>
-#include <format>
-#include <iostream>
-#include <map>
-#include <memory>
-#include <print>
-#include <set>
-
 #if !defined(_WIN32)
     #include <sys/wait.h>
 
     #include <fcntl.h>
+    #include <poll.h>
     #include <pwd.h>
     #include <unistd.h>
 #endif
@@ -231,12 +232,12 @@ void Shell::SubstitutionCapture::clear()
 // Shell implementation
 // ========================================================================
 
-Shell::Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance()) {}
+Shell::Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance())
+{
+}
 
 Shell::Shell(TTY& tty, Environment& env):
-    _env { env },
-    _tty { tty },
-    _processManager { PosixProcessManager::instance() }
+    _env { env }, _tty { tty }, _processManager { PosixProcessManager::instance() }
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
@@ -246,13 +247,23 @@ Shell::Shell(TTY& tty, Environment& env):
     // Capture the shell's process ID at startup
 #if !defined(_WIN32)
     _shellPid = static_cast<ProcessId>(getpid());
+    _shellPgid = static_cast<ProcessId>(getpgrp());
 #else
     _shellPid = static_cast<ProcessId>(GetCurrentProcessId());
+    _shellPgid = 0;
 #endif
+
+    // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
+    _signalFd = SignalHandler::initialize(this);
 
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
+}
+
+Shell::~Shell()
+{
+    SignalHandler::restore();
 }
 
 Environment& Shell::environment() noexcept
@@ -272,6 +283,53 @@ void Shell::setOptimize(bool optimize)
 
 int Shell::run()
 {
+#if !defined(_WIN32)
+    pollfd fds[2];
+    fds[0].fd = _tty.inputFd();
+    fds[0].events = POLLIN;
+    fds[1].fd = _signalFd; // -1 on non-Linux (ignored by poll when nfds=1)
+    fds[1].events = POLLIN;
+
+    int const nfds = (_signalFd >= 0) ? 2 : 1;
+
+    while (!_quit && prompt.ready())
+    {
+        // Check for pending signals on non-signalfd platforms
+        SignalHandler::processPendingSignals();
+
+        // Report completed jobs before prompting
+        reportJobStatus();
+
+        // Wait for input or signals
+        int const pollResult = poll(fds, static_cast<nfds_t>(nfds), -1);
+        if (pollResult < 0)
+        {
+            if (errno == EINTR)
+                continue; // Interrupted by signal, retry
+            break;
+        }
+
+        // Process signals first (if signalfd is readable)
+        if (_signalFd >= 0 && (fds[1].revents & POLLIN))
+            SignalHandler::processSignalFd();
+
+        // Check for pending signals again
+        SignalHandler::processPendingSignals();
+
+        // Report any newly completed jobs
+        reportJobStatus();
+
+        // Process input (if available)
+        if (fds[0].revents & POLLIN)
+        {
+            auto const lineBuffer = prompt.read();
+            debugLog()()("input buffer: {}", lineBuffer);
+
+            _exitCode = execute(lineBuffer);
+        }
+    }
+#else
+    // Windows fallback: simple loop without poll
     while (!_quit && prompt.ready())
     {
         auto const lineBuffer = prompt.read();
@@ -279,6 +337,7 @@ int Shell::run()
 
         _exitCode = execute(lineBuffer);
     }
+#endif
 
     return _quit ? _exitCode : EXIT_SUCCESS;
 }
@@ -349,8 +408,7 @@ int Shell::execute(std::string const& lineBuffer)
 
         CoreVM::Handler* main = _currentProgram->findHandler("@main");
         assert(main != nullptr);
-        auto runner =
-            CoreVM::Runner(main, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+        auto runner = CoreVM::Runner(main, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
         _runner = &runner;
         runner.run();
         return _exitCode;
@@ -673,6 +731,43 @@ void Shell::registerBuiltinFunctions()
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinFunctionCall, this);
+
+    // Job control builtins
+    registerFunction("jobs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinJobs, this);
+
+    registerFunction("fg")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinFg, this);
+
+    registerFunction("fg")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinFg, this);
+
+    registerFunction("bg")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinBg, this);
+
+    registerFunction("bg")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinBg, this);
+
+    registerFunction("wait")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinWait, this);
+
+    registerFunction("wait")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinWait, this);
+
+    registerFunction("internal.cmd_exec_piped_background")
+        .param<std::string>("command")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinCmdExecPipedBackground, this);
     // clang-format on
 }
 
@@ -710,8 +805,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         for (size_t i = 1; i < args.size(); ++i)
             _positionalParameters.push_back(args.at(i));
 
-        auto runner =
-            CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+        auto runner = CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
         runner.run();
 
         _positionalParameters = std::move(savedPositionalParams);
@@ -1900,6 +1994,374 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
     auto runner = CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
     runner.run();
     context.setResult(CoreVM::CoreNumber(_exitCode));
+}
+
+void Shell::builtinJobs(CoreVM::Params& context)
+{
+    auto const jobs = jobTable.listJobs();
+    for (auto const* job: jobs)
+    {
+        char const marker = (jobTable.getCurrentJob() && job->id == jobTable.getCurrentJob()->id)     ? '+'
+                            : (jobTable.getPreviousJob() && job->id == jobTable.getPreviousJob()->id) ? '-'
+                                                                                                      : ' ';
+        std::string stateStr;
+        switch (job->state)
+        {
+            case JobState::Running: stateStr = "Running"; break;
+            case JobState::Stopped: stateStr = "Stopped"; break;
+            case JobState::Done: stateStr = "Done"; break;
+            case JobState::Terminated: stateStr = std::format("Terminated ({})", job->signal); break;
+        }
+
+        std::println("[{}]{} {}\t{}", job->id, marker, stateStr, job->command);
+    }
+
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
+}
+
+void Shell::builtinFg(CoreVM::Params& context)
+{
+#if !defined(_WIN32)
+    // Get job to foreground
+    Job* job = nullptr;
+    if (context.count() > 1)
+    {
+        int const jobId = static_cast<int>(context.getInt(1));
+        job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("fg: %{}: no such job", jobId);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+    else
+    {
+        job = jobTable.getCurrentJob();
+        if (!job)
+        {
+            error("fg: no current job");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+
+    // Print the command being resumed
+    std::println("{}", job->command);
+
+    // Give the job's process group control of the terminal
+    auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), job->pgid);
+    if (!setFgResult.has_value())
+    {
+        error("fg: failed to set foreground process group: {}", toString(setFgResult.error()));
+    }
+
+    // If the job was stopped, send SIGCONT
+    if (job->state == JobState::Stopped)
+    {
+        auto const sigResult = _processManager.sendSignal(-static_cast<int>(job->pgid), SIGCONT);
+        if (!sigResult.has_value())
+        {
+            error("fg: failed to send SIGCONT: {}", toString(sigResult.error()));
+        }
+        job->state = JobState::Running;
+    }
+
+    // Wait for the job to complete or stop
+    for (ProcessId const pid: job->pids)
+    {
+        int status = 0;
+        pid_t const waitedPid = waitpid(static_cast<pid_t>(pid), &status, WUNTRACED);
+        if (waitedPid > 0)
+        {
+            WaitResult result;
+            if (WIFEXITED(status))
+            {
+                result.exitCode = WEXITSTATUS(status);
+                _exitCode = result.exitCode;
+            }
+            else if (WIFSIGNALED(status))
+            {
+                result.signaled = true;
+                result.signal = WTERMSIG(status);
+                _exitCode = 128 + result.signal;
+            }
+            else if (WIFSTOPPED(status))
+            {
+                result.stopped = true;
+                result.signal = WSTOPSIG(status);
+            }
+            jobTable.updateJobState(pid, result);
+        }
+    }
+
+    // Restore shell's terminal control
+    auto const restoreResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+    if (!restoreResult.has_value())
+    {
+        error("fg: failed to restore shell foreground: {}", toString(restoreResult.error()));
+    }
+
+    context.setResult(CoreVM::CoreNumber(_exitCode));
+#else
+    error("fg: not supported on Windows");
+    _exitCode = 1;
+    context.setResult(CoreVM::CoreNumber(1));
+#endif
+}
+
+void Shell::builtinBg(CoreVM::Params& context)
+{
+#if !defined(_WIN32)
+    // Get job to background
+    Job* job = nullptr;
+    if (context.count() > 1)
+    {
+        int const jobId = static_cast<int>(context.getInt(1));
+        job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("bg: %{}: no such job", jobId);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+    else
+    {
+        job = jobTable.getCurrentJob();
+        if (!job)
+        {
+            error("bg: no current job");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+
+    if (job->state != JobState::Stopped)
+    {
+        error("bg: job {} not stopped", job->id);
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    // Print the command being resumed
+    std::println("[{}]+ {} &", job->id, job->command);
+
+    // Send SIGCONT to the process group
+    auto const sigResult = _processManager.sendSignal(-static_cast<int>(job->pgid), SIGCONT);
+    if (!sigResult.has_value())
+    {
+        error("bg: failed to send SIGCONT: {}", toString(sigResult.error()));
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    job->state = JobState::Running;
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
+#else
+    error("bg: not supported on Windows");
+    _exitCode = 1;
+    context.setResult(CoreVM::CoreNumber(1));
+#endif
+}
+
+void Shell::builtinWait(CoreVM::Params& context)
+{
+#if !defined(_WIN32)
+    if (context.count() > 1)
+    {
+        // Wait for specific job
+        int const jobId = static_cast<int>(context.getInt(1));
+        Job* job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("wait: %{}: no such job", jobId);
+            _exitCode = 127;
+            context.setResult(CoreVM::CoreNumber(127));
+            return;
+        }
+
+        // Wait for all processes in the job
+        for (ProcessId const pid: job->pids)
+        {
+            int status = 0;
+            waitpid(static_cast<pid_t>(pid), &status, 0);
+            if (WIFEXITED(status))
+                _exitCode = WEXITSTATUS(status);
+            else if (WIFSIGNALED(status))
+                _exitCode = 128 + WTERMSIG(status);
+        }
+
+        job->state = JobState::Done;
+        job->exitCode = _exitCode;
+    }
+    else
+    {
+        // Wait for all background jobs
+        auto jobs = jobTable.listJobs();
+        for (auto const* constJob: jobs)
+        {
+            if (constJob->state != JobState::Running && constJob->state != JobState::Stopped)
+                continue;
+
+            // Get mutable job
+            Job* job = jobTable.getJob(constJob->id);
+            if (!job)
+                continue;
+
+            for (ProcessId const pid: job->pids)
+            {
+                int status = 0;
+                waitpid(static_cast<pid_t>(pid), &status, 0);
+                if (WIFEXITED(status))
+                    _exitCode = WEXITSTATUS(status);
+                else if (WIFSIGNALED(status))
+                    _exitCode = 128 + WTERMSIG(status);
+            }
+
+            job->state = JobState::Done;
+            job->exitCode = _exitCode;
+        }
+    }
+
+    context.setResult(CoreVM::CoreNumber(_exitCode));
+#else
+    error("wait: not supported on Windows");
+    _exitCode = 1;
+    context.setResult(CoreVM::CoreNumber(1));
+#endif
+}
+
+void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
+{
+#if !defined(_WIN32)
+    std::string const command = context.getString(1);
+
+    if (cmdBuilderArgs().empty())
+    {
+        error("No command to execute");
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    std::string const& program = cmdBuilderArgs().at(0);
+    auto const programPath = resolveProgram(program);
+
+    if (!programPath.has_value())
+    {
+        error("{}: {}", program, toString(programPath.error()));
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    // Close any existing pipeline pipe (background jobs start fresh)
+    _currentPipelineBuilder.currentPipe.reset();
+
+    SpawnConfig config;
+    config.program = *programPath;
+    config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
+    config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
+    config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
+    config.processGroup = std::make_optional<ProcessId>(0); // Create new process group
+    config.closeExtraFds = true;
+    config.keepOpenFds = _procSubstExposedFds;
+
+    applyRedirects(config);
+
+    auto const spawnResult = _processManager.spawn(config);
+    if (!spawnResult.has_value())
+    {
+        error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    ProcessId const pid = spawnResult.value();
+    _lastBackgroundPid = pid;
+
+    // Add to job table
+    std::vector<ProcessId> pids;
+    pids.push_back(pid);
+    int const jobId = jobTable.addJob(pid, std::move(pids), command);
+
+    // Print job info
+    std::println("[{}] {}", jobId, pid);
+
+    if (!_cmdBuilderStack.empty())
+        _cmdBuilderStack.pop_back();
+
+    // Background jobs return 0 immediately
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
+#else
+    error("Background execution not supported on Windows");
+    context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+#endif
+}
+
+void Shell::onSigchld()
+{
+#if !defined(_WIN32)
+    // Reap all terminated/stopped children
+    while (true)
+    {
+        int status = 0;
+        pid_t const pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+        if (pid <= 0)
+            break;
+
+        WaitResult result;
+        if (WIFEXITED(status))
+        {
+            result.exitCode = WEXITSTATUS(status);
+        }
+        else if (WIFSIGNALED(status))
+        {
+            result.signaled = true;
+            result.signal = WTERMSIG(status);
+            result.exitCode = 128 + result.signal;
+        }
+        else if (WIFSTOPPED(status))
+        {
+            result.stopped = true;
+            result.signal = WSTOPSIG(status);
+        }
+
+        // Update job table with this result
+        jobTable.updateJobState(static_cast<ProcessId>(pid), result);
+    }
+#endif
+}
+
+void Shell::reportJobStatus()
+{
+    auto unnotified = jobTable.getUnnotifiedJobs();
+    for (Job* job: unnotified)
+    {
+        char const marker = (job->id == jobTable.getCurrentJob()->id) ? '+' : '-';
+        std::string stateStr;
+
+        switch (job->state)
+        {
+            case JobState::Done: stateStr = "Done"; break;
+            case JobState::Terminated: stateStr = std::format("Terminated (signal {})", job->signal); break;
+            default: continue; // Only report completed jobs
+        }
+
+        std::println("[{}]{} {}\t{}", job->id, marker, stateStr, job->command);
+        job->notified = true;
+    }
+
+    // Clean up notified completed jobs
+    jobTable.cleanupCompletedJobs();
 }
 
 void Shell::cleanupProcSubst()

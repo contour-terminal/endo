@@ -4,8 +4,11 @@ add_library(Shell STATIC
     ASTPrinter.cpp
     DiagnosticsAdapter.hpp
     DiagnosticsAdapter.cpp
+    Error.hpp
     IRGenerator.hpp
     IRGenerator.cpp
+    Job.hpp
+    Job.cpp
     Lexer.hpp
     Lexer.cpp
     Parser.hpp
@@ -20,6 +23,8 @@ add_library(Shell STATIC
     Prompt.cpp
     Shell.hpp
     Shell.cpp
+    SignalHandler.hpp
+    SignalHandler.cpp
     Suggestions.hpp
     Suggestions.cpp
     TTY.hpp

@@ -64,7 +64,8 @@ struct WaitResult
 {
     int exitCode = 0;      ///< Exit code of the process
     bool signaled = false; ///< Whether the process was terminated by a signal
-    int signal = 0;        ///< Signal number if signaled is true
+    bool stopped = false;  ///< Whether the process was stopped (SIGTSTP/SIGSTOP)
+    int signal = 0;        ///< Signal number if signaled or stopped is true
 };
 
 } // namespace endo

@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "Pipe.hpp"
-#include "Process.hpp"
-#include "Prompt.hpp"
-#include "TTY.hpp"
-
 #include <shell/ProcessGroup.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -18,6 +13,13 @@
 #include <set>
 #include <string>
 #include <vector>
+
+#include "Job.hpp"
+#include "Pipe.hpp"
+#include "Process.hpp"
+#include "Prompt.hpp"
+#include "SignalHandler.hpp"
+#include "TTY.hpp"
 
 namespace endo
 {
@@ -68,7 +70,7 @@ class Shell final: public CoreVM::Runtime
 {
   public:
     Shell();
-    ~Shell() = default;
+    ~Shell();
 
     Shell(TTY& tty, Environment& env);
 
@@ -80,8 +82,15 @@ class Shell final: public CoreVM::Runtime
     int run();
     int execute(std::string const& lineBuffer);
 
+    /// Called when SIGCHLD is received to reap child processes.
+    void onSigchld();
+
+    /// Reports status of completed/stopped background jobs to the user.
+    void reportJobStatus();
+
     Prompt prompt;
     std::vector<ProcessGroup> processGroups;
+    JobTable jobTable; ///< Table of background jobs
 
   private:
     void registerBuiltinFunctions();
@@ -147,6 +156,11 @@ class Shell final: public CoreVM::Runtime
     void builtinCaseMatch(CoreVM::Params& context);
     void builtinFunctionRegister(CoreVM::Params& context);
     void builtinFunctionCall(CoreVM::Params& context);
+    void builtinJobs(CoreVM::Params& context);
+    void builtinFg(CoreVM::Params& context);
+    void builtinBg(CoreVM::Params& context);
+    void builtinWait(CoreVM::Params& context);
+    void builtinCmdExecPipedBackground(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();
@@ -209,6 +223,8 @@ class Shell final: public CoreVM::Runtime
 
     int _exitCode = -1;
     ProcessId _shellPid = 0;
+    ProcessId _shellPgid = 0; ///< Shell's process group ID
+    int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
     std::vector<std::vector<std::string>> _cmdBuilderStack;

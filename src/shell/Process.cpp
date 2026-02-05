@@ -2,9 +2,13 @@
 #include "Process.hpp"
 
 #if !defined(_WIN32)
+    #include <cerrno>
+    #include <csignal>
+
     #include <sys/wait.h>
 
     #include <fcntl.h>
+    #include <termios.h>
     #include <unistd.h>
     #if defined(__linux__)
         #include <linux/close_range.h>
@@ -72,17 +76,88 @@ std::expected<WaitResult, ShellError> PosixProcessManager::wait(ProcessId pid)
         return std::unexpected(ShellError::WaitFailed);
 
     WaitResult result;
-    if (WIFSIGNALED(wstatus))
+    if (WIFEXITED(wstatus))
+    {
+        result.exitCode = WEXITSTATUS(wstatus);
+    }
+    else if (WIFSIGNALED(wstatus))
     {
         result.signaled = true;
         result.signal = WTERMSIG(wstatus);
         result.exitCode = 128 + result.signal;
     }
-    else if (WIFEXITED(wstatus))
+    else if (WIFSTOPPED(wstatus))
     {
-        result.exitCode = WEXITSTATUS(wstatus);
+        result.stopped = true;
+        result.signal = WSTOPSIG(wstatus);
     }
     return result;
+}
+
+std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> PosixProcessManager::waitPgid(
+    ProcessId pgid, WaitOptions options)
+{
+    int waitFlags = 0;
+    switch (options)
+    {
+        case WaitOptions::Block: break;
+        case WaitOptions::NoHang: waitFlags = WNOHANG; break;
+        case WaitOptions::Untraced: waitFlags = WNOHANG | WUNTRACED; break;
+    }
+
+    int wstatus = 0;
+    pid_t const result = waitpid(-pgid, &wstatus, waitFlags);
+
+    if (result == -1)
+    {
+        if (errno == ECHILD)
+            return std::nullopt; // No children in this process group
+        return std::unexpected(ShellError::WaitFailed);
+    }
+
+    if (result == 0)
+        return std::nullopt; // No state change (WNOHANG)
+
+    WaitResult waitResult;
+    if (WIFEXITED(wstatus))
+    {
+        waitResult.exitCode = WEXITSTATUS(wstatus);
+    }
+    else if (WIFSIGNALED(wstatus))
+    {
+        waitResult.signaled = true;
+        waitResult.signal = WTERMSIG(wstatus);
+        waitResult.exitCode = 128 + waitResult.signal;
+    }
+    else if (WIFSTOPPED(wstatus))
+    {
+        waitResult.stopped = true;
+        waitResult.signal = WSTOPSIG(wstatus);
+    }
+
+    return std::make_pair(static_cast<ProcessId>(result), waitResult);
+}
+
+std::expected<void, ShellError> PosixProcessManager::sendSignal(ProcessId pid, int signal)
+{
+    if (kill(pid, signal) == -1)
+        return std::unexpected(ShellError::ExecutionFailed);
+    return {};
+}
+
+std::expected<ProcessId, ShellError> PosixProcessManager::getForegroundPgrp(NativeHandle fd)
+{
+    pid_t const pgid = tcgetpgrp(fd);
+    if (pgid == -1)
+        return std::unexpected(ShellError::ExecutionFailed);
+    return static_cast<ProcessId>(pgid);
+}
+
+std::expected<void, ShellError> PosixProcessManager::setForegroundPgrp(NativeHandle fd, ProcessId pgid)
+{
+    if (tcsetpgrp(fd, pgid) == -1)
+        return std::unexpected(ShellError::ExecutionFailed);
+    return {};
 }
 
 std::expected<void, ShellError> PosixProcessManager::changeDirectory(std::filesystem::path const& path)
@@ -93,8 +168,8 @@ std::expected<void, ShellError> PosixProcessManager::changeDirectory(std::filesy
 }
 
 std::expected<NativeHandle, ShellError> PosixProcessManager::openFile(std::filesystem::path const& path,
-                                                                       int flags,
-                                                                       int mode)
+                                                                      int flags,
+                                                                      int mode)
 {
     NativeHandle const fd = open(path.c_str(), flags, mode);
     if (fd == InvalidHandle)
@@ -132,14 +207,14 @@ void PosixProcessManager::closeHandle(NativeHandle handle) noexcept
 
 void PosixProcessManager::closeExtraHandles() noexcept
 {
-#if defined(__linux__)
+    #if defined(__linux__)
     close_range(STDERR_FILENO + 1, ~0U, 0);
-#else
+    #else
     // Fallback for non-Linux: manually close FDs 3 and above
     int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
     for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
         ::close(fd);
-#endif
+    #endif
 }
 
 void PosixProcessManager::closeExtraHandlesExcept(std::vector<NativeHandle> const& keepOpen) noexcept

@@ -86,13 +86,18 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         std::vector<std::unique_ptr<ast::Expr>> const& expressions);
 
     /// Builds command arguments using the command builder builtins.
-    void buildCommandArgs(std::string const& programName, std::vector<std::unique_ptr<ast::Expr>> const& args);
+    void buildCommandArgs(std::string const& programName,
+                          std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     /// Executes the built command (non-piped version).
     CoreVM::Value* execBuiltCommand();
 
     /// Executes the built command (piped version).
     CoreVM::Value* execBuiltCommandPiped(bool lastInChain);
+
+    /// Executes the built command in the background (job control).
+    CoreVM::Value* execBuiltCommandPipedBackground(std::string const& programName,
+                                                   std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args);
 

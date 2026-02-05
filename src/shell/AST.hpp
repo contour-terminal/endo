@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "Lexer.hpp"
-
 #include <shell/Visitor.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -14,6 +12,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "Lexer.hpp"
 
 namespace endo::ast
 {
@@ -532,8 +532,12 @@ struct CommandFileSubst final: public Expr
 struct CallPipeline final: public Statement
 {
     std::vector<std::unique_ptr<ProgramCall>> calls;
+    bool background = false; ///< True if command ends with & (run in background)
 
-    CallPipeline(std::vector<std::unique_ptr<ProgramCall>> calls): calls(std::move(calls)) {}
+    CallPipeline(std::vector<std::unique_ptr<ProgramCall>> calls, bool bg = false):
+        calls(std::move(calls)), background(bg)
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -672,8 +676,8 @@ struct CaseClause
 /// Pattern matching construct similar to switch in other languages.
 struct CaseStmt final: public Statement
 {
-    std::unique_ptr<Expr> word;       ///< Word to match against patterns
-    std::vector<CaseClause> clauses;  ///< Pattern-body pairs
+    std::unique_ptr<Expr> word;      ///< Word to match against patterns
+    std::vector<CaseClause> clauses; ///< Pattern-body pairs
 
     CaseStmt(std::unique_ptr<Expr> word, std::vector<CaseClause> clauses):
         word(std::move(word)), clauses(std::move(clauses))

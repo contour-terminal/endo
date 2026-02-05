@@ -26,6 +26,14 @@ struct SpawnConfig
     std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
 };
 
+/// Wait options for non-blocking waits
+enum class WaitOptions
+{
+    Block,    ///< Block until process state changes
+    NoHang,   ///< Return immediately if no state change
+    Untraced, ///< Also report stopped processes (WUNTRACED)
+};
+
 /// Abstract interface for process management operations.
 ///
 /// This interface abstracts platform-specific process operations, enabling
@@ -46,6 +54,35 @@ class ProcessManager
     /// @param pid Process ID to wait for
     /// @return Wait result on success, or an error
     [[nodiscard]] virtual std::expected<WaitResult, ShellError> wait(ProcessId pid) = 0;
+
+    /// Non-blocking wait for any process in a process group.
+    ///
+    /// @param pgid Process group ID (negative pid waits for any in group)
+    /// @param options Wait options (NoHang, Untraced)
+    /// @return Optional pair of (pid, result) if a process changed state, nullopt if no change
+    [[nodiscard]] virtual std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> waitPgid(
+        ProcessId pgid, WaitOptions options) = 0;
+
+    /// Sends a signal to a process or process group.
+    ///
+    /// @param pid Process ID (positive) or process group ID (negative)
+    /// @param signal Signal number to send
+    /// @return Success or an error
+    [[nodiscard]] virtual std::expected<void, ShellError> sendSignal(ProcessId pid, int signal) = 0;
+
+    /// Gets the foreground process group of a terminal.
+    ///
+    /// @param fd File descriptor of the terminal
+    /// @return Process group ID on success, or an error
+    [[nodiscard]] virtual std::expected<ProcessId, ShellError> getForegroundPgrp(NativeHandle fd) = 0;
+
+    /// Sets the foreground process group of a terminal.
+    ///
+    /// @param fd File descriptor of the terminal
+    /// @param pgid Process group ID to set as foreground
+    /// @return Success or an error
+    [[nodiscard]] virtual std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd,
+                                                                            ProcessId pgid) = 0;
 
     /// Changes the current working directory.
     ///
@@ -102,6 +139,11 @@ class PosixProcessManager final: public ProcessManager
 
     [[nodiscard]] std::expected<ProcessId, ShellError> spawn(SpawnConfig const& config) override;
     [[nodiscard]] std::expected<WaitResult, ShellError> wait(ProcessId pid) override;
+    [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> waitPgid(
+        ProcessId pgid, WaitOptions options) override;
+    [[nodiscard]] std::expected<void, ShellError> sendSignal(ProcessId pid, int signal) override;
+    [[nodiscard]] std::expected<ProcessId, ShellError> getForegroundPgrp(NativeHandle fd) override;
+    [[nodiscard]] std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd, ProcessId pgid) override;
     [[nodiscard]] std::expected<void, ShellError> changeDirectory(std::filesystem::path const& path) override;
     [[nodiscard]] std::expected<NativeHandle, ShellError> openFile(std::filesystem::path const& path,
                                                                    int flags,

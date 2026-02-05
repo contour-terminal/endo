@@ -1249,3 +1249,62 @@ TEST_CASE("shell.control.while_continue")
         shell("for i in 1 2 3; do echo before; if true; then continue; fi; echo after; done").output();
     CHECK(escape(result) == escape("before\nbefore\nbefore\n"));
 }
+
+// ========================================================================
+// Job Management Tests
+// ========================================================================
+
+TEST_CASE("shell.jobs.background_simple")
+{
+    // Background execution with & should return immediately (exit code 0)
+    TestShell shell;
+    // Run a short-lived background command - returns immediately
+    auto exitCode = shell("sleep 0 &").exitCode;
+    CHECK(exitCode == 0);
+}
+
+TEST_CASE("shell.jobs.background_sets_exit_zero")
+{
+    // Background execution should return exit code 0 immediately
+    TestShell shell;
+    CHECK(shell("sleep 0 &").exitCode == 0);
+}
+
+TEST_CASE("shell.jobs.dollar_bang")
+{
+    // $! should contain the PID of the last background process
+    TestShell shell;
+    shell("sleep 0 &");
+    // Get the background PID
+    auto output = shell("echo $!").output();
+    // Should output a number (the PID)
+    CHECK(!output.empty());
+    // The output should contain digits (a PID)
+    bool hasDigits = false;
+    for (char c: output)
+    {
+        if (std::isdigit(c))
+            hasDigits = true;
+    }
+    CHECK(hasDigits);
+}
+
+TEST_CASE("shell.jobs.jobs_builtin_empty")
+{
+    // jobs builtin with no background jobs should produce no output
+    TestShell shell;
+    auto result = shell("jobs").output();
+    CHECK(result.empty());
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.jobs.wait_all")
+{
+    // wait with no arguments should wait for all background jobs
+    TestShell shell;
+    // Start a background job and wait for it
+    shell("sleep 0 &");
+    auto waitExitCode = shell("wait").exitCode;
+    // Wait should complete successfully
+    CHECK(waitExitCode == 0);
+}

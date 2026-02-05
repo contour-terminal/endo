@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Parser.hpp"
-
-#include "ASTPrinter.hpp"
-#include "Lexer.hpp"
-
 #include <shell/AST.hpp>
 #include <shell/DiagnosticsAdapter.hpp>
 #include <shell/ScopedLogger.hpp>
@@ -19,6 +15,8 @@
 #include <optional>
 #include <ranges>
 
+#include "ASTPrinter.hpp"
+#include "Lexer.hpp"
 #include "LogConfig.hpp"
 
 // Use function-local static to avoid C++20 module static initialization issues
@@ -43,9 +41,7 @@ inline auto& parserLog()
 namespace endo
 {
 
-Parser::Parser(CoreVM::Runtime& runtime,
-               CoreVM::diagnostics::Report& report,
-               std::unique_ptr<Source> source):
+Parser::Parser(CoreVM::Runtime& runtime, CoreVM::diagnostics::Report& report, std::unique_ptr<Source> source):
     _runtime { runtime }, _report { report }, _lexer { std::move(source) }
 {
 }
@@ -97,7 +93,8 @@ bool Parser::isEndOfStmt() const noexcept
         || _lexer.currentToken() == Token::DblSemicolon
         || _lexer.currentToken() == Token::AmpAmp
         || _lexer.currentToken() == Token::PipePipe
-        || _lexer.currentToken() == Token::RndClose)
+        || _lexer.currentToken() == Token::RndClose
+        || _lexer.currentToken() == Token::Ampersand)
         return true;
 
     // Backtick is end-of-statement only when we're inside a backtick substitution
@@ -135,8 +132,7 @@ bool Parser::isParameterToken() const noexcept
 
 std::unique_ptr<ast::Statement> Parser::parseBlock(std::string_view traceMessage)
 {
-    TRACE_SCOPE(
-        std::format("parseBlock{}", traceMessage.empty() ? "" : std::format(" ({})", traceMessage)));
+    TRACE_SCOPE(std::format("parseBlock{}", traceMessage.empty() ? "" : std::format(" ({})", traceMessage)));
     auto scope = std::make_unique<ast::CompoundStmt>();
     while (!isEndOfBlock())
     {
@@ -152,9 +148,8 @@ std::unique_ptr<ast::Statement> Parser::parseBlock(std::string_view traceMessage
         TRACE_FMT("Parsed statement: {}", ast::ASTPrinter::print(*stmt));
         scope->statements.emplace_back(std::move(stmt));
     }
-    TRACE_FMT("Parsed scope.3 (current token: {}): {}",
-              _lexer.currentLiteral(),
-              ast::ASTPrinter::print(*scope));
+    TRACE_FMT(
+        "Parsed scope.3 (current token: {}): {}", _lexer.currentLiteral(), ast::ASTPrinter::print(*scope));
     return scope;
 }
 
@@ -249,9 +244,8 @@ std::unique_ptr<ast::IfStmt> Parser::parseIf()
     }
     else if (_lexer.isDirective("else"))
     {
-        TRACE_FMT("Parsing else branch (current token: {}, '{}')",
-                  _lexer.currentToken(),
-                  _lexer.currentLiteral());
+        TRACE_FMT(
+            "Parsing else branch (current token: {}, '{}')", _lexer.currentToken(), _lexer.currentLiteral());
         _lexer.nextToken();
         elseBranch = parseBlock("elseBranch");
         ;
@@ -266,8 +260,7 @@ std::unique_ptr<ast::IfStmt> Parser::parseIf()
     TRACE_FMT("Parsed if statement finished. Current token: {}", _lexer.currentLiteral());
     consumeDirective("fi");
 
-    return std::make_unique<ast::IfStmt>(
-        std::move(condition), std::move(thenBranch), std::move(elseBranch));
+    return std::make_unique<ast::IfStmt>(std::move(condition), std::move(thenBranch), std::move(elseBranch));
 }
 
 std::unique_ptr<ast::WhileStmt> Parser::parseWhile()
@@ -706,9 +699,9 @@ bool Parser::parseRedirect(std::vector<std::unique_ptr<ast::InputRedirect>>& inp
             {
                 int const targetFd = std::stoi(_lexer.currentLiteral());
                 _lexer.nextToken();
-                outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-                    std::make_unique<ast::FileDescriptor>(sourceFd),
-                    std::make_unique<ast::FileDescriptor>(targetFd)));
+                outputRedirects.emplace_back(
+                    std::make_unique<ast::OutputRedirect>(std::make_unique<ast::FileDescriptor>(sourceFd),
+                                                          std::make_unique<ast::FileDescriptor>(targetFd)));
             }
             else
             {
@@ -855,9 +848,7 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
                             if (!target)
                                 break;
                             outputRedirects.emplace_back(std::make_unique<ast::OutputRedirect>(
-                                std::make_unique<ast::FileDescriptor>(fdValue),
-                                std::move(target),
-                                false));
+                                std::make_unique<ast::FileDescriptor>(fdValue), std::move(target), false));
                         }
                         continue;
                     }
@@ -1078,8 +1069,7 @@ std::unique_ptr<ast::ParamExpansionExpr> Parser::parseParamExpansion()
     if (rest.empty())
     {
         // Just ${VAR} - but this should have been DollarBraceName
-        return std::make_unique<ast::ParamExpansionExpr>(
-            variable, ast::ParamExpansionOp::DefaultValue, "");
+        return std::make_unique<ast::ParamExpansionExpr>(variable, ast::ParamExpansionOp::DefaultValue, "");
     }
 
     // Parse the operator
@@ -1246,8 +1236,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithOr()
         auto right = parseArithAnd();
         if (!right)
             return nullptr;
-        left =
-            std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Or, std::move(left), std::move(right));
+        left = std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Or, std::move(left), std::move(right));
     }
     return left;
 }
@@ -1264,8 +1253,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithAnd()
         auto right = parseArithBitOr();
         if (!right)
             return nullptr;
-        left =
-            std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::And, std::move(left), std::move(right));
+        left = std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::And, std::move(left), std::move(right));
     }
     return left;
 }
@@ -1282,8 +1270,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithBitOr()
         auto right = parseArithBitXor();
         if (!right)
             return nullptr;
-        left = std::make_unique<ast::ArithBinaryExpr>(
-            ast::ArithOp::BitOr, std::move(left), std::move(right));
+        left = std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::BitOr, std::move(left), std::move(right));
     }
     return left;
 }
@@ -1301,8 +1288,8 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithBitXor()
         auto right = parseArithBitAnd();
         if (!right)
             return nullptr;
-        left = std::make_unique<ast::ArithBinaryExpr>(
-            ast::ArithOp::BitXor, std::move(left), std::move(right));
+        left =
+            std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::BitXor, std::move(left), std::move(right));
     }
     return left;
 }
@@ -1546,8 +1533,7 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithPow()
         auto right = parseArithPow(); // Right associative: 2**3**4 = 2**(3**4)
         if (!right)
             return nullptr;
-        return std::make_unique<ast::ArithBinaryExpr>(
-            ast::ArithOp::Pow, std::move(left), std::move(right));
+        return std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Pow, std::move(left), std::move(right));
     }
     return left;
 }
@@ -1738,8 +1724,7 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
     {
         _lexer.nextToken();
         std::vector<std::unique_ptr<ast::Expr>> parameters = parseParameterList();
-        CoreVM::NativeCallback const& callback =
-            *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
+        CoreVM::NativeCallback const& callback = *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
         return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
     }
     else if (_lexer.isDirective("export"))
@@ -1822,7 +1807,21 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
         return nullptr;
 
     if (_lexer.currentToken() != Token::Pipe)
+    {
+        // Check for trailing & (background execution)
+        bool const background = _lexer.currentToken() == Token::Ampersand;
+        if (background)
+            _lexer.nextToken(); // consume &
+
+        // Single command, optionally backgrounded
+        if (background)
+        {
+            std::vector<std::unique_ptr<ast::ProgramCall>> calls;
+            calls.emplace_back(std::move(call));
+            return std::make_unique<ast::CallPipeline>(std::move(calls), true);
+        }
         return call;
+    }
 
     std::vector<std::unique_ptr<ast::ProgramCall>> calls;
     calls.emplace_back(std::move(call));
@@ -1839,7 +1838,12 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
         }
     }
 
-    return std::make_unique<ast::CallPipeline>(std::move(calls));
+    // Check for trailing & (background execution for pipeline)
+    bool const background = _lexer.currentToken() == Token::Ampersand;
+    if (background)
+        _lexer.nextToken(); // consume &
+
+    return std::make_unique<ast::CallPipeline>(std::move(calls), background);
 }
 
 bool Parser::tryConsumeToken(Token token)
@@ -1992,8 +1996,7 @@ std::vector<std::string> Parser::expandRange(std::string_view range)
     // Check for numeric range
     int startNum = 0;
     int endNum = 0;
-    auto const startResult =
-        std::from_chars(startStr.data(), startStr.data() + startStr.size(), startNum);
+    auto const startResult = std::from_chars(startStr.data(), startStr.data() + startStr.size(), startNum);
     auto const endResult = std::from_chars(endStr.data(), endStr.data() + endStr.size(), endNum);
 
     if (startResult.ec == std::errc {} && endResult.ec == std::errc {}
@@ -2015,8 +2018,7 @@ std::vector<std::string> Parser::expandRange(std::string_view range)
     }
 
     // Check for single character alphabetic range
-    if (startStr.size() == 1 && endStr.size() == 1
-        && std::isalpha(static_cast<unsigned char>(startStr[0]))
+    if (startStr.size() == 1 && endStr.size() == 1 && std::isalpha(static_cast<unsigned char>(startStr[0]))
         && std::isalpha(static_cast<unsigned char>(endStr[0])))
     {
         char const startChar = startStr[0];

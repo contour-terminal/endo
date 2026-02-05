@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "IRGenerator.hpp"
-
-#include "ASTPrinter.hpp"
-
 #include <shell/AST.hpp>
 #include <shell/DiagnosticsAdapter.hpp>
 #include <shell/ScopedLogger.hpp>
@@ -10,6 +7,8 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <typeinfo>
+
+#include "ASTPrinter.hpp"
 
 // {{{ trace macros
 // clang-format off
@@ -193,16 +192,35 @@ void IRGenerator::visit(ast::CallPipeline const& node)
         {
             // Use dynamic argument building and execution
             buildCommandArgs(call->program, call->parameters);
-            _result = execBuiltCommandPiped(lastInChain);
+
+            // Check if this is the last command in a background pipeline
+            if (lastInChain && node.background)
+            {
+                _result = execBuiltCommandPipedBackground(call->program, call->parameters);
+            }
+            else
+            {
+                _result = execBuiltCommandPiped(lastInChain);
+            }
         }
         else
         {
-            // Use constant array (fast path)
-            std::vector<CoreVM::Value*> callArguments {};
-            callArguments.push_back(get(lastInChain));
-            callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
-            _result = createCallFunction(
-                getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+            // Check if this is the last command in a background pipeline
+            if (lastInChain && node.background)
+            {
+                // Build command args first for background execution
+                buildCommandArgs(call->program, call->parameters);
+                _result = execBuiltCommandPipedBackground(call->program, call->parameters);
+            }
+            else
+            {
+                // Use constant array (fast path)
+                std::vector<CoreVM::Value*> callArguments {};
+                callArguments.push_back(get(lastInChain));
+                callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
+                _result = createCallFunction(
+                    getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+            }
         }
 
         // End redirect context
@@ -230,8 +248,7 @@ void IRGenerator::visit(ast::CommandFileSubst const& node)
         return;
     }
 
-    auto* forkResult =
-        createCallFunction(getBuiltinFunction(*forkCb), { get(isWrite) }, "procsubst_fork");
+    auto* forkResult = createCallFunction(getBuiltinFunction(*forkCb), { get(isWrite) }, "procsubst_fork");
 
     // Check if we're the child (result == 0)
     auto* isChild = createNCmpEQ(forkResult, get(CoreVM::CoreNumber(0)));
@@ -378,8 +395,7 @@ void IRGenerator::visit(ast::HereDocument const& node)
     }
     auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
     auto* content = get(node.content);
-    _result =
-        createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
+    _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
 }
 
 void IRGenerator::visit(ast::HereString const& node)
@@ -394,8 +410,7 @@ void IRGenerator::visit(ast::HereString const& node)
     auto* content = codegen(node.content.get());
     if (!content)
         return;
-    _result =
-        createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_herestring");
+    _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_herestring");
 }
 
 void IRGenerator::visit(ast::LiteralExpr const& node)
@@ -475,8 +490,7 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
             reportTypeError("Internal error: expand.arith_getvar builtin not found");
             return nullptr;
         }
-        return createCallFunction(
-            getBuiltinFunction(*callback), { get(var->name) }, "expand.arith_getvar");
+        return createCallFunction(getBuiltinFunction(*callback), { get(var->name) }, "expand.arith_getvar");
     }
     else if (auto const* binary = dynamic_cast<ast::ArithBinaryExpr const*>(expr))
     {
@@ -500,8 +514,7 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
                     reportTypeError("Internal error: expand.arith_pow builtin not found");
                     return nullptr;
                 }
-                return createCallFunction(
-                    getBuiltinFunction(*callback), { left, right }, "expand.arith_pow");
+                return createCallFunction(getBuiltinFunction(*callback), { left, right }, "expand.arith_pow");
             }
             case ast::ArithOp::Lt: return createNCmpLT(left, right);
             case ast::ArithOp::Gt: return createNCmpGT(left, right);
@@ -766,8 +779,7 @@ void IRGenerator::visit(ast::ProgramCall const& node)
         // Use constant array (fast path)
         auto callArguments = std::vector<CoreVM::Value*> {};
         callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
-        _result =
-            createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
     }
 
     // End redirect context
@@ -1018,14 +1030,13 @@ void IRGenerator::visit(ast::CaseStmt const& node)
         for (size_t p = 0; p < clause.patterns.size(); ++p)
         {
             auto const& pattern = clause.patterns[p];
-            auto* match = createCallFunction(
-                getBuiltinFunction(*matchCb), { wordValue, get(pattern) }, "case_match");
+            auto* match =
+                createCallFunction(getBuiltinFunction(*matchCb), { wordValue, get(pattern) }, "case_match");
 
             // Create intermediate check block for next pattern (if any)
             CoreVM::BasicBlock* nextPatternCheck =
-                (p + 1 < clause.patterns.size())
-                    ? createBlock(std::format("case.check{}.pat{}", i, p + 1))
-                    : nextClause;
+                (p + 1 < clause.patterns.size()) ? createBlock(std::format("case.check{}.pat{}", i, p + 1))
+                                                 : nextClause;
 
             createCondBr(match, bodyBlocks[i], nextPatternCheck);
 
@@ -1132,8 +1143,7 @@ void IRGenerator::visit(ast::ReturnStmt const& node)
         auto* exitStatusCb = findCallback("getvar.exitstatus()S");
         if (exitStatusCb)
         {
-            auto* exitStr =
-                createCallFunction(getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
+            auto* exitStr = createCallFunction(getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
             returnValue = createS2N(exitStr);
         }
         else
@@ -1253,8 +1263,30 @@ CoreVM::Value* IRGenerator::execBuiltCommandPiped(bool lastInChain)
         reportTypeError("Internal error: internal.cmd_exec_piped builtin not found");
         return nullptr;
     }
+    return createCallFunction(getBuiltinFunction(*cmdExecCallback), { get(lastInChain) }, "cmd_exec_piped");
+}
+
+CoreVM::Value* IRGenerator::execBuiltCommandPipedBackground(
+    std::string const& programName, std::vector<std::unique_ptr<ast::Expr>> const& args)
+{
+    auto* cmdExecCallback = findCallback("internal.cmd_exec_piped_background(S)I");
+    if (!cmdExecCallback)
+    {
+        reportTypeError("Internal error: internal.cmd_exec_piped_background builtin not found");
+        return nullptr;
+    }
+
+    // Build the command string for the job table
+    std::string command = programName;
+    for (auto const& arg: args)
+    {
+        if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(arg.get()))
+            command += " " + lit->value;
+    }
+    command += " &";
+
     return createCallFunction(
-        getBuiltinFunction(*cmdExecCallback), { get(lastInChain) }, "cmd_exec_piped");
+        getBuiltinFunction(*cmdExecCallback), { get(command) }, "cmd_exec_piped_background");
 }
 
 std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(

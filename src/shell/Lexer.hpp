@@ -59,6 +59,7 @@ enum class Token
     DblRndClose,      // ))    (arithmetic expansion close)
     DblRndOpen,       // ((    (C-style for loop)
     DblSemicolon,     // ;;    (case clause terminator)
+    Ampersand,        // &     (background execution)
 };
 
 enum class BuiltinFunction
@@ -304,6 +305,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Backtick: name = "`"; break;
             case Tilde: name = "~"; break;
             case DollarBraceParam: name = "DollarBraceParam"; break;
+            case Ampersand: name = "&"; break;
         }
         return formatter<std::string_view>::format(name, ctx);
     }

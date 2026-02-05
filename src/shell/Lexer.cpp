@@ -35,8 +35,7 @@ Token Lexer::nextToken()
             nextChar();
             if (_currentChar == '&')
                 return consumeCharAndConfirmToken(Token::AmpAmp);
-            // Single & not currently used - consume as identifier part
-            return confirmToken(Token::Invalid);
+            return confirmToken(Token::Ampersand);
         case '>':
             nextChar();
             if (_currentChar == '>')
@@ -278,8 +277,7 @@ Token Lexer::consumeBracedVariable()
     if (_nextToken.literal.empty() || (_nextToken.literal.size() == 1 && _nextToken.literal[0] == '#'))
     {
         // Regular variable name: must start with alpha or underscore
-        if (!(_currentChar < 0x80
-              && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
+        if (!(_currentChar < 0x80 && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
         {
             if (_nextToken.literal.empty())
                 return confirmToken(Token::Invalid);
@@ -288,8 +286,7 @@ Token Lexer::consumeBracedVariable()
         }
 
         // Consume the variable name
-        while (_currentChar < 0x80
-               && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
+        while (_currentChar < 0x80 && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
         {
             _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
@@ -337,10 +334,9 @@ Token Lexer::consumeTilde()
 
     // Check if followed by a path separator or whitespace (standalone ~)
     // or followed by alphanumeric/underscore (username)
-    if (_currentChar == ' ' || _currentChar == '\t' || _currentChar == '\n' || _currentChar == '\r'
-        || eof() || _currentChar == ';' || _currentChar == '|' || _currentChar == '&'
-        || _currentChar == '>' || _currentChar == '<' || _currentChar == ')' || _currentChar == '"'
-        || _currentChar == '\'')
+    if (_currentChar == ' ' || _currentChar == '\t' || _currentChar == '\n' || _currentChar == '\r' || eof()
+        || _currentChar == ';' || _currentChar == '|' || _currentChar == '&' || _currentChar == '>'
+        || _currentChar == '<' || _currentChar == ')' || _currentChar == '"' || _currentChar == '\'')
     {
         // Standalone ~ - no username
         return confirmToken(Token::Tilde);
@@ -354,9 +350,9 @@ Token Lexer::consumeTilde()
         // The entire ~/path will be treated as one token
         _nextToken.literal = "~";
         while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
-               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
-               && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
-               && _currentChar != '"' && _currentChar != '\'')
+               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|' && _currentChar != '&'
+               && _currentChar != '>' && _currentChar != '<' && _currentChar != ')' && _currentChar != '"'
+               && _currentChar != '\'')
         {
             _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
@@ -365,9 +361,8 @@ Token Lexer::consumeTilde()
     }
 
     // Consume username: alphanumeric, underscore, dash
-    while (
-        _currentChar < 0x80
-        && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_' || _currentChar == '-'))
+    while (_currentChar < 0x80
+           && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_' || _currentChar == '-'))
     {
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
@@ -380,9 +375,9 @@ Token Lexer::consumeTilde()
         _nextToken.literal.clear();
         _nextToken.literal = username;
         while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
-               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
-               && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
-               && _currentChar != '"' && _currentChar != '\'')
+               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|' && _currentChar != '&'
+               && _currentChar != '>' && _currentChar != '<' && _currentChar != ')' && _currentChar != '"'
+               && _currentChar != '\'')
         {
             _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();

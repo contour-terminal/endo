@@ -53,6 +53,7 @@ the primary project; Endo development follows as resources permit.
 | Parameter expansion (`${var:-default}`, `${#var}`, etc.) | ✅ |
 | Arithmetic expansion (`$((expr))`) | ✅ |
 | Pathname expansion (globbing) `*`, `?`, `[...]`, `**` | ✅ |
+| Job management (`&`, `jobs`, `fg`, `bg`, `wait`) | ✅ |
 | Builtin command: `cat` | TODO |
 
 ### Not Yet Implemented
@@ -209,20 +210,34 @@ Windows support.
 - Functions are scoped to the current command execution (not persisted across separate execute() calls)
 - C-style for loops and `select` require language features not yet implemented
 
-### Phase 1.7: Job Management
+### Phase 1.7: Job Management ✅
+
+**Status:** Complete (except `Ctrl+Z` suspend handling - deferred to terminal integration)
 
 **Dependency:** Platform abstraction (Milestone 0.2)
 
 **Tasks:**
-- [ ] Implement background execution `&`
-- [ ] Implement `jobs` builtin
-- [ ] Implement `fg` builtin
-- [ ] Implement `bg` builtin
-- [ ] Implement `Ctrl+Z` suspend handling
-- [ ] Implement job status notifications
-- [ ] Handle process groups correctly
-- [ ] Remember exit codes from all pipeline processes
-- [ ] Add job management tests
+- [x] Implement background execution `&`
+- [x] Implement `jobs` builtin
+- [x] Implement `fg` builtin
+- [x] Implement `bg` builtin
+- [ ] Implement `Ctrl+Z` suspend handling → Deferred: requires terminal/TTY signal integration
+- [x] Implement job status notifications
+- [x] Handle process groups correctly
+- [x] Remember exit codes from all pipeline processes
+- [x] Add job management tests
+
+**Implementation Notes:**
+- Background execution (`&`) spawns commands in a new process group and returns immediately
+- `jobs` lists all background jobs with their state (Running, Stopped, Done)
+- `fg` brings a background job to the foreground and waits for completion
+- `bg` resumes a stopped job in the background
+- `wait` waits for all or specific background jobs to complete
+- `$!` contains the PID of the last background job
+- Uses `signalfd` on Linux for race-free SIGCHLD handling
+- Falls back to traditional signal handlers on macOS/BSD
+- Process groups are properly managed for job control
+- Ctrl+Z (SIGTSTP) handling deferred until terminal integration is complete
 
 ---
 
