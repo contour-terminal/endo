@@ -9,7 +9,7 @@ module;
 // clang-format off
 #if 0 // defined(TRACE_PARSER)
     #define TRACE_SCOPE(message) ScopedLogger _logger { message }
-    #define TRACE(message, ...) do { ScopedLogger::write(::fmt::format(message, __VA_ARGS__)); } while (0)
+    #define TRACE(message, ...) do { ScopedLogger::write(::std::format(message, __VA_ARGS__)); } while (0)
 #else
     #define TRACE_SCOPE(message) do {} while (0)
     #define TRACE(message, ...) do {} while (0)
@@ -52,7 +52,7 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     CoreVM::Value* codegen(ast::Node const* node)
     {
-        TRACE_SCOPE(fmt::format("codegen({})", node ? typeid(*node).name() : "nullptr"));
+        TRACE_SCOPE(std::format("codegen({})", node ? typeid(*node).name() : "nullptr"));
         _result = nullptr;
         if (node)
             node->accept(*this);
@@ -233,16 +233,17 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     CoreVM::Value* toBool(CoreVM::Value* value) { return createNCmpEQ(value, get(CoreVM::CoreNumber(0))); }
 
-    static std::vector<CoreVM::Constant*> createArray(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
+    std::vector<CoreVM::Constant*> createArray(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
     {
         auto irArray = std::vector<CoreVM::Constant*> {};
         for (auto const& expr: expressions)
         {
-            TRACE_SCOPE(fmt::format("Parameter: ", ast::ASTPrinter::print(*expr)));
-            if (auto* constant = dynamic_cast<CoreVM::Constant*>(expr.get()); constant != nullptr)
+            TRACE_SCOPE(std::format("Parameter: ", ast::ASTPrinter::print(*expr)));
+            auto* value = codegen(expr.get());
+            if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
                 irArray.push_back(constant);
             else
-                assert(!"TODO");
+                throw std::runtime_error("Non-constant expression in array context");
         }
         return irArray;
     }
@@ -250,14 +251,14 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        return IRGenerator::createArray(args);
+        return createArray(args);
     }
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
                                                   std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        auto callArguments = IRGenerator::createArray(args);
+        auto callArguments = createArray(args);
         callArguments.insert(callArguments.begin(), get(programName));
         return callArguments;
     }

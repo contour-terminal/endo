@@ -1,0 +1,316 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 25,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "linux-base",
+            "hidden": true,
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "clang-debug",
+            "inherits": "linux-base",
+            "displayName": "Clang Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "ENABLE_CLANG_TIDY": "ON",
+                "ENABLE_ASAN": "ON",
+                "ENABLE_UBSAN": "ON"
+            }
+        },
+        {
+            "name": "clang-release",
+            "inherits": "linux-base",
+            "displayName": "Clang Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++"
+            }
+        },
+        {
+            "name": "clang-release-native",
+            "inherits": "clang-release",
+            "displayName": "Clang Release (native arch)",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "ENABLE_NATIVE_ARCH": "ON"
+            }
+        },
+        {
+            "name": "clang-release-static",
+            "inherits": "clang-release",
+            "displayName": "Clang Release (static)",
+            "cacheVariables": {
+                "ENABLE_STATIC_LINKING": "ON"
+            }
+        },
+        {
+            "name": "clang-coverage",
+            "inherits": "linux-base",
+            "displayName": "Clang Coverage",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "ENABLE_COVERAGE": "ON"
+            }
+        },
+        {
+            "name": "clang-tsan",
+            "inherits": "linux-base",
+            "displayName": "Clang ThreadSanitizer",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "ENABLE_TSAN": "ON"
+            }
+        },
+        {
+            "name": "gcc-debug",
+            "inherits": "linux-base",
+            "displayName": "GCC Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
+            }
+        },
+        {
+            "name": "clang-pgo-instrument",
+            "inherits": "clang-release-native",
+            "displayName": "Clang PGO Instrumentation",
+            "cacheVariables": {
+                "ENABLE_PGO_INSTRUMENT": "ON"
+            }
+        },
+        {
+            "name": "clang-pgo-optimize",
+            "inherits": "clang-release-native",
+            "displayName": "Clang PGO Optimized",
+            "cacheVariables": {
+                "ENABLE_PGO_OPTIMIZE": "ON"
+            }
+        },
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "cl-debug",
+            "inherits": "windows-base",
+            "displayName": "MSVC Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
+            }
+        },
+        {
+            "name": "cl-release",
+            "inherits": "windows-base",
+            "displayName": "MSVC Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl"
+            }
+        },
+        {
+            "name": "clangcl-debug",
+            "inherits": "windows-base",
+            "displayName": "Clang-CL Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_C_COMPILER": "clang-cl",
+                "CMAKE_CXX_COMPILER": "clang-cl"
+            }
+        },
+        {
+            "name": "clangcl-release",
+            "inherits": "windows-base",
+            "displayName": "Clang-CL Release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_C_COMPILER": "clang-cl",
+                "CMAKE_CXX_COMPILER": "clang-cl"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "clang-debug",
+            "configurePreset": "clang-debug"
+        },
+        {
+            "name": "clang-release",
+            "configurePreset": "clang-release"
+        },
+        {
+            "name": "clang-release-native",
+            "configurePreset": "clang-release-native"
+        },
+        {
+            "name": "clang-release-static",
+            "configurePreset": "clang-release-static"
+        },
+        {
+            "name": "clang-coverage",
+            "configurePreset": "clang-coverage"
+        },
+        {
+            "name": "clang-tsan",
+            "configurePreset": "clang-tsan"
+        },
+        {
+            "name": "gcc-debug",
+            "configurePreset": "gcc-debug"
+        },
+        {
+            "name": "clang-pgo-instrument",
+            "configurePreset": "clang-pgo-instrument"
+        },
+        {
+            "name": "clang-pgo-optimize",
+            "configurePreset": "clang-pgo-optimize"
+        },
+        {
+            "name": "cl-debug",
+            "configurePreset": "cl-debug"
+        },
+        {
+            "name": "cl-release",
+            "configurePreset": "cl-release"
+        },
+        {
+            "name": "clangcl-debug",
+            "configurePreset": "clangcl-debug"
+        },
+        {
+            "name": "clangcl-release",
+            "configurePreset": "clangcl-release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "clang-debug",
+            "configurePreset": "clang-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-release",
+            "configurePreset": "clang-release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-release-native",
+            "configurePreset": "clang-release-native",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-release-static",
+            "configurePreset": "clang-release-static",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-coverage",
+            "configurePreset": "clang-coverage",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-tsan",
+            "configurePreset": "clang-tsan",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "gcc-debug",
+            "configurePreset": "gcc-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-pgo-instrument",
+            "configurePreset": "clang-pgo-instrument",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clang-pgo-optimize",
+            "configurePreset": "clang-pgo-optimize",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "cl-debug",
+            "configurePreset": "cl-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "cl-release",
+            "configurePreset": "cl-release",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clangcl-debug",
+            "configurePreset": "clangcl-debug",
+            "output": {
+                "outputOnFailure": true
+            }
+        },
+        {
+            "name": "clangcl-release",
+            "configurePreset": "clangcl-release",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}
