@@ -36,6 +36,7 @@ the primary project; Endo development follows as resources permit.
 | If-then-else-elif-fi statements | ✅ |
 | While-do-done statements | ✅ |
 | TTY abstraction with raw mode | ✅ |
+| Platform abstraction layer (Pipe, Process, TTY) | ✅ |
 | Grapheme cluster support for Unicode | ✅ |
 
 ### Partially Implemented (Infrastructure Exists)
@@ -69,17 +70,18 @@ Windows support.
 - [x] Implement proper UTF-8 handling in string literal parsing
 - [x] Add tests for Unicode identifiers and string content
 
-### 0.2 Platform Abstraction Layer (In Progress)
+### 0.2 Platform Abstraction Layer ✅
 
-**Current State:** Process management abstracted; pipes and TTY still use direct POSIX calls.
+**Status:** Complete (Windows stubs in place; full implementation deferred to Milestone 4)
 
 **Tasks:**
 - [x] Design platform abstraction interface for process management
-- [ ] Design platform abstraction interface for file descriptors and pipes
-- [ ] Design platform abstraction interface for TTY/console operations
+- [x] Design platform abstraction interface for file descriptors and pipes
+- [x] Design platform abstraction interface for TTY/console operations
 - [x] Implement Linux/POSIX backend
-- [ ] Implement Windows backend (ConPTY, CreateProcess)
-- [ ] Add CMake configuration for platform-specific compilation
+- [x] Add CMake configuration for platform-specific compilation
+- [x] Create Windows stubs (WindowsPipe, WindowsTTY, WindowsProcess)
+- [ ] Implement Windows backend (ConPTY, CreateProcess) → Deferred to Milestone 4
 
 ### 0.3 Error Handling Modernization (In Progress)
 
@@ -339,16 +341,19 @@ Windows support.
 
 ### Phase 4.2: Platform Implementation
 
-**Dependency:** Phase 4.1, Milestone 0.2 (abstraction interface)
+**Dependency:** Phase 4.1, Milestone 0.2 (abstraction interface ✅)
+
+**Current State:** Platform abstraction interfaces complete with stub implementations
+(`WindowsPipe.cpp`, `WindowsTTY.cpp`, `WindowsProcess.cpp`). Stubs return `NotImplemented` errors.
 
 **Design Decision:** Endo prefers forward slashes (`/`) as path separators on all platforms, including Windows.
 Windows APIs accept forward slashes, and this consistency simplifies auto-completion, path manipulation,
 and user muscle memory. Backslashes remain valid in user input but are normalized internally.
 
 **Tasks:**
-- [ ] Implement CreateProcess-based execution
-- [ ] Implement Windows pipe handling
-- [ ] Implement ConPTY integration for terminal
+- [ ] Implement CreateProcess-based execution (replace `WindowsProcess.cpp` stubs)
+- [ ] Implement Windows pipe handling (replace `WindowsPipe.cpp` stubs)
+- [ ] Implement ConPTY integration for terminal (replace `WindowsTTY.cpp` stubs)
 - [ ] Implement Windows console input handling
 - [ ] Handle Windows path separators (prefer forward slashes `/` over backslashes `\`)
 - [ ] Handle drive letters in paths (e.g., `C:/Users/...`)
