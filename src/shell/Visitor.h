@@ -5,6 +5,7 @@ namespace endo::ast
 {
 
 struct ArithExpansionExpr;
+struct BreakStmt;
 struct BuiltinChDirStmt;
 struct BuiltinSetStmt;
 struct BuiltinExportStmt;
@@ -14,9 +15,14 @@ struct BuiltinReadStmt;
 struct BuiltinTrueStmt;
 struct BuiltinUnsetStmt;
 struct CallPipeline;
+struct CaseStmt;
 struct CommandFileSubst;
 struct CompoundStmt;
+struct ContinueStmt;
 struct FileDescriptor;
+struct ForCStyleStmt;
+struct ForListStmt;
+struct FunctionDefStmt;
 struct GlobExpr;
 struct HereDocument;
 struct HereString;
@@ -28,6 +34,7 @@ struct LogicalOrStmt;
 struct OutputRedirect;
 struct ParamExpansionExpr;
 struct ProgramCall;
+struct ReturnStmt;
 struct SubstitutionExpr;
 struct TildeExpr;
 struct VariableExpr;
@@ -48,11 +55,18 @@ struct Visitor
     virtual void visit(CallPipeline const&) = 0;
 
     // flow control
+    virtual void visit(BreakStmt const&) = 0;
+    virtual void visit(CaseStmt const&) = 0;
     virtual void visit(CompoundStmt const&) = 0;
+    virtual void visit(ContinueStmt const&) = 0;
+    virtual void visit(ForCStyleStmt const&) = 0;
+    virtual void visit(ForListStmt const&) = 0;
+    virtual void visit(FunctionDefStmt const&) = 0;
     virtual void visit(IfStmt const&) = 0;
-    virtual void visit(WhileStmt const&) = 0;
     virtual void visit(LogicalAndStmt const&) = 0;
     virtual void visit(LogicalOrStmt const&) = 0;
+    virtual void visit(ReturnStmt const&) = 0;
+    virtual void visit(WhileStmt const&) = 0;
 
     // builtin statements
     virtual void visit(BuiltinExitStmt const&) = 0;

@@ -619,4 +619,119 @@ struct LogicalOrStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// For-list statement: `for var in list; do ...; done`
+///
+/// Iterates over a list of items, assigning each to the loop variable.
+struct ForListStmt final: public Statement
+{
+    std::string variable;                     ///< Loop variable name
+    std::vector<std::unique_ptr<Expr>> items; ///< Items to iterate
+    std::unique_ptr<Statement> body;          ///< Loop body
+
+    ForListStmt(std::string variable,
+                std::vector<std::unique_ptr<Expr>> items,
+                std::unique_ptr<Statement> body):
+        variable(std::move(variable)), items(std::move(items)), body(std::move(body))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// C-style for statement: `for ((init; cond; step)); do ...; done`
+///
+/// Traditional C-style for loop with arithmetic expressions.
+struct ForCStyleStmt final: public Statement
+{
+    std::unique_ptr<ArithExpr> init;      ///< Initialization expression (may be null)
+    std::unique_ptr<ArithExpr> condition; ///< Loop condition (may be null for infinite loop)
+    std::unique_ptr<ArithExpr> step;      ///< Step/increment expression (may be null)
+    std::unique_ptr<Statement> body;      ///< Loop body
+
+    ForCStyleStmt(std::unique_ptr<ArithExpr> init,
+                  std::unique_ptr<ArithExpr> condition,
+                  std::unique_ptr<ArithExpr> step,
+                  std::unique_ptr<Statement> body):
+        init(std::move(init)), condition(std::move(condition)), step(std::move(step)), body(std::move(body))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Case clause for pattern matching
+struct CaseClause
+{
+    std::vector<std::string> patterns; ///< Pipe-separated patterns
+    std::unique_ptr<Statement> body;   ///< Commands to execute on match
+};
+
+/// Case statement: `case word in pattern) ...; esac`
+///
+/// Pattern matching construct similar to switch in other languages.
+struct CaseStmt final: public Statement
+{
+    std::unique_ptr<Expr> word;       ///< Word to match against patterns
+    std::vector<CaseClause> clauses;  ///< Pattern-body pairs
+
+    CaseStmt(std::unique_ptr<Expr> word, std::vector<CaseClause> clauses):
+        word(std::move(word)), clauses(std::move(clauses))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Function definition: `function name() { ... }` or `name() { ... }`
+///
+/// Defines a shell function that can be called later.
+struct FunctionDefStmt final: public Statement
+{
+    std::string name;                ///< Function name
+    std::unique_ptr<Statement> body; ///< Function body
+
+    FunctionDefStmt(std::string name, std::unique_ptr<Statement> body):
+        name(std::move(name)), body(std::move(body))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Break statement: `break [n]`
+///
+/// Exits the innermost loop or the nth enclosing loop.
+struct BreakStmt final: public Statement
+{
+    int levels = 1; ///< Number of loop levels to break out of
+
+    explicit BreakStmt(int levels = 1): levels(levels) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Continue statement: `continue [n]`
+///
+/// Continues with the next iteration of the innermost loop or nth enclosing loop.
+struct ContinueStmt final: public Statement
+{
+    int levels = 1; ///< Number of loop levels to skip
+
+    explicit ContinueStmt(int levels = 1): levels(levels) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Return statement: `return [n]`
+///
+/// Returns from a function with the specified exit code (default: $?).
+struct ReturnStmt final: public Statement
+{
+    std::unique_ptr<Expr> value; ///< Optional return value (defaults to $?)
+
+    explicit ReturnStmt(std::unique_ptr<Expr> value = nullptr): value(std::move(value)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 } // namespace endo::ast

@@ -14,6 +14,7 @@ module;
 #include <map>
 #include <memory>
 #include <print>
+#include <set>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -472,6 +473,11 @@ export class Shell final: public CoreVM::Runtime
             .returnType(CoreVM::LiteralType::String)
             .bind(&Shell::builtinGetExitStatus, this);
 
+        registerFunction("setvar.exitstatus")
+            .param<CoreVM::CoreNumber>("code")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinSetExitStatus, this);
+
         registerFunction("getvar.processid")
             .returnType(CoreVM::LiteralType::String)
             .bind(&Shell::builtinGetProcessId, this);
@@ -693,6 +699,48 @@ export class Shell final: public CoreVM::Runtime
             .param<bool>("all")
             .returnType(CoreVM::LiteralType::String)
             .bind(&Shell::builtinExpandParamReplace, this);
+
+        // For-loop iteration builtins
+        registerFunction("internal.for_init")
+            .param<std::string>("var")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinForInit, this);
+
+        registerFunction("internal.for_add_item")
+            .param<std::string>("item")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinForAddItem, this);
+
+        registerFunction("internal.for_has_more")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinForHasMore, this);
+
+        registerFunction("internal.for_next")
+            .param<std::string>("var")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinForNext, this);
+
+        registerFunction("internal.for_cleanup")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinForCleanup, this);
+
+        // Case statement pattern matching
+        registerFunction("internal.case_match")
+            .param<std::string>("word")
+            .param<std::string>("pattern")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinCaseMatch, this);
+
+        // Function management
+        registerFunction("internal.function_register")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinFunctionRegister, this);
+
+        registerFunction("internal.function_call")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinFunctionCall, this);
         // clang-format on
     }
 
@@ -708,6 +756,39 @@ export class Shell final: public CoreVM::Runtime
     {
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
         std::string const& program = args.at(0);
+
+        // Check if this is a registered shell function
+        if (_registeredFunctions.contains(program))
+        {
+            // Find the function's handler in the current program
+            CoreVM::Handler* handler = _currentProgram->findHandler(program);
+            if (!handler)
+            {
+                error("{}: function not found (was it defined in a previous command?)", program);
+                _exitCode = 127;
+                context.setResult(CoreVM::CoreNumber(127));
+                return;
+            }
+
+            // Save current positional parameters and set up new ones for the function call
+            auto savedPositionalParams = _positionalParameters;
+            _positionalParameters.clear();
+            _positionalParameters.push_back(program); // $0 is the function name
+            for (size_t i = 1; i < args.size(); ++i)
+                _positionalParameters.push_back(args.at(i));
+
+            // Execute the function handler
+            auto runner =
+                CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+            runner.run();
+
+            // Restore positional parameters
+            _positionalParameters = std::move(savedPositionalParams);
+
+            context.setResult(CoreVM::CoreNumber(_exitCode));
+            return;
+        }
+
         auto const programPath = resolveProgram(program);
 
         if (!programPath.has_value())
@@ -876,6 +957,8 @@ export class Shell final: public CoreVM::Runtime
     }
 
     void builtinGetExitStatus(CoreVM::Params& context) { context.setResult(std::to_string(_exitCode)); }
+
+    void builtinSetExitStatus(CoreVM::Params& context) { _exitCode = static_cast<int>(context.getInt(1)); }
 
     void builtinGetProcessId(CoreVM::Params& context) { context.setResult(std::to_string(_shellPid)); }
 
@@ -1883,6 +1966,121 @@ export class Shell final: public CoreVM::Runtime
         context.setResult(result);
     }
 
+    // ========================================================================
+    // For-loop iteration builtins
+    // ========================================================================
+
+    /// Initializes a for-loop iterator for the given variable name.
+    void builtinForInit(CoreVM::Params& context)
+    {
+        auto const& varName = context.getString(1);
+        // Push a new iterator state
+        _forLoopStack.emplace_back();
+        _forLoopStack.back().variable = varName;
+        _forLoopStack.back().index = 0;
+    }
+
+    /// Adds an item to the current for-loop iterator.
+    void builtinForAddItem(CoreVM::Params& context)
+    {
+        if (_forLoopStack.empty())
+            return;
+        auto const& item = context.getString(1);
+        _forLoopStack.back().items.push_back(item);
+    }
+
+    /// Checks if there are more items to iterate over.
+    void builtinForHasMore(CoreVM::Params& context)
+    {
+        if (_forLoopStack.empty())
+        {
+            context.setResult(false);
+            return;
+        }
+        auto const& state = _forLoopStack.back();
+        context.setResult(state.index < state.items.size());
+    }
+
+    /// Gets the next item and assigns it to the loop variable.
+    void builtinForNext(CoreVM::Params& context)
+    {
+        if (_forLoopStack.empty())
+            return;
+
+        auto& state = _forLoopStack.back();
+        auto const& varName = context.getString(1);
+
+        if (state.index < state.items.size())
+        {
+            _env.set(varName, state.items[state.index]);
+            ++state.index;
+        }
+    }
+
+    /// Cleans up the current for-loop state when the loop ends (normal or via break).
+    void builtinForCleanup([[maybe_unused]] CoreVM::Params& context)
+    {
+        if (!_forLoopStack.empty())
+            _forLoopStack.pop_back();
+    }
+
+    // ========================================================================
+    // Case statement pattern matching
+    // ========================================================================
+
+    /// Matches a word against a shell pattern (glob-style).
+    void builtinCaseMatch(CoreVM::Params& context)
+    {
+        auto const& word = context.getString(1);
+        auto const& pattern = context.getString(2);
+
+        // Use the existing glob matching function
+        bool const matched = globMatchFilename(word, pattern);
+        context.setResult(matched);
+    }
+
+    // ========================================================================
+    // Function management
+    // ========================================================================
+
+    /// Registers a function for later invocation.
+    void builtinFunctionRegister(CoreVM::Params& context)
+    {
+        auto const& name = context.getString(1);
+        // The function handler is already created by IRGenerator
+        // We just need to track that it exists
+        _registeredFunctions.insert(name);
+    }
+
+    /// Calls a registered function by name.
+    void builtinFunctionCall(CoreVM::Params& context)
+    {
+        auto const& name = context.getString(1);
+
+        if (!_registeredFunctions.contains(name))
+        {
+            error("{}: command not found", name);
+            _exitCode = 127;
+            context.setResult(CoreVM::CoreNumber(127));
+            return;
+        }
+
+        // Find the function's handler in the current program
+        CoreVM::Handler* handler = _currentProgram->findHandler(name);
+        if (!handler)
+        {
+            error("{}: function not found (was it defined in a previous command?)", name);
+            _exitCode = 127;
+            context.setResult(CoreVM::CoreNumber(127));
+            return;
+        }
+
+        // Execute the function handler
+        auto runner = CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+        runner.run();
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+    }
+
     /// Helper to clean up process substitution state.
     void cleanupProcSubst()
     {
@@ -2095,6 +2293,19 @@ export class Shell final: public CoreVM::Runtime
     std::string _procSubstFdPath;                   ///< Fd path for current process substitution
     std::vector<ProcessId> _procSubstChildPids;     ///< Child pids for process substitution cleanup
     std::vector<NativeHandle> _procSubstExposedFds; ///< Exposed fds to close after command
+
+    // For-loop iteration state
+    struct ForLoopState
+    {
+        std::string variable;           ///< Loop variable name
+        std::vector<std::string> items; ///< Items to iterate over
+        size_t index = 0;               ///< Current index
+    };
+
+    std::vector<ForLoopState> _forLoopStack; ///< Stack of for-loop states (for nested loops)
+
+    // Registered shell function names (their definitions must be in the current program)
+    std::set<std::string> _registeredFunctions;
 
     CoreVM::Runner* _runner = nullptr;
     bool _quit = false;

@@ -194,6 +194,93 @@ export class ASTPrinter: public Visitor
         _result += "done";
     }
 
+    void visit(ForListStmt const& node) override
+    {
+        _result += "for ";
+        _result += node.variable;
+        _result += " in ";
+        for (size_t i = 0; i < node.items.size(); ++i)
+        {
+            if (i > 0)
+                _result += " ";
+            node.items[i]->accept(*this);
+        }
+        _result += "; do ";
+        _result += print(*node.body);
+        _result += "; done";
+    }
+
+    void visit(ForCStyleStmt const& node) override
+    {
+        _result += "for ((";
+        if (node.init)
+            printArithExpr(node.init.get());
+        _result += "; ";
+        if (node.condition)
+            printArithExpr(node.condition.get());
+        _result += "; ";
+        if (node.step)
+            printArithExpr(node.step.get());
+        _result += ")); do ";
+        _result += print(*node.body);
+        _result += "; done";
+    }
+
+    void visit(CaseStmt const& node) override
+    {
+        _result += "case ";
+        node.word->accept(*this);
+        _result += " in ";
+        for (auto const& clause: node.clauses)
+        {
+            for (size_t i = 0; i < clause.patterns.size(); ++i)
+            {
+                if (i > 0)
+                    _result += "|";
+                _result += clause.patterns[i];
+            }
+            _result += ") ";
+            if (clause.body)
+                _result += print(*clause.body);
+            _result += ";; ";
+        }
+        _result += "esac";
+    }
+
+    void visit(FunctionDefStmt const& node) override
+    {
+        _result += "function ";
+        _result += node.name;
+        _result += "() { ";
+        if (node.body)
+            _result += print(*node.body);
+        _result += " }";
+    }
+
+    void visit(BreakStmt const& node) override
+    {
+        _result += "break";
+        if (node.levels > 1)
+            _result += " " + std::to_string(node.levels);
+    }
+
+    void visit(ContinueStmt const& node) override
+    {
+        _result += "continue";
+        if (node.levels > 1)
+            _result += " " + std::to_string(node.levels);
+    }
+
+    void visit(ReturnStmt const& node) override
+    {
+        _result += "return";
+        if (node.value)
+        {
+            _result += " ";
+            node.value->accept(*this);
+        }
+    }
+
     void visit(LogicalAndStmt const& node) override
     {
         node.left->accept(*this);

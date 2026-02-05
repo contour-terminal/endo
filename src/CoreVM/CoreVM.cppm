@@ -641,13 +641,16 @@ class Program
 
     void dump();
 
+    /// Creates a handler with the given name and bytecode.
+    /// Useful for dynamically adding pre-compiled function handlers.
+    using Code = ConstantPool::Code;
+    Handler* createHandler(const std::string& name, const Code& instructions);
+
   private:
     void setup();
 
     // builders
-    using Code = ConstantPool::Code;
     Handler* createHandler(const std::string& name);
-    Handler* createHandler(const std::string& name, const Code& instructions);
 
   private:
     ConstantPool _cp;

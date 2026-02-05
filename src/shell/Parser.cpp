@@ -80,7 +80,10 @@ export class Parser
         || _lexer.isDirective("else")
         || _lexer.isDirective("elif")
         || _lexer.isDirective("fi")
-        || _lexer.isDirective("done");
+        || _lexer.isDirective("done")
+        || _lexer.isDirective("esac")
+        || _lexer.currentLiteral() == "}"
+        || _lexer.currentToken() == Token::DblSemicolon;
         // clang-format on
     }
 
@@ -91,6 +94,7 @@ export class Parser
         || _lexer.currentToken() == Token::LineFeed
         || _lexer.currentToken() == Token::Pipe
         || _lexer.currentToken() == Token::Semicolon
+        || _lexer.currentToken() == Token::DblSemicolon
         || _lexer.currentToken() == Token::AmpAmp
         || _lexer.currentToken() == Token::PipePipe
         || _lexer.currentToken() == Token::RndClose)
@@ -167,6 +171,20 @@ export class Parser
                     return parseIf();
                 else if (_lexer.isDirective("while"))
                     return parseWhile();
+                else if (_lexer.isDirective("for"))
+                    return parseFor();
+                else if (_lexer.isDirective("case"))
+                    return parseCase();
+                else if (_lexer.isDirective("function"))
+                    return parseFunctionDef();
+                else if (_lexer.isDirective("return"))
+                    return parseReturn();
+                else if (_lexer.isDirective("break"))
+                    return parseBreak();
+                else if (_lexer.isDirective("continue"))
+                    return parseContinue();
+                else if (isFunctionDefinition())
+                    return parseFunctionDef();
                 else
                 {
                     // All other statements (builtins and commands) can participate
@@ -270,6 +288,357 @@ export class Parser
         auto body = parseBlock("whileBody");
         consumeDirective("done");
         return std::make_unique<ast::WhileStmt>(std::move(condition), std::move(body));
+    }
+
+    /// Parses a for statement (either list-based or C-style).
+    std::unique_ptr<ast::Statement> parseFor()
+    {
+        TRACE_SCOPE("parseFor");
+        _lexer.nextToken(); // consume 'for'
+
+        // Check for C-style: for ((init; cond; step))
+        if (_lexer.currentToken() == Token::DblRndOpen)
+        {
+            return parseForCStyle();
+        }
+
+        // List-based: for var in list; do ...; done
+        return parseForList();
+    }
+
+    /// Parses: for var in item1 item2 ...; do ...; done
+    std::unique_ptr<ast::ForListStmt> parseForList()
+    {
+        TRACE_SCOPE("parseForList");
+
+        // Expect variable name
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide a variable name for the for loop" },
+                                               currentContextSnippet(),
+                                               "Expected variable name after 'for', got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+
+        std::string variable = consumeLiteral();
+
+        // Expect 'in' keyword
+        if (!_lexer.isDirective("in"))
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Use 'in' to specify the list to iterate over" },
+                                               currentContextSnippet(),
+                                               "Expected 'in' after variable name, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'in'
+
+        // Parse items until ';' or newline followed by 'do'
+        std::vector<std::unique_ptr<ast::Expr>> items;
+        while (!isEndOfStmt() && !_lexer.isDirective("do"))
+        {
+            auto item = parseParameter();
+            if (!item)
+                break;
+            items.emplace_back(std::move(item));
+        }
+
+        consumeOneOf(Token::Semicolon, Token::LineFeed);
+        consumeDirective("do");
+
+        auto body = parseBlock("forListBody");
+        consumeDirective("done");
+
+        return std::make_unique<ast::ForListStmt>(std::move(variable), std::move(items), std::move(body));
+    }
+
+    /// Parses: for ((init; cond; step)); do ...; done
+    std::unique_ptr<ast::ForCStyleStmt> parseForCStyle()
+    {
+        TRACE_SCOPE("parseForCStyle");
+        _lexer.nextToken(); // consume '(('
+
+        // Parse init expression (may be empty)
+        std::unique_ptr<ast::ArithExpr> init;
+        if (_lexer.currentToken() != Token::Semicolon)
+        {
+            init = parseArithOr();
+        }
+
+        if (_lexer.currentToken() != Token::Semicolon)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected ';' in for loop, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ';'
+
+        // Parse condition expression (may be empty for infinite loop)
+        std::unique_ptr<ast::ArithExpr> condition;
+        if (_lexer.currentToken() != Token::Semicolon)
+        {
+            condition = parseArithOr();
+        }
+
+        if (_lexer.currentToken() != Token::Semicolon)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected ';' in for loop, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ';'
+
+        // Parse step expression (may be empty)
+        std::unique_ptr<ast::ArithExpr> step;
+        if (_lexer.currentToken() != Token::DblRndClose)
+        {
+            step = parseArithOr();
+        }
+
+        if (_lexer.currentToken() != Token::DblRndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected '))' in for loop, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '))'
+
+        consumeOneOf(Token::Semicolon, Token::LineFeed);
+        consumeDirective("do");
+
+        auto body = parseBlock("forCStyleBody");
+        consumeDirective("done");
+
+        return std::make_unique<ast::ForCStyleStmt>(
+            std::move(init), std::move(condition), std::move(step), std::move(body));
+    }
+
+    /// Parses: case word in pattern) commands;; pattern) commands;; esac
+    std::unique_ptr<ast::CaseStmt> parseCase()
+    {
+        TRACE_SCOPE("parseCase");
+        _lexer.nextToken(); // consume 'case'
+
+        // Parse word to match
+        auto word = parseParameter();
+        if (!word)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected word after 'case'");
+            return nullptr;
+        }
+
+        // Expect 'in' keyword
+        consumeOneOf(Token::Semicolon, Token::LineFeed);
+        if (!_lexer.isDirective("in"))
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected 'in' after case word, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'in'
+        consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+
+        // Parse clauses
+        std::vector<ast::CaseClause> clauses;
+        while (!_lexer.isDirective("esac") && _lexer.currentToken() != Token::EndOfInput)
+        {
+            ast::CaseClause clause;
+
+            // Parse patterns (pipe-separated)
+            while (true)
+            {
+                // Skip leading '(' if present (optional in patterns)
+                if (_lexer.currentToken() == Token::RndOpen)
+                    _lexer.nextToken();
+
+                if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::String
+                    && _lexer.currentToken() != Token::Number)
+                {
+                    break;
+                }
+
+                clause.patterns.push_back(consumeLiteral());
+
+                if (_lexer.currentToken() == Token::Pipe)
+                {
+                    _lexer.nextToken(); // consume '|'
+                    continue;
+                }
+                break;
+            }
+
+            if (clause.patterns.empty())
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected pattern in case clause");
+                return nullptr;
+            }
+
+            // Expect ')' after patterns
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Expected ')' after pattern, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ')'
+
+            // Parse commands until ';;' or 'esac'
+            clause.body = parseBlock("caseClauseBody");
+
+            // Expect ';;' or 'esac'
+            if (_lexer.currentToken() == Token::DblSemicolon)
+            {
+                _lexer.nextToken(); // consume ';;'
+                consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+            }
+
+            clauses.push_back(std::move(clause));
+        }
+
+        consumeDirective("esac");
+
+        return std::make_unique<ast::CaseStmt>(std::move(word), std::move(clauses));
+    }
+
+    /// Checks if current position is a function definition (name followed by '()')
+    [[nodiscard]] bool isFunctionDefinition() const noexcept
+    {
+        // This is a simple heuristic - we check if we have "name()" pattern
+        // We'd need proper lookahead for full correctness
+        return false; // For now, require explicit 'function' keyword
+    }
+
+    /// Parses: function name() { ... } or function name { ... }
+    std::unique_ptr<ast::FunctionDefStmt> parseFunctionDef()
+    {
+        TRACE_SCOPE("parseFunctionDef");
+
+        // Handle 'function' keyword if present
+        if (_lexer.isDirective("function"))
+            _lexer.nextToken(); // consume 'function'
+
+        // Expect function name
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected function name, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+
+        std::string name = consumeLiteral();
+
+        // Optional '()' after name
+        if (_lexer.currentToken() == Token::RndOpen)
+        {
+            _lexer.nextToken(); // consume '('
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Expected ')' after '(' in function definition");
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ')'
+        }
+
+        consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+
+        // Expect '{' or body starts directly
+        std::unique_ptr<ast::Statement> body;
+        if (_lexer.currentLiteral() == "{")
+        {
+            _lexer.nextToken(); // consume '{'
+            consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+            body = parseBlock("functionBody");
+            if (_lexer.currentLiteral() != "}")
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Expected '}}' to close function body, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume '}'
+        }
+        else
+        {
+            // Allow function body to be a single compound statement (not braced)
+            body = parseStmt();
+        }
+
+        return std::make_unique<ast::FunctionDefStmt>(std::move(name), std::move(body));
+    }
+
+    /// Parses: return [n]
+    std::unique_ptr<ast::ReturnStmt> parseReturn()
+    {
+        TRACE_SCOPE("parseReturn");
+        _lexer.nextToken(); // consume 'return'
+
+        std::unique_ptr<ast::Expr> value;
+        if (!isEndOfStmt())
+        {
+            value = parseParameter();
+        }
+
+        return std::make_unique<ast::ReturnStmt>(std::move(value));
+    }
+
+    /// Parses: break [n]
+    std::unique_ptr<ast::BreakStmt> parseBreak()
+    {
+        TRACE_SCOPE("parseBreak");
+        _lexer.nextToken(); // consume 'break'
+
+        int levels = 1;
+        if (_lexer.currentToken() == Token::Number)
+        {
+            levels = std::stoi(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+
+        return std::make_unique<ast::BreakStmt>(levels);
+    }
+
+    /// Parses: continue [n]
+    std::unique_ptr<ast::ContinueStmt> parseContinue()
+    {
+        TRACE_SCOPE("parseContinue");
+        _lexer.nextToken(); // consume 'continue'
+
+        int levels = 1;
+        if (_lexer.currentToken() == Token::Number)
+        {
+            levels = std::stoi(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+
+        return std::make_unique<ast::ContinueStmt>(levels);
     }
 
     /// Checks if the current token is a redirect token.

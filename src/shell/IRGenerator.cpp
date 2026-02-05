@@ -277,7 +277,12 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::CompoundStmt const& node) override
     {
         for (auto const& stmt: node.statements)
+        {
             codegen(stmt.get());
+            // Stop generating code after a terminator (break, continue, return, etc.)
+            if (getInsertPoint() && getInsertPoint()->getTerminator() != nullptr)
+                break;
+        }
 
         _result = nullptr;
     }
@@ -818,10 +823,338 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         createCondBr(toBool(codegen(node.condition.get())), body, end);
 
         setInsertPoint(body);
+        pushLoopContext(cond, end);
         codegen(node.body.get());
+        popLoopContext();
+        // Only add loop-back branch if body wasn't terminated (by break/continue/return)
+        if (getInsertPoint() && !getInsertPoint()->getTerminator())
+            createBr(cond);
+
+        setInsertPoint(end);
+    }
+
+    void visit(ast::ForListStmt const& node) override
+    {
+        // for var in item1 item2 ...; do body; done
+        //
+        // IR pattern:
+        //   for.init:  index = 0; items = [item1, item2, ...]
+        //   for.cond:  if index >= count goto for.end
+        //   for.body:  var = items[index]; BODY
+        //   for.step:  index++; goto for.cond
+        //   for.end:
+
+        // Initialize the iterator
+        auto* initIterCb = findCallback("internal.for_init(S)V");
+        if (!initIterCb)
+        {
+            reportTypeError("Internal error: internal.for_init builtin not found");
+            return;
+        }
+        createCallFunction(getBuiltinFunction(*initIterCb), { get(node.variable) }, "for_init");
+
+        // Add all items to the iterator
+        auto* addItemCb = findCallback("internal.for_add_item(S)V");
+        if (!addItemCb)
+        {
+            reportTypeError("Internal error: internal.for_add_item builtin not found");
+            return;
+        }
+        for (auto const& item: node.items)
+        {
+            auto* itemValue = codegen(item.get());
+            if (itemValue)
+                createCallFunction(getBuiltinFunction(*addItemCb), { itemValue }, "for_add_item");
+        }
+
+        CoreVM::BasicBlock* cond = createBlock("for.cond");
+        CoreVM::BasicBlock* body = createBlock("for.body");
+        CoreVM::BasicBlock* step = createBlock("for.step");
+        CoreVM::BasicBlock* end = createBlock("for.end");
+
+        createBr(cond);
+
+        // Condition: check if there are more items
+        setInsertPoint(cond);
+        auto* hasMoreCb = findCallback("internal.for_has_more()B");
+        if (!hasMoreCb)
+        {
+            reportTypeError("Internal error: internal.for_has_more builtin not found");
+            return;
+        }
+        auto* hasMore = createCallFunction(getBuiltinFunction(*hasMoreCb), {}, "for_has_more");
+        createCondBr(hasMore, body, end);
+
+        // Body: set variable to next item and execute body
+        setInsertPoint(body);
+        auto* nextCb = findCallback("internal.for_next(S)V");
+        if (!nextCb)
+        {
+            reportTypeError("Internal error: internal.for_next builtin not found");
+            return;
+        }
+        createCallFunction(getBuiltinFunction(*nextCb), { get(node.variable) }, "for_next");
+
+        pushLoopContext(step, end);
+        codegen(node.body.get());
+        popLoopContext();
+        // Only add step branch if body wasn't terminated (by break/continue/return)
+        if (getInsertPoint() && !getInsertPoint()->getTerminator())
+            createBr(step);
+
+        // Step: just loop back to condition (next was already called)
+        setInsertPoint(step);
+        createBr(cond);
+
+        // End: clean up the for-loop state
+        setInsertPoint(end);
+        auto* cleanupCb = findCallback("internal.for_cleanup()V");
+        if (cleanupCb)
+            createCallFunction(getBuiltinFunction(*cleanupCb), {}, "for_cleanup");
+    }
+
+    void visit(ast::ForCStyleStmt const& node) override
+    {
+        // for ((init; cond; step)); do body; done
+        //
+        // IR pattern:
+        //   forc.init: eval(init)
+        //   forc.cond: if !eval(cond) goto forc.end
+        //   forc.body: BODY
+        //   forc.step: eval(step); goto forc.cond
+        //   forc.end:
+
+        CoreVM::BasicBlock* initBlock = createBlock("forc.init");
+        CoreVM::BasicBlock* cond = createBlock("forc.cond");
+        CoreVM::BasicBlock* body = createBlock("forc.body");
+        CoreVM::BasicBlock* step = createBlock("forc.step");
+        CoreVM::BasicBlock* end = createBlock("forc.end");
+
+        createBr(initBlock);
+
+        // Init: evaluate init expression
+        setInsertPoint(initBlock);
+        if (node.init)
+            codegenArith(node.init.get());
+        createBr(cond);
+
+        // Condition: check condition
+        setInsertPoint(cond);
+        if (node.condition)
+        {
+            auto* condValue = codegenArith(node.condition.get());
+            // If condValue is already Boolean (from comparison), use it directly
+            // Otherwise, convert to Boolean by comparing with 0
+            CoreVM::Value* condBool = condValue;
+            if (condValue->type() != CoreVM::LiteralType::Boolean)
+                condBool = createNCmpNE(condValue, get(CoreVM::CoreNumber(0)));
+            createCondBr(condBool, body, end);
+        }
+        else
+        {
+            // No condition = infinite loop (always enter body)
+            createBr(body);
+        }
+
+        // Body
+        setInsertPoint(body);
+        pushLoopContext(step, end);
+        codegen(node.body.get());
+        popLoopContext();
+        createBr(step);
+
+        // Step: evaluate step expression and loop
+        setInsertPoint(step);
+        if (node.step)
+            codegenArith(node.step.get());
         createBr(cond);
 
         setInsertPoint(end);
+    }
+
+    void visit(ast::CaseStmt const& node) override
+    {
+        // case word in pattern1) cmd1;; pattern2) cmd2;; esac
+        //
+        // IR pattern:
+        //   case.word:  word_value = eval(word)
+        //   case.check0: if matches(word, patterns[0]) goto case.body0
+        //   case.check1: if matches(word, patterns[1]) goto case.body1
+        //   ...         goto case.end
+        //   case.body0: commands; goto case.end
+        //   case.body1: commands; goto case.end
+        //   case.end:
+
+        // Evaluate the word first
+        auto* wordValue = codegen(node.word.get());
+        if (!wordValue)
+            return;
+
+        CoreVM::BasicBlock* endBlock = createBlock("case.end");
+
+        // Create blocks for each clause
+        std::vector<CoreVM::BasicBlock*> bodyBlocks;
+        std::vector<CoreVM::BasicBlock*> checkBlocks;
+
+        for (size_t i = 0; i < node.clauses.size(); ++i)
+        {
+            checkBlocks.push_back(createBlock(std::format("case.check{}", i)));
+            bodyBlocks.push_back(createBlock(std::format("case.body{}", i)));
+        }
+
+        // Start checking patterns
+        createBr(checkBlocks.empty() ? endBlock : checkBlocks[0]);
+
+        // Generate pattern matching checks
+        auto* matchCb = findCallback("internal.case_match(SS)B");
+        if (!matchCb)
+        {
+            reportTypeError("Internal error: internal.case_match builtin not found");
+            return;
+        }
+
+        for (size_t i = 0; i < node.clauses.size(); ++i)
+        {
+            auto const& clause = node.clauses[i];
+            setInsertPoint(checkBlocks[i]);
+
+            // Check each pattern (pipe-separated)
+            // For multiple patterns, we chain the checks: if any pattern matches, go to body
+            CoreVM::BasicBlock* nextClause = (i + 1 < checkBlocks.size()) ? checkBlocks[i + 1] : endBlock;
+
+            for (size_t p = 0; p < clause.patterns.size(); ++p)
+            {
+                auto const& pattern = clause.patterns[p];
+                auto* match = createCallFunction(
+                    getBuiltinFunction(*matchCb), { wordValue, get(pattern) }, "case_match");
+
+                // Create intermediate check block for next pattern (if any)
+                CoreVM::BasicBlock* nextPatternCheck =
+                    (p + 1 < clause.patterns.size())
+                        ? createBlock(std::format("case.check{}.pat{}", i, p + 1))
+                        : nextClause;
+
+                createCondBr(match, bodyBlocks[i], nextPatternCheck);
+
+                if (p + 1 < clause.patterns.size())
+                    setInsertPoint(nextPatternCheck);
+            }
+
+            // Handle empty patterns (shouldn't happen, but defensive)
+            if (clause.patterns.empty())
+                createBr(nextClause);
+        }
+
+        // Generate body blocks
+        for (size_t i = 0; i < node.clauses.size(); ++i)
+        {
+            auto const& clause = node.clauses[i];
+            setInsertPoint(bodyBlocks[i]);
+            if (clause.body)
+                codegen(clause.body.get());
+            createBr(endBlock);
+        }
+
+        setInsertPoint(endBlock);
+    }
+
+    void visit(ast::FunctionDefStmt const& node) override
+    {
+        // Register the function for later invocation
+        // Functions are compiled as separate handlers and called at runtime
+        auto* registerCb = findCallback("internal.function_register(S)V");
+        if (!registerCb)
+        {
+            reportTypeError("Internal error: internal.function_register builtin not found");
+            return;
+        }
+
+        // Save current handler and insertion point
+        auto* savedHandler = handler();
+        auto* savedBlock = getInsertPoint();
+
+        // Create a new handler for the function and switch to it
+        auto* funcHandler = getHandler(node.name);
+        setHandler(funcHandler);
+        auto* entryBlock = createBlock(node.name + ".entry");
+        setInsertPoint(entryBlock);
+
+        pushFunctionContext();
+        codegen(node.body.get());
+        popFunctionContext();
+
+        // Always add return at the end - the VM will handle duplicate terminators
+        createRet(get(CoreVM::CoreNumber(0)));
+
+        // Restore to main handler
+        setHandler(savedHandler);
+        setInsertPoint(savedBlock);
+
+        // Register the function name
+        createCallFunction(getBuiltinFunction(*registerCb), { get(node.name) }, "function_register");
+    }
+
+    void visit(ast::BreakStmt const& node) override
+    {
+        auto* ctx = getLoopContext(node.levels);
+        if (!ctx)
+        {
+            reportTypeError("break: not in a loop");
+            return;
+        }
+        createBr(ctx->breakTarget);
+    }
+
+    void visit(ast::ContinueStmt const& node) override
+    {
+        auto* ctx = getLoopContext(node.levels);
+        if (!ctx)
+        {
+            reportTypeError("continue: not in a loop");
+            return;
+        }
+        createBr(ctx->continueTarget);
+    }
+
+    void visit(ast::ReturnStmt const& node) override
+    {
+        if (!inFunction())
+        {
+            reportTypeError("return: not in a function");
+            return;
+        }
+
+        CoreVM::Value* returnValue = nullptr;
+        if (node.value)
+        {
+            returnValue = codegen(node.value.get());
+            if (!returnValue)
+                return;
+            if (returnValue->type() == CoreVM::LiteralType::String)
+                returnValue = createS2N(returnValue);
+        }
+        else
+        {
+            // Default to last exit code ($?)
+            auto* exitStatusCb = findCallback("getvar.exitstatus()S");
+            if (exitStatusCb)
+            {
+                auto* exitStr =
+                    createCallFunction(getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
+                returnValue = createS2N(exitStr);
+            }
+            else
+            {
+                returnValue = get(CoreVM::CoreNumber(0));
+            }
+        }
+
+        // Set $? to the return value before exiting
+        auto* setExitCb = findCallback("setvar.exitstatus(I)V");
+        if (setExitCb)
+            createCallFunction(getBuiltinFunction(*setExitCb), { returnValue }, "setvar.exitstatus");
+
+        createRet(returnValue);
     }
 
     /// Converts a value to a boolean for conditional branching.
@@ -955,6 +1288,63 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         return callArguments;
     }
 
+    // ========================================================================
+    // Loop context management for break/continue
+    // ========================================================================
+
+    /// Context for a loop, tracking continue and break targets.
+    struct LoopContext
+    {
+        CoreVM::BasicBlock* continueTarget; ///< Where 'continue' jumps (loop step or condition)
+        CoreVM::BasicBlock* breakTarget;    ///< Where 'break' jumps (loop end)
+    };
+
+    /// Pushes a new loop context onto the stack.
+    void pushLoopContext(CoreVM::BasicBlock* continueTarget, CoreVM::BasicBlock* breakTarget)
+    {
+        _loopStack.push_back({ continueTarget, breakTarget });
+    }
+
+    /// Pops the current loop context from the stack.
+    void popLoopContext()
+    {
+        if (!_loopStack.empty())
+            _loopStack.pop_back();
+    }
+
+    /// Gets the loop context for break/continue with the specified nesting level.
+    /// @param levels Number of loop levels to skip (1 = current loop)
+    /// @return Pointer to the loop context, or nullptr if not in a loop
+    [[nodiscard]] LoopContext* getLoopContext(int levels = 1)
+    {
+        if (_loopStack.empty())
+            return nullptr;
+
+        // levels is 1-indexed: break 1 = current loop, break 2 = parent loop
+        int const index = static_cast<int>(_loopStack.size()) - levels;
+        if (index < 0)
+            return nullptr;
+
+        return &_loopStack[static_cast<size_t>(index)];
+    }
+
+    // ========================================================================
+    // Function context management for return
+    // ========================================================================
+
+    /// Pushes a function context for tracking return statements.
+    void pushFunctionContext() { ++_functionDepth; }
+
+    /// Pops the current function context.
+    void popFunctionContext()
+    {
+        if (_functionDepth > 0)
+            --_functionDepth;
+    }
+
+    /// Checks if we're currently inside a function.
+    [[nodiscard]] bool inFunction() const { return _functionDepth > 0; }
+
     CoreVM::diagnostics::Report& _report;    // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::Runtime& _runtime;               // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::SourceLocation _currentLocation; ///< Current location for error reporting
@@ -963,5 +1353,8 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     // CoreVM::NativeCallback _processCallCallback;
     // CoreVM::IRBuiltinFunction* _processCallFunction = nullptr;
     CoreVM::Signature _processCallSignature;
+
+    std::vector<LoopContext> _loopStack; ///< Stack of loop contexts for break/continue
+    int _functionDepth = 0;              ///< Current function nesting depth
 };
 } // namespace endo

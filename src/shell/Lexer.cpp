@@ -61,6 +61,8 @@ export enum class Token
     DollarBraceParam, // ${VAR:-default}, ${#VAR}, etc. (parameter expansion)
     DollarDblRndOpen, // $((  (arithmetic expansion)
     DblRndClose,      // ))    (arithmetic expansion close)
+    DblRndOpen,       // ((    (C-style for loop)
+    DblSemicolon,     // ;;    (case clause terminator)
 };
 
 export enum class BuiltinFunction
@@ -203,7 +205,11 @@ export class Lexer
                     return consumeCharAndConfirmToken(Token::LineFeed);
                 return confirmToken(Token::Invalid);
             case '\n': return consumeCharAndConfirmToken(Token::LineFeed);
-            case ';': return consumeCharAndConfirmToken(Token::Semicolon);
+            case ';':
+                nextChar();
+                if (_currentChar == ';')
+                    return consumeCharAndConfirmToken(Token::DblSemicolon);
+                return confirmToken(Token::Semicolon);
             case '=': return consumeCharAndConfirmToken(Token::Equal);
             case '|':
                 nextChar();
@@ -246,7 +252,11 @@ export class Lexer
                     return consumeCharAndConfirmToken(Token::LessRndOpen);
                 else
                     return confirmToken(Token::Less);
-            case '(': return consumeCharAndConfirmToken(Token::RndOpen);
+            case '(':
+                nextChar();
+                if (_currentChar == '(')
+                    return consumeCharAndConfirmToken(Token::DblRndOpen);
+                return confirmToken(Token::RndOpen);
             case ')':
                 nextChar();
                 if (_currentChar == ')')
@@ -278,7 +288,10 @@ export class Lexer
                 else if (_currentChar == '_')
                     return consumeIdentifier(Token::DollarName);
                 else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
+                {
+                    _nextToken.literal += static_cast<char>(_currentChar);
                     return consumeCharAndConfirmToken(Token::DollarNumber);
+                }
                 else
                     return confirmToken(Token::Invalid);
             case '0':
@@ -692,6 +705,8 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case DollarRndOpen: name = "$("; break;
             case DollarDblRndOpen: name = "$(("; break;
             case DblRndClose: name = "))"; break;
+            case DblRndOpen: name = "(("; break;
+            case DblSemicolon: name = ";;"; break;
             case GreaterRndOpen: name = ">("; break;
             case Backtick: name = "`"; break;
             case Tilde: name = "~"; break;

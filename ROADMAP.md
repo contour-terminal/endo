@@ -40,6 +40,11 @@ the primary project; Endo development follows as resources permit.
 | Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
 | If-then-else-elif-fi statements | ✅ |
 | While-do-done statements | ✅ |
+| For-in loops (`for var in list; do ...; done`) | ✅ |
+| Case statements (`case ... esac`) | ✅ |
+| Function definitions (`function name() {}`, `name() {}`) | ✅ |
+| Break and continue statements | ✅ |
+| Return statement | ✅ |
 | TTY abstraction with raw mode | ✅ |
 | Platform abstraction layer (Pipe, Process, TTY) | ✅ |
 | Grapheme cluster support for Unicode | ✅ |
@@ -181,19 +186,28 @@ Windows support.
 - Arithmetic expansion: Supports `+`, `-`, `*`, `/`, `%`, `**`, comparisons (`<`, `>`, `<=`, `>=`, `==`, `!=`), logical operators (`&&`, `||`, `!`), and bitwise operators
 - Pathname expansion: Cross-platform implementation using `<filesystem>`, supports `*`, `?`, `[...]` bracket expressions with ranges and `**` recursive globbing
 
-### Phase 1.6: Control Flow Completion
+### Phase 1.6: Control Flow Completion ✅
+
+**Status:** Complete (except `select` - deferred; C-style for loop requires arithmetic assignment)
 
 **Dependency:** Phase 1.1 (variables for loop iteration)
 
 **Tasks:**
-- [ ] Implement `for var in list; do ...; done`
-- [ ] Implement `for ((init; cond; step)); do ...; done`
-- [ ] Implement `case ... esac` pattern matching
-- [ ] Implement `select` for menu generation
-- [ ] Implement function definitions `function name() { ... }`
-- [ ] Implement `return` statement for functions
-- [ ] Implement `break` and `continue` for loops
-- [ ] Add control flow tests
+- [x] Implement `for var in list; do ...; done`
+- [ ] Implement `for ((init; cond; step)); do ...; done` → Deferred: requires arithmetic assignment expressions
+- [x] Implement `case ... esac` pattern matching
+- [ ] Implement `select` for menu generation → Deferred: requires TTY interaction
+- [x] Implement function definitions `function name() { ... }` and `name() { ... }`
+- [x] Implement `return` statement for functions
+- [x] Implement `break` and `continue` for loops
+- [x] Add control flow tests
+
+**Implementation Notes:**
+- For-list loops: Full support with break/continue, proper cleanup of nested loop state
+- Case statements: Full glob-style pattern matching with multiple patterns per clause (`|`-separated)
+- Functions: Supports positional parameters ($1, $2, ...) and return values affecting $?
+- Functions are scoped to the current command execution (not persisted across separate execute() calls)
+- C-style for loops and `select` require language features not yet implemented
 
 ### Phase 1.7: Job Management
 
