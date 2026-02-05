@@ -329,13 +329,15 @@ The library includes:
 
 ### Phase 2.5: Tooltips and Help
 
-**Dependency:** Phase 2.2 (mouse), Phase 2.3 (completion data)
+**Dependency:** Phase 2.2 (mouse), Phase 2.3 (completion data), Phase 5.3 (LSP as shared backend)
 
 **Tasks:**
 - [ ] Implement mouse-hover tooltip display
 - [ ] Implement inline help for commands
 - [ ] Implement error tooltips with suggestions
 - [ ] Integrate with man pages for command help
+- [ ] Consume LSP hover/diagnostics capabilities via in-process API for consistent behavior
+  between the interactive shell and external editors
 
 ### Phase 2.6: Customizable Prompt
 
@@ -463,7 +465,7 @@ and user muscle memory. Backslashes remain valid in user input but are normalize
 **Dependency:** Milestone 1 (complete language), Phase 1.6 (functions)
 
 **Tasks:**
-- [ ] Implement DAP server protocol handling, asseccsible via CLI `endo --dap` and `endo --dap-tcp <PORT>`
+- [ ] Implement DAP server protocol handling, asseccsible via CLI `endo --dap`
 - [ ] Implement breakpoint support
 - [ ] Implement step execution (into, over, out)
 - [ ] Implement variable inspection
@@ -481,6 +483,44 @@ and user muscle memory. Backslashes remain valid in user input but are normalize
 - [ ] Implement trace output mode
 - [ ] Implement performance bottleneck detection
 - [ ] Add profiling tests
+
+### Phase 5.3: Language Server Protocol (LSP)
+
+**Dependency:** Milestone 1 (complete language), Phase 2.4 (syntax highlighting can share tokenizer)
+
+**Rationale:** Provides IDE-grade editing support for Endo shell scripts in external editors
+(VS Code, Neovim, Helix, Emacs, etc.). Reuses the existing lexer, parser, and AST infrastructure
+to deliver rich language intelligence outside the interactive shell.
+
+**Tasks:**
+- [ ] Implement LSP server transport (stdio, accessible via `endo --lsp`)
+- [ ] Implement `initialize`/`shutdown`/`exit` lifecycle
+- [ ] Implement `textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose` synchronization
+- [ ] Implement `textDocument/publishDiagnostics` (syntax errors, undefined variables, unknown commands)
+- [ ] Implement `textDocument/completion` (commands, file paths, variables, builtins, options)
+- [ ] Implement `textDocument/hover` (command help via man pages, builtin documentation, variable values)
+- [ ] Implement `textDocument/definition` (go-to-definition for functions and variable assignments)
+- [ ] Implement `textDocument/references` (find all references to a function or variable)
+- [ ] Implement `textDocument/documentSymbol` (outline of functions, aliases, exported variables)
+- [ ] Implement `textDocument/signatureHelp` (parameter hints for functions)
+- [ ] Implement `textDocument/formatting` and `textDocument/rangeFormatting`
+- [ ] Implement `textDocument/rename` (rename function or variable across script)
+- [ ] Implement `textDocument/semanticTokens` (semantic highlighting: commands, builtins, variables, strings, operators)
+- [ ] Implement `textDocument/codeAction` (quick fixes for common errors, e.g. missing quotes, unset variables)
+- [ ] Create VS Code extension with language registration for `.endo` and `.sh` files
+- [ ] Add LSP server tests (protocol conformance and language feature tests)
+
+**Implementation Notes:**
+- Reuse existing `Lexer` and `Parser` for tokenization and AST construction; run in incremental mode
+  for fast re-parsing on edits
+- Diagnostics should include structured error context from Milestone 0.3's error hierarchy
+- Completion provider should share the abstraction from Phase 2.3 where possible
+- Semantic tokens map to the same token categories as Phase 2.4's syntax highlighting
+- The LSP server runs as a separate process (`endo --lsp`), similar to the DAP server (`endo --dap`)
+- Consider using JSON-RPC library or implementing a lightweight handler on top of `std::iostream`
+- The LSP's hover, completion, and diagnostics capabilities can be consumed internally by the
+  interactive shell (Phase 2.5 Tooltips, Phase 2.3 Completion) via in-process API calls, avoiding
+  the need for duplicate logic between the interactive editor and external editor support
 
 ---
 
@@ -522,7 +562,9 @@ Milestone 4: Windows Support                               │
 
 Milestone 5: Developer Tools
 ├── 5.1 DAP Server
-└── 5.2 Profiling
+├── 5.2 Profiling
+└── 5.3 LSP Server ◄──── reuses Lexer/Parser/AST
+    └── feeds into 2.5 Tooltips, 2.3 Completion (in-process API)
 ```
 
 ---
@@ -551,6 +593,7 @@ Milestone 5: Developer Tools
 |------|------------|
 | UTF-8 edge cases | Use well-tested Unicode libraries; comprehensive test suite |
 | DAP protocol complexity | Reference existing implementations; incremental feature support |
+| LSP protocol surface area | Implement incrementally; start with diagnostics and completion, add features progressively |
 
 ---
 
