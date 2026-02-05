@@ -248,16 +248,29 @@ Windows support.
 
 ### Phase 2.1: Rich Text Editor Foundation
 
+**Status:** In Progress
+
 **Dependency:** Milestone 1 complete (need full language for practical editing)
 
-**Tasks:**
-- [ ] Design grid-based text rendering architecture
-- [ ] Implement multi-line input support
-- [ ] Implement cursor movement (word, line, document)
-- [ ] Implement text selection model
-- [ ] Implement undo/redo history
-- [ ] Implement clipboard integration (OSC 52)
-- [ ] Implement Shift-key based text selection that can be clipboard-copied with Ctrl+C, or deleted Backspace/Delete.
+**Current State:** A comprehensive TUI library has been integrated into the project (`src/tui/`).
+The library includes:
+- Terminal input/output abstraction (`Terminal`, `TerminalInput`, `TerminalOutput`)
+- VT sequence parser (`VtParser`) with support for CSI, SGR mouse, bracketed paste, UTF-8
+- Input field with multiline editing, history, and kill ring (`InputField`)
+- Various UI components (Box, Dialog, List, LogPanel, StatusBar, Spinner, Text, Theme)
+- Sixel image support and Markdown rendering
+
+**Completed Tasks:**
+- [x] Add GUI-style selection model (Shift+arrows, Ctrl+A select all, Ctrl+C copy, Ctrl+X cut)
+- [x] Implement undo/redo history (Ctrl+Z undo, Ctrl+Shift+Z redo)
+- [x] Implement clipboard integration via OSC 52 (`TerminalOutput::copyToClipboard()` + callback)
+- [x] Add mouse click-to-position cursor support (`InputField::setCursorFromClick()`)
+- [x] Rewrite `Prompt` class to use `tui::Terminal` + `tui::InputField`
+- [x] Remove `InputEditor` dependency from Shell (superseded by TUI library)
+
+**Remaining Tasks:**
+- [ ] Implement fixed editor region that auto-grows up to 50% of terminal height
+- [ ] Add multiline editing support with proper rendering
 - [ ] Add or improve editor unit tests
 
 ### Phase 2.2: Mouse Integration
