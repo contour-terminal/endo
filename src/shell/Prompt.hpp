@@ -13,7 +13,8 @@ namespace endo
 /// @brief TUI-based prompt using tui::Terminal and tui::InputField.
 ///
 /// Provides a rich editing experience with selection, undo/redo, clipboard,
-/// and history support via the TUI library.
+/// and history support via the TUI library. Supports multiline editing with
+/// an auto-growing editor region that expands up to 50% of terminal height.
 class Prompt
 {
   public:
@@ -49,15 +50,37 @@ class Prompt
     /// @brief Handles terminal resize events.
     void onResize();
 
+    /// @brief Displays the prompt without waiting for input.
+    ///
+    /// Call this before blocking on poll() to ensure the prompt is visible.
+    /// After input is available, call read() or processInput() to handle it.
+    void display();
+
+    /// @brief Enables or disables multiline editing mode.
+    /// @param enable True to enable multiline editing.
+    void setMultilineEnabled(bool enable);
+
+    /// @brief Returns whether multiline editing is enabled.
+    [[nodiscard]] bool isMultilineEnabled() const noexcept;
+
   private:
     tui::Terminal _terminal;
     tui::InputField _inputField;
     std::string _promptStr = "> ";
     bool _initialized = false;
     bool _aborted = false;
+    bool _multilineEnabled = true; ///< Enable multiline editing by default
+    int _editorStartRow = 1;       ///< Row where editor region starts (1-based)
+    int _lastRenderedLines = 1;    ///< Number of lines rendered in last render()
 
     void initialize();
     void render();
+
+    /// @brief Calculates the display width of a string.
+    [[nodiscard]] static int displayWidth(std::string_view text);
+
+    /// @brief Calculates the maximum height for the editor region (50% of terminal).
+    [[nodiscard]] int maxEditorHeight() const;
 };
 
 } // namespace endo

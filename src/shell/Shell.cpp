@@ -300,6 +300,9 @@ int Shell::run()
         // Report completed jobs before prompting
         reportJobStatus();
 
+        // Display the prompt before waiting for input
+        prompt.display();
+
         // Wait for input or signals
         int const pollResult = poll(fds, static_cast<nfds_t>(nfds), -1);
         if (pollResult < 0)
