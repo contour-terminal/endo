@@ -3,19 +3,25 @@ module;
 
 #include <chrono>
 #include <cstring>
+#include <expected>
 #include <format>
 #include <functional>
 #include <mutex>
 #include <print>
 #include <thread>
 
-#include <sys/ioctl.h>
+#include "Error.h"
+#include "Platform.h"
 
-#include <pty.h>
-#include <termios.h>
-#include <unistd.h>
+#if !defined(_WIN32)
+    #include <sys/ioctl.h>
 
-import UnixPipe;
+    #include <pty.h>
+    #include <termios.h>
+    #include <unistd.h>
+#endif
+
+import Pipe;
 import IRGenerator;
 
 export module TTY;
@@ -23,6 +29,17 @@ export module TTY;
 namespace endo
 {
 
+/// Terminal size in rows and columns.
+export struct TerminalSize
+{
+    uint16_t rows = 0; ///< Number of rows
+    uint16_t cols = 0; ///< Number of columns
+};
+
+/// Abstract interface for terminal operations.
+///
+/// This interface abstracts platform-specific terminal operations, enabling
+/// testability and cross-platform support.
 export class TTY
 {
   public:
@@ -35,8 +52,19 @@ export class TTY
     TTY(TTY&&) = default;
     TTY& operator=(TTY&&) = default;
 
-    [[nodiscard]] virtual int inputFd() const noexcept = 0;
-    [[nodiscard]] virtual int outputFd() const noexcept = 0;
+    /// Returns the native handle for input.
+    [[nodiscard]] virtual NativeHandle inputFd() const noexcept = 0;
+
+    /// Returns the native handle for output.
+    [[nodiscard]] virtual NativeHandle outputFd() const noexcept = 0;
+
+    /// Checks if this TTY is connected to a real terminal.
+    [[nodiscard]] virtual bool isTerminal() const noexcept = 0;
+
+    /// Gets the terminal size.
+    ///
+    /// @return Terminal size on success, or an error
+    [[nodiscard]] virtual std::expected<TerminalSize, ShellError> getSize() const = 0;
 
     virtual void setRawMode() = 0;
     virtual void restoreMode() = 0;
@@ -58,7 +86,9 @@ export class TTY
     }
 };
 
-void setRawMode(int fd)
+#if !defined(_WIN32)
+
+void setRawMode(NativeHandle fd)
 {
     auto tio = termios {};
     tcgetattr(fd, &tio);
@@ -75,12 +105,24 @@ void setRawMode(int fd)
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
 }
 
+/// Safely closes a file descriptor and sets it to InvalidHandle.
+///
+/// @param fd Pointer to the file descriptor to close
+void safeClose(NativeHandle* fd) noexcept
+{
+    if (fd && *fd != InvalidHandle)
+    {
+        ::close(*fd);
+        *fd = InvalidHandle;
+    }
+}
+
 export class RealTTY final: public TTY
 {
   public:
     RealTTY()
     {
-        for (int fd: { STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO })
+        for (NativeHandle fd: { STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO })
             if (isatty(fd) && tcgetattr(fd, &_originalTermios) == 0)
                 return;
         throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
@@ -94,9 +136,19 @@ export class RealTTY final: public TTY
         return instance;
     }
 
-    [[nodiscard]] int inputFd() const noexcept override { return STDIN_FILENO; }
+    [[nodiscard]] NativeHandle inputFd() const noexcept override { return STDIN_FILENO; }
 
-    [[nodiscard]] int outputFd() const noexcept override { return STDOUT_FILENO; }
+    [[nodiscard]] NativeHandle outputFd() const noexcept override { return STDOUT_FILENO; }
+
+    [[nodiscard]] bool isTerminal() const noexcept override { return isatty(STDIN_FILENO) != 0; }
+
+    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override
+    {
+        winsize ws {};
+        if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1)
+            return std::unexpected(ShellError::IoError);
+        return TerminalSize { .rows = ws.ws_row, .cols = ws.ws_col };
+    }
 
     void setRawMode() override { endo::setRawMode(STDIN_FILENO); }
 
@@ -124,7 +176,9 @@ export class RealTTY final: public TTY
   private:
     termios _originalTermios {};
 };
+#endif // !_WIN32
 
+#if !defined(_WIN32)
 // This is a TTY implementation that can be used for testing.
 // It uses a PTY to simulate a TTY.
 // The output of the TTY is stored in a buffer that can be inspected.
@@ -147,13 +201,20 @@ export class TestPTY final: public TTY
         _closed = true;
         pthread_cancel(_updateThread.native_handle());
         _updateThread.join();
-        saveClose(&_ptySlave);
-        saveClose(&_ptyMaster);
+        safeClose(&_ptySlave);
+        safeClose(&_ptyMaster);
     }
 
-    [[nodiscard]] int inputFd() const noexcept override { return _ptySlave; }
+    [[nodiscard]] NativeHandle inputFd() const noexcept override { return _ptySlave; }
 
-    [[nodiscard]] int outputFd() const noexcept override { return _ptySlave; }
+    [[nodiscard]] NativeHandle outputFd() const noexcept override { return _ptySlave; }
+
+    [[nodiscard]] bool isTerminal() const noexcept override { return isatty(_ptySlave) != 0; }
+
+    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override
+    {
+        return TerminalSize { .rows = _windowSize.ws_row, .cols = _windowSize.ws_col };
+    }
 
     void setRawMode() override { endo::setRawMode(STDIN_FILENO); }
 
@@ -214,11 +275,13 @@ export class TestPTY final: public TTY
     std::thread _updateThread;
     mutable std::mutex _outputMutex;
 
-    int _ptyMaster = -1;
-    int _ptySlave = -1;
+    NativeHandle _ptyMaster = InvalidHandle;
+    NativeHandle _ptySlave = InvalidHandle;
     termios _baseTermios {};
     winsize _windowSize {};
 
     bool _closed = false;
 };
+#endif // !_WIN32
+
 } // namespace endo

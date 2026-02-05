@@ -1,30 +1,47 @@
 add_library(Shell STATIC
     AST.h
+    Platform.h
+    ProcessGroup.h
     Visitor.h
 )
 
+# Platform-agnostic module sources
+set(SHELL_MODULE_SOURCES
+    Lexer.cpp
+    Process.cpp
+    Pipe.cpp
+    TTY.cpp
+    Shell.cpp
+    Prompt.cpp
+    ASTPrinter.cpp
+    IRGenerator.cpp
+    Parser.cpp
+)
+
+# Platform-specific implementations
+if(WIN32)
+    list(APPEND SHELL_MODULE_SOURCES WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
+endif()
 
 target_sources(Shell
   PUBLIC
     FILE_SET CXX_MODULES FILES
-      Lexer.cpp
-      Process.cpp
-      UnixPipe.cpp
-      TTY.cpp
-      Shell.cpp
-      Prompt.cpp
-      ASTPrinter.cpp
-      IRGenerator.cpp
-      Parser.cpp
+      ${SHELL_MODULE_SOURCES}
 )
 
 find_package(Threads REQUIRED)
-# util for pty.h
 
 # see https://github.com/llvm/llvm-project/issues/75108
 # and https://github.com/ericniebler/range-v3/blob/f013aef2ae81f3661a560e7922a968665bedebff/include/meta/meta_fwd.hpp#L37
 target_compile_definitions(Shell PUBLIC META_WORKAROUND_LLVM_28385)
-target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM InputEditor Threads::Threads util)
+
+# Platform-specific libraries
+if(WIN32)
+    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM InputEditor)
+else()
+    # util for pty.h on POSIX systems
+    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM InputEditor Threads::Threads util)
+endif()
 
 
 if(ENDO_TRACE_VM)

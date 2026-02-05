@@ -3,11 +3,20 @@
 
 #include <vector>
 
-#include <unistd.h>
+#include "Platform.h"
 
+namespace endo
+{
+
+/// Represents a group of related processes.
+///
+/// A process group contains a leader process and optionally
+/// foreground and background processes.
 struct ProcessGroup
 {
-    pid_t leader = -1;
-    pid_t foreground = -1;
-    std::vector<pid_t> background;
+    ProcessId leader = InvalidProcessId;     ///< Leader process ID
+    ProcessId foreground = InvalidProcessId; ///< Foreground process ID
+    std::vector<ProcessId> background;       ///< Background process IDs
 };
+
+} // namespace endo

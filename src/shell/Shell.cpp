@@ -11,22 +11,20 @@ module;
 #include <format>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <print>
 
-#include <sys/wait.h>
-
-#include <fcntl.h>
-#include <unistd.h>
+#if !defined(_WIN32)
+    #include <fcntl.h>
+    #include <unistd.h>
+#endif
 
 #include "Error.h"
 #include "LogConfig.h"
-
-#if defined(__linux__)
-    #include <linux/close_range.h>
-#endif
+#include "Platform.h"
 
 import TTY;
-import UnixPipe;
+import Pipe;
 import Prompt;
 import Lexer;
 import ASTPrinter;
@@ -55,16 +53,6 @@ namespace endo
 using std::placeholders::_1;
 using std::placeholders::_2;
 using std::placeholders::_3;
-
-std::vector<char const*> constructArgv(CoreVM::CoreStringArray const& args)
-{
-    std::vector<char const*> argv;
-    argv.reserve(args.size() + 1);
-    for (const auto& arg: args)
-        argv.push_back(arg.c_str());
-    argv.push_back(nullptr);
-    return argv;
-}
 
 std::string readLine(TTY& tty, std::string_view prompt)
 {
@@ -113,22 +101,27 @@ struct PipelineBuilder
 {
     struct IODescriptors
     {
-        int reader;
-        int writer;
+        NativeHandle reader;
+        NativeHandle writer;
     };
 
-    int defaultStdinFd = STDIN_FILENO;
-    int defaultStdoutFd = STDOUT_FILENO;
-    std::optional<UnixPipe> currentPipe = std::nullopt;
+    NativeHandle defaultStdinFd = 0;  // STDIN_FILENO
+    NativeHandle defaultStdoutFd = 1; // STDOUT_FILENO
+    std::unique_ptr<Pipe> currentPipe = nullptr;
 
     auto requestShellPipe(bool lastInChain) -> IODescriptors;
 };
 
 inline auto PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
 {
-    int const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
-    currentPipe = lastInChain ? std::nullopt : std::make_optional<UnixPipe>();
-    int const stdoutFd = lastInChain ? defaultStdoutFd : currentPipe->writer();
+    NativeHandle const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
+    if (lastInChain)
+        currentPipe = nullptr;
+    else if (auto pipeResult = createPipe(); pipeResult.has_value())
+        currentPipe = std::move(pipeResult.value());
+    else
+        currentPipe = nullptr; // Error case - will result in using default stdout
+    NativeHandle const stdoutFd = lastInChain || !currentPipe ? defaultStdoutFd : currentPipe->writer();
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
 
@@ -402,12 +395,8 @@ export class Shell final: public CoreVM::Runtime
     void builtinCallProcess(CoreVM::Params& context)
     {
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
-        std::vector<char const*> const argv = constructArgv(args);
         std::string const& program = args.at(0);
         auto const programPath = resolveProgram(program);
-
-        int const stdinFd = _currentPipelineBuilder.defaultStdinFd;
-        int const stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
 
         if (!programPath.has_value())
         {
@@ -421,43 +410,34 @@ export class Shell final: public CoreVM::Runtime
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
         //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
-        pid_t const pid = fork();
-        switch (pid)
+        SpawnConfig config;
+        config.program = *programPath;
+        config.arguments = std::vector<std::string>(args.begin() + 1, args.end());
+        config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
+        config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
+        config.closeExtraFds = true;
+
+        auto const spawnResult = _processManager.spawn(config);
+        if (!spawnResult.has_value())
         {
-            case -1:
-                error("Failed to fork(): {}", strerror(errno));
-                context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
-                return;
-            case 0: {
-                // child process
-                if (stdinFd != STDIN_FILENO)
-                    dup2(stdinFd, STDIN_FILENO);
-                if (stdoutFd != STDOUT_FILENO)
-                    dup2(stdoutFd, STDOUT_FILENO);
-                execvp(programPath->c_str(), const_cast<char* const*>(argv.data()));
-                error("Failed to execve({}): {}", programPath->string(), strerror(errno));
-                _exit(EXIT_FAILURE);
-            }
-            default:
-                // parent process
-                int wstatus = 0;
-                waitpid(pid, &wstatus, 0);
-                if (WIFSIGNALED(wstatus))
-                {
-                    _exitCode = 128 + WTERMSIG(wstatus);
-                    debugLog()()("child process exited with signal {}\n", WTERMSIG(wstatus));
-                }
-                else if (WIFEXITED(wstatus))
-                {
-                    _exitCode = WEXITSTATUS(wstatus);
-                    debugLog()()("child process exited with code {}\n", _exitCode);
-                }
-                else if (WIFSTOPPED(wstatus))
-                    debugLog()()("child process stopped with signal {}\n", WSTOPSIG(wstatus));
-                else
-                    debugLog()()("child process exited with unknown status {}\n", wstatus);
-                break;
+            error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
         }
+
+        auto const waitResult = _processManager.wait(spawnResult.value());
+        if (!waitResult.has_value())
+        {
+            error("Failed to wait for {}: {}", program, toString(waitResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        _exitCode = waitResult->exitCode;
+        if (waitResult->signaled)
+            debugLog()()("child process exited with signal {}\n", waitResult->signal);
+        else
+            debugLog()()("child process exited with code {}\n", _exitCode);
 
         context.setResult(CoreVM::CoreNumber(_exitCode));
     }
@@ -467,7 +447,6 @@ export class Shell final: public CoreVM::Runtime
         bool const lastInChain = context.getBool(1);
         CoreVM::CoreStringArray const& args = context.getStringArray(2);
 
-        std::vector<char const*> const argv = constructArgv(args);
         std::string const& program = args.at(0);
         auto const programPath = resolveProgram(program);
 
@@ -485,66 +464,50 @@ export class Shell final: public CoreVM::Runtime
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
         //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
-        pid_t const pid = fork();
-        switch (pid)
-        {
-            case -1:
-                error("Failed to fork(): {}", strerror(errno));
-                context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
-                return;
-            case 0: {
-                // child process
-                setpgid(0, !_currentProcessGroupPids.empty() ? _currentProcessGroupPids.front() : 0);
-                if (stdinFd != STDIN_FILENO)
-                    dup2(stdinFd, STDIN_FILENO);
-                if (stdoutFd != STDOUT_FILENO)
-                    dup2(stdoutFd, STDOUT_FILENO);
+        SpawnConfig config;
+        config.program = *programPath;
+        config.arguments = std::vector<std::string>(args.begin() + 1, args.end());
+        config.stdinFd = stdinFd;
+        config.stdoutFd = stdoutFd;
+        config.processGroup = !_currentProcessGroupPids.empty()
+                                  ? std::make_optional(_currentProcessGroupPids.front())
+                                  : std::make_optional<ProcessId>(0);
+        config.closeExtraFds = true;
 
-                // Close all inherited FDs except stdin, stdout, stderr
-#if defined(__linux__)
-                close_range(STDERR_FILENO + 1, ~0U, 0);
-#else
-                // Fallback for non-Linux: manually close FDs 3 and above
-                int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
-                for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
-                    ::close(fd);
-#endif
-                execvp(programPath->c_str(), const_cast<char* const*>(argv.data()));
-                error("Failed to execve({}): {}", programPath->string(), strerror(errno));
-                _exit(EXIT_FAILURE);
-            }
-            default:
-                // parent process
-                _leftPid = _rightPid;
-                _rightPid = pid;
-                _currentProcessGroupPids.push_back(pid);
-                if (lastInChain)
+        auto const spawnResult = _processManager.spawn(config);
+        if (!spawnResult.has_value())
+        {
+            error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        ProcessId const pid = spawnResult.value();
+        _leftPid = _rightPid;
+        _rightPid = pid;
+        _currentProcessGroupPids.push_back(pid);
+
+        if (lastInChain)
+        {
+            // This is the last process in the chain, so we need to wait for all
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                auto const waitResult = _processManager.wait(processPid);
+                if (!waitResult.has_value())
                 {
-                    // This is the last process in the chain, so we need to wait for all
-                    for (pid_t const pid: _currentProcessGroupPids)
-                    {
-                        int wstatus = 0;
-                        waitpid(pid, &wstatus, 0);
-                        if (WIFSIGNALED(wstatus))
-                        {
-                            _exitCode = 128 + WTERMSIG(wstatus);
-                            debugLog()()("child process {} exited with signal {}\n", pid, WTERMSIG(wstatus));
-                        }
-                        else if (WIFEXITED(wstatus))
-                        {
-                            _exitCode = WEXITSTATUS(wstatus);
-                            debugLog()()("child process {} exited with code {}\n", pid, _exitCode);
-                        }
-                        else if (WIFSTOPPED(wstatus))
-                            debugLog()()("child process {} stopped with signal {}\n", pid, WSTOPSIG(wstatus));
-                        else
-                            debugLog()()("child process {} exited with unknown status {}\n", pid, wstatus);
-                    }
-                    _currentProcessGroupPids.clear();
-                    _leftPid = std::nullopt;
-                    _rightPid = std::nullopt;
+                    error("Failed to wait for process {}: {}", processPid, toString(waitResult.error()));
+                    continue;
                 }
-                break;
+
+                _exitCode = waitResult->exitCode;
+                if (waitResult->signaled)
+                    debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+                else
+                    debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+            }
+            _currentProcessGroupPids.clear();
+            _leftPid = std::nullopt;
+            _rightPid = std::nullopt;
         }
 
         context.setResult(CoreVM::CoreNumber(_exitCode));
@@ -705,9 +668,9 @@ export class Shell final: public CoreVM::Runtime
     PipelineBuilder _currentPipelineBuilder;
 
     // This stores the PIDs of all processes in the pipeline's process group.
-    std::vector<pid_t> _currentProcessGroupPids;
-    std::optional<pid_t> _leftPid;
-    std::optional<pid_t> _rightPid;
+    std::vector<ProcessId> _currentProcessGroupPids;
+    std::optional<ProcessId> _leftPid;
+    std::optional<ProcessId> _rightPid;
 
     // This stores the exit code of the last process in the pipeline.
     // TODO: remember exit codes from all processes in the pipeline's process group

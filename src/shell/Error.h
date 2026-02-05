@@ -27,6 +27,11 @@ enum class ShellError
 
     // Environment errors
     VariableNotFound,
+
+    // Platform abstraction errors
+    PipeCreationFailed,
+    HandleDuplicationFailed,
+    NotImplemented,
 };
 
 /// Converts a ShellError to a human-readable string.
@@ -47,6 +52,9 @@ enum class ShellError
         case ShellError::ParseFailed: return "parse failed";
         case ShellError::ExecutionFailed: return "execution failed";
         case ShellError::VariableNotFound: return "variable not found";
+        case ShellError::PipeCreationFailed: return "pipe creation failed";
+        case ShellError::HandleDuplicationFailed: return "handle duplication failed";
+        case ShellError::NotImplemented: return "not implemented";
     }
     return "unknown error";
 }
