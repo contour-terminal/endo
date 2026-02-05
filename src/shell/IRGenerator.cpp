@@ -35,10 +35,13 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     ///
     /// @param rootNode The root statement of the AST
     /// @param report Diagnostics report for error messages
+    /// @param runtime Runtime instance for accessing builtins
     /// @return The generated IR program, or nullptr if errors occurred
-    static CoreVM::IRProgram* generate(ast::Statement const& rootNode, CoreVM::diagnostics::Report& report)
+    static CoreVM::IRProgram* generate(ast::Statement const& rootNode,
+                                       CoreVM::diagnostics::Report& report,
+                                       CoreVM::Runtime& runtime)
     {
-        IRGenerator generator(report);
+        IRGenerator generator(report, runtime);
 
         generator.setProgram(std::make_unique<CoreVM::IRProgram>());
         generator.setHandler(generator.getHandler(GLOBAL_SCOPE_INIT_NAME));
@@ -54,10 +57,17 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     }
 
   private:
-    explicit IRGenerator(CoreVM::diagnostics::Report& report): _report { report }
+    explicit IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& runtime):
+        _report { report }, _runtime { runtime }
     {
         _processCallSignature.setReturnType(CoreVM::LiteralType::Number);
         _processCallSignature.setName("ProcessCall");
+    }
+
+    /// Finds a builtin function by its signature string.
+    [[nodiscard]] CoreVM::NativeCallback* findCallback(std::string const& signature) const
+    {
+        return _runtime.find(signature);
     }
 
     CoreVM::Value* codegen(ast::Node const* node)
@@ -132,7 +142,10 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "set");
     }
 
-    void visit(ast::BuiltinFalseStmt const&) override { _result = get(CoreVM::CoreNumber(1)); }
+    void visit(ast::BuiltinFalseStmt const& node) override
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "false");
+    }
 
     void visit(ast::BuiltinReadStmt const& node) override
     {
@@ -143,7 +156,10 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "read");
     }
 
-    void visit(ast::BuiltinTrueStmt const&) override { _result = get(CoreVM::CoreNumber(0)); }
+    void visit(ast::BuiltinTrueStmt const& node) override
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "true");
+    }
 
     void visit(ast::CallPipeline const& node) override
     {
@@ -160,11 +176,22 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         {
             std::unique_ptr<ast::ProgramCall> const& call = node.calls[i];
             bool const lastInChain = i == node.calls.size() - 1;
-            std::vector<CoreVM::Value*> callArguments {};
-            callArguments.push_back(get(lastInChain));
-            callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
-            _result =
-                createCallFunction(getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+
+            if (containsVariableExpr(call->parameters))
+            {
+                // Use dynamic argument building and execution
+                buildCommandArgs(call->program, call->parameters);
+                _result = execBuiltCommandPiped(lastInChain);
+            }
+            else
+            {
+                // Use constant array (fast path)
+                std::vector<CoreVM::Value*> callArguments {};
+                callArguments.push_back(get(lastInChain));
+                callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
+                _result = createCallFunction(
+                    getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+            }
         }
     }
 
@@ -212,6 +239,77 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     void visit(ast::LiteralExpr const& node) override { _result = get(node.value); }
 
+    void visit(ast::VariableExpr const& node) override
+    {
+        switch (node.type)
+        {
+            case ast::VariableType::Named: {
+                // Call getvar(name) to retrieve the variable value at runtime
+                auto* callback = findCallback("getvar(S)S");
+                if (!callback)
+                {
+                    reportTypeError("Internal error: getvar builtin not found");
+                    return;
+                }
+                _result = createCallFunction(getBuiltinFunction(*callback), { get(node.name) }, "getvar");
+                break;
+            }
+            case ast::VariableType::ExitStatus: {
+                auto* callback = findCallback("getvar.exitstatus()S");
+                if (!callback)
+                {
+                    reportTypeError("Internal error: getvar.exitstatus builtin not found");
+                    return;
+                }
+                _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.exitstatus");
+                break;
+            }
+            case ast::VariableType::ProcessId: {
+                auto* callback = findCallback("getvar.processid()S");
+                if (!callback)
+                {
+                    reportTypeError("Internal error: getvar.processid builtin not found");
+                    return;
+                }
+                _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.processid");
+                break;
+            }
+            case ast::VariableType::BackgroundId: {
+                auto* callback = findCallback("getvar.backgroundid()S");
+                if (!callback)
+                {
+                    reportTypeError("Internal error: getvar.backgroundid builtin not found");
+                    return;
+                }
+                _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.backgroundid");
+                break;
+            }
+            case ast::VariableType::Positional: {
+                // Convert name to integer index
+                int index = 0;
+                if (!node.name.empty())
+                    index = std::stoi(node.name);
+
+                auto* callback = findCallback("getvar.positional(I)S");
+                if (!callback)
+                {
+                    reportTypeError("Internal error: getvar.positional builtin not found");
+                    return;
+                }
+                _result = createCallFunction(
+                    getBuiltinFunction(*callback), { get(CoreVM::CoreNumber(index)) }, "getvar.positional");
+                break;
+            }
+        }
+    }
+
+    void visit(ast::BuiltinUnsetStmt const& node) override
+    {
+        auto callArguments = std::vector<CoreVM::Value*> {};
+        callArguments.push_back(get(node.name));
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "unset");
+    }
+
     void visit(ast::OutputRedirect const&) override
     {
         // TODO
@@ -233,11 +331,21 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         //         fmt::print("Warning: non-constant argument passed to program call\n");
         // }
 
-        auto callArguments = std::vector<CoreVM::Value*> {};
-        callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
-        // callArguments.push_back(get(redirectsArg));
-
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
+        if (containsVariableExpr(node.parameters))
+        {
+            // Use dynamic argument building and execution
+            buildCommandArgs(node.program, node.parameters);
+            _result = execBuiltCommand();
+        }
+        else
+        {
+            // Use constant array (fast path)
+            auto callArguments = std::vector<CoreVM::Value*> {};
+            callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
+            // callArguments.push_back(get(redirectsArg));
+            _result =
+                createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
+        }
     }
 
     void visit(ast::SubstitutionExpr const&) override
@@ -263,9 +371,29 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         setInsertPoint(end);
     }
 
-    CoreVM::Value* toBool(CoreVM::Value* value) { return createNCmpEQ(value, get(CoreVM::CoreNumber(0))); }
+    /// Converts a value to a boolean for conditional branching.
+    /// For Numbers: true if equal to 0 (shell convention: 0 = success = true)
+    /// For Booleans: use directly
+    CoreVM::Value* toBool(CoreVM::Value* value)
+    {
+        if (value->type() == CoreVM::LiteralType::Boolean)
+            return value;
+        return createNCmpEQ(value, get(CoreVM::CoreNumber(0)));
+    }
 
-    std::vector<CoreVM::Constant*> createArray(std::vector<std::unique_ptr<ast::Expr>> const& expressions)
+    /// Checks if any expression in the list contains a variable expression that needs runtime evaluation.
+    [[nodiscard]] bool containsVariableExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
+    {
+        for (auto const& expr: expressions)
+        {
+            if (dynamic_cast<ast::VariableExpr const*>(expr.get()) != nullptr)
+                return true;
+        }
+        return false;
+    }
+
+    std::vector<CoreVM::Constant*> createConstantArray(
+        std::vector<std::unique_ptr<ast::Expr>> const& expressions)
     {
         auto irArray = std::vector<CoreVM::Constant*> {};
         for (auto const& expr: expressions)
@@ -287,22 +415,81 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         return irArray;
     }
 
+    /// Builds command arguments using the command builder builtins.
+    /// This is used when arguments contain variable expressions that need runtime evaluation.
+    void buildCommandArgs(std::string const& programName, std::vector<std::unique_ptr<ast::Expr>> const& args)
+    {
+        TRACE_SCOPE("buildCommandArgs");
+
+        // Start building the command with the program name
+        auto* cmdStartCallback = findCallback("internal.cmd_start(S)V");
+        if (!cmdStartCallback)
+        {
+            reportTypeError("Internal error: internal.cmd_start builtin not found");
+            return;
+        }
+        createCallFunction(getBuiltinFunction(*cmdStartCallback), { get(programName) }, "cmd_start");
+
+        // Add each argument
+        auto* cmdArgCallback = findCallback("internal.cmd_arg(S)V");
+        if (!cmdArgCallback)
+        {
+            reportTypeError("Internal error: internal.cmd_arg builtin not found");
+            return;
+        }
+
+        for (auto const& arg: args)
+        {
+            auto* value = codegen(arg.get());
+            if (!value)
+                continue; // Error already reported
+
+            createCallFunction(getBuiltinFunction(*cmdArgCallback), { value }, "cmd_arg");
+        }
+    }
+
+    /// Executes the built command (non-piped version).
+    CoreVM::Value* execBuiltCommand()
+    {
+        auto* cmdExecCallback = findCallback("internal.cmd_exec()I");
+        if (!cmdExecCallback)
+        {
+            reportTypeError("Internal error: internal.cmd_exec builtin not found");
+            return nullptr;
+        }
+        return createCallFunction(getBuiltinFunction(*cmdExecCallback), {}, "cmd_exec");
+    }
+
+    /// Executes the built command (piped version).
+    CoreVM::Value* execBuiltCommandPiped(bool lastInChain)
+    {
+        auto* cmdExecCallback = findCallback("internal.cmd_exec_piped(B)I");
+        if (!cmdExecCallback)
+        {
+            reportTypeError("Internal error: internal.cmd_exec_piped builtin not found");
+            return nullptr;
+        }
+        return createCallFunction(
+            getBuiltinFunction(*cmdExecCallback), { get(lastInChain) }, "cmd_exec_piped");
+    }
+
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        return createArray(args);
+        return createConstantArray(args);
     }
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
                                                   std::vector<std::unique_ptr<ast::Expr>> const& args)
     {
         TRACE_SCOPE("createCallArgs");
-        auto callArguments = createArray(args);
+        auto callArguments = createConstantArray(args);
         callArguments.insert(callArguments.begin(), get(programName));
         return callArguments;
     }
 
     CoreVM::diagnostics::Report& _report;    // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    CoreVM::Runtime& _runtime;               // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::SourceLocation _currentLocation; ///< Current location for error reporting
     bool _hasErrors = false;                 ///< Whether any errors have been reported
     CoreVM::Value* _result = nullptr;

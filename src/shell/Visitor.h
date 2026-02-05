@@ -11,6 +11,7 @@ struct BuiltinFalseStmt;
 struct BuiltinExitStmt;
 struct BuiltinReadStmt;
 struct BuiltinTrueStmt;
+struct BuiltinUnsetStmt;
 struct CallPipeline;
 struct CommandFileSubst;
 struct CompoundStmt;
@@ -21,6 +22,7 @@ struct LiteralExpr;
 struct OutputRedirect;
 struct ProgramCall;
 struct SubstitutionExpr;
+struct VariableExpr;
 struct WhileStmt;
 
 struct Visitor
@@ -48,11 +50,13 @@ struct Visitor
     virtual void visit(BuiltinReadStmt const&) = 0;
     virtual void visit(BuiltinChDirStmt const&) = 0;
     virtual void visit(BuiltinSetStmt const&) = 0;
+    virtual void visit(BuiltinUnsetStmt const&) = 0;
 
-    // epxressions
+    // expressions
     virtual void visit(LiteralExpr const&) = 0;
     virtual void visit(SubstitutionExpr const&) = 0;
     virtual void visit(CommandFileSubst const&) = 0;
+    virtual void visit(VariableExpr const&) = 0;
 };
 
 } // namespace endo::ast

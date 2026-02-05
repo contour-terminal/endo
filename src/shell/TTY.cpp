@@ -191,8 +191,6 @@ export class TestPTY final: public TTY
         if (openpty(&_ptyMaster, &_ptySlave, name, &_baseTermios, &_windowSize) == -1)
             throw std::runtime_error("openpty: " + std::string(strerror(errno)));
 
-        std::println("TestPTY opened: {} (master {}, slave {})", name, _ptyMaster, _ptySlave);
-
         _updateThread = std::thread { std::bind(&TestPTY::outputUpdateLoop, this) };
     }
 

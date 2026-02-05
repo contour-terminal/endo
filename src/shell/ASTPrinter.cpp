@@ -161,6 +161,33 @@ export class ASTPrinter: public Visitor
     void visit(SubstitutionExpr const& node) override { (void) node; }
 
     void visit(CommandFileSubst const& node) override { (void) node; }
+
+    void visit(VariableExpr const& node) override
+    {
+        switch (node.type)
+        {
+            case VariableType::Named:
+                if (node.braced)
+                    _result += std::format("${{{}}}", node.name);
+                else
+                    _result += std::format("${}", node.name);
+                break;
+            case VariableType::ExitStatus:
+                _result += "$?";
+                break;
+            case VariableType::ProcessId:
+                _result += "$$";
+                break;
+            case VariableType::BackgroundId:
+                _result += "$!";
+                break;
+            case VariableType::Positional:
+                _result += std::format("${}", node.name);
+                break;
+        }
+    }
+
+    void visit(BuiltinUnsetStmt const& node) override { _result += "unset " + node.name; }
 };
 
 } // namespace endo::ast

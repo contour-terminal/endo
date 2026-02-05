@@ -46,6 +46,9 @@ export enum class Token
     Semicolon,      // ;
     String,         // "..." and '...'
     Identifier,     // space delimited text not containing any of the unescaped symbols above
+
+    // New tokens added below to avoid shifting existing enum values
+    DollarBraceName, // ${NAME}
 };
 
 export enum class BuiltinFunction
@@ -221,7 +224,11 @@ export class Lexer
                     return consumeCharAndConfirmToken(Token::DollarNot);
                 else if (_currentChar == '?')
                     return consumeCharAndConfirmToken(Token::DollarQuestion);
+                else if (_currentChar == '{')
+                    return consumeBracedVariable();
                 else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+                    return consumeIdentifier(Token::DollarName);
+                else if (_currentChar == '_')
                     return consumeIdentifier(Token::DollarName);
                 else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
                     return consumeCharAndConfirmToken(Token::DollarNumber);
@@ -329,6 +336,73 @@ export class Lexer
         return confirmToken(Token::String);
     }
 
+    /// Consumes a braced variable: ${NAME}
+    Token consumeBracedVariable()
+    {
+        nextChar(); // consume '{'
+
+        // Handle special variables within braces: ${?}, ${!}, etc.
+        if (_currentChar == '?')
+        {
+            nextChar();
+            if (_currentChar == '}')
+            {
+                nextChar();
+                return confirmToken(Token::DollarQuestion);
+            }
+            return confirmToken(Token::Invalid);
+        }
+        else if (_currentChar == '!')
+        {
+            nextChar();
+            if (_currentChar == '}')
+            {
+                nextChar();
+                return confirmToken(Token::DollarNot);
+            }
+            return confirmToken(Token::Invalid);
+        }
+        else if (_currentChar == '$')
+        {
+            nextChar();
+            if (_currentChar == '}')
+            {
+                nextChar();
+                return confirmToken(Token::DollarDollar);
+            }
+            return confirmToken(Token::Invalid);
+        }
+        else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
+        {
+            _nextToken.literal += static_cast<char>(_currentChar);
+            nextChar();
+            if (_currentChar == '}')
+            {
+                nextChar();
+                return confirmToken(Token::DollarNumber);
+            }
+            return confirmToken(Token::Invalid);
+        }
+
+        // Regular variable name: must start with alpha or underscore
+        if (!(_currentChar < 0x80 && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
+            return confirmToken(Token::Invalid);
+
+        // Consume the variable name
+        while (_currentChar < 0x80 && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
+        {
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar();
+        }
+
+        // Expect closing brace
+        if (_currentChar != '}')
+            return confirmToken(Token::Invalid);
+
+        nextChar(); // consume '}'
+        return confirmToken(Token::DollarBraceName);
+    }
+
     char32_t nextChar()
     {
         _currentChar = _source->readChar();
@@ -410,6 +484,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case DollarNot: name = "$!"; break;
             case DollarQuestion: name = "$?"; break;
             case DollarNumber: name = "DollarNumber"; break;
+            case DollarBraceName: name = "DollarBraceName"; break;
             case EndOfInput: name = "EndOfInput"; break;
             case Equal: name = "="; break;
             case Greater: name = ">"; break;

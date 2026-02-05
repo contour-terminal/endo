@@ -87,6 +87,7 @@ class Environment
 
     virtual void set(std::string_view name, std::string_view value) = 0;
     [[nodiscard]] virtual std::optional<std::string_view> get(std::string_view name) const = 0;
+    virtual void unset(std::string_view name) = 0;
 
     virtual void exportVariable(std::string_view name) = 0;
 
@@ -143,6 +144,12 @@ export class TestEnvironment: public Environment
             return std::nullopt;
     }
 
+    void unset(std::string_view name) override
+    {
+        _values.erase(std::string(name));
+        unsetenv(name.data());
+    }
+
     void exportVariable(std::string_view name) override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -171,6 +178,12 @@ export class SystemEnvironment: public Environment
             return std::nullopt;
     }
 
+    void unset(std::string_view name) override
+    {
+        _values.erase(std::string(name));
+        unsetenv(name.data());
+    }
+
     void exportVariable(std::string_view name) override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -192,12 +205,21 @@ export class Shell final: public CoreVM::Runtime
   public:
     Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance()) {}
 
+    ~Shell() = default;
+
     Shell(TTY& tty, Environment& env): _env { env }, _tty { tty }
     {
         _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
         _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
         _env.setAndExport("SHELL", "endo");
+
+        // Capture the shell's process ID at startup
+#if !defined(_WIN32)
+        _shellPid = static_cast<ProcessId>(getpid());
+#else
+        _shellPid = static_cast<ProcessId>(GetCurrentProcessId());
+#endif
 
         // NB: These lines could go away once we have a proper command line parser and
         //     the ability to set these options from the command line.
@@ -244,7 +266,7 @@ export class Shell final: public CoreVM::Runtime
 
             debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-            CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode, report);
+            CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode, report, *this);
 
             // Check for IR generation errors
             if (report.containsFailures())
@@ -351,6 +373,33 @@ export class Shell final: public CoreVM::Runtime
             .returnType(CoreVM::LiteralType::Boolean)
             .bind(&Shell::builtinSet, this);
 
+        registerFunction("unset")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinUnset, this);
+
+        registerFunction("getvar")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinGetVar, this);
+
+        registerFunction("getvar.exitstatus")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinGetExitStatus, this);
+
+        registerFunction("getvar.processid")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinGetProcessId, this);
+
+        registerFunction("getvar.backgroundid")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinGetBackgroundId, this);
+
+        registerFunction("getvar.positional")
+            .param<CoreVM::CoreNumber>("index")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinGetPositional, this);
+
         registerFunction("callproc")
             .param<std::vector<std::string>>("args")
             //.param<std::vector<CoreVM::CoreNumber>>("redirects")
@@ -385,6 +434,26 @@ export class Shell final: public CoreVM::Runtime
             .param<CoreVM::CoreNumber>("oflags")
             .returnType(CoreVM::LiteralType::Number)
             .bind(&Shell::builtinOpenWrite, this);
+
+        // Command builder functions for dynamic argument construction
+        registerFunction("internal.cmd_start")
+            .param<std::string>("program")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinCmdStart, this);
+
+        registerFunction("internal.cmd_arg")
+            .param<std::string>("arg")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinCmdArg, this);
+
+        registerFunction("internal.cmd_exec")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinCmdExec, this);
+
+        registerFunction("internal.cmd_exec_piped")
+            .param<bool>("last_in_chain")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinCmdExecPiped, this);
         // clang-format on
     }
 
@@ -550,6 +619,174 @@ export class Shell final: public CoreVM::Runtime
         context.setResult(true);
     }
 
+    void builtinUnset(CoreVM::Params& context)
+    {
+        _env.unset(context.getString(1));
+        context.setResult(true);
+    }
+
+    void builtinGetVar(CoreVM::Params& context)
+    {
+        auto const& name = context.getString(1);
+        auto const value = _env.get(name);
+        context.setResult(std::string(value.value_or("")));
+    }
+
+    void builtinGetExitStatus(CoreVM::Params& context) { context.setResult(std::to_string(_exitCode)); }
+
+    void builtinGetProcessId(CoreVM::Params& context) { context.setResult(std::to_string(_shellPid)); }
+
+    void builtinGetBackgroundId(CoreVM::Params& context)
+    {
+        if (_lastBackgroundPid.has_value())
+            context.setResult(std::to_string(_lastBackgroundPid.value()));
+        else
+            context.setResult("");
+    }
+
+    void builtinGetPositional(CoreVM::Params& context)
+    {
+        auto const index = static_cast<size_t>(context.getInt(1));
+        if (index < _positionalParameters.size())
+            context.setResult(_positionalParameters[index]);
+        else
+            context.setResult("");
+    }
+
+    // Command builder functions for dynamic argument construction
+    void builtinCmdStart(CoreVM::Params& context)
+    {
+        _cmdBuilderArgs.clear();
+        _cmdBuilderArgs.push_back(context.getString(1));
+    }
+
+    void builtinCmdArg(CoreVM::Params& context) { _cmdBuilderArgs.push_back(context.getString(1)); }
+
+    void builtinCmdExec(CoreVM::Params& context)
+    {
+        if (_cmdBuilderArgs.empty())
+        {
+            error("No command to execute");
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        std::string const& program = _cmdBuilderArgs.at(0);
+        auto const programPath = resolveProgram(program);
+
+        if (!programPath.has_value())
+        {
+            error("{}: {}", program, toString(programPath.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        SpawnConfig config;
+        config.program = *programPath;
+        config.arguments = std::vector<std::string>(_cmdBuilderArgs.begin() + 1, _cmdBuilderArgs.end());
+        config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
+        config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
+        config.closeExtraFds = true;
+
+        auto const spawnResult = _processManager.spawn(config);
+        if (!spawnResult.has_value())
+        {
+            error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        auto const waitResult = _processManager.wait(spawnResult.value());
+        if (!waitResult.has_value())
+        {
+            error("Failed to wait for {}: {}", program, toString(waitResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        _exitCode = waitResult->exitCode;
+        if (waitResult->signaled)
+            debugLog()()("child process exited with signal {}\n", waitResult->signal);
+        else
+            debugLog()()("child process exited with code {}\n", _exitCode);
+
+        _cmdBuilderArgs.clear();
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+    }
+
+    void builtinCmdExecPiped(CoreVM::Params& context)
+    {
+        bool const lastInChain = context.getBool(1);
+
+        if (_cmdBuilderArgs.empty())
+        {
+            error("No command to execute");
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        std::string const& program = _cmdBuilderArgs.at(0);
+        auto const programPath = resolveProgram(program);
+
+        if (!programPath.has_value())
+        {
+            error("{}: {}", program, toString(programPath.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+        SpawnConfig config;
+        config.program = *programPath;
+        config.arguments = std::vector<std::string>(_cmdBuilderArgs.begin() + 1, _cmdBuilderArgs.end());
+        config.stdinFd = stdinFd;
+        config.stdoutFd = stdoutFd;
+        config.processGroup = !_currentProcessGroupPids.empty()
+                                  ? std::make_optional(_currentProcessGroupPids.front())
+                                  : std::make_optional<ProcessId>(0);
+        config.closeExtraFds = true;
+
+        auto const spawnResult = _processManager.spawn(config);
+        if (!spawnResult.has_value())
+        {
+            error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+            context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+            return;
+        }
+
+        ProcessId const pid = spawnResult.value();
+        _leftPid = _rightPid;
+        _rightPid = pid;
+        _currentProcessGroupPids.push_back(pid);
+
+        if (lastInChain)
+        {
+            // This is the last process in the chain, so we need to wait for all
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                auto const waitResult = _processManager.wait(processPid);
+                if (!waitResult.has_value())
+                {
+                    error("Failed to wait for process {}: {}", processPid, toString(waitResult.error()));
+                    continue;
+                }
+
+                _exitCode = waitResult->exitCode;
+                if (waitResult->signaled)
+                    debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+                else
+                    debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+            }
+            _currentProcessGroupPids.clear();
+            _leftPid = std::nullopt;
+            _rightPid = std::nullopt;
+        }
+
+        _cmdBuilderArgs.clear();
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+    }
+
     void builtinSetAndExport(CoreVM::Params& context)
     {
         _env.set(context.getString(1), context.getString(2));
@@ -558,9 +795,17 @@ export class Shell final: public CoreVM::Runtime
 
     void builtinExport(CoreVM::Params& context) { _env.exportVariable(context.getString(1)); }
 
-    void builtinTrue(CoreVM::Params& context) { context.setResult(true); }
+    void builtinTrue(CoreVM::Params& context)
+    {
+        _exitCode = 0;
+        context.setResult(true);
+    }
 
-    void builtinFalse(CoreVM::Params& context) { context.setResult(false); }
+    void builtinFalse(CoreVM::Params& context)
+    {
+        _exitCode = 1;
+        context.setResult(false);
+    }
 
     void builtinReadDefault(CoreVM::Params& context)
     {
@@ -679,6 +924,18 @@ export class Shell final: public CoreVM::Runtime
     // This stores the exit code of the last process in the pipeline.
     // TODO: remember exit codes from all processes in the pipeline's process group
     int _exitCode = -1;
+
+    // Shell's process ID for $$ variable
+    ProcessId _shellPid = 0;
+
+    // Last background process ID for $! variable
+    std::optional<ProcessId> _lastBackgroundPid;
+
+    // Positional parameters ($0, $1, $2, etc.)
+    std::vector<std::string> _positionalParameters;
+
+    // Command builder for dynamic argument construction
+    std::vector<std::string> _cmdBuilderArgs;
 
     CoreVM::Runner* _runner = nullptr;
     bool _quit = false;

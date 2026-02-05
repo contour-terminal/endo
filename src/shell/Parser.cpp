@@ -138,12 +138,12 @@ export class Parser
                 else if (_lexer.isDirective("true"))
                 {
                     _lexer.nextToken();
-                    return std::make_unique<ast::BuiltinTrueStmt>();
+                    return std::make_unique<ast::BuiltinTrueStmt>(*_runtime.find("true()B"));
                 }
                 else if (_lexer.isDirective("false"))
                 {
                     _lexer.nextToken();
-                    return std::make_unique<ast::BuiltinFalseStmt>();
+                    return std::make_unique<ast::BuiltinFalseStmt>(*_runtime.find("false()B"));
                 }
                 else if (_lexer.isDirective("read"))
                 {
@@ -178,6 +178,12 @@ export class Parser
                         return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd(S)B"),
                                                                        std::move(param));
                     }
+                }
+                else if (_lexer.isDirective("unset"))
+                {
+                    _lexer.nextToken();
+                    auto name = consumeLiteral();
+                    return std::make_unique<ast::BuiltinUnsetStmt>(*_runtime.find("unset(S)B"), name);
                 }
                 else
                 {
@@ -325,7 +331,23 @@ export class Parser
         {
             case Token::String:
             case Token::Number:
-            case Token::Identifier: return std::make_unique<ast::LiteralExpr>(consumeLiteral()); break;
+            case Token::Identifier: return std::make_unique<ast::LiteralExpr>(consumeLiteral());
+            case Token::DollarName:
+                return std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, false);
+            case Token::DollarBraceName:
+                return std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, true);
+            case Token::DollarQuestion:
+                _lexer.nextToken();
+                return std::make_unique<ast::VariableExpr>("?", ast::VariableType::ExitStatus, false);
+            case Token::DollarDollar:
+                _lexer.nextToken();
+                return std::make_unique<ast::VariableExpr>("$", ast::VariableType::ProcessId, false);
+            case Token::DollarNot:
+                _lexer.nextToken();
+                return std::make_unique<ast::VariableExpr>("!", ast::VariableType::BackgroundId, false);
+            case Token::DollarNumber:
+                return std::make_unique<ast::VariableExpr>(
+                    consumeLiteral(), ast::VariableType::Positional, false);
             default:
                 _report.syntaxErrorWithSuggestions(currentLocation(),
                                                    {},

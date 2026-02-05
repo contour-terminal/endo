@@ -64,6 +64,35 @@ struct LiteralExpr final: Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Represents a variable expression for runtime variable substitution.
+///
+/// This covers:
+/// - Simple variables: $VAR
+/// - Braced variables: ${VAR}
+/// - Special variables: $?, $$, $!, $0-$9
+enum class VariableType
+{
+    Named,        ///< Regular named variable: $VAR or ${VAR}
+    ExitStatus,   ///< $? - Exit status of last command
+    ProcessId,    ///< $$ - Current shell process ID
+    BackgroundId, ///< $! - PID of last background process
+    Positional,   ///< $0-$9 - Positional parameters
+};
+
+struct VariableExpr final: Expr
+{
+    std::string name;    ///< Variable name (empty for special variables like $?)
+    VariableType type;   ///< Type of variable
+    bool braced = false; ///< Whether this was ${VAR} syntax
+
+    VariableExpr(std::string name, VariableType type, bool braced = false):
+        name(std::move(name)), type(type), braced(braced)
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // >FILE
 // 1>FILE
 // 1>&2
@@ -132,11 +161,25 @@ struct BuiltinExportStmt final: public Statement
 
 struct BuiltinTrueStmt final: public Statement
 {
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+
+    explicit BuiltinTrueStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
+        callback { callback }
+    {
+    }
+
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
 struct BuiltinFalseStmt final: public Statement
 {
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+
+    explicit BuiltinFalseStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
+        callback { callback }
+    {
+    }
+
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
@@ -178,6 +221,20 @@ struct BuiltinChDirStmt final: public Statement
     BuiltinChDirStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
                      std::unique_ptr<Expr> path):
         callback { callback }, path { std::move(path) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Builtin unset statement for removing variables from the environment.
+struct BuiltinUnsetStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::string name;
+
+    BuiltinUnsetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback, std::string name):
+        callback { callback }, name { std::move(name) }
     {
     }
 
