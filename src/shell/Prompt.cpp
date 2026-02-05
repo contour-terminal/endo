@@ -70,6 +70,7 @@ std::string Prompt::read()
     _inputField.setPrompt(_promptStr);
     _inputField.setMultiline(_multilineEnabled);
     _lastRenderedLines = 1;
+    _scrollOffset = 0;
 
     // Render the initial prompt immediately
     render();
@@ -86,6 +87,24 @@ std::string Prompt::read()
             {
                 onResize();
                 render();
+                continue;
+            }
+
+            // Handle mouse events
+            if (auto const* mouse = std::get_if<tui::MouseEvent>(&event))
+            {
+                // Skip events consumed by terminal UI (e.g., scrollback selection)
+                // if (mouse->uiHandled)
+                //     continue;
+
+                int line = 0;
+                int column = 0;
+                if (translateMouseCoords(mouse->x, mouse->y, line, column))
+                {
+                    auto action = _inputField.handleMouse(mouse->type, line, column, mouse->modifiers);
+                    if (action == tui::InputFieldAction::Changed)
+                        render();
+                }
                 continue;
             }
 
@@ -161,6 +180,24 @@ std::optional<std::string> Prompt::processInput()
             continue;
         }
 
+        // Handle mouse events
+        if (auto const* mouse = std::get_if<tui::MouseEvent>(&event))
+        {
+            // Skip events consumed by terminal UI (e.g., scrollback selection)
+            // if (mouse->uiHandled)
+            //     continue;
+
+            int line = 0;
+            int column = 0;
+            if (translateMouseCoords(mouse->x, mouse->y, line, column))
+            {
+                auto action = _inputField.handleMouse(mouse->type, line, column, mouse->modifiers);
+                if (action == tui::InputFieldAction::Changed)
+                    render();
+            }
+            continue;
+        }
+
         auto action = _inputField.processEvent(event);
 
         switch (action)
@@ -212,6 +249,7 @@ void Prompt::display()
     _inputField.setPrompt(_promptStr);
     _inputField.setMultiline(_multilineEnabled);
     _lastRenderedLines = 1;
+    _scrollOffset = 0;
 
     // Render the prompt
     render();
@@ -297,6 +335,21 @@ void Prompt::render()
     auto const cursorLine = _inputField.cursorLine();
     auto const cursorColumn = _inputField.cursorColumn();
     auto const termWidth = std::max(80, _terminal.columns()); // Ensure minimum width
+    auto const termHeight = _terminal.rows();
+
+    // Estimate editor start row: assume prompt is at the bottom of terminal
+    // This is updated on first render and when content changes
+    if (_lastRenderedLines == 1 && visibleLines == 1)
+    {
+        // First render: estimate based on terminal height
+        // Assume we're near the bottom of the terminal
+        _editorStartRow = std::max(1, termHeight - visibleLines + 1);
+    }
+    else if (visibleLines > _lastRenderedLines)
+    {
+        // Editor grew: adjust start row upward
+        _editorStartRow = std::max(1, _editorStartRow - (visibleLines - _lastRenderedLines));
+    }
 
     // Style constants - OpenCode-inspired look
     // Soft blue for the left bar: RGB(97, 175, 239)
@@ -319,11 +372,10 @@ void Prompt::render()
     auto const totalPromptWidth = LeftBarWidth + PaddingAfterBar + promptTextWidth;
 
     // Calculate scroll offset to keep cursor visible
-    static int scrollOffset = 0;
-    if (cursorLine < scrollOffset)
-        scrollOffset = cursorLine;
-    else if (cursorLine >= scrollOffset + visibleLines)
-        scrollOffset = cursorLine - visibleLines + 1;
+    if (cursorLine < _scrollOffset)
+        _scrollOffset = cursorLine;
+    else if (cursorLine >= _scrollOffset + visibleLines)
+        _scrollOffset = cursorLine - visibleLines + 1;
 
     // Get selection bounds
     auto const hasSelection = _inputField.hasSelection();
@@ -339,7 +391,7 @@ void Prompt::render()
     // Render each visible line
     for (int displayRow = 0; displayRow < visibleLines; ++displayRow)
     {
-        auto const lineIndex = scrollOffset + displayRow;
+        auto const lineIndex = _scrollOffset + displayRow;
         auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Move to start of line and clear it
@@ -443,7 +495,7 @@ void Prompt::render()
     }
 
     // Position cursor
-    auto const cursorDisplayRow = cursorLine - scrollOffset;
+    auto const cursorDisplayRow = cursorLine - _scrollOffset;
 
     // Move cursor to correct row
     auto const rowsToMoveUp = (visibleLines - 1) - cursorDisplayRow;
@@ -480,6 +532,50 @@ void Prompt::render()
 
     // Flush output to terminal
     out.flush();
+}
+
+int Prompt::promptWidth() const
+{
+    // Left bar (1) + padding (1) + prompt text width
+    static constexpr int LeftBarWidth = 1;
+    static constexpr int PaddingAfterBar = 1;
+    return LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+}
+
+bool Prompt::translateMouseCoords(int screenX, int screenY, int& outLine, int& outColumn) const
+{
+    // Screen coordinates are 1-based from top of terminal
+    // The editor is rendered at _editorStartRow (1-based screen row)
+
+    auto const totalLines = _inputField.lineCount();
+    auto const maxHeight = maxEditorHeight();
+    auto const visibleLines = std::min(totalLines, maxHeight);
+
+    // Calculate editor bounds on screen
+    auto const editorEndRow = _editorStartRow + visibleLines - 1;
+
+    // Check if mouse is within the visible editor region (vertically)
+    if (screenY < _editorStartRow || screenY > editorEndRow)
+        return false;
+
+    // Convert screen row to line index (accounting for scroll and editor position)
+    auto const displayRow = screenY - _editorStartRow; // 0-based row within editor
+    outLine = _scrollOffset + displayRow;
+    if (outLine < 0 || outLine >= totalLines)
+        return false;
+
+    // Convert screen column to grapheme column
+    // Subtract prompt width from screen X
+    auto const totalPromptWidth = promptWidth();
+    int textColumn = screenX - totalPromptWidth;
+    if (textColumn < 0)
+        textColumn = 0;
+
+    // The textColumn is now in display cells, need to convert to grapheme index
+    // For now, assume 1:1 mapping (can be improved for wide characters)
+    outColumn = textColumn;
+
+    return true;
 }
 
 } // namespace endo

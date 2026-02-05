@@ -29,14 +29,18 @@ namespace
     //
     // We use flags 1|8=9 to ensure modifiers are reported for all keys including Enter.
     // Flag 8 is needed because some terminals only report Shift+Enter with this flag.
-    constexpr auto EnableCsiU = "\033[>9u"sv;             // Kitty keyboard protocol (disambiguate + all keys)
-    constexpr auto DisableCsiU = "\033[<u"sv;             // Pop Kitty keyboard protocol
-    constexpr auto EnableSgrMouse = "\033[?1006h"sv;      // SGR mouse mode
-    constexpr auto DisableSgrMouse = "\033[?1006l"sv;     // Disable SGR mouse mode
-    constexpr auto EnableMouseTracking = "\033[?1000h"sv; // Basic mouse tracking
-    constexpr auto DisableMouseTracking = "\033[?1000l"sv;
+    constexpr auto EnableCsiU = "\033[>9u"sv; // Kitty keyboard protocol (disambiguate + all keys)
+    constexpr auto DisableCsiU = "\033[<u"sv; // Pop Kitty keyboard protocol
     constexpr auto EnableBracketedPaste = "\033[?2004h"sv;
     constexpr auto DisableBracketedPaste = "\033[?2004l"sv;
+
+    // Passive mouse tracking (DEC mode 2029) - Contour terminal extension
+    // Automatically enables SGR format and button tracking.
+    // Reports mouse events with an additional uiHandled parameter indicating
+    // whether the terminal UI consumed the event (e.g., for scrollback selection).
+    // Format: CSI < button ; column ; row ; uiHandled M/m
+    constexpr auto EnablePassiveMouseTracking = "\033[?2029h"sv;
+    constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv;
 
     /// Writes a string_view to the terminal (stdout).
     void writeToTerminal(std::string_view data)
@@ -199,16 +203,14 @@ void TerminalInput::disableRawMode()
 void TerminalInput::enableProtocols()
 {
     writeToTerminal(EnableCsiU);
-    writeToTerminal(EnableMouseTracking);
-    writeToTerminal(EnableSgrMouse);
+    writeToTerminal(EnablePassiveMouseTracking);
     writeToTerminal(EnableBracketedPaste);
 }
 
 void TerminalInput::disableProtocols()
 {
     writeToTerminal(DisableBracketedPaste);
-    writeToTerminal(DisableSgrMouse);
-    writeToTerminal(DisableMouseTracking);
+    writeToTerminal(DisablePassiveMouseTracking);
     writeToTerminal(DisableCsiU);
 }
 

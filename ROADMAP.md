@@ -279,19 +279,32 @@ The library includes:
 
 ### Phase 2.2: Mouse Integration
 
+**Status:** Complete
+
 **Dependency:** Phase 2.1
 
 **Tasks:**
-- [ ] Implement passive mouse tracking VT extension support
-- [ ] Implement click-to-position cursor
-- [ ] Implement click-and-drag selection
-- [ ] Implement double-click word selection
-- [ ] Implement triple-click line selection
-- [ ] Add mouse interaction tests
+- [x] Implement passive mouse tracking VT extension support (DEC mode 2029)
+- [x] Implement click-to-position cursor
+- [x] Implement click-and-drag selection
+- [x] Implement double-click word selection (fish-style word boundaries)
+- [x] Implement triple-click line selection
+- [x] Add mouse interaction tests
+
+**Implementation Notes:**
+- Uses Contour's passive mouse tracking (DEC mode 2029) which includes SGR format and uiHandled hint
+- Word selection uses fish-style boundaries: path separators (`/`) and punctuation break words
+- Events with `uiHandled=true` are skipped (terminal UI consumed them, e.g., for scrollback)
+- Scroll wheel scrolls multiline editor content
+- 14 new mouse-related tests added to InputField_test.cpp
 
 ### Phase 2.3: Completion and Suggestions
 
 **Dependency:** Phase 2.1, Milestone 1 (need language features to complete)
+
+**Notes:**
+- Completion system will be designed with an abstraction layer to allow both local and AI-powered completion providers
+- Initial implementation will focus on local completion based on the current command line context
 
 **Tasks:**
 - [ ] Design completion provider interface

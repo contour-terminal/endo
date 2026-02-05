@@ -37,6 +37,7 @@ struct MouseEvent
     int x = 0;                           ///< Column (1-based).
     int y = 0;                           ///< Row (1-based).
     Modifier modifiers = Modifier::None; ///< Active modifier keys.
+    bool uiHandled = false;              ///< True if terminal UI consumed this event.
 };
 
 /// @brief Terminal resize event.

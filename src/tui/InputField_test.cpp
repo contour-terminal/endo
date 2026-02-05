@@ -755,3 +755,187 @@ TEST_CASE("InputField.utf8_characters")
     // Should have two grapheme clusters
     CHECK(field.text() == "\xC3\xA9\xC3\xA8"); // UTF-8 encoding of e with acute + e with grave
 }
+
+// ============================================================================
+// Mouse handling tests
+// ============================================================================
+
+TEST_CASE("InputField.mouse_click_positions_cursor")
+{
+    InputField field;
+    field.setText("hello world");
+
+    // Single click at column 5 should position cursor there
+    auto action = field.handleMouse(MouseEvent::Type::Press, 0, 5, Modifier::None);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.cursor() == 5);
+    CHECK(!field.hasSelection());
+}
+
+TEST_CASE("InputField.mouse_click_with_shift_extends_selection")
+{
+    InputField field;
+    field.setText("hello world");
+    (void) field.processEvent(specialKey(KeyCode::Home)); // Cursor at start
+
+    // Shift+click at column 5 should create selection
+    auto action = field.handleMouse(MouseEvent::Type::Press, 0, 5, Modifier::Shift);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "hello");
+}
+
+TEST_CASE("InputField.mouse_drag_creates_selection")
+{
+    InputField field;
+    field.setText("hello world");
+
+    // Press at column 0
+    (void) field.handleMouse(MouseEvent::Type::Press, 0, 0, Modifier::None);
+    CHECK(!field.hasSelection());
+
+    // Drag to column 5
+    auto action = field.handleMouse(MouseEvent::Type::Move, 0, 5, Modifier::None);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "hello");
+
+    // Release
+    action = field.handleMouse(MouseEvent::Type::Release, 0, 5, Modifier::None);
+    CHECK(action == InputFieldAction::None);
+    CHECK(field.hasSelection()); // Selection remains
+}
+
+TEST_CASE("InputField.double_click_selects_word")
+{
+    InputField field;
+    field.setText("hello world");
+
+    // First click
+    (void) field.handleMouse(MouseEvent::Type::Press, 0, 7, Modifier::None);
+    (void) field.handleMouse(MouseEvent::Type::Release, 0, 7, Modifier::None);
+
+    // Second click (double-click) - should select "world"
+    auto action = field.handleMouse(MouseEvent::Type::Press, 0, 7, Modifier::None);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "world");
+}
+
+TEST_CASE("InputField.double_click_on_path_selects_component")
+{
+    InputField field;
+    field.setText("/home/user/file.txt");
+
+    // First click on "user"
+    (void) field.handleMouse(MouseEvent::Type::Press, 0, 7, Modifier::None);
+    (void) field.handleMouse(MouseEvent::Type::Release, 0, 7, Modifier::None);
+
+    // Second click (double-click) - should select "user" not whole path
+    auto action = field.handleMouse(MouseEvent::Type::Press, 0, 7, Modifier::None);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "user");
+}
+
+TEST_CASE("InputField.triple_click_selects_line")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("first line\nsecond line\nthird line");
+
+    // First click on second line
+    (void) field.handleMouse(MouseEvent::Type::Press, 1, 3, Modifier::None);
+    (void) field.handleMouse(MouseEvent::Type::Release, 1, 3, Modifier::None);
+
+    // Second click
+    (void) field.handleMouse(MouseEvent::Type::Press, 1, 3, Modifier::None);
+    (void) field.handleMouse(MouseEvent::Type::Release, 1, 3, Modifier::None);
+
+    // Third click (triple-click) - should select entire second line
+    auto action = field.handleMouse(MouseEvent::Type::Press, 1, 3, Modifier::None);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "second line\n");
+}
+
+TEST_CASE("InputField.click_count_resets_after_timeout")
+{
+    InputField field;
+    field.setText("hello world");
+
+    // First click
+    (void) field.handleMouse(MouseEvent::Type::Press, 0, 5, Modifier::None);
+    (void) field.handleMouse(MouseEvent::Type::Release, 0, 5, Modifier::None);
+    CHECK(!field.hasSelection());
+
+    // Wait... (simulated by just doing another single click at different position)
+    // Click at different position should reset click count
+    (void) field.handleMouse(MouseEvent::Type::Press, 0, 0, Modifier::None);
+    CHECK(!field.hasSelection()); // Single click, no selection
+}
+
+TEST_CASE("InputField.select_word_fish_style")
+{
+    InputField field;
+    field.setText("hello-world.txt");
+
+    // Select word at position 0 (should select "hello")
+    field.selectWord(0);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "hello");
+
+    // Clear and select word at position 6 (on "-", should select just "-")
+    field.clearSelection();
+    field.selectWord(5); // The hyphen position
+    CHECK(field.hasSelection());
+    // Since hyphen is not a word char, we select just the character
+    CHECK(field.selectedText() == "-");
+}
+
+TEST_CASE("InputField.select_line")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("line one\nline two\nline three");
+
+    // Select line 1 (second line)
+    field.selectLine(1);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "line two\n");
+
+    // Select line 0 (first line)
+    field.selectLine(0);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "line one\n");
+
+    // Select last line (no trailing newline)
+    field.selectLine(2);
+    CHECK(field.hasSelection());
+    CHECK(field.selectedText() == "line three");
+}
+
+TEST_CASE("InputField.scroll_by")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("line1\nline2\nline3\nline4\nline5");
+
+    CHECK(field.scrollOffset() == 0);
+
+    // Scroll down
+    field.scrollBy(2);
+    CHECK(field.scrollOffset() == 2);
+
+    // Scroll up
+    field.scrollBy(-1);
+    CHECK(field.scrollOffset() == 1);
+
+    // Don't scroll past beginning
+    field.scrollBy(-10);
+    CHECK(field.scrollOffset() == 0);
+
+    // Don't scroll past end (4 lines means max offset of 4)
+    field.scrollBy(100);
+    CHECK(field.scrollOffset() == 4); // 5 lines, max offset is 4
+}

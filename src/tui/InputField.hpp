@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <optional>
@@ -98,6 +99,42 @@ class InputField
     /// @param extendSelection If true, extends selection from current anchor; otherwise clears selection.
     void setCursorFromClick(int line, int column, bool extendSelection = false);
 
+    // ========================================================================
+    // Mouse handling
+    // ========================================================================
+
+    /// @brief Handles a mouse event with field-relative coordinates.
+    ///
+    /// Implements click-to-position, drag selection, double-click word selection,
+    /// and triple-click line selection.
+    /// @param type The mouse event type (Press, Release, Move, ScrollUp, ScrollDown).
+    /// @param line The line number (0-based).
+    /// @param column The column within the line (0-based, in graphemes).
+    /// @param mods Active modifier keys.
+    /// @return The action resulting from the event.
+    [[nodiscard]] auto handleMouse(MouseEvent::Type type, int line, int column, Modifier mods)
+        -> InputFieldAction;
+
+    /// @brief Selects the word at the given byte position (fish-style word boundaries).
+    /// @param position Byte offset into the buffer.
+    void selectWord(std::size_t position);
+
+    /// @brief Selects the entire line at the given index.
+    /// @param lineIndex The line number (0-based).
+    void selectLine(int lineIndex);
+
+    /// @brief Scrolls the view by the given number of lines (for multiline mode).
+    ///
+    /// Positive values scroll down, negative scroll up.
+    /// @param lines Number of lines to scroll.
+    void scrollBy(int lines);
+
+    /// @brief Returns the current scroll offset (for multiline mode).
+    [[nodiscard]] auto scrollOffset() const noexcept -> int;
+
+    /// @brief Sets the scroll offset (for multiline mode).
+    void setScrollOffset(int offset);
+
     /// @brief Sets the maximum number of lines allowed in multiline mode (0 = unlimited).
     void setMaxLines(int maxLines);
 
@@ -174,7 +211,18 @@ class InputField
     std::size_t _cursor = 0;
     std::string _prompt;
     bool _multiline = false;
-    int _maxLines = 0; ///< 0 = unlimited
+    int _maxLines = 0;     ///< 0 = unlimited
+    int _scrollOffset = 0; ///< Scroll offset for multiline mode
+
+    // Mouse state
+    bool _dragging = false; ///< True during click-and-drag selection
+    std::chrono::steady_clock::time_point _lastClickTime {};
+    int _lastClickLine = -1;
+    int _lastClickColumn = -1;
+    int _clickCount = 0; ///< 1=single, 2=double, 3=triple
+
+    static constexpr auto DoubleClickTimeout = std::chrono::milliseconds(400);
+    static constexpr int DoubleClickTolerance = 2; ///< Max distance in cells for multi-click
 
     // Clipboard callback
     ClipboardCallback _clipboardCallback;
@@ -253,7 +301,14 @@ class InputField
     // Unicode helpers (using libunicode)
     [[nodiscard]] auto nextGraphemeCluster(std::size_t pos) const -> std::size_t;
     [[nodiscard]] auto prevGraphemeCluster(std::size_t pos) const -> std::size_t;
-    [[nodiscard]] static auto isWordCharAt(char c) -> bool;
+
+    // Word boundary helpers (fish-style: path separators break words)
+    [[nodiscard]] static auto isWordChar(char c) -> bool;
+    [[nodiscard]] auto findWordStart(std::size_t pos) const -> std::size_t;
+    [[nodiscard]] auto findWordEnd(std::size_t pos) const -> std::size_t;
+
+    // Mouse helpers
+    [[nodiscard]] auto detectClickCount(int line, int column) -> int;
 
     // Selection helpers
     void deleteSelection();        ///< Deletes selected text if any.

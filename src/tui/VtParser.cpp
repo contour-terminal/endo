@@ -321,7 +321,8 @@ void VtParser::processUtf8(std::uint8_t byte, std::vector<InputEvent>& events)
 
 void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
 {
-    // Check for SGR mouse: ESC[<button;x;yM or ESC[<button;x;ym
+    // Check for SGR mouse: ESC[<button;x;y[;uiHandled]M or ESC[<button;x;y[;uiHandled]m
+    // The optional 4th parameter (uiHandled) is part of passive mouse tracking (DEC mode 2029).
     if (!_paramBuf.empty() && _paramBuf[0] == '<' && (finalByte == 'M' || finalByte == 'm'))
     {
         auto const params = parseCsiParams(_paramBuf.substr(1));
@@ -330,6 +331,7 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             auto const rawButton = params[0];
             auto const x = params[1];
             auto const y = params[2];
+            auto const uiHandled = (params.size() >= 4) && (params[3] != 0);
             auto const isRelease = (finalByte == 'm');
 
             auto mods = Modifier::None;
@@ -344,13 +346,19 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
 
             if (buttonBits == 64)
             {
-                events.emplace_back(
-                    MouseEvent { .type = MouseEvent::Type::ScrollUp, .x = x, .y = y, .modifiers = mods });
+                events.emplace_back(MouseEvent { .type = MouseEvent::Type::ScrollUp,
+                                                 .x = x,
+                                                 .y = y,
+                                                 .modifiers = mods,
+                                                 .uiHandled = uiHandled });
             }
             else if (buttonBits == 65)
             {
-                events.emplace_back(
-                    MouseEvent { .type = MouseEvent::Type::ScrollDown, .x = x, .y = y, .modifiers = mods });
+                events.emplace_back(MouseEvent { .type = MouseEvent::Type::ScrollDown,
+                                                 .x = x,
+                                                 .y = y,
+                                                 .modifiers = mods,
+                                                 .uiHandled = uiHandled });
             }
             else if (rawButton & 32)
             {
@@ -358,7 +366,8 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
                                                  .button = buttonBits & 3,
                                                  .x = x,
                                                  .y = y,
-                                                 .modifiers = mods });
+                                                 .modifiers = mods,
+                                                 .uiHandled = uiHandled });
             }
             else if (isRelease)
             {
@@ -366,7 +375,8 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
                                                  .button = buttonBits & 3,
                                                  .x = x,
                                                  .y = y,
-                                                 .modifiers = mods });
+                                                 .modifiers = mods,
+                                                 .uiHandled = uiHandled });
             }
             else
             {
@@ -374,7 +384,8 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
                                                  .button = buttonBits & 3,
                                                  .x = x,
                                                  .y = y,
-                                                 .modifiers = mods });
+                                                 .modifiers = mods,
+                                                 .uiHandled = uiHandled });
             }
         }
         return;

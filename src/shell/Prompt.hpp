@@ -104,6 +104,7 @@ class Prompt
     bool _multilineEnabled = true; ///< Enable multiline editing by default
     int _editorStartRow = 1;       ///< Row where editor region starts (1-based)
     int _lastRenderedLines = 1;    ///< Number of lines rendered in last render()
+    int _scrollOffset = 0;         ///< Scroll offset for multiline display
 
     void initialize();
     void render();
@@ -113,6 +114,18 @@ class Prompt
 
     /// @brief Calculates the maximum height for the editor region (50% of terminal).
     [[nodiscard]] int maxEditorHeight() const;
+
+    /// @brief Translates screen mouse coordinates to field-relative line/column.
+    ///
+    /// @param screenX Screen column (1-based from MouseEvent).
+    /// @param screenY Screen row (1-based from MouseEvent).
+    /// @param outLine Output: line index (0-based).
+    /// @param outColumn Output: grapheme column (0-based).
+    /// @return True if the mouse is within the editor region, false otherwise.
+    [[nodiscard]] bool translateMouseCoords(int screenX, int screenY, int& outLine, int& outColumn) const;
+
+    /// @brief Calculates the total width of the prompt prefix (left bar + padding + prompt text).
+    [[nodiscard]] int promptWidth() const;
 };
 
 } // namespace endo

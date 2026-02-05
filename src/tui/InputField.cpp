@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <string>
 
 #if defined(__clang__)
@@ -487,9 +490,9 @@ void InputField::killWord()
     // Find end position without modifying cursor
     auto endPos = _cursor;
     auto const size = _buffer.size();
-    while (endPos < size && !isWordCharAt(_buffer[endPos]))
+    while (endPos < size && !isWordChar(_buffer[endPos]))
         endPos = nextGraphemeCluster(endPos);
-    while (endPos < size && isWordCharAt(_buffer[endPos]))
+    while (endPos < size && isWordChar(_buffer[endPos]))
         endPos = nextGraphemeCluster(endPos);
 
     if (endPos > start)
@@ -507,9 +510,9 @@ void InputField::killWordBackward()
     auto const end = _cursor;
     // Find start position without modifying cursor
     auto startPos = _cursor;
-    while (startPos > 0 && !isWordCharAt(_buffer[prevGraphemeCluster(startPos)]))
+    while (startPos > 0 && !isWordChar(_buffer[prevGraphemeCluster(startPos)]))
         startPos = prevGraphemeCluster(startPos);
-    while (startPos > 0 && isWordCharAt(_buffer[prevGraphemeCluster(startPos)]))
+    while (startPos > 0 && isWordChar(_buffer[prevGraphemeCluster(startPos)]))
         startPos = prevGraphemeCluster(startPos);
 
     if (startPos < end)
@@ -594,19 +597,19 @@ void InputField::moveForwardWord()
 {
     auto const size = _buffer.size();
     // Emacs forward-word: skip non-word chars, then skip word chars
-    while (_cursor < size && !isWordCharAt(_buffer[_cursor]))
+    while (_cursor < size && !isWordChar(_buffer[_cursor]))
         _cursor = nextUtf8(_buffer, _cursor);
-    while (_cursor < size && isWordCharAt(_buffer[_cursor]))
+    while (_cursor < size && isWordChar(_buffer[_cursor]))
         _cursor = nextUtf8(_buffer, _cursor);
 }
 
 void InputField::moveBackwardWord()
 {
     // Skip whitespace/non-word characters
-    while (_cursor > 0 && !isWordCharAt(_buffer[prevUtf8(_buffer, _cursor)]))
+    while (_cursor > 0 && !isWordChar(_buffer[prevUtf8(_buffer, _cursor)]))
         _cursor = prevUtf8(_buffer, _cursor);
     // Skip word characters
-    while (_cursor > 0 && isWordCharAt(_buffer[prevUtf8(_buffer, _cursor)]))
+    while (_cursor > 0 && isWordChar(_buffer[prevUtf8(_buffer, _cursor)]))
         _cursor = prevUtf8(_buffer, _cursor);
 }
 
@@ -736,9 +739,16 @@ auto InputField::prevGraphemeCluster(std::size_t pos) const -> std::size_t
     return lastBoundaryOffset;
 }
 
-auto InputField::isWordCharAt(char c) -> bool
+auto InputField::isWordChar(char c) -> bool
 {
-    return c != ' ' && c != '\t' && c != '\n' && c != '\r';
+    // Fish-style word boundaries: alphanumeric and underscore are word characters.
+    // Path separators, punctuation, and whitespace are boundaries.
+    if (std::isalnum(static_cast<unsigned char>(c)))
+        return true;
+    if (c == '_')
+        return true;
+    // Everything else (including '/', '.', '-', whitespace, etc.) is a boundary
+    return false;
 }
 
 // ============================================================================
@@ -1157,6 +1167,224 @@ void InputField::clearUndoHistory()
 {
     _undoStack.clear();
     _redoStack.clear();
+}
+
+// ============================================================================
+// Mouse handling
+// ============================================================================
+
+auto InputField::handleMouse(MouseEvent::Type type, int line, int column, Modifier mods) -> InputFieldAction
+{
+    bool const shift = (mods & Modifier::Shift) != Modifier::None;
+
+    switch (type)
+    {
+        case MouseEvent::Type::Press: {
+            // Only handle left button for now (button 0)
+            int const clickCount = detectClickCount(line, column);
+
+            if (clickCount == 1)
+            {
+                // Single click: position cursor, optionally extend selection
+                _dragging = true;
+                setCursorFromClick(line, column, shift);
+            }
+            else if (clickCount == 2)
+            {
+                // Double click: select word
+                _dragging = false;
+                setCursorFromClick(line, column, false);
+                selectWord(_cursor);
+            }
+            else // clickCount >= 3
+            {
+                // Triple click: select line
+                _dragging = false;
+                selectLine(line);
+            }
+            return InputFieldAction::Changed;
+        }
+
+        case MouseEvent::Type::Move:
+            if (_dragging)
+            {
+                // Extend selection while dragging
+                setCursorFromClick(line, column, true);
+                return InputFieldAction::Changed;
+            }
+            break;
+
+        case MouseEvent::Type::Release: _dragging = false; break;
+
+        case MouseEvent::Type::ScrollUp:
+            if (_multiline && lineCount() > 1)
+            {
+                scrollBy(-3);
+                return InputFieldAction::Changed;
+            }
+            break;
+
+        case MouseEvent::Type::ScrollDown:
+            if (_multiline && lineCount() > 1)
+            {
+                scrollBy(3);
+                return InputFieldAction::Changed;
+            }
+            break;
+    }
+
+    return InputFieldAction::None;
+}
+
+auto InputField::detectClickCount(int line, int column) -> int
+{
+    auto const now = std::chrono::steady_clock::now();
+    auto const elapsed = now - _lastClickTime;
+
+    // Check if this is a continuation of multi-click sequence
+    bool const withinTimeout = elapsed < DoubleClickTimeout;
+    bool const nearLastClick =
+        std::abs(line - _lastClickLine) <= 0 && std::abs(column - _lastClickColumn) <= DoubleClickTolerance;
+
+    if (withinTimeout && nearLastClick)
+    {
+        _clickCount = std::min(_clickCount + 1, 3);
+    }
+    else
+    {
+        _clickCount = 1;
+    }
+
+    _lastClickTime = now;
+    _lastClickLine = line;
+    _lastClickColumn = column;
+
+    return _clickCount;
+}
+
+auto InputField::findWordStart(std::size_t pos) const -> std::size_t
+{
+    if (pos == 0 || _buffer.empty())
+        return 0;
+
+    // Move to start of current character
+    std::size_t current = pos;
+    if (current > _buffer.size())
+        current = _buffer.size();
+    if (current > 0)
+        current = prevGraphemeCluster(current);
+
+    // If we're on a non-word char, just return current position
+    if (!isWordChar(_buffer[current]))
+        return pos;
+
+    // Move backward while on word characters
+    while (current > 0)
+    {
+        std::size_t prev = prevGraphemeCluster(current);
+        if (!isWordChar(_buffer[prev]))
+            break;
+        current = prev;
+    }
+
+    return current;
+}
+
+auto InputField::findWordEnd(std::size_t pos) const -> std::size_t
+{
+    if (_buffer.empty())
+        return 0;
+
+    std::size_t current = pos;
+    if (current >= _buffer.size())
+        return _buffer.size();
+
+    // If we're on a non-word char, just return current position
+    if (!isWordChar(_buffer[current]))
+        return pos;
+
+    // Move forward while on word characters
+    while (current < _buffer.size() && isWordChar(_buffer[current]))
+    {
+        current = nextGraphemeCluster(current);
+    }
+
+    return current;
+}
+
+void InputField::selectWord(std::size_t position)
+{
+    if (_buffer.empty())
+        return;
+
+    // Clamp position to buffer bounds
+    if (position >= _buffer.size())
+        position = _buffer.size() > 0 ? _buffer.size() - 1 : 0;
+
+    // If on a non-word character, don't select anything meaningful
+    if (!isWordChar(_buffer[position]))
+    {
+        // Select just this character
+        _selectionAnchor = position;
+        _cursor = nextGraphemeCluster(position);
+        return;
+    }
+
+    std::size_t wordStart = findWordStart(position);
+    std::size_t wordEnd = findWordEnd(position);
+
+    _selectionAnchor = wordStart;
+    _cursor = wordEnd;
+}
+
+void InputField::selectLine(int lineIndex)
+{
+    auto const totalLines = lineCount();
+    if (lineIndex < 0)
+        lineIndex = 0;
+    if (lineIndex >= totalLines)
+        lineIndex = totalLines - 1;
+
+    // Find line boundaries
+    std::size_t lineStart = 0;
+    int currentLine = 0;
+    while (currentLine < lineIndex && lineStart < _buffer.size())
+    {
+        if (_buffer[lineStart] == '\n')
+            ++currentLine;
+        ++lineStart;
+    }
+
+    std::size_t lineEnd = lineStart;
+    while (lineEnd < _buffer.size() && _buffer[lineEnd] != '\n')
+        ++lineEnd;
+
+    // Include the newline in selection if not at end of buffer
+    if (lineEnd < _buffer.size() && _buffer[lineEnd] == '\n')
+        ++lineEnd;
+
+    _selectionAnchor = lineStart;
+    _cursor = lineEnd;
+}
+
+void InputField::scrollBy(int lines)
+{
+    auto const totalLines = lineCount();
+    auto const maxOffset = std::max(0, totalLines - 1);
+
+    _scrollOffset = std::clamp(_scrollOffset + lines, 0, maxOffset);
+}
+
+auto InputField::scrollOffset() const noexcept -> int
+{
+    return _scrollOffset;
+}
+
+void InputField::setScrollOffset(int offset)
+{
+    auto const totalLines = lineCount();
+    auto const maxOffset = std::max(0, totalLines - 1);
+    _scrollOffset = std::clamp(offset, 0, maxOffset);
 }
 
 } // namespace tui
