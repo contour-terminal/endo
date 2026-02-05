@@ -77,14 +77,6 @@ fetch_and_unpack_Catch2()
         https://github.com/catchorg/Catch2/archive/refs/tags/v2.13.10.tar.gz
 }
 
-fetch_and_unpack_fmtlib()
-{
-    fetch_and_unpack \
-        fmt-9.1.0 \
-        fmtlib-9.1.0.tar.gz \
-        https://github.com/fmtlib/fmt/archive/refs/tags/9.1.0.tar.gz
-}
-
 fetch_and_unpack_gsl()
 {
     fetch_and_unpack \
@@ -168,7 +160,6 @@ install_deps_popos()
     local NAME=`grep ^NAME /etc/os-release | cut -d= -f2 | cut -f1 | tr -d '"'`
 
     fetch_and_unpack_gsl
-    fetch_and_unpack_fmtlib
     fetch_and_unpack_Catch2
     fetch_and_unpack_boxed
 
@@ -210,12 +201,10 @@ install_deps_ubuntu()
     fetch_and_unpack_gsl
     case $RELEASE in
         "18.04" | "19.04" | "20.04" | "21.04" | "21.10" | "22.04")
-            # Older Ubuntu's don't have a recent enough fmt, so supply it.
-            fetch_and_unpack_fmtlib
             fetch_and_unpack_Catch2
             ;;
         *)
-            packages="$packages libfmt-dev catch2"
+            packages="$packages catch2"
             ;;
     esac
 
@@ -227,7 +216,6 @@ install_deps_ubuntu()
 
 install_deps_FreeBSD()
 {
-    fetch_and_unpack_fmtlib
     fetch_and_unpack_boxed
 
     [ x$PREPARE_ONLY_EMBEDS = xON ] && return
@@ -246,7 +234,6 @@ install_deps_FreeBSD()
 
 install_deps_arch()
 {
-    fetch_and_unpack_fmtlib
     fetch_and_unpack_boxed
     [ x$PREPARE_ONLY_EMBEDS = xON ] && return
 
@@ -264,7 +251,6 @@ install_deps_arch()
 install_deps_suse()
 {
     fetch_and_unpack_gsl
-    fetch_and_unpack_fmtlib
     fetch_and_unpack_boxed
 
     echo "SuSE: PREPARE_ONLY_EMBEDS=$PREPARE_ONLY_EMBEDS"
@@ -287,7 +273,6 @@ install_deps_suse()
 install_deps_fedora()
 {
     fetch_and_unpack_gsl
-    fetch_and_unpack_fmtlib
     fetch_and_unpack_Catch2
     fetch_and_unpack_boxed
     [ x$PREPARE_ONLY_EMBEDS = xON ] && return
@@ -318,7 +303,6 @@ install_deps_darwin()
     # NB: Also available in brew: mimalloc
     brew install $SYSDEP_ASSUME_YES \
         cpp-gsl \
-        fmt \
         pkg-config \
         yaml-cpp
 }
@@ -363,7 +347,6 @@ main()
             ;;
         *)
             fetch_and_unpack_Catch2
-            fetch_and_unpack_fmtlib
             fetch_and_unpack_gsl
             fetch_and_unpack_yaml_cpp
             fetch_and_unpack_boxed
