@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
+#include <chrono>
 #include <cstring>
 #include <format>
 #include <functional>
@@ -18,6 +19,7 @@ import UnixPipe;
 import IRGenerator;
 
 export module TTY;
+
 namespace endo
 {
 
@@ -83,6 +85,7 @@ export class RealTTY final: public TTY
                 return;
         throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
     }
+
     ~RealTTY() override { restoreMode(); }
 
     [[nodiscard]] static RealTTY& instance()
@@ -90,11 +93,13 @@ export class RealTTY final: public TTY
         static RealTTY instance;
         return instance;
     }
+
     [[nodiscard]] int inputFd() const noexcept override { return STDIN_FILENO; }
 
     [[nodiscard]] int outputFd() const noexcept override { return STDOUT_FILENO; }
 
     void setRawMode() override { endo::setRawMode(STDIN_FILENO); }
+
     void restoreMode() override
     {
         int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_originalTermios);
@@ -108,6 +113,7 @@ export class RealTTY final: public TTY
         if (result == -1)
             throw std::runtime_error("write: " + std::string(strerror(errno)));
     }
+
     void writeToStdin(std::string_view str) const override
     {
         ssize_t const result = ::write(STDIN_FILENO, str.data(), str.size());
@@ -135,6 +141,7 @@ export class TestPTY final: public TTY
 
         _updateThread = std::thread { std::bind(&TestPTY::outputUpdateLoop, this) };
     }
+
     ~TestPTY() override
     {
         _closed = true;
@@ -145,21 +152,25 @@ export class TestPTY final: public TTY
     }
 
     [[nodiscard]] int inputFd() const noexcept override { return _ptySlave; }
+
     [[nodiscard]] int outputFd() const noexcept override { return _ptySlave; }
 
     void setRawMode() override { endo::setRawMode(STDIN_FILENO); }
+
     void restoreMode() override
     {
         int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_baseTermios);
         if (result == -1)
             throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
     }
+
     void writeToStdout(std::string_view str) const override
     {
         ssize_t const result = ::write(_ptySlave, str.data(), str.size());
         if (result == -1)
             throw std::runtime_error("write: " + std::string(strerror(errno)));
     }
+
     void writeToStdin(std::string_view str) const override
     {
         ssize_t const result = ::write(_ptyMaster, str.data(), str.size());
@@ -170,6 +181,8 @@ export class TestPTY final: public TTY
     // Returns the output that was written to the TTY.
     [[nodiscard]] std::string_view output() const noexcept
     {
+        // Give the output thread time to read remaining data from the PTY
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
         auto _ = std::scoped_lock { _outputMutex };
         return _output;
     }

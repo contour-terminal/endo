@@ -199,6 +199,7 @@ class CoreArray
     explicit CoreArray(const Register* base): _base(base) {}
 
     [[nodiscard]] Register getRawAt(size_t i) const { return _base[1 + i]; }
+
     [[nodiscard]] const Register* data() const { return _base + 1; }
 
   protected:
@@ -214,8 +215,11 @@ using CoreCidrArray = std::vector<util::Cidr>;
 
 struct FilePos
 { // {{{
+
     FilePos(): FilePos { 1, 1, 0 } {}
+
     FilePos(unsigned r, unsigned c): FilePos { r, c, 0 } {}
+
     FilePos(unsigned r, unsigned c, unsigned o): line(r), column(c), offset(o) {}
 
     FilePos& set(unsigned r, unsigned c, unsigned o)
@@ -260,6 +264,7 @@ inline size_t operator-(const FilePos& a, const FilePos& b)
     else
         return 1 + a.offset - b.offset;
 }
+
 // }}}
 
 // ExecutionEngine
@@ -340,6 +345,7 @@ class Runner
       private:
         std::vector<Value> _stack;
     };
+
     // }}}
 
   public:
@@ -348,7 +354,9 @@ class Runner
     ~Runner() = default;
 
     const Handler* handler() const noexcept { return _handler; }
+
     const Program* program() const noexcept { return _program; }
+
     void* userdata() const noexcept { return _userdata; }
 
     bool run();
@@ -376,20 +384,29 @@ class Runner
     CoreString* catString(const CoreString& a, const CoreString& b);
 
     const Stack& stack() const noexcept { return _stack; }
+
     Value stack(int si) const { return _stack[si]; }
 
     CoreNumber getNumber(int si) const { return static_cast<CoreNumber>(_stack[si]); }
+
     const CoreString& getString(int si) const { return *(CoreString*) _stack[si]; }
+
     const util::IPAddress& getIPAddress(int si) const { return *(util::IPAddress*) _stack[si]; }
+
     const util::Cidr& getCidr(int si) const { return *(util::Cidr*) _stack[si]; }
+
     const util::RegExp& getRegExp(int si) const { return *(util::RegExp*) _stack[si]; }
 
     const CoreString* getStringPtr(int si) const { return (CoreString*) _stack[si]; }
+
     const util::Cidr* getCidrPtr(int si) const { return (util::Cidr*) _stack[si]; }
 
     void push(Value value) { _stack.push(value); }
+
     Value pop() { return _stack.pop(); }
+
     void discard(size_t n) { _stack.discard(n); }
+
     void pushString(const CoreString* value) { push((Value) value); }
 
     bool loop();
@@ -433,7 +450,9 @@ struct MatchCaseDef
     uint64_t pc;
 
     MatchCaseDef() = default;
+
     explicit MatchCaseDef(uint64_t l): label(l), pc(0) {}
+
     MatchCaseDef(uint64_t l, uint64_t p): label(l), pc(p) {}
 };
 
@@ -495,6 +514,7 @@ class ConstantPool
     size_t makeCidrArray(const std::vector<util::Cidr>& elements);
 
     size_t makeMatchDef();
+
     MatchDef& getMatchDef(size_t id) { return _matchDefs[id]; }
 
     size_t makeNativeHandler(const std::string& sig);
@@ -509,25 +529,33 @@ class ConstantPool
 
     // accessor
     [[nodiscard]] CoreNumber getInteger(size_t id) const { return _numbers[id]; }
+
     [[nodiscard]] const CoreString& getString(size_t id) const { return _strings[id]; }
+
     [[nodiscard]] const util::IPAddress& getIPAddress(size_t id) const { return _ipaddrs[id]; }
+
     [[nodiscard]] const util::Cidr& getCidr(size_t id) const { return _cidrs[id]; }
+
     [[nodiscard]] const util::RegExp& getRegExp(size_t id) const { return _regularExpressions[id]; }
 
     [[nodiscard]] const std::vector<CoreNumber>& getIntArray(size_t id) const { return _intArrays[id]; }
+
     [[nodiscard]] const std::vector<std::string>& getStringArray(size_t id) const
     {
         return _stringArrays[id];
     }
+
     [[nodiscard]] const std::vector<util::IPAddress>& getIPAddressArray(size_t id) const
     {
         return _ipaddrArrays[id];
     }
+
     [[nodiscard]] const std::vector<util::Cidr>& getCidrArray(size_t id) const { return _cidrArrays[id]; }
 
     [[nodiscard]] const MatchDef& getMatchDef(size_t id) const { return _matchDefs[id]; }
 
     [[nodiscard]] const std::pair<std::string, Code>& getHandler(size_t id) const { return _handlers[id]; }
+
     std::pair<std::string, Code>& getHandler(size_t id) { return _handlers[id]; }
 
     size_t setHandler(const std::string& name, Code&& code)
@@ -542,12 +570,16 @@ class ConstantPool
     {
         return _modules;
     }
+
     [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
+
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
+
     [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const
     {
         return _nativeHandlerSignatures;
     }
+
     [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const
     {
         return _nativeFunctionSignatures;
@@ -586,12 +618,16 @@ class Program
     ~Program() = default;
 
     const ConstantPool& constants() const noexcept { return _cp; }
+
     ConstantPool& constants() noexcept { return _cp; }
 
     // accessors to linked data
     const Match* match(size_t index) const { return _matches[index].get(); }
+
     Handler* handler(size_t index) const;
+
     NativeCallback* nativeHandler(size_t index) const { return _nativeHandlers[index]; }
+
     NativeCallback* nativeFunction(size_t index) const { return _nativeFunctions[index]; }
 
     // bulk accessors
@@ -638,11 +674,13 @@ class Handler
     [[nodiscard]] Program* program() const noexcept { return _program; }
 
     [[nodiscard]] const std::string& name() const noexcept { return _name; }
+
     void setName(const std::string& name) { _name = name; }
 
     [[nodiscard]] size_t stackSize() const noexcept { return _stackSize; }
 
     [[nodiscard]] const std::vector<Instruction>& code() const noexcept { return _code; }
+
     void setCode(std::vector<Instruction> code);
 
 #if defined(COREVM_DIRECT_THREADED_VM)
@@ -650,6 +688,7 @@ class Handler
     {
         return _directThreadedCode;
     }
+
     [[nodiscard]] std::vector<uint64_t>& directThreadedCode() noexcept { return _directThreadedCode; }
 #endif
 
@@ -677,43 +716,61 @@ class Params
     [[nodiscard]] Runner* caller() const { return _caller; }
 
     void setResult(bool value) { _argv[0] = value; }
+
     void setResult(CoreNumber value) { _argv[0] = (Value) value; }
+
     void setResult(const Handler* handler) { _argv[0] = _caller->program()->indexOf(handler); }
+
     void setResult(const char* str) { _argv[0] = (Value) _caller->newString(str); }
+
     void setResult(std::string str) { _argv[0] = (Value) _caller->newString(std::move(str)); }
+
     void setResult(const CoreString* str) { _argv[0] = (Value) str; }
+
     void setResult(const util::IPAddress* ip) { _argv[0] = (Value) ip; }
+
     void setResult(const util::Cidr* cidr) { _argv[0] = (Value) cidr; }
 
     [[deprecated("Use count()")]] [[nodiscard]] int size() const { return _argc; }
+
     [[nodiscard]] int count() const { return _argc; }
 
     [[nodiscard]] Value at(size_t i) const { return _argv[i]; }
+
     [[nodiscard]] Value operator[](size_t i) const { return _argv[i]; }
+
     [[nodiscard]] Value& operator[](size_t i) { return _argv[i]; }
 
     [[nodiscard]] bool getBool(size_t offset) const { return at(offset); }
+
     [[nodiscard]] CoreNumber getInt(size_t offset) const { return at(offset); }
+
     [[nodiscard]] const CoreString& getString(size_t offset) const { return *(CoreString*) at(offset); }
+
     [[nodiscard]] Handler* getHandler(size_t offset) const
     {
         return _caller->program()->handler(static_cast<size_t>(at(offset)));
     }
+
     [[nodiscard]] const util::IPAddress& getIPAddress(size_t offset) const
     {
         return *(util::IPAddress*) at(offset);
     }
+
     [[nodiscard]] const util::Cidr& getCidr(size_t offset) const { return *(util::Cidr*) at(offset); }
 
     [[nodiscard]] const CoreIntArray& getIntArray(size_t offset) const { return *(CoreIntArray*) at(offset); }
+
     [[nodiscard]] const CoreStringArray& getStringArray(size_t offset) const
     {
         return *(CoreStringArray*) at(offset);
     }
+
     [[nodiscard]] const CoreIPAddrArray& getIPAddressArray(size_t offset) const
     {
         return *(CoreIPAddrArray*) at(offset);
     }
+
     [[nodiscard]] const CoreCidrArray& getCidrArray(size_t offset) const
     {
         return *(CoreCidrArray*) at(offset);
@@ -727,12 +784,15 @@ class Params
 
       public:
         iterator(Params* p, size_t init): _params(p), _current(init) {}
+
         iterator(const iterator& v) = default;
 
         [[nodiscard]] size_t offset() const { return _current; }
+
         [[nodiscard]] Value get() const { return _params->at(_current); }
 
         [[nodiscard]] Value& operator*() { return _params->_argv[_current]; }
+
         [[nodiscard]] const Value& operator*() const { return _params->_argv[_current]; }
 
         iterator& operator++()
@@ -750,6 +810,7 @@ class Params
     }; // }}}
 
     [[nodiscard]] iterator begin() { return iterator(this, std::min(1, _argc)); }
+
     [[nodiscard]] iterator end() { return iterator(this, _argc); }
 
   private:
@@ -781,21 +842,31 @@ class Signature
     Signature& operator=(const Signature&) = default;
 
     void setName(std::string name) { _name = std::move(name); }
+
     void setReturnType(LiteralType rt) { _returnType = rt; }
+
     void setArgs(std::vector<LiteralType> args) { _args = std::move(args); }
 
     [[nodiscard]] const std::string& name() const { return _name; }
+
     [[nodiscard]] LiteralType returnType() const { return _returnType; }
+
     [[nodiscard]] const std::vector<LiteralType>& args() const { return _args; }
+
     [[nodiscard]] std::vector<LiteralType>& args() { return _args; }
 
     [[nodiscard]] std::string to_s() const;
 
     [[nodiscard]] bool operator==(const Signature& v) const { return to_s() == v.to_s(); }
+
     [[nodiscard]] bool operator!=(const Signature& v) const { return to_s() != v.to_s(); }
+
     [[nodiscard]] bool operator<(const Signature& v) const { return to_s() < v.to_s(); }
+
     [[nodiscard]] bool operator>(const Signature& v) const { return to_s() > v.to_s(); }
+
     [[nodiscard]] bool operator<=(const Signature& v) const { return to_s() <= v.to_s(); }
+
     [[nodiscard]] bool operator>=(const Signature& v) const { return to_s() >= v.to_s(); }
 };
 
@@ -878,8 +949,11 @@ class NativeCallback
     NativeCallback& setExperimental() noexcept;
 
     [[nodiscard]] bool getAttribute(Attribute t) const noexcept { return _attributes & unsigned(t); }
+
     [[nodiscard]] bool isNeverReturning() const noexcept { return getAttribute(Attribute::NoReturn); }
+
     [[nodiscard]] bool isReadOnly() const noexcept { return getAttribute(Attribute::SideEffectFree); }
+
     [[nodiscard]] bool isExperimental() const noexcept { return getAttribute(Attribute::Experimental); }
 
     // runtime
@@ -889,7 +963,9 @@ class NativeCallback
 struct SourceLocation // {{{
 {
     SourceLocation() = default;
+
     SourceLocation(std::string fileName): filename(std::move(fileName)) {}
+
     SourceLocation(std::string fileName, FilePos beg, FilePos end):
         filename(std::move(fileName)), begin(beg), end(end)
     {
@@ -982,9 +1058,11 @@ class Value
     virtual ~Value();
 
     [[nodiscard]] LiteralType type() const { return _type; }
+
     void setType(LiteralType ty) { _type = ty; }
 
     [[nodiscard]] const std::string& name() const { return _name; }
+
     void setName(const std::string& n) { _name = n; }
 
     /**
@@ -1073,6 +1151,7 @@ class IRBuiltinFunction: public Constant
     }
 
     [[nodiscard]] const Signature& signature() const { return _native.signature(); }
+
     [[nodiscard]] const NativeCallback& getNative() const { return _native; }
 
   private:
@@ -1265,7 +1344,9 @@ class StoreInstr: public Instr
     }
 
     [[nodiscard]] Value* variable() const { return operand(0); }
+
     [[nodiscard]] ConstantInt* index() const { return static_cast<ConstantInt*>(operand(1)); }
+
     [[nodiscard]] Value* source() const { return operand(2); }
 
     [[nodiscard]] std::string to_string() const override;
@@ -1430,7 +1511,9 @@ class CondBrInstr: public TerminateInstr
     CondBrInstr(Value* cond, BasicBlock* trueBlock, BasicBlock* falseBlock);
 
     [[nodiscard]] Value* condition() const { return operands()[0]; }
+
     [[nodiscard]] BasicBlock* trueBlock() const { return (BasicBlock*) operands()[1]; }
+
     [[nodiscard]] BasicBlock* falseBlock() const { return (BasicBlock*) operands()[2]; }
 
     [[nodiscard]] std::string to_string() const override;
@@ -1597,6 +1680,7 @@ class IRHandler: public Constant
     BasicBlock* createBlock(const std::string& name = "");
 
     [[nodiscard]] IRProgram* getProgram() const { return _program; }
+
     void setParent(IRProgram* prog) { _program = prog; }
 
     void dump();
@@ -1606,6 +1690,7 @@ class IRHandler: public Constant
     auto basicBlocks() { return util::unbox(_blocks); }
 
     [[nodiscard]] BasicBlock* getEntryBlock() const { return _blocks.front().get(); }
+
     void setEntryBlock(BasicBlock* bb);
 
     /**
@@ -1656,6 +1741,7 @@ class IRBuiltinHandler: public Constant
     }
 
     [[nodiscard]] const Signature& signature() const { return _native.signature(); }
+
     [[nodiscard]] const NativeCallback& getNative() const { return _native; }
 
   private:
@@ -1671,11 +1757,17 @@ class IRProgram
     void dump();
 
     ConstantBoolean* getBoolean(bool literal) { return literal ? &_trueLiteral : &_falseLiteral; }
+
     ConstantInt* get(int64_t literal) { return get<ConstantInt>(_numbers, literal); }
+
     ConstantString* get(const std::string& literal) { return get<ConstantString>(_strings, literal); }
+
     ConstantIP* get(const util::IPAddress& literal) { return get<ConstantIP>(_ipaddrs, literal); }
+
     ConstantCidr* get(const util::Cidr& literal) { return get<ConstantCidr>(_cidrs, literal); }
+
     ConstantRegExp* get(const util::RegExp& literal) { return get<ConstantRegExp>(_regexps, literal); }
+
     ConstantArray* get(const std::vector<Constant*>& elems)
     {
         return get<ConstantArray>(_constantArrays, elems);
@@ -1716,6 +1808,7 @@ class IRProgram
     T* get(std::vector<std::unique_ptr<T>>& table, U&& literal);
 
     void addImport(const std::string& name, const std::string& path) { _modules.emplace_back(name, path); }
+
     void setModules(const std::vector<std::pair<std::string, std::string>>& modules) { _modules = modules; }
 
     [[nodiscard]] const std::vector<std::pair<std::string, std::string>>& modules() const { return _modules; }
@@ -1779,14 +1872,17 @@ class IRBuilder
     std::string makeName(std::string name);
 
     void setProgram(std::unique_ptr<IRProgram> program);
+
     IRProgram* program() const { return _program; }
 
     IRHandler* setHandler(IRHandler* hn);
+
     IRHandler* handler() const { return _handler; }
 
     BasicBlock* createBlock(const std::string& name);
 
     void setInsertPoint(BasicBlock* bb);
+
     BasicBlock* getInsertPoint() const { return _insertPoint; }
 
     Instr* insert(std::unique_ptr<Instr> instr);
@@ -1802,17 +1898,26 @@ class IRBuilder
 
     // literals
     ConstantBoolean* getBoolean(bool literal) { return _program->getBoolean(literal); }
+
     ConstantInt* get(int64_t literal) { return _program->get(literal); }
+
     ConstantString* get(const std::string& literal) { return _program->get(literal); }
+
     ConstantIP* get(const util::IPAddress& literal) { return _program->get(literal); }
+
     ConstantCidr* get(const util::Cidr& literal) { return _program->get(literal); }
+
     ConstantRegExp* get(const util::RegExp& literal) { return _program->get(literal); }
+
     IRBuiltinHandler* findBuiltinHandler(const Signature& sig) { return _program->findBuiltinHandler(sig); }
+
     IRBuiltinHandler* getBuiltinHandler(const NativeCallback& cb) { return _program->getBuiltinHandler(cb); }
+
     IRBuiltinFunction* getBuiltinFunction(const NativeCallback& cb)
     {
         return _program->getBuiltinFunction(cb);
     }
+
     ConstantArray* get(const std::vector<Constant*>& arrayElements) { return _program->get(arrayElements); }
 
     // values
@@ -1930,6 +2035,7 @@ class BasicBlock: public Value
     ~BasicBlock() override;
 
     [[nodiscard]] IRHandler* getHandler() const { return _handler; }
+
     void setParent(IRHandler* handler) { _handler = handler; }
 
     /*!
@@ -1955,12 +2061,15 @@ class BasicBlock: public Value
      * basic block.
      */
     auto instructions() { return util::unbox(_code); }
+
     Instr* instruction(size_t i) { return _code[i].get(); }
 
     [[nodiscard]] Instr* front() const { return _code.front().get(); }
+
     [[nodiscard]] Instr* back() const { return _code.back().get(); }
 
     [[nodiscard]] size_t size() const { return _code.size(); }
+
     [[nodiscard]] bool empty() const { return _code.empty(); }
 
     [[nodiscard]] Instr* back(size_t sub) const
@@ -2064,6 +2173,7 @@ class BasicBlock: public Value
 
     /** Retrieves all uccessors of the given basic block. */
     [[nodiscard]] std::vector<BasicBlock*>& successors() { return _successors; }
+
     [[nodiscard]] const std::vector<BasicBlock*>& successors() const { return _successors; }
 
     /** Retrieves all dominators of given basic block. */
@@ -2113,6 +2223,7 @@ class Runtime
 
     [[nodiscard]] NativeCallback* find(const std::string& signature) const noexcept;
     [[nodiscard]] NativeCallback* find(const Signature& signature) const noexcept;
+
     [[nodiscard]] auto builtins() { return util::unbox(_builtins); }
 
     NativeCallback& registerHandler(const std::string& name);
@@ -2152,21 +2263,10 @@ T* IRProgram::get(std::vector<T>& table, U&& literal)
     if (auto i = std::ranges::find_if(table, [&](T const& elem) { return elem.get() == literal; });
         i != table.end())
     {
-        std::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(), typeid(U).name());
         return &*i;
     }
 
-    // for (size_t i = 0, e = table.size(); i != e; ++i)
-    //     if (table[i].get() == literal)
-    //     {
-    //         std::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(),
-    //         typeid(U).name()); return &table[i];
-    //     }
-
-    std::print("IRProgram.get<{}, {}>: creating new entry\n", typeid(T).name(), typeid(U).name());
     table.emplace_back(T { std::forward<U>(literal) });
-    for (auto const& elem: literal)
-        std::print(" - {}\n", elem->to_string());
     return &table.back();
 }
 
@@ -2417,6 +2517,7 @@ inline const NativeCallback::DefaultValue& NativeCallback::getDefaultParamAt(siz
     assert(i < _defaults.size());
     return _defaults[i];
 }
+
 // }}}
 
 using StackPointer = size_t;
@@ -2441,12 +2542,16 @@ class TargetCodeGenerator: public InstructionVisitor
     void emitLoad(Value* value);
 
     void emitInstr(Opcode opc) { emitInstr(makeInstruction(opc)); }
+
     void emitInstr(Opcode opc, Operand op1) { emitInstr(makeInstruction(opc, op1)); }
+
     void emitInstr(Opcode opc, Operand op1, Operand op2) { emitInstr(makeInstruction(opc, op1, op2)); }
+
     void emitInstr(Opcode opc, Operand op1, Operand op2, Operand op3)
     {
         emitInstr(makeInstruction(opc, op1, op2, op3));
     }
+
     void emitInstr(Instruction instr);
 
     /**
@@ -2712,6 +2817,7 @@ struct Message
     [[nodiscard]] std::string string() const;
 
     bool operator==(const Message& other) const noexcept;
+
     bool operator!=(const Message& other) const noexcept { return !(*this == other); }
 };
 
@@ -2773,19 +2879,26 @@ class BufferedReport: public Report
     [[nodiscard]] const MessageList& messages() const noexcept { return _messages; }
 
     void clear();
+
     [[nodiscard]] size_t size() const noexcept { return _messages.size(); }
+
     const Message& operator[](size_t i) const { return _messages[i]; }
 
     using iterator = MessageList::iterator;
     using const_iterator = MessageList::const_iterator;
+
     iterator begin() noexcept { return _messages.begin(); }
+
     iterator end() noexcept { return _messages.end(); }
+
     [[nodiscard]] const_iterator begin() const noexcept { return _messages.begin(); }
+
     [[nodiscard]] const_iterator end() const noexcept { return _messages.end(); }
 
     [[nodiscard]] bool contains(const Message& m) const noexcept;
 
     bool operator==(const BufferedReport& other) const noexcept;
+
     bool operator!=(const BufferedReport& other) const noexcept { return !(*this == other); }
 
   private:

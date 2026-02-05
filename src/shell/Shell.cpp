@@ -15,6 +15,11 @@ module;
 #include <sys/wait.h>
 
 #include <fcntl.h>
+#include <unistd.h>
+
+#if defined(__linux__)
+    #include <linux/close_range.h>
+#endif
 
 import TTY;
 import UnixPipe;
@@ -28,7 +33,7 @@ import CoreVM;
 
 export module Shell;
 
-auto inline debugLog = logstore::category("debug ", "Debug log", logstore::category::state::Enabled);
+static auto debugLog = logstore::category("debug", "Debug log", logstore::category::state::Disabled);
 
 namespace endo
 {
@@ -120,6 +125,7 @@ export class TestEnvironment: public Environment
     {
         _values[std::string(name)] = std::string(value);
     }
+
     [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -129,6 +135,7 @@ export class TestEnvironment: public Environment
         else
             return std::nullopt;
     }
+
     void exportVariable(std::string_view name) override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -146,6 +153,7 @@ export class SystemEnvironment: public Environment
     {
         _values[std::string(name)] = std::string(value);
     }
+
     [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -155,6 +163,7 @@ export class SystemEnvironment: public Environment
         else
             return std::nullopt;
     }
+
     void exportVariable(std::string_view name) override
     {
         if (auto i = _values.find(name.data()); i != _values.end())
@@ -192,6 +201,7 @@ export class Shell final: public CoreVM::Runtime
     }
 
     [[nodiscard]] Environment& environment() noexcept { return _env; }
+
     [[nodiscard]] Environment const& environment() const noexcept { return _env; }
 
     void setOptimize(bool optimize) { _optimize = optimize; }
@@ -209,6 +219,7 @@ export class Shell final: public CoreVM::Runtime
 
         return _quit ? _exitCode : EXIT_SUCCESS;
     }
+
     int execute(std::string const& lineBuffer)
     {
         try
@@ -430,6 +441,7 @@ export class Shell final: public CoreVM::Runtime
 
         context.setResult(CoreVM::CoreNumber(_exitCode));
     }
+
     void builtinCallProcessShellPiped(CoreVM::Params& context)
     {
         bool const lastInChain = context.getBool(1);
@@ -467,6 +479,16 @@ export class Shell final: public CoreVM::Runtime
                     dup2(stdinFd, STDIN_FILENO);
                 if (stdoutFd != STDOUT_FILENO)
                     dup2(stdoutFd, STDOUT_FILENO);
+
+                // Close all inherited FDs except stdin, stdout, stderr
+#if defined(__linux__)
+                close_range(STDERR_FILENO + 1, ~0U, 0);
+#else
+                // Fallback for non-Linux: manually close FDs 3 and above
+                int const maxFd = static_cast<int>(sysconf(_SC_OPEN_MAX));
+                for (int fd = STDERR_FILENO + 1; fd < maxFd; ++fd)
+                    ::close(fd);
+#endif
                 execvp(programPath->c_str(), const_cast<char* const*>(argv.data()));
                 error("Failed to execve({}): {}", programPath->string(), strerror(errno));
                 _exit(EXIT_FAILURE);
@@ -517,6 +539,7 @@ export class Shell final: public CoreVM::Runtime
 
         context.setResult(result == 0);
     }
+
     void builtinChDirHome(CoreVM::Params& context)
     {
         auto const path = _env.get("HOME").value_or("/");
@@ -528,19 +551,25 @@ export class Shell final: public CoreVM::Runtime
 
         context.setResult(result == 0);
     }
+
     void builtinSet(CoreVM::Params& context)
     {
         _env.set(context.getString(1), context.getString(2));
         context.setResult(true);
     }
+
     void builtinSetAndExport(CoreVM::Params& context)
     {
         _env.set(context.getString(1), context.getString(2));
         _env.exportVariable(context.getString(1));
     }
+
     void builtinExport(CoreVM::Params& context) { _env.exportVariable(context.getString(1)); }
+
     void builtinTrue(CoreVM::Params& context) { context.setResult(true); }
+
     void builtinFalse(CoreVM::Params& context) { context.setResult(false); }
+
     void builtinReadDefault(CoreVM::Params& context)
     {
         std::string const line =
@@ -548,6 +577,7 @@ export class Shell final: public CoreVM::Runtime
         _env.set("REPLY", line);
         context.setResult(line);
     }
+
     void builtinRead(CoreVM::Params& context)
     {
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
@@ -587,6 +617,7 @@ export class Shell final: public CoreVM::Runtime
 
         context.setResult(CoreVM::CoreNumber(fd));
     }
+
     [[nodiscard]] std::optional<std::filesystem::path> resolveProgram(std::string const& program) const
     {
         auto const pathEnv = _env.get("PATH");
