@@ -14,3 +14,5 @@ target_include_directories(InputEditor PUBLIC
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/include>
 )
+
+enable_sanitizers(InputEditor)

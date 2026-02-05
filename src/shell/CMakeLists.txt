@@ -73,3 +73,8 @@ add_executable(test-endo
 target_link_libraries(test-endo Shell Catch2::Catch2)
 
 add_test(NAME test-endo COMMAND test-endo)
+
+# Enable sanitizers for all targets
+enable_sanitizers(Shell)
+enable_sanitizers(endo)
+enable_sanitizers(test-endo)
