@@ -2,9 +2,10 @@
 module;
 #include <shell/AST.h>
 #include <shell/Visitor.h>
-#include <fmt/format.h>
 
 #include <crispy/assert.h>
+
+#include <format>
 
 import Lexer;
 
@@ -26,22 +27,22 @@ export class ASTPrinter: public Visitor
         return printer._result;
     }
 
-    void visit(FileDescriptor const& node) override { _result += fmt::format("{}", node.value); }
+    void visit(FileDescriptor const& node) override { _result += std::format("{}", node.value); }
     void visit(InputRedirect const& node) override { crispy::ignore_unused(node); }
     void visit(OutputRedirect const& node) override
     {
         if (std::holds_alternative<std::unique_ptr<LiteralExpr>>(node.target))
         {
-            _result += fmt::format(
+            _result += std::format(
                 " {}>{}", node.source->value, std::get<std::unique_ptr<LiteralExpr>>(node.target)->value);
         }
         else
-            _result += fmt::format(
+            _result += std::format(
                 " {}>&{}", node.source->value, std::get<std::unique_ptr<FileDescriptor>>(node.target)->value);
     }
     void visit(ProgramCall const& node) override
     {
-        _result += fmt::format("{}", node.program);
+        _result += std::format("{}", node.program);
 
         for (auto const& param: node.parameters)
         {
@@ -145,9 +146,9 @@ export class ASTPrinter: public Visitor
         _result += "done";
     }
 
-    void visit(LiteralExpr const& node) override { _result += fmt::format("{}", node.value); }
-    void visit(SubstitutionExpr const& node) override { crispy::ignore_unused(node); }
-    void visit(CommandFileSubst const& node) override { crispy::ignore_unused(node); }
+    void visit(LiteralExpr const& node) override { _result += std::format("{}", node.value); }
+    void visit(SubstitutionExpr const& node) override { (void) node; }
+    void visit(CommandFileSubst const& node) override { (void) node; }
 };
 
 } // namespace endo::ast

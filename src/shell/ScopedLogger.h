@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <fmt/format.h>
 #include <crispy/logstore.h>
+
+#include <format>
 #include <string>
 
 struct ScopedLogger
@@ -17,7 +18,7 @@ struct ScopedLogger
         return result;
     }
 
-    static auto write(std::string message) { return fmt::format("{}{}\n", indentation(), message); }
+    static auto write(std::string message) { return std::format("{}{}\n", indentation(), message); }
     auto writeInternal(std::string message) { _category()("{}{}\n", indentation(), message); }
 
     ScopedLogger(std::string message, auto&& log): _message(std::move(message)), _category(log)

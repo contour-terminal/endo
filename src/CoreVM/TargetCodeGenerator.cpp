@@ -2,12 +2,12 @@
 module;
 #include <CoreVM/util/assert.h>
 
-#include <fmt/core.h>
-
 #include <array>
 #include <cstdarg>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <print>
 #include <unordered_map>
 #include <vector>
 
@@ -431,11 +431,11 @@ void TargetCodeGenerator::emitLoad(Value* value)
 
 void TargetCodeGenerator::dumpCurrentStack()
 {
-    fmt::print("Dump stack state ({} elements):\n", _stack.size());
+    std::print("Dump stack state ({} elements):\n", _stack.size());
 
     for (size_t i = 0, e = _stack.size(); i != e; ++i)
     {
-        fmt::print("stack[{}]: {}\n", i, _stack[i]->to_string());
+        std::print("stack[{}]: {}\n", i, _stack[i]->to_string());
     }
 }
 

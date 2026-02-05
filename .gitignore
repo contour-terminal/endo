@@ -1,8 +1,10 @@
 .cache/
 _deps/
 _ucd/
+out/
 build/
 target/
+/cmake/CPM.cmake
 
 compile_commands.json
 /src/vtparser/

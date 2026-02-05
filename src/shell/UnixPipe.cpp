@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <fmt/format.h>
 #include <crispy/logstore.h>
 
 #include <cstring>
@@ -11,6 +10,7 @@ module;
 #include <unistd.h>
 
 export module UnixPipe;
+
 namespace endo
 {
 

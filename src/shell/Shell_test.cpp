@@ -2,7 +2,7 @@
 
 #include <crispy/escape.h>
 
-#include <catch2/catch.hpp>
+#include <catch2/catch_test_macros.hpp>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;
@@ -86,7 +86,6 @@ TEST_CASE("shell.builtin.get_variable")
     CHECK(shell.env.get("BRU").value_or("NONE") == "hello");
     shell("$BRU");
 }
-
 
 // TEST_CASE("shell.builtin.set_and_export_variable")
 // {

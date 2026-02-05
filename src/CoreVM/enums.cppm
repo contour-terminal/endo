@@ -117,9 +117,7 @@ enum class MatchClass
     RegExp,
 };
 
-
 std::string tos(MatchClass c);
-
 
 enum class UnaryOperator
 {
@@ -196,8 +194,6 @@ enum class LiteralType
     IntPair = 13,     // array<int, 2>
 };
 
-
-
 template <const UnaryOperator Operator, const LiteralType ResultType>
 class UnaryInstr;
 
@@ -253,7 +249,6 @@ using PCmpEQInstr = BinaryInstr<BinaryOperator::PCmpEQ, LiteralType::Boolean>;
 using PCmpNEInstr = BinaryInstr<BinaryOperator::PCmpNE, LiteralType::Boolean>;
 using PInCidrInstr = BinaryInstr<BinaryOperator::PInCidr, LiteralType::Boolean>;
 
-
 enum class OperandSig
 {
     V,   // no operands
@@ -284,12 +279,8 @@ constexpr inline unsigned getPrice(Opcode opcode)
 // --------------------------------------------------------------------------
 // encoder
 
-
-
 using Instruction = uint64_t;
 using Operand = uint16_t;
-
-
 
 /** Creates an instruction with no operands. */
 constexpr Instruction makeInstruction(Opcode opc)
@@ -363,5 +354,4 @@ int getStackChange(Instruction instr);
  */
 size_t computeStackSize(const Instruction* program, size_t programSize);
 
-
-}
+} // namespace CoreVM

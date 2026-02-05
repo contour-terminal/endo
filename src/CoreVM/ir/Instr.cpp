@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <fmt/format.h>
-#include <vector>
+
 #include <cassert>
 #include <cinttypes>
+#include <format>
+#include <memory>
+#include <print>
 #include <sstream>
 #include <utility>
+#include <vector>
 
 module CoreVM;
 namespace CoreVM
@@ -135,7 +138,7 @@ std::unique_ptr<Instr> Instr::replace(std::unique_ptr<Instr> newInstr)
 
 void Instr::dumpOne(const char* mnemonic)
 {
-    fmt::print("\t{}\n", formatOne(mnemonic));
+    std::print("\t{}\n", formatOne(mnemonic));
 }
 
 std::string Instr::formatOne(std::string mnemonic) const
@@ -145,9 +148,9 @@ std::string Instr::formatOne(std::string mnemonic) const
     if (type() == LiteralType::Void)
         sstr << mnemonic;
     else if (name().empty())
-        sstr << fmt::format("%??? = {}", mnemonic);
+        sstr << std::format("%??? = {}", mnemonic);
     else
-        sstr << fmt::format("%{} = {}", name(), mnemonic);
+        sstr << std::format("%{} = {}", name(), mnemonic);
 
     for (size_t i = 0, e = _operands.size(); i != e; ++i)
     {
@@ -218,14 +221,14 @@ std::string Instr::formatOne(std::string mnemonic) const
                 sstr << ']';
             }
             else
-                sstr << fmt::format("?UnknownConstant({})", typeid(*arg).name());
+                sstr << std::format("?UnknownConstant({})", typeid(*arg).name());
         }
         else if (auto* bb = dynamic_cast<Instr*>(arg))
             sstr << '%' << arg->name();
         else if (auto* bb = dynamic_cast<BasicBlock*>(arg))
             sstr << '%' << arg->name();
         else
-            sstr << fmt::format(
+            sstr << std::format(
                 "?UnknownValue({}): name={}, parent={}", typeid(*arg).name(), arg->to_string(), name());
     }
 

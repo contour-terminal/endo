@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <fmt/format.h>
 
+#include <format>
 #include <iostream>
+#include <print>
 
 module CoreVM;
 namespace CoreVM::diagnostics
@@ -13,9 +14,9 @@ std::string Message::string() const
 {
     switch (type)
     {
-        case Type::Warning: return fmt::format("[{}] {}", sourceLocation, text);
-        case Type::LinkError: return fmt::format("{}: {}", type, text);
-        default: return fmt::format("[{}] {}: {}", sourceLocation, type, text);
+        case Type::Warning: return std::format("[{}] {}", sourceLocation, text);
+        case Type::LinkError: return std::format("{}: {}", type, text);
+        default: return std::format("[{}] {}: {}", sourceLocation, type, text);
     }
 }
 
@@ -42,8 +43,8 @@ void ConsoleReport::push_back(Message message)
 
     switch (message.type)
     {
-        case Type::Warning: std::cerr << fmt::format("Warning: {}\n", message); break;
-        default: std::cerr << fmt::format("Error: {}\n", message); break;
+        case Type::Warning: std::cerr << std::format("Warning: {}\n", message); break;
+        default: std::cerr << std::format("Error: {}\n", message); break;
     }
 }
 // }}}
@@ -69,8 +70,8 @@ void BufferedReport::log() const
     {
         switch (message.type)
         {
-            case Type::Warning: fmt::print("Warning: {}\n", message); break;
-            default: fmt::print("Error: {}\n", message); break;
+            case Type::Warning: std::print("Warning: {}\n", message); break;
+            default: std::print("Error: {}\n", message); break;
         }
     }
 }
@@ -117,8 +118,8 @@ std::ostream& operator<<(std::ostream& os, const BufferedReport& report)
     {
         switch (message.type)
         {
-            case Type::Warning: os << fmt::format("Warning: {}\n", message); break;
-            default: os << fmt::format("Error: {}\n", message); break;
+            case Type::Warning: os << std::format("Warning: {}\n", message); break;
+            default: os << std::format("Error: {}\n", message); break;
         }
     }
     return os;

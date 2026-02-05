@@ -1,20 +1,27 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <shell/ScopedLogger.h>
 #include <shell/AST.h>
+#include <shell/ScopedLogger.h>
 
-#include <crispy/utils.h>
 #include <crispy/logstore.h>
+#include <crispy/utils.h>
 
 #include <memory>
 #include <optional>
 
 auto inline parserLog = logstore::category("parser", "Parser logger", logstore::category::state::Enabled);
 #define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog };
-#define TRACE_FMT(message, ...) do { parserLog()(ScopedLogger::write(::fmt::format(message, __VA_ARGS__))); } while (0)
-#define TRACE(message) do { parserLog()(ScopedLogger::write(::fmt::format(message))); } while (0)
-
+#define TRACE_FMT(message, ...)                                                \
+    do                                                                         \
+    {                                                                          \
+        parserLog()(ScopedLogger::write(::std::format(message, __VA_ARGS__))); \
+    } while (0)
+#define TRACE(message)                                            \
+    do                                                            \
+    {                                                             \
+        parserLog()(ScopedLogger::write(::std::format(message))); \
+    } while (0)
 
 import ASTPrinter;
 import Lexer;
@@ -62,7 +69,7 @@ export class Parser
     std::unique_ptr<ast::Statement> parseBlock(std::string_view traceMessage = {})
     {
         TRACE_SCOPE(
-            fmt::format("parseBlock{}", traceMessage.empty() ? "" : fmt::format(" ({})", traceMessage)));
+            std::format("parseBlock{}", traceMessage.empty() ? "" : std::format(" ({})", traceMessage)));
         auto scope = std::make_unique<ast::CompoundStmt>();
         while (!isEndOfBlock())
         {

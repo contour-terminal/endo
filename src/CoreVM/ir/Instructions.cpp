@@ -2,10 +2,10 @@
 module;
 #include <crispy/assert.h>
 
-#include <fmt/format.h>
-
 #include <cassert>
+#include <format>
 #include <utility> // make_pair
+
 module CoreVM;
 namespace CoreVM
 {
@@ -101,7 +101,7 @@ void NopInstr::accept(InstructionVisitor& v)
 // {{{ CastInstr
 std::string CastInstr::to_string() const
 {
-    return formatOne(fmt::format("cast {}", type()));
+    return formatOne(std::format("cast {}", type()));
 }
 
 std::unique_ptr<Instr> CastInstr::clone()

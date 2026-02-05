@@ -3,9 +3,6 @@
 
 #include <shell/Visitor.h>
 
-
-#include <fmt/format.h>
-
 #include <filesystem>
 #include <memory>
 #include <string>
@@ -161,7 +158,7 @@ struct BuiltinSetStmt final: public Statement
     BuiltinSetStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
                    std::unique_ptr<Expr> name,
                    std::unique_ptr<Expr> value):
-        callback { callback }, name {std::move( name )}, value { std::move(value) }
+        callback { callback }, name { std::move(name) }, value { std::move(value) }
     {
     }
 

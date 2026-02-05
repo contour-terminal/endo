@@ -2,11 +2,10 @@
 module;
 
 #include <cinttypes>
+#include <format>
 #include <iomanip>
 #include <iostream>
 #include <vector>
-#include <fmt/core.h>
-
 
 module CoreVM;
 import CoreVM.util;
@@ -204,7 +203,7 @@ void dumpArrays(const std::vector<std::vector<T>>& vv, const char* name)
         {
             if (k)
                 std::cout << ", ";
-            std::cout << fmt::format("{}", array[k]);
+            std::cout << std::format("{}", array[k]);
         }
         std::cout << "];\n";
     }

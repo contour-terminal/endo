@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <fmt/format.h>
-
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <format>
 #include <iterator>
 #include <sstream>
 #include <unordered_map>
@@ -40,10 +39,8 @@ struct InstructionInfo
     }
 };
 
-#define IIDEF(opcode, operandSig, stackChange, stackOutput)                                    \
-    {                                                                                          \
-        Opcode::opcode, #opcode, OperandSig::operandSig, stackChange, LiteralType::stackOutput \
-    }
+#define IIDEF(opcode, operandSig, stackChange, stackOutput) \
+    { Opcode::opcode, #opcode, OperandSig::operandSig, stackChange, LiteralType::stackOutput }
 // [(size_t)(Opcode:: opcode)] = { Opcode:: opcode, #opcode, OperandSig:: operandSig, stackChange,
 // LiteralType:: stackOutput }
 
@@ -229,7 +226,7 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
     std::stringstream line;
     size_t n = 0;
 
-    std::string word = fmt::format("{:<10}", mnemo);
+    std::string word = std::format("{:<10}", mnemo);
     line << word;
     n += word.size();
 
@@ -314,12 +311,12 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
                 break;
             }
             case Opcode::LOAD:
-                word = fmt::format("STACK[{}]", A);
+                word = std::format("STACK[{}]", A);
                 line << word;
                 n += word.size();
                 break;
             case Opcode::STORE:
-                word = fmt::format("@STACK[{}]", A);
+                word = std::format("@STACK[{}]", A);
                 line << word;
                 n += word.size();
                 break;
@@ -329,7 +326,7 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
                 n += word.size();
                 break;
             case Opcode::SLOAD:
-                word = fmt::format("\"{}\"", cp->getString(A));
+                word = std::format("\"{}\"", cp->getString(A));
                 line << word;
                 n += word.size();
                 break;
@@ -357,17 +354,17 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
                 switch (operandSignature(opc))
                 {
                     case OperandSig::III:
-                        word = fmt::format("{}, {}, {}", A, B, C);
+                        word = std::format("{}, {}, {}", A, B, C);
                         line << word;
                         n += word.size();
                         break;
                     case OperandSig::II:
-                        word = fmt::format("{}, {}", A, B);
+                        word = std::format("{}, {}", A, B);
                         line << word;
                         n += word.size();
                         break;
                     case OperandSig::I:
-                        word = fmt::format("{}", A);
+                        word = std::format("{}", A);
                         line << word;
                         n += word.size();
                         break;
@@ -381,17 +378,17 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
         switch (operandSignature(opc))
         {
             case OperandSig::III:
-                word = fmt::format("{}, {}, {}", A, B, C);
+                word = std::format("{}, {}, {}", A, B, C);
                 line << word;
                 n += word.size();
                 break;
             case OperandSig::II:
-                word = fmt::format("{}, {}", A, B);
+                word = std::format("{}, {}", A, B);
                 line << word;
                 n += word.size();
                 break;
             case OperandSig::I:
-                word = fmt::format("{}", A);
+                word = std::format("{}", A);
                 line << word;
                 n += word.size();
                 break;
@@ -407,7 +404,7 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
 
     int stackChange = getStackChange(pc);
 
-    word = fmt::format("; ip={:>3} sp={:>2} ({}{})",
+    word = std::format("; ip={:>3} sp={:>2} ({}{})",
                        ip,
                        sp,
                        stackChange > 0   ? '+'

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module;
-#include <fmt/format.h>
+
+#include <format>
+#include <fstream>
 
 #include <sys/stat.h>
 #include <sys/types.h>
-
-#include <fstream>
 
 #include <fcntl.h>
 
@@ -16,7 +16,7 @@ namespace CoreVM
 
 std::string SourceLocation::str() const
 {
-    return fmt::format("{{ {}:{}.{} - {}:{}.{} }}",
+    return std::format("{{ {}:{}.{} - {}:{}.{} }}",
                        begin.line,
                        begin.column,
                        begin.offset,

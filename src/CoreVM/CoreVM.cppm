@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <fmt/format.h>
-
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring> // memset()
+#include <format>
 #include <functional> // hash<>
 #include <iostream>
 #include <list>
 #include <optional>
+#include <print>
 #include <regex>
 #include <string>
 #include <utility>
@@ -955,9 +955,9 @@ class PassManager
     void run(IRHandler* handler);
 
     template <typename... Args>
-    void logDebug(fmt::format_string<Args...> msg, Args... args)
+    void logDebug(std::format_string<Args...> msg, Args... args)
     {
-        logDebug(fmt::vformat(msg, fmt::make_format_args(args...)));
+        logDebug(std::vformat(msg.get(), std::make_format_args(args...)));
     }
 
     void logDebug(const std::string& msg);
@@ -1089,7 +1089,7 @@ class ConstantValue: public Constant
 
     [[nodiscard]] std::string to_string() const override
     {
-        return fmt::format("Constant '{}': {} = {}", name(), type(), _value);
+        return std::format("Constant '{}': {} = {}", name(), type(), _value);
     }
 
   private:
@@ -2152,21 +2152,21 @@ T* IRProgram::get(std::vector<T>& table, U&& literal)
     if (auto i = std::ranges::find_if(table, [&](T const& elem) { return elem.get() == literal; });
         i != table.end())
     {
-        fmt::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(), typeid(U).name());
+        std::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(), typeid(U).name());
         return &*i;
     }
 
     // for (size_t i = 0, e = table.size(); i != e; ++i)
     //     if (table[i].get() == literal)
     //     {
-    //         fmt::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(),
+    //         std::print("IRProgram.get<{}, {}>: found existing entry\n", typeid(T).name(),
     //         typeid(U).name()); return &table[i];
     //     }
 
-    fmt::print("IRProgram.get<{}, {}>: creating new entry\n", typeid(T).name(), typeid(U).name());
+    std::print("IRProgram.get<{}, {}>: creating new entry\n", typeid(T).name(), typeid(U).name());
     table.emplace_back(T { std::forward<U>(literal) });
     for (auto const& elem: literal)
-        fmt::print(" - {}\n", elem->to_string());
+        std::print(" - {}\n", elem->to_string());
     return &table.back();
 }
 
@@ -2721,33 +2721,34 @@ class Report
     virtual ~Report() = default;
 
     template <typename... Args>
-    void tokenError(const SourceLocation& sloc, const std::string& f, Args... args)
+    void tokenError(const SourceLocation& sloc, std::format_string<Args...> f, Args... args)
     {
-        emplace_back(Type::TokenError, sloc, fmt::format(f, std::move(args)...));
+        emplace_back(Type::TokenError, sloc, std::format(f, std::move(args)...));
     }
 
     template <typename... Args>
-    void syntaxError(const SourceLocation& sloc, fmt::format_string<Args...> f, Args... args)
+    void syntaxError(const SourceLocation& sloc, std::format_string<Args...> f, Args... args)
     {
-        emplace_back(Type::SyntaxError, sloc, fmt::format(f, std::move(args)...));
+        emplace_back(Type::SyntaxError, sloc, std::format(f, std::move(args)...));
     }
 
     template <typename... Args>
-    void typeError(const SourceLocation& sloc, fmt::format_string<Args...> f, Args... args)
+    void typeError(const SourceLocation& sloc, std::format_string<Args...> f, Args... args)
     {
-        emplace_back(Type::TypeError, sloc, fmt::format(f, std::move(args)...));
+        emplace_back(Type::TypeError, sloc, std::format(f, std::move(args)...));
     }
 
     template <typename... Args>
-    void warning(const SourceLocation& sloc, fmt::format_string<Args...> f, Args... args)
+    void warning(const SourceLocation& sloc, std::format_string<Args...> f, Args... args)
     {
-        emplace_back(Type::Warning, sloc, fmt::format(f, std::move(args)...));
+        emplace_back(Type::Warning, sloc, std::format(f, std::move(args)...));
     }
 
     template <typename... Args>
-    void linkError(fmt::format_string<Args...> f, Args... args)
+    void linkError(std::format_string<Args...> f, Args... args)
     {
-        emplace_back(Type::LinkError, SourceLocation {}, fmt::vformat(f, fmt::make_format_args(args)...));
+        emplace_back(
+            Type::LinkError, SourceLocation {}, std::vformat(f.get(), std::make_format_args(args...)));
     }
 
     void emplace_back(Type ty, SourceLocation sl, std::string t)
@@ -2864,125 +2865,109 @@ struct hash<CoreVM::LiteralType>
 
 } // namespace std
 
-export namespace fmt
-{
 template <>
-struct formatter<CoreVM::util::Cidr>: formatter<std::string>
+struct std::formatter<CoreVM::util::Cidr>: std::formatter<std::string>
 {
-    auto format(CoreVM::util::Cidr const& value, format_context& ctx) -> format_context::iterator
+    auto format(CoreVM::util::Cidr const& value, std::format_context& ctx) const
+        -> std::format_context::iterator
     {
-        return formatter<std::string>::format(value.str(), ctx);
+        return std::formatter<std::string>::format(value.str(), ctx);
     }
 };
 
 template <>
-struct formatter<CoreVM::Signature>
+struct std::formatter<CoreVM::Signature>: std::formatter<std::string>
 {
-    template <typename ParseContext>
-    auto parse(ParseContext& ctx)
+    auto format(const CoreVM::Signature& v, std::format_context& ctx) const -> std::format_context::iterator
     {
-        return ctx.begin();
-    }
-
-    template <typename FormatContext>
-    auto format(const CoreVM::Signature& v, FormatContext& ctx)
-    {
-        return format_to(ctx.begin(), v.to_s());
+        return std::formatter<std::string>::format(v.to_s(), ctx);
     }
 };
 
-} // namespace fmt
-
-export
+template <>
+struct std::formatter<CoreVM::util::RegExp>: std::formatter<std::string>
 {
-    template <>
-    struct fmt::formatter<CoreVM::util::RegExp>: fmt::formatter<std::string>
+    auto format(CoreVM::util::RegExp const& v, std::format_context& ctx) const
+        -> std::format_context::iterator
     {
-        using RegExp = CoreVM::util::RegExp;
+        return std::formatter<std::string>::format(v.pattern(), ctx);
+    }
+};
 
-        auto format(RegExp const& v, format_context& ctx) -> format_context::iterator
-        {
-            return formatter<std::string>::format(v.pattern(), ctx);
-        }
-    };
-
-    template <>
-    struct fmt::formatter<CoreVM::diagnostics::Type>: fmt::formatter<std::string_view>
+template <>
+struct std::formatter<CoreVM::diagnostics::Type>: std::formatter<std::string_view>
+{
+    auto format(const CoreVM::diagnostics::Type& value, std::format_context& ctx) const
+        -> std::format_context::iterator
     {
-        using Type = CoreVM::diagnostics::Type;
-
-        auto format(const Type& value, format_context& ctx) -> format_context::iterator
+        std::string_view name;
+        switch (value)
         {
-            string_view name;
-            switch (value)
-            {
-                case Type::TokenError: name = "TokenError"; break;
-                case Type::SyntaxError: name = "SyntaxError"; break;
-                case Type::TypeError: name = "TypeError"; break;
-                case Type::Warning: name = "Warning"; break;
-                case Type::LinkError: name = "LinkError"; break;
-            }
-            return formatter<string_view>::format(name, ctx);
+            case CoreVM::diagnostics::Type::TokenError: name = "TokenError"; break;
+            case CoreVM::diagnostics::Type::SyntaxError: name = "SyntaxError"; break;
+            case CoreVM::diagnostics::Type::TypeError: name = "TypeError"; break;
+            case CoreVM::diagnostics::Type::Warning: name = "Warning"; break;
+            case CoreVM::diagnostics::Type::LinkError: name = "LinkError"; break;
         }
-    };
+        return std::formatter<std::string_view>::format(name, ctx);
+    }
+};
 
-    template <>
-    struct fmt::formatter<CoreVM::diagnostics::Message>: fmt::formatter<std::string>
+template <>
+struct std::formatter<CoreVM::diagnostics::Message>: std::formatter<std::string>
+{
+    auto format(const CoreVM::diagnostics::Message& value, std::format_context& ctx) const
+        -> std::format_context::iterator
     {
-        using Message = CoreVM::diagnostics::Message;
+        return std::formatter<std::string>::format(value.string(), ctx);
+    }
+};
 
-        auto format(const Message& value, format_context& ctx) -> format_context::iterator
-        {
-            return formatter<std::string>::format(value.string(), ctx);
-        }
-    };
-
-    template <>
-    struct fmt::formatter<CoreVM::LiteralType>: fmt::formatter<std::string_view>
+template <>
+struct std::formatter<CoreVM::LiteralType>: std::formatter<std::string_view>
+{
+    auto format(CoreVM::LiteralType id, std::format_context& ctx) const -> std::format_context::iterator
     {
-        using LiteralType = CoreVM::LiteralType;
-
-        auto format(LiteralType id, format_context& ctx) -> format_context::iterator
+        std::string_view name;
+        switch (id)
         {
-            std::string_view name;
-            switch (id)
-            {
-                case LiteralType::Void: name = "Void"; break;
-                case LiteralType::Boolean: name = "Boolean"; break;
-                case LiteralType::Number: name = "Number"; break;
-                case LiteralType::String: name = "String"; break;
-                case LiteralType::IPAddress: name = "IPAddress"; break;
-                case LiteralType::Cidr: name = "Cidr"; break;
-                case LiteralType::RegExp: name = "RegExp"; break;
-                case LiteralType::Handler: name = "Handler"; break;
-                case LiteralType::IntArray: name = "IntArray"; break;
-                case LiteralType::StringArray: name = "StringArray"; break;
-                case LiteralType::IPAddrArray: name = "IPAddrArray"; break;
-                case LiteralType::CidrArray: name = "CidrArray"; break;
-                case LiteralType::IntPair: name = "IntPair"; break;
-            }
-            return formatter<std::string_view>::format(name, ctx);
+            case CoreVM::LiteralType::Void: name = "Void"; break;
+            case CoreVM::LiteralType::Boolean: name = "Boolean"; break;
+            case CoreVM::LiteralType::Number: name = "Number"; break;
+            case CoreVM::LiteralType::String: name = "String"; break;
+            case CoreVM::LiteralType::IPAddress: name = "IPAddress"; break;
+            case CoreVM::LiteralType::Cidr: name = "Cidr"; break;
+            case CoreVM::LiteralType::RegExp: name = "RegExp"; break;
+            case CoreVM::LiteralType::Handler: name = "Handler"; break;
+            case CoreVM::LiteralType::IntArray: name = "IntArray"; break;
+            case CoreVM::LiteralType::StringArray: name = "StringArray"; break;
+            case CoreVM::LiteralType::IPAddrArray: name = "IPAddrArray"; break;
+            case CoreVM::LiteralType::CidrArray: name = "CidrArray"; break;
+            case CoreVM::LiteralType::IntPair: name = "IntPair"; break;
         }
-    };
+        return std::formatter<std::string_view>::format(name, ctx);
+    }
+};
 
-    template <>
-    struct fmt::formatter<CoreVM::FilePos>: fmt::formatter<std::string>
+template <>
+struct std::formatter<CoreVM::FilePos>: std::formatter<std::string>
+{
+    auto format(const CoreVM::FilePos& value, std::format_context& ctx) const -> std::format_context::iterator
     {
-        auto format(const CoreVM::FilePos& value, format_context& ctx) -> format_context::iterator
-        {
-            return formatter<std::string>::format(fmt::format("{}:{}", value.line, value.column), ctx);
-        }
-    };
+        return std::formatter<std::string>::format(std::format("{}:{}", value.line, value.column), ctx);
+    }
+};
 
-    template <>
-    struct fmt::formatter<CoreVM::SourceLocation>: fmt::formatter<std::string>
+template <>
+struct std::formatter<CoreVM::SourceLocation>: std::formatter<std::string>
+{
+    auto format(const CoreVM::SourceLocation& value, std::format_context& ctx) const
+        -> std::format_context::iterator
     {
-        auto format(const CoreVM::SourceLocation& value, format_context& ctx) -> format_context::iterator
-        {
-            if (!value.filename.empty())
-                return formatter<std::string>::format(fmt::format("{}:{}", value.filename, value.begin), ctx);
-            else
-                return formatter<std::string>::format(fmt::format("{}", value.begin), ctx);
-        }
-    };
-}
+        if (!value.filename.empty())
+            return std::formatter<std::string>::format(std::format("{}:{}", value.filename, value.begin),
+                                                       ctx);
+        else
+            return std::formatter<std::string>::format(std::format("{}", value.begin), ctx);
+    }
+};

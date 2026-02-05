@@ -6,8 +6,11 @@ module;
 #include <crispy/utils.h>
 
 #include <cstdio>
+#include <cstring>
+#include <format>
 #include <iostream>
 #include <map>
+#include <print>
 
 #include <sys/wait.h>
 
@@ -47,7 +50,7 @@ std::vector<char const*> constructArgv(CoreVM::CoreStringArray const& args)
 std::string readLine(TTY& tty, std::string_view prompt)
 {
     // Most super-native implementation, yet to be replaced by a proper line editor.
-    tty.writeToStdout(fmt::format("{}", prompt));
+    tty.writeToStdout(std::format("{}", prompt));
     std::string line;
     while (true)
     {
@@ -287,79 +290,79 @@ export class Shell final: public CoreVM::Runtime
     void registerBuiltinFunctions()
     {
         // clang-format off
-    registerFunction("exit")
-        .param<CoreVM::CoreNumber>("code")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind(&Shell::builtinExit, this);
+        registerFunction("exit")
+            .param<CoreVM::CoreNumber>("code")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinExit, this);
 
-    registerFunction("export")
-        .param<std::string>("name")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind(&Shell::builtinExport, this);
+        registerFunction("export")
+            .param<std::string>("name")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinExport, this);
 
-    registerFunction("export")
-        .param<std::string>("name")
-        .param<std::string>("value")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind(&Shell::builtinSetAndExport, this);
+        registerFunction("export")
+            .param<std::string>("name")
+            .param<std::string>("value")
+            .returnType(CoreVM::LiteralType::Void)
+            .bind(&Shell::builtinSetAndExport, this);
 
-    registerFunction("true")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinTrue, this);
+        registerFunction("true")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinTrue, this);
 
-    registerFunction("false")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinFalse, this);
+        registerFunction("false")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinFalse, this);
 
-    registerFunction("cd")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinChDirHome, this);
+        registerFunction("cd")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinChDirHome, this);
 
-    registerFunction("cd")
-        .param<std::string>("path")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinChDir, this);
+        registerFunction("cd")
+            .param<std::string>("path")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinChDir, this);
 
-    registerFunction("set")
-        .param<std::string>("name")
-        .param<std::string>("value")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinSet, this);
+        registerFunction("set")
+            .param<std::string>("name")
+            .param<std::string>("value")
+            .returnType(CoreVM::LiteralType::Boolean)
+            .bind(&Shell::builtinSet, this);
 
-    registerFunction("callproc")
-        .param<std::vector<std::string>>("args")
-        //.param<std::vector<CoreVM::CoreNumber>>("redirects")
-        .returnType(CoreVM::LiteralType::Number)
-        .bind(&Shell::builtinCallProcess, this);
+        registerFunction("callproc")
+            .param<std::vector<std::string>>("args")
+            //.param<std::vector<CoreVM::CoreNumber>>("redirects")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinCallProcess, this);
 
-    registerFunction("callproc")
-        .param<bool>("last_in_chain")
-        .param<std::vector<std::string>>("args")
-        //.param<std::vector<CoreVM::CoreNumber>>("redirects")
-        .returnType(CoreVM::LiteralType::Number)
-        .bind(&Shell::builtinCallProcessShellPiped, this);
+        registerFunction("callproc")
+            .param<bool>("last_in_chain")
+            .param<std::vector<std::string>>("args")
+            //.param<std::vector<CoreVM::CoreNumber>>("redirects")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinCallProcessShellPiped, this);
 
-    registerFunction("read")
-        .returnType(CoreVM::LiteralType::String)
-        .bind(&Shell::builtinReadDefault, this);
+        registerFunction("read")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinReadDefault, this);
 
-    registerFunction("read")
-        .param<std::vector<std::string>>("args")
-        .returnType(CoreVM::LiteralType::String)
-        .bind(&Shell::builtinRead, this);
+        registerFunction("read")
+            .param<std::vector<std::string>>("args")
+            .returnType(CoreVM::LiteralType::String)
+            .bind(&Shell::builtinRead, this);
 
-    // used to redirect file to stdin
-    registerFunction("internal.open_read")
-        .param<std::string>("path")
-        .returnType(CoreVM::LiteralType::Number)
-        .bind(&Shell::builtinOpenRead, this);
+        // used to redirect file to stdin
+        registerFunction("internal.open_read")
+            .param<std::string>("path")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinOpenRead, this);
 
-    // used for redirecting output to a file
-    registerFunction("internal.open_write")
-        .param<std::string>("path")
-        .param<CoreVM::CoreNumber>("oflags")
-        .returnType(CoreVM::LiteralType::Number)
-        .bind(&Shell::builtinOpenWrite, this);
+        // used for redirecting output to a file
+        registerFunction("internal.open_write")
+            .param<std::string>("path")
+            .param<CoreVM::CoreNumber>("oflags")
+            .returnType(CoreVM::LiteralType::Number)
+            .bind(&Shell::builtinOpenWrite, this);
         // clang-format on
     }
 
@@ -370,6 +373,7 @@ export class Shell final: public CoreVM::Runtime
         _runner->suspend();
         _quit = true;
     }
+
     void builtinCallProcess(CoreVM::Params& context)
     {
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
@@ -540,7 +544,7 @@ export class Shell final: public CoreVM::Runtime
     void builtinReadDefault(CoreVM::Params& context)
     {
         std::string const line =
-            readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+            readLine(_tty, std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
         _env.set("REPLY", line);
         context.setResult(line);
     }
@@ -549,7 +553,7 @@ export class Shell final: public CoreVM::Runtime
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
         std::string const& variable = args.at(0);
         std::string const line =
-            readLine(_tty, fmt::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+            readLine(_tty, std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
         _env.set(variable, line);
         context.setResult(line);
     }
@@ -609,13 +613,13 @@ export class Shell final: public CoreVM::Runtime
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp)
     {
         debugLog()(
-            fmt::format("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants())));
+            std::format("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants())));
     }
 
     template <typename... Args>
-    void error(fmt::format_string<Args...> const& message, Args&&... args)
+    void error(std::format_string<Args...> const& message, Args&&... args)
     {
-        std::cerr << fmt::format(message, std::forward<Args>(args)...) + "\n";
+        std::println(std::cerr, "{}", std::format(message, std::forward<Args>(args)...));
     }
 
   private:

@@ -3,10 +3,9 @@ module;
 #include <CoreVM/util/assert.h>
 #include <CoreVM/util/strings.h>
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cassert>
+#include <format>
 
 module CoreVM;
 namespace CoreVM
@@ -26,13 +25,14 @@ Value::Value(LiteralType ty, std::string name): _type(ty), _name(std::move(name)
 {
     if (_name.empty())
     {
-        _name = fmt::format("unnamed{}", valueCounter);
+        _name = std::format("unnamed{}", valueCounter);
         valueCounter++;
         // printf("default-create name: %s\n", _name.c_str());
     }
 }
 
-// Value::Value(Value&& other) noexcept: _type(other._type), _name(std::move(other._name)), _uses(std::move(other._uses))
+// Value::Value(Value&& other) noexcept: _type(other._type), _name(std::move(other._name)),
+// _uses(std::move(other._uses))
 // {
 //     other._uses = {};
 // }
@@ -40,7 +40,7 @@ Value::Value(LiteralType ty, std::string name): _type(ty), _name(std::move(name)
 // Value& Value::operator=(Value&& other) noexcept
 // {
 //     COREVM_ASSERT(!isUsed(),
-//                   fmt::format("Value {} being destroyed is still in use by: {}.",
+//                   std::format("Value {} being destroyed is still in use by: {}.",
 //                               name(),
 //                               join(_uses, ", ", &Instr::name)));
 //
@@ -55,7 +55,7 @@ Value::Value(LiteralType ty, std::string name): _type(ty), _name(std::move(name)
 Value::~Value()
 {
     COREVM_ASSERT(!isUsed(),
-                  fmt::format("Value {} being destroyed is still in use by: {}.",
+                  std::format("Value {} being destroyed is still in use by: {}.",
                               name(),
                               join(_uses, ", ", &Instr::name)));
 }
@@ -89,7 +89,7 @@ void Value::replaceAllUsesWith(Value* newUse)
 
 std::string Value::to_string() const
 {
-    return fmt::format("Value {} of type {}", _name, _type);
+    return std::format("Value {} of type {}", _name, _type);
 }
 
 } // namespace CoreVM

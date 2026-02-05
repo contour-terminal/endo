@@ -2,8 +2,7 @@
 #include <crispy/App.h>
 #include <crispy/logstore.h>
 
-#define CATCH_CONFIG_RUNNER
-#include <catch2/catch.hpp>
+#include <catch2/catch_session.hpp>
 
 int main(int argc, char const* argv[])
 {

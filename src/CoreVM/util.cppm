@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <fmt/format.h>
-
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>    // memset()
+#include <cstring> // memset()
+#include <format>
 #include <functional> // hash<>
 #include <iostream>
 #include <optional>
@@ -203,7 +202,6 @@ bool SuffixTree<K, V>::lookup(const Key& key, Value* value) const
 
     return false;
 }
-
 
 template <typename K, typename V>
 class PrefixTree
@@ -645,8 +643,7 @@ class RegExpContext
 
 } // namespace CoreVM::util
 
-export
-{
+export {
 
     namespace std
     {
@@ -658,22 +655,22 @@ export
     } // namespace std
 
     template <>
-    struct fmt::formatter<CoreVM::util::IPAddress>: formatter<std::string>
+    struct std::formatter<CoreVM::util::IPAddress>: formatter<std::string>
     {
         using IPAddress = CoreVM::util::IPAddress;
 
-        auto format(IPAddress const& v, format_context& ctx) -> format_context::iterator
+        auto format(IPAddress const& v, format_context& ctx) const -> format_context::iterator
         {
             return formatter<std::string>::format(v.str(), ctx);
         }
     };
 
     template <>
-    struct fmt::formatter<std::optional<CoreVM::util::IPAddress>>: formatter<std::string>
+    struct std::formatter<std::optional<CoreVM::util::IPAddress>>: formatter<std::string>
     {
         using IPAddress = CoreVM::util::IPAddress;
 
-        auto format(std::optional<IPAddress> const& v, format_context& ctx) -> format_context::iterator
+        auto format(std::optional<IPAddress> const& v, format_context& ctx) const -> format_context::iterator
         {
             if (v)
                 return formatter<std::string>::format(v->str(), ctx);

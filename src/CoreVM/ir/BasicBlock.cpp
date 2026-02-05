@@ -2,13 +2,13 @@
 module;
 #include <CoreVM/util/assert.h>
 
-#include <fmt/format.h>
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <format>
 #include <iostream>
 #include <iterator>
+#include <memory>
 #include <sstream>
 #include <vector>
 
@@ -290,10 +290,10 @@ bool BasicBlock::isComplete() const
 void BasicBlock::verify()
 {
     COREVM_ASSERT(!_code.empty(),
-                  fmt::format("BasicBlock {}: verify: Must contain at least one instruction.", name()));
+                  std::format("BasicBlock {}: verify: Must contain at least one instruction.", name()));
     COREVM_ASSERT(
         isComplete(),
-        fmt::format("BasicBlock {}: verify: Last instruction must be a terminator instruction.", name()));
+        std::format("BasicBlock {}: verify: Last instruction must be a terminator instruction.", name()));
     COREVM_ASSERT(
         std::find_if(_code.begin(),
                      std::prev(_code.end()),
@@ -301,7 +301,7 @@ void BasicBlock::verify()
                          return dynamic_cast<TerminateInstr*>(instr.get()) != nullptr;
                      })
             == std::prev(_code.end()),
-        fmt::format("BasicBlock {}: verify: Found a terminate instruction in the middle of the block.",
+        std::format("BasicBlock {}: verify: Found a terminate instruction in the middle of the block.",
                     name()));
 }
 

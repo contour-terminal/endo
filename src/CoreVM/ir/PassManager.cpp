@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <fmt/format.h>
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <string>
+#include <utility>
 
 module CoreVM;
 namespace CoreVM

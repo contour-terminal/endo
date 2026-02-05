@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <fmt/format.h>
-
 #include <cstring>
+#include <format>
 #include <functional>
+#include <mutex>
+#include <print>
+#include <thread>
 
 #include <sys/ioctl.h>
-#include <thread>
-#include <mutex>
+
 #include <pty.h>
 #include <termios.h>
 #include <unistd.h>
@@ -41,17 +42,17 @@ export class TTY
     virtual void writeToStdout(std::string_view str) const = 0;
 
     template <typename... Args>
-    void writeToStdout(fmt::format_string<Args...> const& fmt, Args&&... args) const
+    void writeToStdout(std::format_string<Args...> const& fmt, Args&&... args) const
     {
-        writeToStdout(fmt::format(fmt, std::forward<Args>(args)...));
+        writeToStdout(std::format(fmt, std::forward<Args>(args)...));
     }
 
     virtual void writeToStdin(std::string_view str) const = 0;
 
     template <typename... Args>
-    void writeToStdin(fmt::format_string<Args...> const& fmt, Args&&... args) const
+    void writeToStdin(std::format_string<Args...> const& fmt, Args&&... args) const
     {
-        writeToStdin(fmt::format(fmt, std::forward<Args>(args)...));
+        writeToStdin(std::format(fmt, std::forward<Args>(args)...));
     }
 };
 
@@ -130,7 +131,7 @@ export class TestPTY final: public TTY
         if (openpty(&_ptyMaster, &_ptySlave, name, &_baseTermios, &_windowSize) == -1)
             throw std::runtime_error("openpty: " + std::string(strerror(errno)));
 
-        fmt::print("TestPTY opened: {} (master {}, slave {})\n", name, _ptyMaster, _ptySlave);
+        std::println("TestPTY opened: {} (master {}, slave {})", name, _ptyMaster, _ptySlave);
 
         _updateThread = std::thread { std::bind(&TestPTY::outputUpdateLoop, this) };
     }

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <fmt/format.h>
 #include <crispy/logstore.h>
+
 #include <cstring>
+#include <format>
 #include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
 
-
-auto inline lexerLog = logstore::category("lexer ", "Lexer logger ", logstore::category::state::Enabled );
+auto inline lexerLog = logstore::category("lexer ", "Lexer logger ", logstore::category::state::Enabled);
 
 using namespace std::string_view_literals;
 
@@ -235,18 +235,19 @@ export class Lexer
     }
 
     static std::vector<TokenInfo> tokenize(std::unique_ptr<Source> source)
-{
-    auto tokens = std::vector<TokenInfo> {};
-    auto lexer = Lexer { std::move(source) };
-
-    while (lexer.currentToken() != Token::EndOfInput)
     {
-        tokens.emplace_back(TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
-        lexer.nextToken();
-    }
+        auto tokens = std::vector<TokenInfo> {};
+        auto lexer = Lexer { std::move(source) };
 
-    return tokens;
-}
+        while (lexer.currentToken() != Token::EndOfInput)
+        {
+            tokens.emplace_back(
+                TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
+            lexer.nextToken();
+        }
+
+        return tokens;
+    }
 
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
@@ -315,26 +316,25 @@ export class Lexer
     }
 
     Token consumeCharAndConfirmToken(Token token)
-{
-    nextChar();
-    return confirmToken(token);
-}
+    {
+        nextChar();
+        return confirmToken(token);
+    }
 
     Token confirmToken(Token token)
-{
-    _nextToken.token = token;
-    _nextToken.literal = _nextToken.literal;
-    auto const [a, b, _] = _source->currentSourceLocation();
-    _nextToken.location.end = { .line = a, .column = b };
-    _currentToken = _nextToken;
+    {
+        _nextToken.token = token;
+        _nextToken.literal = _nextToken.literal;
+        auto const [a, b, _] = _source->currentSourceLocation();
+        _nextToken.location.end = { .line = a, .column = b };
+        _currentToken = _nextToken;
 
-    _nextToken.literal = {};
-    _nextToken.location.name = _source->currentSourceLocation().name;
-    _nextToken.location.begin = _nextToken.location.end;
+        _nextToken.literal = {};
+        _nextToken.location.name = _source->currentSourceLocation().name;
+        _nextToken.location.begin = _nextToken.location.end;
 
-    return token;
-}
-
+        return token;
+    }
 
     std::unique_ptr<Source> _source;
     char32_t _currentChar = 0;
@@ -344,43 +344,41 @@ export class Lexer
 };
 } // namespace endo
 
-
-
 template <>
-struct fmt::formatter<endo::LineColumn>: fmt::formatter<std::string>
+struct std::formatter<endo::LineColumn>: std::formatter<std::string>
 {
-    auto format(const endo::LineColumn lineColumn, format_context& ctx) -> format_context::iterator
+    auto format(const endo::LineColumn lineColumn, format_context& ctx) const -> format_context::iterator
     {
-        return formatter<std::string>::format(fmt::format("{}:{}", lineColumn.line, lineColumn.column), ctx);
+        return formatter<std::string>::format(std::format("{}:{}", lineColumn.line, lineColumn.column), ctx);
     }
 };
 
 template <>
-struct fmt::formatter<endo::SourceLocation>: fmt::formatter<std::string>
+struct std::formatter<endo::SourceLocation>: std::formatter<std::string>
 {
-    auto format(const endo::SourceLocation location, format_context& ctx) -> format_context::iterator
+    auto format(const endo::SourceLocation location, format_context& ctx) const -> format_context::iterator
     {
         return formatter<std::string>::format(
-            fmt::format("{}:{}:{}", location.name, location.line, location.column), ctx);
+            std::format("{}:{}:{}", location.name, location.line, location.column), ctx);
     }
 };
 
 template <>
-struct fmt::formatter<endo::SourceLocationRange>: fmt::formatter<std::string>
+struct std::formatter<endo::SourceLocationRange>: std::formatter<std::string>
 {
-    auto format(const endo::SourceLocationRange range, format_context& ctx) -> format_context::iterator
+    auto format(const endo::SourceLocationRange range, format_context& ctx) const -> format_context::iterator
     {
-        return formatter<std::string>::format(fmt::format("{}({} - {})", range.name, range.begin, range.end),
+        return formatter<std::string>::format(std::format("{}({} - {})", range.name, range.begin, range.end),
                                               ctx);
     }
 };
 
 template <>
-struct fmt::formatter<endo::Token>: fmt::formatter<std::string_view>
+struct std::formatter<endo::Token>: std::formatter<std::string_view>
 {
-    auto format(const endo::Token token, format_context& ctx) -> format_context::iterator
+    auto format(const endo::Token token, format_context& ctx) const -> format_context::iterator
     {
-        string_view name;
+        std::string_view name;
         using enum endo::Token;
         switch (token)
         {
@@ -411,16 +409,19 @@ struct fmt::formatter<endo::Token>: fmt::formatter<std::string_view>
             case Semicolon: name = ";"; break;
             case String: name = "String"; break;
         }
-        return formatter<string_view>::format(name, ctx);
+        return formatter<std::string_view>::format(name, ctx);
     }
 };
 
 template <>
-struct fmt::formatter<endo::TokenInfo>
+struct std::formatter<endo::TokenInfo>
 {
-    static auto parse(format_parse_context& ctx) -> format_parse_context::iterator { return ctx.begin(); }
-    static auto format(endo::TokenInfo const& info, format_context& ctx) -> format_context::iterator
+    static constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
     {
-        return fmt::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);
+        return ctx.begin();
+    }
+    auto format(endo::TokenInfo const& info, format_context& ctx) const -> format_context::iterator
+    {
+        return std::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);
     }
 };
