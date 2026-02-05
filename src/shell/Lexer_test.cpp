@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
-import Lexer;
+#include "Lexer.hpp"
 
 TEST_CASE("Lexer.basic")
 {

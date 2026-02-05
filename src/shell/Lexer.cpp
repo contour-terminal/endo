@@ -1,731 +1,422 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
-
-#include <cstring>
-#include <format>
-#include <memory>
-#include <string>
-#include <string_view>
-#include <vector>
+#include "Lexer.hpp"
 
 #include <libunicode/utf8.h>
 
 using namespace std::string_view_literals;
 
-export module Lexer;
-
 namespace endo
 {
 
-export enum class Token
+Token Lexer::nextToken()
 {
-    Invalid,
-
-    AmpNumber,      // '&' DIGIT+
-    Backslash,      // '\'
-    DollarDollar,   // $$
-    DollarName,     // $NAME
-    DollarNot,      // $!
-    DollarQuestion, // $?
-    DollarNumber,   // '$' DIGIT+
-    EndOfInput,     // EOF
-    LineFeed,       // LF
-    Equal,          // =
-    Greater,        // >
-    GreaterEqual,   // >=
-    GreaterGreater, // >>
-    Less,           // <
-    LessEqual,      // <=
-    LessLess,       // <<
-    LessRndOpen,    // <(
-    Not,            // !
-    Number,         // DIGIT+
-    Pipe,           // |
-    RndClose,       // )
-    RndOpen,        // (
-    Semicolon,      // ;
-    String,         // "..." and '...'
-    Identifier,     // space delimited text not containing any of the unescaped symbols above
-
-    // New tokens added below to avoid shifting existing enum values
-    DollarBraceName,  // ${NAME}
-    LessLessLess,     // <<<
-    LessLessDash,     // <<-
-    GreaterAmp,       // >&
-    AmpAmp,           // &&
-    PipePipe,         // ||
-    DollarRndOpen,    // $(
-    GreaterRndOpen,   // >(
-    Backtick,         // `
-    Tilde,            // ~ at word start (for tilde expansion)
-    DollarBraceParam, // ${VAR:-default}, ${#VAR}, etc. (parameter expansion)
-    DollarDblRndOpen, // $((  (arithmetic expansion)
-    DblRndClose,      // ))    (arithmetic expansion close)
-    DblRndOpen,       // ((    (C-style for loop)
-    DblSemicolon,     // ;;    (case clause terminator)
-};
-
-export enum class BuiltinFunction
-{
-    Exit,
-    Cd,
-    Pwd,
-    Env,
-    Fg,
-    Bg,
-    Read,  // read VAR
-    Time,  // time COMMAND
-    If,    // if (EXPR) COMMAND [else COMMAND]
-    While, // while (EXPR) COMMAND
-};
-
-export struct LineColumn
-{
-    int line;   // 0-based index
-    int column; // 0-based index
-};
-
-export struct SourceLocation
-{
-    int line;              // 0-based index
-    int column;            // 0-based index
-    std::string_view name; // e.g. stdin, or a filename
-};
-
-export struct SourceLocationRange
-{
-    LineColumn begin;
-    LineColumn end;
-    std::string_view name; // e.g. stdin, or a filename
-};
-
-export struct TokenInfo
-{
-    Token token;
-    std::string literal;
-    SourceLocationRange location;
-};
-
-export class Source
-{
-  public:
-    virtual ~Source() = default;
-
-    virtual void rewind() = 0;
-    [[nodiscard]] virtual char32_t readChar() = 0;
-    [[nodiscard]] virtual std::string_view readGraphemeCluster() = 0;
-    [[nodiscard]] virtual SourceLocation currentSourceLocation() const noexcept = 0;
-};
-
-export class StringSource final: public Source
-{
-  public:
-    explicit StringSource(std::string source): _source { std::move(source) } {}
-
-    void rewind() override
+    consumeWhitespace();
+    switch (_currentChar)
     {
-        _location.line = 0;
-        _location.column = 0;
-    }
-
-    [[nodiscard]] char32_t readChar() override
-    {
-        if (_offset >= _source.size())
-            return static_cast<char32_t>(-1);
-
-        size_t bytesConsumed = 0;
-        auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);
-
-        if (!std::holds_alternative<unicode::Success>(result))
-        {
-            // Invalid UTF-8: skip one byte, return replacement character
-            ++_offset;
-            ++_location.column;
-            return U'\uFFFD';
-        }
-
-        auto const ch = std::get<unicode::Success>(result).value;
-        _offset += bytesConsumed;
-        ++_location.column;
-
-        if (ch == U'\n')
-        {
-            ++_location.line;
-            _location.column = 0;
-        }
-
-        return ch;
-    }
-
-    [[nodiscard]] std::string_view readGraphemeCluster() override
-    {
-        if (_offset >= _source.size())
-            return {};
-
-        size_t bytesConsumed = 0;
-        auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);
-
-        if (std::holds_alternative<unicode::Success>(result))
-            return std::string_view(_source.data() + _offset, bytesConsumed);
-
-        // Invalid UTF-8: return single byte
-        return std::string_view(_source.data() + _offset, 1);
-    }
-
-    [[nodiscard]] SourceLocation currentSourceLocation() const noexcept override { return _location; }
-
-  private:
-    SourceLocation _location;
-    std::string _source;
-    size_t _offset = 0;
-};
-
-export class Lexer
-{
-  public:
-    explicit Lexer(std::unique_ptr<Source> source): _source { std::move(source) }
-    {
-        nextChar();
-        nextToken();
-    }
-
-    Token nextToken()
-    {
-        // auto const postLogger = crispy::finally { [this]() mutable {
-        //     lexerLog()("Lexer.nextToken ~> {}\n", _currentToken);
-        // } };
-
-        consumeWhitespace();
-        switch (_currentChar)
-        {
-            case (char32_t) -1: return confirmToken(Token::EndOfInput);
-            case '\r':
-                nextChar();
-                if (_currentChar == '\n')
-                    return consumeCharAndConfirmToken(Token::LineFeed);
-                return confirmToken(Token::Invalid);
-            case '\n': return consumeCharAndConfirmToken(Token::LineFeed);
-            case ';':
-                nextChar();
-                if (_currentChar == ';')
-                    return consumeCharAndConfirmToken(Token::DblSemicolon);
-                return confirmToken(Token::Semicolon);
-            case '=': return consumeCharAndConfirmToken(Token::Equal);
-            case '|':
-                nextChar();
-                if (_currentChar == '|')
-                    return consumeCharAndConfirmToken(Token::PipePipe);
-                return confirmToken(Token::Pipe);
-            case '&':
-                nextChar();
-                if (_currentChar == '&')
-                    return consumeCharAndConfirmToken(Token::AmpAmp);
-                // Single & not currently used - consume as identifier part
-                return confirmToken(Token::Invalid);
-            case '>':
-                nextChar();
-                if (_currentChar == '>')
-                    return consumeCharAndConfirmToken(Token::GreaterGreater);
-                else if (_currentChar == '=')
-                    return consumeCharAndConfirmToken(Token::GreaterEqual);
-                else if (_currentChar == '&')
-                    return consumeCharAndConfirmToken(Token::GreaterAmp);
-                else if (_currentChar == '(')
-                    return consumeCharAndConfirmToken(Token::GreaterRndOpen);
-                else
-                    return confirmToken(Token::Greater);
-            case '<':
+        case (char32_t) -1: return confirmToken(Token::EndOfInput);
+        case '\r':
+            nextChar();
+            if (_currentChar == '\n')
+                return consumeCharAndConfirmToken(Token::LineFeed);
+            return confirmToken(Token::Invalid);
+        case '\n': return consumeCharAndConfirmToken(Token::LineFeed);
+        case ';':
+            nextChar();
+            if (_currentChar == ';')
+                return consumeCharAndConfirmToken(Token::DblSemicolon);
+            return confirmToken(Token::Semicolon);
+        case '=': return consumeCharAndConfirmToken(Token::Equal);
+        case '|':
+            nextChar();
+            if (_currentChar == '|')
+                return consumeCharAndConfirmToken(Token::PipePipe);
+            return confirmToken(Token::Pipe);
+        case '&':
+            nextChar();
+            if (_currentChar == '&')
+                return consumeCharAndConfirmToken(Token::AmpAmp);
+            // Single & not currently used - consume as identifier part
+            return confirmToken(Token::Invalid);
+        case '>':
+            nextChar();
+            if (_currentChar == '>')
+                return consumeCharAndConfirmToken(Token::GreaterGreater);
+            else if (_currentChar == '=')
+                return consumeCharAndConfirmToken(Token::GreaterEqual);
+            else if (_currentChar == '&')
+                return consumeCharAndConfirmToken(Token::GreaterAmp);
+            else if (_currentChar == '(')
+                return consumeCharAndConfirmToken(Token::GreaterRndOpen);
+            else
+                return confirmToken(Token::Greater);
+        case '<':
+            nextChar();
+            if (_currentChar == '<')
+            {
                 nextChar();
                 if (_currentChar == '<')
-                {
-                    nextChar();
-                    if (_currentChar == '<')
-                        return consumeCharAndConfirmToken(Token::LessLessLess);
-                    else if (_currentChar == '-')
-                        return consumeCharAndConfirmToken(Token::LessLessDash);
-                    else
-                        return confirmToken(Token::LessLess);
-                }
-                else if (_currentChar == '=')
-                    return consumeCharAndConfirmToken(Token::LessEqual);
-                else if (_currentChar == '(')
-                    return consumeCharAndConfirmToken(Token::LessRndOpen);
+                    return consumeCharAndConfirmToken(Token::LessLessLess);
+                else if (_currentChar == '-')
+                    return consumeCharAndConfirmToken(Token::LessLessDash);
                 else
-                    return confirmToken(Token::Less);
-            case '(':
+                    return confirmToken(Token::LessLess);
+            }
+            else if (_currentChar == '=')
+                return consumeCharAndConfirmToken(Token::LessEqual);
+            else if (_currentChar == '(')
+                return consumeCharAndConfirmToken(Token::LessRndOpen);
+            else
+                return confirmToken(Token::Less);
+        case '(':
+            nextChar();
+            if (_currentChar == '(')
+                return consumeCharAndConfirmToken(Token::DblRndOpen);
+            return confirmToken(Token::RndOpen);
+        case ')':
+            nextChar();
+            if (_currentChar == ')')
+                return consumeCharAndConfirmToken(Token::DblRndClose);
+            return confirmToken(Token::RndClose);
+        case '\\': return consumeCharAndConfirmToken(Token::Backslash);
+        case '!': return consumeCharAndConfirmToken(Token::Not);
+        case '`': return consumeCharAndConfirmToken(Token::Backtick);
+        case '~': return consumeTilde();
+        case '$':
+            nextChar();
+            if (_currentChar == '(')
+            {
                 nextChar();
                 if (_currentChar == '(')
-                    return consumeCharAndConfirmToken(Token::DblRndOpen);
-                return confirmToken(Token::RndOpen);
-            case ')':
-                nextChar();
-                if (_currentChar == ')')
-                    return consumeCharAndConfirmToken(Token::DblRndClose);
-                return confirmToken(Token::RndClose);
-            case '\\': return consumeCharAndConfirmToken(Token::Backslash);
-            case '!': return consumeCharAndConfirmToken(Token::Not);
-            case '`': return consumeCharAndConfirmToken(Token::Backtick);
-            case '~': return consumeTilde();
-            case '$':
-                nextChar();
-                if (_currentChar == '(')
-                {
-                    nextChar();
-                    if (_currentChar == '(')
-                        return consumeCharAndConfirmToken(Token::DollarDblRndOpen);
-                    return confirmToken(Token::DollarRndOpen);
-                }
-                else if (_currentChar == '$')
-                    return consumeCharAndConfirmToken(Token::DollarDollar);
-                else if (_currentChar == '!')
-                    return consumeCharAndConfirmToken(Token::DollarNot);
-                else if (_currentChar == '?')
-                    return consumeCharAndConfirmToken(Token::DollarQuestion);
-                else if (_currentChar == '{')
-                    return consumeBracedVariable();
-                else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
-                    return consumeIdentifier(Token::DollarName);
-                else if (_currentChar == '_')
-                    return consumeIdentifier(Token::DollarName);
-                else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
-                {
-                    _nextToken.literal += static_cast<char>(_currentChar);
-                    return consumeCharAndConfirmToken(Token::DollarNumber);
-                }
-                else
-                    return confirmToken(Token::Invalid);
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9': return consumeNumber();
-            case '"':
-            case '\'': return consumeString();
-            default: return consumeIdentifier();
-        }
-        return confirmToken(Token::Invalid);
-        // crispy::unreachable();
-    }
-
-    [[nodiscard]] Token currentToken() const noexcept { return _currentToken.token; }
-
-    [[nodiscard]] std::string const& currentLiteral() const noexcept { return _currentToken.literal; }
-
-    [[nodiscard]] SourceLocationRange currentRange() const noexcept { return _currentRange; }
-
-    [[nodiscard]] bool isDirective(std::string_view name) const noexcept
-    {
-        return currentToken() == Token::Identifier && currentLiteral() == name;
-    }
-
-    static std::vector<TokenInfo> tokenize(std::unique_ptr<Source> source)
-    {
-        auto tokens = std::vector<TokenInfo> {};
-        auto lexer = Lexer { std::move(source) };
-
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.emplace_back(
-                TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
-            lexer.nextToken();
-        }
-
-        return tokens;
-    }
-
-  private:
-    [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
-
-    [[nodiscard]] char32_t currentChar() const noexcept { return _currentChar; }
-
-    void consumeWhitespace()
-    {
-        _nextToken.literal = {};
-
-        while (_currentChar == U' ' || _currentChar == U'\t')
-            nextChar();
-
-        auto const [line, column, name] = _source->currentSourceLocation();
-        _nextToken.location.name = name;
-        _nextToken.location.begin = { .line = line, .column = column };
-        _nextToken.location.end = _nextToken.location.begin;
-    }
-
-    Token consumeNumber()
-    {
-        while (_currentChar >= U'0' && _currentChar <= U'9')
-        {
-            _nextToken.literal += unicode::to_utf8(_currentChar);
-            nextChar();
-        }
-
-        return confirmToken(Token::Number);
-    }
-
-    Token consumeIdentifier() { return consumeIdentifier(Token::Identifier); }
-
-    Token consumeIdentifier(Token token)
-    {
-        // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single
-        // tokens Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single
-        // tokens
-        auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
-
-        while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
-        {
-            _nextToken.literal += unicode::to_utf8(_currentChar);
-            nextChar();
-        }
-        return confirmToken(token);
-    }
-
-    Token consumeString()
-    {
-        auto const quote = _currentChar;
-        nextChar();
-        while (_currentChar != quote)
-        {
-            if (_currentChar == '\\')
-                nextChar();
-            _nextToken.literal += unicode::to_utf8(_currentChar);
-            nextChar();
-        }
-        nextChar();
-        return confirmToken(Token::String);
-    }
-
-    /// Consumes a braced variable: ${NAME} or parameter expansion ${NAME:-default}, ${#NAME}, etc.
-    Token consumeBracedVariable()
-    {
-        nextChar(); // consume '{'
-
-        // Handle ${#VAR} (length) - starts with #
-        if (_currentChar == '#')
-        {
-            _nextToken.literal += '#';
-            nextChar();
-            // Fall through to consume the variable name and any trailing content
-        }
-
-        // Handle special variables within braces: ${?}, ${!}, etc.
-        if (_currentChar == '?')
-        {
-            nextChar();
-            if (_currentChar == '}')
-            {
-                nextChar();
-                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
-                {
-                    // ${#?} - length of $? (unusual but valid)
-                    return confirmToken(Token::DollarBraceParam);
-                }
-                return confirmToken(Token::DollarQuestion);
+                    return consumeCharAndConfirmToken(Token::DollarDblRndOpen);
+                return confirmToken(Token::DollarRndOpen);
             }
-            return confirmToken(Token::Invalid);
-        }
-        else if (_currentChar == '!')
-        {
-            nextChar();
-            if (_currentChar == '}')
+            else if (_currentChar == '$')
+                return consumeCharAndConfirmToken(Token::DollarDollar);
+            else if (_currentChar == '!')
+                return consumeCharAndConfirmToken(Token::DollarNot);
+            else if (_currentChar == '?')
+                return consumeCharAndConfirmToken(Token::DollarQuestion);
+            else if (_currentChar == '{')
+                return consumeBracedVariable();
+            else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+                return consumeIdentifier(Token::DollarName);
+            else if (_currentChar == '_')
+                return consumeIdentifier(Token::DollarName);
+            else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
             {
-                nextChar();
-                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
-                {
-                    // ${#!} - length of $!
-                    return confirmToken(Token::DollarBraceParam);
-                }
-                return confirmToken(Token::DollarNot);
+                _nextToken.literal += static_cast<char>(_currentChar);
+                return consumeCharAndConfirmToken(Token::DollarNumber);
             }
-            return confirmToken(Token::Invalid);
-        }
-        else if (_currentChar == '$')
-        {
-            nextChar();
-            if (_currentChar == '}')
-            {
-                nextChar();
-                if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
-                {
-                    // ${#$} - length of $$
-                    return confirmToken(Token::DollarBraceParam);
-                }
-                return confirmToken(Token::DollarDollar);
-            }
-            return confirmToken(Token::Invalid);
-        }
-        else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
-        {
-            _nextToken.literal += static_cast<char>(_currentChar);
-            nextChar();
-            if (_currentChar == '}')
-            {
-                nextChar();
-                if (_nextToken.literal.size() > 1 && _nextToken.literal[0] == '#')
-                {
-                    // ${#0} - length of $0
-                    return confirmToken(Token::DollarBraceParam);
-                }
-                return confirmToken(Token::DollarNumber);
-            }
-            // Fall through - might have more content like ${1:-default}
-        }
-
-        // Consume the variable name if we haven't started yet
-        if (_nextToken.literal.empty() || (_nextToken.literal.size() == 1 && _nextToken.literal[0] == '#'))
-        {
-            // Regular variable name: must start with alpha or underscore
-            if (!(_currentChar < 0x80
-                  && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
-            {
-                if (_nextToken.literal.empty())
-                    return confirmToken(Token::Invalid);
-                // Had # but no valid variable name - still invalid
+            else
                 return confirmToken(Token::Invalid);
-            }
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9': return consumeNumber();
+        case '"':
+        case '\'': return consumeString();
+        default: return consumeIdentifier();
+    }
+    return confirmToken(Token::Invalid);
+}
 
-            // Consume the variable name
-            while (_currentChar < 0x80
-                   && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
-            {
-                _nextToken.literal += unicode::to_utf8(_currentChar);
-                nextChar();
-            }
-        }
+std::vector<TokenInfo> Lexer::tokenize(std::unique_ptr<Source> source)
+{
+    auto tokens = std::vector<TokenInfo> {};
+    auto lexer = Lexer { std::move(source) };
 
-        // Check for closing brace or parameter expansion operator
+    while (lexer.currentToken() != Token::EndOfInput)
+    {
+        tokens.emplace_back(TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
+        lexer.nextToken();
+    }
+
+    return tokens;
+}
+
+void Lexer::consumeWhitespace()
+{
+    _nextToken.literal = {};
+
+    while (_currentChar == U' ' || _currentChar == U'\t')
+        nextChar();
+
+    auto const [line, column, name] = _source->currentSourceLocation();
+    _nextToken.location.name = name;
+    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.end = _nextToken.location.begin;
+}
+
+Token Lexer::consumeNumber()
+{
+    while (_currentChar >= U'0' && _currentChar <= U'9')
+    {
+        _nextToken.literal += unicode::to_utf8(_currentChar);
+        nextChar();
+    }
+
+    return confirmToken(Token::Number);
+}
+
+Token Lexer::consumeIdentifier()
+{
+    return consumeIdentifier(Token::Identifier);
+}
+
+Token Lexer::consumeIdentifier(Token token)
+{
+    // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single
+    // tokens Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single
+    // tokens
+    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
+
+    while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
+    {
+        _nextToken.literal += unicode::to_utf8(_currentChar);
+        nextChar();
+    }
+    return confirmToken(token);
+}
+
+Token Lexer::consumeString()
+{
+    auto const quote = _currentChar;
+    nextChar();
+    while (_currentChar != quote)
+    {
+        if (_currentChar == '\\')
+            nextChar();
+        _nextToken.literal += unicode::to_utf8(_currentChar);
+        nextChar();
+    }
+    nextChar();
+    return confirmToken(Token::String);
+}
+
+Token Lexer::consumeBracedVariable()
+{
+    nextChar(); // consume '{'
+
+    // Handle ${#VAR} (length) - starts with #
+    if (_currentChar == '#')
+    {
+        _nextToken.literal += '#';
+        nextChar();
+        // Fall through to consume the variable name and any trailing content
+    }
+
+    // Handle special variables within braces: ${?}, ${!}, etc.
+    if (_currentChar == '?')
+    {
+        nextChar();
         if (_currentChar == '}')
         {
-            nextChar(); // consume '}'
-            // Check if we have a # prefix (length operator)
+            nextChar();
             if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
-                return confirmToken(Token::DollarBraceParam);
-            return confirmToken(Token::DollarBraceName);
-        }
-
-        // Parameter expansion operator detected - consume everything until closing brace
-        // Operators: :-, :+, :=, :?, #, ##, %, %%, /, //
-        // We store the full content in literal for the parser to handle
-        int braceDepth = 1;
-        while (!eof() && braceDepth > 0)
-        {
-            if (_currentChar == '{')
-                ++braceDepth;
-            else if (_currentChar == '}')
-                --braceDepth;
-
-            if (braceDepth > 0)
             {
-                _nextToken.literal += unicode::to_utf8(_currentChar);
-                nextChar();
+                // ${#?} - length of $? (unusual but valid)
+                return confirmToken(Token::DollarBraceParam);
             }
+            return confirmToken(Token::DollarQuestion);
         }
-
-        if (braceDepth != 0)
-            return confirmToken(Token::Invalid);
-
-        nextChar(); // consume final '}'
-        return confirmToken(Token::DollarBraceParam);
+        return confirmToken(Token::Invalid);
+    }
+    else if (_currentChar == '!')
+    {
+        nextChar();
+        if (_currentChar == '}')
+        {
+            nextChar();
+            if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+            {
+                // ${#!} - length of $!
+                return confirmToken(Token::DollarBraceParam);
+            }
+            return confirmToken(Token::DollarNot);
+        }
+        return confirmToken(Token::Invalid);
+    }
+    else if (_currentChar == '$')
+    {
+        nextChar();
+        if (_currentChar == '}')
+        {
+            nextChar();
+            if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+            {
+                // ${#$} - length of $$
+                return confirmToken(Token::DollarBraceParam);
+            }
+            return confirmToken(Token::DollarDollar);
+        }
+        return confirmToken(Token::Invalid);
+    }
+    else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
+    {
+        _nextToken.literal += static_cast<char>(_currentChar);
+        nextChar();
+        if (_currentChar == '}')
+        {
+            nextChar();
+            if (_nextToken.literal.size() > 1 && _nextToken.literal[0] == '#')
+            {
+                // ${#0} - length of $0
+                return confirmToken(Token::DollarBraceParam);
+            }
+            return confirmToken(Token::DollarNumber);
+        }
+        // Fall through - might have more content like ${1:-default}
     }
 
-    /// Consumes a tilde token: ~, ~username, or ~/path
-    /// Returns Tilde token with optional username in the literal field
-    /// The suffix (path after ~/ or ~user/) is NOT consumed - it becomes a separate token
-    Token consumeTilde()
+    // Consume the variable name if we haven't started yet
+    if (_nextToken.literal.empty() || (_nextToken.literal.size() == 1 && _nextToken.literal[0] == '#'))
     {
-        nextChar(); // consume '~'
-
-        // Check if followed by a path separator or whitespace (standalone ~)
-        // or followed by alphanumeric/underscore (username)
-        if (_currentChar == ' ' || _currentChar == '\t' || _currentChar == '\n' || _currentChar == '\r'
-            || eof() || _currentChar == ';' || _currentChar == '|' || _currentChar == '&'
-            || _currentChar == '>' || _currentChar == '<' || _currentChar == ')' || _currentChar == '"'
-            || _currentChar == '\'')
+        // Regular variable name: must start with alpha or underscore
+        if (!(_currentChar < 0x80
+              && (std::isalpha(static_cast<char>(_currentChar)) || _currentChar == '_')))
         {
-            // Standalone ~ - no username
-            return confirmToken(Token::Tilde);
+            if (_nextToken.literal.empty())
+                return confirmToken(Token::Invalid);
+            // Had # but no valid variable name - still invalid
+            return confirmToken(Token::Invalid);
         }
 
-        // If it starts with /, this is ~/path - return as identifier to be handled specially
-        // The tilde is recorded but the rest becomes part of the identifier
-        if (_currentChar == '/')
-        {
-            // Put a marker in the literal to indicate this was a tilde expansion
-            // The entire ~/path will be treated as one token
-            _nextToken.literal = "~";
-            while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
-                   && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
-                   && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
-                   && _currentChar != '"' && _currentChar != '\'')
-            {
-                _nextToken.literal += unicode::to_utf8(_currentChar);
-                nextChar();
-            }
-            return confirmToken(Token::Tilde);
-        }
-
-        // Consume username: alphanumeric, underscore, dash
-        while (
-            _currentChar < 0x80
-            && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_' || _currentChar == '-'))
+        // Consume the variable name
+        while (_currentChar < 0x80
+               && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_'))
         {
             _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
         }
+    }
 
-        // If followed by /, consume the path too
-        if (_currentChar == '/')
+    // Check for closing brace or parameter expansion operator
+    if (_currentChar == '}')
+    {
+        nextChar(); // consume '}'
+        // Check if we have a # prefix (length operator)
+        if (!_nextToken.literal.empty() && _nextToken.literal[0] == '#')
+            return confirmToken(Token::DollarBraceParam);
+        return confirmToken(Token::DollarBraceName);
+    }
+
+    // Parameter expansion operator detected - consume everything until closing brace
+    // Operators: :-, :+, :=, :?, #, ##, %, %%, /, //
+    // We store the full content in literal for the parser to handle
+    int braceDepth = 1;
+    while (!eof() && braceDepth > 0)
+    {
+        if (_currentChar == '{')
+            ++braceDepth;
+        else if (_currentChar == '}')
+            --braceDepth;
+
+        if (braceDepth > 0)
         {
-            std::string const username = _nextToken.literal;
-            _nextToken.literal.clear();
-            _nextToken.literal = username;
-            while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
-                   && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
-                   && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
-                   && _currentChar != '"' && _currentChar != '\'')
-            {
-                _nextToken.literal += unicode::to_utf8(_currentChar);
-                nextChar();
-            }
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar();
         }
+    }
 
+    if (braceDepth != 0)
+        return confirmToken(Token::Invalid);
+
+    nextChar(); // consume final '}'
+    return confirmToken(Token::DollarBraceParam);
+}
+
+Token Lexer::consumeTilde()
+{
+    nextChar(); // consume '~'
+
+    // Check if followed by a path separator or whitespace (standalone ~)
+    // or followed by alphanumeric/underscore (username)
+    if (_currentChar == ' ' || _currentChar == '\t' || _currentChar == '\n' || _currentChar == '\r'
+        || eof() || _currentChar == ';' || _currentChar == '|' || _currentChar == '&'
+        || _currentChar == '>' || _currentChar == '<' || _currentChar == ')' || _currentChar == '"'
+        || _currentChar == '\'')
+    {
+        // Standalone ~ - no username
         return confirmToken(Token::Tilde);
     }
 
-    char32_t nextChar()
+    // If it starts with /, this is ~/path - return as identifier to be handled specially
+    // The tilde is recorded but the rest becomes part of the identifier
+    if (_currentChar == '/')
     {
-        _currentChar = _source->readChar();
-        // lexerLog()("Lexer.nextChar: '{}'\n", (char) _currentChar);
-        return _currentChar;
-    }
-
-    Token consumeCharAndConfirmToken(Token token)
-    {
-        nextChar();
-        return confirmToken(token);
-    }
-
-    Token confirmToken(Token token)
-    {
-        _nextToken.token = token;
-        _nextToken.literal = _nextToken.literal;
-        auto const [a, b, _] = _source->currentSourceLocation();
-        _nextToken.location.end = { .line = a, .column = b };
-        _currentToken = _nextToken;
-
-        _nextToken.literal = {};
-        _nextToken.location.name = _source->currentSourceLocation().name;
-        _nextToken.location.begin = _nextToken.location.end;
-
-        return token;
-    }
-
-    std::unique_ptr<Source> _source;
-    char32_t _currentChar = 0;
-    TokenInfo _currentToken = TokenInfo {};
-    TokenInfo _nextToken = TokenInfo {};
-    SourceLocationRange _currentRange {};
-};
-} // namespace endo
-
-template <>
-struct std::formatter<endo::LineColumn>: std::formatter<std::string>
-{
-    auto format(const endo::LineColumn lineColumn, format_context& ctx) const -> format_context::iterator
-    {
-        return formatter<std::string>::format(std::format("{}:{}", lineColumn.line, lineColumn.column), ctx);
-    }
-};
-
-template <>
-struct std::formatter<endo::SourceLocation>: std::formatter<std::string>
-{
-    auto format(const endo::SourceLocation location, format_context& ctx) const -> format_context::iterator
-    {
-        return formatter<std::string>::format(
-            std::format("{}:{}:{}", location.name, location.line, location.column), ctx);
-    }
-};
-
-template <>
-struct std::formatter<endo::SourceLocationRange>: std::formatter<std::string>
-{
-    auto format(const endo::SourceLocationRange range, format_context& ctx) const -> format_context::iterator
-    {
-        return formatter<std::string>::format(std::format("{}({} - {})", range.name, range.begin, range.end),
-                                              ctx);
-    }
-};
-
-template <>
-struct std::formatter<endo::Token>: std::formatter<std::string_view>
-{
-    auto format(const endo::Token token, format_context& ctx) const -> format_context::iterator
-    {
-        std::string_view name;
-        using enum endo::Token;
-        switch (token)
+        // Put a marker in the literal to indicate this was a tilde expansion
+        // The entire ~/path will be treated as one token
+        _nextToken.literal = "~";
+        while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
+               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
+               && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
+               && _currentChar != '"' && _currentChar != '\'')
         {
-            case AmpNumber: name = "AmpNumber"; break;
-            case Backslash: name = "\\"; break;
-            case DollarDollar: name = "$$"; break;
-            case DollarName: name = "DollarName"; break;
-            case DollarNot: name = "$!"; break;
-            case DollarQuestion: name = "$?"; break;
-            case DollarNumber: name = "DollarNumber"; break;
-            case DollarBraceName: name = "DollarBraceName"; break;
-            case EndOfInput: name = "EndOfInput"; break;
-            case Equal: name = "="; break;
-            case Greater: name = ">"; break;
-            case GreaterEqual: name = ">="; break;
-            case GreaterGreater: name = ">>"; break;
-            case GreaterAmp: name = ">&"; break;
-            case Identifier: name = "Identifier"; break;
-            case Invalid: name = "Invalid"; break;
-            case Less: name = "<"; break;
-            case LessEqual: name = "<="; break;
-            case LessLess: name = "<<"; break;
-            case LessLessDash: name = "<<-"; break;
-            case LessLessLess: name = "<<<"; break;
-            case LessRndOpen: name = "<("; break;
-            case LineFeed: name = "LineFeed"; break;
-            case Not: name = "!"; break;
-            case Number: name = "Number"; break;
-            case Pipe: name = "|"; break;
-            case RndClose: name = ")"; break;
-            case RndOpen: name = "("; break;
-            case Semicolon: name = ";"; break;
-            case String: name = "String"; break;
-            case AmpAmp: name = "&&"; break;
-            case PipePipe: name = "||"; break;
-            case DollarRndOpen: name = "$("; break;
-            case DollarDblRndOpen: name = "$(("; break;
-            case DblRndClose: name = "))"; break;
-            case DblRndOpen: name = "(("; break;
-            case DblSemicolon: name = ";;"; break;
-            case GreaterRndOpen: name = ">("; break;
-            case Backtick: name = "`"; break;
-            case Tilde: name = "~"; break;
-            case DollarBraceParam: name = "DollarBraceParam"; break;
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar();
         }
-        return formatter<std::string_view>::format(name, ctx);
+        return confirmToken(Token::Tilde);
     }
-};
 
-template <>
-struct std::formatter<endo::TokenInfo>
+    // Consume username: alphanumeric, underscore, dash
+    while (
+        _currentChar < 0x80
+        && (std::isalnum(static_cast<char>(_currentChar)) || _currentChar == '_' || _currentChar == '-'))
+    {
+        _nextToken.literal += unicode::to_utf8(_currentChar);
+        nextChar();
+    }
+
+    // If followed by /, consume the path too
+    if (_currentChar == '/')
+    {
+        std::string const username = _nextToken.literal;
+        _nextToken.literal.clear();
+        _nextToken.literal = username;
+        while (!eof() && _currentChar != ' ' && _currentChar != '\t' && _currentChar != '\n'
+               && _currentChar != '\r' && _currentChar != ';' && _currentChar != '|'
+               && _currentChar != '&' && _currentChar != '>' && _currentChar != '<' && _currentChar != ')'
+               && _currentChar != '"' && _currentChar != '\'')
+        {
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar();
+        }
+    }
+
+    return confirmToken(Token::Tilde);
+}
+
+char32_t Lexer::nextChar()
 {
-    static constexpr auto parse(format_parse_context& ctx) -> format_parse_context::iterator
-    {
-        return ctx.begin();
-    }
+    _currentChar = _source->readChar();
+    return _currentChar;
+}
 
-    auto format(endo::TokenInfo const& info, format_context& ctx) const -> format_context::iterator
-    {
-        return std::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);
-    }
-};
+Token Lexer::consumeCharAndConfirmToken(Token token)
+{
+    nextChar();
+    return confirmToken(token);
+}
+
+Token Lexer::confirmToken(Token token)
+{
+    _nextToken.token = token;
+    _nextToken.literal = _nextToken.literal;
+    auto const [a, b, _] = _source->currentSourceLocation();
+    _nextToken.location.end = { .line = a, .column = b };
+    _currentToken = _nextToken;
+
+    _nextToken.literal = {};
+    _nextToken.location.name = _source->currentSourceLocation().name;
+    _nextToken.location.begin = _nextToken.location.end;
+
+    return token;
+}
+
+} // namespace endo

@@ -9,10 +9,9 @@
 #include <unistd.h>
 
 #include "LogConfig.hpp"
+#include "Shell.hpp"
 
 using namespace std::string_view_literals;
-
-import Shell;
 
 namespace
 {

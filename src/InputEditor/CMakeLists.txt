@@ -4,9 +4,6 @@ add_library(InputEditor STATIC)
 target_sources(InputEditor
     PRIVATE
         InputEditor.cpp
-    PUBLIC
-      FILE_SET CXX_MODULES FILES
-        InputEditor.cppm
     )
 
 target_link_libraries(InputEditor PUBLIC vtparser crispy::core boxed-cpp)

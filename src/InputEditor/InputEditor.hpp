@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-
-module;
+#pragma once
 
 #include <compare>
 #include <string>
@@ -9,13 +8,11 @@ module;
 #include <boxed-cpp/boxed.hpp>
 #include <libunicode/scan.h>
 
-export module input_editor;
-
-export namespace InputEditor
+namespace InputEditor
 {
 
 // clang-format off
-namespace detail 
+namespace detail
 {
     struct LineOffset {};
     struct ColumnOffset {};

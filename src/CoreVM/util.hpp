@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#pragma once
 
 #include <cstdint>
 #include <cstdio>
@@ -8,9 +8,11 @@ module;
 #include <format>
 #include <functional> // hash<>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <regex>
 #include <string>
+#include <unordered_map>
 
 #if defined(_WIN32) || defined(_WIN64)
     #include <winsock2.h>
@@ -20,12 +22,7 @@ module;
     #include <netinet/in.h> // in_addr, in6_addr
 #endif
 
-#include <memory>
-#include <unordered_map>
-
-export module CoreVM.util;
-
-export namespace CoreVM::util
+namespace CoreVM::util
 {
 
 template <typename T>
@@ -659,39 +656,36 @@ class RegExpContext
 
 } // namespace CoreVM::util
 
-export {
+namespace std
+{
+template <>
+struct hash<::CoreVM::util::IPAddress>
+{
+    size_t operator()(const ::CoreVM::util::IPAddress& v) const { return *(uint32_t*) (v.data()); }
+};
+} // namespace std
 
-    namespace std
+template <>
+struct std::formatter<CoreVM::util::IPAddress>: formatter<std::string>
+{
+    using IPAddress = CoreVM::util::IPAddress;
+
+    auto format(IPAddress const& v, format_context& ctx) const -> format_context::iterator
     {
-        template <>
-        struct hash<::CoreVM::util::IPAddress>
-        {
-            size_t operator()(const ::CoreVM::util::IPAddress& v) const { return *(uint32_t*) (v.data()); }
-        };
-    } // namespace std
+        return formatter<std::string>::format(v.str(), ctx);
+    }
+};
 
-    template <>
-    struct std::formatter<CoreVM::util::IPAddress>: formatter<std::string>
+template <>
+struct std::formatter<std::optional<CoreVM::util::IPAddress>>: formatter<std::string>
+{
+    using IPAddress = CoreVM::util::IPAddress;
+
+    auto format(std::optional<IPAddress> const& v, format_context& ctx) const -> format_context::iterator
     {
-        using IPAddress = CoreVM::util::IPAddress;
-
-        auto format(IPAddress const& v, format_context& ctx) const -> format_context::iterator
-        {
-            return formatter<std::string>::format(v.str(), ctx);
-        }
-    };
-
-    template <>
-    struct std::formatter<std::optional<CoreVM::util::IPAddress>>: formatter<std::string>
-    {
-        using IPAddress = CoreVM::util::IPAddress;
-
-        auto format(std::optional<IPAddress> const& v, format_context& ctx) const -> format_context::iterator
-        {
-            if (v)
-                return formatter<std::string>::format(v->str(), ctx);
-            else
-                return formatter<std::string>::format("NONE", ctx);
-        }
-    };
-}
+        if (v)
+            return formatter<std::string>::format(v->str(), ctx);
+        else
+            return formatter<std::string>::format("NONE", ctx);
+    }
+};

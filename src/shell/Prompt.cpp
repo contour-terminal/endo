@@ -1,64 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
-#include <iostream>
-#include <string>
-#include <vector>
+#include "Prompt.hpp"
 
-export module Prompt;
-
-struct GridCell
+namespace endo
 {
-    std::u32string graphemeCluster;
-    int width = 0; // either 0, 1, or 2 (number of columns)
 
-    [[nodiscard]] std::string toUtf8() const;
-};
-
-struct GridLine
+Prompt::Prompt(): _input(std::cin)
 {
-    std::vector<GridCell> columns;
+}
 
-    [[nodiscard]] std::string toUtf8() const;
-
-    [[nodiscard]] GridCell& cellAt(size_t index);
-    [[nodiscard]] GridCell const& cellAt(size_t index) const;
-};
-
-struct Grid
+bool Prompt::ready() const
 {
-    std::vector<GridLine> lines;
+    return _input.good();
+}
 
-    [[nodiscard]] GridLine& lineAt(size_t index);
-    [[nodiscard]] GridLine const& lineAt(size_t index) const;
-};
-
-export class Prompt
+std::string Prompt::read()
 {
-  public:
-    Prompt(): _input(std::cin) {}
-
-    [[nodiscard]] bool ready() const { return _input.good(); }
-
-    std::string read()
+    while (ready() && !_complete)
     {
-        while (ready() && !_complete)
-        {
-            std::cout << _prompt;
-            std::getline(_input, _buffer);
-            _complete = true; // keep it simple for now
-        }
-
-        auto line = std::move(_buffer);
-        _buffer = {};
-        _complete = false;
-        return line;
+        std::cout << _prompt;
+        std::getline(_input, _buffer);
+        _complete = true; // keep it simple for now
     }
 
-  private:
-    std::istream& _input; // NOLINT
-    std::string _prompt = "> ";
-    std::string _buffer;
-    bool _complete = false;
+    auto line = std::move(_buffer);
+    _buffer = {};
+    _complete = false;
+    return line;
+}
 
-    Grid _grid;
-};
+} // namespace endo

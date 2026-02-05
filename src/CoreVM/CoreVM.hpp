@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#pragma once
+
+#include <CoreVM/enums.hpp>
+#include <CoreVM/util.hpp>
 
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring> // memset()
+#include <deque>
 #include <format>
 #include <functional> // hash<>
 #include <iostream>
@@ -14,6 +18,7 @@ module;
 #include <print>
 #include <regex>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -26,16 +31,12 @@ module;
     #include <netinet/in.h> // in_addr, in6_addr
 #endif
 
-export module CoreVM;
-export import :enums;
-export import CoreVM.util;
-
-export namespace CoreVM::diagnostics
+namespace CoreVM::diagnostics
 {
 class Report;
 }
 
-export namespace CoreVM
+namespace CoreVM
 {
 
 class Instr;
@@ -2776,7 +2777,7 @@ class MatchRegEx: public Match
 
 } // namespace CoreVM
 
-export namespace CoreVM::transform
+namespace CoreVM::transform
 {
 
 /**
@@ -2803,7 +2804,7 @@ bool eliminateUnusedBlocks(IRHandler* handler);
 
 } // namespace CoreVM::transform
 
-export namespace CoreVM::diagnostics
+namespace CoreVM::diagnostics
 {
 
 enum class Type
@@ -2821,8 +2822,8 @@ struct Message
     Type type;
     SourceLocation sourceLocation;
     std::string text;
-    std::vector<std::string> suggestions;          ///< Optional hints for fixing the error
-    std::optional<std::string> contextSnippet;     ///< Source line for display context
+    std::vector<std::string> suggestions;      ///< Optional hints for fixing the error
+    std::optional<std::string> contextSnippet; ///< Source line for display context
 
     /// Constructs a message without suggestions (backward compatible).
     Message(Type ty, SourceLocation sl, std::string t):
@@ -3017,7 +3018,7 @@ class TypeError: public DiagnosticsError
 
 } // namespace CoreVM::diagnostics
 
-export namespace std
+namespace std
 {
 
 template <>

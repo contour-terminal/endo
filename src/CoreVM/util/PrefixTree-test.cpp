@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <CoreVM/util.hpp>
 
-import CoreVM;
 #include <xzero/testing.h>
 
 TEST(PrefixTree, exactMatch)

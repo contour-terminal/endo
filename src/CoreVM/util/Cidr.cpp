@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include <CoreVM/util.hpp>
 
 #include <cstdint>
 #include <cstdio>
@@ -13,8 +13,6 @@ module;
     #include <arpa/inet.h>  // ntohl(), htonl()
     #include <netinet/in.h> // in_addr, in6_addr
 #endif
-
-module CoreVM.util;
 
 namespace CoreVM::util
 {

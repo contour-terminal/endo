@@ -1,37 +1,36 @@
 add_library(Shell STATIC
-    AST.h
-    DiagnosticsAdapter.h
-    DiagnosticsAdapter.cpp
-    Platform.h
-    ProcessGroup.h
-    Suggestions.h
-    Suggestions.cpp
-    Visitor.h
-)
-
-# Platform-agnostic module sources
-set(SHELL_MODULE_SOURCES
-    Lexer.cpp
-    Process.cpp
-    Pipe.cpp
-    TTY.cpp
-    Shell.cpp
-    Prompt.cpp
+    AST.hpp
+    ASTPrinter.hpp
     ASTPrinter.cpp
+    DiagnosticsAdapter.hpp
+    DiagnosticsAdapter.cpp
+    IRGenerator.hpp
     IRGenerator.cpp
+    Lexer.hpp
+    Lexer.cpp
+    Parser.hpp
     Parser.cpp
+    Pipe.hpp
+    Pipe.cpp
+    Platform.hpp
+    Process.hpp
+    Process.cpp
+    ProcessGroup.hpp
+    Prompt.hpp
+    Prompt.cpp
+    Shell.hpp
+    Shell.cpp
+    Suggestions.hpp
+    Suggestions.cpp
+    TTY.hpp
+    TTY.cpp
+    Visitor.hpp
 )
 
 # Platform-specific implementations
 if(WIN32)
-    list(APPEND SHELL_MODULE_SOURCES WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
+    target_sources(Shell PRIVATE WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
 endif()
-
-target_sources(Shell
-  PUBLIC
-    FILE_SET CXX_MODULES FILES
-      ${SHELL_MODULE_SOURCES}
-)
 
 find_package(Threads REQUIRED)
 

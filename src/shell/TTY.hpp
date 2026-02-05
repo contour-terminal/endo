@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <expected>
+#include <format>
+#include <mutex>
+#include <string>
+#include <string_view>
+#include <thread>
+
+#include "Error.hpp"
+#include "Platform.hpp"
+
+#if !defined(_WIN32)
+    #include <sys/ioctl.h>
+
+    #include <termios.h>
+#endif
+
+namespace endo
+{
+
+/// Terminal size in rows and columns.
+struct TerminalSize
+{
+    uint16_t rows = 0; ///< Number of rows
+    uint16_t cols = 0; ///< Number of columns
+};
+
+/// Abstract interface for terminal operations.
+///
+/// This interface abstracts platform-specific terminal operations, enabling
+/// testability and cross-platform support.
+class TTY
+{
+  public:
+    TTY() = default;
+    virtual ~TTY() = default;
+
+    TTY(TTY const&) = delete;
+    TTY& operator=(TTY const&) = delete;
+
+    TTY(TTY&&) = default;
+    TTY& operator=(TTY&&) = default;
+
+    /// Returns the native handle for input.
+    [[nodiscard]] virtual NativeHandle inputFd() const noexcept = 0;
+
+    /// Returns the native handle for output.
+    [[nodiscard]] virtual NativeHandle outputFd() const noexcept = 0;
+
+    /// Checks if this TTY is connected to a real terminal.
+    [[nodiscard]] virtual bool isTerminal() const noexcept = 0;
+
+    /// Gets the terminal size.
+    ///
+    /// @return Terminal size on success, or an error
+    [[nodiscard]] virtual std::expected<TerminalSize, ShellError> getSize() const = 0;
+
+    virtual void setRawMode() = 0;
+    virtual void restoreMode() = 0;
+
+    virtual void writeToStdout(std::string_view str) const = 0;
+
+    template <typename... Args>
+    void writeToStdout(std::format_string<Args...> const& fmt, Args&&... args) const
+    {
+        writeToStdout(std::format(fmt, std::forward<Args>(args)...));
+    }
+
+    virtual void writeToStdin(std::string_view str) const = 0;
+
+    template <typename... Args>
+    void writeToStdin(std::format_string<Args...> const& fmt, Args&&... args) const
+    {
+        writeToStdin(std::format(fmt, std::forward<Args>(args)...));
+    }
+};
+
+#if !defined(_WIN32)
+
+void setRawMode(NativeHandle fd);
+
+/// Safely closes a file descriptor and sets it to InvalidHandle.
+///
+/// @param fd Pointer to the file descriptor to close
+void safeClose(NativeHandle* fd) noexcept;
+
+class RealTTY final: public TTY
+{
+  public:
+    RealTTY();
+    ~RealTTY() override;
+
+    [[nodiscard]] static RealTTY& instance();
+
+    [[nodiscard]] NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] bool isTerminal() const noexcept override;
+    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
+    void setRawMode() override;
+    void restoreMode() override;
+    void writeToStdout(std::string_view str) const override;
+    void writeToStdin(std::string_view str) const override;
+
+  private:
+    termios _originalTermios {};
+};
+
+// This is a TTY implementation that can be used for testing.
+// It uses a PTY to simulate a TTY.
+// The output of the TTY is stored in a buffer that can be inspected.
+class TestPTY final: public TTY
+{
+  public:
+    TestPTY();
+    ~TestPTY() override;
+
+    [[nodiscard]] NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] bool isTerminal() const noexcept override;
+    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
+    void setRawMode() override;
+    void restoreMode() override;
+    void writeToStdout(std::string_view str) const override;
+    void writeToStdin(std::string_view str) const override;
+
+    // Returns the output that was written to the TTY.
+    [[nodiscard]] std::string_view output() const noexcept;
+
+  private:
+    void outputUpdateLoop();
+
+    std::string _output;
+    std::thread _updateThread;
+    mutable std::mutex _outputMutex;
+
+    NativeHandle _ptyMaster = InvalidHandle;
+    NativeHandle _ptySlave = InvalidHandle;
+    termios _baseTermios {};
+    struct winsize _windowSize;
+
+    bool _closed = false;
+};
+#endif // !_WIN32
+
+} // namespace endo

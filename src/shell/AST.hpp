@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "Lexer.hpp"
+
 #include <shell/Visitor.hpp>
+
+#include <CoreVM/CoreVM.hpp>
 
 #include <filesystem>
 #include <memory>
@@ -10,9 +14,6 @@
 #include <utility>
 #include <variant>
 #include <vector>
-
-import CoreVM;
-import Lexer;
 
 namespace endo::ast
 {

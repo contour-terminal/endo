@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+namespace endo
+{
 
 struct GridCell
 {
@@ -43,3 +51,5 @@ class Prompt
 
     Grid _grid;
 };
+
+} // namespace endo

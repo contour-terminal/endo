@@ -40,11 +40,6 @@ target_sources(CoreVM
     vm/Program.cpp
     vm/Runner.cpp
     vm/Runtime.cpp
-    PUBLIC
-      FILE_SET CXX_MODULES FILES
-        CoreVM.cppm
-        util.cppm
-        enums.cppm
   )
 
 target_compile_definitions(CoreVM PUBLIC

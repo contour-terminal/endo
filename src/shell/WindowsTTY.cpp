@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include "TTY.hpp"
 
 #include <cstring>
 #include <expected>
@@ -14,8 +14,6 @@ module;
     #include <windows.h>
 #endif
 
-module TTY;
-
 namespace endo
 {
 
@@ -24,7 +22,7 @@ namespace endo
 /// Windows implementation of the TTY interface using ConPTY.
 ///
 /// This is a stub implementation that will be completed when Windows support is needed.
-export class WindowsTTY final: public TTY
+class WindowsTTY final: public TTY
 {
   public:
     WindowsTTY()

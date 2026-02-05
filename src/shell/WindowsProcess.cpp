@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include "Process.hpp"
 
 #include <expected>
 #include <filesystem>
@@ -14,8 +14,6 @@ module;
     #include <windows.h>
 #endif
 
-module Process;
-
 namespace endo
 {
 
@@ -24,7 +22,7 @@ namespace endo
 /// Windows implementation of ProcessManager.
 ///
 /// This is a stub implementation that will be completed when Windows support is needed.
-export class WindowsProcessManager final: public ProcessManager
+class WindowsProcessManager final: public ProcessManager
 {
   public:
     /// Returns the singleton instance of WindowsProcessManager.

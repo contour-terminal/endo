@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include <CoreVM/CoreVM.hpp>
+#include <CoreVM/util.hpp>
 
 #include <climits>
 #include <cstdio>
@@ -10,9 +11,6 @@ module;
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-module CoreVM;
-import CoreVM.util;
 namespace CoreVM
 {
 

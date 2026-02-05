@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include "Lexer.hpp"
+
 #include <span>
 #include <string>
 #include <string_view>
 #include <vector>
-
-import Lexer;
 
 namespace endo
 {

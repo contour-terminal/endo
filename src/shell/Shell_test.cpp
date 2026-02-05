@@ -11,8 +11,9 @@ using namespace std::string_literals;
 using namespace std::string_view_literals;
 
 using crispy::escape;
-import Shell;
-import TTY;
+
+#include "Shell.hpp"
+#include "TTY.hpp"
 
 namespace
 {

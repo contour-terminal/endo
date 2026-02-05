@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include <CoreVM/CoreVM.hpp>
+#include <CoreVM/util.hpp>
+
 #include <CoreVM/sysconfig.h>
 #include <CoreVM/util/strings.hpp>
 #include <CoreVM/util/assert.hpp>
@@ -12,9 +14,6 @@ module;
 #include <memory>
 #include <utility>
 #include <vector>
-
-module CoreVM;
-import CoreVM.util;
 // XXX Visual Studio doesn't support computed goto statements
 #if defined(_MSC_VER)
     #define COREVM_VM_LOOP_SWITCH 1

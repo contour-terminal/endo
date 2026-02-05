@@ -1,9 +1,10 @@
-module;
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
 #include <cstdint>
 #include <string>
-export module CoreVM:enums;
 
-export namespace CoreVM
+namespace CoreVM
 {
 
 enum Opcode : uint16_t

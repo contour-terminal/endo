@@ -10,8 +10,9 @@
 #include <ranges>
 #include <string_view>
 
-import CoreVM;
-import Lexer;
+#include <CoreVM/CoreVM.hpp>
+
+#include "Lexer.hpp"
 
 using namespace std::string_view_literals;
 

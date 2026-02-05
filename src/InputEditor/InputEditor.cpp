@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-
-module input_editor;
+#include <InputEditor/InputEditor.hpp>
 
 namespace InputEditor
 {

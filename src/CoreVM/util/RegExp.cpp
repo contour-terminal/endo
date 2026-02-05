@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include <CoreVM/util.hpp>
 
 #include <cstring>
 #include <regex>
-
-module CoreVM.util;
 namespace CoreVM::util
 {
 

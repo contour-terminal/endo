@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-module;
+#include "Pipe.hpp"
 
 #include <expected>
 #include <memory>
@@ -10,8 +10,6 @@ module;
 #if defined(_WIN32)
     #include <windows.h>
 #endif
-
-module Pipe;
 
 namespace endo
 {

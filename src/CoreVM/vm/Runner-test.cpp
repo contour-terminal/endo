@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <xzero/testing.h>
+#include <CoreVM/CoreVM.hpp>
 
-import CoreVM;
+#include <xzero/testing.h>
 using namespace xzero;
 using namespace CoreVM;
 using Code = ConstantPool::Code;
