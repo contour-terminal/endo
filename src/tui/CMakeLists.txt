@@ -28,3 +28,12 @@ target_compile_features(tui PUBLIC cxx_std_23)
 
 set_pedantic_compiler_warnings(tui)
 enable_sanitizers(tui)
+
+# Tests
+add_executable(test-tui
+    test_main.cpp
+    InputField_test.cpp
+)
+target_link_libraries(test-tui tui Catch2::Catch2)
+add_test(NAME test-tui COMMAND test-tui)
+enable_sanitizers(test-tui)
