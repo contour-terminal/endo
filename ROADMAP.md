@@ -257,7 +257,8 @@ Windows support.
 - [ ] Implement text selection model
 - [ ] Implement undo/redo history
 - [ ] Implement clipboard integration (OSC 52)
-- [ ] Add editor unit tests
+- [ ] Implement Shift-key based text selection that can be clipboard-copied with Ctrl+C, or deleted Backspace/Delete.
+- [ ] Add or improve editor unit tests
 
 ### Phase 2.2: Mouse Integration
 
