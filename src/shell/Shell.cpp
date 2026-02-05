@@ -234,20 +234,24 @@ export class Shell final: public CoreVM::Runtime
             CoreVM::diagnostics::ConsoleReport report;
             auto parser = endo::Parser(*this, report, std::make_unique<endo::StringSource>(lineBuffer));
             auto const rootNode = parser.parse();
-            if (!rootNode)
-            {
-                error("Failed to parse input");
+
+            // Check for parser errors
+            if (report.containsFailures())
                 return EXIT_FAILURE;
-            }
+
+            if (!rootNode)
+                return EXIT_FAILURE;
 
             debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-            CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode);
-            if (irProgram == nullptr)
-            {
-                error("Failed to generate IR program");
+            CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode, report);
+
+            // Check for IR generation errors
+            if (report.containsFailures())
                 return EXIT_FAILURE;
-            }
+
+            if (irProgram == nullptr)
+                return EXIT_FAILURE;
 
             if (_optimize)
             {

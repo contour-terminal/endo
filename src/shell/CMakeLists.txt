@@ -1,7 +1,11 @@
 add_library(Shell STATIC
     AST.h
+    DiagnosticsAdapter.h
+    DiagnosticsAdapter.cpp
     Platform.h
     ProcessGroup.h
+    Suggestions.h
+    Suggestions.cpp
     Visitor.h
 )
 
@@ -62,6 +66,7 @@ target_link_libraries(endo PUBLIC Shell)
 
 add_executable(test-endo
     test_main.cpp
+    Diagnostics_test.cpp
     Lexer_test.cpp
     Shell_test.cpp
 )

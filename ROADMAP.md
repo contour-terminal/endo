@@ -83,15 +83,15 @@ Windows support.
 - [x] Create Windows stubs (WindowsPipe, WindowsTTY, WindowsProcess)
 - [ ] Implement Windows backend (ConPTY, CreateProcess) → Deferred to Milestone 4
 
-### 0.3 Error Handling Modernization (In Progress)
+### 0.3 Error Handling Modernization ✅
 
-**Current State:** Error types defined; `std::expected` introduced for process operations.
+**Status:** Complete
 
 **Tasks:**
 - [x] Audit existing error handling
 - [x] Introduce `std::expected` for recoverable errors
 - [x] Create error type hierarchy for shell errors
-- [ ] Add structured error reporting with context (line/column, suggestions)
+- [x] Add structured error reporting with context (line/column, suggestions)
 
 ---
 

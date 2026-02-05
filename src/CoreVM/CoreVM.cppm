@@ -2803,14 +2803,32 @@ enum class Type
     LinkError
 };
 
+/// Diagnostic message with optional suggestions and source context.
 struct Message
 {
     Type type;
     SourceLocation sourceLocation;
     std::string text;
+    std::vector<std::string> suggestions;          ///< Optional hints for fixing the error
+    std::optional<std::string> contextSnippet;     ///< Source line for display context
 
+    /// Constructs a message without suggestions (backward compatible).
     Message(Type ty, SourceLocation sl, std::string t):
         type { ty }, sourceLocation { std::move(sl) }, text { std::move(t) }
+    {
+    }
+
+    /// Constructs a message with suggestions and optional context snippet.
+    Message(Type ty,
+            SourceLocation sl,
+            std::string t,
+            std::vector<std::string> sugg,
+            std::optional<std::string> ctx = std::nullopt):
+        type { ty },
+        sourceLocation { std::move(sl) },
+        text { std::move(t) },
+        suggestions { std::move(sugg) },
+        contextSnippet { std::move(ctx) }
     {
     }
 
@@ -2838,10 +2856,40 @@ class Report
         emplace_back(Type::SyntaxError, sloc, std::format(f, std::move(args)...));
     }
 
+    /// Reports a syntax error with suggestions for fixing.
+    template <typename... Args>
+    void syntaxErrorWithSuggestions(SourceLocation const& sloc,
+                                    std::vector<std::string> suggestions,
+                                    std::optional<std::string> contextSnippet,
+                                    std::format_string<Args...> f,
+                                    Args... args)
+    {
+        push_back(Message(Type::SyntaxError,
+                          sloc,
+                          std::format(f, std::move(args)...),
+                          std::move(suggestions),
+                          std::move(contextSnippet)));
+    }
+
     template <typename... Args>
     void typeError(const SourceLocation& sloc, std::format_string<Args...> f, Args... args)
     {
         emplace_back(Type::TypeError, sloc, std::format(f, std::move(args)...));
+    }
+
+    /// Reports a type error with suggestions for fixing.
+    template <typename... Args>
+    void typeErrorWithSuggestions(SourceLocation const& sloc,
+                                  std::vector<std::string> suggestions,
+                                  std::optional<std::string> contextSnippet,
+                                  std::format_string<Args...> f,
+                                  Args... args)
+    {
+        push_back(Message(Type::TypeError,
+                          sloc,
+                          std::format(f, std::move(args)...),
+                          std::move(suggestions),
+                          std::move(contextSnippet)));
     }
 
     template <typename... Args>

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <shell/AST.h>
+#include <shell/DiagnosticsAdapter.h>
 #include <shell/ScopedLogger.h>
 
 #include <typeinfo>
@@ -30,21 +31,30 @@ namespace endo
 export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 {
   public:
-    static CoreVM::IRProgram* generate(ast::Statement const& rootNode)
+    /// Generates IR code from an AST.
+    ///
+    /// @param rootNode The root statement of the AST
+    /// @param report Diagnostics report for error messages
+    /// @return The generated IR program, or nullptr if errors occurred
+    static CoreVM::IRProgram* generate(ast::Statement const& rootNode, CoreVM::diagnostics::Report& report)
     {
-        IRGenerator generator;
+        IRGenerator generator(report);
 
         generator.setProgram(std::make_unique<CoreVM::IRProgram>());
         generator.setHandler(generator.getHandler(GLOBAL_SCOPE_INIT_NAME));
         generator.setInsertPoint(generator.createBlock("EntryPoint"));
         generator.codegen(&rootNode);
+
+        if (generator._hasErrors)
+            return nullptr;
+
         generator.createRet(generator.get(CoreVM::CoreNumber(0)));
 
         return generator.program();
     }
 
   private:
-    IRGenerator()
+    explicit IRGenerator(CoreVM::diagnostics::Report& report): _report { report }
     {
         _processCallSignature.setReturnType(CoreVM::LiteralType::Number);
         _processCallSignature.setName("ProcessCall");
@@ -55,8 +65,21 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         TRACE_SCOPE(std::format("codegen({})", node ? typeid(*node).name() : "nullptr"));
         _result = nullptr;
         if (node)
+        {
+            // Track current location for error reporting
+            if (node->location.has_value())
+                _currentLocation = toCoreLoc(node->location.value());
             node->accept(*this);
+        }
         return _result;
+    }
+
+    /// Reports a type error at the current location.
+    template <typename... Args>
+    void reportTypeError(std::format_string<Args...> f, Args&&... args)
+    {
+        _report.typeError(_currentLocation, f, std::forward<Args>(args)...);
+        _hasErrors = true;
     }
 
     void visit(ast::BuiltinExitStmt const& node) override
@@ -67,10 +90,15 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         else
         {
             exitCode = codegen(node.code.get());
+            if (!exitCode)
+                return; // Error already reported
             if (exitCode->type() == CoreVM::LiteralType::String)
                 exitCode = createS2N(exitCode);
             else if (exitCode->type() != CoreVM::LiteralType::Number)
-                throw std::runtime_error("exit code must be a number");
+            {
+                reportTypeError("exit code must be a number, got {}", exitCode->type());
+                return;
+            }
         }
         _result = createCallFunction(getBuiltinFunction(node.callback.get()), { exitCode }, "exit");
     }
@@ -244,10 +272,17 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         {
             TRACE_SCOPE(std::format("Parameter: ", ast::ASTPrinter::print(*expr)));
             auto* value = codegen(expr.get());
+            if (!value)
+            {
+                // Error already reported
+                continue;
+            }
             if (auto* constant = dynamic_cast<CoreVM::Constant*>(value); constant != nullptr)
                 irArray.push_back(constant);
             else
-                throw std::runtime_error("Non-constant expression in array context");
+            {
+                reportTypeError("Non-constant expression in array context");
+            }
         }
         return irArray;
     }
@@ -267,6 +302,9 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         return callArguments;
     }
 
+    CoreVM::diagnostics::Report& _report;    // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+    CoreVM::SourceLocation _currentLocation; ///< Current location for error reporting
+    bool _hasErrors = false;                 ///< Whether any errors have been reported
     CoreVM::Value* _result = nullptr;
     // CoreVM::NativeCallback _processCallCallback;
     // CoreVM::IRBuiltinFunction* _processCallFunction = nullptr;

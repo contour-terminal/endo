@@ -2,6 +2,7 @@
 module;
 
 #include <shell/AST.h>
+#include <shell/DiagnosticsAdapter.h>
 #include <shell/ScopedLogger.h>
 
 #include <crispy/utils.h>
@@ -51,7 +52,22 @@ export class Parser
 
     std::unique_ptr<ast::Statement> parse() { return parseBlock("global"); }
 
+    /// Sets the source text for context snippets in error messages.
+    void setSourceText(std::string_view source) { _sourceText = source; }
+
   private:
+    /// Converts the current lexer location to CoreVM SourceLocation format.
+    [[nodiscard]] CoreVM::SourceLocation currentLocation() const { return toCoreLoc(_lexer.currentRange()); }
+
+    /// Gets the context snippet for the current line.
+    [[nodiscard]] std::optional<std::string> currentContextSnippet() const
+    {
+        if (_sourceText.empty())
+            return std::nullopt;
+        auto const line = extractSourceLine(_sourceText, _lexer.currentRange().begin.line);
+        return line.empty() ? std::nullopt : std::make_optional(line);
+    }
+
     [[nodiscard]] bool isEndOfBlock() const noexcept
     {
         // clang-format off
@@ -168,9 +184,19 @@ export class Parser
                     return parseCallPipeline();
                 }
             case Token::EndOfInput:
-                _report.syntaxError(CoreVM::SourceLocation(), "Unexpected end of input");
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(),
+                    { "Check for unclosed quotes, parentheses, or control structures" },
+                    currentContextSnippet(),
+                    "Unexpected end of input");
                 return nullptr;
-            default: _report.syntaxError(CoreVM::SourceLocation(), "Unexpected token"); return nullptr;
+            default:
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Unexpected token '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
         }
 
         return nullptr;
@@ -300,7 +326,13 @@ export class Parser
             case Token::String:
             case Token::Number:
             case Token::Identifier: return std::make_unique<ast::LiteralExpr>(consumeLiteral()); break;
-            default: _report.syntaxError(CoreVM::SourceLocation(), "Expected parameter"); return nullptr;
+            default:
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Expected parameter, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
         }
     }
 
@@ -372,15 +404,18 @@ export class Parser
         if (_lexer.isDirective(directive))
             _lexer.nextToken();
         else
-            _report.syntaxError(CoreVM::SourceLocation(),
-                                "Expected directive '{}' but got '{}'",
-                                directive,
-                                _lexer.currentLiteral());
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected '{}' but got '{}'",
+                                               directive,
+                                               _lexer.currentLiteral());
     }
 
     CoreVM::Runtime& _runtime;            // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     CoreVM::diagnostics::Report& _report; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
     Lexer _lexer;
+    std::string_view _sourceText; ///< Original source text for context snippets
 };
 
 } // namespace endo

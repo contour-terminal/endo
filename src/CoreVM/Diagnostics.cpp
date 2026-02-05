@@ -56,10 +56,51 @@ void ConsoleReport::push_back(Message message)
     if (message.type != Type::Warning)
         _errorCount++;
 
+    // Format: filename:line:column: type: message
+    auto const& loc = message.sourceLocation;
+    std::string_view typeStr;
     switch (message.type)
     {
-        case Type::Warning: std::cerr << std::format("Warning: {}\n", message); break;
-        default: std::cerr << std::format("Error: {}\n", message); break;
+        case Type::TokenError: typeStr = "token error"; break;
+        case Type::SyntaxError: typeStr = "syntax error"; break;
+        case Type::TypeError: typeStr = "type error"; break;
+        case Type::Warning: typeStr = "warning"; break;
+        case Type::LinkError: typeStr = "link error"; break;
+    }
+
+    // Print location and message
+    if (!loc.filename.empty())
+    {
+        std::cerr << std::format(
+            "{}:{}:{}: {}: {}\n", loc.filename, loc.begin.line, loc.begin.column, typeStr, message.text);
+    }
+    else
+    {
+        std::cerr << std::format("{}: {}\n", typeStr, message.text);
+    }
+
+    // Print context snippet with caret if available
+    if (message.contextSnippet.has_value())
+    {
+        std::cerr << std::format("  | {}\n", message.contextSnippet.value());
+
+        // Create caret line pointing to the error column
+        if (loc.begin.column > 0)
+        {
+            auto const column = static_cast<int>(loc.begin.column) - 1; // Convert to 0-based for display
+            auto const length = (loc.end.column > loc.begin.column) ? (loc.end.column - loc.begin.column) : 1;
+            std::string caretLine(static_cast<size_t>(column), ' ');
+            caretLine += '^';
+            if (length > 1)
+                caretLine += std::string(static_cast<size_t>(length - 1), '~');
+            std::cerr << std::format("  | {}\n", caretLine);
+        }
+    }
+
+    // Print suggestions as hints
+    for (auto const& suggestion: message.suggestions)
+    {
+        std::cerr << std::format("  hint: {}\n", suggestion);
     }
 }
 

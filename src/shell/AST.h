@@ -5,20 +5,25 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
 #include <vector>
 
 import CoreVM;
+import Lexer;
 
 namespace endo::ast
 {
 
 struct Visitor;
 
+/// Base class for all AST nodes with optional source location tracking.
 struct Node
 {
+    std::optional<SourceLocationRange> location; ///< Source location of this node
+
     virtual ~Node() = default;
 
     virtual void accept(Visitor&) const = 0;
