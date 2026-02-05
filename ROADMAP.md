@@ -40,6 +40,7 @@ the primary project; Endo development follows as resources permit.
 | TTY abstraction with raw mode | ✅ |
 | Platform abstraction layer (Pipe, Process, TTY) | ✅ |
 | Grapheme cluster support for Unicode | ✅ |
+| Builtin command: `cat` | TODO |
 
 ### Partially Implemented (Infrastructure Exists)
 
