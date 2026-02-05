@@ -59,37 +59,36 @@ See milestone breakdown below.
 **Rationale:** These foundational improvements enable all subsequent milestones and are required for
 Windows support.
 
-### 0.1 UTF-8 Support Completion in Lexer
+### 0.1 UTF-8 Support Completion in Lexer ✅
 
-**Current State:** Multiple TODOs in `Lexer.cpp` where characters are cast to `char` instead of
-handling full UTF-8 sequences.
-
-**Tasks:**
-- [ ] Implement proper UTF-8 codepoint consumption in `consumeNumber()`
-- [ ] Implement proper UTF-8 handling in `consumeIdentifier()`
-- [ ] Implement proper UTF-8 handling in string literal parsing
-- [ ] Add tests for Unicode identifiers and string content
-
-### 0.2 Platform Abstraction Layer
-
-**Current State:** Direct POSIX calls (`fork`, `exec`, `pipe`, etc.) throughout codebase.
+**Status:** Complete
 
 **Tasks:**
-- [ ] Design platform abstraction interface for process management
+- [x] Implement proper UTF-8 codepoint consumption in `consumeNumber()`
+- [x] Implement proper UTF-8 handling in `consumeIdentifier()`
+- [x] Implement proper UTF-8 handling in string literal parsing
+- [x] Add tests for Unicode identifiers and string content
+
+### 0.2 Platform Abstraction Layer (In Progress)
+
+**Current State:** Process management abstracted; pipes and TTY still use direct POSIX calls.
+
+**Tasks:**
+- [x] Design platform abstraction interface for process management
 - [ ] Design platform abstraction interface for file descriptors and pipes
 - [ ] Design platform abstraction interface for TTY/console operations
-- [ ] Implement Linux/POSIX backend
+- [x] Implement Linux/POSIX backend
 - [ ] Implement Windows backend (ConPTY, CreateProcess)
 - [ ] Add CMake configuration for platform-specific compilation
 
-### 0.3 Error Handling Modernization
+### 0.3 Error Handling Modernization (In Progress)
 
-**Current State:** Mixed error handling patterns.
+**Current State:** Error types defined; `std::expected` introduced for process operations.
 
 **Tasks:**
-- [ ] Audit existing error handling
-- [ ] Introduce `std::expected` for recoverable errors
-- [ ] Create error type hierarchy for shell errors
+- [x] Audit existing error handling
+- [x] Introduce `std::expected` for recoverable errors
+- [x] Create error type hierarchy for shell errors
 - [ ] Add structured error reporting with context (line/column, suggestions)
 
 ---
