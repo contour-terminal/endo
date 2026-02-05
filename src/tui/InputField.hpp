@@ -1,0 +1,267 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <cstddef>
+#include <functional>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
+#include <tui/InputEvent.hpp>
+
+namespace tui
+{
+
+/// @brief Result of processing an input event in InputField.
+enum class InputFieldAction : std::uint8_t
+{
+    Changed, ///< Buffer content or cursor changed, re-render needed.
+    Submit,  ///< User pressed Enter.
+    Abort,   ///< User pressed Ctrl+C.
+    Eof,     ///< User pressed Ctrl+D on an empty line.
+    None,    ///< Event not consumed by InputField.
+};
+
+/// @brief Pure-model text editor with Emacs keybindings, history, and kill ring.
+///
+/// Accepts InputEvent objects and updates internal state. No I/O — the caller
+/// renders based on text() and cursor(). Operates on grapheme cluster boundaries
+/// using libunicode for correct Unicode handling.
+///
+/// Supports both single-line and multiline modes. In multiline mode:
+/// - Shift+Enter inserts a newline
+/// - Up/Down navigate between lines (history when on first/last line)
+/// - Home/End move to start/end of current line
+/// - Ctrl+Home/Ctrl+End move to start/end of buffer
+class InputField
+{
+  public:
+    /// @brief Processes an input event and returns the resulting action.
+    /// @param event The input event to process.
+    /// @return The action resulting from the event.
+    [[nodiscard]] auto processEvent(InputEvent const& event) -> InputFieldAction;
+
+    /// @brief Returns the current buffer content.
+    [[nodiscard]] auto text() const noexcept -> std::string_view;
+
+    /// @brief Returns the cursor position as a byte offset into text().
+    [[nodiscard]] auto cursor() const noexcept -> std::size_t;
+
+    /// @brief Sets the prompt string.
+    /// @param prompt The prompt to display before user input.
+    void setPrompt(std::string_view prompt);
+
+    /// @brief Returns the current prompt string.
+    [[nodiscard]] auto prompt() const noexcept -> std::string_view;
+
+    /// @brief Clears the buffer and resets cursor to position 0.
+    void clear();
+
+    /// @brief Sets the buffer content programmatically.
+    /// @param text New buffer content.
+    void setText(std::string_view text);
+
+    /// @brief Adds an entry to the history ring.
+    /// @param entry The line to add.
+    void addHistory(std::string entry);
+
+    /// @brief Sets the maximum number of history entries to retain.
+    /// @param n Maximum history size.
+    void setMaxHistory(std::size_t n);
+
+    /// @brief Enables or disables multiline mode.
+    /// @param enable True to enable multiline editing.
+    void setMultiline(bool enable);
+
+    /// @brief Returns whether multiline mode is enabled.
+    [[nodiscard]] auto isMultiline() const noexcept -> bool;
+
+    /// @brief Returns the number of lines in the current buffer.
+    [[nodiscard]] auto lineCount() const noexcept -> int;
+
+    /// @brief Returns the current cursor line (0-based).
+    [[nodiscard]] auto cursorLine() const noexcept -> int;
+
+    /// @brief Returns the current cursor column within the line (0-based, in graphemes).
+    [[nodiscard]] auto cursorColumn() const noexcept -> int;
+
+    /// @brief Returns the content of a specific line (0-based index).
+    [[nodiscard]] auto lineAt(int lineIndex) const -> std::string_view;
+
+    /// @brief Positions the cursor based on a click at the given line and column.
+    ///
+    /// Coordinates are relative to the input field content (not screen coordinates).
+    /// The caller is responsible for translating screen coordinates to field-relative coordinates.
+    /// @param line The line number (0-based).
+    /// @param column The column within the line (0-based, in graphemes).
+    /// @param extendSelection If true, extends selection from current anchor; otherwise clears selection.
+    void setCursorFromClick(int line, int column, bool extendSelection = false);
+
+    /// @brief Sets the maximum number of lines allowed in multiline mode (0 = unlimited).
+    void setMaxLines(int maxLines);
+
+    /// @brief Returns the maximum number of lines allowed.
+    [[nodiscard]] auto maxLines() const noexcept -> int;
+
+    // ========================================================================
+    // Clipboard callback
+    // ========================================================================
+
+    /// @brief Callback type for clipboard copy operations.
+    using ClipboardCallback = std::function<void(std::string_view)>;
+
+    /// @brief Sets a callback to be invoked when text is copied.
+    ///
+    /// This allows integration with system clipboard (e.g., OSC 52).
+    /// The callback receives the text that was copied.
+    /// @param callback The callback function, or nullptr to disable.
+    void setClipboardCallback(ClipboardCallback callback);
+
+    // ========================================================================
+    // Selection support (GUI-style: Shift+arrows, not Emacs set-mark)
+    // ========================================================================
+
+    /// @brief Returns whether there is an active selection.
+    [[nodiscard]] auto hasSelection() const noexcept -> bool;
+
+    /// @brief Returns the start of the selection (lower byte offset).
+    [[nodiscard]] auto selectionStart() const noexcept -> std::size_t;
+
+    /// @brief Returns the end of the selection (higher byte offset).
+    [[nodiscard]] auto selectionEnd() const noexcept -> std::size_t;
+
+    /// @brief Returns the selected text.
+    [[nodiscard]] auto selectedText() const -> std::string_view;
+
+    /// @brief Clears the selection without deleting text.
+    void clearSelection();
+
+    /// @brief Selects all text in the buffer.
+    void selectAll();
+
+    /// @brief Copies the selected text to the clipboard (kill ring for now).
+    /// @return True if text was copied.
+    auto copySelection() -> bool;
+
+    /// @brief Cuts the selected text to the clipboard.
+    /// @return True if text was cut.
+    auto cutSelection() -> bool;
+
+    // ========================================================================
+    // Undo/Redo support
+    // ========================================================================
+
+    /// @brief Undoes the last editing operation.
+    /// @return True if an undo was performed.
+    auto undo() -> bool;
+
+    /// @brief Redoes the last undone operation.
+    /// @return True if a redo was performed.
+    auto redo() -> bool;
+
+    /// @brief Returns whether undo is available.
+    [[nodiscard]] auto canUndo() const noexcept -> bool;
+
+    /// @brief Returns whether redo is available.
+    [[nodiscard]] auto canRedo() const noexcept -> bool;
+
+    /// @brief Clears the undo/redo history.
+    void clearUndoHistory();
+
+  private:
+    std::string _buffer;
+    std::size_t _cursor = 0;
+    std::string _prompt;
+    bool _multiline = false;
+    int _maxLines = 0; ///< 0 = unlimited
+
+    // Clipboard callback
+    ClipboardCallback _clipboardCallback;
+
+    // Selection state (GUI-style)
+    std::optional<std::size_t>
+        _selectionAnchor; ///< Anchor point where selection started (nullopt = no selection).
+
+    // Undo/Redo state
+    struct UndoState
+    {
+        std::string buffer;
+        std::size_t cursor;
+    };
+
+    std::vector<UndoState> _undoStack;
+    std::vector<UndoState> _redoStack;
+    static constexpr std::size_t MaxUndoHistory = 100;
+
+    // History
+    std::vector<std::string> _history;
+    std::size_t _historyIndex = 0;
+    std::string _savedLine;
+    std::size_t _maxHistory = 100;
+
+    // Kill ring (Emacs-style)
+    std::vector<std::string> _killRing;
+    std::size_t _killRingIndex = 0;
+    static constexpr std::size_t MaxKillRing = 16;
+    bool _lastWasKill = false; ///< Whether the last action was a kill (for kill ring appending).
+
+    /// @brief Dispatches a KeyEvent to the appropriate editing operation.
+    [[nodiscard]] auto handleKey(KeyEvent const& key) -> InputFieldAction;
+
+    // Editing operations
+    void killToEnd();          ///< Ctrl+K: Kill from cursor to end of line.
+    void killToStart();        ///< Ctrl+U: Kill from cursor to start of line.
+    void killWord();           ///< Alt+D: Kill word forward.
+    void killWordBackward();   ///< Alt+Backspace / Ctrl+W: Kill word backward.
+    void yank();               ///< Ctrl+Y: Yank (paste) from kill ring.
+    void yankPop();            ///< Alt+Y: Cycle kill ring.
+    void deleteChar();         ///< Delete / Ctrl+D: Delete character at cursor.
+    void deleteCharBackward(); ///< Backspace: Delete character before cursor.
+    void moveToStart();        ///< Ctrl+A / Home: Move cursor to start of line (or buffer).
+    void moveToEnd();          ///< Ctrl+E / End: Move cursor to end of line (or buffer).
+    void moveToBufferStart();  ///< Move cursor to start of buffer.
+    void moveToBufferEnd();    ///< Move cursor to end of buffer.
+    void moveToLineStart();    ///< Move cursor to start of current line.
+    void moveToLineEnd();      ///< Move cursor to end of current line.
+    void moveForwardChar();    ///< Ctrl+F / Right: Move cursor forward one grapheme.
+    void moveBackwardChar();   ///< Ctrl+B / Left: Move cursor backward one grapheme.
+    void moveForwardWord();    ///< Alt+F / Ctrl+Right: Move cursor forward one word.
+    void moveBackwardWord();   ///< Alt+B / Ctrl+Left: Move cursor backward one word.
+    void moveUp();             ///< Move cursor up one line (multiline mode).
+    void moveDown();           ///< Move cursor down one line (multiline mode).
+    void historyPrev();        ///< Up / Ctrl+P: Previous history entry.
+    void historyNext();        ///< Down / Ctrl+N: Next history entry.
+    void transpose();          ///< Ctrl+T: Transpose characters before cursor.
+    void insertNewline();      ///< Insert a newline at cursor (multiline mode).
+
+    /// @brief Pushes text onto the kill ring.
+    void pushKillRing(std::string text);
+
+    /// @brief Inserts a UTF-8 encoded codepoint at the cursor.
+    void insertCodepoint(char32_t cp);
+
+    /// @brief Inserts a UTF-8 string at the cursor.
+    void insertText(std::string_view text);
+
+    // Line position helpers
+    [[nodiscard]] auto findLineStart(std::size_t pos) const -> std::size_t;
+    [[nodiscard]] auto findLineEnd(std::size_t pos) const -> std::size_t;
+    [[nodiscard]] auto countGraphemesInRange(std::size_t start, std::size_t end) const -> int;
+    [[nodiscard]] auto moveToGraphemeInLine(std::size_t lineStart, int graphemeIndex) const -> std::size_t;
+
+    // Unicode helpers (using libunicode)
+    [[nodiscard]] auto nextGraphemeCluster(std::size_t pos) const -> std::size_t;
+    [[nodiscard]] auto prevGraphemeCluster(std::size_t pos) const -> std::size_t;
+    [[nodiscard]] static auto isWordCharAt(char c) -> bool;
+
+    // Selection helpers
+    void deleteSelection();        ///< Deletes selected text if any.
+    void startOrExtendSelection(); ///< Starts selection at cursor if none, keeps anchor otherwise.
+    void moveWithSelection(void (InputField::*move)()); ///< Executes move while extending selection.
+
+    // Undo/Redo helpers
+    void saveUndoState(); ///< Saves current state to undo stack before an editing operation.
+};
+
+} // namespace tui
