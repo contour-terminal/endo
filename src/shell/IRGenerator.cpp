@@ -264,6 +264,57 @@ export class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         setInsertPoint(end);
     }
 
+    void visit(ast::LogicalAndStmt const& node) override
+    {
+        // Short-circuit AND: execute right only if left succeeds (exit code 0)
+        // A && B:
+        //   eval A
+        //   if A succeeded (exit code == 0): eval B, result = B's exit code
+        //   else: result = A's exit code
+        CoreVM::BasicBlock* evalRight = createBlock("and.evalRight");
+        CoreVM::BasicBlock* end = createBlock("and.end");
+
+        // Evaluate left side
+        auto* leftResult = codegen(node.left.get());
+
+        // If left succeeded (exit code == 0), evaluate right side
+        createCondBr(toBool(leftResult), evalRight, end);
+
+        // Evaluate right side
+        setInsertPoint(evalRight);
+        codegen(node.right.get());
+        createBr(end);
+
+        setInsertPoint(end);
+        // Note: The exit code is automatically set by the last executed command
+    }
+
+    void visit(ast::LogicalOrStmt const& node) override
+    {
+        // Short-circuit OR: execute right only if left fails (exit code != 0)
+        // A || B:
+        //   eval A
+        //   if A failed (exit code != 0): eval B, result = B's exit code
+        //   else: result = A's exit code (which is 0, success)
+        CoreVM::BasicBlock* evalRight = createBlock("or.evalRight");
+        CoreVM::BasicBlock* end = createBlock("or.end");
+
+        // Evaluate left side
+        auto* leftResult = codegen(node.left.get());
+
+        // If left failed (exit code != 0), evaluate right side
+        // toBool returns true for exit code 0 (success), so we flip the branches
+        createCondBr(toBool(leftResult), end, evalRight);
+
+        // Evaluate right side
+        setInsertPoint(evalRight);
+        codegen(node.right.get());
+        createBr(end);
+
+        setInsertPoint(end);
+        // Note: The exit code is automatically set by the last executed command
+    }
+
     void visit(ast::InputRedirect const& node) override
     {
         auto* callback = findCallback("internal.redirect_input(IS)V");

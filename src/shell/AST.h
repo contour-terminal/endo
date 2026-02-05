@@ -404,4 +404,38 @@ struct WhileStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Logical AND statement: `cmd1 && cmd2`
+///
+/// Executes `right` only if `left` succeeds (exit code 0).
+/// Implements short-circuit evaluation.
+struct LogicalAndStmt final: public Statement
+{
+    std::unique_ptr<Statement> left;
+    std::unique_ptr<Statement> right;
+
+    LogicalAndStmt(std::unique_ptr<Statement> left, std::unique_ptr<Statement> right):
+        left(std::move(left)), right(std::move(right))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Logical OR statement: `cmd1 || cmd2`
+///
+/// Executes `right` only if `left` fails (exit code != 0).
+/// Implements short-circuit evaluation.
+struct LogicalOrStmt final: public Statement
+{
+    std::unique_ptr<Statement> left;
+    std::unique_ptr<Statement> right;
+
+    LogicalOrStmt(std::unique_ptr<Statement> left, std::unique_ptr<Statement> right):
+        left(std::move(left)), right(std::move(right))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 } // namespace endo::ast

@@ -21,6 +21,8 @@ struct HereString;
 struct IfStmt;
 struct InputRedirect;
 struct LiteralExpr;
+struct LogicalAndStmt;
+struct LogicalOrStmt;
 struct OutputRedirect;
 struct ProgramCall;
 struct SubstitutionExpr;
@@ -45,6 +47,8 @@ struct Visitor
     virtual void visit(CompoundStmt const&) = 0;
     virtual void visit(IfStmt const&) = 0;
     virtual void visit(WhileStmt const&) = 0;
+    virtual void visit(LogicalAndStmt const&) = 0;
+    virtual void visit(LogicalOrStmt const&) = 0;
 
     // builtin statements
     virtual void visit(BuiltinExitStmt const&) = 0;

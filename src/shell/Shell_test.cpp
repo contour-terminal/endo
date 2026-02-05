@@ -395,3 +395,82 @@ TEST_CASE("shell.redirect.multiple_redirects")
     std::filesystem::remove("/tmp/endo_test_multi_in.txt");
     std::filesystem::remove("/tmp/endo_test_multi_out.txt");
 }
+
+// ============================================================================
+// Logical Operators
+// ============================================================================
+
+TEST_CASE("shell.logical.and_success")
+{
+    // true && echo hello - should execute echo because true succeeds
+    TestShell shell;
+    CHECK(escape(shell("true && echo hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.logical.and_failure")
+{
+    // false && echo hello - should NOT execute echo because false fails
+    TestShell shell;
+    CHECK(shell("false && echo hello").output() == "");
+}
+
+TEST_CASE("shell.logical.or_success")
+{
+    // true || echo hello - should NOT execute echo because true succeeds
+    TestShell shell;
+    CHECK(shell("true || echo hello").output() == "");
+}
+
+TEST_CASE("shell.logical.or_failure")
+{
+    // false || echo hello - should execute echo because false fails
+    TestShell shell;
+    CHECK(escape(shell("false || echo hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.logical.chained_and")
+{
+    // true && true && echo hello - should execute echo
+    TestShell shell;
+    CHECK(escape(shell("true && true && echo hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.logical.chained_or")
+{
+    // false || false || echo hello - should execute echo
+    TestShell shell;
+    CHECK(escape(shell("false || false || echo hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.logical.mixed_operators")
+{
+    // true && false || echo hello - && has same precedence as ||, left-to-right
+    // (true && false) || echo hello - true&&false = false, so echo runs
+    TestShell shell;
+    CHECK(escape(shell("true && false || echo hello").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.logical.exit_code_propagation_and")
+{
+    // After true && false, exit code should be 1 (from false)
+    TestShell shell;
+    shell("true && false");
+    CHECK(shell("echo $?").output() == "1\n");
+}
+
+TEST_CASE("shell.logical.exit_code_propagation_or")
+{
+    // After false || true, exit code should be 0 (from true)
+    TestShell shell;
+    shell("false || true");
+    CHECK(shell("echo $?").output() == "0\n");
+}
+
+TEST_CASE("shell.logical.with_pipeline")
+{
+    // Logical operators should have lower precedence than pipes
+    // echo hello | cat && echo world
+    // Should be: (echo hello | cat) && echo world
+    TestShell shell;
+    CHECK(escape(shell("echo hello | cat && echo world").output()) == escape("hello\nworld\n"));
+}

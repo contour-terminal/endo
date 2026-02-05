@@ -52,6 +52,8 @@ export enum class Token
     LessLessLess,    // <<<
     LessLessDash,    // <<-
     GreaterAmp,      // >&
+    AmpAmp,          // &&
+    PipePipe,        // ||
 };
 
 export enum class BuiltinFunction
@@ -196,7 +198,17 @@ export class Lexer
             case '\n': return consumeCharAndConfirmToken(Token::LineFeed);
             case ';': return consumeCharAndConfirmToken(Token::Semicolon);
             case '=': return consumeCharAndConfirmToken(Token::Equal);
-            case '|': return consumeCharAndConfirmToken(Token::Pipe);
+            case '|':
+                nextChar();
+                if (_currentChar == '|')
+                    return consumeCharAndConfirmToken(Token::PipePipe);
+                return confirmToken(Token::Pipe);
+            case '&':
+                nextChar();
+                if (_currentChar == '&')
+                    return consumeCharAndConfirmToken(Token::AmpAmp);
+                // Single & not currently used - consume as identifier part
+                return confirmToken(Token::Invalid);
             case '>':
                 nextChar();
                 if (_currentChar == '>')
@@ -520,6 +532,8 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case RndOpen: name = "("; break;
             case Semicolon: name = ";"; break;
             case String: name = "String"; break;
+            case AmpAmp: name = "&&"; break;
+            case PipePipe: name = "||"; break;
         }
         return formatter<std::string_view>::format(name, ctx);
     }

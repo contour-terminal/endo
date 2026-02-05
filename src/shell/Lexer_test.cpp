@@ -66,3 +66,53 @@ TEST_CASE("Lexer.utf8_mixed")
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "hello\xE4\xB8\x96\xE7\x95\x8C");
 }
+
+TEST_CASE("Lexer.logical_and")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cmd1 && cmd2"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd1");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::AmpAmp);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd2");
+}
+
+TEST_CASE("Lexer.logical_or")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cmd1 || cmd2"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd1");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::PipePipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cmd2");
+}
+
+TEST_CASE("Lexer.pipe_vs_logical_or")
+{
+    // Ensure | and || are distinguished correctly
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("a | b || c"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "a");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Pipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "b");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::PipePipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "c");
+}

@@ -85,7 +85,9 @@ export class Parser
     return _lexer.currentToken() == Token::EndOfInput
         || _lexer.currentToken() == Token::LineFeed
         || _lexer.currentToken() == Token::Pipe
-        || _lexer.currentToken() == Token::Semicolon;
+        || _lexer.currentToken() == Token::Semicolon
+        || _lexer.currentToken() == Token::AmpAmp
+        || _lexer.currentToken() == Token::PipePipe;
         // clang-format on
     }
 
@@ -125,69 +127,11 @@ export class Parser
                     return parseIf();
                 else if (_lexer.isDirective("while"))
                     return parseWhile();
-                else if (_lexer.isDirective("exit"))
-                {
-                    _lexer.nextToken();
-                    std::unique_ptr<ast::Expr> code;
-                    if (!isEndOfStmt())
-                        code = parseParameter();
-                    assert(_runtime.find("exit(I)V") != nullptr);
-                    return std::make_unique<ast::BuiltinExitStmt>(*_runtime.find("exit(I)V"),
-                                                                  std::move(code));
-                }
-                else if (_lexer.isDirective("true"))
-                {
-                    _lexer.nextToken();
-                    return std::make_unique<ast::BuiltinTrueStmt>(*_runtime.find("true()B"));
-                }
-                else if (_lexer.isDirective("false"))
-                {
-                    _lexer.nextToken();
-                    return std::make_unique<ast::BuiltinFalseStmt>(*_runtime.find("false()B"));
-                }
-                else if (_lexer.isDirective("read"))
-                {
-                    _lexer.nextToken();
-                    std::vector<std::unique_ptr<ast::Expr>> parameters = parseParameterList();
-                    CoreVM::NativeCallback const& callback =
-                        *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
-                    return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
-                }
-                else if (_lexer.isDirective("export"))
-                {
-                    _lexer.nextToken();
-                    auto name = consumeLiteral();
-                    return std::make_unique<ast::BuiltinExportStmt>(*_runtime.find("export(S)V"), name);
-                }
-                else if (_lexer.isDirective("set"))
-                {
-                    _lexer.nextToken();
-                    auto name = parseParameter();
-                    auto value = parseParameter();
-                    return std::make_unique<ast::BuiltinSetStmt>(
-                        *_runtime.find("set(SS)B"), std::move(name), std::move(value));
-                }
-                else if (_lexer.isDirective("cd"))
-                {
-                    _lexer.nextToken();
-                    if (isEndOfStmt())
-                        return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd()B"), nullptr);
-                    else
-                    {
-                        auto param = parseParameter();
-                        return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd(S)B"),
-                                                                       std::move(param));
-                    }
-                }
-                else if (_lexer.isDirective("unset"))
-                {
-                    _lexer.nextToken();
-                    auto name = consumeLiteral();
-                    return std::make_unique<ast::BuiltinUnsetStmt>(*_runtime.find("unset(S)B"), name);
-                }
                 else
                 {
-                    return parseCallPipeline();
+                    // All other statements (builtins and commands) can participate
+                    // in logical expressions (&&, ||)
+                    return parseLogicalExpr();
                 }
             case Token::EndOfInput:
                 _report.syntaxErrorWithSuggestions(
@@ -649,6 +593,113 @@ export class Parser
                                                    _lexer.currentLiteral());
                 return nullptr;
         }
+    }
+
+    /// Parses a primary statement: a builtin command or a call pipeline.
+    /// This is the lowest level of statement parsing, called by parseLogicalExpr().
+    std::unique_ptr<ast::Statement> parsePrimaryStmt()
+    {
+        TRACE_SCOPE("parsePrimaryStmt");
+
+        // Handle builtin commands that don't participate in pipelines
+        if (_lexer.isDirective("exit"))
+        {
+            _lexer.nextToken();
+            std::unique_ptr<ast::Expr> code;
+            if (!isEndOfStmt())
+                code = parseParameter();
+            assert(_runtime.find("exit(I)V") != nullptr);
+            return std::make_unique<ast::BuiltinExitStmt>(*_runtime.find("exit(I)V"), std::move(code));
+        }
+        else if (_lexer.isDirective("true"))
+        {
+            _lexer.nextToken();
+            return std::make_unique<ast::BuiltinTrueStmt>(*_runtime.find("true()B"));
+        }
+        else if (_lexer.isDirective("false"))
+        {
+            _lexer.nextToken();
+            return std::make_unique<ast::BuiltinFalseStmt>(*_runtime.find("false()B"));
+        }
+        else if (_lexer.isDirective("read"))
+        {
+            _lexer.nextToken();
+            std::vector<std::unique_ptr<ast::Expr>> parameters = parseParameterList();
+            CoreVM::NativeCallback const& callback =
+                *_runtime.find(parameters.empty() ? "read()S" : "read(s)S");
+            return std::make_unique<ast::BuiltinReadStmt>(callback, std::move(parameters));
+        }
+        else if (_lexer.isDirective("export"))
+        {
+            _lexer.nextToken();
+            auto name = consumeLiteral();
+            return std::make_unique<ast::BuiltinExportStmt>(*_runtime.find("export(S)V"), name);
+        }
+        else if (_lexer.isDirective("set"))
+        {
+            _lexer.nextToken();
+            auto name = parseParameter();
+            auto value = parseParameter();
+            return std::make_unique<ast::BuiltinSetStmt>(
+                *_runtime.find("set(SS)B"), std::move(name), std::move(value));
+        }
+        else if (_lexer.isDirective("cd"))
+        {
+            _lexer.nextToken();
+            if (isEndOfStmt())
+                return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd()B"), nullptr);
+            else
+            {
+                auto param = parseParameter();
+                return std::make_unique<ast::BuiltinChDirStmt>(*_runtime.find("cd(S)B"), std::move(param));
+            }
+        }
+        else if (_lexer.isDirective("unset"))
+        {
+            _lexer.nextToken();
+            auto name = consumeLiteral();
+            return std::make_unique<ast::BuiltinUnsetStmt>(*_runtime.find("unset(S)B"), name);
+        }
+        else
+        {
+            // External command or pipeline
+            return parseCallPipeline();
+        }
+    }
+
+    /// Parses logical expressions with && and || operators.
+    /// Implements left-to-right associativity: `A && B || C` parses as `(A && B) || C`
+    std::unique_ptr<ast::Statement> parseLogicalExpr()
+    {
+        TRACE_SCOPE("parseLogicalExpr");
+
+        auto left = parsePrimaryStmt();
+        if (!left)
+            return nullptr;
+
+        while (_lexer.currentToken() == Token::AmpAmp || _lexer.currentToken() == Token::PipePipe)
+        {
+            auto const op = _lexer.currentToken();
+            _lexer.nextToken();
+
+            auto right = parsePrimaryStmt();
+            if (!right)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add a command after the operator" },
+                                                   currentContextSnippet(),
+                                                   "Expected command after '{}'",
+                                                   op == Token::AmpAmp ? "&&" : "||");
+                return nullptr;
+            }
+
+            if (op == Token::AmpAmp)
+                left = std::make_unique<ast::LogicalAndStmt>(std::move(left), std::move(right));
+            else
+                left = std::make_unique<ast::LogicalOrStmt>(std::move(left), std::move(right));
+        }
+
+        return left;
     }
 
     std::unique_ptr<ast::Statement> parseCallPipeline()

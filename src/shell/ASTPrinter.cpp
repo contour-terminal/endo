@@ -194,6 +194,20 @@ export class ASTPrinter: public Visitor
         _result += "done";
     }
 
+    void visit(LogicalAndStmt const& node) override
+    {
+        node.left->accept(*this);
+        _result += " && ";
+        node.right->accept(*this);
+    }
+
+    void visit(LogicalOrStmt const& node) override
+    {
+        node.left->accept(*this);
+        _result += " || ";
+        node.right->accept(*this);
+    }
+
     void visit(LiteralExpr const& node) override { _result += std::format("{}", node.value); }
 
     void visit(SubstitutionExpr const& node) override { (void) node; }
