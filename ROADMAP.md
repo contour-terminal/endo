@@ -31,8 +31,9 @@ the primary project; Endo development follows as resources permit.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `export` | ✅ |
+| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export` | ✅ |
 | Environment variables (set/get/export) | ✅ |
+| Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | If-then-else-elif-fi statements | ✅ |
 | While-do-done statements | ✅ |
 | TTY abstraction with raw mode | ✅ |
@@ -100,17 +101,20 @@ Windows support.
 **Priority:** High
 **Rationale:** Completes the shell language to be practically useful for daily work.
 
-### Phase 1.1: Variable System
+### Phase 1.1: Variable System ✅
+
+**Status:** Complete (local variable scope deferred until function support in Phase 1.6)
 
 **Dependency:** None
 
 **Tasks:**
-- [ ] Implement `$VAR` substitution in commands
-- [ ] Implement `${VAR}` extended substitution syntax
-- [ ] Implement local variable scope (within functions)
-- [ ] Implement global variable scope
-- [ ] Implement `unset` builtin
-- [ ] Add tests for variable scoping rules
+- [x] Implement `$VAR` substitution in commands
+- [x] Implement `${VAR}` extended substitution syntax
+- [ ] Implement local variable scope (within functions) → Deferred to Phase 1.6
+- [x] Implement global variable scope
+- [x] Implement `unset` builtin
+- [x] Add tests for variable scoping rules
+- [x] Implement special variables: `$?`, `$$`, `$!`, `$0-$9`
 
 ### Phase 1.2: Redirects and File Descriptors
 
