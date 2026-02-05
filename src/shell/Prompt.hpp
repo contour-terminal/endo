@@ -1,55 +1,63 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <iostream>
+#include <optional>
 #include <string>
-#include <vector>
+
+#include <tui/InputField.hpp>
+#include <tui/Terminal.hpp>
 
 namespace endo
 {
 
-struct GridCell
-{
-    std::u32string graphemeCluster;
-    int width = 0; // either 0, 1, or 2 (number of columns)
-
-    [[nodiscard]] std::string toUtf8() const;
-};
-
-struct GridLine
-{
-    std::vector<GridCell> columns;
-
-    [[nodiscard]] std::string toUtf8() const;
-
-    [[nodiscard]] GridCell& cellAt(size_t index);
-    [[nodiscard]] GridCell const& cellAt(size_t index) const;
-};
-
-struct Grid
-{
-    std::vector<GridLine> lines;
-
-    [[nodiscard]] GridLine& lineAt(size_t index);
-    [[nodiscard]] GridLine const& lineAt(size_t index) const;
-};
-
+/// @brief TUI-based prompt using tui::Terminal and tui::InputField.
+///
+/// Provides a rich editing experience with selection, undo/redo, clipboard,
+/// and history support via the TUI library.
 class Prompt
 {
   public:
     Prompt();
+    ~Prompt();
 
+    /// @brief Returns whether the prompt is ready to accept input.
     [[nodiscard]] bool ready() const;
 
-    std::string read();
+    /// @brief Reads a line of input from the user.
+    ///
+    /// Blocks until the user submits (Enter) or aborts (Ctrl+C/Ctrl+D).
+    /// @return The input line, or empty string on EOF/abort.
+    [[nodiscard]] std::string read();
+
+    /// @brief Sets the prompt string displayed before user input.
+    /// @param promptStr The prompt string.
+    void setPrompt(std::string_view promptStr);
+
+    /// @brief Adds an entry to the command history.
+    /// @param entry The command to add.
+    void addHistory(std::string entry);
+
+    /// @brief Returns the input file descriptor for poll() integration.
+    [[nodiscard]] int inputFd() const noexcept;
+
+    /// @brief Processes pending input events without blocking.
+    ///
+    /// Call this when poll() indicates input is available.
+    /// @return The completed input line if user submitted, nullopt otherwise.
+    [[nodiscard]] std::optional<std::string> processInput();
+
+    /// @brief Handles terminal resize events.
+    void onResize();
 
   private:
-    std::istream& _input; // NOLINT
-    std::string _prompt = "> ";
-    std::string _buffer;
-    bool _complete = false;
+    tui::Terminal _terminal;
+    tui::InputField _inputField;
+    std::string _promptStr = "> ";
+    bool _initialized = false;
+    bool _aborted = false;
 
-    Grid _grid;
+    void initialize();
+    void render();
 };
 
 } // namespace endo

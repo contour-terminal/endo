@@ -45,10 +45,10 @@ target_compile_definitions(Shell PUBLIC META_WORKAROUND_LLVM_28385)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM InputEditor)
+    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM tui)
 else()
     # util for pty.h on POSIX systems
-    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM InputEditor Threads::Threads util)
+    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM tui Threads::Threads util)
 endif()
 
 
