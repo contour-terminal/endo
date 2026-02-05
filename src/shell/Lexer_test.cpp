@@ -24,3 +24,45 @@ TEST_CASE("Lexer.basic")
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::EndOfInput);
 }
+
+TEST_CASE("Lexer.utf8_identifier")
+{
+    // Chinese characters: 中文
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo \xE4\xB8\xAD\xE6\x96\x87"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "\xE4\xB8\xAD\xE6\x96\x87"); // Chinese characters
+}
+
+TEST_CASE("Lexer.utf8_string")
+{
+    // Chinese characters in quoted string: "中文"
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo \"\xE4\xB8\xAD\xE6\x96\x87\""));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::String);
+    CHECK(lexer.currentLiteral() == "\xE4\xB8\xAD\xE6\x96\x87");
+}
+
+TEST_CASE("Lexer.utf8_emoji")
+{
+    // Grinning face emoji: U+1F600
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo \xF0\x9F\x98\x80"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "\xF0\x9F\x98\x80"); // Grinning face emoji
+}
+
+TEST_CASE("Lexer.utf8_mixed")
+{
+    // Mixed ASCII and UTF-8: hello世界
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("hello\xE4\xB8\x96\xE7\x95\x8C"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "hello\xE4\xB8\x96\xE7\x95\x8C");
+}

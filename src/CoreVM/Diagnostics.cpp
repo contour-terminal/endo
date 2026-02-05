@@ -1,11 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
+#include <shell/LogConfig.h>
+
 #include <format>
 #include <iostream>
 #include <print>
 
 module CoreVM;
+
+namespace
+{
+// Use function-local static to avoid C++20 module static initialization issues
+auto& diagnosticsLog()
+{
+    static auto instance =
+        logstore::category("vm.diag", "VM diagnostics log", endo::log::categoryState("vm.diag"));
+    return instance;
+}
+} // namespace
 
 namespace CoreVM::diagnostics
 {
@@ -69,12 +82,15 @@ void BufferedReport::clear()
 
 void BufferedReport::log() const
 {
+    if (!diagnosticsLog().is_enabled())
+        return;
+
     for (const Message& message: _messages)
     {
         switch (message.type)
         {
-            case Type::Warning: std::print("Warning: {}\n", message); break;
-            default: std::print("Error: {}\n", message); break;
+            case Type::Warning: diagnosticsLog()()("Warning: {}\n", message); break;
+            default: diagnosticsLog()()("Error: {}\n", message); break;
         }
     }
 }

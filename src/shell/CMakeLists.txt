@@ -8,6 +8,7 @@ target_sources(Shell
   PUBLIC
     FILE_SET CXX_MODULES FILES
       Lexer.cpp
+      Process.cpp
       UnixPipe.cpp
       TTY.cpp
       Shell.cpp

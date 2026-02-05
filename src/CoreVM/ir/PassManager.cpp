@@ -1,13 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <shell/LogConfig.h>
+
 #include <string>
 #include <utility>
 
 module CoreVM;
+
+namespace
+{
+// Use function-local static to avoid C++20 module static initialization issues
+auto& passManagerLog()
+{
+    static auto instance =
+        logstore::category("vm.pass", "VM pass manager log", endo::log::categoryState("vm.pass"));
+    return instance;
+}
+} // namespace
+
 namespace CoreVM
 {
 
@@ -50,11 +61,8 @@ void PassManager::run(IRHandler* handler)
 
 void PassManager::logDebug(const std::string& msg)
 {
-    const char* debugFlag = getenv("COREVM_DEBUG_TRANSFORMS");
-    if (debugFlag && strcmp(debugFlag, "1") == 0)
-    {
-        fprintf(stderr, "PassManager: %s\n", msg.c_str());
-    }
+    if (passManagerLog().is_enabled())
+        passManagerLog()()("PassManager: {}\n", msg);
 }
 
 } // namespace CoreVM

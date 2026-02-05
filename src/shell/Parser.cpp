@@ -4,23 +4,30 @@ module;
 #include <shell/AST.h>
 #include <shell/ScopedLogger.h>
 
-#include <crispy/logstore.h>
 #include <crispy/utils.h>
 
 #include <memory>
 #include <optional>
 
-auto inline parserLog = logstore::category("parser", "Parser logger", logstore::category::state::Enabled);
-#define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog };
-#define TRACE_FMT(message, ...)                                                \
-    do                                                                         \
-    {                                                                          \
-        parserLog()(ScopedLogger::write(::std::format(message, __VA_ARGS__))); \
+#include "LogConfig.h"
+
+// Use function-local static to avoid C++20 module static initialization issues
+inline auto& parserLog()
+{
+    static auto instance = logstore::category("parser", "Parser logger", endo::log::categoryState("parser"));
+    return instance;
+}
+
+#define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog() };
+#define TRACE_FMT(message, ...)                                                        \
+    do                                                                                 \
+    {                                                                                  \
+        parserLog()()("{}", ScopedLogger::write(::std::format(message, __VA_ARGS__))); \
     } while (0)
-#define TRACE(message)                                            \
-    do                                                            \
-    {                                                             \
-        parserLog()(ScopedLogger::write(::std::format(message))); \
+#define TRACE(message)                                                    \
+    do                                                                    \
+    {                                                                     \
+        parserLog()()("{}", ScopedLogger::write(::std::format(message))); \
     } while (0)
 
 import ASTPrinter;

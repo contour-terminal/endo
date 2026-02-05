@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <crispy/logstore.h>
-
 #include <cstring>
 #include <format>
 #include <memory>
@@ -10,7 +8,7 @@ module;
 #include <string_view>
 #include <vector>
 
-auto inline lexerLog = logstore::category("lexer ", "Lexer logger ", logstore::category::state::Enabled);
+#include <libunicode/utf8.h>
 
 using namespace std::string_view_literals;
 
@@ -116,13 +114,24 @@ export class StringSource final: public Source
     [[nodiscard]] char32_t readChar() override
     {
         if (_offset >= _source.size())
-            return -1;
+            return static_cast<char32_t>(-1);
 
-        auto const ch = _source[_offset];
+        size_t bytesConsumed = 0;
+        auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);
 
-        ++_offset;
+        if (!std::holds_alternative<unicode::Success>(result))
+        {
+            // Invalid UTF-8: skip one byte, return replacement character
+            ++_offset;
+            ++_location.column;
+            return U'\uFFFD';
+        }
+
+        auto const ch = std::get<unicode::Success>(result).value;
+        _offset += bytesConsumed;
         ++_location.column;
-        if (ch == '\n')
+
+        if (ch == U'\n')
         {
             ++_location.line;
             _location.column = 0;
@@ -136,6 +145,13 @@ export class StringSource final: public Source
         if (_offset >= _source.size())
             return {};
 
+        size_t bytesConsumed = 0;
+        auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);
+
+        if (std::holds_alternative<unicode::Success>(result))
+            return std::string_view(_source.data() + _offset, bytesConsumed);
+
+        // Invalid UTF-8: return single byte
         return std::string_view(_source.data() + _offset, 1);
     }
 
@@ -264,7 +280,7 @@ export class Lexer
     {
         _nextToken.literal = {};
 
-        while (strchr(" \t", (int) _currentChar))
+        while (_currentChar == U' ' || _currentChar == U'\t')
             nextChar();
 
         auto const [line, column, name] = _source->currentSourceLocation();
@@ -275,9 +291,9 @@ export class Lexer
 
     Token consumeNumber()
     {
-        while (strchr("0123456789", (int) _currentChar))
+        while (_currentChar >= U'0' && _currentChar <= U'9')
         {
-            _nextToken.literal += static_cast<char>(_currentChar); // TODO: UTF-8
+            _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
         }
 
@@ -292,11 +308,9 @@ export class Lexer
 
         while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
         {
-            _nextToken.literal += static_cast<char>(_currentChar); // TODO: UTF-8
+            _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
-            // lexerLog()("consumeIdentifier: '{}'\n", (char) _currentChar);
         }
-        lexerLog()("consumeIdentifier: result: '{}'\n", _nextToken.literal);
         return confirmToken(token);
     }
 
@@ -308,7 +322,7 @@ export class Lexer
         {
             if (_currentChar == '\\')
                 nextChar();
-            _nextToken.literal += static_cast<char>(_currentChar); // TODO: UTF-8
+            _nextToken.literal += unicode::to_utf8(_currentChar);
             nextChar();
         }
         nextChar();

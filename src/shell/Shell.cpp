@@ -7,6 +7,7 @@ module;
 
 #include <cstdio>
 #include <cstring>
+#include <expected>
 #include <format>
 #include <iostream>
 #include <map>
@@ -16,6 +17,9 @@ module;
 
 #include <fcntl.h>
 #include <unistd.h>
+
+#include "Error.h"
+#include "LogConfig.h"
 
 #if defined(__linux__)
     #include <linux/close_range.h>
@@ -28,12 +32,22 @@ import Lexer;
 import ASTPrinter;
 import IRGenerator;
 import Parser;
+import Process;
 
 import CoreVM;
 
 export module Shell;
 
-static auto debugLog = logstore::category("debug", "Debug log", logstore::category::state::Disabled);
+namespace
+{
+// Use function-local static to avoid C++20 module static initialization issues
+auto& debugLog()
+{
+    static auto instance =
+        logstore::category("shell.debug", "Shell debug log", endo::log::categoryState("shell.debug"));
+    return instance;
+}
+} // namespace
 
 namespace endo
 {
@@ -211,7 +225,7 @@ export class Shell final: public CoreVM::Runtime
         while (!_quit && prompt.ready())
         {
             auto const lineBuffer = prompt.read();
-            debugLog()("input buffer: {}", lineBuffer);
+            debugLog()()("input buffer: {}", lineBuffer);
 
             _exitCode = execute(lineBuffer);
             // _tty.writeToStdout("exit code: {}\n", _exitCode);
@@ -233,7 +247,7 @@ export class Shell final: public CoreVM::Runtime
                 return EXIT_FAILURE;
             }
 
-            debugLog()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
+            debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
             CoreVM::IRProgram* irProgram = IRGenerator::generate(*rootNode);
             if (irProgram == nullptr)
@@ -259,9 +273,9 @@ export class Shell final: public CoreVM::Runtime
                 pm.run(irProgram);
             }
 
-            debugLog()("================================================\n");
-            debugLog()("Optimized IR program:\n");
-            if (debugLog.is_enabled())
+            debugLog()()("================================================\n");
+            debugLog()()("Optimized IR program:\n");
+            if (debugLog().is_enabled())
                 irProgram->dump();
 
             _currentProgram = CoreVM::TargetCodeGenerator {}.generate(irProgram);
@@ -272,9 +286,9 @@ export class Shell final: public CoreVM::Runtime
             }
             _currentProgram->link(this, &report);
 
-            debugLog()("================================================\n");
-            debugLog()("Linked target code:\n");
-            if (debugLog.is_enabled())
+            debugLog()()("================================================\n");
+            debugLog()()("Linked target code:\n");
+            if (debugLog().is_enabled())
                 _currentProgram->dump();
 
             CoreVM::Handler* main = _currentProgram->findHandler("@main");
@@ -390,14 +404,14 @@ export class Shell final: public CoreVM::Runtime
         CoreVM::CoreStringArray const& args = context.getStringArray(1);
         std::vector<char const*> const argv = constructArgv(args);
         std::string const& program = args.at(0);
-        std::optional<std::filesystem::path> const programPath = resolveProgram(program);
+        auto const programPath = resolveProgram(program);
 
         int const stdinFd = _currentPipelineBuilder.defaultStdinFd;
         int const stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
 
         if (!programPath.has_value())
         {
-            error("Failed to resolve program '{}'", program);
+            error("{}: {}", program, toString(programPath.error()));
             context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
             return;
         }
@@ -405,7 +419,7 @@ export class Shell final: public CoreVM::Runtime
         // TODO: setup redirects
         // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     debugLog()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
+        //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
         pid_t const pid = fork();
         switch (pid)
@@ -429,13 +443,19 @@ export class Shell final: public CoreVM::Runtime
                 int wstatus = 0;
                 waitpid(pid, &wstatus, 0);
                 if (WIFSIGNALED(wstatus))
-                    error("child process exited with signal {}", WTERMSIG(wstatus));
+                {
+                    _exitCode = 128 + WTERMSIG(wstatus);
+                    debugLog()()("child process exited with signal {}\n", WTERMSIG(wstatus));
+                }
                 else if (WIFEXITED(wstatus))
-                    error("child process exited with code {}", _exitCode = WEXITSTATUS(wstatus));
+                {
+                    _exitCode = WEXITSTATUS(wstatus);
+                    debugLog()()("child process exited with code {}\n", _exitCode);
+                }
                 else if (WIFSTOPPED(wstatus))
-                    error("child process stopped with signal {}", WSTOPSIG(wstatus));
+                    debugLog()()("child process stopped with signal {}\n", WSTOPSIG(wstatus));
                 else
-                    error("child process exited with unknown status {}", wstatus);
+                    debugLog()()("child process exited with unknown status {}\n", wstatus);
                 break;
         }
 
@@ -449,11 +469,11 @@ export class Shell final: public CoreVM::Runtime
 
         std::vector<char const*> const argv = constructArgv(args);
         std::string const& program = args.at(0);
-        std::optional<std::filesystem::path> const programPath = resolveProgram(program);
+        auto const programPath = resolveProgram(program);
 
         if (!programPath.has_value())
         {
-            error("Failed to resolve program '{}'", program);
+            error("{}: {}", program, toString(programPath.error()));
             context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
             return;
         }
@@ -463,7 +483,7 @@ export class Shell final: public CoreVM::Runtime
         // TODO: setup redirects
         // CoreVM::CoreIntArray const& outputRedirects = context.getIntArray(1);
         // for (size_t i = 0; i + 2 < outputRedirects.size(); i += 2)
-        //     debugLog()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
+        //     debugLog()()("redirect: {} -> {}\n", outputRedirects[i], outputRedirects[i + 1]);
 
         pid_t const pid = fork();
         switch (pid)
@@ -506,15 +526,19 @@ export class Shell final: public CoreVM::Runtime
                         int wstatus = 0;
                         waitpid(pid, &wstatus, 0);
                         if (WIFSIGNALED(wstatus))
-                            error("child process {}, exited with signal {}", pid, WTERMSIG(wstatus));
+                        {
+                            _exitCode = 128 + WTERMSIG(wstatus);
+                            debugLog()()("child process {} exited with signal {}\n", pid, WTERMSIG(wstatus));
+                        }
                         else if (WIFEXITED(wstatus))
-                            error("child process {} exited with code {}",
-                                  pid,
-                                  _exitCode = WEXITSTATUS(wstatus));
+                        {
+                            _exitCode = WEXITSTATUS(wstatus);
+                            debugLog()()("child process {} exited with code {}\n", pid, _exitCode);
+                        }
                         else if (WIFSTOPPED(wstatus))
-                            error("child process {} stopped with signal {}", pid, WSTOPSIG(wstatus));
+                            debugLog()()("child process {} stopped with signal {}\n", pid, WSTOPSIG(wstatus));
                         else
-                            error("child process {} exited with unknown status {}", pid, wstatus);
+                            debugLog()()("child process {} exited with unknown status {}\n", pid, wstatus);
                     }
                     _currentProcessGroupPids.clear();
                     _leftPid = std::nullopt;
@@ -533,11 +557,11 @@ export class Shell final: public CoreVM::Runtime
         _env.set("OLDPWD", _env.get("PWD").value_or(""));
         _env.set("PWD", path);
 
-        int const result = chdir(path.data());
-        if (result != 0)
-            error("Failed to change directory to '{}'", path);
+        auto const result = _processManager.changeDirectory(path);
+        if (!result.has_value())
+            error("Failed to change directory to '{}': {}", path, toString(result.error()));
 
-        context.setResult(result == 0);
+        context.setResult(result.has_value());
     }
 
     void builtinChDirHome(CoreVM::Params& context)
@@ -545,11 +569,12 @@ export class Shell final: public CoreVM::Runtime
         auto const path = _env.get("HOME").value_or("/");
         _env.set("OLDPWD", std::filesystem::current_path().string());
         _env.set("PWD", path);
-        int const result = chdir(path.data());
-        if (result != 0)
-            error("Failed to change directory to '{}'", path);
 
-        context.setResult(result == 0);
+        auto const result = _processManager.changeDirectory(std::filesystem::path(path));
+        if (!result.has_value())
+            error("Failed to change directory to '{}': {}", path, toString(result.error()));
+
+        context.setResult(result.has_value());
     }
 
     void builtinSet(CoreVM::Params& context)
@@ -592,59 +617,71 @@ export class Shell final: public CoreVM::Runtime
     void builtinOpenRead(CoreVM::Params& context)
     {
         std::string const& path = context.getString(1);
-        int const fd = open(path.data(), O_RDONLY);
-        if (fd == -1)
+        auto const result = _processManager.openFile(path, O_RDONLY);
+        if (!result.has_value())
         {
-            error("Failed to open file '{}': {}", path, strerror(errno));
+            error("Failed to open file '{}': {}", path, toString(result.error()));
             context.setResult(CoreVM::CoreNumber(-1));
             return;
         }
 
-        context.setResult(CoreVM::CoreNumber(fd));
+        context.setResult(CoreVM::CoreNumber(result.value()));
     }
 
     void builtinOpenWrite(CoreVM::Params& context)
     {
         std::string const& path = context.getString(1);
         int const oflags = static_cast<int>(context.getInt(2));
-        int const fd = open(path.data(), oflags ? oflags : (O_WRONLY | O_CREAT | O_TRUNC));
-        if (fd == -1)
+        auto const result = _processManager.openFile(path, oflags ? oflags : (O_WRONLY | O_CREAT | O_TRUNC));
+        if (!result.has_value())
         {
-            error("Failed to open file '{}': {}", path, strerror(errno));
+            error("Failed to open file '{}': {}", path, toString(result.error()));
             context.setResult(CoreVM::CoreNumber(-1));
             return;
         }
 
-        context.setResult(CoreVM::CoreNumber(fd));
+        context.setResult(CoreVM::CoreNumber(result.value()));
     }
 
-    [[nodiscard]] std::optional<std::filesystem::path> resolveProgram(std::string const& program) const
+    /// Resolves a program name to its full path.
+    ///
+    /// @param program Program name or path to resolve
+    /// @return Full path to the program on success, or ShellError::ProgramNotFound
+    [[nodiscard]] std::expected<std::filesystem::path, ShellError> resolveProgram(
+        std::string const& program) const
     {
+        // Check if it's an absolute or relative path
+        if (program.contains('/'))
+        {
+            if (std::filesystem::exists(program))
+                return std::filesystem::path(program);
+            return std::unexpected(ShellError::ProgramNotFound);
+        }
+
+        // Search in PATH
         auto const pathEnv = _env.get("PATH");
         if (!pathEnv.has_value())
-            return std::nullopt;
+            return std::unexpected(ShellError::VariableNotFound);
 
         auto const pathEnvValue = pathEnv.value();
         auto const paths = crispy::split(pathEnvValue, ':');
 
         for (auto const& pathStr: paths)
         {
-            auto path = std::filesystem::path(pathStr);
-            auto const programPath = path / program;
+            auto const programPath = std::filesystem::path(pathStr) / program;
             if (std::filesystem::exists(programPath))
             {
-                debugLog()("Found program: {}", programPath.string());
+                debugLog()()("Found program: {}", programPath.string());
                 return programPath;
             }
         }
 
-        return std::nullopt;
+        return std::unexpected(ShellError::ProgramNotFound);
     }
 
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp)
     {
-        debugLog()(
-            std::format("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants())));
+        debugLog()()("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
     }
 
     template <typename... Args>
@@ -657,6 +694,8 @@ export class Shell final: public CoreVM::Runtime
     Environment& _env;
 
     TTY& _tty;
+
+    ProcessManager& _processManager = PosixProcessManager::instance();
 
     std::unique_ptr<CoreVM::Program> _currentProgram;
     CoreVM::Runner::Globals _globals;
