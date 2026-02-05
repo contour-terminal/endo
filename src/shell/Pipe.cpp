@@ -7,9 +7,9 @@ module;
 #include <stdexcept>
 #include <string>
 
-#include "Error.h"
-#include "LogConfig.h"
-#include "Platform.h"
+#include "Error.hpp"
+#include "LogConfig.hpp"
+#include "Platform.hpp"
 
 #if !defined(_WIN32)
     #include <fcntl.h>

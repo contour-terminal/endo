@@ -8,7 +8,7 @@
 
 #include <unistd.h>
 
-#include "LogConfig.h"
+#include "LogConfig.hpp"
 
 using namespace std::string_view_literals;
 

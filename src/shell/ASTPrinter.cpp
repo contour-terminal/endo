@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <shell/AST.h>
-#include <shell/Visitor.h>
+#include <shell/AST.hpp>
+#include <shell/Visitor.hpp>
 
 #include <crispy/assert.h>
 

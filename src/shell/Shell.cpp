@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <shell/ProcessGroup.h>
+#include <shell/ProcessGroup.hpp>
 
 #include <crispy/assert.h>
 #include <crispy/utils.h>
@@ -24,9 +24,9 @@ module;
     #include <unistd.h>
 #endif
 
-#include "Error.h"
-#include "LogConfig.h"
-#include "Platform.h"
+#include "Error.hpp"
+#include "LogConfig.hpp"
+#include "Platform.hpp"
 
 import TTY;
 import Pipe;

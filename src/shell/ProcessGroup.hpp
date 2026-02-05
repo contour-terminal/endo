@@ -3,7 +3,7 @@
 
 #include <vector>
 
-#include "Platform.h"
+#include "Platform.hpp"
 
 namespace endo
 {

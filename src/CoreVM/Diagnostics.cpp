@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <shell/LogConfig.h>
+#include <shell/LogConfig.hpp>
 
 #include <format>
 #include <iostream>

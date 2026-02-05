@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 #include <CoreVM/sysconfig.h>
-#include <CoreVM/util/strings.h>
-#include <CoreVM/util/assert.h>
+#include <CoreVM/util/strings.hpp>
+#include <CoreVM/util/assert.hpp>
 
 #include <cinttypes>
 #include <cmath>

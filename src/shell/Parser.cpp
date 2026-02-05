@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
 
-#include <shell/AST.h>
-#include <shell/DiagnosticsAdapter.h>
-#include <shell/ScopedLogger.h>
+#include <shell/AST.hpp>
+#include <shell/DiagnosticsAdapter.hpp>
+#include <shell/ScopedLogger.hpp>
 
 #include <crispy/utils.h>
 
 #include <memory>
 #include <optional>
 
-#include "LogConfig.h"
+#include "LogConfig.hpp"
 
 // Use function-local static to avoid C++20 module static initialization issues
 inline auto& parserLog()

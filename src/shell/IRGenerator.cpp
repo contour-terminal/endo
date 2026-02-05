@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <shell/AST.h>
-#include <shell/DiagnosticsAdapter.h>
-#include <shell/ScopedLogger.h>
+#include <shell/AST.hpp>
+#include <shell/DiagnosticsAdapter.hpp>
+#include <shell/ScopedLogger.hpp>
 
 #include <typeinfo>
 

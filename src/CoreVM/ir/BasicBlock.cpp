@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 module;
-#include <CoreVM/util/assert.h>
+#include <CoreVM/util/assert.hpp>
 
 #include <algorithm>
 #include <cassert>

@@ -7,8 +7,8 @@ module;
 #include <string>
 #include <vector>
 
-#include "Error.h"
-#include "Platform.h"
+#include "Error.hpp"
+#include "Platform.hpp"
 
 #if defined(_WIN32)
     #include <windows.h>

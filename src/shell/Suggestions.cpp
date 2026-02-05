@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Suggestions.h>
+#include <shell/Suggestions.hpp>
 
 #include <algorithm>
 #include <format>
