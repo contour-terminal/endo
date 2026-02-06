@@ -321,6 +321,29 @@ TEST_CASE("InputField.redo")
     CHECK_FALSE(field.canRedo());
 }
 
+TEST_CASE("InputField.redo_ctrl_y")
+{
+    InputField field;
+
+    (void) field.processEvent(charKey('a'));
+    (void) field.processEvent(charKey('b'));
+    (void) field.processEvent(charKey('c'));
+    CHECK(field.text() == "abc");
+
+    // Undo twice
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));
+    (void) field.processEvent(charKey('z', Modifier::Ctrl));
+    CHECK(field.text() == "a");
+
+    // Redo with Ctrl+Y (modern keybinding)
+    (void) field.processEvent(charKey('y', Modifier::Ctrl));
+    CHECK(field.text() == "ab");
+
+    // Redo again with Ctrl+Y
+    (void) field.processEvent(charKey('y', Modifier::Ctrl));
+    CHECK(field.text() == "abc");
+}
+
 TEST_CASE("InputField.new_edit_clears_redo_stack")
 {
     InputField field;
@@ -637,8 +660,8 @@ TEST_CASE("InputField.yank")
     (void) field.processEvent(charKey('u', Modifier::Ctrl));
     CHECK(field.text().empty());
 
-    // Yank it back
-    (void) field.processEvent(charKey('y', Modifier::Ctrl));
+    // Yank it back with Ctrl+V (Paste, which uses kill ring)
+    (void) field.processEvent(charKey('v', Modifier::Ctrl));
     CHECK(field.text() == "hello");
 }
 
@@ -655,13 +678,38 @@ TEST_CASE("InputField.enter_submits")
     CHECK(action == InputFieldAction::Submit);
 }
 
-TEST_CASE("InputField.ctrl_c_aborts")
+TEST_CASE("InputField.ctrl_c_copies_without_selection")
 {
     InputField field;
     field.setText("something");
 
+    // Ctrl+C without selection does nothing (no abort)
     auto action = field.processEvent(charKey('c', Modifier::Ctrl));
-    CHECK(action == InputFieldAction::Abort);
+    CHECK(action == InputFieldAction::None);
+}
+
+TEST_CASE("InputField.ctrl_d_aborts_on_empty")
+{
+    InputField field;
+    // Empty buffer
+
+    // Ctrl+D on empty buffer returns Eof (abort)
+    auto action = field.processEvent(charKey('d', Modifier::Ctrl));
+    CHECK(action == InputFieldAction::Eof);
+}
+
+TEST_CASE("InputField.ctrl_d_deletes_char_when_not_empty")
+{
+    InputField field;
+    field.setText("hello");
+
+    // Move cursor to beginning
+    (void) field.processEvent(specialKey(KeyCode::Home));
+
+    // Ctrl+D on non-empty buffer deletes character at cursor
+    auto action = field.processEvent(charKey('d', Modifier::Ctrl));
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.text() == "ello");
 }
 
 TEST_CASE("InputField.ctrl_c_copies_when_selection")
@@ -673,6 +721,11 @@ TEST_CASE("InputField.ctrl_c_copies_when_selection")
     // Ctrl+C with selection should copy, not abort
     auto action = field.processEvent(charKey('c', Modifier::Ctrl));
     CHECK(action == InputFieldAction::Changed);
+
+    // Clear selection and buffer, then paste to verify copy worked
+    field.clear();
+    (void) field.processEvent(charKey('v', Modifier::Ctrl)); // Paste
+    CHECK(field.text() == "hello");
 }
 
 TEST_CASE("InputField.ctrl_d_eof_on_empty")

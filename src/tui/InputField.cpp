@@ -14,6 +14,7 @@
 #endif
 
 #include <tui/Canvas.hpp>
+#include <tui/EditAction.hpp>
 #include <tui/InputField.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
@@ -278,298 +279,375 @@ void InputField::setMaxHistory(std::size_t n)
         _history.erase(_history.begin());
 }
 
+void InputField::setKeyBindings(KeyBindings bindings)
+{
+    _keyBindings = std::move(bindings);
+}
+
+auto InputField::keyBindings() const noexcept -> KeyBindings const&
+{
+    return _keyBindings;
+}
+
+auto InputField::keyBindings() noexcept -> KeyBindings&
+{
+    return _keyBindings;
+}
+
+auto InputField::executeAction(EditAction action) -> InputFieldAction
+{
+    switch (action)
+    {
+        case EditAction::None: return InputFieldAction::None;
+
+        // Movement
+        case EditAction::MoveForwardChar:
+            clearSelection();
+            moveForwardChar();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveBackwardChar:
+            clearSelection();
+            moveBackwardChar();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveForwardWord:
+            clearSelection();
+            moveForwardWord();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveBackwardWord:
+            clearSelection();
+            moveBackwardWord();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveToLineStart:
+            clearSelection();
+            if (_multiline)
+                moveToLineStart();
+            else
+                moveToStart();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveToLineEnd:
+            clearSelection();
+            if (_multiline)
+                moveToLineEnd();
+            else
+                moveToEnd();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveToBufferStart:
+            clearSelection();
+            moveToBufferStart();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveToBufferEnd:
+            clearSelection();
+            moveToBufferEnd();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveUp:
+            clearSelection();
+            if (_multiline)
+                moveUp();
+            else
+                historyPrev();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::MoveDown:
+            clearSelection();
+            if (_multiline)
+                moveDown();
+            else
+                historyNext();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        // Editing
+        case EditAction::DeleteCharBackward:
+            clearGhostText();
+            if (hasSelection())
+            {
+                saveUndoState();
+                deleteSelection();
+            }
+            else
+            {
+                deleteCharBackward();
+            }
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::DeleteCharForward:
+            clearGhostText();
+            if (hasSelection())
+            {
+                saveUndoState();
+                deleteSelection();
+            }
+            else
+            {
+                deleteChar();
+            }
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::DeleteWord:
+            clearGhostText();
+            killWord();
+            return InputFieldAction::Changed;
+
+        case EditAction::DeleteWordBackward:
+            clearGhostText();
+            killWordBackward();
+            return InputFieldAction::Changed;
+
+        case EditAction::KillToEnd:
+            clearGhostText();
+            killToEnd();
+            return InputFieldAction::Changed;
+
+        case EditAction::KillToStart:
+            clearGhostText();
+            killToStart();
+            return InputFieldAction::Changed;
+
+        case EditAction::Transpose:
+            transpose();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        // Undo/Redo
+        case EditAction::Undo:
+            _lastWasKill = false;
+            if (undo())
+                return InputFieldAction::Changed;
+            return InputFieldAction::None;
+
+        case EditAction::Redo:
+            _lastWasKill = false;
+            if (redo())
+                return InputFieldAction::Changed;
+            return InputFieldAction::None;
+
+        // Kill Ring
+        case EditAction::Yank:
+            yank();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::YankPop:
+            yankPop();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        // Selection
+        case EditAction::SelectAll:
+            selectAll();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        // Clipboard
+        case EditAction::Copy:
+            if (hasSelection())
+            {
+                copySelection();
+                _lastWasKill = false;
+                return InputFieldAction::Changed;
+            }
+            return InputFieldAction::None;
+
+        case EditAction::Cut:
+            if (hasSelection())
+            {
+                saveUndoState();
+                cutSelection();
+                _lastWasKill = false;
+                return InputFieldAction::Changed;
+            }
+            return InputFieldAction::None;
+
+        case EditAction::Paste:
+            // Paste from kill ring (system clipboard handled via PasteEvent)
+            yank();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        // Control
+        case EditAction::Submit:
+            clearSelection();
+            _lastWasKill = false;
+            return InputFieldAction::Submit;
+
+        case EditAction::Abort: _lastWasKill = false; return InputFieldAction::Abort;
+
+        case EditAction::InsertNewline:
+            if (_multiline)
+            {
+                saveUndoState();
+                clearGhostText();
+                if (hasSelection())
+                    deleteSelection();
+                insertNewline();
+                _lastWasKill = false;
+                return InputFieldAction::Changed;
+            }
+            return InputFieldAction::None;
+
+        // History
+        case EditAction::HistoryPrev:
+            clearSelection();
+            historyPrev();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::HistoryNext:
+            clearSelection();
+            historyNext();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+    }
+
+    return InputFieldAction::None;
+}
+
 auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
 {
     auto const ctrl = hasModifier(key.modifiers, Modifier::Ctrl);
     auto const alt = hasModifier(key.modifiers, Modifier::Alt);
     auto const shift = hasModifier(key.modifiers, Modifier::Shift);
 
-    // Special keys
-    switch (key.key)
+    // ========================================================================
+    // Special case: Shift+movement keys for selection extension
+    // These cannot be handled by the keybinding system because they modify
+    // the behavior of movement keys rather than being separate actions.
+    // ========================================================================
+    if (shift && !ctrl && !alt)
     {
-        case KeyCode::Enter:
-            _lastWasKill = false;
-            // In multiline mode: Shift+Enter OR Alt+Enter inserts newline
-            // Alt+Enter works universally (ESC prefix), Shift+Enter requires Kitty protocol
-            if (_multiline && (shift || alt))
-            {
-                saveUndoState();
-                clearGhostText(); // User input clears ghost suggestion
-                // Delete selection first if any
-                if (hasSelection())
-                    deleteSelection();
-                insertNewline();
-                return InputFieldAction::Changed;
-            }
-            clearSelection();
-            return InputFieldAction::Submit;
-        case KeyCode::Tab:
-            // Tab could be expanded in the future; for now insert literal tab
-            _lastWasKill = false;
-            return InputFieldAction::None;
-        case KeyCode::Escape: _lastWasKill = false; return InputFieldAction::None;
-        case KeyCode::Backspace:
-            _lastWasKill = false;
-            clearGhostText(); // User input clears ghost suggestion
-            if (hasSelection())
-            {
-                saveUndoState();
-                deleteSelection();
-                return InputFieldAction::Changed;
-            }
-            if (ctrl || alt)
-            {
-                killWordBackward();
-                return InputFieldAction::Changed;
-            }
-            deleteCharBackward();
-            return InputFieldAction::Changed;
-        case KeyCode::Delete:
-            _lastWasKill = false;
-            clearGhostText(); // User input clears ghost suggestion
-            if (hasSelection())
-            {
-                saveUndoState();
-                deleteSelection();
-                return InputFieldAction::Changed;
-            }
-            deleteChar();
-            return InputFieldAction::Changed;
-        case KeyCode::Up:
-            _lastWasKill = false;
-            if (_multiline)
-            {
-                if (shift)
+        switch (key.key)
+        {
+            case KeyCode::Up:
+                _lastWasKill = false;
+                if (_multiline)
                     moveWithSelection(&InputField::moveUp);
                 else
-                {
-                    clearSelection();
-                    moveUp(); // moveUp() falls back to historyPrev() on first line
-                }
-            }
-            else
-            {
-                clearSelection();
-                historyPrev();
-            }
-            return InputFieldAction::Changed;
-        case KeyCode::Down:
-            _lastWasKill = false;
-            if (_multiline)
-            {
-                if (shift)
+                    moveWithSelection(&InputField::historyPrev);
+                return InputFieldAction::Changed;
+
+            case KeyCode::Down:
+                _lastWasKill = false;
+                if (_multiline)
                     moveWithSelection(&InputField::moveDown);
                 else
-                {
-                    clearSelection();
-                    moveDown(); // moveDown() falls back to historyNext() on last line
-                }
-            }
-            else
-            {
-                clearSelection();
-                historyNext();
-            }
-            return InputFieldAction::Changed;
-        case KeyCode::Left:
-            _lastWasKill = false;
-            if (shift)
-            {
-                if (ctrl)
-                    moveWithSelection(&InputField::moveBackwardWord);
-                else
-                    moveWithSelection(&InputField::moveBackwardChar);
-            }
-            else
-            {
-                clearSelection();
-                if (ctrl)
-                    moveBackwardWord();
-                else
-                    moveBackwardChar();
-            }
-            return InputFieldAction::Changed;
-        case KeyCode::Right:
-            _lastWasKill = false;
-            if (shift)
-            {
-                if (ctrl)
-                    moveWithSelection(&InputField::moveForwardWord);
-                else
-                    moveWithSelection(&InputField::moveForwardChar);
-            }
-            else
-            {
-                clearSelection();
-                if (ctrl)
-                    moveForwardWord();
-                else
-                    moveForwardChar();
-            }
-            return InputFieldAction::Changed;
-        case KeyCode::Home:
-            _lastWasKill = false;
-            if (shift)
-            {
-                if (_multiline && ctrl)
-                    moveWithSelection(&InputField::moveToBufferStart);
-                else if (_multiline)
+                    moveWithSelection(&InputField::historyNext);
+                return InputFieldAction::Changed;
+
+            case KeyCode::Left:
+                _lastWasKill = false;
+                moveWithSelection(&InputField::moveBackwardChar);
+                return InputFieldAction::Changed;
+
+            case KeyCode::Right:
+                _lastWasKill = false;
+                moveWithSelection(&InputField::moveForwardChar);
+                return InputFieldAction::Changed;
+
+            case KeyCode::Home:
+                _lastWasKill = false;
+                if (_multiline)
                     moveWithSelection(&InputField::moveToLineStart);
                 else
                     moveWithSelection(&InputField::moveToStart);
-            }
-            else
-            {
-                clearSelection();
-                if (_multiline && ctrl)
-                    moveToBufferStart();
-                else if (_multiline)
-                    moveToLineStart();
-                else
-                    moveToStart();
-            }
-            return InputFieldAction::Changed;
-        case KeyCode::End:
-            _lastWasKill = false;
-            if (shift)
-            {
-                if (_multiline && ctrl)
-                    moveWithSelection(&InputField::moveToBufferEnd);
-                else if (_multiline)
+                return InputFieldAction::Changed;
+
+            case KeyCode::End:
+                _lastWasKill = false;
+                if (_multiline)
                     moveWithSelection(&InputField::moveToLineEnd);
                 else
                     moveWithSelection(&InputField::moveToEnd);
-            }
-            else
-            {
-                clearSelection();
-                if (_multiline && ctrl)
-                    moveToBufferEnd();
-                else if (_multiline)
-                    moveToLineEnd();
-                else
-                    moveToEnd();
-            }
-            return InputFieldAction::Changed;
-        default: break;
-    }
+                return InputFieldAction::Changed;
 
-    // Ctrl+letter combinations
-    if (ctrl && key.codepoint != 0)
-    {
-        switch (key.codepoint)
-        {
-            case 'a':
-                _lastWasKill = false;
-                // Ctrl+A: Select all (GUI-style) takes precedence over Emacs move-to-start
-                selectAll();
-                return InputFieldAction::Changed;
-            case 'e':
-                _lastWasKill = false;
-                if (_multiline)
-                    moveToLineEnd();
-                else
-                    moveToEnd();
-                return InputFieldAction::Changed;
-            case 'f':
-                moveForwardChar();
-                _lastWasKill = false;
-                return InputFieldAction::Changed;
-            case 'b':
-                moveBackwardChar();
-                _lastWasKill = false;
-                return InputFieldAction::Changed;
-            case 'p':
-                _lastWasKill = false;
-                if (_multiline)
-                    moveUp();
-                else
-                    historyPrev();
-                return InputFieldAction::Changed;
-            case 'n':
-                _lastWasKill = false;
-                if (_multiline)
-                    moveDown();
-                else
-                    historyNext();
-                return InputFieldAction::Changed;
-            case 'k': killToEnd(); return InputFieldAction::Changed;
-            case 'u': killToStart(); return InputFieldAction::Changed;
-            case 'w': killWordBackward(); return InputFieldAction::Changed;
-            case 'y':
-                yank();
-                _lastWasKill = false;
-                return InputFieldAction::Changed;
-            case 't':
-                transpose();
-                _lastWasKill = false;
-                return InputFieldAction::Changed;
-            case 'd':
-                if (_buffer.empty())
-                    return InputFieldAction::Eof;
-                deleteChar();
-                _lastWasKill = false;
-                return InputFieldAction::Changed;
-            case 'c':
-                // Ctrl+C: Copy if selection, otherwise abort
-                if (hasSelection())
-                {
-                    copySelection();
-                    _lastWasKill = false;
-                    return InputFieldAction::Changed;
-                }
-                return InputFieldAction::Abort;
-            case 'x':
-                // Ctrl+X: Cut selection
-                if (hasSelection())
-                {
-                    saveUndoState();
-                    cutSelection();
-                    _lastWasKill = false;
-                    return InputFieldAction::Changed;
-                }
-                return InputFieldAction::None;
-            case 'z':
-                _lastWasKill = false;
-                // Ctrl+Shift+Z: Redo, Ctrl+Z: Undo
-                if (shift)
-                {
-                    if (redo())
-                        return InputFieldAction::Changed;
-                }
-                else
-                {
-                    if (undo())
-                        return InputFieldAction::Changed;
-                }
-                return InputFieldAction::None;
             default: break;
         }
     }
 
-    // Alt+letter combinations
-    if (alt && key.codepoint != 0)
+    // Shift+Ctrl movement (select word)
+    if (shift && ctrl && !alt)
     {
-        switch (key.codepoint)
+        switch (key.key)
         {
-            case 'f':
-                moveForwardWord();
+            case KeyCode::Left:
                 _lastWasKill = false;
+                moveWithSelection(&InputField::moveBackwardWord);
                 return InputFieldAction::Changed;
-            case 'b':
-                moveBackwardWord();
+
+            case KeyCode::Right:
                 _lastWasKill = false;
+                moveWithSelection(&InputField::moveForwardWord);
                 return InputFieldAction::Changed;
-            case 'd': killWord(); return InputFieldAction::Changed;
-            case 'y':
-                yankPop();
+
+            case KeyCode::Home:
                 _lastWasKill = false;
+                moveWithSelection(&InputField::moveToBufferStart);
                 return InputFieldAction::Changed;
+
+            case KeyCode::End:
+                _lastWasKill = false;
+                moveWithSelection(&InputField::moveToBufferEnd);
+                return InputFieldAction::Changed;
+
             default: break;
         }
     }
 
-    // Printable codepoint
+    // ========================================================================
+    // Special case: Context-dependent keys
+    // ========================================================================
+
+    // Ctrl+D: EOF if buffer empty, delete char forward otherwise
+    if (ctrl && !alt && !shift && key.codepoint == 'd')
+    {
+        if (_buffer.empty())
+            return InputFieldAction::Eof;
+        // Otherwise fall through to keybinding lookup (DeleteCharForward)
+    }
+
+    // Tab: Not handled yet, ignore
+    if (key.key == KeyCode::Tab)
+    {
+        _lastWasKill = false;
+        return InputFieldAction::None;
+    }
+
+    // Escape: Ignore
+    if (key.key == KeyCode::Escape)
+    {
+        _lastWasKill = false;
+        return InputFieldAction::None;
+    }
+
+    // ========================================================================
+    // Keybinding lookup
+    // ========================================================================
+    if (auto action = _keyBindings.lookup(key); action && *action != EditAction::None)
+    {
+        return executeAction(*action);
+    }
+
+    // ========================================================================
+    // Printable characters
+    // ========================================================================
     if (key.codepoint != 0 && !ctrl && !alt && isPrintable(key.key))
     {
         // Save undo state before any changes

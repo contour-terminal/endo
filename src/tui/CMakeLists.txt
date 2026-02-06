@@ -7,6 +7,7 @@ add_library(tui
     CompletionPopup.cpp
     Dialog.cpp
     InputField.cpp
+    KeyBindings.cpp
     List.cpp
     LogPanel.cpp
     MarkdownRenderer.cpp
@@ -42,6 +43,7 @@ enable_sanitizers(tui)
 add_executable(test-tui
     test_main.cpp
     InputField_test.cpp
+    KeyBindings_test.cpp
     Renderer_test.cpp
     Completer_test.cpp
     CompletionPopup_test.cpp

@@ -11,6 +11,7 @@
 
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
+#include <tui/KeyBindings.hpp>
 
 namespace tui
 {
@@ -229,6 +230,20 @@ class InputField: public Component
     /// @brief Selects all text in the buffer.
     void selectAll();
 
+    // ========================================================================
+    // Keybindings
+    // ========================================================================
+
+    /// @brief Sets custom keybindings for the input field.
+    /// @param bindings The keybindings to use.
+    void setKeyBindings(KeyBindings bindings);
+
+    /// @brief Returns the current keybindings (const).
+    [[nodiscard]] auto keyBindings() const noexcept -> KeyBindings const&;
+
+    /// @brief Returns the current keybindings (mutable).
+    [[nodiscard]] auto keyBindings() noexcept -> KeyBindings&;
+
     /// @brief Copies the selected text to the clipboard (kill ring for now).
     /// @return True if text was copied.
     auto copySelection() -> bool;
@@ -262,6 +277,7 @@ class InputField: public Component
     std::string _buffer;
     std::size_t _cursor = 0;
     std::string _prompt;
+    KeyBindings _keyBindings = KeyBindings::defaults();
     std::string _ghostText; ///< Ghost text suggestion (displayed dimmed after cursor)
     bool _multiline = false;
     int _maxLines = 0;     ///< 0 = unlimited
@@ -309,6 +325,11 @@ class InputField: public Component
 
     /// @brief Dispatches a KeyEvent to the appropriate editing operation.
     [[nodiscard]] auto handleKey(KeyEvent const& key) -> InputFieldAction;
+
+    /// @brief Executes an edit action.
+    /// @param action The action to execute.
+    /// @return The result of executing the action.
+    [[nodiscard]] auto executeAction(EditAction action) -> InputFieldAction;
 
     // Editing operations
     void killToEnd();          ///< Ctrl+K: Kill from cursor to end of line.
