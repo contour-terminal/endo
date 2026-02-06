@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <cstddef>
+#include <string>
+#include <vector>
+
+#include <tui/Component.hpp>
+#include <tui/InputEvent.hpp>
+#include <tui/Theme.hpp>
+
+namespace tui
+{
+
+/// @brief A single completion item for the popup.
+struct CompletionItem
+{
+    std::string text;        ///< The completion text to insert.
+    std::string displayText; ///< Display text (may differ from insert text).
+    std::string description; ///< Optional description/help text.
+    int score = 0;           ///< Ranking score (higher = more relevant).
+};
+
+/// @brief Result of processing an input event in CompletionPopup.
+enum class CompletionAction : std::uint8_t
+{
+    None,      ///< No action taken (event not consumed).
+    Changed,   ///< Selection changed, re-render needed.
+    Accepted,  ///< User accepted the selected completion.
+    Dismissed, ///< User dismissed the popup (Escape).
+};
+
+/// @brief A popup menu for showing completion suggestions.
+///
+/// This is a proper TUI widget that manages its own visibility state,
+/// handles keyboard navigation, and renders using the Canvas API.
+/// It's designed to be shown below the cursor in a text input context.
+///
+/// As a Component, CompletionPopup can be added to a Screen's component tree
+/// and will receive events through the standard event dispatch mechanism.
+///
+/// Usage:
+/// @code
+///   CompletionPopup popup;
+///   popup.show(completions);  // Show with items
+///
+///   // In event loop:
+///   auto action = popup.processEvent(event);
+///   if (action == CompletionAction::Accepted) {
+///       auto item = popup.selectedItem();
+///       // Use item->text for insertion
+///   }
+///
+///   // Rendering happens automatically via Component::render(Canvas&)
+/// @endcode
+class CompletionPopup: public Component
+{
+  public:
+    /// @brief Constructs an initially hidden completion popup.
+    CompletionPopup() = default;
+    ~CompletionPopup() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the popup to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    /// @param event The input event.
+    /// @return EventResult for event bubbling.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief CompletionPopup can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size based on items.
+    [[nodiscard]] Size preferredSize() const override;
+
+    // ========================================================================
+    // Visibility and Items
+    // ========================================================================
+
+    /// @brief Shows the popup with the given completion items.
+    /// @param items The completion items to display.
+    /// @note If items is empty, the popup remains hidden.
+    void show(std::vector<CompletionItem> items);
+
+    /// @brief Hides the popup and clears items.
+    void hide();
+
+    /// @brief Returns whether the popup is currently visible.
+    /// @note Overrides Component::visible() to also check for non-empty items.
+    [[nodiscard]] bool visible() const noexcept;
+
+    /// @brief Returns the number of items in the popup.
+    [[nodiscard]] size_t itemCount() const noexcept;
+
+    /// @brief Returns true if the popup has no items.
+    [[nodiscard]] bool empty() const noexcept;
+
+    // ========================================================================
+    // Selection
+    // ========================================================================
+
+    /// @brief Returns the currently selected index.
+    [[nodiscard]] size_t selectedIndex() const noexcept;
+
+    /// @brief Returns the currently selected item, or nullptr if none.
+    [[nodiscard]] CompletionItem const* selectedItem() const noexcept;
+
+    /// @brief Returns the item at the given index, or nullptr if out of bounds.
+    [[nodiscard]] CompletionItem const* itemAt(size_t index) const noexcept;
+
+    /// @brief Selects the next item (with wrap-around).
+    void selectNext();
+
+    /// @brief Selects the previous item (with wrap-around).
+    void selectPrev();
+
+    /// @brief Moves selection down by one page.
+    void pageDown();
+
+    /// @brief Moves selection up by one page.
+    void pageUp();
+
+    /// @brief Selects the first item.
+    void selectFirst();
+
+    /// @brief Selects the last item.
+    void selectLast();
+
+    // ========================================================================
+    // Configuration
+    // ========================================================================
+
+    /// @brief Sets the maximum number of visible items.
+    /// @param maxVisible Maximum items to show (default: 10).
+    void setMaxVisible(int maxVisible);
+
+    /// @brief Returns the maximum number of visible items.
+    [[nodiscard]] int maxVisible() const noexcept;
+
+    // ========================================================================
+    // Event Handling
+    // ========================================================================
+
+    /// @brief Processes an input event.
+    ///
+    /// Handles keyboard navigation:
+    /// - Up/Down or Ctrl+K/J: Navigate items
+    /// - PageUp/PageDown: Page navigation
+    /// - Enter/Tab: Accept selection
+    /// - Escape: Dismiss popup
+    ///
+    /// @param event The input event to process.
+    /// @return The resulting action.
+    [[nodiscard]] CompletionAction processEvent(InputEvent const& event);
+
+    /// @brief Returns the height of the last rendered popup (including border).
+    [[nodiscard]] int renderedHeight() const noexcept;
+
+    /// @brief Returns the width of the last rendered popup (including border).
+    [[nodiscard]] int renderedWidth() const noexcept;
+
+  private:
+    std::vector<CompletionItem> _items;
+    size_t _selected = 0;
+    size_t _scrollOffset = 0;
+    int _maxVisible = 10;
+    int _renderedHeight = 0;
+    int _renderedWidth = 0;
+    bool _visible = false;
+
+    /// @brief Ensures the selected item is visible by adjusting scroll offset.
+    void ensureSelectedVisible();
+
+    /// @brief Calculates the width needed for the popup.
+    [[nodiscard]] int calculateWidth(int maxWidth) const;
+
+    /// @brief Handles a key event.
+    [[nodiscard]] CompletionAction handleKey(KeyEvent const& key);
+};
+
+} // namespace tui
