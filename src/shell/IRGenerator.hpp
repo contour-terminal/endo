@@ -66,6 +66,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::BuiltinBgStmt const& node) override;
     void visit(ast::BuiltinWaitStmt const& node) override;
     void visit(ast::BuiltinBindStmt const& node) override;
+    void visit(ast::BuiltinWhichStmt const& node) override;
     void visit(ast::OutputRedirect const& node) override;
     void visit(ast::ProgramCall const& node) override;
     void visit(ast::SubstitutionExpr const& node) override;

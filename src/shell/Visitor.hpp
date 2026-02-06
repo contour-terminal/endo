@@ -19,6 +19,7 @@ struct BuiltinFgStmt;
 struct BuiltinBgStmt;
 struct BuiltinWaitStmt;
 struct BuiltinBindStmt;
+struct BuiltinWhichStmt;
 struct CallPipeline;
 struct CaseStmt;
 struct CommandFileSubst;
@@ -87,6 +88,7 @@ struct Visitor
     virtual void visit(BuiltinBgStmt const&) = 0;
     virtual void visit(BuiltinWaitStmt const&) = 0;
     virtual void visit(BuiltinBindStmt const&) = 0;
+    virtual void visit(BuiltinWhichStmt const&) = 0;
 
     // expressions
     virtual void visit(ArithExpansionExpr const&) = 0;

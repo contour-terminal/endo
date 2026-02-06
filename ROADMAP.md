@@ -31,7 +31,7 @@ the primary project; Endo development follows as resources permit.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind`, `echo` | ✅ |
+| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |
@@ -54,7 +54,6 @@ the primary project; Endo development follows as resources permit.
 | Arithmetic expansion (`$((expr))`) | ✅ |
 | Pathname expansion (globbing) `*`, `?`, `[...]`, `**` | ✅ |
 | Job management (`&`, `jobs`, `fg`, `bg`, `wait`) | ✅ |
-| Builtin command: `cat` | TODO |
 
 ### Not Yet Implemented
 

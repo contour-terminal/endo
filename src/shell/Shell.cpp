@@ -379,6 +379,33 @@ NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, 
     return defaultFd;
 }
 
+NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, ProcessManager& pm)
+{
+    for (auto& entry: entries)
+    {
+        if (entry.type == Type::InputFile && entry.targetFd == STDIN_FILENO)
+        {
+            // Open the file if not already open
+            if (entry.openedFd == -1)
+            {
+                auto const result = pm.openFile(entry.path, O_RDONLY);
+                if (result.has_value())
+                    entry.openedFd = result.value();
+            }
+            if (entry.openedFd != -1)
+                return entry.openedFd;
+        }
+        else if ((entry.type == Type::HereDoc || entry.type == Type::HereString)
+                 && entry.targetFd == STDIN_FILENO)
+        {
+            // Here-doc/here-string content is already in a pipe
+            if (entry.openedFd != -1)
+                return entry.openedFd;
+        }
+    }
+    return defaultFd;
+}
+
 // ========================================================================
 // Shell::SubstitutionCapture implementation
 // ========================================================================
@@ -971,6 +998,20 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBind, this);
 
+    // which                        - show help
+    // which <program>...           - find program(s) in PATH
+    // which -a <program>...        - show all matches
+    // which -h/--help              - show help
+    // which -i/--read-alias        - also show aliases (not yet implemented)
+    _runtime.registerFunction("which")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinWhich, this);
+
+    _runtime.registerFunction("which")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinWhich, this);
+
     // clang-format on
 }
 
@@ -1065,6 +1106,266 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Handle cat builtin
+    if (program == "cat")
+    {
+        std::vector<std::string> catArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            catArgs.push_back(args.at(i));
+
+        // Parse flags
+        bool numberLines = false;
+        bool numberNonBlank = false;
+        bool squeezeBlank = false;
+        bool showEnds = false;
+        bool showTabs = false;
+        bool showHelp = false;
+        std::vector<std::string> files;
+
+        for (size_t i = 0; i < catArgs.size(); ++i)
+        {
+            std::string_view arg = catArgs[i];
+
+            if (arg == "--")
+            {
+                // Everything after -- is a file
+                for (size_t j = i + 1; j < catArgs.size(); ++j)
+                    files.push_back(catArgs[j]);
+                break;
+            }
+
+            if (arg == "--help")
+            {
+                showHelp = true;
+                continue;
+            }
+            if (arg == "--number")
+            {
+                numberLines = true;
+                continue;
+            }
+            if (arg == "--number-nonblank")
+            {
+                numberNonBlank = true;
+                continue;
+            }
+            if (arg == "--squeeze-blank")
+            {
+                squeezeBlank = true;
+                continue;
+            }
+            if (arg == "--show-ends")
+            {
+                showEnds = true;
+                continue;
+            }
+            if (arg == "--show-tabs")
+            {
+                showTabs = true;
+                continue;
+            }
+            if (arg == "--show-all")
+            {
+                showEnds = true;
+                showTabs = true;
+                continue;
+            }
+
+            if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+            {
+                bool validFlag = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    switch (arg[j])
+                    {
+                        case 'n': numberLines = true; break;
+                        case 'b': numberNonBlank = true; break;
+                        case 's': squeezeBlank = true; break;
+                        case 'E': showEnds = true; break;
+                        case 'T': showTabs = true; break;
+                        case 'A':
+                            showEnds = true;
+                            showTabs = true;
+                            break;
+                        case 'h': showHelp = true; break;
+                        default: validFlag = false; break;
+                    }
+                    if (!validFlag)
+                        break;
+                }
+                if (validFlag)
+                    continue;
+            }
+
+            // Not a flag, treat as file
+            files.push_back(std::string(arg));
+        }
+
+        // -b overrides -n
+        if (numberNonBlank)
+            numberLines = false;
+
+        // Helper to write output
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+        auto writeOutput = [outputFd](std::string const& str) {
+            [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+        };
+
+        if (showHelp)
+        {
+            writeOutput("Usage: cat [OPTION]... [FILE]...\n");
+            writeOutput("Concatenate FILE(s) to standard output.\n");
+            writeOutput("With no FILE, or when FILE is -, read standard input.\n");
+            writeOutput("\n");
+            writeOutput("  -n, --number           number all output lines\n");
+            writeOutput("  -b, --number-nonblank  number non-blank output lines (overrides -n)\n");
+            writeOutput("  -s, --squeeze-blank    suppress repeated empty output lines\n");
+            writeOutput("  -E, --show-ends        display $ at end of each line\n");
+            writeOutput("  -T, --show-tabs        display TAB characters as ^I\n");
+            writeOutput("  -A, --show-all         equivalent to -ET\n");
+            writeOutput("  -h, --help             display this help and exit\n");
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+
+        // Helper to process and output content
+        int lineNumber = 1;
+        bool lastLineWasBlank = false;
+
+        auto processContent = [&](std::string const& content) {
+            std::string line;
+            for (size_t i = 0; i < content.size(); ++i)
+            {
+                char c = content[i];
+                if (c == '\n')
+                {
+                    bool isBlank = line.empty();
+
+                    // Squeeze blank lines
+                    if (squeezeBlank && isBlank && lastLineWasBlank)
+                    {
+                        line.clear();
+                        continue;
+                    }
+                    lastLineWasBlank = isBlank;
+
+                    // Process tabs
+                    if (showTabs)
+                    {
+                        std::string processed;
+                        for (char ch: line)
+                        {
+                            if (ch == '\t')
+                                processed += "^I";
+                            else
+                                processed += ch;
+                        }
+                        line = std::move(processed);
+                    }
+
+                    // Build output line
+                    std::string output;
+                    if (numberNonBlank && !isBlank)
+                    {
+                        output = std::format("{:>6}\t", lineNumber++);
+                    }
+                    else if (numberLines)
+                    {
+                        output = std::format("{:>6}\t", lineNumber++);
+                    }
+                    output += line;
+                    if (showEnds)
+                        output += '$';
+                    output += '\n';
+                    writeOutput(output);
+                    line.clear();
+                }
+                else
+                {
+                    line += c;
+                }
+            }
+            // Handle last line without newline
+            if (!line.empty())
+            {
+                if (showTabs)
+                {
+                    std::string processed;
+                    for (char ch: line)
+                    {
+                        if (ch == '\t')
+                            processed += "^I";
+                        else
+                            processed += ch;
+                    }
+                    line = std::move(processed);
+                }
+
+                std::string output;
+                if (numberNonBlank && !line.empty())
+                {
+                    output = std::format("{:>6}\t", lineNumber++);
+                }
+                else if (numberLines)
+                {
+                    output = std::format("{:>6}\t", lineNumber++);
+                }
+                output += line;
+                writeOutput(output);
+            }
+        };
+
+        // Helper to read from fd
+        auto readFromFd = [](NativeHandle fd) -> std::string {
+            std::string content;
+            char buffer[4096];
+            ssize_t bytesRead;
+            while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+                content.append(buffer, static_cast<size_t>(bytesRead));
+            return content;
+        };
+
+        bool success = true;
+
+        // If no files specified, read from stdin
+        if (files.empty())
+            files.push_back("-");
+
+        for (auto const& file: files)
+        {
+            if (file == "-")
+            {
+                // Read from stdin
+                NativeHandle const inputFd = _redirectState.getEffectiveStdinFd(
+                    _currentPipelineBuilder.defaultStdinFd, _processManager);
+                std::string content = readFromFd(inputFd);
+                processContent(content);
+            }
+            else
+            {
+                // Read from file
+                auto const result = _processManager.openFile(file, O_RDONLY);
+                if (!result.has_value())
+                {
+                    error("cat: {}: {}", file, strerror(errno));
+                    success = false;
+                    continue;
+                }
+                NativeHandle fd = result.value();
+                std::string content = readFromFd(fd);
+                close(fd);
+                processContent(content);
+            }
+        }
+
+        _exitCode = success ? 0 : 1;
+        context.setResult(CoreVM::CoreNumber(_exitCode));
         return;
     }
 
@@ -1253,6 +1554,274 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
                 debugLog()()("Failed to reclaim foreground: {}", toString(setFgResult.error()));
         }
 
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
+    // Handle cat builtin in pipeline
+    if (program == "cat")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+        std::vector<std::string> catArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            catArgs.push_back(args.at(i));
+
+        // Parse flags
+        bool numberLines = false;
+        bool numberNonBlank = false;
+        bool squeezeBlank = false;
+        bool showEnds = false;
+        bool showTabs = false;
+        bool showHelp = false;
+        std::vector<std::string> files;
+
+        for (size_t i = 0; i < catArgs.size(); ++i)
+        {
+            std::string_view arg = catArgs[i];
+
+            if (arg == "--")
+            {
+                for (size_t j = i + 1; j < catArgs.size(); ++j)
+                    files.push_back(catArgs[j]);
+                break;
+            }
+
+            if (arg == "--help")
+            {
+                showHelp = true;
+                continue;
+            }
+            if (arg == "--number")
+            {
+                numberLines = true;
+                continue;
+            }
+            if (arg == "--number-nonblank")
+            {
+                numberNonBlank = true;
+                continue;
+            }
+            if (arg == "--squeeze-blank")
+            {
+                squeezeBlank = true;
+                continue;
+            }
+            if (arg == "--show-ends")
+            {
+                showEnds = true;
+                continue;
+            }
+            if (arg == "--show-tabs")
+            {
+                showTabs = true;
+                continue;
+            }
+            if (arg == "--show-all")
+            {
+                showEnds = true;
+                showTabs = true;
+                continue;
+            }
+
+            if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+            {
+                bool validFlag = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    switch (arg[j])
+                    {
+                        case 'n': numberLines = true; break;
+                        case 'b': numberNonBlank = true; break;
+                        case 's': squeezeBlank = true; break;
+                        case 'E': showEnds = true; break;
+                        case 'T': showTabs = true; break;
+                        case 'A':
+                            showEnds = true;
+                            showTabs = true;
+                            break;
+                        case 'h': showHelp = true; break;
+                        default: validFlag = false; break;
+                    }
+                    if (!validFlag)
+                        break;
+                }
+                if (validFlag)
+                    continue;
+            }
+
+            files.push_back(std::string(arg));
+        }
+
+        if (numberNonBlank)
+            numberLines = false;
+
+        auto writeOutput = [stdoutFd](std::string const& str) {
+            [[maybe_unused]] auto written = write(stdoutFd, str.data(), str.size());
+        };
+
+        if (showHelp)
+        {
+            writeOutput("Usage: cat [OPTION]... [FILE]...\n");
+            writeOutput("Concatenate FILE(s) to standard output.\n");
+            writeOutput("With no FILE, or when FILE is -, read standard input.\n");
+            writeOutput("\n");
+            writeOutput("  -n, --number           number all output lines\n");
+            writeOutput("  -b, --number-nonblank  number non-blank output lines (overrides -n)\n");
+            writeOutput("  -s, --squeeze-blank    suppress repeated empty output lines\n");
+            writeOutput("  -E, --show-ends        display $ at end of each line\n");
+            writeOutput("  -T, --show-tabs        display TAB characters as ^I\n");
+            writeOutput("  -A, --show-all         equivalent to -ET\n");
+            writeOutput("  -h, --help             display this help and exit\n");
+
+            if (!lastInChain)
+                _currentPipelineBuilder.closeCurrentPipeWriter();
+
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+
+        int lineNumber = 1;
+        bool lastLineWasBlank = false;
+
+        auto processContent = [&](std::string const& content) {
+            std::string line;
+            for (size_t i = 0; i < content.size(); ++i)
+            {
+                char c = content[i];
+                if (c == '\n')
+                {
+                    bool isBlank = line.empty();
+
+                    if (squeezeBlank && isBlank && lastLineWasBlank)
+                    {
+                        line.clear();
+                        continue;
+                    }
+                    lastLineWasBlank = isBlank;
+
+                    if (showTabs)
+                    {
+                        std::string processed;
+                        for (char ch: line)
+                        {
+                            if (ch == '\t')
+                                processed += "^I";
+                            else
+                                processed += ch;
+                        }
+                        line = std::move(processed);
+                    }
+
+                    std::string output;
+                    if (numberNonBlank && !isBlank)
+                        output = std::format("{:>6}\t", lineNumber++);
+                    else if (numberLines)
+                        output = std::format("{:>6}\t", lineNumber++);
+                    output += line;
+                    if (showEnds)
+                        output += '$';
+                    output += '\n';
+                    writeOutput(output);
+                    line.clear();
+                }
+                else
+                {
+                    line += c;
+                }
+            }
+            if (!line.empty())
+            {
+                if (showTabs)
+                {
+                    std::string processed;
+                    for (char ch: line)
+                    {
+                        if (ch == '\t')
+                            processed += "^I";
+                        else
+                            processed += ch;
+                    }
+                    line = std::move(processed);
+                }
+
+                std::string output;
+                if (numberNonBlank && !line.empty())
+                    output = std::format("{:>6}\t", lineNumber++);
+                else if (numberLines)
+                    output = std::format("{:>6}\t", lineNumber++);
+                output += line;
+                writeOutput(output);
+            }
+        };
+
+        auto readFromFd = [](NativeHandle fd) -> std::string {
+            std::string content;
+            char buffer[4096];
+            ssize_t bytesRead;
+            while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+                content.append(buffer, static_cast<size_t>(bytesRead));
+            return content;
+        };
+
+        bool success = true;
+
+        if (files.empty())
+            files.push_back("-");
+
+        for (auto const& file: files)
+        {
+            if (file == "-")
+            {
+                std::string content = readFromFd(stdinFd);
+                processContent(content);
+            }
+            else
+            {
+                auto const result = _processManager.openFile(file, O_RDONLY);
+                if (!result.has_value())
+                {
+                    error("cat: {}: {}", file, strerror(errno));
+                    success = false;
+                    continue;
+                }
+                NativeHandle fd = result.value();
+                std::string content = readFromFd(fd);
+                close(fd);
+                processContent(content);
+            }
+        }
+
+        if (!lastInChain)
+            _currentPipelineBuilder.closeCurrentPipeWriter();
+
+        std::string cmdString = "cat";
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            cmdString += ' ';
+            cmdString += args.at(i);
+        }
+        _pipelineCommands.push_back(std::move(cmdString));
+
+        if (lastInChain)
+        {
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                int status = 0;
+                waitpid(processPid, &status, 0);
+                if (WIFEXITED(status))
+                    _exitCode = WEXITSTATUS(status);
+            }
+            _currentProcessGroupPids.clear();
+            _pipelineCommands.clear();
+
+            auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+            if (!setFgResult)
+                debugLog()()("Failed to reclaim foreground: {}", toString(setFgResult.error()));
+        }
+
+        _exitCode = success ? 0 : 1;
         context.setResult(CoreVM::CoreNumber(_exitCode));
         return;
     }
@@ -2838,8 +3407,10 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
 void Shell::builtinBind(CoreVM::Params& context)
 {
     // Get arguments (may be empty if called without arguments)
+    // context.count() is the number of parameters (excluding return value at index 0)
+    // For bind(s)I, we have 1 parameter (the string array) at index 1
     std::vector<std::string> args;
-    if (context.count() > 1)
+    if (context.count() >= 1)
     {
         auto const& argArray = context.getStringArray(1);
         for (size_t i = 0; i < argArray.size(); ++i)
@@ -2980,6 +3551,132 @@ void Shell::builtinBind(CoreVM::Params& context)
     prompt.bindKey(*chord, *action);
     _exitCode = 0;
     context.setResult(CoreVM::CoreNumber(0));
+}
+
+void Shell::builtinWhich(CoreVM::Params& context)
+{
+    // Get arguments (may be empty if called without arguments)
+    // context.count() is the number of parameters (excluding return value at index 0)
+    // For which(s)I, we have 1 parameter (the string array) at index 1
+    std::vector<std::string> args;
+    if (context.count() >= 1)
+    {
+        auto const& argArray = context.getStringArray(1);
+        for (size_t i = 0; i < argArray.size(); ++i)
+            args.push_back(argArray[i]);
+    }
+
+    // Parse flags
+    bool showAll = false;
+    bool showHelp = false;
+    bool readAlias = false;
+    std::vector<std::string> programs;
+
+    for (auto const& arg: args)
+    {
+        if (arg == "-h" || arg == "--help")
+            showHelp = true;
+        else if (arg == "-a" || arg == "--all")
+            showAll = true;
+        else if (arg == "-i" || arg == "--read-alias")
+            readAlias = true;
+        else if (arg.starts_with("-"))
+        {
+            error("which: invalid option: {}", arg);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+        else
+            programs.push_back(arg);
+    }
+
+    // Helper to write output to the effective stdout (respects redirects and test environments)
+    auto writeOutput = [this](std::string const& str) {
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+        [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+    };
+
+    // Show help if requested or no arguments given
+    if (showHelp || programs.empty())
+    {
+        std::string help = "Usage: which [OPTIONS] PROGRAM...\n"
+                           "\n"
+                           "Locate executables in the PATH.\n"
+                           "\n"
+                           "Options:\n"
+                           "  -a, --all         Print all matching executables in PATH, not just the first\n"
+                           "  -h, --help        Show this help message\n"
+                           "  -i, --read-alias  Also show aliases (not yet implemented)\n"
+                           "\n"
+                           "Exit status:\n"
+                           "  0  if all programs were found\n"
+                           "  1  if one or more programs were not found\n";
+        writeOutput(help);
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Warn about --read-alias since aliases aren't implemented yet
+    if (readAlias)
+    {
+        error("which: --read-alias: aliases not yet implemented");
+    }
+
+    // Get PATH
+    auto const pathEnv = _env.get("PATH");
+    if (!pathEnv.has_value())
+    {
+        error("which: PATH not set");
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    auto const paths = crispy::split(pathEnv.value(), ':');
+    bool allFound = true;
+
+    // Search for each program
+    for (auto const& program: programs)
+    {
+        bool found = false;
+
+        // If program contains '/', treat as path
+        if (program.contains('/'))
+        {
+            if (std::filesystem::exists(program))
+            {
+                writeOutput(program + "\n");
+                found = true;
+            }
+        }
+        else
+        {
+            // Search PATH
+            for (auto const& pathStr: paths)
+            {
+                auto const programPath = std::filesystem::path(pathStr) / program;
+                if (std::filesystem::exists(programPath))
+                {
+                    writeOutput(programPath.string() + "\n");
+                    found = true;
+                    if (!showAll)
+                        break; // Only show first match unless -a is specified
+                }
+            }
+        }
+
+        if (!found)
+        {
+            error("which: no {} in ({})", program, pathEnv.value());
+            allFound = false;
+        }
+    }
+
+    _exitCode = allFound ? 0 : 1;
+    context.setResult(CoreVM::CoreNumber(_exitCode));
 }
 
 void Shell::onSigchld()

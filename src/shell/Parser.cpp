@@ -1818,6 +1818,30 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
             return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind(S+)I"), std::move(args));
         }
     }
+    else if (_lexer.isDirective("which"))
+    {
+        _lexer.nextToken();
+        if (isEndOfStmt())
+        {
+            // which with no arguments - show help
+            assert(_runtime.find("which()I") != nullptr);
+            return std::make_unique<ast::BuiltinWhichStmt>(*_runtime.find("which()I"));
+        }
+        else
+        {
+            // which with arguments (program names and flags)
+            std::vector<std::unique_ptr<ast::Expr>> args;
+            while (!isEndOfStmt())
+            {
+                auto arg = parseParameter();
+                if (!arg)
+                    break;
+                args.push_back(std::move(arg));
+            }
+            assert(_runtime.find("which(s)I") != nullptr);
+            return std::make_unique<ast::BuiltinWhichStmt>(*_runtime.find("which(s)I"), std::move(args));
+        }
+    }
     else
     {
         // External command or pipeline

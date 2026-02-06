@@ -168,6 +168,7 @@ std::vector<std::string> CommandCompleter::builtinNames()
 {
     return {
         // Shell builtins
+        "cat",
         "cd",
         "exit",
         "export",
@@ -180,6 +181,8 @@ std::vector<std::string> CommandCompleter::builtinNames()
         "fg",
         "bg",
         "wait",
+        "bind",
+        "which",
         // Control flow keywords (also completable)
         "if",
         "then",

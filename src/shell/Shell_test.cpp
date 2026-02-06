@@ -162,6 +162,191 @@ TEST_CASE("shell.builtin.unset_nonexistent_variable")
 }
 
 // ============================================================================
+// Which Builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.which_help")
+{
+    TestShell shell;
+    // which with no arguments should show help and return 0
+    auto output = shell("which").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.which_help_flag")
+{
+    TestShell shell;
+    auto output = shell("which --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--all") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.which_find_existing_program")
+{
+    TestShell shell;
+    // /bin/ls or /usr/bin/ls should exist on most systems
+    auto output = shell("which ls").output();
+    CHECK((output.find("/bin/ls") != std::string::npos || output.find("/usr/bin/ls") != std::string::npos));
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.which_nonexistent_program")
+{
+    TestShell shell;
+    shell("which nonexistent_program_that_surely_does_not_exist_12345");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_multiple_programs")
+{
+    TestShell shell;
+    auto output = shell("which ls cat").output();
+    CHECK(output.find("ls") != std::string::npos);
+    CHECK(output.find("cat") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.which_mixed_existing_and_nonexistent")
+{
+    TestShell shell;
+    // Should find ls but not the nonexistent one, return 1
+    auto output = shell("which ls nonexistent_xyz_123").output();
+    CHECK(output.find("ls") != std::string::npos);
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_invalid_option")
+{
+    TestShell shell;
+    shell("which --invalid-option ls");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.which_read_alias_warning")
+{
+    TestShell shell;
+    // --read-alias should warn but continue
+    shell("which -i ls");
+    // Should still find ls despite the warning
+    CHECK(shell.exitCode == 0);
+}
+
+// ============================================================================
+// Cat Builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.cat_help")
+{
+    TestShell shell;
+    auto output = shell("cat --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--number") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.cat_help_short")
+{
+    TestShell shell;
+    auto output = shell("cat -h").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.cat_pipe_input")
+{
+    // Test cat in a pipeline - reading from stdin
+    CHECK(escape(TestShell()("echo hello | cat").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo -n test | cat").output()) == escape("test"));
+}
+
+TEST_CASE("shell.builtin.cat_n_flag")
+{
+    // Test line numbering with echo piped to cat
+    TestShell shell;
+    auto output = shell("echo -e \"line1\\nline2\\nline3\" | cat -n").output();
+    CHECK(output.find("1\t") != std::string::npos);
+    CHECK(output.find("2\t") != std::string::npos);
+    CHECK(output.find("3\t") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_b_flag")
+{
+    // Test -b only numbers non-blank lines
+    TestShell shell;
+    auto output = shell("echo -e \"line1\\n\\nline2\" | cat -b").output();
+    // First line should be numbered
+    CHECK(output.find("1\t") != std::string::npos);
+    // Second line is blank, should NOT be numbered
+    // Third line should be numbered as 2
+    CHECK(output.find("2\t") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_E_flag")
+{
+    // Test -E shows $ at end of lines
+    TestShell shell;
+    auto output = shell("echo -e \"hello\\nworld\" | cat -E").output();
+    CHECK(output.find("hello$") != std::string::npos);
+    CHECK(output.find("world$") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_T_flag")
+{
+    // Test -T shows tabs as ^I
+    TestShell shell;
+    auto output = shell("echo -e \"a\\tb\" | cat -T").output();
+    CHECK(output.find("^I") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_s_flag")
+{
+    // Test -s squeezes multiple blank lines
+    TestShell shell;
+    auto output = shell("echo -e \"a\\n\\n\\n\\nb\" | cat -s").output();
+    // Should squeeze the multiple blank lines into one
+    // Count the number of lines
+    size_t newlineCount = 0;
+    for (char c: output)
+        if (c == '\n')
+            newlineCount++;
+    // Should have: a, blank, b, final newline = roughly 3-4 newlines instead of 5
+    CHECK(newlineCount < 5);
+}
+
+TEST_CASE("shell.builtin.cat_A_flag")
+{
+    // Test -A is equivalent to -ET
+    TestShell shell;
+    auto output = shell("echo -e \"a\\tb\" | cat -A").output();
+    CHECK(output.find("^I") != std::string::npos); // Shows tabs
+    CHECK(output.find("$") != std::string::npos);  // Shows line ends
+}
+
+TEST_CASE("shell.builtin.cat_combined_flags")
+{
+    // Test combining multiple flags
+    TestShell shell;
+    auto output = shell("echo -e \"a\\tb\\ncd\" | cat -nT").output();
+    CHECK(output.find("1\t") != std::string::npos); // Line numbers
+    CHECK(output.find("^I") != std::string::npos);  // Tabs shown
+}
+
+TEST_CASE("shell.builtin.cat_pipe_chain")
+{
+    // Test cat in middle of pipeline
+    CHECK(escape(TestShell()("echo hello | cat | cat").output()) == escape("hello\n"));
+}
+
+TEST_CASE("shell.builtin.cat_nonexistent_file")
+{
+    TestShell shell;
+    shell("cat /nonexistent/path/to/file");
+    CHECK(shell.exitCode == 1);
+}
+
+// ============================================================================
 // Variable Substitution - $VAR and ${VAR}
 // ============================================================================
 

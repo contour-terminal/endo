@@ -145,6 +145,7 @@ class Shell final
     void builtinWait(CoreVM::Params& context);
     void builtinCmdExecPipedBackground(CoreVM::Params& context);
     void builtinBind(CoreVM::Params& context);
+    void builtinWhich(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();
@@ -271,6 +272,10 @@ class Shell final
         /// Get the effective stdout fd considering output redirects.
         /// Opens the redirect file if needed.
         [[nodiscard]] NativeHandle getEffectiveStdoutFd(NativeHandle defaultFd, ProcessManager& pm);
+
+        /// Get the effective stdin fd considering input redirects.
+        /// Opens the redirect file if needed.
+        [[nodiscard]] NativeHandle getEffectiveStdinFd(NativeHandle defaultFd, ProcessManager& pm);
 
         void addInputFile(int targetFd, std::string path);
         void addOutputFile(int sourceFd, std::string path, bool append);
