@@ -62,6 +62,12 @@ TEST_CASE("shell.syntax.pipes")
     CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\n"));
 }
 
+TEST_CASE("shell.syntax.multiline")
+{
+    // Newlines should separate commands just like semicolons
+    CHECK(escape(TestShell()("echo a\necho b\necho c").output()) == escape("a\nb\nc\n"));
+}
+
 // ============================================================================
 // Read Builtin
 // ============================================================================

@@ -296,7 +296,11 @@ void Prompt::resume()
     {
         _terminal.resume();
         if (_screen)
-            _screen->invalidate();
+        {
+            // Release cursor tracking since external output (shell commands) may have
+            // moved the cursor to an unknown position.
+            _screen->releaseCursor();
+        }
     }
 }
 

@@ -85,6 +85,16 @@ void Screen::invalidate([[maybe_unused]] Component& component)
     _needsFullRedraw = true;
 }
 
+void Screen::releaseCursor()
+{
+    // Reset cursor tracking for inline mode.
+    // After external output (e.g., shell command output), the cursor position
+    // is no longer where we think it is. Reset to 0 so next draw() starts fresh.
+    _previousContentHeight = 0;
+    _previousCursorRow = 0;
+    _needsFullRedraw = true;
+}
+
 void Screen::setTheme(Theme theme)
 {
     _theme = std::move(theme);

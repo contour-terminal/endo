@@ -126,6 +126,14 @@ class Screen
     /// Marks a specific component as needing a redraw.
     void invalidate(Component& component);
 
+    /// Releases cursor tracking state after external output.
+    ///
+    /// Call this when external processes have written to the terminal (e.g., after
+    /// running shell commands). The cursor position is no longer known, so the next
+    /// draw() in inline mode will start fresh instead of trying to move relative
+    /// to where it thinks the cursor is.
+    void releaseCursor();
+
     // --- Render Mode ---
 
     /// Sets the render mode (Diff or Full).

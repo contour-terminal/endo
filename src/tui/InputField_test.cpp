@@ -448,6 +448,43 @@ TEST_CASE("InputField.multiline_insert_newline_with_shift_enter")
     CHECK(field.lineCount() == 2);
 }
 
+TEST_CASE("InputField.multiline_multiple_lines_then_submit")
+{
+    InputField field;
+    field.setMultiline(true);
+
+    // Type "echo a"
+    for (char c: std::string_view("echo a"))
+        (void) field.processEvent(charKey(c));
+
+    // Shift+Enter
+    auto action = field.processEvent(specialKey(KeyCode::Enter, Modifier::Shift));
+    CHECK(action == InputFieldAction::Changed);
+
+    // Type "echo b"
+    for (char c: std::string_view("echo b"))
+        (void) field.processEvent(charKey(c));
+
+    // Shift+Enter
+    action = field.processEvent(specialKey(KeyCode::Enter, Modifier::Shift));
+    CHECK(action == InputFieldAction::Changed);
+
+    // Type "echo c"
+    for (char c: std::string_view("echo c"))
+        (void) field.processEvent(charKey(c));
+
+    // Verify full content before submit
+    CHECK(field.text() == "echo a\necho b\necho c");
+    CHECK(field.lineCount() == 3);
+
+    // Enter (submit)
+    action = field.processEvent(specialKey(KeyCode::Enter));
+    CHECK(action == InputFieldAction::Submit);
+
+    // After submit, text should still be intact
+    CHECK(field.text() == "echo a\necho b\necho c");
+}
+
 TEST_CASE("InputField.multiline_max_lines_limit")
 {
     InputField field;
