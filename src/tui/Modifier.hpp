@@ -7,6 +7,11 @@ namespace tui
 {
 
 /// @brief Bitmask enumeration for keyboard modifier keys.
+///
+/// Bit layout follows Kitty keyboard protocol:
+/// - Bits 0-3: Standard modifiers (Shift, Alt, Ctrl, Super)
+/// - Bits 4-5: Hyper, Meta (rarely used, not implemented)
+/// - Bits 6-7: Lock keys (CapsLock, NumLock)
 enum class Modifier : std::uint8_t
 {
     None = 0,
@@ -14,6 +19,10 @@ enum class Modifier : std::uint8_t
     Alt = 1 << 1,
     Ctrl = 1 << 2,
     Super = 1 << 3,
+    // Hyper = 1 << 4,  // Rarely used
+    // Meta = 1 << 5,   // Rarely used
+    CapsLock = 1 << 6,
+    NumLock = 1 << 7,
 };
 
 /// @brief Bitwise OR for combining modifiers.

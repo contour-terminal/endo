@@ -659,9 +659,12 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
             deleteSelection();
 
         auto cp = key.codepoint;
-        // Handle Shift modifier for letter capitalization (needed for Kitty keyboard protocol)
-        // The terminal sends lowercase codepoint + Shift modifier, we need to uppercase it
-        if (shift && cp >= 'a' && cp <= 'z')
+        // Handle Shift and CapsLock modifiers for letter capitalization
+        // Kitty keyboard protocol sends lowercase codepoint + modifier flags
+        // CapsLock XOR Shift: either one (but not both) should uppercase letters
+        bool const capsActive = hasModifier(key.modifiers, Modifier::CapsLock);
+        bool const shouldCapitalize = (shift != capsActive); // XOR logic
+        if (shouldCapitalize && cp >= 'a' && cp <= 'z')
             cp = cp - 'a' + 'A';
         insertCodepoint(cp);
         _lastWasKill = false;

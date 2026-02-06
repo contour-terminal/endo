@@ -1029,3 +1029,91 @@ TEST_CASE("InputField.scroll_by")
     field.scrollBy(100);
     CHECK(field.scrollOffset() == 4); // 5 lines, max offset is 4
 }
+
+// ============================================================================
+// CapsLock and Shift capitalization tests (Kitty keyboard protocol)
+// ============================================================================
+
+TEST_CASE("InputField.shift_capitalizes_letters")
+{
+    InputField field;
+
+    // Shift+a should produce 'A' (Kitty sends lowercase codepoint + Shift modifier)
+    (void) field.processEvent(charKey('a', Modifier::Shift));
+    CHECK(field.text() == "A");
+
+    field.clear();
+
+    // Shift+z should produce 'Z'
+    (void) field.processEvent(charKey('z', Modifier::Shift));
+    CHECK(field.text() == "Z");
+}
+
+TEST_CASE("InputField.capslock_capitalizes_letters")
+{
+    InputField field;
+
+    // CapsLock active + 'a' should produce 'A'
+    (void) field.processEvent(charKey('a', Modifier::CapsLock));
+    CHECK(field.text() == "A");
+
+    field.clear();
+
+    // CapsLock active + 'z' should produce 'Z'
+    (void) field.processEvent(charKey('z', Modifier::CapsLock));
+    CHECK(field.text() == "Z");
+}
+
+TEST_CASE("InputField.capslock_plus_shift_produces_lowercase")
+{
+    InputField field;
+
+    // CapsLock + Shift should cancel out (XOR behavior) - produces lowercase
+    (void) field.processEvent(charKey('a', Modifier::CapsLock | Modifier::Shift));
+    CHECK(field.text() == "a");
+
+    field.clear();
+
+    (void) field.processEvent(charKey('z', Modifier::CapsLock | Modifier::Shift));
+    CHECK(field.text() == "z");
+}
+
+TEST_CASE("InputField.capslock_does_not_affect_numbers")
+{
+    InputField field;
+
+    // CapsLock should not affect non-letter characters
+    (void) field.processEvent(charKey('1', Modifier::CapsLock));
+    CHECK(field.text() == "1");
+
+    (void) field.processEvent(charKey('!', Modifier::CapsLock));
+    CHECK(field.text() == "1!");
+
+    (void) field.processEvent(charKey('@', Modifier::CapsLock));
+    CHECK(field.text() == "1!@");
+}
+
+TEST_CASE("InputField.capslock_does_not_affect_symbols")
+{
+    InputField field;
+
+    // CapsLock should not affect symbols
+    (void) field.processEvent(charKey('-', Modifier::CapsLock));
+    (void) field.processEvent(charKey('=', Modifier::CapsLock));
+    (void) field.processEvent(charKey('[', Modifier::CapsLock));
+    CHECK(field.text() == "-=[");
+}
+
+TEST_CASE("InputField.mixed_capslock_typing")
+{
+    InputField field;
+
+    // Simulate typing "Hello" with CapsLock on, using Shift for lowercase 'e' and 'o'
+    (void) field.processEvent(charKey('h', Modifier::CapsLock));                   // H
+    (void) field.processEvent(charKey('e', Modifier::CapsLock | Modifier::Shift)); // e (shift cancels caps)
+    (void) field.processEvent(charKey('l', Modifier::CapsLock));                   // L
+    (void) field.processEvent(charKey('l', Modifier::CapsLock));                   // L
+    (void) field.processEvent(charKey('o', Modifier::CapsLock | Modifier::Shift)); // o (shift cancels caps)
+
+    CHECK(field.text() == "HeLLo");
+}

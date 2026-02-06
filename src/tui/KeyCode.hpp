@@ -10,6 +10,7 @@ namespace tui
 ///
 /// Printable characters use their Unicode codepoint directly (cast to KeyCode).
 /// Non-printable keys use values in the 0x10000+ range to avoid collision.
+/// Kitty-specific keys use values in the 0x20000+ range.
 enum class KeyCode : std::uint32_t
 {
     // Non-printable keys (above Unicode BMP to avoid collision with codepoints)
@@ -39,14 +40,120 @@ enum class KeyCode : std::uint32_t
     F10,
     F11,
     F12,
+
+    // ========================================================================
+    // Kitty keyboard protocol special keys (0x20000+ range)
+    // These correspond to Kitty's Private Use Area keycodes (57344-63743)
+    // ========================================================================
+
+    // Lock/System keys
+    CapsLock = 0x20000,
+    ScrollLock,
+    NumLock,
+    PrintScreen,
+    Pause,
+    Menu,
+
+    // Extended function keys (F13-F35)
+    F13,
+    F14,
+    F15,
+    F16,
+    F17,
+    F18,
+    F19,
+    F20,
+    F21,
+    F22,
+    F23,
+    F24,
+    F25,
+    F26,
+    F27,
+    F28,
+    F29,
+    F30,
+    F31,
+    F32,
+    F33,
+    F34,
+    F35,
+
+    // Keypad keys
+    KP_0,
+    KP_1,
+    KP_2,
+    KP_3,
+    KP_4,
+    KP_5,
+    KP_6,
+    KP_7,
+    KP_8,
+    KP_9,
+    KP_Decimal,
+    KP_Divide,
+    KP_Multiply,
+    KP_Subtract,
+    KP_Add,
+    KP_Enter,
+    KP_Equal,
+    KP_Separator,
+    KP_Left,
+    KP_Right,
+    KP_Up,
+    KP_Down,
+    KP_PageUp,
+    KP_PageDown,
+    KP_Home,
+    KP_End,
+    KP_Insert,
+    KP_Delete,
+    KP_Begin,
+
+    // Media keys
+    MediaPlay,
+    MediaPause,
+    MediaPlayPause,
+    MediaReverse,
+    MediaStop,
+    MediaFastForward,
+    MediaRewind,
+    MediaTrackNext,
+    MediaTrackPrevious,
+    MediaRecord,
+    LowerVolume,
+    RaiseVolume,
+    MuteVolume,
+
+    // Modifier keys (when reported as key events, not as modifiers)
+    LeftShift,
+    LeftControl,
+    LeftAlt,
+    LeftSuper,
+    LeftHyper,
+    LeftMeta,
+    RightShift,
+    RightControl,
+    RightAlt,
+    RightSuper,
+    RightHyper,
+    RightMeta,
+    IsoLevel3Shift,
+    IsoLevel5Shift,
 };
 
 /// @brief Checks whether a key code represents a printable Unicode character.
 /// @param key The key code to test.
 /// @return True if the key code is a printable codepoint.
+///
+/// Excludes Kitty's Private Use Area (57344-63743) which is used for special keys
+/// like CapsLock, NumLock, modifier keys, keypad keys, and media keys.
 [[nodiscard]] constexpr auto isPrintable(KeyCode key) noexcept -> bool
 {
-    return static_cast<std::uint32_t>(key) < 0x10000 && static_cast<std::uint32_t>(key) >= 32;
+    auto const value = static_cast<std::uint32_t>(key);
+    // Printable if: >= 32 (space) AND below special key range (0x10000)
+    // AND not in Kitty PUA range (57344-63743)
+    return value >= 32 && value < 0x10000 && !(value >= 57344 && value <= 63743);
 }
 
 /// @brief Converts a Unicode codepoint to a KeyCode.

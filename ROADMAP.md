@@ -284,6 +284,10 @@ The library includes:
 - Keybinding system maps key chords to edit actions, enabling future vi mode support
 - Default keybindings use modern conventions: Ctrl+C=copy, Ctrl+Y=redo, Ctrl+D=delete char (EOF on empty)
 - Shift+movement keys extend selection; Ctrl+D is context-sensitive (EOF vs delete)
+- Kitty keyboard protocol support: Full handling of Kitty's CSIu escape sequences including:
+  - CapsLock and NumLock modifiers (bits 6-7) for proper capitalization with CapsLock active
+  - All special keycodes in Private Use Area (57344-63743): lock keys, F13-F35, keypad, media keys, modifier keys
+  - CapsLock XOR Shift behavior: either one (but not both) capitalizes letters, matching standard keyboard behavior
 - `bind` builtin command allows runtime keybinding management:
   - `bind` - List all keybindings
   - `bind <key> <action>` - Bind a key to an action (e.g., `bind ctrl+y yank`)

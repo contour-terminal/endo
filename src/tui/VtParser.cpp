@@ -33,7 +33,10 @@ namespace
 
     /// @brief Decodes CSI modifier parameter to Modifier bitmask.
     ///
-    /// CSI modifiers use the convention: encoded = 1 + (shift) + 2*(alt) + 4*(ctrl) + 8*(super).
+    /// CSI modifiers use the convention: encoded = 1 + modifier_bits
+    /// where modifier_bits follows Kitty keyboard protocol:
+    ///   bit 0: Shift, bit 1: Alt, bit 2: Ctrl, bit 3: Super,
+    ///   bit 4: Hyper, bit 5: Meta, bit 6: CapsLock, bit 7: NumLock
     /// @param param The raw modifier parameter from CSI sequence.
     /// @return The decoded Modifier bitmask.
     constexpr auto decodeModifiers(int param) -> Modifier
@@ -50,6 +53,11 @@ namespace
             mods |= Modifier::Ctrl;
         if (bits & 8)
             mods |= Modifier::Super;
+        // Hyper (bit 4) and Meta (bit 5) are rarely used, skipped
+        if (bits & 64)
+            mods |= Modifier::CapsLock;
+        if (bits & 128)
+            mods |= Modifier::NumLock;
         return mods;
     }
 
@@ -417,8 +425,120 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
             default: break;
         }
 
-        // Printable codepoint
-        if (keycode >= 32 && keycode < 0x10000)
+        // Handle Kitty's special key codes in Private Use Area (57358-57454)
+        if (keycode >= 57358 && keycode <= 57454)
+        {
+            auto mappedKey = std::optional<KeyCode> {};
+            switch (keycode)
+            {
+                    // clang-format off
+                // Lock/System keys (57358-57363)
+                case 57358: mappedKey = KeyCode::CapsLock; break;
+                case 57359: mappedKey = KeyCode::ScrollLock; break;
+                case 57360: mappedKey = KeyCode::NumLock; break;
+                case 57361: mappedKey = KeyCode::PrintScreen; break;
+                case 57362: mappedKey = KeyCode::Pause; break;
+                case 57363: mappedKey = KeyCode::Menu; break;
+
+                // Extended function keys F13-F35 (57376-57398)
+                case 57376: mappedKey = KeyCode::F13; break;
+                case 57377: mappedKey = KeyCode::F14; break;
+                case 57378: mappedKey = KeyCode::F15; break;
+                case 57379: mappedKey = KeyCode::F16; break;
+                case 57380: mappedKey = KeyCode::F17; break;
+                case 57381: mappedKey = KeyCode::F18; break;
+                case 57382: mappedKey = KeyCode::F19; break;
+                case 57383: mappedKey = KeyCode::F20; break;
+                case 57384: mappedKey = KeyCode::F21; break;
+                case 57385: mappedKey = KeyCode::F22; break;
+                case 57386: mappedKey = KeyCode::F23; break;
+                case 57387: mappedKey = KeyCode::F24; break;
+                case 57388: mappedKey = KeyCode::F25; break;
+                case 57389: mappedKey = KeyCode::F26; break;
+                case 57390: mappedKey = KeyCode::F27; break;
+                case 57391: mappedKey = KeyCode::F28; break;
+                case 57392: mappedKey = KeyCode::F29; break;
+                case 57393: mappedKey = KeyCode::F30; break;
+                case 57394: mappedKey = KeyCode::F31; break;
+                case 57395: mappedKey = KeyCode::F32; break;
+                case 57396: mappedKey = KeyCode::F33; break;
+                case 57397: mappedKey = KeyCode::F34; break;
+                case 57398: mappedKey = KeyCode::F35; break;
+
+                // Keypad keys (57399-57427)
+                case 57399: mappedKey = KeyCode::KP_0; break;
+                case 57400: mappedKey = KeyCode::KP_1; break;
+                case 57401: mappedKey = KeyCode::KP_2; break;
+                case 57402: mappedKey = KeyCode::KP_3; break;
+                case 57403: mappedKey = KeyCode::KP_4; break;
+                case 57404: mappedKey = KeyCode::KP_5; break;
+                case 57405: mappedKey = KeyCode::KP_6; break;
+                case 57406: mappedKey = KeyCode::KP_7; break;
+                case 57407: mappedKey = KeyCode::KP_8; break;
+                case 57408: mappedKey = KeyCode::KP_9; break;
+                case 57409: mappedKey = KeyCode::KP_Decimal; break;
+                case 57410: mappedKey = KeyCode::KP_Divide; break;
+                case 57411: mappedKey = KeyCode::KP_Multiply; break;
+                case 57412: mappedKey = KeyCode::KP_Subtract; break;
+                case 57413: mappedKey = KeyCode::KP_Add; break;
+                case 57414: mappedKey = KeyCode::KP_Enter; break;
+                case 57415: mappedKey = KeyCode::KP_Equal; break;
+                case 57416: mappedKey = KeyCode::KP_Separator; break;
+                case 57417: mappedKey = KeyCode::KP_Left; break;
+                case 57418: mappedKey = KeyCode::KP_Right; break;
+                case 57419: mappedKey = KeyCode::KP_Up; break;
+                case 57420: mappedKey = KeyCode::KP_Down; break;
+                case 57421: mappedKey = KeyCode::KP_PageUp; break;
+                case 57422: mappedKey = KeyCode::KP_PageDown; break;
+                case 57423: mappedKey = KeyCode::KP_Home; break;
+                case 57424: mappedKey = KeyCode::KP_End; break;
+                case 57425: mappedKey = KeyCode::KP_Insert; break;
+                case 57426: mappedKey = KeyCode::KP_Delete; break;
+                case 57427: mappedKey = KeyCode::KP_Begin; break;
+
+                // Media keys (57428-57440)
+                case 57428: mappedKey = KeyCode::MediaPlay; break;
+                case 57429: mappedKey = KeyCode::MediaPause; break;
+                case 57430: mappedKey = KeyCode::MediaPlayPause; break;
+                case 57431: mappedKey = KeyCode::MediaReverse; break;
+                case 57432: mappedKey = KeyCode::MediaStop; break;
+                case 57433: mappedKey = KeyCode::MediaFastForward; break;
+                case 57434: mappedKey = KeyCode::MediaRewind; break;
+                case 57435: mappedKey = KeyCode::MediaTrackNext; break;
+                case 57436: mappedKey = KeyCode::MediaTrackPrevious; break;
+                case 57437: mappedKey = KeyCode::MediaRecord; break;
+                case 57438: mappedKey = KeyCode::LowerVolume; break;
+                case 57439: mappedKey = KeyCode::RaiseVolume; break;
+                case 57440: mappedKey = KeyCode::MuteVolume; break;
+
+                // Modifier keys as key events (57441-57454)
+                case 57441: mappedKey = KeyCode::LeftShift; break;
+                case 57442: mappedKey = KeyCode::LeftControl; break;
+                case 57443: mappedKey = KeyCode::LeftAlt; break;
+                case 57444: mappedKey = KeyCode::LeftSuper; break;
+                case 57445: mappedKey = KeyCode::LeftHyper; break;
+                case 57446: mappedKey = KeyCode::LeftMeta; break;
+                case 57447: mappedKey = KeyCode::RightShift; break;
+                case 57448: mappedKey = KeyCode::RightControl; break;
+                case 57449: mappedKey = KeyCode::RightAlt; break;
+                case 57450: mappedKey = KeyCode::RightSuper; break;
+                case 57451: mappedKey = KeyCode::RightHyper; break;
+                case 57452: mappedKey = KeyCode::RightMeta; break;
+                case 57453: mappedKey = KeyCode::IsoLevel3Shift; break;
+                case 57454: mappedKey = KeyCode::IsoLevel5Shift; break;
+                    // clang-format on
+
+                default: break; // Unknown PUA key in this range
+            }
+
+            if (mappedKey)
+                events.emplace_back(KeyEvent { .key = *mappedKey, .modifiers = modifier });
+            // Silently ignore unmapped keys in PUA range
+            return;
+        }
+
+        // Printable codepoint (but exclude remaining PUA range)
+        if (keycode >= 32 && keycode < 0x10000 && !(keycode >= 57344 && keycode <= 63743))
         {
             auto const cp = static_cast<char32_t>(keycode);
             events.emplace_back(
