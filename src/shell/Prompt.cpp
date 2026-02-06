@@ -115,6 +115,8 @@ std::string Prompt::read()
             switch (action)
             {
                 case PromptComponent::Action::Submit: {
+                    // Redraw to clear ghost text before moving cursor
+                    _screen->draw();
                     // Move cursor past the editor region before returning
                     auto& out = _terminal.output();
                     auto const totalLines = _promptComponent->inputField().lineCount();

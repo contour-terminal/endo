@@ -337,9 +337,18 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
 
     switch (action)
     {
-        case tui::InputFieldAction::Submit: _completionPopup.hide(); return Action::Submit;
-        case tui::InputFieldAction::Abort: _completionPopup.hide(); return Action::Abort;
-        case tui::InputFieldAction::Eof: _completionPopup.hide(); return Action::Eof;
+        case tui::InputFieldAction::Submit:
+            _inputField.clearGhostText();
+            _completionPopup.hide();
+            return Action::Submit;
+        case tui::InputFieldAction::Abort:
+            _inputField.clearGhostText();
+            _completionPopup.hide();
+            return Action::Abort;
+        case tui::InputFieldAction::Eof:
+            _inputField.clearGhostText();
+            _completionPopup.hide();
+            return Action::Eof;
         case tui::InputFieldAction::Changed:
             updateGhostText();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
