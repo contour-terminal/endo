@@ -286,13 +286,17 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
                                            .matchPositions = std::move(matchPositions) });
     }
 
-    // Sort: directories first, then alphabetically
+    // Sort: directories first, then by score (descending), then alphabetically
     std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {
         bool aIsDir = !a.displayText.empty() && a.displayText.back() == '/';
         bool bIsDir = !b.displayText.empty() && b.displayText.back() == '/';
 
         if (aIsDir != bIsDir)
             return aIsDir > bIsDir;
+
+        // Higher score first
+        if (a.score != b.score)
+            return a.score > b.score;
 
         return a.displayText < b.displayText;
     });
