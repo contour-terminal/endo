@@ -217,3 +217,35 @@ TEST_CASE("Lexer.greater_vs_greater_rnd_open")
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "cmd");
 }
+
+TEST_CASE("Lexer.unterminated_double_quote_string")
+{
+    // Unterminated double-quoted string should return Invalid token (not hang)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo \"hello"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Invalid);
+}
+
+TEST_CASE("Lexer.unterminated_single_quote_string")
+{
+    // Unterminated single-quoted string should return Invalid token (not hang)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo 'hello"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Invalid);
+}
+
+TEST_CASE("Lexer.unterminated_string_with_escape")
+{
+    // Unterminated string with trailing escape should return Invalid token (not hang)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo \"hello\\"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Invalid);
+}

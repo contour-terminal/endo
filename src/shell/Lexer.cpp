@@ -187,13 +187,19 @@ Token Lexer::consumeString()
 {
     auto const quote = _currentChar;
     nextChar();
-    while (_currentChar != quote)
+    while (_currentChar != quote && !eof())
     {
         if (_currentChar == '\\')
+        {
             nextChar();
+            if (eof())
+                break;
+        }
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
     }
+    if (eof())
+        return confirmToken(Token::Invalid); // Unterminated string
     nextChar();
     return confirmToken(Token::String);
 }
