@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <array>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <format>
 
 #include <sys/ioctl.h>
 
+#include <poll.h>
+#include <termios.h>
 #include <unistd.h>
 
 #include <tui/TerminalOutput.hpp>
@@ -21,6 +25,145 @@ namespace
                                                    'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
                                                    's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2',
                                                    '3', '4', '5', '6', '7', '8', '9', '+', '/' };
+
+    /// @brief Queries the terminal for XTVERSION and returns the response.
+    ///
+    /// Sends CSI > q and reads the DCS response with a short timeout.
+    /// Response format: DCS > | <terminal-name-and-version> ST
+    /// Example: "\033P>|kitty(0.26.5)\033\\"
+    ///
+    /// @param timeoutMs Timeout in milliseconds to wait for response.
+    /// @return Terminal identification string, or empty if not supported/timeout.
+    auto queryXTVersion(int timeoutMs = 100) -> std::string
+    {
+        // Save current terminal attributes
+        struct termios origTermios {};
+        struct termios rawTermios {};
+        bool needRestore = false;
+
+        if (tcgetattr(STDIN_FILENO, &origTermios) == 0)
+        {
+            rawTermios = origTermios;
+            // Set raw mode for reliable reading
+            rawTermios.c_lflag &= ~static_cast<tcflag_t>(ICANON | ECHO);
+            rawTermios.c_cc[VMIN] = 0;
+            rawTermios.c_cc[VTIME] = 0;
+            if (tcsetattr(STDIN_FILENO, TCSANOW, &rawTermios) == 0)
+                needRestore = true;
+        }
+
+        // Send XTVERSION query: CSI > q
+        static constexpr auto Query = "\033[>q";
+        static_cast<void>(::write(STDOUT_FILENO, Query, std::strlen(Query)));
+
+        std::string response;
+        std::array<char, 256> buffer {};
+
+        // Poll for response with timeout
+        struct pollfd pfd {};
+        pfd.fd = STDIN_FILENO;
+        pfd.events = POLLIN;
+
+        while (true)
+        {
+            int const ret = ::poll(&pfd, 1, timeoutMs);
+            if (ret <= 0)
+                break; // Timeout or error
+
+            auto const n = ::read(STDIN_FILENO, buffer.data(), buffer.size());
+            if (n <= 0)
+                break;
+
+            response.append(buffer.data(), static_cast<size_t>(n));
+
+            // Check for ST (String Terminator): ESC \ or 0x9C
+            if (response.find("\033\\") != std::string::npos || response.find('\x9C') != std::string::npos)
+                break;
+
+            // Short timeout for subsequent reads
+            timeoutMs = 10;
+        }
+
+        // Restore terminal attributes
+        if (needRestore)
+            tcsetattr(STDIN_FILENO, TCSANOW, &origTermios);
+
+        return response;
+    }
+
+    /// @brief Parses XTVERSION response to extract terminal name.
+    ///
+    /// Response format: DCS > | <name> ST
+    /// Example: "\033P>|kitty(0.26.5)\033\\" -> "kitty"
+    ///
+    /// @param response The raw XTVERSION response.
+    /// @return Lowercase terminal name, or empty if parsing failed.
+    auto parseXTVersionName(std::string_view response) -> std::string
+    {
+        // Look for DCS > | prefix: ESC P > | or 0x90 > |
+        auto pos = response.find("\033P>|");
+        if (pos == std::string_view::npos)
+        {
+            pos = response.find("\x90>|");
+            if (pos == std::string_view::npos)
+                return {};
+            pos += 3; // Skip 0x90 > |
+        }
+        else
+        {
+            pos += 4; // Skip ESC P > |
+        }
+
+        // Find ST: ESC \ or 0x9C
+        auto end = response.find("\033\\", pos);
+        if (end == std::string_view::npos)
+        {
+            end = response.find('\x9C', pos);
+            if (end == std::string_view::npos)
+                end = response.size();
+        }
+
+        std::string name(response.substr(pos, end - pos));
+
+        // Extract just the terminal name (before version info)
+        // e.g., "kitty(0.26.5)" -> "kitty", "contour 0.4.3" -> "contour"
+        auto const parenPos = name.find('(');
+        if (parenPos != std::string::npos)
+            name = name.substr(0, parenPos);
+
+        auto const spacePos = name.find(' ');
+        if (spacePos != std::string::npos)
+            name = name.substr(0, spacePos);
+
+        // Convert to lowercase for comparison
+        for (char& c: name)
+            c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        return name;
+    }
+
+    /// @brief Detects if the terminal supports the Kitty unscroll extension.
+    ///
+    /// Uses XTVERSION query (CSI > q) to identify the terminal.
+    /// Known terminals that support CSI Ps + T (unscroll):
+    /// - kitty
+    /// - contour
+    /// - mintty
+    ///
+    /// @return true if unscroll is likely supported.
+    auto detectUnscrollSupport() -> bool
+    {
+        auto const response = queryXTVersion();
+        if (response.empty())
+            return false;
+
+        auto const name = parseXTVersionName(response);
+        if (name.empty())
+            return false;
+
+        // Terminals known to support CSI Ps + T (unscroll)
+        return name == "kitty" || name == "contour" || name == "mintty";
+    }
 
     /// @brief Encodes data to base64.
     /// @param data The data to encode.
@@ -76,6 +219,7 @@ SyncGuard::~SyncGuard()
 auto TerminalOutput::initialize() -> VoidResult
 {
     updateDimensions();
+    _unscrollSupported = detectUnscrollSupport();
     return {};
 }
 
@@ -225,6 +369,21 @@ void TerminalOutput::copyToClipboard(std::string_view text)
     _buffer += "\033]52;c;";
     _buffer += base64Encode(text);
     _buffer += "\033\\";
+}
+
+void TerminalOutput::unscroll(int n)
+{
+    // Kitty unscroll extension: CSI Ps + T
+    // This is an extension to SD (Scroll Down / Pan Up) that restores
+    // lines from the scrollback buffer instead of inserting blank lines.
+    // See: https://sw.kovidgoyal.net/kitty/unscroll/
+    if (n > 0)
+        _buffer += std::format("\033[{}+T", n);
+}
+
+bool TerminalOutput::supportsUnscroll() const noexcept
+{
+    return _unscrollSupported;
 }
 
 void TerminalOutput::flush()

@@ -20,6 +20,7 @@ add_library(tui
     Text.cpp
     Theme.cpp
     VtParser.cpp
+    completer/Completer.cpp
 )
 
 target_include_directories(tui PUBLIC
@@ -40,6 +41,9 @@ add_executable(test-tui
     test_main.cpp
     InputField_test.cpp
     Renderer_test.cpp
+    Completer_test.cpp
+    CompletionPopup_test.cpp
+    Screen_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

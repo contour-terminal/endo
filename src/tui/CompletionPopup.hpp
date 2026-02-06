@@ -8,26 +8,17 @@
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/Theme.hpp>
+#include <tui/completer/CompletionItem.hpp>
 
 namespace tui
 {
 
-/// @brief A single completion item for the popup.
-struct CompletionItem
-{
-    std::string text;        ///< The completion text to insert.
-    std::string displayText; ///< Display text (may differ from insert text).
-    std::string description; ///< Optional description/help text.
-    int score = 0;           ///< Ranking score (higher = more relevant).
-};
-
 /// @brief Result of processing an input event in CompletionPopup.
 enum class CompletionAction : std::uint8_t
 {
-    None,      ///< No action taken (event not consumed).
     Changed,   ///< Selection changed, re-render needed.
     Accepted,  ///< User accepted the selected completion.
-    Dismissed, ///< User dismissed the popup (Escape).
+    Dismissed, ///< User dismissed the popup (Escape or unhandled key).
 };
 
 /// @brief A popup menu for showing completion suggestions.
@@ -87,6 +78,15 @@ class CompletionPopup: public Component
 
     /// @brief Hides the popup and clears items.
     void hide();
+
+    /// @brief Updates the completion items, preserving selection if possible.
+    ///
+    /// If the currently selected item (by text) exists in the new list,
+    /// keeps it selected. Otherwise, selects the first item (best match).
+    /// If the new list is empty, hides the popup.
+    ///
+    /// @param items The new completion items.
+    void updateItems(std::vector<CompletionItem> items);
 
     /// @brief Returns whether the popup is currently visible.
     /// @note Overrides Component::visible() to also check for non-empty items.

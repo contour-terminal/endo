@@ -29,13 +29,48 @@ enum class RenderMode : uint8_t
     Full, ///< Always write all cells (for benchmarking).
 };
 
+/// Unscroll mode for inline viewport.
+///
+/// Controls whether to use the Kitty unscroll extension (CSI Ps + T) to
+/// restore scrollback content when inline content shrinks (e.g., popup hides).
+/// Supported by: Kitty, Contour, mintty.
+enum class UnscrollMode : uint8_t
+{
+    Auto,     ///< Auto-detect terminal support (default).
+    Enabled,  ///< Always use unscroll (for known-supported terminals).
+    Disabled, ///< Never use unscroll (fallback to clearing rows).
+};
+
 /// Configuration for the Screen.
 struct ScreenConfig
 {
     Viewport viewport = Viewport::Fullscreen;
-    Rect fixedArea;          ///< For Viewport::Fixed.
-    int inlineMaxHeight = 0; ///< For Viewport::Inline (0 = no limit).
+    Rect fixedArea;                                 ///< For Viewport::Fixed.
+    int inlineMaxHeight = 0;                        ///< For Viewport::Inline (0 = no limit).
+    UnscrollMode unscrollMode = UnscrollMode::Auto; ///< Unscroll behavior for inline mode.
 };
+
+/// Cursor movement calculations for inline rendering.
+///
+/// This struct captures the cursor movements needed when transitioning
+/// between renders with different content heights in inline viewport mode.
+struct InlineCursorMovement
+{
+    int moveUpToStart = 0;       ///< Move up from previous cursor position to row 0.
+    int newLinesToEmit = 0;      ///< Newlines to emit when content grows.
+    int moveUpAfterNewlines = 0; ///< Move up after emitting newlines (equals newLinesToEmit).
+    int rowsToClear = 0;         ///< Rows to clear when content shrinks.
+};
+
+/// Calculates cursor movements for inline rendering transitions.
+///
+/// @param previousContentHeight Height of content from previous render.
+/// @param previousCursorRow Cursor row at end of previous render.
+/// @param newContentHeight Height of content for current render.
+/// @return Cursor movement instructions.
+[[nodiscard]] InlineCursorMovement calculateInlineCursorMovement(int previousContentHeight,
+                                                                 int previousCursorRow,
+                                                                 int newContentHeight);
 
 /// Central coordinator for the TUI component system.
 ///
@@ -189,6 +224,10 @@ class Screen
     std::unordered_set<Component*> _dirtyComponents;
     int _previousContentHeight = 0;
     int _previousCursorRow = 0; ///< Cursor row at end of last inline render (for positioning)
+    // NOTE: Unscroll feature is disabled until properly implemented for inline mode.
+    // The _scrolledLinesCount and _unscrollSupported fields are kept for future use.
+    // int _scrolledLinesCount = 0;   ///< Lines scrolled into scrollback (for unscroll)
+    // bool _unscrollSupported = false; ///< Resolved unscroll support (from config + detection)
 
     // Focus state
     FocusGroupId _activeGroup = std::string(DefaultFocusGroup);

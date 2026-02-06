@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <chrono>
 #include <string>
 
 #include <tui/CompletionPopup.hpp>
@@ -120,8 +121,13 @@ class PromptComponent: public tui::Component
 
     // Completion helpers
     void updateGhostText();
-    void triggerCompletion();
+    void triggerCompletion(bool forceShowPopup);
+    void updateCompletionPopup();
     void insertCompletion(std::string_view text);
+
+    // Double-Tab detection
+    std::chrono::steady_clock::time_point _lastTabTime {};
+    static constexpr auto DoubleTabThreshold = std::chrono::milliseconds(400);
 };
 
 } // namespace endo

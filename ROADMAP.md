@@ -300,7 +300,7 @@ The library includes:
 
 ### Phase 2.3: Completion and Suggestions
 
-**Status:** Complete (tests pending)
+**Status:** Complete
 
 **Dependency:** Phase 2.1, Milestone 1 (need language features to complete)
 
@@ -324,17 +324,25 @@ The library includes:
 - [x] Add completion styles to Theme (`ghostText`, `completionItem`, `completionSelected`, `completionDesc`)
 - [x] Design and implement completion popup UI (`CompletionPopup.cpp` - bordered list with scroll indicators)
 - [x] Integrate completion with Prompt (Tab/Ctrl+Space triggers, menu navigation, ghost text rendering)
-- [ ] Add comprehensive completion tests
+- [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
 
 **Implementation Notes:**
+- Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`) moved to `src/tui/completer/` as pure TUI model
+- Shell-specific providers (`CommandCompleter`, `FileCompleter`, etc.) remain in `src/shell/` and use `tui::CompletionItem`
 - `CompletionContextType` enum: Command, Argument, FilePath, Variable, VariableBrace, Redirect, Option, Unknown
 - Ghost text uses SGR 2 (dim) for visual distinction from actual input
-- `CompletionPopup` is a proper TUI widget with `show()`/`hide()` visibility management, `processEvent()` returning `CompletionAction` enum (None, Changed, Accepted, Dismissed), and `render()` using relative cursor positioning
-- Completion menu appears below cursor with Up/Down/Ctrl+J/Ctrl+K navigation, Enter/Tab to accept, Escape to dismiss
+- `CompletionPopup` is a proper TUI widget with `show()`/`hide()`/`updateItems()` visibility management, `processEvent()` returning `CompletionAction` enum (Changed, Accepted, Dismissed), and `render()` using relative cursor positioning
+- Unhandled keys cause popup to dismiss and pass through to parent (removed `None` action)
+- Visibility state is properly synced between `CompletionPopup` and `Component` base class
+- Dynamic filtering: typing while popup is visible filters the list in real-time; `updateItems()` preserves selection when the selected item still matches, otherwise selects best match; auto-closes on 0 matches
+- Popup positioning: In inline mode (primary screen), always renders below cursor - Screen creates space by emitting newlines to use scrollback buffer; in fullscreen/fixed mode, renders above cursor when not enough space below (< 3 rows)
+- Completion menu appears below cursor with Up/Down/Ctrl+J/Ctrl+K/Tab/Shift+Tab navigation, Enter to accept, Escape to dismiss
 - Single completion matches are inserted directly without showing menu
 - `Environment` class extracted to `Environment.hpp` for cleaner dependency management
 - Shell class creates `Completer` with environment and history, connects to Prompt via `setCompleter()`
 - Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
+- Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.)
+- 39 completion-related tests covering Completer, CompletionPopup, and updateItems functionality
 
 ### Phase 2.3.5: TUI Renderer Architecture
 
@@ -387,6 +395,10 @@ and focus group management.
 - Inline viewport: Shell renders at cursor position, grows downward by emitting newlines
 - Widget lifecycle: Persistent tree with explicit `addChild()`/`removeChild()`
 - `InputField::Model`: Nested class pattern separates logic from rendering, enables unit testing
+- Synchronized output: `Screen::flush()` uses DEC mode 2026 (`SyncGuard`) to batch terminal updates and prevent visual tearing
+- Inline cursor management: `flushInline()` properly handles content height changes - moves up by `newLines` (not `contentHeight`) after emitting newlines, and clears excess rows when content shrinks to avoid visual artifacts
+- Kitty unscroll extension (WIP): Infrastructure added for `CSI Ps + T` to restore scrollback content. Detected via XTVERSION query. Supported terminals: Kitty, Contour, mintty. Configurable via `UnscrollMode::Auto|Enabled|Disabled`. Currently disabled for inline mode because the sequence shifts the entire screen, which doesn't work well when rendering at the bottom. Needs scroll region approach for proper implementation.
+- Unit tests for cursor movement calculations in `Screen_test.cpp` (13 test cases)
 
 **Architecture:**
 ```

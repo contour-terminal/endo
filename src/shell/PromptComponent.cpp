@@ -5,6 +5,7 @@
 
 #include "Completer.hpp"
 #include <tui/Canvas.hpp>
+#include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 
 #if defined(__clang__)
@@ -174,18 +175,38 @@ void PromptComponent::render(tui::Canvas& canvas)
 
     canvas.setCursor(cursorLine, displayCol);
 
-    // Render completion popup if visible (as overlay in bottom-right area)
+    // Render completion popup if visible
     if (_completionPopup.visible())
     {
         auto popupSize = _completionPopup.preferredSize();
-        auto popupRect =
-            tui::Rect { cursorLine + 1, // Below cursor
-                        totalPromptWidth,
-                        std::min(popupSize.width, canvasWidth - totalPromptWidth - HorizontalMargin),
-                        std::min(popupSize.height, canvas.height() - cursorLine - 1) };
+        int availableBelow = canvas.height() - cursorLine - 1;
+        int availableAbove = cursorLine;
 
-        if (popupRect.height > 0)
+        bool renderBelow = true;
+
+        // In fullscreen/fixed mode, choose direction based on available space
+        // In inline mode, always render below (Screen handles scrolling via preferredSize)
+        if (auto* scr = screen(); scr && scr->viewport() != tui::Viewport::Inline)
         {
+            // Prefer below, but use above if below has < 3 rows and above has more space
+            if (availableBelow < 3 && availableAbove > availableBelow)
+                renderBelow = false;
+        }
+
+        int popupRow = renderBelow ? (cursorLine + 1)
+                                   : std::max(0, cursorLine - std::min(popupSize.height, availableAbove));
+        int popupHeight = renderBelow ? std::min(popupSize.height, std::max(0, availableBelow))
+                                      : std::min(popupSize.height, availableAbove);
+
+        if (popupHeight >= 3) // Minimum: border (2) + 1 item
+        {
+            // Rect constructor: {x, y, width, height} where x=column, y=row
+            auto popupRect =
+                tui::Rect { totalPromptWidth, // x (column) - where prompt ends
+                            popupRow,         // y (row) - below or above cursor
+                            std::min(popupSize.width, canvasWidth - totalPromptWidth - HorizontalMargin),
+                            popupHeight };
+
             _completionPopup.setArea(popupRect);
             auto popupCanvas = canvas.subcanvas(popupRect);
             _completionPopup.render(popupCanvas);
@@ -217,7 +238,16 @@ tui::Size PromptComponent::preferredSize() const
         maxWidth = std::max(maxWidth, promptWidth + displayWidth(lineContent));
     }
 
-    return { maxWidth, lineCount };
+    // If completion popup is visible, add space for it below the input
+    int totalHeight = lineCount;
+    if (_completionPopup.visible())
+    {
+        auto popupSize = _completionPopup.preferredSize();
+        totalHeight += popupSize.height;
+        maxWidth = std::max(maxWidth, promptWidth + popupSize.width);
+    }
+
+    return { maxWidth, totalHeight };
 }
 
 void PromptComponent::setPrompt(std::string_view prompt)
@@ -246,6 +276,10 @@ int PromptComponent::displayWidth(std::string_view text)
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
 {
+    // Track if popup was visible before processing (for dynamic filtering)
+    bool const popupWasVisible = _completionPopup.visible();
+    bool popupDismissedByTyping = false;
+
     // Handle completion popup events first
     if (_completionPopup.visible())
     {
@@ -257,11 +291,11 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 if (auto const* selected = _completionPopup.selectedItem())
                     insertCompletion(selected->text);
                 _completionPopup.hide();
+                updateGhostText(); // Clear/update ghost text after completion
                 return Action::Changed;
-            case tui::CompletionAction::Dismissed: _completionPopup.hide(); return Action::Changed;
-            case tui::CompletionAction::None:
-                // Close popup and continue processing
-                _completionPopup.hide();
+            case tui::CompletionAction::Dismissed:
+                // Don't hide yet - let event pass through and potentially re-filter
+                popupDismissedByTyping = true;
                 break;
         }
     }
@@ -269,17 +303,20 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     // Handle key events with special completion handling
     if (auto const* key = std::get_if<tui::KeyEvent>(&event))
     {
-        // Tab triggers completion
+        // Tab triggers completion (double-Tab forces popup to show)
         if (key->key == tui::KeyCode::Tab && key->modifiers == tui::Modifier::None)
         {
-            triggerCompletion();
+            auto const now = std::chrono::steady_clock::now();
+            bool const isDoubleTab = (now - _lastTabTime) < DoubleTabThreshold;
+            _lastTabTime = now;
+            triggerCompletion(isDoubleTab);
             return Action::Changed;
         }
 
-        // Ctrl+Space triggers completion
+        // Ctrl+Space triggers completion (always shows popup)
         if (key->codepoint == ' ' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
         {
-            triggerCompletion();
+            triggerCompletion(true);
             return Action::Changed;
         }
 
@@ -303,8 +340,17 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         case tui::InputFieldAction::Submit: _completionPopup.hide(); return Action::Submit;
         case tui::InputFieldAction::Abort: _completionPopup.hide(); return Action::Abort;
         case tui::InputFieldAction::Eof: _completionPopup.hide(); return Action::Eof;
-        case tui::InputFieldAction::Changed: updateGhostText(); return Action::Changed;
-        case tui::InputFieldAction::None: break;
+        case tui::InputFieldAction::Changed:
+            updateGhostText();
+            // If popup was visible and dismissed by typing, re-filter instead of hiding
+            if (popupWasVisible && popupDismissedByTyping)
+                updateCompletionPopup();
+            return Action::Changed;
+        case tui::InputFieldAction::None:
+            // If dismissed but text didn't change (e.g., Escape), hide popup
+            if (popupDismissedByTyping)
+                _completionPopup.hide();
+            break;
     }
 
     return Action::None;
@@ -336,7 +382,7 @@ void PromptComponent::updateGhostText()
         _inputField.clearGhostText();
 }
 
-void PromptComponent::triggerCompletion()
+void PromptComponent::triggerCompletion(bool forceShowPopup)
 {
     if (!_completer)
         return;
@@ -353,15 +399,17 @@ void PromptComponent::triggerCompletion()
         return;
     }
 
-    if (completions.size() == 1)
+    if (completions.size() == 1 && !forceShowPopup)
     {
         // Single match: insert directly without showing popup
+        // (unless force-show was requested via double-Tab or Ctrl+Space)
         insertCompletion(completions[0].text);
         _completionPopup.hide();
+        updateGhostText(); // Clear/update ghost text after completion
         return;
     }
 
-    // Multiple matches: populate and show popup
+    // Multiple matches (or force-show): populate and show popup
     std::vector<tui::CompletionItem> popupItems;
     popupItems.reserve(completions.size());
     for (auto const& item: completions)
@@ -374,6 +422,43 @@ void PromptComponent::triggerCompletion()
         });
     }
     _completionPopup.show(std::move(popupItems));
+}
+
+void PromptComponent::updateCompletionPopup()
+{
+    if (!_completer)
+    {
+        _completionPopup.hide();
+        return;
+    }
+
+    auto const text = _inputField.text();
+    auto const cursor = _inputField.cursor();
+
+    // Get filtered completions
+    auto completions = _completer->complete(text, cursor);
+
+    if (completions.empty())
+    {
+        _completionPopup.hide(); // Auto-close on 0 matches
+        return;
+    }
+
+    // Convert to popup items
+    std::vector<tui::CompletionItem> popupItems;
+    popupItems.reserve(completions.size());
+    for (auto const& item: completions)
+    {
+        popupItems.push_back(tui::CompletionItem {
+            .text = item.text,
+            .displayText = item.displayText.empty() ? item.text : item.displayText,
+            .description = item.description,
+            .score = item.score,
+        });
+    }
+
+    // Update with selection preservation
+    _completionPopup.updateItems(std::move(popupItems));
 }
 
 void PromptComponent::insertCompletion(std::string_view text)

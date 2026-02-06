@@ -167,6 +167,26 @@ class TerminalOutput
     /// @param text The text to copy to the clipboard.
     void copyToClipboard(std::string_view text);
 
+    /// @brief Unscrolls (restores) lines from the scrollback buffer.
+    ///
+    /// Uses the Kitty unscroll extension (CSI Ps + T) to restore content
+    /// that was previously scrolled into the scrollback buffer.
+    /// Supported by: Kitty, Contour, mintty.
+    ///
+    /// @param n Number of lines to restore from scrollback.
+    /// @note On unsupported terminals, this sequence is silently ignored.
+    void unscroll(int n);
+
+    /// @brief Checks if the terminal supports the unscroll extension.
+    ///
+    /// Detects support by checking for known terminals:
+    /// - Kitty: KITTY_WINDOW_ID environment variable
+    /// - Contour: TERMINAL_NAME=contour environment variable
+    /// - mintty: TERM_PROGRAM=mintty environment variable
+    ///
+    /// @return true if unscroll is likely supported.
+    [[nodiscard]] bool supportsUnscroll() const noexcept;
+
     /// @brief Flushes the internal buffer to stdout.
     void flush();
 
@@ -183,6 +203,7 @@ class TerminalOutput
     std::string _buffer; ///< Output buffer for batching writes.
     int _cols = 80;
     int _rows = 24;
+    bool _unscrollSupported = false; ///< Cached unscroll support detection.
 
     /// @brief Appends SGR (Select Graphic Rendition) sequences for the given style.
     void appendSgr(Style const& style);

@@ -9,6 +9,31 @@
 namespace tui
 {
 
+InlineCursorMovement calculateInlineCursorMovement(int previousContentHeight,
+                                                   int previousCursorRow,
+                                                   int newContentHeight)
+{
+    InlineCursorMovement result;
+
+    // Move from previous cursor position to row 0
+    if (previousContentHeight > 0 && previousCursorRow > 0)
+        result.moveUpToStart = previousCursorRow;
+
+    // Calculate newlines needed when content grows
+    if (newContentHeight > previousContentHeight)
+    {
+        result.newLinesToEmit = newContentHeight - previousContentHeight;
+        // Move back up by the number of newlines emitted (NOT contentHeight!)
+        result.moveUpAfterNewlines = result.newLinesToEmit;
+    }
+
+    // Calculate rows to clear when content shrinks
+    if (previousContentHeight > newContentHeight && newContentHeight > 0)
+        result.rowsToClear = previousContentHeight - newContentHeight;
+
+    return result;
+}
+
 Screen::Screen(Terminal& terminal, ScreenConfig config):
     _terminal(terminal), _config(config), _theme(darkTheme()), _root(std::make_unique<RootComponent>())
 {
@@ -19,6 +44,13 @@ Screen::Screen(Terminal& terminal, ScreenConfig config):
     auto const termCols = _terminal.columns();
     _current.resize(termRows, termCols);
     _previous.resize(termRows, termCols);
+
+    // NOTE: Unscroll feature (CSI n + T) is currently disabled for inline mode because
+    // the sequence shifts the ENTIRE screen down, which doesn't work well when rendering
+    // at the bottom of the terminal. The feature needs a different approach for inline
+    // rendering, possibly using scroll regions.
+    // The UnscrollMode config is preserved for future implementation.
+    (void) _config.unscrollMode; // Suppress unused warning
 }
 
 Screen::~Screen() = default;
@@ -294,6 +326,9 @@ void Screen::endFrame()
 
 void Screen::flush()
 {
+    // Use synchronized output to prevent tearing
+    auto syncGuard = _terminal.output().syncGuard();
+
     switch (_config.viewport)
     {
         case Viewport::Fullscreen: flushFullscreen(); break;
@@ -399,9 +434,16 @@ void Screen::flushInline()
             out.writeRaw("\n");
 
         // Move cursor back to top of our region
-        if (contentHeight > 0)
-            out.moveUp(contentHeight);
+        // IMPORTANT: Move up by newLines (the amount we moved down), NOT contentHeight!
+        // Moving up by contentHeight causes cursor drift when content grows/shrinks repeatedly.
+        if (newLines > 0)
+            out.moveUp(newLines);
     }
+
+    // Track how many rows to clear if content shrank
+    int rowsToClear = (_previousContentHeight > contentHeight && contentHeight > 0)
+                          ? (_previousContentHeight - contentHeight)
+                          : 0;
 
     _previousContentHeight = contentHeight;
 
@@ -449,6 +491,20 @@ void Screen::flushInline()
 
         if (row < contentHeight - 1)
             out.writeRaw("\n");
+    }
+
+    // Clear excess rows when content shrank (to avoid leaving garbage on screen)
+    if (rowsToClear > 0)
+    {
+        // We're currently at row contentHeight-1, need to clear rows below
+        for (int i = 0; i < rowsToClear; ++i)
+        {
+            out.writeRaw("\n");
+            out.writeRaw("\r");
+            out.clearToEndOfLine();
+        }
+        // Move back up to where we were (row contentHeight-1)
+        out.moveUp(rowsToClear);
     }
 
     // Position cursor and track its row for next render

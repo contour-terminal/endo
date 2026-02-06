@@ -130,8 +130,8 @@ void CompletionPopup::render(Canvas& canvas)
             descWidth = stringWidth(desc);
         }
 
-        // Fill the row background
-        canvas.fill(Rect { row, 1, innerWidth, 1 }, ' ', itemStyle);
+        // Fill the row background (x=col, y=row, width, height)
+        canvas.fill(Rect { 1, row, innerWidth, 1 }, ' ', itemStyle);
 
         // Calculate total content width
         int totalContentWidth = textWidth + (descWidth > 0 ? 2 + descWidth : 0);
@@ -212,9 +212,10 @@ EventResult CompletionPopup::onEvent(InputEvent const& event)
     switch (action)
     {
         case CompletionAction::Changed:
-        case CompletionAction::Accepted:
-        case CompletionAction::Dismissed: invalidate(); return EventResult::Handled;
-        case CompletionAction::None: return EventResult::Ignored;
+        case CompletionAction::Accepted: invalidate(); return EventResult::Handled;
+        case CompletionAction::Dismissed:
+            invalidate();
+            return EventResult::Ignored; // Let parent handle the key that dismissed us
     }
     return EventResult::Ignored;
 }
@@ -241,6 +242,7 @@ void CompletionPopup::show(std::vector<CompletionItem> items)
     _selected = 0;
     _scrollOffset = 0;
     _visible = !_items.empty();
+    Component::setVisible(_visible); // Sync Component visibility state
 }
 
 void CompletionPopup::hide()
@@ -251,6 +253,45 @@ void CompletionPopup::hide()
     _visible = false;
     _renderedHeight = 0;
     _renderedWidth = 0;
+    Component::setVisible(false); // Sync Component visibility state
+}
+
+void CompletionPopup::updateItems(std::vector<CompletionItem> items)
+{
+    if (items.empty())
+    {
+        hide();
+        return;
+    }
+
+    // Remember current selection text
+    std::string previousSelection;
+    if (_selected < _items.size())
+        previousSelection = _items[_selected].text;
+
+    _items = std::move(items);
+    _scrollOffset = 0;
+
+    // Try to find the previously selected item in the new list
+    if (!previousSelection.empty())
+    {
+        for (size_t i = 0; i < _items.size(); ++i)
+        {
+            if (_items[i].text == previousSelection)
+            {
+                _selected = i;
+                ensureSelectedVisible();
+                _visible = true;
+                Component::setVisible(true);
+                return;
+            }
+        }
+    }
+
+    // Not found - select first item (best match)
+    _selected = 0;
+    _visible = true;
+    Component::setVisible(true);
 }
 
 bool CompletionPopup::visible() const noexcept
@@ -392,12 +433,12 @@ int CompletionPopup::maxVisible() const noexcept
 CompletionAction CompletionPopup::processEvent(InputEvent const& event)
 {
     if (!visible())
-        return CompletionAction::None;
+        return CompletionAction::Dismissed;
 
     if (auto const* key = std::get_if<KeyEvent>(&event))
         return handleKey(*key);
 
-    return CompletionAction::None;
+    return CompletionAction::Dismissed;
 }
 
 CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
@@ -440,20 +481,28 @@ CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
         return CompletionAction::Changed;
     }
 
-    // Accept selection
-    if (key.key == KeyCode::Enter || key.key == KeyCode::Tab)
+    // Tab: auto-accept if only one item, otherwise cycle to next/previous
+    if (key.key == KeyCode::Tab)
+    {
+        if (_items.size() == 1)
+            return CompletionAction::Accepted; // Auto-accept single remaining item
+
+        if (hasModifier(key.modifiers, Modifier::Shift))
+            selectPrev();
+        else
+            selectNext();
+        return CompletionAction::Changed;
+    }
+
+    // Accept selection with Enter
+    if (key.key == KeyCode::Enter)
     {
         return CompletionAction::Accepted;
     }
 
-    // Dismiss popup
-    if (key.key == KeyCode::Escape)
-    {
-        return CompletionAction::Dismissed;
-    }
-
-    // Any other key is not consumed
-    return CompletionAction::None;
+    // Dismiss popup on Escape or any other unhandled key
+    // Any unhandled key dismisses the popup, allowing the key to be processed by parent
+    return CompletionAction::Dismissed;
 }
 
 // ============================================================================

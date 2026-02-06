@@ -6,26 +6,13 @@
 #include <string_view>
 #include <vector>
 
+#include <tui/completer/CompletionItem.hpp>
+
 namespace endo
 {
 
-/// @brief A single completion suggestion.
-struct CompletionItem
-{
-    std::string text;        ///< Full completion text (the actual value to insert).
-    std::string displayText; ///< Text to display in menu (may be abbreviated).
-    std::string description; ///< Help text / synopsis for the completion menu.
-    int score = 0;           ///< Ranking score (higher = better match).
-
-    /// @brief Returns the suffix to append after the prefix.
-    /// @param prefixLen Length of the prefix already typed.
-    [[nodiscard]] std::string suffix(size_t prefixLen) const
-    {
-        return prefixLen < text.size() ? text.substr(prefixLen) : "";
-    }
-
-    auto operator<=>(CompletionItem const&) const = default;
-};
+// Use tui::CompletionItem for completion items
+using tui::CompletionItem;
 
 /// @brief Type of completion context.
 enum class CompletionContextType
