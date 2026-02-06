@@ -29,7 +29,7 @@ namespace endo
 
 std::string readLine(TTY& tty, std::string_view prompt);
 
-class Shell final: public CoreVM::Runtime
+class Shell final
 {
   public:
     Shell();
@@ -198,6 +198,7 @@ class Shell final: public CoreVM::Runtime
 
     std::vector<std::string>& cmdBuilderArgs();
 
+    CoreVM::Runtime _runtime;
     Environment& _env;
     TTY& _tty;
 

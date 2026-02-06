@@ -538,7 +538,7 @@ int Shell::execute(std::string const& lineBuffer)
     try
     {
         CoreVM::diagnostics::ConsoleReport report;
-        auto parser = endo::Parser(*this, report, std::make_unique<endo::StringSource>(lineBuffer));
+        auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
         auto const rootNode = parser.parse();
 
         // Check for parser errors
@@ -550,7 +550,7 @@ int Shell::execute(std::string const& lineBuffer)
 
         debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-        auto irProgram = IRGenerator::generate(*rootNode, report, *this);
+        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime);
 
         // Check for IR generation errors
         if (report.containsFailures())
@@ -587,7 +587,7 @@ int Shell::execute(std::string const& lineBuffer)
             error("Failed to generate target code");
             return EXIT_FAILURE;
         }
-        _currentProgram->link(this, &report);
+        _currentProgram->link(&_runtime, &report);
 
         debugLog()()("================================================\n");
         debugLog()()("Linked target code:\n");
@@ -613,267 +613,267 @@ int Shell::execute(std::string const& lineBuffer)
 void Shell::registerBuiltinFunctions()
 {
     // clang-format off
-    registerFunction("exit")
+    _runtime.registerFunction("exit")
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinExit, this);
 
-    registerFunction("export")
+    _runtime.registerFunction("export")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinExport, this);
 
-    registerFunction("export")
+    _runtime.registerFunction("export")
         .param<std::string>("name")
         .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinSetAndExport, this);
 
-    registerFunction("true")
+    _runtime.registerFunction("true")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinTrue, this);
 
-    registerFunction("false")
+    _runtime.registerFunction("false")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinFalse, this);
 
-    registerFunction("cd")
+    _runtime.registerFunction("cd")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinChDirHome, this);
 
-    registerFunction("cd")
+    _runtime.registerFunction("cd")
         .param<std::string>("path")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinChDir, this);
 
-    registerFunction("set")
+    _runtime.registerFunction("set")
         .param<std::string>("name")
         .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinSet, this);
 
-    registerFunction("unset")
+    _runtime.registerFunction("unset")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinUnset, this);
 
-    registerFunction("getvar")
+    _runtime.registerFunction("getvar")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetVar, this);
 
-    registerFunction("getvar.exitstatus")
+    _runtime.registerFunction("getvar.exitstatus")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetExitStatus, this);
 
-    registerFunction("setvar.exitstatus")
+    _runtime.registerFunction("setvar.exitstatus")
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinSetExitStatus, this);
 
-    registerFunction("getvar.processid")
+    _runtime.registerFunction("getvar.processid")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetProcessId, this);
 
-    registerFunction("getvar.backgroundid")
+    _runtime.registerFunction("getvar.backgroundid")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetBackgroundId, this);
 
-    registerFunction("getvar.positional")
+    _runtime.registerFunction("getvar.positional")
         .param<CoreVM::CoreNumber>("index")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetPositional, this);
 
-    registerFunction("callproc")
+    _runtime.registerFunction("callproc")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCallProcess, this);
 
-    registerFunction("callproc")
+    _runtime.registerFunction("callproc")
         .param<bool>("last_in_chain")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCallProcessShellPiped, this);
 
-    registerFunction("read")
+    _runtime.registerFunction("read")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinReadDefault, this);
 
-    registerFunction("read")
+    _runtime.registerFunction("read")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinRead, this);
 
-    registerFunction("internal.open_read")
+    _runtime.registerFunction("internal.open_read")
         .param<std::string>("path")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinOpenRead, this);
 
-    registerFunction("internal.open_write")
+    _runtime.registerFunction("internal.open_write")
         .param<std::string>("path")
         .param<CoreVM::CoreNumber>("oflags")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinOpenWrite, this);
 
-    registerFunction("internal.cmd_start")
+    _runtime.registerFunction("internal.cmd_start")
         .param<std::string>("program")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinCmdStart, this);
 
-    registerFunction("internal.cmd_arg")
+    _runtime.registerFunction("internal.cmd_arg")
         .param<std::string>("arg")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinCmdArg, this);
 
-    registerFunction("internal.cmd_exec")
+    _runtime.registerFunction("internal.cmd_exec")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCmdExec, this);
 
-    registerFunction("internal.cmd_exec_piped")
+    _runtime.registerFunction("internal.cmd_exec_piped")
         .param<bool>("last_in_chain")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCmdExecPiped, this);
 
-    registerFunction("internal.redirect_start")
+    _runtime.registerFunction("internal.redirect_start")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectStart, this);
 
-    registerFunction("internal.redirect_input")
+    _runtime.registerFunction("internal.redirect_input")
         .param<CoreVM::CoreNumber>("target_fd")
         .param<std::string>("path")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectInput, this);
 
-    registerFunction("internal.redirect_output")
+    _runtime.registerFunction("internal.redirect_output")
         .param<CoreVM::CoreNumber>("source_fd")
         .param<std::string>("path")
         .param<bool>("append")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectOutput, this);
 
-    registerFunction("internal.redirect_fd_dup")
+    _runtime.registerFunction("internal.redirect_fd_dup")
         .param<CoreVM::CoreNumber>("source_fd")
         .param<CoreVM::CoreNumber>("target_fd")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectFdDup, this);
 
-    registerFunction("internal.redirect_heredoc")
+    _runtime.registerFunction("internal.redirect_heredoc")
         .param<CoreVM::CoreNumber>("target_fd")
         .param<std::string>("content")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectHeredoc, this);
 
-    registerFunction("internal.redirect_herestring")
+    _runtime.registerFunction("internal.redirect_herestring")
         .param<CoreVM::CoreNumber>("target_fd")
         .param<std::string>("content")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectHerestring, this);
 
-    registerFunction("internal.redirect_end")
+    _runtime.registerFunction("internal.redirect_end")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinRedirectEnd, this);
 
-    registerFunction("internal.subst_start")
+    _runtime.registerFunction("internal.subst_start")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinSubstStart, this);
 
-    registerFunction("internal.subst_end")
+    _runtime.registerFunction("internal.subst_end")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinSubstEnd, this);
 
-    registerFunction("internal.procsubst_fork")
+    _runtime.registerFunction("internal.procsubst_fork")
         .param<bool>("is_write")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinProcSubstFork, this);
 
-    registerFunction("internal.procsubst_exit")
+    _runtime.registerFunction("internal.procsubst_exit")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinProcSubstExit, this);
 
-    registerFunction("internal.procsubst_get_path")
+    _runtime.registerFunction("internal.procsubst_get_path")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinProcSubstGetPath, this);
 
-    registerFunction("internal.procsubst_cleanup")
+    _runtime.registerFunction("internal.procsubst_cleanup")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinProcSubstCleanup, this);
 
-    registerFunction("expand.tilde")
+    _runtime.registerFunction("expand.tilde")
         .param<std::string>("suffix")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandTilde, this);
 
-    registerFunction("expand.tilde_user")
+    _runtime.registerFunction("expand.tilde_user")
         .param<std::string>("user")
         .param<std::string>("suffix")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandTildeUser, this);
 
-    registerFunction("expand.glob")
+    _runtime.registerFunction("expand.glob")
         .param<std::string>("pattern")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinExpandGlob, this);
 
-    registerFunction("expand.arith_to_string")
+    _runtime.registerFunction("expand.arith_to_string")
         .param<CoreVM::CoreNumber>("value")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinArithToString, this);
 
-    registerFunction("expand.arith_getvar")
+    _runtime.registerFunction("expand.arith_getvar")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinArithGetVar, this);
 
-    registerFunction("expand.arith_pow")
+    _runtime.registerFunction("expand.arith_pow")
         .param<CoreVM::CoreNumber>("base")
         .param<CoreVM::CoreNumber>("exp")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinArithPow, this);
 
-    registerFunction("expand.param_length")
+    _runtime.registerFunction("expand.param_length")
         .param<std::string>("var")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamLength, this);
 
-    registerFunction("expand.param_default")
+    _runtime.registerFunction("expand.param_default")
         .param<std::string>("var")
         .param<std::string>("default_value")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamDefault, this);
 
-    registerFunction("expand.param_alternate")
+    _runtime.registerFunction("expand.param_alternate")
         .param<std::string>("var")
         .param<std::string>("alternate")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamAlternate, this);
 
-    registerFunction("expand.param_assign")
+    _runtime.registerFunction("expand.param_assign")
         .param<std::string>("var")
         .param<std::string>("default_value")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamAssign, this);
 
-    registerFunction("expand.param_error")
+    _runtime.registerFunction("expand.param_error")
         .param<std::string>("var")
         .param<std::string>("error_msg")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamError, this);
 
-    registerFunction("expand.param_remove_prefix")
+    _runtime.registerFunction("expand.param_remove_prefix")
         .param<std::string>("var")
         .param<std::string>("pattern")
         .param<bool>("longest")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamRemovePrefix, this);
 
-    registerFunction("expand.param_remove_suffix")
+    _runtime.registerFunction("expand.param_remove_suffix")
         .param<std::string>("var")
         .param<std::string>("pattern")
         .param<bool>("longest")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamRemoveSuffix, this);
 
-    registerFunction("expand.param_replace")
+    _runtime.registerFunction("expand.param_replace")
         .param<std::string>("var")
         .param<std::string>("pattern")
         .param<std::string>("replacement")
@@ -881,78 +881,78 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinExpandParamReplace, this);
 
-    registerFunction("internal.for_init")
+    _runtime.registerFunction("internal.for_init")
         .param<std::string>("var")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinForInit, this);
 
-    registerFunction("internal.for_add_item")
+    _runtime.registerFunction("internal.for_add_item")
         .param<std::string>("item")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinForAddItem, this);
 
-    registerFunction("internal.for_has_more")
+    _runtime.registerFunction("internal.for_has_more")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinForHasMore, this);
 
-    registerFunction("internal.for_next")
+    _runtime.registerFunction("internal.for_next")
         .param<std::string>("var")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinForNext, this);
 
-    registerFunction("internal.for_cleanup")
+    _runtime.registerFunction("internal.for_cleanup")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinForCleanup, this);
 
-    registerFunction("internal.case_match")
+    _runtime.registerFunction("internal.case_match")
         .param<std::string>("word")
         .param<std::string>("pattern")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinCaseMatch, this);
 
-    registerFunction("internal.function_register")
+    _runtime.registerFunction("internal.function_register")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinFunctionRegister, this);
 
-    registerFunction("internal.function_call")
+    _runtime.registerFunction("internal.function_call")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinFunctionCall, this);
 
     // Job control builtins
-    registerFunction("jobs")
+    _runtime.registerFunction("jobs")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinJobs, this);
 
-    registerFunction("fg")
+    _runtime.registerFunction("fg")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinFg, this);
 
-    registerFunction("fg")
+    _runtime.registerFunction("fg")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinFg, this);
 
-    registerFunction("bg")
+    _runtime.registerFunction("bg")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBg, this);
 
-    registerFunction("bg")
+    _runtime.registerFunction("bg")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBg, this);
 
-    registerFunction("wait")
+    _runtime.registerFunction("wait")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinWait, this);
 
-    registerFunction("wait")
+    _runtime.registerFunction("wait")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinWait, this);
 
-    registerFunction("internal.cmd_exec_piped_background")
+    _runtime.registerFunction("internal.cmd_exec_piped_background")
         .param<std::string>("command")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCmdExecPipedBackground, this);
@@ -962,11 +962,11 @@ void Shell::registerBuiltinFunctions()
     // bind <key> <action>  - bind a key to an action
     // bind -r <key>        - remove a binding
     // bind --reset         - reset to defaults
-    registerFunction("bind")
+    _runtime.registerFunction("bind")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBind, this);
 
-    registerFunction("bind")
+    _runtime.registerFunction("bind")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBind, this);
