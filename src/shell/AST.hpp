@@ -457,6 +457,64 @@ struct BuiltinUnsetStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Builtin jobs statement for listing background jobs.
+struct BuiltinJobsStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+
+    explicit BuiltinJobsStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
+        callback { callback }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Builtin fg statement for bringing a job to foreground.
+struct BuiltinFgStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::unique_ptr<Expr> jobId; ///< Optional job ID (null for current job)
+
+    BuiltinFgStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                  std::unique_ptr<Expr> jobId = nullptr):
+        callback { callback }, jobId { std::move(jobId) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Builtin bg statement for resuming a stopped job in the background.
+struct BuiltinBgStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::unique_ptr<Expr> jobId; ///< Optional job ID (null for current job)
+
+    BuiltinBgStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                  std::unique_ptr<Expr> jobId = nullptr):
+        callback { callback }, jobId { std::move(jobId) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Builtin wait statement for waiting on background jobs.
+struct BuiltinWaitStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::unique_ptr<Expr> jobId; ///< Optional job ID (null for all jobs)
+
+    BuiltinWaitStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                    std::unique_ptr<Expr> jobId = nullptr):
+        callback { callback }, jobId { std::move(jobId) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Program call: `/bin/ls -hal`
 ///
 /// Represents a program call with its arguments and redirects.

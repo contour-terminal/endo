@@ -14,6 +14,10 @@ struct BuiltinExitStmt;
 struct BuiltinReadStmt;
 struct BuiltinTrueStmt;
 struct BuiltinUnsetStmt;
+struct BuiltinJobsStmt;
+struct BuiltinFgStmt;
+struct BuiltinBgStmt;
+struct BuiltinWaitStmt;
 struct CallPipeline;
 struct CaseStmt;
 struct CommandFileSubst;
@@ -77,6 +81,10 @@ struct Visitor
     virtual void visit(BuiltinChDirStmt const&) = 0;
     virtual void visit(BuiltinSetStmt const&) = 0;
     virtual void visit(BuiltinUnsetStmt const&) = 0;
+    virtual void visit(BuiltinJobsStmt const&) = 0;
+    virtual void visit(BuiltinFgStmt const&) = 0;
+    virtual void visit(BuiltinBgStmt const&) = 0;
+    virtual void visit(BuiltinWaitStmt const&) = 0;
 
     // expressions
     virtual void visit(ArithExpansionExpr const&) = 0;

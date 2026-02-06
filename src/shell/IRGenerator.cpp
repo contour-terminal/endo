@@ -704,6 +704,77 @@ void IRGenerator::visit(ast::BuiltinUnsetStmt const& node)
     _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "unset");
 }
 
+void IRGenerator::visit(ast::BuiltinJobsStmt const& node)
+{
+    _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "jobs");
+}
+
+void IRGenerator::visit(ast::BuiltinFgStmt const& node)
+{
+    if (!node.jobId)
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "fg");
+    }
+    else
+    {
+        auto* jobIdValue = codegen(node.jobId.get());
+        if (!jobIdValue)
+            return;
+        if (jobIdValue->type() == CoreVM::LiteralType::String)
+            jobIdValue = createS2N(jobIdValue);
+        else if (jobIdValue->type() != CoreVM::LiteralType::Number)
+        {
+            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "fg");
+    }
+}
+
+void IRGenerator::visit(ast::BuiltinBgStmt const& node)
+{
+    if (!node.jobId)
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "bg");
+    }
+    else
+    {
+        auto* jobIdValue = codegen(node.jobId.get());
+        if (!jobIdValue)
+            return;
+        if (jobIdValue->type() == CoreVM::LiteralType::String)
+            jobIdValue = createS2N(jobIdValue);
+        else if (jobIdValue->type() != CoreVM::LiteralType::Number)
+        {
+            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "bg");
+    }
+}
+
+void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
+{
+    if (!node.jobId)
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "wait");
+    }
+    else
+    {
+        auto* jobIdValue = codegen(node.jobId.get());
+        if (!jobIdValue)
+            return;
+        if (jobIdValue->type() == CoreVM::LiteralType::String)
+            jobIdValue = createS2N(jobIdValue);
+        else if (jobIdValue->type() != CoreVM::LiteralType::Number)
+        {
+            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            return;
+        }
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "wait");
+    }
+}
+
 void IRGenerator::visit(ast::OutputRedirect const& node)
 {
     if (std::holds_alternative<std::unique_ptr<ast::FileDescriptor>>(node.target))

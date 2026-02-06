@@ -238,6 +238,7 @@ Windows support.
 - Falls back to traditional signal handlers on macOS/BSD
 - Process groups are properly managed for job control
 - Ctrl+Z (SIGTSTP) handling deferred until terminal integration is complete
+- Job control builtins (`jobs`, `fg`, `bg`, `wait`) are recognized as parser directives with dedicated AST nodes
 
 ---
 

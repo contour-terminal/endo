@@ -479,4 +479,39 @@ void ASTPrinter::visit(BuiltinUnsetStmt const& node)
     _result += "unset " + node.name;
 }
 
+void ASTPrinter::visit(BuiltinJobsStmt const&)
+{
+    _result += "jobs";
+}
+
+void ASTPrinter::visit(BuiltinFgStmt const& node)
+{
+    _result += "fg";
+    if (node.jobId)
+    {
+        _result += " ";
+        node.jobId->accept(*this);
+    }
+}
+
+void ASTPrinter::visit(BuiltinBgStmt const& node)
+{
+    _result += "bg";
+    if (node.jobId)
+    {
+        _result += " ";
+        node.jobId->accept(*this);
+    }
+}
+
+void ASTPrinter::visit(BuiltinWaitStmt const& node)
+{
+    _result += "wait";
+    if (node.jobId)
+    {
+        _result += " ";
+        node.jobId->accept(*this);
+    }
+}
+
 } // namespace endo::ast

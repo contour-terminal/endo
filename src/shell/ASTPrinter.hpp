@@ -53,6 +53,10 @@ class ASTPrinter: public Visitor
     void visit(ParamExpansionExpr const& node) override;
     void visit(VariableExpr const& node) override;
     void visit(BuiltinUnsetStmt const& node) override;
+    void visit(BuiltinJobsStmt const& node) override;
+    void visit(BuiltinFgStmt const& node) override;
+    void visit(BuiltinBgStmt const& node) override;
+    void visit(BuiltinWaitStmt const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

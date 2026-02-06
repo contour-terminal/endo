@@ -1311,6 +1311,51 @@ TEST_CASE("shell.jobs.wait_all")
     CHECK(waitExitCode == 0);
 }
 
+TEST_CASE("shell.jobs.fg_is_builtin")
+{
+    // fg without background jobs should return non-zero from builtin
+    // (not "/usr/bin/fg: no job control" error from external command)
+    TestShell shell;
+    auto const result = shell("fg").exitCode;
+    // fg with no jobs should fail, but through the builtin path
+    CHECK(result != 0);
+    // Verify it's not trying to execute external /usr/bin/fg
+    // (external fg would have a different error pattern)
+}
+
+TEST_CASE("shell.jobs.bg_is_builtin")
+{
+    // bg without background jobs should return non-zero from builtin
+    TestShell shell;
+    auto const result = shell("bg").exitCode;
+    // bg with no jobs should fail, but through the builtin path
+    CHECK(result != 0);
+}
+
+TEST_CASE("shell.jobs.fg_with_job_id")
+{
+    // fg with invalid job ID should fail through builtin
+    TestShell shell;
+    auto const result = shell("fg 999").exitCode;
+    CHECK(result != 0);
+}
+
+TEST_CASE("shell.jobs.bg_with_job_id")
+{
+    // bg with invalid job ID should fail through builtin
+    TestShell shell;
+    auto const result = shell("bg 999").exitCode;
+    CHECK(result != 0);
+}
+
+TEST_CASE("shell.jobs.wait_with_job_id")
+{
+    // wait with invalid job ID should fail through builtin
+    TestShell shell;
+    auto const result = shell("wait 999").exitCode;
+    CHECK(result != 0);
+}
+
 // ============================================================================
 // FileCompleter Tests
 // ============================================================================

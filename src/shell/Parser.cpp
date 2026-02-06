@@ -1758,6 +1758,44 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
         auto name = consumeLiteral();
         return std::make_unique<ast::BuiltinUnsetStmt>(*_runtime.find("unset(S)B"), name);
     }
+    else if (_lexer.isDirective("jobs"))
+    {
+        _lexer.nextToken();
+        return std::make_unique<ast::BuiltinJobsStmt>(*_runtime.find("jobs()I"));
+    }
+    else if (_lexer.isDirective("fg"))
+    {
+        _lexer.nextToken();
+        if (isEndOfStmt())
+            return std::make_unique<ast::BuiltinFgStmt>(*_runtime.find("fg()I"));
+        else
+        {
+            auto jobId = parseParameter();
+            return std::make_unique<ast::BuiltinFgStmt>(*_runtime.find("fg(I)I"), std::move(jobId));
+        }
+    }
+    else if (_lexer.isDirective("bg"))
+    {
+        _lexer.nextToken();
+        if (isEndOfStmt())
+            return std::make_unique<ast::BuiltinBgStmt>(*_runtime.find("bg()I"));
+        else
+        {
+            auto jobId = parseParameter();
+            return std::make_unique<ast::BuiltinBgStmt>(*_runtime.find("bg(I)I"), std::move(jobId));
+        }
+    }
+    else if (_lexer.isDirective("wait"))
+    {
+        _lexer.nextToken();
+        if (isEndOfStmt())
+            return std::make_unique<ast::BuiltinWaitStmt>(*_runtime.find("wait()I"));
+        else
+        {
+            auto jobId = parseParameter();
+            return std::make_unique<ast::BuiltinWaitStmt>(*_runtime.find("wait(I)I"), std::move(jobId));
+        }
+    }
     else
     {
         // External command or pipeline
