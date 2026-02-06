@@ -300,21 +300,112 @@ The library includes:
 
 ### Phase 2.3: Completion and Suggestions
 
+**Status:** Complete (tests pending)
+
 **Dependency:** Phase 2.1, Milestone 1 (need language features to complete)
 
 **Notes:**
-- Completion system will be designed with an abstraction layer to allow both local and AI-powered completion providers
-- Initial implementation will focus on local completion based on the current command line context
+- Completion system uses an abstraction layer (`CompletionProvider` interface) to allow both local and AI-powered completion providers
+- Initial implementation provides local completion based on the current command line context
+- Fish-style ghost text suggestions appear dimmed after the cursor
+- Tab or Ctrl+Space triggers completion menu; Right arrow or End accepts ghost text
 
 **Tasks:**
-- [ ] Design completion provider interface
-- [ ] Implement command name completion
-- [ ] Implement file path completion
-- [ ] Implement variable name completion
-- [ ] Implement option/flag completion (with help text)
-- [ ] Implement history-based suggestions
-- [ ] Design and implement completion popup UI
-- [ ] Add completion tests
+- [x] Design completion provider interface (`CompletionProvider`, `CompletionItem`, `CompletionContext`)
+- [x] Implement context analysis (`CompletionContext.cpp` - uses Lexer to determine context type)
+- [x] Implement command name completion (`CommandCompleter.cpp` - builtins + PATH scanning with caching)
+- [x] Implement file path completion (`FileCompleter.cpp` - with tilde expansion)
+- [x] Implement variable name completion (`VariableCompleter.cpp` - env vars + special vars)
+- [x] Implement option/flag completion stub (`OptionCompleter.cpp` - placeholder for future --help parsing)
+- [x] Implement history-based suggestions (`HistoryCompleter.cpp` - prefix matching with recency scoring)
+- [x] Implement history abstraction (`History` interface, `InMemoryHistory` implementation)
+- [x] Implement completer orchestrator (`Completer.cpp` - coordinates providers, generates suggestions)
+- [x] Add ghost text support to InputField (`setGhostText()`, `acceptGhostText()`, auto-clear on modification)
+- [x] Add completion styles to Theme (`ghostText`, `completionItem`, `completionSelected`, `completionDesc`)
+- [x] Design and implement completion popup UI (`CompletionPopup.cpp` - bordered list with scroll indicators)
+- [x] Integrate completion with Prompt (Tab/Ctrl+Space triggers, menu navigation, ghost text rendering)
+- [ ] Add comprehensive completion tests
+
+**Implementation Notes:**
+- `CompletionContextType` enum: Command, Argument, FilePath, Variable, VariableBrace, Redirect, Option, Unknown
+- Ghost text uses SGR 2 (dim) for visual distinction from actual input
+- `CompletionPopup` is a proper TUI widget with `show()`/`hide()` visibility management, `processEvent()` returning `CompletionAction` enum (None, Changed, Accepted, Dismissed), and `render()` using relative cursor positioning
+- Completion menu appears below cursor with Up/Down/Ctrl+J/Ctrl+K navigation, Enter/Tab to accept, Escape to dismiss
+- Single completion matches are inserted directly without showing menu
+- `Environment` class extracted to `Environment.hpp` for cleaner dependency management
+- Shell class creates `Completer` with environment and history, connects to Prompt via `setCompleter()`
+- Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
+
+### Phase 2.3.5: TUI Renderer Architecture
+
+**Status:** Complete
+
+**Dependency:** Phase 2.1
+
+**Rationale:** The original TUI rendering used direct terminal output without central coordination,
+causing issues like `CompletionPopup::hide()` not clearing the screen. The new architecture provides
+buffer-based immediate-mode rendering with diff-based terminal updates, proper component hierarchy,
+and focus group management.
+
+**Tasks:**
+- [x] Create geometry types (`Rect`, `Point`, `Size` in `Rect.hpp`)
+- [x] Create cell buffer (`Cell`, `Buffer` types)
+- [x] Create drawing context (`Canvas` - bounded view into buffer)
+- [x] Create component base class (`Component` with event bubbling, focus, hierarchy)
+- [x] Create screen coordinator (`Screen` - manages component tree, rendering, events)
+- [x] Implement viewport modes (Fullscreen, Inline with terminal scrolling, Fixed)
+- [x] Implement focus groups for multi-focus support (shell + AI overlay)
+- [x] Add render mode option (`RenderMode::Diff` vs `RenderMode::Full` for benchmarking)
+- [x] Migrate `InputField` to `Component` (inherits from Component, implements render(Canvas&), onEvent())
+- [x] Migrate `CompletionPopup` to `Component` (inherits from Component, implements render(Canvas&), onEvent())
+- [x] Migrate `List` to `Component` (inherits from Component, implements render(Canvas&), onEvent())
+- [x] Migrate `SelectDialog`, `ConfirmDialog`, `InputDialog` to `Component`
+- [x] Migrate `StatusBar` to `Component`
+- [x] Note: `Box` remains as a utility class (Canvas already has drawBox() method)
+- [x] Update `Prompt` to use `Screen` coordinator (Phase 10)
+  - Created `PromptComponent` class with styled prompt rendering (left bar, background, colors)
+  - Integrated `Screen` with `Inline` viewport mode in `Prompt`
+  - Uses Canvas-based rendering through the component tree
+- [x] Remove old TerminalOutput-based rendering code (Phase 11)
+  - Removed deprecated `render(TerminalOutput&, ...)` methods from all widget headers and implementations
+  - Removed unused helper methods (`renderBackground`, `calculateBounds`)
+  - Updated includes to use `Theme.hpp` instead of `TerminalOutput.hpp` in widget headers
+- [x] Add comprehensive unit tests for new rendering system (Phase 12)
+  - Added 65 tests in `Renderer_test.cpp` covering:
+    - `Point`: construction, equality, offset
+    - `Size`: construction, empty, area
+    - `Rect`: construction, factory methods, accessors, contains, intersects, offset, inset, expand, intersect, unite
+    - `Cell`: equality, reset, continuation, wide character detection
+    - `Buffer`: construction, resize, cell access, putString, fill, clear, cursor state
+    - `Canvas`: coordinate translation, clipping, drawing operations, subcanvas
+
+**Implementation Notes:**
+- Buffer-based immediate mode: Components render to a `Buffer` via `Canvas`, then `Screen` diffs and flushes
+- Component hierarchy: Parent-child relationships with z-index ordering for overlays
+- Event bubbling: Events propagate from target up through ancestors until handled
+- Focus groups: Multiple independent focus contexts (e.g., "prompt", "ai-chat", "overlay")
+- Inline viewport: Shell renders at cursor position, grows downward by emitting newlines
+- Widget lifecycle: Persistent tree with explicit `addChild()`/`removeChild()`
+- `InputField::Model`: Nested class pattern separates logic from rendering, enables unit testing
+
+**Architecture:**
+```
+Screen (coordinator)
+  ├── owns Buffer (current + previous for diff)
+  ├── owns RootComponent (implicit container)
+  ├── manages focus groups
+  └── dispatches events with bubbling
+
+Canvas (drawing context)
+  └── bounded view into Buffer with coordinate translation
+
+Component (base class)
+  ├── render(Canvas&) - pure virtual
+  ├── onEvent(InputEvent&) - with EventResult for bubbling
+  ├── parent/children hierarchy
+  ├── visibility, area, z-index
+  └── focus group membership
+```
 
 ### Phase 2.4: Syntax Highlighting
 
