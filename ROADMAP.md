@@ -31,7 +31,7 @@ the primary project; Endo development follows as resources permit.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind` | ✅ |
+| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind`, `echo` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |

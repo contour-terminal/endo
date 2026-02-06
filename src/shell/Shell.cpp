@@ -49,6 +49,112 @@ auto& debugLog()
         logstore::category("shell.debug", "Shell debug log", endo::log::categoryState("shell.debug"));
     return instance;
 }
+
+std::string processEscapeSequences(std::string_view input)
+{
+    std::string result;
+    result.reserve(input.size());
+
+    for (size_t i = 0; i < input.size(); ++i)
+    {
+        if (input[i] == '\\' && i + 1 < input.size())
+        {
+            char next = input[i + 1];
+            switch (next)
+            {
+                case '\\':
+                    result += '\\';
+                    ++i;
+                    break;
+                case 'a':
+                    result += '\a';
+                    ++i;
+                    break;
+                case 'b':
+                    result += '\b';
+                    ++i;
+                    break;
+                case 'e':
+                    result += '\x1B';
+                    ++i;
+                    break;
+                case 'f':
+                    result += '\f';
+                    ++i;
+                    break;
+                case 'n':
+                    result += '\n';
+                    ++i;
+                    break;
+                case 'r':
+                    result += '\r';
+                    ++i;
+                    break;
+                case 't':
+                    result += '\t';
+                    ++i;
+                    break;
+                case 'v':
+                    result += '\v';
+                    ++i;
+                    break;
+                case '0': {
+                    // Octal: \0, \0n, \0nn, \0nnn
+                    ++i; // skip backslash
+                    ++i; // skip '0'
+                    int value = 0;
+                    int digits = 0;
+                    while (i < input.size() && digits < 3 && input[i] >= '0' && input[i] <= '7')
+                    {
+                        value = value * 8 + (input[i] - '0');
+                        ++i;
+                        ++digits;
+                    }
+                    --i; // compensate for loop increment
+                    result += static_cast<char>(value);
+                    break;
+                }
+                case 'x': {
+                    // Hex: \xH, \xHH
+                    ++i; // skip backslash
+                    ++i; // skip 'x'
+                    int value = 0;
+                    int digits = 0;
+                    while (i < input.size() && digits < 2)
+                    {
+                        char c = input[i];
+                        if (c >= '0' && c <= '9')
+                            value = value * 16 + (c - '0');
+                        else if (c >= 'a' && c <= 'f')
+                            value = value * 16 + (c - 'a' + 10);
+                        else if (c >= 'A' && c <= 'F')
+                            value = value * 16 + (c - 'A' + 10);
+                        else
+                            break;
+                        ++i;
+                        ++digits;
+                    }
+                    --i; // compensate for loop increment
+                    if (digits > 0)
+                        result += static_cast<char>(value);
+                    else
+                        result += "\\x"; // invalid escape, keep literal
+                    break;
+                }
+                default:
+                    // Unknown escape - keep literal
+                    result += input[i];
+                    break;
+            }
+        }
+        else
+        {
+            result += input[i];
+        }
+    }
+    return result;
+}
+
 } // namespace
 
 namespace endo
@@ -210,6 +316,12 @@ auto Shell::PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
     return IODescriptors { .reader = stdinFd, .writer = stdoutFd };
 }
 
+void Shell::PipelineBuilder::closeCurrentPipeWriter()
+{
+    if (currentPipe)
+        currentPipe->closeWriter();
+}
+
 // ========================================================================
 // Shell::RedirectState implementation
 // ========================================================================
@@ -243,6 +355,28 @@ void Shell::RedirectState::addHereDoc(int targetFd, std::string content)
 void Shell::RedirectState::addHereString(int targetFd, std::string content)
 {
     entries.push_back({ .type = Type::HereString, .targetFd = targetFd, .content = std::move(content) });
+}
+
+NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, ProcessManager& pm)
+{
+    for (auto& entry: entries)
+    {
+        if (entry.type == Type::OutputFile && entry.sourceFd == STDOUT_FILENO)
+        {
+            // Open the file if not already open
+            if (entry.openedFd == -1)
+            {
+                int const oflags =
+                    entry.append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
+                auto const result = pm.openFile(entry.path, oflags);
+                if (result.has_value())
+                    entry.openedFd = result.value();
+            }
+            if (entry.openedFd != -1)
+                return entry.openedFd;
+        }
+    }
+    return defaultFd;
 }
 
 // ========================================================================
@@ -836,6 +970,7 @@ void Shell::registerBuiltinFunctions()
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinBind, this);
+
     // clang-format on
 }
 
@@ -854,6 +989,84 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 {
     CoreVM::CoreStringArray const& args = context.getStringArray(1);
     std::string const& program = args.at(0);
+
+    // Handle echo builtin
+    if (program == "echo")
+    {
+        std::vector<std::string> echoArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            echoArgs.push_back(args.at(i));
+
+        bool suppressNewline = false;
+        bool interpretEscapes = false;
+        size_t argStart = 0;
+
+        // Parse flags
+        for (size_t i = 0; i < echoArgs.size(); ++i)
+        {
+            std::string_view arg = echoArgs[i];
+
+            if (arg == "--")
+            {
+                argStart = i + 1;
+                break;
+            }
+
+            if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+            {
+                bool validFlag = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    if (arg[j] == 'n')
+                        suppressNewline = true;
+                    else if (arg[j] == 'e')
+                        interpretEscapes = true;
+                    else
+                    {
+                        validFlag = false;
+                        break;
+                    }
+                }
+
+                if (validFlag)
+                {
+                    argStart = i + 1;
+                    continue;
+                }
+            }
+
+            argStart = i;
+            break;
+        }
+
+        // Build output string
+        std::string output;
+        for (size_t i = argStart; i < echoArgs.size(); ++i)
+        {
+            if (i > argStart)
+                output += ' ';
+            output += echoArgs[i];
+        }
+
+        // Process escape sequences if -e flag is set
+        if (interpretEscapes)
+            output = processEscapeSequences(output);
+
+        // Add newline if not suppressed
+        if (!suppressNewline)
+            output += '\n';
+
+        // Get the effective stdout fd considering redirects
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+        // Write to the correct output fd (respects redirects and test environments)
+        [[maybe_unused]] auto written = write(outputFd, output.data(), output.size());
+
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
 
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
@@ -935,6 +1148,115 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     CoreVM::CoreStringArray const& args = context.getStringArray(2);
 
     std::string const& program = args.at(0);
+
+    // Handle echo builtin in pipeline
+    if (program == "echo")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+        std::vector<std::string> echoArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            echoArgs.push_back(args.at(i));
+
+        bool suppressNewline = false;
+        bool interpretEscapes = false;
+        size_t argStart = 0;
+
+        // Parse flags
+        for (size_t i = 0; i < echoArgs.size(); ++i)
+        {
+            std::string_view arg = echoArgs[i];
+
+            if (arg == "--")
+            {
+                argStart = i + 1;
+                break;
+            }
+
+            if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
+            {
+                bool validFlag = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    if (arg[j] == 'n')
+                        suppressNewline = true;
+                    else if (arg[j] == 'e')
+                        interpretEscapes = true;
+                    else
+                    {
+                        validFlag = false;
+                        break;
+                    }
+                }
+
+                if (validFlag)
+                {
+                    argStart = i + 1;
+                    continue;
+                }
+            }
+
+            argStart = i;
+            break;
+        }
+
+        // Build output string
+        std::string output;
+        for (size_t i = argStart; i < echoArgs.size(); ++i)
+        {
+            if (i > argStart)
+                output += ' ';
+            output += echoArgs[i];
+        }
+
+        // Process escape sequences if -e flag is set
+        if (interpretEscapes)
+            output = processEscapeSequences(output);
+
+        // Add newline if not suppressed
+        if (!suppressNewline)
+            output += '\n';
+
+        // Write to the pipeline's stdout
+        [[maybe_unused]] auto written = write(stdoutFd, output.data(), output.size());
+
+        // Close write end of pipe so downstream can see EOF
+        // Use the PipelineBuilder method to properly manage the Pipe object
+        if (!lastInChain)
+            _currentPipelineBuilder.closeCurrentPipeWriter();
+
+        // Track command for job table
+        std::string cmdString = "echo";
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            cmdString += ' ';
+            cmdString += args.at(i);
+        }
+        _pipelineCommands.push_back(std::move(cmdString));
+
+        if (lastInChain)
+        {
+            // Wait for downstream processes to complete
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                int status = 0;
+                waitpid(processPid, &status, 0);
+                if (WIFEXITED(status))
+                    _exitCode = WEXITSTATUS(status);
+            }
+            _currentProcessGroupPids.clear();
+            _pipelineCommands.clear();
+
+            // Reclaim terminal control
+            auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+            if (!setFgResult)
+                debugLog()()("Failed to reclaim foreground: {}", toString(setFgResult.error()));
+        }
+
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     auto const programPath = resolveProgram(program);
 
     if (!programPath.has_value())

@@ -221,6 +221,9 @@ class Shell final: public CoreVM::Runtime
         std::unique_ptr<Pipe> currentPipe = nullptr;
 
         auto requestShellPipe(bool lastInChain) -> IODescriptors;
+
+        /// Close the current pipe's writer (for builtin commands that write to pipe)
+        void closeCurrentPipeWriter();
     };
 
     PipelineBuilder _currentPipelineBuilder;
@@ -263,6 +266,11 @@ class Shell final: public CoreVM::Runtime
         std::vector<Entry> entries;
 
         void clear();
+
+        /// Get the effective stdout fd considering output redirects.
+        /// Opens the redirect file if needed.
+        [[nodiscard]] NativeHandle getEffectiveStdoutFd(NativeHandle defaultFd, ProcessManager& pm);
+
         void addInputFile(int targetFd, std::string path);
         void addOutputFile(int sourceFd, std::string path, bool append);
         void addFdDup(int sourceFd, int targetFd);

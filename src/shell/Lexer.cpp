@@ -191,9 +191,19 @@ Token Lexer::consumeString()
     {
         if (_currentChar == '\\')
         {
+            // In double quotes, only certain escapes are special: \\ \" \$ \` \newline
+            // In single quotes, backslash is literal (except for \' in some shells)
+            // For simplicity, preserve the backslash for all escapes
+            _nextToken.literal += '\\';
             nextChar();
             if (eof())
                 break;
+            // Special case: \\ should become single backslash
+            if (_currentChar == '\\')
+            {
+                // Already added one backslash, just continue to add the second
+            }
+            // For all other cases, add the character after the backslash
         }
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();

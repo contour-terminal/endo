@@ -62,6 +62,42 @@ TEST_CASE("shell.syntax.pipes")
     CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\n"));
 }
 
+TEST_CASE("shell.builtin.echo_basic")
+{
+    CHECK(escape(TestShell()("echo hello").output()) == escape("hello\n"));
+    CHECK(escape(TestShell()("echo hello world").output()) == escape("hello world\n"));
+    CHECK(escape(TestShell()("echo").output()) == escape("\n"));
+}
+
+TEST_CASE("shell.builtin.echo_n_flag")
+{
+    CHECK(escape(TestShell()("echo -n hello").output()) == escape("hello"));
+    CHECK(escape(TestShell()("echo -n hello world").output()) == escape("hello world"));
+}
+
+TEST_CASE("shell.builtin.echo_e_flag")
+{
+    // Tab and newline escapes
+    CHECK(escape(TestShell()("echo -e \"a\\tb\"").output()) == escape("a\tb\n"));
+    CHECK(escape(TestShell()("echo -e \"a\\nb\"").output()) == escape("a\nb\n"));
+    // Combined
+    CHECK(escape(TestShell()("echo -e \"a\\tb\\tc\"").output()) == escape("a\tb\tc\n"));
+}
+
+TEST_CASE("shell.builtin.echo_ne_flags")
+{
+    // -n and -e combined
+    CHECK(escape(TestShell()("echo -ne \"a\\tb\"").output()) == escape("a\tb"));
+    CHECK(escape(TestShell()("echo -en \"a\\nb\"").output()) == escape("a\nb"));
+}
+
+TEST_CASE("shell.builtin.echo_double_dash")
+{
+    // -- signals end of options
+    CHECK(escape(TestShell()("echo -- -n").output()) == escape("-n\n"));
+    CHECK(escape(TestShell()("echo -- -e").output()) == escape("-e\n"));
+}
+
 TEST_CASE("shell.syntax.multiline")
 {
     // Newlines should separate commands just like semicolons
