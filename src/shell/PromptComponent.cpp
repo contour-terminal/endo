@@ -7,13 +7,13 @@
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
+#include <tui/Unicode.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 #include <libunicode/utf8_grapheme_segmenter.h>
-#include <libunicode/width.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #endif
@@ -166,10 +166,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     {
         if (graphemeIndex >= cursorColumn)
             break;
-        int clusterWidth = 0;
-        for (char32_t cp: cluster)
-            clusterWidth += unicode::width(cp);
-        displayCol += std::max(1, clusterWidth);
+        displayCol += tui::graphemeClusterWidth(cluster);
         ++graphemeIndex;
     }
 
@@ -265,12 +262,7 @@ int PromptComponent::displayWidth(std::string_view text)
     int width = 0;
     auto segmenter = unicode::utf8_grapheme_segmenter(text);
     for (auto const& cluster: segmenter)
-    {
-        int clusterWidth = 0;
-        for (char32_t cp: cluster)
-            clusterWidth += unicode::width(cp);
-        width += std::max(1, clusterWidth);
-    }
+        width += tui::graphemeClusterWidth(cluster);
     return width;
 }
 

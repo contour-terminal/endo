@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <algorithm>
+#include <string_view>
+
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+#include <libunicode/codepoint_properties.h>
+#include <libunicode/width.h>
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
+
+namespace tui
+{
+
+/// Calculates the display width of a grapheme cluster.
+///
+/// This function correctly handles:
+/// - Simple characters (width 1)
+/// - Wide characters like CJK (width 2)
+/// - Emoji with ZWJ sequences (width 2)
+/// - Emoji with skin tone modifiers (width 2)
+/// - Combining characters (width of base character)
+///
+/// @param cluster A view of codepoints forming a single grapheme cluster
+/// @return The number of terminal columns needed to display the cluster
+inline int graphemeClusterWidth(std::u32string_view cluster) noexcept
+{
+    if (cluster.empty())
+        return 0;
+
+    // Get properties of the first codepoint
+    auto const props = unicode::codepoint_properties::get(cluster[0]);
+
+    // Emoji with emoji presentation are width 2
+    if (props.emoji_presentation())
+        return 2;
+
+    // Check for ZWJ sequences - if first codepoint is emoji and cluster contains ZWJ
+    if (props.emoji() && cluster.size() > 1)
+    {
+        bool const hasZwj = std::find(cluster.begin(), cluster.end(), U'\u200D') != cluster.end();
+        if (hasZwj)
+            return 2;
+    }
+
+    // For regular grapheme clusters with combining characters,
+    // use the width of the base character (first codepoint)
+    int const baseWidth = unicode::width(cluster[0]);
+
+    // Ensure at least width 1 for non-zero-width clusters
+    return baseWidth > 0 ? baseWidth : 1;
+}
+
+} // namespace tui

@@ -3,12 +3,13 @@
 
 #include <stdexcept>
 
+#include "Unicode.hpp"
+
 #if defined(__clang__)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 #include <libunicode/utf8_grapheme_segmenter.h>
-#include <libunicode/width.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #endif
@@ -140,13 +141,8 @@ int Buffer::putString(int row, int col, std::string_view text, Style const& styl
 
         auto const& cluster = *it;
 
-        // Calculate display width by iterating over codepoints in the cluster
-        int clusterWidth = 0;
-        for (char32_t cp: cluster)
-            clusterWidth += unicode::width(cp);
-
-        if (clusterWidth == 0)
-            clusterWidth = 1; // Ensure at least 1 column
+        // Calculate display width for the grapheme cluster
+        int const clusterWidth = graphemeClusterWidth(cluster);
 
         // Check if it fits
         if (currentCol + clusterWidth > _cols)

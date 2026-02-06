@@ -8,13 +8,13 @@
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 #include <libunicode/utf8_grapheme_segmenter.h>
-#include <libunicode/width.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #endif
 
 #include <tui/Canvas.hpp>
 #include <tui/Theme.hpp>
+#include <tui/Unicode.hpp>
 
 namespace tui
 {
@@ -27,11 +27,7 @@ namespace
         int width = 0;
         auto segmenter = unicode::utf8_grapheme_segmenter(text);
         for (auto it = segmenter.begin(); it != segmenter.end(); ++it)
-        {
-            auto const& cluster = *it;
-            for (char32_t cp: cluster)
-                width += unicode::width(cp);
-        }
+            width += graphemeClusterWidth(*it);
         return width;
     }
 
@@ -76,11 +72,7 @@ namespace
             std::string_view grapheme(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
 
             // Calculate grapheme width
-            int graphemeWidth = 0;
-            for (char32_t cp: cluster)
-                graphemeWidth += unicode::width(cp);
-            if (graphemeWidth == 0)
-                graphemeWidth = 1;
+            int const graphemeWidth = graphemeClusterWidth(cluster);
 
             // Choose style based on whether this position is highlighted
             Style const& style = isMatchPosition(matchPositions, graphemeIndex) ? matchStyle : normalStyle;
@@ -105,11 +97,7 @@ namespace
             auto const& cluster = *it;
 
             // Calculate cluster width
-            int clusterWidth = 0;
-            for (char32_t cp: cluster)
-                clusterWidth += unicode::width(cp);
-            if (clusterWidth == 0)
-                clusterWidth = 1;
+            int const clusterWidth = graphemeClusterWidth(cluster);
 
             // Check if adding this cluster plus "..." would exceed max
             if (cols + clusterWidth + 3 > maxWidth)

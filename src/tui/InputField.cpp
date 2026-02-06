@@ -9,7 +9,6 @@
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 #include <libunicode/utf8_grapheme_segmenter.h>
-#include <libunicode/width.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #endif
@@ -17,6 +16,7 @@
 #include <tui/Canvas.hpp>
 #include <tui/InputField.hpp>
 #include <tui/Theme.hpp>
+#include <tui/Unicode.hpp>
 
 namespace tui
 {
@@ -159,11 +159,7 @@ void InputField::render(Canvas& canvas)
         }
 
         // Calculate cluster width
-        int clusterWidth = 0;
-        for (char32_t cp: cluster)
-            clusterWidth += unicode::width(cp);
-        if (clusterWidth == 0)
-            clusterWidth = 1;
+        int const clusterWidth = graphemeClusterWidth(cluster);
 
         // Determine style (normal or selected)
         Style style = textStyle;
