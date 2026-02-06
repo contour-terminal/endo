@@ -45,13 +45,17 @@ std::vector<CompletionItem> Completer::complete(std::string_view input, size_t c
 
 std::optional<std::string> Completer::suggest(std::string_view input, size_t cursorPosition) const
 {
-    // For ghost text, we want the best single suggestion
-    // This is used for fish-style autosuggestions
+    // Fish-style ghost text: only show suggestions for command context
+    // This prevents ghost text from appearing after string literals, arguments, etc.
+    // Users can still use Tab to trigger the completion popup in any context.
 
     auto ctx = analyzeContext(input, cursorPosition);
 
-    // For ghost text, we want to suggest based on the full input
-    // First, check history for matching commands
+    // Ghost text is only shown for command context (fish-style behavior)
+    if (ctx.type != CompletionContextType::Command)
+        return std::nullopt;
+
+    // Check providers for history-based command suggestions
     for (auto const& provider: _providers)
     {
         if (!provider->canHandle(ctx.type))
@@ -61,26 +65,11 @@ std::optional<std::string> Completer::suggest(std::string_view input, size_t cur
         if (completions.empty())
             continue;
 
-        // Return the suffix of the best match
-        auto const& best = completions[0];
-
-        // For command context or full-line matching, return the suffix after the full input
-        if (ctx.type == CompletionContextType::Command && !completions.empty())
+        // Find a completion that starts with the full input
+        for (auto const& item: completions)
         {
-            // Check if any completion starts with the full input
-            for (auto const& item: completions)
-            {
-                if (item.text.starts_with(input) && item.text.size() > input.size())
-                {
-                    return item.text.substr(input.size());
-                }
-            }
-        }
-
-        // For other contexts, return the suffix after the prefix
-        if (best.text.starts_with(ctx.prefix) && best.text.size() > ctx.prefix.size())
-        {
-            return best.suffix(ctx.prefix.size());
+            if (item.text.starts_with(input) && item.text.size() > input.size())
+                return item.text.substr(input.size());
         }
     }
 
