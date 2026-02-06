@@ -44,6 +44,25 @@ std::expected<ProcessId, ShellError> PosixProcessManager::spawn(SpawnConfig cons
     if (pid == 0)
     {
         // Child process
+
+        // Unblock signals that the shell blocked for signalfd.
+        // Child processes need to receive job control signals (e.g., SIGTSTP from Ctrl+Z).
+        // The signal mask is inherited across fork() and preserved across exec().
+        sigset_t mask;
+        sigemptyset(&mask);
+        sigaddset(&mask, SIGCHLD);
+        sigaddset(&mask, SIGTSTP);
+        sigaddset(&mask, SIGCONT);
+        sigprocmask(SIG_UNBLOCK, &mask, nullptr);
+
+        // Reset job control signals to default behavior.
+        // SIGTSTP: Terminal stop (Ctrl+Z)
+        // SIGTTIN: Background process reading from terminal
+        // SIGTTOU: Background process writing to terminal
+        signal(SIGTSTP, SIG_DFL);
+        signal(SIGTTIN, SIG_DFL);
+        signal(SIGTTOU, SIG_DFL);
+
         if (config.processGroup.has_value())
             setpgid(0, config.processGroup.value());
 
@@ -69,11 +88,27 @@ std::expected<ProcessId, ShellError> PosixProcessManager::spawn(SpawnConfig cons
     return pid;
 }
 
-std::expected<WaitResult, ShellError> PosixProcessManager::wait(ProcessId pid)
+std::expected<WaitResult, ShellError> PosixProcessManager::wait(ProcessId pid, WaitFlags flags)
 {
+    int waitFlags = 0;
+    if (flags.test(WaitFlag::NoHang))
+        waitFlags |= WNOHANG;
+    if (flags.test(WaitFlag::Untraced))
+        waitFlags |= WUNTRACED;
+
     int wstatus = 0;
-    if (waitpid(pid, &wstatus, 0) == -1)
+    pid_t const waitResult = waitpid(pid, &wstatus, waitFlags);
+
+    if (waitResult == -1)
         return std::unexpected(ShellError::WaitFailed);
+
+    if (waitResult == 0 && flags.test(WaitFlag::NoHang))
+    {
+        // No state change yet (WNOHANG case)
+        WaitResult result;
+        result.exitCode = -1; // Indicate no change
+        return result;
+    }
 
     WaitResult result;
     if (WIFEXITED(wstatus))
@@ -95,15 +130,13 @@ std::expected<WaitResult, ShellError> PosixProcessManager::wait(ProcessId pid)
 }
 
 std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> PosixProcessManager::waitPgid(
-    ProcessId pgid, WaitOptions options)
+    ProcessId pgid, WaitFlags flags)
 {
     int waitFlags = 0;
-    switch (options)
-    {
-        case WaitOptions::Block: break;
-        case WaitOptions::NoHang: waitFlags = WNOHANG; break;
-        case WaitOptions::Untraced: waitFlags = WNOHANG | WUNTRACED; break;
-    }
+    if (flags.test(WaitFlag::NoHang))
+        waitFlags |= WNOHANG;
+    if (flags.test(WaitFlag::Untraced))
+        waitFlags |= WUNTRACED;
 
     int wstatus = 0;
     pid_t const result = waitpid(-pgid, &wstatus, waitFlags);

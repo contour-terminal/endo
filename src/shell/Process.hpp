@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <crispy/flags.h>
+
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -26,13 +28,19 @@ struct SpawnConfig
     std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
 };
 
-/// Wait options for non-blocking waits
-enum class WaitOptions
+/// Flags for controlling wait behavior.
+///
+/// These flags can be combined using the | operator.
+/// Example: WaitFlag::NoHang | WaitFlag::Untraced
+enum class WaitFlag
 {
-    Block,    ///< Block until process state changes
-    NoHang,   ///< Return immediately if no state change
-    Untraced, ///< Also report stopped processes (WUNTRACED)
+    None = 0,
+    NoHang = 1 << 0,   ///< Return immediately if no state change (WNOHANG)
+    Untraced = 1 << 1, ///< Also report stopped processes (WUNTRACED)
 };
+
+/// Type-safe flags for wait operations.
+using WaitFlags = crispy::flags<WaitFlag>;
 
 /// Abstract interface for process management operations.
 ///
@@ -49,19 +57,20 @@ class ProcessManager
     /// @return The PID of the spawned process on success, or an error
     [[nodiscard]] virtual std::expected<ProcessId, ShellError> spawn(SpawnConfig const& config) = 0;
 
-    /// Waits for a process to terminate.
+    /// Waits for a process to terminate or stop.
     ///
     /// @param pid Process ID to wait for
+    /// @param flags Wait flags (default: blocking wait without stop detection)
     /// @return Wait result on success, or an error
-    [[nodiscard]] virtual std::expected<WaitResult, ShellError> wait(ProcessId pid) = 0;
+    [[nodiscard]] virtual std::expected<WaitResult, ShellError> wait(ProcessId pid, WaitFlags flags = {}) = 0;
 
     /// Non-blocking wait for any process in a process group.
     ///
     /// @param pgid Process group ID (negative pid waits for any in group)
-    /// @param options Wait options (NoHang, Untraced)
+    /// @param flags Wait flags (NoHang, Untraced)
     /// @return Optional pair of (pid, result) if a process changed state, nullopt if no change
     [[nodiscard]] virtual std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> waitPgid(
-        ProcessId pgid, WaitOptions options) = 0;
+        ProcessId pgid, WaitFlags flags) = 0;
 
     /// Sends a signal to a process or process group.
     ///
@@ -138,9 +147,9 @@ class PosixProcessManager final: public ProcessManager
     [[nodiscard]] static PosixProcessManager& instance();
 
     [[nodiscard]] std::expected<ProcessId, ShellError> spawn(SpawnConfig const& config) override;
-    [[nodiscard]] std::expected<WaitResult, ShellError> wait(ProcessId pid) override;
+    [[nodiscard]] std::expected<WaitResult, ShellError> wait(ProcessId pid, WaitFlags flags = {}) override;
     [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> waitPgid(
-        ProcessId pgid, WaitOptions options) override;
+        ProcessId pgid, WaitFlags flags) override;
     [[nodiscard]] std::expected<void, ShellError> sendSignal(ProcessId pid, int signal) override;
     [[nodiscard]] std::expected<ProcessId, ShellError> getForegroundPgrp(NativeHandle fd) override;
     [[nodiscard]] std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd, ProcessId pgid) override;

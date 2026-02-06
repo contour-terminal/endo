@@ -212,7 +212,7 @@ Windows support.
 
 ### Phase 1.7: Job Management ✅
 
-**Status:** Complete (except `Ctrl+Z` suspend handling - deferred to terminal integration)
+**Status:** Complete
 
 **Dependency:** Platform abstraction (Milestone 0.2)
 
@@ -221,7 +221,7 @@ Windows support.
 - [x] Implement `jobs` builtin
 - [x] Implement `fg` builtin
 - [x] Implement `bg` builtin
-- [ ] Implement `Ctrl+Z` suspend handling → Deferred: requires terminal/TTY signal integration
+- [x] Implement `Ctrl+Z` suspend handling (external SIGTSTP/SIGCONT)
 - [x] Implement job status notifications
 - [x] Handle process groups correctly
 - [x] Remember exit codes from all pipeline processes
@@ -234,10 +234,12 @@ Windows support.
 - `bg` resumes a stopped job in the background
 - `wait` waits for all or specific background jobs to complete
 - `$!` contains the PID of the last background job
-- Uses `signalfd` on Linux for race-free SIGCHLD handling
+- Uses `signalfd` on Linux for race-free SIGCHLD, SIGTSTP, and SIGCONT handling
 - Falls back to traditional signal handlers on macOS/BSD
 - Process groups are properly managed for job control
-- Ctrl+Z (SIGTSTP) handling deferred until terminal integration is complete
+- Foreground job control: When running a foreground command (single or pipeline), the shell creates a new process group, transfers terminal control to it, and waits with `WUNTRACED`. When Ctrl+Z is pressed, the process receives SIGTSTP, the shell detects the stopped state, adds the job to the job table, and returns control to the shell. The user can then use `fg` to resume or `bg` to continue in background.
+- SIGTSTP handling for shell itself: When the shell receives SIGTSTP (e.g., from parent shell via `kill -TSTP`), it restores terminal to cooked mode, re-raises SIGTSTP with default handling to actually stop, and when resumed (SIGCONT), restores raw mode and redraws the prompt
+- Note: Ctrl+Z at the prompt (when no foreground job is running) is used for undo (TUI feature)
 - Job control builtins (`jobs`, `fg`, `bg`, `wait`) are recognized as parser directives with dedicated AST nodes
 
 ---

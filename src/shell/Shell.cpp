@@ -887,25 +887,26 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 
     applyRedirects(config);
 
-    auto const spawnResult = _processManager.spawn(config);
-    if (!spawnResult.has_value())
+    // Build command string for job table
+    std::string command;
+    for (size_t i = 0; i < args.size(); ++i)
     {
-        error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        if (i > 0)
+            command += ' ';
+        command += args.at(i);
+    }
+
+    auto const fgResult = runForeground(config, command);
+    if (!fgResult.has_value())
+    {
+        error("Failed to run {}: {}", program, toString(fgResult.error()));
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
 
-    auto const waitResult = _processManager.wait(spawnResult.value());
-    if (!waitResult.has_value())
-    {
-        error("Failed to wait for {}: {}", program, toString(waitResult.error()));
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
-        return;
-    }
-
-    _exitCode = waitResult->exitCode;
-    if (waitResult->signaled)
-        debugLog()()("child process exited with signal {}\n", waitResult->signal);
+    _exitCode = fgResult->exitCode;
+    if (fgResult->stopped)
+        debugLog()()("child process stopped with signal {}\n", fgResult->exitCode);
     else
         debugLog()()("child process exited with code {}\n", _exitCode);
 
@@ -957,8 +958,75 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     _rightPid = pid;
     _currentProcessGroupPids.push_back(pid);
 
+    // Track command string for job table display
+    std::string cmdString;
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        if (i > 0)
+            cmdString += ' ';
+        cmdString += args.at(i);
+    }
+    _pipelineCommands.push_back(std::move(cmdString));
+
     if (lastInChain)
     {
+#if !defined(_WIN32)
+        // Build command string for job table from _pipelineCommands
+        std::string command;
+        for (size_t i = 0; i < _pipelineCommands.size(); ++i)
+        {
+            if (i > 0)
+                command += " | ";
+            command += _pipelineCommands[i];
+        }
+
+        // Process group leader is the first process
+        ProcessId const pgid = _currentProcessGroupPids.front();
+
+        // Give terminal control to the pipeline's process group
+        auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
+        if (!setFgResult)
+            debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
+
+        bool anyStopped = false;
+        for (ProcessId const processPid: _currentProcessGroupPids)
+        {
+            auto const waitResult = _processManager.wait(processPid, WaitFlag::Untraced);
+            if (!waitResult.has_value())
+            {
+                error("Failed to wait for process {}: {}", processPid, toString(waitResult.error()));
+                continue;
+            }
+
+            _exitCode = waitResult->exitCode;
+            if (waitResult->stopped)
+            {
+                anyStopped = true;
+                debugLog()()("child process {} stopped\n", processPid);
+            }
+            else if (waitResult->signaled)
+                debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+            else
+                debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+        }
+
+        // Restore shell's terminal control
+        auto const restoreFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+        if (!restoreFgResult)
+            debugLog()()("Failed to restore shell foreground: {}", toString(restoreFgResult.error()));
+
+        // If any process was stopped, add the whole pipeline to job table
+        if (anyStopped)
+        {
+            (void) jobTable.addJob(pgid, _currentProcessGroupPids, command);
+            // Mark the job as stopped
+            WaitResult stoppedResult { .exitCode = 0, .stopped = true };
+            jobTable.updateJobState(_currentProcessGroupPids.front(), stoppedResult);
+            std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+        }
+
+        _pipelineCommands.clear();
+#else
         for (ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid);
@@ -974,6 +1042,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             else
                 debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
         }
+#endif
         _currentProcessGroupPids.clear();
         _leftPid = std::nullopt;
         _rightPid = std::nullopt;
@@ -1102,25 +1171,26 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
 
     applyRedirects(config);
 
-    auto const spawnResult = _processManager.spawn(config);
-    if (!spawnResult.has_value())
+    // Build command string for job table
+    std::string command;
+    for (size_t i = 0; i < cmdBuilderArgs().size(); ++i)
     {
-        error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        if (i > 0)
+            command += ' ';
+        command += cmdBuilderArgs().at(i);
+    }
+
+    auto const fgResult = runForeground(config, command);
+    if (!fgResult.has_value())
+    {
+        error("Failed to run {}: {}", program, toString(fgResult.error()));
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
 
-    auto const waitResult = _processManager.wait(spawnResult.value());
-    if (!waitResult.has_value())
-    {
-        error("Failed to wait for {}: {}", program, toString(waitResult.error()));
-        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
-        return;
-    }
-
-    _exitCode = waitResult->exitCode;
-    if (waitResult->signaled)
-        debugLog()()("child process exited with signal {}\n", waitResult->signal);
+    _exitCode = fgResult->exitCode;
+    if (fgResult->stopped)
+        debugLog()()("child process stopped\n");
     else
         debugLog()()("child process exited with code {}\n", _exitCode);
 
@@ -1180,8 +1250,75 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     _rightPid = pid;
     _currentProcessGroupPids.push_back(pid);
 
+    // Track command string for job table display
+    std::string cmdString;
+    for (size_t i = 0; i < cmdBuilderArgs().size(); ++i)
+    {
+        if (i > 0)
+            cmdString += ' ';
+        cmdString += cmdBuilderArgs().at(i);
+    }
+    _pipelineCommands.push_back(std::move(cmdString));
+
     if (lastInChain)
     {
+#if !defined(_WIN32)
+        // Build command string for job table from _pipelineCommands
+        std::string command;
+        for (size_t i = 0; i < _pipelineCommands.size(); ++i)
+        {
+            if (i > 0)
+                command += " | ";
+            command += _pipelineCommands[i];
+        }
+
+        // Process group leader is the first process
+        ProcessId const pgid = _currentProcessGroupPids.front();
+
+        // Give terminal control to the pipeline's process group
+        auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
+        if (!setFgResult)
+            debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
+
+        bool anyStopped = false;
+        for (ProcessId const processPid: _currentProcessGroupPids)
+        {
+            auto const waitResult = _processManager.wait(processPid, WaitFlag::Untraced);
+            if (!waitResult.has_value())
+            {
+                error("Failed to wait for process {}: {}", processPid, toString(waitResult.error()));
+                continue;
+            }
+
+            _exitCode = waitResult->exitCode;
+            if (waitResult->stopped)
+            {
+                anyStopped = true;
+                debugLog()()("child process {} stopped\n", processPid);
+            }
+            else if (waitResult->signaled)
+                debugLog()()("child process {} exited with signal {}\n", processPid, waitResult->signal);
+            else
+                debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
+        }
+
+        // Restore shell's terminal control
+        auto const restoreFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+        if (!restoreFgResult)
+            debugLog()()("Failed to restore shell foreground: {}", toString(restoreFgResult.error()));
+
+        // If any process was stopped, add the whole pipeline to job table
+        if (anyStopped)
+        {
+            (void) jobTable.addJob(pgid, _currentProcessGroupPids, command);
+            // Mark the job as stopped
+            WaitResult stoppedResult { .exitCode = 0, .stopped = true };
+            jobTable.updateJobState(_currentProcessGroupPids.front(), stoppedResult);
+            std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+        }
+
+        _pipelineCommands.clear();
+#else
         for (ProcessId const processPid: _currentProcessGroupPids)
         {
             auto const waitResult = _processManager.wait(processPid);
@@ -1197,6 +1334,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             else
                 debugLog()()("child process {} exited with code {}\n", processPid, _exitCode);
         }
+#endif
         _currentProcessGroupPids.clear();
         _leftPid = std::nullopt;
         _rightPid = std::nullopt;
@@ -2395,6 +2533,37 @@ void Shell::onSigchld()
 #endif
 }
 
+void Shell::onSigtstp()
+{
+#if !defined(_WIN32)
+    // Step 1: Restore terminal to cooked mode so the parent shell can use it
+    prompt.suspend();
+
+    // Step 2: Actually stop the shell process by re-raising SIGTSTP with default handling
+    SignalHandler::suspendSelf();
+
+    // Step 3: When we reach here, we've been resumed (SIGCONT was received)
+    // Restore terminal to raw mode and redraw
+    prompt.resume();
+    prompt.display();
+#endif
+}
+
+void Shell::onSigcont()
+{
+#if !defined(_WIN32)
+    // This is called when SIGCONT is received after being stopped.
+    // The main work is done in onSigtstp() after suspendSelf() returns,
+    // but this handler is useful for cases where SIGCONT arrives without
+    // a preceding SIGTSTP (e.g., if we were stopped by SIGSTOP instead).
+    //
+    // Note: On Linux with signalfd, we may receive SIGCONT here even after
+    // the onSigtstp() handling has already resumed the terminal. In that case,
+    // calling resume() again is harmless (it checks for suspended state).
+    prompt.resume();
+#endif
+}
+
 void Shell::reportJobStatus()
 {
     auto unnotified = jobTable.getUnnotifiedJobs();
@@ -2436,6 +2605,75 @@ void Shell::cleanupProcSubst()
     _procSubstExposedFds.clear();
 
     _procSubstFdPath.clear();
+#endif
+}
+
+std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnConfig& config,
+                                                                        std::string const& command)
+{
+#if !defined(_WIN32)
+    // Create new process group with child as leader
+    config.processGroup = 0;
+
+    auto spawnResult = _processManager.spawn(config);
+    if (!spawnResult)
+        return std::unexpected(spawnResult.error());
+
+    ProcessId const pid = spawnResult.value();
+    ProcessId const pgid = pid; // Child is process group leader
+
+    // Give terminal control to child's process group
+    auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), pgid);
+    if (!setFgResult)
+    {
+        debugLog()()("Failed to set foreground process group: {}", toString(setFgResult.error()));
+    }
+
+    // Wait with WUNTRACED to detect stopped processes (Ctrl+Z)
+    auto waitResult = _processManager.wait(pid, WaitFlag::Untraced);
+
+    // Restore shell's terminal control
+    auto const restoreFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+    if (!restoreFgResult)
+    {
+        debugLog()()("Failed to restore shell foreground: {}", toString(restoreFgResult.error()));
+    }
+
+    if (!waitResult)
+        return std::unexpected(waitResult.error());
+
+    ForegroundResult result {
+        .exitCode = waitResult->exitCode,
+        .stopped = waitResult->stopped,
+        .pid = pid,
+        .pgid = pgid,
+    };
+
+    // If process was stopped, add to job table
+    if (waitResult->stopped)
+    {
+        (void) jobTable.addJob(pgid, { pid }, command);
+        jobTable.updateJobState(pid, *waitResult);
+        std::println("\n[{}]+  Stopped                 {}", jobTable.getCurrentJob()->id, command);
+    }
+
+    return result;
+#else
+    // Windows: no job control, just spawn and wait
+    auto spawnResult = _processManager.spawn(config);
+    if (!spawnResult)
+        return std::unexpected(spawnResult.error());
+
+    auto waitResult = _processManager.wait(spawnResult.value());
+    if (!waitResult)
+        return std::unexpected(waitResult.error());
+
+    return ForegroundResult {
+        .exitCode = waitResult->exitCode,
+        .stopped = false,
+        .pid = spawnResult.value(),
+        .pgid = 0,
+    };
 #endif
 }
 

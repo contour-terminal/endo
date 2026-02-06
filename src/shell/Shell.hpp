@@ -48,6 +48,24 @@ class Shell final: public CoreVM::Runtime
     /// Called when SIGCHLD is received to reap child processes.
     void onSigchld();
 
+    /// Called when SIGTSTP is received to suspend the shell.
+    ///
+    /// This is triggered when the parent shell sends SIGTSTP (e.g., via kill -TSTP)
+    /// or when the user presses Ctrl+Z while the shell is a foreground process in
+    /// another terminal.
+    ///
+    /// The shell will:
+    /// 1. Restore terminal to cooked mode (disable raw mode and protocols)
+    /// 2. Re-raise SIGTSTP with default handling to actually stop
+    /// 3. After resume, restore terminal to raw mode and redraw
+    void onSigtstp();
+
+    /// Called when SIGCONT is received after being stopped.
+    ///
+    /// This is triggered when the shell is resumed after being stopped.
+    /// The shell will restore terminal state and redraw the prompt.
+    void onSigcont();
+
     /// Reports status of completed/stopped background jobs to the user.
     void reportJobStatus();
 
@@ -134,6 +152,30 @@ class Shell final: public CoreVM::Runtime
     [[nodiscard]] std::expected<std::filesystem::path, ShellError> resolveProgram(
         std::string const& program) const;
 
+    /// Result of running a command in the foreground with job control.
+    struct ForegroundResult
+    {
+        int exitCode = 0;     ///< Exit code if process terminated
+        bool stopped = false; ///< True if process was stopped (Ctrl+Z)
+        ProcessId pid = 0;    ///< Process ID of the child
+        ProcessId pgid = 0;   ///< Process group ID
+    };
+
+    /// Runs a command in the foreground with proper job control.
+    ///
+    /// This handles:
+    /// - Creating a new process group for the child
+    /// - Transferring terminal control to the child
+    /// - Waiting for the child with WUNTRACED to detect Ctrl+Z
+    /// - Adding stopped jobs to the job table
+    /// - Restoring terminal control to the shell
+    ///
+    /// @param config Spawn configuration (processGroup will be set to 0)
+    /// @param command Command string for job table display
+    /// @return ForegroundResult on success, or an error
+    [[nodiscard]] std::expected<ForegroundResult, ShellError> runForeground(SpawnConfig& config,
+                                                                            std::string const& command);
+
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);
 
     template <typename... Args>
@@ -183,6 +225,7 @@ class Shell final: public CoreVM::Runtime
     PipelineBuilder _currentPipelineBuilder;
 
     std::vector<ProcessId> _currentProcessGroupPids;
+    std::vector<std::string> _pipelineCommands; ///< Commands in current pipeline for job table display
     std::optional<ProcessId> _leftPid;
     std::optional<ProcessId> _rightPid;
 
