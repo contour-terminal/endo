@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 #if !defined(_WIN32)
@@ -218,6 +219,10 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
     // Determine if we should show hidden files
     bool showHidden = !prefix.empty() && prefix[0] == '.';
 
+    // Configuration for fuzzy matching
+    tui::FuzzyConfig fuzzyConfig;
+    double const minThreshold = fuzzyConfig.minMatchThreshold;
+
     for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
     {
         if (ec)
@@ -229,8 +234,21 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         if (isHidden(filename) && !showHidden)
             continue;
 
-        // Check if filename matches prefix (smart case)
-        if (!tui::SmartCaseMatch::matchesPrefix(filename, prefix))
+        // Option C: Check both prefix and fuzzy matches
+        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(filename, prefix);
+        tui::FuzzyMatchResult fuzzyResult;
+        bool isFuzzyMatch = false;
+
+        if (!isPrefixMatch && !prefix.empty())
+        {
+            // Try fuzzy matching only if not a prefix match
+            fuzzyResult = tui::FuzzyMatch::matchSmartCase(filename, prefix);
+            size_t textLen = tui::FuzzyMatch::countGraphemes(filename);
+            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+        }
+
+        // Skip if neither prefix nor fuzzy match
+        if (!isPrefixMatch && !isFuzzyMatch)
             continue;
 
         bool isDir = entry.is_directory(ec);
@@ -244,12 +262,28 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         }
 
         int baseScore = isDir ? 80 : 50; // Directories get slightly higher priority
-        int score = tui::SmartCaseMatch::adjustScore(baseScore, filename, prefix);
+        int score;
+        std::vector<size_t> matchPositions;
+
+        if (isPrefixMatch)
+        {
+            // Prefix matches use SmartCaseMatch scoring with bonus
+            score = tui::SmartCaseMatch::adjustScore(baseScore, filename, prefix);
+            score += fuzzyConfig.prefixMatchBonus; // Prefix gets priority over fuzzy
+            // No matchPositions for prefix matches (no special highlighting needed)
+        }
+        else
+        {
+            // Fuzzy matches use FuzzyMatch scoring
+            score = tui::FuzzyMatch::calculateScore(baseScore, filename, prefix, fuzzyResult, fuzzyConfig);
+            matchPositions = std::move(fuzzyResult.positions);
+        }
 
         results.push_back(CompletionItem { .text = fullPath,
                                            .displayText = displayName,
                                            .description = isDir ? "directory" : "",
-                                           .score = score });
+                                           .score = score,
+                                           .matchPositions = std::move(matchPositions) });
     }
 
     // Sort: directories first, then alphabetically

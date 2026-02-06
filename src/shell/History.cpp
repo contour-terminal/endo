@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
@@ -73,6 +74,83 @@ std::vector<std::string_view> InMemoryHistory::search(std::string_view prefix, s
                 results.emplace_back(*it);
         }
     }
+
+    return results;
+}
+
+std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(std::string_view prefix,
+                                                                     size_t maxResults) const
+{
+    std::vector<FuzzySearchResult> results;
+    results.reserve(std::min(maxResults * 2, _entries.size())); // Reserve extra for sorting
+
+    tui::FuzzyConfig fuzzyConfig;
+    double const minThreshold = fuzzyConfig.minMatchThreshold;
+
+    // Track seen entries to avoid duplicates
+    std::vector<std::string_view> seen;
+    seen.reserve(std::min(maxResults * 2, _entries.size()));
+
+    // First pass: collect all matches from newest to oldest
+    int recencyBonus = static_cast<int>(_entries.size());
+    for (auto it = _entries.rbegin(); it != _entries.rend(); ++it, --recencyBonus)
+    {
+        // Check for duplicates
+        bool isDuplicate = false;
+        for (auto const& existing: seen)
+        {
+            if (existing == *it)
+            {
+                isDuplicate = true;
+                break;
+            }
+        }
+        if (isDuplicate)
+            continue;
+        seen.emplace_back(*it);
+
+        // Check prefix match first
+        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(*it, prefix);
+        tui::FuzzyMatchResult fuzzyResult;
+        bool isFuzzyMatch = false;
+
+        if (!isPrefixMatch && !prefix.empty())
+        {
+            fuzzyResult = tui::FuzzyMatch::matchSmartCase(*it, prefix);
+            size_t textLen = tui::FuzzyMatch::countGraphemes(*it);
+            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+        }
+
+        if (!isPrefixMatch && !isFuzzyMatch)
+            continue;
+
+        int score;
+        std::vector<size_t> matchPositions;
+
+        if (isPrefixMatch)
+        {
+            score = tui::SmartCaseMatch::adjustScore(100, *it, prefix);
+            score += fuzzyConfig.prefixMatchBonus + recencyBonus; // Prefix + recency bonus
+        }
+        else
+        {
+            score = tui::FuzzyMatch::calculateScore(50, *it, prefix, fuzzyResult, fuzzyConfig);
+            score += recencyBonus; // Recency bonus
+            matchPositions = std::move(fuzzyResult.positions);
+        }
+
+        results.push_back(FuzzySearchResult { .entry = *it,
+                                              .positions = std::move(matchPositions),
+                                              .score = score,
+                                              .isPrefixMatch = isPrefixMatch });
+    }
+
+    // Sort by score descending
+    std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) { return a.score > b.score; });
+
+    // Trim to maxResults
+    if (results.size() > maxResults)
+        results.resize(maxResults);
 
     return results;
 }

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <set>
 
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
@@ -24,45 +25,62 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
     std::vector<CompletionItem> results;
     auto const& prefix = context.prefix;
 
-    // Add builtins first
-    for (auto const& builtin: builtinNames())
-    {
-        if (tui::SmartCaseMatch::matchesPrefix(builtin, prefix))
+    // Configuration for fuzzy matching
+    tui::FuzzyConfig fuzzyConfig;
+    double const minThreshold = fuzzyConfig.minMatchThreshold;
+
+    // Helper lambda for adding a command match
+    auto addMatch = [&](std::string const& name, std::string_view description, int baseScore) {
+        // Check if already added (avoid duplicates)
+        for (auto const& existing: results)
         {
-            int score = tui::SmartCaseMatch::adjustScore(100, builtin, prefix);
-            results.push_back(CompletionItem {
-                .text = builtin,
-                .displayText = builtin,
-                .description = "builtin",
-                .score = score // Builtins get higher priority
-            });
+            if (existing.text == name)
+                return;
         }
-    }
+
+        // Option C: Check both prefix and fuzzy matches
+        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
+        tui::FuzzyMatchResult fuzzyResult;
+        bool isFuzzyMatch = false;
+
+        if (!isPrefixMatch && !prefix.empty())
+        {
+            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
+            size_t textLen = tui::FuzzyMatch::countGraphemes(name);
+            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+        }
+
+        if (!isPrefixMatch && !isFuzzyMatch)
+            return;
+
+        int score;
+        std::vector<size_t> matchPositions;
+
+        if (isPrefixMatch)
+        {
+            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
+            score += fuzzyConfig.prefixMatchBonus;
+        }
+        else
+        {
+            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
+            matchPositions = std::move(fuzzyResult.positions);
+        }
+
+        results.push_back(CompletionItem { .text = name,
+                                           .displayText = name,
+                                           .description = std::string(description),
+                                           .score = score,
+                                           .matchPositions = std::move(matchPositions) });
+    };
+
+    // Add builtins first (higher priority)
+    for (auto const& builtin: builtinNames())
+        addMatch(builtin, "builtin", 100);
 
     // Add commands from PATH
     for (auto const& cmd: _cachedCommands)
-    {
-        if (tui::SmartCaseMatch::matchesPrefix(cmd, prefix))
-        {
-            // Check if already added (avoid duplicates with builtins)
-            bool isDuplicate = false;
-            for (auto const& existing: results)
-            {
-                if (existing.text == cmd)
-                {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-
-            if (!isDuplicate)
-            {
-                int score = tui::SmartCaseMatch::adjustScore(50, cmd, prefix);
-                results.push_back(
-                    CompletionItem { .text = cmd, .displayText = cmd, .description = "", .score = score });
-            }
-        }
-    }
+        addMatch(cmd, "", 50);
 
     // Sort by score (descending), then alphabetically
     std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {

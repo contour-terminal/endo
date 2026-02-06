@@ -35,6 +35,63 @@ namespace
         return width;
     }
 
+    /// @brief Checks if a grapheme index is in the match positions set.
+    auto isMatchPosition(std::vector<size_t> const& positions, size_t index) -> bool
+    {
+        // positions is typically small (pattern length), linear search is fine
+        for (size_t pos: positions)
+        {
+            if (pos == index)
+                return true;
+            if (pos > index)
+                break; // positions are sorted
+        }
+        return false;
+    }
+
+    /// @brief Renders text with highlighted match positions grapheme-by-grapheme.
+    /// @return Number of columns consumed.
+    auto putStringWithHighlights(Canvas& canvas,
+                                 int row,
+                                 int col,
+                                 std::string_view text,
+                                 Style const& normalStyle,
+                                 Style const& matchStyle,
+                                 std::vector<size_t> const& matchPositions) -> int
+    {
+        int currentCol = col;
+        size_t graphemeIndex = 0;
+
+        auto segmenter = unicode::utf8_grapheme_segmenter(text);
+        for (auto it = segmenter.begin(); it != segmenter.end(); ++it, ++graphemeIndex)
+        {
+            auto const& cluster = *it;
+
+            // Get grapheme as string_view
+            auto nextIt = it;
+            ++nextIt;
+            char const* clusterStart = it._clusterStart;
+            char const* clusterEnd =
+                (nextIt != segmenter.end()) ? nextIt._clusterStart : (text.data() + text.size());
+            std::string_view grapheme(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
+
+            // Calculate grapheme width
+            int graphemeWidth = 0;
+            for (char32_t cp: cluster)
+                graphemeWidth += unicode::width(cp);
+            if (graphemeWidth == 0)
+                graphemeWidth = 1;
+
+            // Choose style based on whether this position is highlighted
+            Style const& style = isMatchPosition(matchPositions, graphemeIndex) ? matchStyle : normalStyle;
+
+            canvas.put(row, currentCol, grapheme, style);
+            currentCol += graphemeWidth;
+        }
+
+        return currentCol - col;
+    }
+
     /// @brief Truncates a string to fit within a given width, adding ellipsis.
     /// @return A pair of (truncated string, display width).
     auto truncateWithEllipsis(std::string_view text, int maxWidth) -> std::pair<std::string, int>
@@ -136,10 +193,18 @@ void CompletionPopup::render(Canvas& canvas)
         // Calculate total content width
         int totalContentWidth = textWidth + (descWidth > 0 ? 2 + descWidth : 0);
 
+        // Determine if we need fuzzy match highlighting
+        bool hasHighlights = !item.matchPositions.empty();
+        Style const& matchStyle = theme.completionMatch;
+
         if (totalContentWidth <= innerWidth)
         {
             // Everything fits
-            canvas.putString(row, 1, displayText, itemStyle);
+            if (hasHighlights)
+                putStringWithHighlights(
+                    canvas, row, 1, displayText, itemStyle, matchStyle, item.matchPositions);
+            else
+                canvas.putString(row, 1, displayText, itemStyle);
 
             // Draw description right-aligned
             if (descWidth > 0)
@@ -158,13 +223,18 @@ void CompletionPopup::render(Canvas& canvas)
             if (textWidth > maxTextWidth)
             {
                 // Truncate display text with ellipsis
+                // Note: For truncated text, highlighting is disabled as positions may be invalid
                 auto [truncated, truncWidth] = truncateWithEllipsis(displayText, maxTextWidth);
                 canvas.putString(row, 1, truncated, itemStyle);
                 textWidth = truncWidth;
             }
             else
             {
-                canvas.putString(row, 1, displayText, itemStyle);
+                if (hasHighlights)
+                    putStringWithHighlights(
+                        canvas, row, 1, displayText, itemStyle, matchStyle, item.matchPositions);
+                else
+                    canvas.putString(row, 1, displayText, itemStyle);
             }
 
             // Draw description if there's room

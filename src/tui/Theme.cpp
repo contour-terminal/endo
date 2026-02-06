@@ -81,6 +81,8 @@ auto darkTheme() -> Theme
     theme.completionSelected.fg = theme.colors.primary; // Selected item
     theme.completionSelected.inverse = true;            // Inverse for visibility
     theme.completionDesc.fg = theme.colors.textMuted;   // Description text
+    theme.completionMatch.fg = theme.colors.info;       // Highlighted matched chars (cyan)
+    theme.completionMatch.bold = true;
 
     theme.borderStyle = BorderStyle::Rounded;
 
@@ -155,6 +157,8 @@ auto lightTheme() -> Theme
     theme.completionSelected.fg = theme.colors.primary; // Selected item
     theme.completionSelected.inverse = true;            // Inverse for visibility
     theme.completionDesc.fg = theme.colors.textMuted;   // Description text
+    theme.completionMatch.fg = theme.colors.info;       // Highlighted matched chars (cyan)
+    theme.completionMatch.bold = true;
 
     theme.borderStyle = BorderStyle::Rounded;
 
@@ -223,6 +227,8 @@ auto monoTheme() -> Theme
     theme.completionItem = {};               // Normal
     theme.completionSelected.inverse = true; // Selected
     theme.completionDesc.dim = true;         // Description
+    theme.completionMatch.bold = true;       // Highlighted matched chars (bold for mono)
+    theme.completionMatch.underline = true;
 
     theme.borderStyle = BorderStyle::Single;
 

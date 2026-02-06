@@ -10,6 +10,7 @@
 
 #include <tui/completer/CompletionItem.hpp>
 #include <tui/completer/CompletionProvider.hpp>
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 namespace tui
@@ -20,6 +21,8 @@ struct CompletionConfig
 {
     size_t maxSuggestions = 50;         ///< Maximum completions to return.
     SmartCaseConfig smartCaseConfig {}; ///< Smart case matching bonuses.
+    FuzzyConfig fuzzyConfig {};         ///< Fuzzy matching configuration.
+    bool enableFuzzy = true;            ///< Whether to include fuzzy matches (non-prefix).
 };
 
 /// @brief Orchestrates completion providers and generates suggestions.

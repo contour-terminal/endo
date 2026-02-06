@@ -4,6 +4,7 @@
 #include <tui/completer/Completer.hpp>
 #include <tui/completer/CompletionItem.hpp>
 #include <tui/completer/CompletionProvider.hpp>
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 using namespace tui;
@@ -11,12 +12,12 @@ using namespace tui;
 namespace
 {
 
-/// @brief A simple test provider that returns fixed completions.
+/// @brief A simple test provider that returns fixed completions with fuzzy support.
 class TestProvider: public CompletionProvider
 {
   public:
-    explicit TestProvider(std::vector<CompletionItem> items, int priority = 0):
-        _items(std::move(items)), _priority(priority)
+    explicit TestProvider(std::vector<CompletionItem> items, int priority = 0, bool enableFuzzy = true):
+        _items(std::move(items)), _priority(priority), _enableFuzzy(enableFuzzy)
     {
     }
 
@@ -25,14 +26,39 @@ class TestProvider: public CompletionProvider
         std::vector<CompletionItem> results;
         std::string_view prefix = input.substr(0, cursorPosition);
 
+        FuzzyConfig fuzzyConfig;
+        double const minThreshold = fuzzyConfig.minMatchThreshold;
+
         for (auto const& item: _items)
         {
-            if (SmartCaseMatch::matchesPrefix(item.text, prefix))
+            // Option C: Check both prefix and fuzzy matches
+            bool isPrefixMatch = SmartCaseMatch::matchesPrefix(item.text, prefix);
+            FuzzyMatchResult fuzzyResult;
+            bool isFuzzyMatch = false;
+
+            if (!isPrefixMatch && _enableFuzzy && !prefix.empty())
             {
-                auto resultItem = item;
-                resultItem.score = SmartCaseMatch::adjustScore(item.score, item.text, prefix);
-                results.push_back(resultItem);
+                fuzzyResult = FuzzyMatch::matchSmartCase(item.text, prefix);
+                size_t textLen = FuzzyMatch::countGraphemes(item.text);
+                isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
             }
+
+            if (!isPrefixMatch && !isFuzzyMatch)
+                continue;
+
+            auto resultItem = item;
+            if (isPrefixMatch)
+            {
+                resultItem.score = SmartCaseMatch::adjustScore(item.score, item.text, prefix);
+                resultItem.score += fuzzyConfig.prefixMatchBonus;
+            }
+            else
+            {
+                resultItem.score =
+                    FuzzyMatch::calculateScore(item.score, item.text, prefix, fuzzyResult, fuzzyConfig);
+                resultItem.matchPositions = std::move(fuzzyResult.positions);
+            }
+            results.push_back(resultItem);
         }
         return results;
     }
@@ -42,6 +68,7 @@ class TestProvider: public CompletionProvider
   private:
     std::vector<CompletionItem> _items;
     int _priority;
+    bool _enableFuzzy;
 };
 
 /// @brief Helper to create items quickly.
@@ -229,4 +256,86 @@ TEST_CASE("Completer.config_persistence")
     completer.setConfig(config);
 
     CHECK(completer.config().maxSuggestions == 25);
+}
+
+// ============================================================================
+// Fuzzy matching tests
+// ============================================================================
+
+TEST_CASE("Completer.fuzzy_matching_finds_non_prefix")
+{
+    Completer completer;
+
+    std::vector<CompletionItem> items = { item("Downloads", 10), item("Documents", 10), item("Desktop", 10) };
+
+    completer.addProvider(std::make_unique<TestProvider>(items));
+
+    // "ds" should fuzzy-match all three:
+    // - "Downloads" (D...s)
+    // - "Documents" (D...s)
+    // - "Desktop" (De...S...top -> wait, no 's' at end... let me think)
+    // Actually "Desktop" has 'D' and 's' so it matches: D...s...ktop
+    auto results = completer.complete("ds", 2);
+    CHECK(results.size() == 3); // All three match "ds"
+
+    // All should have match positions for highlighting (fuzzy matches)
+    bool foundDownloads = false;
+    bool foundDocuments = false;
+    bool foundDesktop = false;
+    for (auto const& r: results)
+    {
+        if (r.text == "Downloads")
+        {
+            foundDownloads = true;
+            CHECK_FALSE(r.matchPositions.empty()); // Should have highlighting positions
+        }
+        if (r.text == "Documents")
+        {
+            foundDocuments = true;
+            CHECK_FALSE(r.matchPositions.empty());
+        }
+        if (r.text == "Desktop")
+        {
+            foundDesktop = true;
+            CHECK_FALSE(r.matchPositions.empty());
+        }
+    }
+    CHECK(foundDownloads);
+    CHECK(foundDocuments);
+    CHECK(foundDesktop);
+}
+
+TEST_CASE("Completer.prefix_matches_score_higher_than_fuzzy")
+{
+    Completer completer;
+
+    // "do" should prefix-match "documents" and fuzzy-match "Downloads" (D...o)
+    std::vector<CompletionItem> items = { item("downloads", 10), item("documents", 10) };
+
+    completer.addProvider(std::make_unique<TestProvider>(items));
+
+    auto results = completer.complete("do", 2);
+    CHECK(results.size() == 2);
+
+    // "documents" is a prefix match, "downloads" is also a prefix match
+    // Both should be prefix matches, so both have empty matchPositions
+    for (auto const& r: results)
+        CHECK(r.matchPositions.empty()); // Prefix matches have no highlighting
+}
+
+TEST_CASE("Completer.fuzzy_match_has_positions")
+{
+    Completer completer;
+
+    std::vector<CompletionItem> items = { item("Downloads", 10) };
+
+    completer.addProvider(std::make_unique<TestProvider>(items));
+
+    // "dls" matches "DownLoads" -> D...l...s
+    auto results = completer.complete("dls", 3);
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].text == "Downloads");
+    CHECK_FALSE(results[0].matchPositions.empty());
+    // Positions should be indices of 'D', 'l', 's' in "Downloads"
+    CHECK(results[0].matchPositions.size() == 3);
 }

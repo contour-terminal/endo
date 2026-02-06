@@ -14,19 +14,20 @@ std::vector<CompletionItem> HistoryCompleter::complete(CompletionContext const& 
 
     // For history completion, we match against the full input, not just the current word
     // This is because history entries are complete command lines
-    auto matches = _history.search(context.fullInput, 10);
+    // Use fuzzy search to find both prefix and fuzzy matches
+    auto matches = _history.searchFuzzy(context.fullInput, 10);
 
-    int score = 100; // Recency ordering: first match is most recent
     for (auto const& match: matches)
     {
         // Don't suggest the exact current input
-        if (match == context.fullInput)
+        if (match.entry == context.fullInput)
             continue;
 
-        results.push_back(CompletionItem { .text = std::string(match),
-                                           .displayText = std::string(match),
+        results.push_back(CompletionItem { .text = std::string(match.entry),
+                                           .displayText = std::string(match.entry),
                                            .description = "history",
-                                           .score = score-- });
+                                           .score = match.score,
+                                           .matchPositions = match.positions });
     }
 
     return results;

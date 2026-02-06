@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
@@ -17,51 +18,77 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
     std::vector<CompletionItem> results;
     auto const& prefix = context.prefix;
 
+    // Configuration for fuzzy matching
+    tui::FuzzyConfig fuzzyConfig;
+    double const minThreshold = fuzzyConfig.minMatchThreshold;
+
+    // Helper to check and add a variable match
+    auto tryAddVariable = [&](std::string const& name,
+                              std::string const& displayText,
+                              std::string const& description,
+                              int baseScore) {
+        // Check if already added (avoid duplicates)
+        for (auto const& existing: results)
+        {
+            if (existing.text == name)
+                return;
+        }
+
+        // Option C: Check both prefix and fuzzy matches
+        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
+        tui::FuzzyMatchResult fuzzyResult;
+        bool isFuzzyMatch = false;
+
+        if (!isPrefixMatch && !prefix.empty())
+        {
+            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
+            size_t textLen = tui::FuzzyMatch::countGraphemes(name);
+            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+        }
+
+        if (!isPrefixMatch && !isFuzzyMatch)
+            return;
+
+        int score;
+        std::vector<size_t> matchPositions;
+
+        if (isPrefixMatch)
+        {
+            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
+            score += fuzzyConfig.prefixMatchBonus;
+        }
+        else
+        {
+            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
+            matchPositions = std::move(fuzzyResult.positions);
+        }
+
+        results.push_back(CompletionItem { .text = name,
+                                           .displayText = displayText,
+                                           .description = description,
+                                           .score = score,
+                                           .matchPositions = std::move(matchPositions) });
+    };
+
     // Add special variables first
     for (auto const& special: specialVariables())
-    {
-        if (tui::SmartCaseMatch::matchesPrefix(special.text, prefix))
-        {
-            auto item = special;
-            item.score = tui::SmartCaseMatch::adjustScore(special.score, special.text, prefix);
-            results.push_back(item);
-        }
-    }
+        tryAddVariable(special.text, special.displayText, special.description, special.score);
 
     // Add environment variables
     for (auto const& varName: _env.keys())
     {
-        if (tui::SmartCaseMatch::matchesPrefix(varName, prefix))
+        auto value = _env.get(varName);
+        std::string description;
+        if (value)
         {
-            // Check if already added (avoid duplicates with specials)
-            bool isDuplicate = false;
-            for (auto const& existing: results)
-            {
-                if (existing.text == varName)
-                {
-                    isDuplicate = true;
-                    break;
-                }
-            }
-
-            if (!isDuplicate)
-            {
-                auto value = _env.get(varName);
-                std::string description;
-                if (value)
-                {
-                    // Truncate long values for display
-                    if (value->size() > 40)
-                        description = std::string(value->substr(0, 37)) + "...";
-                    else
-                        description = std::string(*value);
-                }
-
-                int score = tui::SmartCaseMatch::adjustScore(50, varName, prefix);
-                results.push_back(CompletionItem {
-                    .text = varName, .displayText = varName, .description = description, .score = score });
-            }
+            // Truncate long values for display
+            if (value->size() > 40)
+                description = std::string(value->substr(0, 37)) + "...";
+            else
+                description = std::string(*value);
         }
+
+        tryAddVariable(varName, varName, description, 50);
     }
 
     // Sort by score (descending), then alphabetically

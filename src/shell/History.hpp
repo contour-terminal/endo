@@ -3,6 +3,7 @@
 
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace endo
@@ -39,6 +40,22 @@ class History
     /// @return Matching entries ordered by recency (newest first).
     [[nodiscard]] virtual std::vector<std::string_view> search(std::string_view prefix,
                                                                size_t maxResults = 10) const = 0;
+
+    /// @brief Result from fuzzy history search.
+    struct FuzzySearchResult
+    {
+        std::string_view entry;        ///< The matched history entry.
+        std::vector<size_t> positions; ///< Grapheme indices of matched characters.
+        int score;                     ///< Match score (higher = better).
+        bool isPrefixMatch;            ///< True if this is a prefix match (vs fuzzy).
+    };
+
+    /// @brief Searches for entries using both prefix and fuzzy matching.
+    /// @param prefix The pattern to search for.
+    /// @param maxResults Maximum number of results to return.
+    /// @return Matching entries ordered by score (highest first), then recency.
+    [[nodiscard]] virtual std::vector<FuzzySearchResult> searchFuzzy(std::string_view prefix,
+                                                                     size_t maxResults = 10) const = 0;
 };
 
 /// @brief In-memory history implementation (current session only).
@@ -56,6 +73,8 @@ class InMemoryHistory: public History
     void clear() override;
     [[nodiscard]] std::vector<std::string_view> search(std::string_view prefix,
                                                        size_t maxResults = 10) const override;
+    [[nodiscard]] std::vector<FuzzySearchResult> searchFuzzy(std::string_view prefix,
+                                                             size_t maxResults = 10) const override;
 
   private:
     std::vector<std::string> _entries;

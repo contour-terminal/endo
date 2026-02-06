@@ -21,6 +21,7 @@ add_library(tui
     Theme.cpp
     VtParser.cpp
     completer/Completer.cpp
+    completer/FuzzyMatch.cpp
     completer/SmartCaseMatch.cpp
 )
 
@@ -46,6 +47,7 @@ add_executable(test-tui
     CompletionPopup_test.cpp
     Screen_test.cpp
     SmartCaseMatch_test.cpp
+    FuzzyMatch_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

@@ -87,6 +87,7 @@ struct Theme
     Style completionItem;     ///< Normal completion menu item.
     Style completionSelected; ///< Selected completion menu item.
     Style completionDesc;     ///< Description text in completion menu.
+    Style completionMatch;    ///< Highlighted matched characters in fuzzy completion.
 
     // Border style
     BorderStyle borderStyle = BorderStyle::Rounded;
