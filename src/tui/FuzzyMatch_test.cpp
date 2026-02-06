@@ -249,25 +249,25 @@ TEST_CASE("FuzzyMatch.score_100_percent_match")
 {
     auto result = FuzzyMatch::matchSmartCase("abc", "abc");
     int score = FuzzyMatch::calculateScore(50, "abc", "abc", result);
-    // 50 base + 100 (100% match) + 10 (1 consecutive run) + 15 (word start) + 50 (prefix)
-    CHECK(score == 50 + 100 + 10 + 15 + 50);
+    // 50 base + 100 (100% match) + 10 (1 consecutive run) + 15 (word start)
+    // Note: No prefix bonus - that's reserved for actual prefix matches (handled by caller)
+    CHECK(score == 50 + 100 + 10 + 15);
 }
 
 TEST_CASE("FuzzyMatch.score_50_percent_match")
 {
     auto result = FuzzyMatch::matchSmartCase("abcd", "ab");
     int score = FuzzyMatch::calculateScore(50, "abcd", "ab", result);
-    // 50 base + 50 (50% match) + 10 (1 run) + 15 (word start) + 50 (prefix)
-    CHECK(score == 50 + 50 + 10 + 15 + 50);
+    // 50 base + 50 (50% match) + 10 (1 run) + 15 (word start)
+    CHECK(score == 50 + 50 + 10 + 15);
 }
 
-TEST_CASE("FuzzyMatch.score_no_prefix_bonus")
+TEST_CASE("FuzzyMatch.score_no_word_start_bonus")
 {
     auto result = FuzzyMatch::matchSmartCase("xabc", "abc");
     int score = FuzzyMatch::calculateScore(50, "xabc", "abc", result);
-    // No prefix bonus since first match is at position 1, not 0
-    // 50 base + 75 (75% match) + 10 (1 run) + 0 (no word start for a,b,c) + 0 (no prefix)
-    CHECK(score == 50 + 75 + 10 + 0 + 0);
+    // 50 base + 75 (75% match) + 10 (1 run) + 0 (no word start for a,b,c)
+    CHECK(score == 50 + 75 + 10 + 0);
 }
 
 TEST_CASE("FuzzyMatch.score_with_config")
@@ -276,12 +276,12 @@ TEST_CASE("FuzzyMatch.score_with_config")
     config.maxMatchPercentBonus = 200;
     config.consecutiveBonus = 20;
     config.wordStartBonus = 30;
-    config.prefixMatchBonus = 100;
+    config.prefixMatchBonus = 100; // Not used by calculateScore, only by caller
 
     auto result = FuzzyMatch::matchSmartCase("abc", "abc");
     int score = FuzzyMatch::calculateScore(0, "abc", "abc", result, config);
-    // 0 base + 200 (100% match) + 20 (1 run) + 30 (word start) + 100 (prefix)
-    CHECK(score == 0 + 200 + 20 + 30 + 100);
+    // 0 base + 200 (100% match) + 20 (1 run) + 30 (word start)
+    CHECK(score == 0 + 200 + 20 + 30);
 }
 
 TEST_CASE("FuzzyMatch.score_non_match_returns_base")

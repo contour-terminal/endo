@@ -228,10 +228,11 @@ int FuzzyMatch::calculateScore(int baseScore,
     // Word start bonus
     int wordStartScore = static_cast<int>(result.wordStartMatches) * config.wordStartBonus;
 
-    // Prefix bonus if first match is at position 0
-    int prefixBonus = (!result.positions.empty() && result.positions[0] == 0) ? config.prefixMatchBonus : 0;
+    // Note: We intentionally do NOT add prefixMatchBonus here for fuzzy matches.
+    // The prefixMatchBonus is reserved for actual prefix matches (handled by the caller).
+    // Fuzzy matches starting at position 0 already benefit from wordStartBonus.
 
-    return baseScore + percentBonus + consecutiveScore + wordStartScore + prefixBonus;
+    return baseScore + percentBonus + consecutiveScore + wordStartScore;
 }
 
 } // namespace tui

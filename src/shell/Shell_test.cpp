@@ -12,6 +12,8 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
+#include "CompletionContext.hpp"
+#include "CompletionProviders/FileCompleter.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
 
@@ -1307,4 +1309,53 @@ TEST_CASE("shell.jobs.wait_all")
     auto waitExitCode = shell("wait").exitCode;
     // Wait should complete successfully
     CHECK(waitExitCode == 0);
+}
+
+// ============================================================================
+// FileCompleter Tests
+// ============================================================================
+
+TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
+{
+    // Create a temporary directory with "src" and "scripts" subdirectories
+    auto tempDir = std::filesystem::temp_directory_path() / "endo_test_completion";
+    std::filesystem::create_directories(tempDir / "src");
+    std::filesystem::create_directories(tempDir / "scripts");
+
+    // Change to the temp directory for testing
+    auto originalDir = std::filesystem::current_path();
+    std::filesystem::current_path(tempDir);
+
+    endo::FileCompleter completer;
+
+    // Complete "sr" - should match both "src" (prefix) and "scripts" (fuzzy)
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::FilePath,
+        .prefix = "sr",
+        .cursorPosition = 5,
+        .fullInput = "cd sr",
+    };
+
+    auto results = completer.complete(context);
+
+    // Clean up
+    std::filesystem::current_path(originalDir);
+    std::filesystem::remove_all(tempDir);
+
+    // Verify results
+    REQUIRE(results.size() == 2);
+
+    // "src" should be first because it's a prefix match (higher score)
+    // "scripts" should be second because it's only a fuzzy match
+    CHECK(results[0].displayText == "src/");
+    CHECK(results[1].displayText == "scripts/");
+
+    // Prefix match should have higher score
+    CHECK(results[0].score > results[1].score);
+
+    // Prefix match should have empty matchPositions (no highlighting needed)
+    CHECK(results[0].matchPositions.empty());
+
+    // Fuzzy match should have matchPositions for 's' and 'r'
+    CHECK_FALSE(results[1].matchPositions.empty());
 }
