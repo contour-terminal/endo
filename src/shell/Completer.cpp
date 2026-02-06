@@ -45,6 +45,10 @@ std::vector<CompletionItem> Completer::complete(std::string_view input, size_t c
 
 std::optional<std::string> Completer::suggest(std::string_view input, size_t cursorPosition) const
 {
+    // Don't show ghost text when input is empty
+    if (input.empty())
+        return std::nullopt;
+
     // Fish-style ghost text: only show suggestions for command context
     // This prevents ghost text from appearing after string literals, arguments, etc.
     // Users can still use Tab to trigger the completion popup in any context.
