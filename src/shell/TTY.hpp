@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <chrono>
 #include <expected>
 #include <format>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -60,6 +62,16 @@ class TTY
     virtual void setRawMode() = 0;
     virtual void restoreMode() = 0;
 
+    /// Enable or disable input echo (for silent mode in read -s)
+    /// @param enabled true to enable echo, false to disable
+    virtual void setEchoEnabled(bool enabled) = 0;
+
+    /// Read a single character with optional timeout
+    /// @param timeout Maximum time to wait (0 = block indefinitely)
+    /// @return Character read, or std::nullopt on timeout/EOF/error
+    [[nodiscard]] virtual std::optional<char> readCharWithTimeout(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) = 0;
+
     virtual void writeToStdout(std::string_view str) const = 0;
 
     template <typename... Args>
@@ -100,6 +112,9 @@ class RealTTY final: public TTY
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
     void restoreMode() override;
+    void setEchoEnabled(bool enabled) override;
+    [[nodiscard]] std::optional<char> readCharWithTimeout(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
     void writeToStdin(std::string_view str) const override;
 
@@ -122,6 +137,9 @@ class TestPTY final: public TTY
     [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
     void setRawMode() override;
     void restoreMode() override;
+    void setEchoEnabled(bool enabled) override;
+    [[nodiscard]] std::optional<char> readCharWithTimeout(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
     void writeToStdout(std::string_view str) const override;
     void writeToStdin(std::string_view str) const override;
 

@@ -11,6 +11,7 @@
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
 
+    #include <poll.h>
     #include <pty.h>
     #include <unistd.h>
 #endif
@@ -100,6 +101,37 @@ void RealTTY::restoreMode()
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
 }
 
+void RealTTY::setEchoEnabled(bool enabled)
+{
+    termios tio;
+    if (tcgetattr(STDIN_FILENO, &tio) == -1)
+        return; // Silently fail if not a terminal
+
+    if (enabled)
+        tio.c_lflag |= ECHO;
+    else
+        tio.c_lflag &= ~static_cast<tcflag_t>(ECHO);
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &tio);
+}
+
+std::optional<char> RealTTY::readCharWithTimeout(std::chrono::milliseconds timeout)
+{
+    if (timeout.count() > 0)
+    {
+        pollfd pfd { .fd = STDIN_FILENO, .events = POLLIN, .revents = 0 };
+        int const result = poll(&pfd, 1, static_cast<int>(timeout.count()));
+        if (result <= 0)
+            return std::nullopt; // timeout or error
+    }
+
+    char ch;
+    ssize_t const n = ::read(STDIN_FILENO, &ch, 1);
+    if (n <= 0)
+        return std::nullopt; // EOF or error
+    return ch;
+}
+
 void RealTTY::writeToStdout(std::string_view str) const
 {
     ssize_t const result = ::write(STDOUT_FILENO, str.data(), str.size());
@@ -164,6 +196,37 @@ void TestPTY::restoreMode()
     int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_baseTermios);
     if (result == -1)
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
+}
+
+void TestPTY::setEchoEnabled(bool enabled)
+{
+    termios tio;
+    if (tcgetattr(_ptySlave, &tio) == -1)
+        return;
+
+    if (enabled)
+        tio.c_lflag |= ECHO;
+    else
+        tio.c_lflag &= ~static_cast<tcflag_t>(ECHO);
+
+    tcsetattr(_ptySlave, TCSANOW, &tio);
+}
+
+std::optional<char> TestPTY::readCharWithTimeout(std::chrono::milliseconds timeout)
+{
+    if (timeout.count() > 0)
+    {
+        pollfd pfd { .fd = _ptySlave, .events = POLLIN, .revents = 0 };
+        int const result = poll(&pfd, 1, static_cast<int>(timeout.count()));
+        if (result <= 0)
+            return std::nullopt; // timeout or error
+    }
+
+    char ch;
+    ssize_t const n = ::read(_ptySlave, &ch, 1);
+    if (n <= 0)
+        return std::nullopt; // EOF or error
+    return ch;
 }
 
 void TestPTY::writeToStdout(std::string_view str) const

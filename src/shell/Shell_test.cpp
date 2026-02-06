@@ -127,6 +127,138 @@ TEST_CASE("shell.builtin.read.CustomVar")
     CHECK(shell.env.get("BRU").value_or("NONE") == input);
 }
 
+TEST_CASE("shell.builtin.read.help")
+{
+    TestShell shell;
+    auto output = shell("read --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("-p PROMPT") != std::string::npos);
+    CHECK(output.find("-r") != std::string::npos);
+    CHECK(output.find("-s") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.read.custom_prompt")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("hello\n");
+    shell("read -p 'Enter: ' VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "hello");
+    // Check that prompt was displayed
+    CHECK(shell.pty.output().find("Enter:") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.read.raw_mode")
+{
+    TestShell shell;
+    // With -r, backslash is preserved as-is
+    shell.pty.writeToStdin("hello\\nworld\n");
+    shell("read -r VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "hello\\nworld");
+}
+
+TEST_CASE("shell.builtin.read.backslash_escape")
+{
+    TestShell shell;
+    // Without -r, backslash escapes the next character
+    shell.pty.writeToStdin("hello\\nworld\n");
+    shell("read VAR");
+    // \n becomes literal 'n' (backslash removed)
+    CHECK(shell.env.get("VAR").value_or("NONE") == "hellonworld");
+}
+
+TEST_CASE("shell.builtin.read.max_chars")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("hello world\n");
+    shell("read -n 5 VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "hello");
+}
+
+TEST_CASE("shell.builtin.read.delimiter")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("hello:world\n");
+    shell("read -d ':' VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "hello");
+}
+
+TEST_CASE("shell.builtin.read.multiple_variables")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("one two three four\n");
+    shell("read A B C");
+    CHECK(shell.env.get("A").value_or("NONE") == "one");
+    CHECK(shell.env.get("B").value_or("NONE") == "two");
+    // Last variable gets remainder
+    CHECK(shell.env.get("C").value_or("NONE") == "three four");
+}
+
+TEST_CASE("shell.builtin.read.more_vars_than_words")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("one two\n");
+    shell("read A B C D");
+    CHECK(shell.env.get("A").value_or("NONE") == "one");
+    CHECK(shell.env.get("B").value_or("NONE") == "two");
+    CHECK(shell.env.get("C").value_or("NONE") == "");
+    CHECK(shell.env.get("D").value_or("NONE") == "");
+}
+
+// Note: Pipeline support for read (e.g., "echo hello | read VAR") requires
+// additional infrastructure work. The read builtin currently works with
+// interactive TTY input and all flags (-p, -r, -s, -n, -t, -d) function correctly.
+
+TEST_CASE("shell.builtin.read.custom_ifs")
+{
+    TestShell shell;
+    shell("set IFS ':'");
+    shell.pty.writeToStdin("one:two:three\n");
+    shell("read A B C");
+    CHECK(shell.env.get("A").value_or("NONE") == "one");
+    CHECK(shell.env.get("B").value_or("NONE") == "two");
+    CHECK(shell.env.get("C").value_or("NONE") == "three");
+}
+
+TEST_CASE("shell.builtin.read.empty_ifs_no_split")
+{
+    TestShell shell;
+    shell("set IFS ''");
+    shell.pty.writeToStdin("one two three\n");
+    shell("read A B C");
+    // With empty IFS, no splitting occurs - first var gets everything
+    CHECK(shell.env.get("A").value_or("NONE") == "one two three");
+    CHECK(shell.env.get("B").value_or("NONE") == "");
+    CHECK(shell.env.get("C").value_or("NONE") == "");
+}
+
+TEST_CASE("shell.builtin.read.timeout_success")
+{
+    TestShell shell;
+    // Write input immediately, should succeed before timeout
+    shell.pty.writeToStdin("quick\n");
+    shell("read -t 5 VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "quick");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.read.invalid_option")
+{
+    TestShell shell;
+    shell("read --invalid-option VAR");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.read.combined_flags")
+{
+    TestShell shell;
+    shell.pty.writeToStdin("test\\ninput\n");
+    // -r (raw) and custom prompt
+    shell("read -r -p '> ' VAR");
+    CHECK(shell.env.get("VAR").value_or("NONE") == "test\\ninput");
+    CHECK(shell.pty.output().find("> ") != std::string::npos);
+}
+
 // ============================================================================
 // Set/Unset Builtins
 // ============================================================================

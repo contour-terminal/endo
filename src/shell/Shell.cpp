@@ -2569,22 +2569,362 @@ void Shell::builtinFalse(CoreVM::Params& context)
     context.setResult(false);
 }
 
+std::vector<std::string> Shell::splitByIFS(std::string_view input) const
+{
+    // Get IFS, default to space/tab/newline (bash default)
+    std::string const ifs = std::string(_env.get("IFS").value_or(" \t\n"));
+
+    if (ifs.empty())
+    {
+        // Empty IFS = no splitting, return whole input as single element
+        return { std::string(input) };
+    }
+
+    std::vector<std::string> result;
+    std::string current;
+
+    for (char c: input)
+    {
+        if (ifs.find(c) != std::string::npos)
+        {
+            // IFS character - end current word if non-empty
+            if (!current.empty())
+            {
+                result.push_back(std::move(current));
+                current.clear();
+            }
+            // Skip consecutive IFS characters (bash whitespace behavior)
+        }
+        else
+        {
+            current += c;
+        }
+    }
+
+    // Don't forget last word
+    if (!current.empty())
+        result.push_back(std::move(current));
+
+    return result;
+}
+
+std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& options)
+{
+    // Display prompt if specified and we have a terminal
+    bool const isTTY = (inputFd == _tty.inputFd()) && _tty.isTerminal();
+    if (!options.prompt.empty() && isTTY)
+    {
+        _tty.writeToStdout(options.prompt);
+    }
+
+    // Set up silent mode if requested
+    bool const needRestoreEcho = options.silent && isTTY;
+    if (needRestoreEcho)
+        _tty.setEchoEnabled(false);
+
+    std::string result;
+    bool escaped = false; // For backslash handling when !rawMode
+    size_t charsRead = 0;
+    bool hitEof = false;
+
+    auto const startTime = std::chrono::steady_clock::now();
+
+    while (true)
+    {
+        // Check max chars limit
+        if (options.maxChars && charsRead >= *options.maxChars)
+            break;
+
+        // Calculate remaining timeout
+        std::chrono::milliseconds remainingTimeout { 0 };
+        if (options.timeout)
+        {
+            auto const elapsed = std::chrono::steady_clock::now() - startTime;
+            auto const elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed);
+            if (elapsedMs >= *options.timeout)
+            {
+                // Timeout expired
+                hitEof = true;
+                break;
+            }
+            remainingTimeout = *options.timeout - elapsedMs;
+        }
+
+        // Read character
+        std::optional<char> maybeChar;
+
+        if (isTTY)
+        {
+            // Reading from TTY - use TTY's timeout-aware read
+            maybeChar = _tty.readCharWithTimeout(remainingTimeout);
+        }
+        else
+        {
+            // Reading from pipe/file - use poll + read
+            if (remainingTimeout.count() > 0)
+            {
+                pollfd pfd { .fd = inputFd, .events = POLLIN, .revents = 0 };
+                if (poll(&pfd, 1, static_cast<int>(remainingTimeout.count())) <= 0)
+                {
+                    hitEof = true;
+                    break; // timeout
+                }
+            }
+            char ch;
+            ssize_t const n = ::read(inputFd, &ch, 1);
+            if (n <= 0)
+            {
+                hitEof = true;
+                break; // EOF or error
+            }
+            maybeChar = ch;
+        }
+
+        if (!maybeChar)
+        {
+            hitEof = true;
+            break; // EOF or timeout
+        }
+
+        char const ch = *maybeChar;
+        ++charsRead;
+
+        // Check for delimiter (unless we're in escaped state)
+        if (ch == options.delimiter && !escaped)
+            break;
+
+        // Handle backslash escaping (when not in raw mode)
+        if (!options.rawMode && ch == '\\' && !escaped)
+        {
+            escaped = true;
+            continue; // Don't add backslash to result yet
+        }
+
+        if (escaped)
+        {
+            // In non-raw mode, backslash escapes the next character
+            // Special case: backslash-newline is line continuation (skip both)
+            if (ch == '\n')
+            {
+                escaped = false;
+                // Show continuation prompt if on TTY
+                if (isTTY && !options.prompt.empty())
+                    _tty.writeToStdout("> ");
+                continue;
+            }
+            // Otherwise, add the escaped character as-is (backslash removed)
+            escaped = false;
+        }
+
+        result += ch;
+    }
+
+    // If we ended with an escape character, add the backslash
+    if (escaped)
+        result += '\\';
+
+    // Restore echo if we disabled it
+    if (needRestoreEcho)
+        _tty.setEchoEnabled(true);
+
+    // Write newline to output if silent mode was used (for visual consistency)
+    if (options.silent && isTTY)
+        _tty.writeToStdout("\n");
+
+    return result;
+}
+
 void Shell::builtinReadDefault(CoreVM::Params& context)
 {
-    std::string const line =
-        readLine(_tty, std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
+    // Determine input source
+    NativeHandle const inputFd =
+        _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
+
+    ReadOptions options;
+    // Only show prompt if reading from TTY (not pipeline)
+    if (inputFd == _tty.inputFd() && _tty.isTerminal())
+        options.prompt = std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m");
+
+    std::string const line = readInputLine(inputFd, options);
     _env.set("REPLY", line);
+    _exitCode = line.empty() ? 1 : 0; // Return 1 on EOF (empty input)
     context.setResult(line);
 }
 
 void Shell::builtinRead(CoreVM::Params& context)
 {
-    CoreVM::CoreStringArray const& args = context.getStringArray(1);
-    std::string const& variable = args.at(0);
-    std::string const line =
-        readLine(_tty, std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m"));
-    _env.set(variable, line);
-    context.setResult(line);
+    // Get arguments
+    std::vector<std::string> args;
+    if (context.count() >= 1)
+    {
+        auto const& argArray = context.getStringArray(1);
+        for (size_t i = 0; i < argArray.size(); ++i)
+            args.push_back(argArray[i]);
+    }
+
+    ReadOptions options;
+
+    // Determine input source first (for prompt decision)
+    NativeHandle const inputFd =
+        _redirectState.getEffectiveStdinFd(_currentPipelineBuilder.defaultStdinFd, _processManager);
+    bool const isTTY = (inputFd == _tty.inputFd()) && _tty.isTerminal();
+
+    // Helper to write output for help
+    auto writeOutput = [this](std::string const& str) {
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+        [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+    };
+
+    // Parse flags
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        std::string_view arg = args[i];
+
+        if (arg == "-h" || arg == "--help")
+        {
+            writeOutput("Usage: read [OPTIONS] [VAR...]\n");
+            writeOutput("Read a line from standard input.\n\n");
+            writeOutput("Options:\n");
+            writeOutput("  -p PROMPT   Display PROMPT before reading\n");
+            writeOutput("  -r          Raw mode (don't interpret backslashes)\n");
+            writeOutput("  -s          Silent mode (don't echo input)\n");
+            writeOutput("  -n NCHARS   Read at most NCHARS characters\n");
+            writeOutput("  -t TIMEOUT  Timeout in seconds\n");
+            writeOutput("  -d DELIM    Use DELIM as line delimiter (default: newline)\n");
+            writeOutput("  -h, --help  Display this help\n\n");
+            writeOutput("If no VAR specified, input is stored in REPLY.\n");
+            writeOutput("Multiple VARs split input by $IFS (default: space/tab/newline).\n");
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreString(""));
+            return;
+        }
+        else if (arg == "-p" && i + 1 < args.size())
+        {
+            options.prompt = args[++i];
+        }
+        else if (arg == "-r")
+        {
+            options.rawMode = true;
+        }
+        else if (arg == "-s")
+        {
+            options.silent = true;
+        }
+        else if (arg == "-n" && i + 1 < args.size())
+        {
+            try
+            {
+                options.maxChars = std::stoul(args[++i]);
+            }
+            catch (std::exception const&)
+            {
+                error("read: invalid number: {}", args[i]);
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreString(""));
+                return;
+            }
+        }
+        else if (arg == "-t" && i + 1 < args.size())
+        {
+            try
+            {
+                double const seconds = std::stod(args[++i]);
+                if (seconds < 0)
+                {
+                    error("read: invalid timeout: {}", args[i]);
+                    _exitCode = 1;
+                    context.setResult(CoreVM::CoreString(""));
+                    return;
+                }
+                options.timeout = std::chrono::milliseconds(static_cast<long>(seconds * 1000));
+            }
+            catch (std::exception const&)
+            {
+                error("read: invalid timeout: {}", args[i]);
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreString(""));
+                return;
+            }
+        }
+        else if (arg == "-d" && i + 1 < args.size())
+        {
+            std::string const& delim = args[++i];
+            options.delimiter = delim.empty() ? '\0' : delim[0];
+        }
+        else if (!arg.starts_with("-"))
+        {
+            // Variable name
+            options.variableNames.push_back(std::string(arg));
+        }
+        else
+        {
+            error("read: invalid option: {}", arg);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreString(""));
+            return;
+        }
+    }
+
+    // If no prompt specified and reading from TTY, use default prompt
+    if (options.prompt.empty() && isTTY)
+    {
+        options.prompt = std::format("{}read{}>{} ", "\033[1;34m", "\033[37;1m", "\033[m");
+    }
+
+    // Read input
+    std::string const input = readInputLine(inputFd, options);
+
+    // Determine if we hit EOF (for exit code)
+    bool const hitEof = input.empty();
+
+    // Assign to variables
+    if (options.variableNames.empty())
+    {
+        // No variable specified - use REPLY
+        _env.set("REPLY", input);
+    }
+    else if (options.variableNames.size() == 1)
+    {
+        // Single variable - no splitting needed
+        _env.set(options.variableNames[0], input);
+    }
+    else
+    {
+        // Multiple variables - split by IFS
+        auto const words = splitByIFS(input);
+
+        for (size_t i = 0; i < options.variableNames.size(); ++i)
+        {
+            if (i < words.size())
+            {
+                if (i == options.variableNames.size() - 1)
+                {
+                    // Last variable gets remainder
+                    std::string remainder;
+                    for (size_t j = i; j < words.size(); ++j)
+                    {
+                        if (j > i)
+                            remainder += ' ';
+                        remainder += words[j];
+                    }
+                    _env.set(options.variableNames[i], remainder);
+                }
+                else
+                {
+                    _env.set(options.variableNames[i], words[i]);
+                }
+            }
+            else
+            {
+                // More variables than words - set to empty
+                _env.set(options.variableNames[i], "");
+            }
+        }
+    }
+
+    _exitCode = hitEof ? 1 : 0;
+    context.setResult(CoreVM::CoreString(input));
 }
 
 void Shell::builtinOpenRead(CoreVM::Params& context)

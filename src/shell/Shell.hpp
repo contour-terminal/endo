@@ -6,6 +6,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <chrono>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -28,6 +29,18 @@ namespace endo
 {
 
 std::string readLine(TTY& tty, std::string_view prompt);
+
+/// Options for the read builtin command
+struct ReadOptions
+{
+    std::string prompt;                               ///< -p PROMPT
+    bool rawMode = false;                             ///< -r (no backslash escape)
+    bool silent = false;                              ///< -s (no echo)
+    std::optional<size_t> maxChars;                   ///< -n NCHARS
+    std::optional<std::chrono::milliseconds> timeout; ///< -t SECONDS
+    char delimiter = '\n';                            ///< -d DELIM
+    std::vector<std::string> variableNames;           ///< VAR1 VAR2 ...
+};
 
 class Shell final
 {
@@ -150,6 +163,10 @@ class Shell final
     // Helper functions
     void cleanupProcSubst();
     void applyRedirects(SpawnConfig& config);
+
+    // Read builtin helpers
+    [[nodiscard]] std::string readInputLine(NativeHandle inputFd, ReadOptions const& options);
+    [[nodiscard]] std::vector<std::string> splitByIFS(std::string_view input) const;
 
     [[nodiscard]] std::expected<std::filesystem::path, ShellError> resolveProgram(
         std::string const& program) const;

@@ -31,7 +31,7 @@ the primary project; Endo development follows as resources permit.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep` | ✅ |
+| Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd`, `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |
@@ -443,6 +443,9 @@ Component (base class)
 ### Phase 2.4: Syntax Highlighting
 
 **Dependency:** Phase 2.1
+
+**Notes:**
+- Remember that LSP support will be implemented too. Prepare for code-reuse.
 
 **Tasks:**
 - [ ] Design syntax highlighting architecture
