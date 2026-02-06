@@ -327,8 +327,10 @@ The library includes:
 - [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
 
 **Implementation Notes:**
-- Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`) moved to `src/tui/completer/` as pure TUI model
-- Shell-specific providers (`CommandCompleter`, `FileCompleter`, etc.) remain in `src/shell/` and use `tui::CompletionItem`
+- Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`) in `src/tui/completer/` as pure TUI model
+- Shell-specific providers reorganized into `src/shell/CompletionProviders/` subdirectory for cleaner structure
+- Smart case matching: lowercase patterns match case-insensitively; patterns with uppercase match case-sensitively (like Vim's smartcase)
+- Score bonuses via `SmartCaseConfig`: exact matches get +50, case-exact prefixes get +25 (configurable)
 - `CompletionContextType` enum: Command, Argument, FilePath, Variable, VariableBrace, Redirect, Option, Unknown
 - Ghost text uses SGR 2 (dim) for visual distinction from actual input
 - `CompletionPopup` is a proper TUI widget with `show()`/`hide()`/`updateItems()` visibility management, `processEvent()` returning `CompletionAction` enum (Changed, Accepted, Dismissed), and `render()` using relative cursor positioning

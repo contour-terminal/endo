@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/CommandCompleter.hpp>
 #include <shell/CompletionContext.hpp>
 #include <shell/CompletionProvider.hpp>
+#include <shell/CompletionProviders/CommandCompleter.hpp>
+#include <shell/CompletionProviders/FileCompleter.hpp>
+#include <shell/CompletionProviders/HistoryCompleter.hpp>
+#include <shell/CompletionProviders/OptionCompleter.hpp>
+#include <shell/CompletionProviders/VariableCompleter.hpp>
 #include <shell/Environment.hpp>
-#include <shell/FileCompleter.hpp>
 #include <shell/History.hpp>
-#include <shell/HistoryCompleter.hpp>
-#include <shell/OptionCompleter.hpp>
-#include <shell/VariableCompleter.hpp>
 
 #include <memory>
 #include <optional>

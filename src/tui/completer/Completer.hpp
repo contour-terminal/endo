@@ -10,6 +10,7 @@
 
 #include <tui/completer/CompletionItem.hpp>
 #include <tui/completer/CompletionProvider.hpp>
+#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace tui
 {
@@ -17,7 +18,8 @@ namespace tui
 /// @brief Configuration for the completion system.
 struct CompletionConfig
 {
-    size_t maxSuggestions = 50; ///< Maximum completions to return.
+    size_t maxSuggestions = 50;         ///< Maximum completions to return.
+    SmartCaseConfig smartCaseConfig {}; ///< Smart case matching bonuses.
 };
 
 /// @brief Orchestrates completion providers and generates suggestions.

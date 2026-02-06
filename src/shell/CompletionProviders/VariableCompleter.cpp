@@ -3,6 +3,8 @@
 
 #include <algorithm>
 
+#include <tui/completer/SmartCaseMatch.hpp>
+
 namespace endo
 {
 
@@ -18,14 +20,18 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
     // Add special variables first
     for (auto const& special: specialVariables())
     {
-        if (special.text.starts_with(prefix))
-            results.push_back(special);
+        if (tui::SmartCaseMatch::matchesPrefix(special.text, prefix))
+        {
+            auto item = special;
+            item.score = tui::SmartCaseMatch::adjustScore(special.score, special.text, prefix);
+            results.push_back(item);
+        }
     }
 
     // Add environment variables
     for (auto const& varName: _env.keys())
     {
-        if (varName.starts_with(prefix))
+        if (tui::SmartCaseMatch::matchesPrefix(varName, prefix))
         {
             // Check if already added (avoid duplicates with specials)
             bool isDuplicate = false;
@@ -51,8 +57,9 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
                         description = std::string(*value);
                 }
 
+                int score = tui::SmartCaseMatch::adjustScore(50, varName, prefix);
                 results.push_back(CompletionItem {
-                    .text = varName, .displayText = varName, .description = description, .score = 50 });
+                    .text = varName, .displayText = varName, .description = description, .score = score });
             }
         }
     }

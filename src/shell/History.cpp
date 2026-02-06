@@ -3,6 +3,8 @@
 
 #include <algorithm>
 
+#include <tui/completer/SmartCaseMatch.hpp>
+
 namespace endo
 {
 
@@ -55,7 +57,7 @@ std::vector<std::string_view> InMemoryHistory::search(std::string_view prefix, s
     // Search from newest to oldest (reverse order)
     for (auto it = _entries.rbegin(); it != _entries.rend() && results.size() < maxResults; ++it)
     {
-        if (it->starts_with(prefix))
+        if (tui::SmartCaseMatch::matchesPrefix(*it, prefix))
         {
             // Avoid duplicates in results
             bool isDuplicate = false;

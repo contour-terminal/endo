@@ -21,6 +21,7 @@ add_library(tui
     Theme.cpp
     VtParser.cpp
     completer/Completer.cpp
+    completer/SmartCaseMatch.cpp
 )
 
 target_include_directories(tui PUBLIC
@@ -44,6 +45,7 @@ add_executable(test-tui
     Completer_test.cpp
     CompletionPopup_test.cpp
     Screen_test.cpp
+    SmartCaseMatch_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

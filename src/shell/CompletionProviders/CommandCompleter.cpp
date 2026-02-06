@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CommandCompleter.hpp"
+#include <shell/Shell.hpp>
 
 #include <crispy/utils.h>
 
@@ -7,7 +8,7 @@
 #include <filesystem>
 #include <set>
 
-#include "Shell.hpp"
+#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
 {
@@ -26,13 +27,14 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
     // Add builtins first
     for (auto const& builtin: builtinNames())
     {
-        if (builtin.starts_with(prefix))
+        if (tui::SmartCaseMatch::matchesPrefix(builtin, prefix))
         {
+            int score = tui::SmartCaseMatch::adjustScore(100, builtin, prefix);
             results.push_back(CompletionItem {
                 .text = builtin,
                 .displayText = builtin,
                 .description = "builtin",
-                .score = 100 // Builtins get higher priority
+                .score = score // Builtins get higher priority
             });
         }
     }
@@ -40,7 +42,7 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
     // Add commands from PATH
     for (auto const& cmd: _cachedCommands)
     {
-        if (cmd.starts_with(prefix))
+        if (tui::SmartCaseMatch::matchesPrefix(cmd, prefix))
         {
             // Check if already added (avoid duplicates with builtins)
             bool isDuplicate = false;
@@ -55,8 +57,9 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
 
             if (!isDuplicate)
             {
+                int score = tui::SmartCaseMatch::adjustScore(50, cmd, prefix);
                 results.push_back(
-                    CompletionItem { .text = cmd, .displayText = cmd, .description = "", .score = 50 });
+                    CompletionItem { .text = cmd, .displayText = cmd, .description = "", .score = score });
             }
         }
     }

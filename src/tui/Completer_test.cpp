@@ -4,6 +4,7 @@
 #include <tui/completer/Completer.hpp>
 #include <tui/completer/CompletionItem.hpp>
 #include <tui/completer/CompletionProvider.hpp>
+#include <tui/completer/SmartCaseMatch.hpp>
 
 using namespace tui;
 
@@ -26,8 +27,12 @@ class TestProvider: public CompletionProvider
 
         for (auto const& item: _items)
         {
-            if (item.text.starts_with(prefix))
-                results.push_back(item);
+            if (SmartCaseMatch::matchesPrefix(item.text, prefix))
+            {
+                auto resultItem = item;
+                resultItem.score = SmartCaseMatch::adjustScore(item.score, item.text, prefix);
+                results.push_back(resultItem);
+            }
         }
         return results;
     }

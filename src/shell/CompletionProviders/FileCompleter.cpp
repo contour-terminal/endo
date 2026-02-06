@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include <tui/completer/SmartCaseMatch.hpp>
+
 #if !defined(_WIN32)
     #include <pwd.h>
     #include <unistd.h>
@@ -227,8 +229,8 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
         if (isHidden(filename) && !showHidden)
             continue;
 
-        // Check if filename matches prefix
-        if (!filename.starts_with(prefix))
+        // Check if filename matches prefix (smart case)
+        if (!tui::SmartCaseMatch::matchesPrefix(filename, prefix))
             continue;
 
         bool isDir = entry.is_directory(ec);
@@ -241,12 +243,13 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
             fullPath += "/";
         }
 
-        results.push_back(CompletionItem {
-            .text = fullPath,
-            .displayText = displayName,
-            .description = isDir ? "directory" : "",
-            .score = isDir ? 80 : 50 // Directories get slightly higher priority
-        });
+        int baseScore = isDir ? 80 : 50; // Directories get slightly higher priority
+        int score = tui::SmartCaseMatch::adjustScore(baseScore, filename, prefix);
+
+        results.push_back(CompletionItem { .text = fullPath,
+                                           .displayText = displayName,
+                                           .description = isDir ? "directory" : "",
+                                           .score = score });
     }
 
     // Sort: directories first, then alphabetically
