@@ -31,7 +31,7 @@ the primary project; Endo development follows as resources permit.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export` | ✅ |
+| Builtins: `exit`, `true`, `false`, `read`, `cd`, `set`, `unset`, `export`, `bind` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |
@@ -262,10 +262,11 @@ The library includes:
 - Input field with multiline editing, history, and kill ring (`InputField`)
 - Various UI components (Box, Dialog, List, LogPanel, StatusBar, Spinner, Text, Theme)
 - Sixel image support and Markdown rendering
+- Configurable keybinding system (`KeyBindings`, `EditAction`) with modern defaults
 
 **Tasks:**
 - [x] Add GUI-style selection model (Shift+arrows, Ctrl+A select all, Ctrl+C copy, Ctrl+X cut)
-- [x] Implement undo/redo history (Ctrl+Z undo, Ctrl+Shift+Z redo)
+- [x] Implement undo/redo history (Ctrl+Z undo, Ctrl+Y/Ctrl+Shift+Z redo)
 - [x] Implement clipboard integration via OSC 52 (`TerminalOutput::copyToClipboard()` + callback)
 - [x] Add mouse click-to-position cursor support (`InputField::setCursorFromClick()`)
 - [x] Rewrite `Prompt` class to use `tui::Terminal` + `tui::InputField`
@@ -273,12 +274,22 @@ The library includes:
 - [x] Implement fixed editor region that auto-grows up to 50% of terminal height
 - [x] Add multiline editing support with proper rendering and selection highlighting
 - [x] Add comprehensive editor unit tests (47 tests covering basic editing, cursor movement, selection, undo/redo, multiline, history, kill ring, clipboard, and UTF-8)
+- [x] Implement configurable keybinding framework (`EditAction`, `KeyChord`, `KeyBindings`)
 
 **Implementation Notes:**
 - Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
 - Editor region scrolls to keep cursor visible when content exceeds max height
 - Selection highlighting uses inverse video (SGR 7/27)
 - Display width calculation uses libunicode for proper Unicode handling
+- Keybinding system maps key chords to edit actions, enabling future vi mode support
+- Default keybindings use modern conventions: Ctrl+C=copy, Ctrl+Y=redo, Ctrl+D=delete char (EOF on empty)
+- Shift+movement keys extend selection; Ctrl+D is context-sensitive (EOF vs delete)
+- `bind` builtin command allows runtime keybinding management:
+  - `bind` - List all keybindings
+  - `bind <key> <action>` - Bind a key to an action (e.g., `bind ctrl+y yank`)
+  - `bind -r <key>` - Remove a keybinding
+  - `bind --reset` - Reset to defaults
+  - `bind --help` - Show available actions and key format
 
 ### Phase 2.2: Mouse Integration
 

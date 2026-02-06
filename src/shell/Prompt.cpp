@@ -323,4 +323,44 @@ bool Prompt::isMultilineEnabled() const noexcept
     return _multilineEnabled;
 }
 
+void Prompt::bindKey(tui::KeyChord chord, tui::EditAction action)
+{
+    initialize();
+    if (_promptComponent)
+        _promptComponent->inputField().keyBindings().bind(chord, action);
+}
+
+void Prompt::unbindKey(tui::KeyChord chord)
+{
+    initialize();
+    if (_promptComponent)
+        _promptComponent->inputField().keyBindings().unbind(chord);
+}
+
+void Prompt::resetKeyBindings()
+{
+    initialize();
+    if (_promptComponent)
+        _promptComponent->inputField().setKeyBindings(tui::KeyBindings::defaults());
+}
+
+tui::KeyBindings const& Prompt::keyBindings() const
+{
+    // This const version needs to handle the case where promptComponent isn't initialized yet
+    // Return a static default bindings as fallback
+    static auto const defaultBindings = tui::KeyBindings::defaults();
+    if (_promptComponent)
+        return _promptComponent->inputField().keyBindings();
+    return defaultBindings;
+}
+
+tui::KeyBindings& Prompt::keyBindings()
+{
+    // Initialize to ensure _promptComponent exists
+    const_cast<Prompt*>(this)->initialize();
+    // This will crash if initialization failed (_aborted), but that's acceptable
+    // since the shell can't work without a functional terminal anyway
+    return _promptComponent->inputField().keyBindings();
+}
+
 } // namespace endo

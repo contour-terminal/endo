@@ -144,6 +144,7 @@ class Shell final: public CoreVM::Runtime
     void builtinBg(CoreVM::Params& context);
     void builtinWait(CoreVM::Params& context);
     void builtinCmdExecPipedBackground(CoreVM::Params& context);
+    void builtinBind(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();

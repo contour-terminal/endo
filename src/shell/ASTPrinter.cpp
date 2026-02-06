@@ -514,4 +514,14 @@ void ASTPrinter::visit(BuiltinWaitStmt const& node)
     }
 }
 
+void ASTPrinter::visit(BuiltinBindStmt const& node)
+{
+    _result += "bind";
+    for (auto const& arg: node.args)
+    {
+        _result += " ";
+        arg->accept(*this);
+    }
+}
+
 } // namespace endo::ast

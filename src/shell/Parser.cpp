@@ -1796,6 +1796,28 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
             return std::make_unique<ast::BuiltinWaitStmt>(*_runtime.find("wait(I)I"), std::move(jobId));
         }
     }
+    else if (_lexer.isDirective("bind"))
+    {
+        _lexer.nextToken();
+        if (isEndOfStmt())
+        {
+            // bind with no arguments - list all bindings
+            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind()I"));
+        }
+        else
+        {
+            // bind with arguments
+            std::vector<std::unique_ptr<ast::Expr>> args;
+            while (!isEndOfStmt())
+            {
+                auto arg = parseParameter();
+                if (!arg)
+                    break;
+                args.push_back(std::move(arg));
+            }
+            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind(S+)I"), std::move(args));
+        }
+    }
     else
     {
         // External command or pipeline

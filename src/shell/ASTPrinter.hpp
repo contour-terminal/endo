@@ -57,6 +57,7 @@ class ASTPrinter: public Visitor
     void visit(BuiltinFgStmt const& node) override;
     void visit(BuiltinBgStmt const& node) override;
     void visit(BuiltinWaitStmt const& node) override;
+    void visit(BuiltinBindStmt const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

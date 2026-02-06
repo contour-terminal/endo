@@ -822,6 +822,20 @@ void Shell::registerBuiltinFunctions()
         .param<std::string>("command")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinCmdExecPipedBackground, this);
+
+    // Keybinding management
+    // bind                 - list all bindings
+    // bind <key> <action>  - bind a key to an action
+    // bind -r <key>        - remove a binding
+    // bind --reset         - reset to defaults
+    registerFunction("bind")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinBind, this);
+
+    registerFunction("bind")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinBind, this);
     // clang-format on
 }
 
@@ -2497,6 +2511,153 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     error("Background execution not supported on Windows");
     context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
 #endif
+}
+
+void Shell::builtinBind(CoreVM::Params& context)
+{
+    // Get arguments (may be empty if called without arguments)
+    std::vector<std::string> args;
+    if (context.count() > 1)
+    {
+        auto const& argArray = context.getStringArray(1);
+        for (size_t i = 0; i < argArray.size(); ++i)
+            args.push_back(argArray[i]);
+    }
+
+    // No arguments: list all bindings
+    if (args.empty())
+    {
+        auto const& bindings = prompt.keyBindings().bindings();
+        for (auto const& [chord, action]: bindings)
+        {
+            std::println("{}\t{}", chord.toString(), tui::editActionToString(action));
+        }
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Check for flags
+    if (args[0] == "-r" || args[0] == "--remove")
+    {
+        // Remove binding: bind -r <key>
+        if (args.size() < 2)
+        {
+            error("bind: -r requires a key argument");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+
+        auto const chord = tui::KeyChord::parse(args[1]);
+        if (!chord)
+        {
+            error("bind: invalid key chord: {}", args[1]);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+
+        prompt.unbindKey(*chord);
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    if (args[0] == "--reset")
+    {
+        // Reset to defaults: bind --reset
+        prompt.resetKeyBindings();
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    if (args[0] == "-l" || args[0] == "--list")
+    {
+        // List bindings (same as no arguments)
+        auto const& bindings = prompt.keyBindings().bindings();
+        for (auto const& [chord, action]: bindings)
+        {
+            std::println("{}\t{}", chord.toString(), tui::editActionToString(action));
+        }
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    if (args[0] == "-h" || args[0] == "--help")
+    {
+        std::println("Usage: bind [options] [key action]");
+        std::println("");
+        std::println("Options:");
+        std::println("  -l, --list    List all keybindings");
+        std::println("  -r, --remove  Remove a keybinding: bind -r ctrl+y");
+        std::println("  --reset       Reset all keybindings to defaults");
+        std::println("  -h, --help    Show this help message");
+        std::println("");
+        std::println("Examples:");
+        std::println("  bind                     # List all bindings");
+        std::println("  bind ctrl+y redo         # Bind Ctrl+Y to redo");
+        std::println("  bind ctrl+y yank         # Bind Ctrl+Y to yank (Emacs-style)");
+        std::println("  bind -r ctrl+y           # Remove Ctrl+Y binding");
+        std::println("  bind --reset             # Reset to defaults");
+        std::println("");
+        std::println("Key format: [modifier+]...key");
+        std::println("  Modifiers: ctrl, alt, shift, super");
+        std::println("  Keys: a-z, enter, backspace, delete, tab, escape,");
+        std::println("        up, down, left, right, home, end, f1-f12");
+        std::println("");
+        std::println("Actions:");
+        std::println("  Movement: move-forward-char, move-backward-char, move-forward-word,");
+        std::println("            move-backward-word, move-to-line-start, move-to-line-end,");
+        std::println("            move-to-buffer-start, move-to-buffer-end, move-up, move-down");
+        std::println("  Editing:  delete-char-backward, delete-char-forward, delete-word,");
+        std::println("            delete-word-backward, kill-to-end, kill-to-start, transpose");
+        std::println("  Undo:     undo, redo");
+        std::println("  Kill Ring: yank, yank-pop");
+        std::println("  Selection: select-all");
+        std::println("  Clipboard: cut, copy, paste");
+        std::println("  Control:  submit, abort, insert-newline");
+        std::println("  History:  history-prev, history-next");
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Set binding: bind <key> <action>
+    if (args.size() < 2)
+    {
+        error("bind: requires key and action arguments");
+        error("Usage: bind <key> <action>");
+        error("Run 'bind --help' for more information.");
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    auto const chord = tui::KeyChord::parse(args[0]);
+    if (!chord)
+    {
+        error("bind: invalid key chord: {}", args[0]);
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    auto const action = tui::parseEditAction(args[1]);
+    if (!action)
+    {
+        error("bind: unknown action: {}", args[1]);
+        error("Run 'bind --help' to see available actions.");
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    prompt.bindKey(*chord, *action);
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
 }
 
 void Shell::onSigchld()

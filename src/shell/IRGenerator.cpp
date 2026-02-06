@@ -775,6 +775,20 @@ void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
     }
 }
 
+void IRGenerator::visit(ast::BuiltinBindStmt const& node)
+{
+    if (node.args.empty())
+    {
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "bind");
+    }
+    else
+    {
+        auto callArguments = std::vector<CoreVM::Value*> {};
+        callArguments.emplace_back(get(createCallArgs(node.args)));
+        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "bind");
+    }
+}
+
 void IRGenerator::visit(ast::OutputRedirect const& node)
 {
     if (std::holds_alternative<std::unique_ptr<ast::FileDescriptor>>(node.target))

@@ -515,6 +515,21 @@ struct BuiltinWaitStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Builtin bind statement for managing keybindings.
+struct BuiltinBindStmt final: public Statement
+{
+    std::reference_wrapper<CoreVM::NativeCallback const> callback;
+    std::vector<std::unique_ptr<Expr>> args; ///< Arguments (key, action, flags)
+
+    BuiltinBindStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback,
+                    std::vector<std::unique_ptr<Expr>> args = {}):
+        callback { callback }, args { std::move(args) }
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Program call: `/bin/ls -hal`
 ///
 /// Represents a program call with its arguments and redirects.

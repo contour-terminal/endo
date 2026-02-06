@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 
+#include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
 
@@ -83,6 +84,28 @@ class Prompt
     /// @brief Sets the completer to use for autocompletion.
     /// @param completer The completer (ownership not transferred).
     void setCompleter(Completer* completer);
+
+    // ========================================================================
+    // Keybindings
+    // ========================================================================
+
+    /// @brief Binds a key chord to an edit action.
+    /// @param chord The key chord to bind.
+    /// @param action The action to execute when the chord is pressed.
+    void bindKey(tui::KeyChord chord, tui::EditAction action);
+
+    /// @brief Removes a keybinding.
+    /// @param chord The key chord to unbind.
+    void unbindKey(tui::KeyChord chord);
+
+    /// @brief Resets all keybindings to defaults.
+    void resetKeyBindings();
+
+    /// @brief Returns the current keybindings (const).
+    [[nodiscard]] tui::KeyBindings const& keyBindings() const;
+
+    /// @brief Returns the current keybindings (mutable).
+    [[nodiscard]] tui::KeyBindings& keyBindings();
 
     /// @brief RAII helper for suspend/resume scoping.
     ///
