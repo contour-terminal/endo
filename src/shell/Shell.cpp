@@ -7,6 +7,7 @@
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
+#include <chrono>
 #include <csignal>
 #include <cstdio>
 #include <cstring>
@@ -18,6 +19,7 @@
 #include <memory>
 #include <print>
 #include <set>
+#include <thread>
 
 #include "ASTPrinter.hpp"
 #include "Error.hpp"
@@ -1369,6 +1371,135 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    // Handle sleep builtin
+    if (program == "sleep")
+    {
+        std::vector<std::string> sleepArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            sleepArgs.push_back(args.at(i));
+
+        // Helper to write output
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+        auto writeOutput = [outputFd](std::string const& str) {
+            [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+        };
+
+        // Check for help
+        for (auto const& arg: sleepArgs)
+        {
+            if (arg == "-h" || arg == "--help")
+            {
+                writeOutput("Usage: sleep NUMBER[SUFFIX]...\n");
+                writeOutput("Pause for NUMBER seconds.\n");
+                writeOutput("\n");
+                writeOutput("SUFFIX may be:\n");
+                writeOutput("  s   seconds (default)\n");
+                writeOutput("  m   minutes\n");
+                writeOutput("  h   hours\n");
+                writeOutput("  d   days\n");
+                writeOutput("\n");
+                writeOutput("Multiple arguments are summed together.\n");
+                writeOutput("NUMBER may be an integer or floating-point number.\n");
+                _exitCode = 0;
+                context.setResult(CoreVM::CoreNumber(0));
+                return;
+            }
+        }
+
+        // No arguments - error
+        if (sleepArgs.empty())
+        {
+            error("sleep: missing operand");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+
+        // Parse duration arguments
+        double totalSeconds = 0.0;
+        for (auto const& arg: sleepArgs)
+        {
+            if (arg.empty())
+                continue;
+
+            double multiplier = 1.0;
+            std::string numStr = arg;
+
+            // Check for suffix
+            char lastChar = arg.back();
+            if (lastChar == 's' || lastChar == 'S')
+            {
+                multiplier = 1.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'm' || lastChar == 'M')
+            {
+                multiplier = 60.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'h' || lastChar == 'H')
+            {
+                multiplier = 3600.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'd' || lastChar == 'D')
+            {
+                multiplier = 86400.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+
+            if (numStr.empty())
+            {
+                error("sleep: invalid time interval '{}'", arg);
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreNumber(1));
+                return;
+            }
+
+            // Parse number
+            try
+            {
+                size_t pos = 0;
+                double value = std::stod(numStr, &pos);
+                if (pos != numStr.size())
+                {
+                    error("sleep: invalid time interval '{}'", arg);
+                    _exitCode = 1;
+                    context.setResult(CoreVM::CoreNumber(1));
+                    return;
+                }
+                if (value < 0)
+                {
+                    error("sleep: invalid time interval '{}'", arg);
+                    _exitCode = 1;
+                    context.setResult(CoreVM::CoreNumber(1));
+                    return;
+                }
+                totalSeconds += value * multiplier;
+            }
+            catch (std::exception const&)
+            {
+                error("sleep: invalid time interval '{}'", arg);
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreNumber(1));
+                return;
+            }
+        }
+
+        // Sleep
+        if (totalSeconds > 0)
+        {
+            auto const duration = std::chrono::duration<double>(totalSeconds);
+            std::this_thread::sleep_for(duration);
+        }
+
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
     {
@@ -1823,6 +1954,169 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
         _exitCode = success ? 0 : 1;
         context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
+    // Handle sleep builtin in pipeline
+    if (program == "sleep")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+        std::vector<std::string> sleepArgs;
+        for (size_t i = 1; i < args.size(); ++i)
+            sleepArgs.push_back(args.at(i));
+
+        auto writeOutput = [stdoutFd](std::string const& str) {
+            [[maybe_unused]] auto written = write(stdoutFd, str.data(), str.size());
+        };
+
+        // Check for help
+        for (auto const& arg: sleepArgs)
+        {
+            if (arg == "-h" || arg == "--help")
+            {
+                writeOutput("Usage: sleep NUMBER[SUFFIX]...\n");
+                writeOutput("Pause for NUMBER seconds.\n");
+                writeOutput("\n");
+                writeOutput("SUFFIX may be:\n");
+                writeOutput("  s   seconds (default)\n");
+                writeOutput("  m   minutes\n");
+                writeOutput("  h   hours\n");
+                writeOutput("  d   days\n");
+                writeOutput("\n");
+                writeOutput("Multiple arguments are summed together.\n");
+                writeOutput("NUMBER may be an integer or floating-point number.\n");
+
+                if (!lastInChain)
+                    _currentPipelineBuilder.closeCurrentPipeWriter();
+
+                _exitCode = 0;
+                context.setResult(CoreVM::CoreNumber(0));
+                return;
+            }
+        }
+
+        // No arguments - error
+        if (sleepArgs.empty())
+        {
+            error("sleep: missing operand");
+
+            if (!lastInChain)
+                _currentPipelineBuilder.closeCurrentPipeWriter();
+
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+
+        // Parse duration arguments
+        double totalSeconds = 0.0;
+        bool parseError = false;
+        for (auto const& arg: sleepArgs)
+        {
+            if (arg.empty())
+                continue;
+
+            double multiplier = 1.0;
+            std::string numStr = arg;
+
+            char lastChar = arg.back();
+            if (lastChar == 's' || lastChar == 'S')
+            {
+                multiplier = 1.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'm' || lastChar == 'M')
+            {
+                multiplier = 60.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'h' || lastChar == 'H')
+            {
+                multiplier = 3600.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+            else if (lastChar == 'd' || lastChar == 'D')
+            {
+                multiplier = 86400.0;
+                numStr = arg.substr(0, arg.size() - 1);
+            }
+
+            if (numStr.empty())
+            {
+                error("sleep: invalid time interval '{}'", arg);
+                parseError = true;
+                break;
+            }
+
+            try
+            {
+                size_t pos = 0;
+                double value = std::stod(numStr, &pos);
+                if (pos != numStr.size() || value < 0)
+                {
+                    error("sleep: invalid time interval '{}'", arg);
+                    parseError = true;
+                    break;
+                }
+                totalSeconds += value * multiplier;
+            }
+            catch (std::exception const&)
+            {
+                error("sleep: invalid time interval '{}'", arg);
+                parseError = true;
+                break;
+            }
+        }
+
+        if (parseError)
+        {
+            if (!lastInChain)
+                _currentPipelineBuilder.closeCurrentPipeWriter();
+
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+
+        // Sleep
+        if (totalSeconds > 0)
+        {
+            auto const duration = std::chrono::duration<double>(totalSeconds);
+            std::this_thread::sleep_for(duration);
+        }
+
+        if (!lastInChain)
+            _currentPipelineBuilder.closeCurrentPipeWriter();
+
+        // Track command for job table
+        std::string cmdString = "sleep";
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            cmdString += ' ';
+            cmdString += args.at(i);
+        }
+        _pipelineCommands.push_back(std::move(cmdString));
+
+        if (lastInChain)
+        {
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                int status = 0;
+                waitpid(processPid, &status, 0);
+                if (WIFEXITED(status))
+                    _exitCode = WEXITSTATUS(status);
+            }
+            _currentProcessGroupPids.clear();
+            _pipelineCommands.clear();
+
+            auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+            if (!setFgResult)
+                debugLog()()("Failed to reclaim foreground: {}", toString(setFgResult.error()));
+        }
+
+        _exitCode = 0;
+        context.setResult(CoreVM::CoreNumber(0));
         return;
     }
 

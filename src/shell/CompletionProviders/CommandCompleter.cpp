@@ -175,6 +175,7 @@ std::vector<std::string> CommandCompleter::builtinNames()
         "set",
         "unset",
         "read",
+        "sleep",
         "true",
         "false",
         "jobs",

@@ -4,6 +4,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 
@@ -344,6 +345,111 @@ TEST_CASE("shell.builtin.cat_nonexistent_file")
     TestShell shell;
     shell("cat /nonexistent/path/to/file");
     CHECK(shell.exitCode == 1);
+}
+
+// ============================================================================
+// Sleep Builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.sleep_help")
+{
+    TestShell shell;
+    auto output = shell("sleep --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("SUFFIX") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_help_short")
+{
+    TestShell shell;
+    auto output = shell("sleep -h").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_no_args")
+{
+    TestShell shell;
+    shell("sleep");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.sleep_zero")
+{
+    TestShell shell;
+    shell("sleep 0");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_small_duration")
+{
+    // Test with a very small sleep to ensure it works without taking too long
+    TestShell shell;
+    auto start = std::chrono::steady_clock::now();
+    shell("sleep 0.01");
+    auto end = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    CHECK(shell.exitCode == 0);
+    CHECK(elapsed >= 10); // Should have slept at least 10ms
+}
+
+TEST_CASE("shell.builtin.sleep_suffix_s")
+{
+    TestShell shell;
+    shell("sleep '0.01s'");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_suffix_m")
+{
+    // Test parsing only - use 0 to avoid actual delay
+    TestShell shell;
+    shell("sleep '0m'");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_suffix_h")
+{
+    TestShell shell;
+    shell("sleep '0h'");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_suffix_d")
+{
+    TestShell shell;
+    shell("sleep '0d'");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_multiple_args")
+{
+    // Multiple arguments should be summed
+    TestShell shell;
+    shell("sleep 0 '0s' '0m'");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.sleep_invalid_arg")
+{
+    TestShell shell;
+    shell("sleep abc");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.sleep_negative")
+{
+    TestShell shell;
+    shell("sleep -1");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.sleep_float")
+{
+    TestShell shell;
+    shell("sleep 0.001");
+    CHECK(shell.exitCode == 0);
 }
 
 // ============================================================================
