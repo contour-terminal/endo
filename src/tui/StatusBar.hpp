@@ -4,7 +4,8 @@
 #include <string>
 #include <vector>
 
-#include <tui/TerminalOutput.hpp>
+#include <tui/Component.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
@@ -30,11 +31,30 @@ struct StatusBarStyle
 ///
 /// Typically rendered at the bottom of the screen. Supports left, center, and right
 /// aligned sections for different types of information.
-class StatusBar
+/// As a Component, StatusBar can be added to a Screen's component tree.
+class StatusBar: public Component
 {
   public:
     /// @brief Constructs an empty status bar.
     StatusBar() = default;
+    ~StatusBar() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the status bar to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief StatusBar doesn't handle events by default.
+    [[nodiscard]] EventResult onEvent([[maybe_unused]] InputEvent const& event) override
+    {
+        return EventResult::Ignored;
+    }
+
+    /// @brief StatusBar is not focusable by default.
+    [[nodiscard]] bool focusable() const override { return false; }
+
+    /// @brief Returns preferred size (1 row, full width).
+    [[nodiscard]] Size preferredSize() const override;
 
     /// @brief Sets the keyboard hints to display.
     /// @param hints The hints to display.
@@ -66,16 +86,6 @@ class StatusBar
 
     /// @brief Returns the current style configuration.
     [[nodiscard]] auto style() const noexcept -> StatusBarStyle const&;
-
-    /// @brief Renders the status bar at the specified row.
-    /// @param output The terminal output to render to.
-    /// @param row The row to render at (1-based).
-    /// @param width The width to render across.
-    void render(TerminalOutput& output, int row, int width) const;
-
-    /// @brief Renders the status bar at the bottom of the screen.
-    /// @param output The terminal output to render to.
-    void renderAtBottom(TerminalOutput& output) const;
 
   private:
     std::vector<KeyHint> _hints;

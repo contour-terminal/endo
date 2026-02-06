@@ -9,11 +9,14 @@
     #pragma clang diagnostic ignored "-Wold-style-cast"
 #endif
 #include <libunicode/utf8_grapheme_segmenter.h>
+#include <libunicode/width.h>
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #endif
 
+#include <tui/Canvas.hpp>
 #include <tui/InputField.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
@@ -83,6 +86,7 @@ auto InputField::processEvent(InputEvent const& event) -> InputFieldAction
     {
         // Save undo state before any changes
         saveUndoState();
+        clearGhostText(); // User input clears ghost suggestion
         // Delete selection first if any (paste replaces selection)
         if (hasSelection())
             deleteSelection();
@@ -92,6 +96,136 @@ auto InputField::processEvent(InputEvent const& event) -> InputFieldAction
     }
 
     return InputFieldAction::None;
+}
+
+// --- Component Interface Implementation ---
+
+void InputField::render(Canvas& canvas)
+{
+    auto const& theme = canvas.theme();
+    auto const width = canvas.width();
+    auto const height = canvas.height();
+
+    if (width <= 0 || height <= 0)
+        return;
+
+    // Determine styles based on focus state
+    Style const& textStyle = focused() ? theme.inputFocused : theme.inputNormal;
+    Style selectionStyle = textStyle;
+    selectionStyle.inverse = true;
+    Style const& ghostStyle = theme.ghostText;
+
+    // For now, render single-line mode
+    // TODO: Implement multiline rendering
+
+    int col = 0;
+
+    // Render prompt
+    if (!_prompt.empty())
+    {
+        col += canvas.putString(0, col, _prompt, textStyle);
+    }
+
+    // Calculate visible portion of text
+    auto const textStartCol = col;
+    auto const availableWidth = width - textStartCol;
+
+    if (availableWidth <= 0)
+        return;
+
+    // Render text with selection highlighting
+    auto segmenter = unicode::utf8_grapheme_segmenter(_buffer);
+    int cursorDisplayCol = textStartCol;
+    bool cursorFound = false;
+
+    for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it)
+    {
+        auto const& cluster = *it;
+
+        // Calculate byte range for this cluster
+        auto nextIt = it;
+        ++nextIt;
+        char const* clusterStart = it._clusterStart;
+        char const* clusterEnd =
+            (nextIt != segmenter.end()) ? nextIt._clusterStart : (_buffer.data() + _buffer.size());
+        size_t clusterByteStart = static_cast<size_t>(clusterStart - _buffer.data());
+        size_t clusterByteEnd = static_cast<size_t>(clusterEnd - _buffer.data());
+
+        // Check if cursor is at this position
+        if (!cursorFound && _cursor <= clusterByteStart)
+        {
+            cursorDisplayCol = col;
+            cursorFound = true;
+        }
+
+        // Calculate cluster width
+        int clusterWidth = 0;
+        for (char32_t cp: cluster)
+            clusterWidth += unicode::width(cp);
+        if (clusterWidth == 0)
+            clusterWidth = 1;
+
+        // Determine style (normal or selected)
+        Style style = textStyle;
+        if (hasSelection())
+        {
+            size_t selStart = selectionStart();
+            size_t selEnd = selectionEnd();
+            if (clusterByteStart >= selStart && clusterByteStart < selEnd)
+                style = selectionStyle;
+        }
+
+        // Render the cluster
+        std::string_view clusterView(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
+        canvas.putString(0, col, clusterView, style);
+        col += clusterWidth;
+        (void) clusterByteEnd; // bytePos tracking reserved for future multiline support
+    }
+
+    // Handle cursor at end of text
+    if (!cursorFound || _cursor >= _buffer.size())
+    {
+        cursorDisplayCol = col;
+    }
+
+    // Render ghost text after cursor
+    if (!_ghostText.empty() && _cursor >= _buffer.size())
+    {
+        canvas.putString(0, col, _ghostText, ghostStyle);
+    }
+
+    // Set cursor position
+    canvas.setCursor(0, cursorDisplayCol);
+}
+
+EventResult InputField::onEvent(InputEvent const& event)
+{
+    auto action = processEvent(event);
+
+    switch (action)
+    {
+        case InputFieldAction::Changed: invalidate(); return EventResult::Handled;
+        case InputFieldAction::Submit:
+        case InputFieldAction::Abort:
+        case InputFieldAction::Eof:
+            // These need special handling by the parent
+            return EventResult::Handled;
+        case InputFieldAction::None: return EventResult::Ignored;
+    }
+
+    return EventResult::Ignored;
+}
+
+Size InputField::preferredSize() const
+{
+    // Calculate height based on line count
+    int lines = lineCount();
+    if (_maxLines > 0)
+        lines = std::min(lines, _maxLines);
+
+    // Width: prompt + some reasonable text width
+    int promptWidth = static_cast<int>(_prompt.size());
+    return { promptWidth + 40, std::max(1, lines) };
 }
 
 auto InputField::text() const noexcept -> std::string_view
@@ -164,6 +298,7 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
             if (_multiline && (shift || alt))
             {
                 saveUndoState();
+                clearGhostText(); // User input clears ghost suggestion
                 // Delete selection first if any
                 if (hasSelection())
                     deleteSelection();
@@ -179,6 +314,7 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
         case KeyCode::Escape: _lastWasKill = false; return InputFieldAction::None;
         case KeyCode::Backspace:
             _lastWasKill = false;
+            clearGhostText(); // User input clears ghost suggestion
             if (hasSelection())
             {
                 saveUndoState();
@@ -194,6 +330,7 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
             return InputFieldAction::Changed;
         case KeyCode::Delete:
             _lastWasKill = false;
+            clearGhostText(); // User input clears ghost suggestion
             if (hasSelection())
             {
                 saveUndoState();
@@ -441,6 +578,7 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
     {
         // Save undo state before any changes
         saveUndoState();
+        clearGhostText(); // User input clears ghost suggestion
 
         // Delete selection first if any (typing replaces selection)
         if (hasSelection())
@@ -831,6 +969,40 @@ void InputField::setMaxLines(int maxLines)
 auto InputField::maxLines() const noexcept -> int
 {
     return _maxLines;
+}
+
+// ============================================================================
+// Ghost text
+// ============================================================================
+
+void InputField::setGhostText(std::string_view ghost)
+{
+    _ghostText = std::string(ghost);
+}
+
+void InputField::clearGhostText()
+{
+    _ghostText.clear();
+}
+
+void InputField::acceptGhostText()
+{
+    if (_ghostText.empty())
+        return;
+
+    saveUndoState();
+    insertText(_ghostText);
+    _ghostText.clear();
+}
+
+auto InputField::ghostText() const noexcept -> std::string_view
+{
+    return _ghostText;
+}
+
+auto InputField::hasGhostText() const noexcept -> bool
+{
+    return !_ghostText.empty();
 }
 
 auto InputField::findLineStart(std::size_t pos) const -> std::size_t

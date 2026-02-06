@@ -82,6 +82,12 @@ struct Theme
     Style error;   ///< Error message style.
     Style info;    ///< Info message style.
 
+    // Completion styles
+    Style ghostText;          ///< Ghost text suggestion (dimmed inline suggestion).
+    Style completionItem;     ///< Normal completion menu item.
+    Style completionSelected; ///< Selected completion menu item.
+    Style completionDesc;     ///< Description text in completion menu.
+
     // Border style
     BorderStyle borderStyle = BorderStyle::Rounded;
 };

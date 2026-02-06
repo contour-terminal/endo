@@ -1,10 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <algorithm>
 
+#include <tui/Canvas.hpp>
 #include <tui/StatusBar.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
+
+// =============================================================================
+// Component Interface
+// =============================================================================
+
+void StatusBar::render(Canvas& canvas)
+{
+    auto const width = canvas.width();
+
+    // Fill background
+    canvas.fill(canvas.area(), ' ', _style.background);
+
+    auto col = 1;
+
+    // If we have hints, render them on the left
+    if (!_hints.empty())
+    {
+        auto first = true;
+        for (auto const& hint: _hints)
+        {
+            if (!first)
+            {
+                col += canvas.putString(0, col, _style.separatorChar, _style.separator);
+            }
+            first = false;
+
+            col += canvas.putString(0, col, hint.key, _style.keyStyle);
+            col += canvas.putString(0, col, " ", _style.actionStyle);
+            col += canvas.putString(0, col, hint.action, _style.actionStyle);
+        }
+    }
+    else if (!_leftText.empty())
+    {
+        canvas.putString(0, 1, _leftText, _style.actionStyle);
+    }
+
+    // Center text
+    if (!_centerText.empty())
+    {
+        auto const centerCol = (width - static_cast<int>(_centerText.size())) / 2;
+        canvas.putString(0, centerCol, _centerText, _style.actionStyle);
+    }
+
+    // Right text
+    if (!_rightText.empty())
+    {
+        auto const rightCol = width - static_cast<int>(_rightText.size()) - 1;
+        canvas.putString(0, rightCol, _rightText, _style.actionStyle);
+    }
+}
+
+Size StatusBar::preferredSize() const
+{
+    return { 80, 1 }; // Full width (will be adjusted), 1 row
+}
 
 void StatusBar::setHints(std::vector<KeyHint> hints)
 {
@@ -44,63 +101,6 @@ void StatusBar::setStyle(StatusBarStyle style)
 auto StatusBar::style() const noexcept -> StatusBarStyle const&
 {
     return _style;
-}
-
-void StatusBar::render(TerminalOutput& output, int row, int width) const
-{
-    output.moveTo(row, 1);
-
-    // Fill background
-    auto const bgSpaces = std::string(static_cast<std::size_t>(width), ' ');
-    output.write(bgSpaces, _style.background);
-
-    // Calculate section widths
-    auto const rightWidth = static_cast<int>(_rightText.size());
-    auto const centerWidth = static_cast<int>(_centerText.size());
-
-    // If we have hints, render them on the left
-    if (!_hints.empty())
-    {
-        output.moveTo(row, 2);
-
-        auto first = true;
-        for (auto const& hint: _hints)
-        {
-            if (!first)
-                output.write(_style.separatorChar, _style.separator);
-            first = false;
-
-            output.write(hint.key, _style.keyStyle);
-            output.writeRaw(" ");
-            output.write(hint.action, _style.actionStyle);
-        }
-    }
-    else if (!_leftText.empty())
-    {
-        output.moveTo(row, 2);
-        output.write(_leftText, _style.actionStyle);
-    }
-
-    // Center text
-    if (!_centerText.empty())
-    {
-        auto const centerCol = (width - centerWidth) / 2 + 1;
-        output.moveTo(row, centerCol);
-        output.write(_centerText, _style.actionStyle);
-    }
-
-    // Right text
-    if (!_rightText.empty())
-    {
-        auto const rightCol = width - rightWidth;
-        output.moveTo(row, rightCol);
-        output.write(_rightText, _style.actionStyle);
-    }
-}
-
-void StatusBar::renderAtBottom(TerminalOutput& output) const
-{
-    render(output, output.rows(), output.columns());
 }
 
 auto StatusBar::formatHints() const -> std::string

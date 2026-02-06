@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <algorithm>
 
+#include <tui/Canvas.hpp>
 #include <tui/Dialog.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
@@ -14,6 +16,71 @@ SelectDialog::SelectDialog(SelectDialogConfig config):
     _config(std::move(config)), _list(std::move(_config.items))
 {
     _list.setStyle(defaultListStyle());
+}
+
+// --- Component Interface ---
+
+void SelectDialog::render(Canvas& canvas)
+{
+    auto const termCols = canvas.width();
+    auto const termRows = canvas.height();
+
+    // Dim background
+    if (_config.dimBackground)
+    {
+        auto dimStyle = Style {};
+        dimStyle.dim = true;
+        canvas.fill(canvas.area(), ' ', dimStyle);
+    }
+
+    // Calculate dialog bounds
+    auto const itemCount = static_cast<int>(_list.visibleItems().size());
+    auto const contentHeight = std::min(itemCount, _config.maxHeight - 2);
+    auto const dialogHeight = contentHeight + 2; // +2 for borders
+    auto const dialogWidth = std::min(_config.width, termCols - 4);
+    auto const startRow = (termRows - dialogHeight) / 2;
+    auto const startCol = (termCols - dialogWidth) / 2;
+
+    // Draw box
+    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
+
+    // Render list inside box (inner area)
+    auto listRect = Rect { startRow + 1, startCol + 2, dialogWidth - 4, contentHeight };
+    auto listCanvas = canvas.subcanvas(listRect);
+    _list.render(listCanvas);
+
+    // Render hint bar below dialog
+    auto const hintRow = startRow + dialogHeight;
+    auto const hintText =
+        std::string(_config.confirmHint) + " select  " + std::string(_config.cancelHint) + " cancel";
+    auto const hintCol = startCol + (dialogWidth - static_cast<int>(hintText.size())) / 2;
+
+    auto hintStyle = Style {};
+    hintStyle.dim = true;
+    canvas.putString(hintRow, hintCol, hintText, hintStyle);
+}
+
+EventResult SelectDialog::onEvent(InputEvent const& event)
+{
+    auto result = processEvent(event);
+
+    switch (result)
+    {
+        case DialogResult::Changed:
+        case DialogResult::Confirmed:
+        case DialogResult::Cancelled: invalidate(); return EventResult::Handled;
+        case DialogResult::None: return EventResult::Ignored;
+    }
+    return EventResult::Ignored;
+}
+
+Size SelectDialog::preferredSize() const
+{
+    auto const itemCount = static_cast<int>(_list.visibleItems().size());
+    auto const contentHeight = std::min(itemCount, _config.maxHeight - 2);
+    auto const dialogHeight = contentHeight + 3; // +2 for borders, +1 for hint
+    return { _config.width, dialogHeight };
 }
 
 auto SelectDialog::processEvent(InputEvent const& event) -> DialogResult
@@ -29,39 +96,6 @@ auto SelectDialog::processEvent(InputEvent const& event) -> DialogResult
     }
 
     return DialogResult::None;
-}
-
-void SelectDialog::render(TerminalOutput& output)
-{
-    _cachedTermCols = output.columns();
-    _cachedTermRows = output.rows();
-
-    if (_config.dimBackground)
-        renderBackground(output);
-
-    auto boxConfig = calculateBounds(_cachedTermCols, _cachedTermRows);
-    auto box = Box(boxConfig);
-    box.render(output);
-
-    // Render the list inside the box
-    auto const listStartRow = box.contentStartRow();
-    auto const listStartCol = box.contentStartCol();
-    auto const listWidth = box.innerWidth();
-    auto const listHeight = box.innerHeight();
-
-    _list.render(output, listStartRow, listStartCol, listWidth, listHeight);
-
-    // Render hint bar at bottom
-    auto const hintRow = boxConfig.row + boxConfig.height;
-    auto const hintText =
-        std::string(_config.confirmHint) + " select  " + std::string(_config.cancelHint) + " cancel";
-    auto const hintCol = boxConfig.col + (boxConfig.width - static_cast<int>(hintText.size())) / 2;
-
-    auto hintStyle = Style {};
-    hintStyle.dim = true;
-
-    output.moveTo(hintRow, hintCol);
-    output.write(hintText, hintStyle);
 }
 
 auto SelectDialog::selectedIndex() const noexcept -> std::size_t
@@ -90,50 +124,6 @@ void SelectDialog::setConfig(SelectDialogConfig config)
     _list.setItems(std::move(_config.items));
 }
 
-void SelectDialog::renderBackground(TerminalOutput& output)
-{
-    auto dimStyle = Style {};
-    dimStyle.dim = true;
-
-    // Fill the entire screen with a dim character or just apply dim attribute
-    for (auto row = 1; row <= _cachedTermRows; ++row)
-    {
-        output.moveTo(row, 1);
-        auto const spaces = std::string(static_cast<std::size_t>(_cachedTermCols), ' ');
-        output.write(spaces, dimStyle);
-    }
-}
-
-auto SelectDialog::calculateBounds(int termCols, int termRows) const -> BoxConfig
-{
-    auto const itemCount = static_cast<int>(_list.visibleItems().size());
-    auto const contentHeight = std::min(itemCount, _config.maxHeight - 2);
-    auto const dialogHeight = contentHeight + 2; // +2 for borders
-
-    auto const dialogWidth = std::min(_config.width, termCols - 4);
-
-    auto const startRow = (termRows - dialogHeight) / 2;
-    auto const startCol = (termCols - dialogWidth) / 2 + 1;
-
-    return BoxConfig {
-        .row = startRow,
-        .col = startCol,
-        .width = dialogWidth,
-        .height = dialogHeight,
-        .border = _config.border,
-        .borderStyle = _config.borderStyle,
-        .title = _config.title,
-        .titleAlign = TitleAlign::Center,
-        .titleStyle = _config.titleStyle,
-        .paddingLeft = 1,
-        .paddingRight = 1,
-        .paddingTop = 0,
-        .paddingBottom = 0,
-        .fillBackground = false,
-        .backgroundStyle = {},
-    };
-}
-
 // =============================================================================
 // ConfirmDialog
 // =============================================================================
@@ -141,6 +131,93 @@ auto SelectDialog::calculateBounds(int termCols, int termRows) const -> BoxConfi
 ConfirmDialog::ConfirmDialog(ConfirmDialogConfig config):
     _config(std::move(config)), _confirmSelected(_config.defaultConfirm)
 {
+}
+
+// --- Component Interface ---
+
+void ConfirmDialog::render(Canvas& canvas)
+{
+    auto const termCols = canvas.width();
+    auto const termRows = canvas.height();
+
+    auto const dialogWidth = std::min(_config.width, termCols - 4);
+    auto const dialogHeight = 6; // title + padding + message + padding + buttons + border
+
+    auto const startRow = (termRows - dialogHeight) / 2;
+    auto const startCol = (termCols - dialogWidth) / 2;
+
+    // Dim background
+    if (_config.dimBackground)
+    {
+        auto dimStyle = Style {};
+        dimStyle.dim = true;
+        canvas.fill(canvas.area(), ' ', dimStyle);
+    }
+
+    // Draw box with title
+    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
+
+    // Fill box interior
+    auto innerRect = Rect { startRow + 1, startCol + 1, dialogWidth - 2, dialogHeight - 2 };
+    canvas.fill(innerRect, ' ', Style {});
+
+    // Message (with padding)
+    auto const messageRow = startRow + 2;
+    auto const messageCol = startCol + 3;
+    canvas.putString(messageRow, messageCol, _config.message, _config.messageStyle);
+
+    // Buttons
+    auto const buttonRow = startRow + dialogHeight - 2;
+
+    auto confirmStyle = Style {};
+    auto cancelStyle = Style {};
+
+    if (_confirmSelected)
+    {
+        confirmStyle.inverse = true;
+        confirmStyle.bold = true;
+    }
+    else
+    {
+        cancelStyle.inverse = true;
+        cancelStyle.bold = true;
+    }
+
+    auto const confirmBtn = " " + _config.confirmLabel + " ";
+    auto const cancelBtn = " " + _config.cancelLabel + " ";
+    auto const buttonsWidth = static_cast<int>(confirmBtn.size() + cancelBtn.size() + 4);
+    auto buttonsCol = startCol + (dialogWidth - buttonsWidth) / 2;
+
+    canvas.putString(buttonRow, buttonsCol, "[", _config.borderStyle);
+    buttonsCol += 1;
+    buttonsCol += canvas.putString(buttonRow, buttonsCol, confirmBtn, confirmStyle);
+    canvas.putString(buttonRow, buttonsCol, "]", _config.borderStyle);
+    buttonsCol += 1;
+    buttonsCol += canvas.putString(buttonRow, buttonsCol, "  ", Style {});
+    canvas.putString(buttonRow, buttonsCol, "[", _config.borderStyle);
+    buttonsCol += 1;
+    buttonsCol += canvas.putString(buttonRow, buttonsCol, cancelBtn, cancelStyle);
+    canvas.putString(buttonRow, buttonsCol, "]", _config.borderStyle);
+}
+
+EventResult ConfirmDialog::onEvent(InputEvent const& event)
+{
+    auto result = processEvent(event);
+
+    switch (result)
+    {
+        case DialogResult::Changed:
+        case DialogResult::Confirmed:
+        case DialogResult::Cancelled: invalidate(); return EventResult::Handled;
+        case DialogResult::None: return EventResult::Ignored;
+    }
+    return EventResult::Ignored;
+}
+
+Size ConfirmDialog::preferredSize() const
+{
+    return { _config.width, 6 };
 }
 
 auto ConfirmDialog::processEvent(InputEvent const& event) -> DialogResult
@@ -174,89 +251,6 @@ auto ConfirmDialog::processEvent(InputEvent const& event) -> DialogResult
     return DialogResult::None;
 }
 
-void ConfirmDialog::render(TerminalOutput& output)
-{
-    auto const termCols = output.columns();
-    auto const termRows = output.rows();
-
-    auto const dialogWidth = std::min(_config.width, termCols - 4);
-    auto const dialogHeight = 6; // title + padding + message + padding + buttons + border
-
-    auto const startRow = (termRows - dialogHeight) / 2;
-    auto const startCol = (termCols - dialogWidth) / 2 + 1;
-
-    // Dim background
-    if (_config.dimBackground)
-    {
-        auto dimStyle = Style {};
-        dimStyle.dim = true;
-
-        for (auto row = 1; row <= termRows; ++row)
-        {
-            output.moveTo(row, 1);
-            output.write(std::string(static_cast<std::size_t>(termCols), ' '), dimStyle);
-        }
-    }
-
-    auto boxConfig = BoxConfig {
-        .row = startRow,
-        .col = startCol,
-        .width = dialogWidth,
-        .height = dialogHeight,
-        .border = _config.border,
-        .borderStyle = _config.borderStyle,
-        .title = _config.title,
-        .titleAlign = TitleAlign::Center,
-        .titleStyle = _config.titleStyle,
-        .paddingLeft = 2,
-        .paddingRight = 2,
-        .paddingTop = 1,
-        .paddingBottom = 0,
-        .fillBackground = true,
-        .backgroundStyle = {},
-    };
-
-    auto box = Box(boxConfig);
-    box.render(output);
-
-    // Message
-    auto const messageRow = box.contentStartRow();
-    auto const messageCol = box.contentStartCol();
-    output.moveTo(messageRow, messageCol);
-    output.write(_config.message, _config.messageStyle);
-
-    // Buttons
-    auto const buttonRow = startRow + dialogHeight - 2;
-
-    auto confirmStyle = Style {};
-    auto cancelStyle = Style {};
-
-    if (_confirmSelected)
-    {
-        confirmStyle.inverse = true;
-        confirmStyle.bold = true;
-    }
-    else
-    {
-        cancelStyle.inverse = true;
-        cancelStyle.bold = true;
-    }
-
-    auto const confirmBtn = " " + _config.confirmLabel + " ";
-    auto const cancelBtn = " " + _config.cancelLabel + " ";
-    auto const buttonsWidth = static_cast<int>(confirmBtn.size() + cancelBtn.size() + 4);
-    auto const buttonsCol = startCol + (dialogWidth - buttonsWidth) / 2;
-
-    output.moveTo(buttonRow, buttonsCol);
-    output.write("[", _config.borderStyle);
-    output.write(confirmBtn, confirmStyle);
-    output.write("]", _config.borderStyle);
-    output.writeRaw("  ");
-    output.write("[", _config.borderStyle);
-    output.write(cancelBtn, cancelStyle);
-    output.write("]", _config.borderStyle);
-}
-
 auto ConfirmDialog::isConfirmSelected() const noexcept -> bool
 {
     return _confirmSelected;
@@ -269,6 +263,88 @@ auto ConfirmDialog::isConfirmSelected() const noexcept -> bool
 InputDialog::InputDialog(InputDialogConfig config):
     _config(std::move(config)), _value(_config.initialValue), _cursor(_value.size())
 {
+}
+
+// --- Component Interface ---
+
+void InputDialog::render(Canvas& canvas)
+{
+    auto const termCols = canvas.width();
+    auto const termRows = canvas.height();
+
+    auto const dialogWidth = std::min(_config.width, termCols - 4);
+    auto const dialogHeight = 5; // border + prompt + input + border
+
+    auto const startRow = (termRows - dialogHeight) / 2;
+    auto const startCol = (termCols - dialogWidth) / 2;
+
+    // Dim background
+    if (_config.dimBackground)
+    {
+        auto dimStyle = Style {};
+        dimStyle.dim = true;
+        canvas.fill(canvas.area(), ' ', dimStyle);
+    }
+
+    // Draw box with title
+    auto boxRect = Rect { startRow, startCol, dialogWidth, dialogHeight };
+    canvas.drawBox(boxRect, _config.border, _config.borderStyle, _config.title, TitleAlign::Center);
+
+    // Fill box interior
+    auto innerRect = Rect { startRow + 1, startCol + 1, dialogWidth - 2, dialogHeight - 2 };
+    canvas.fill(innerRect, ' ', Style {});
+
+    // Inner content area
+    auto const contentCol = startCol + 2;
+    auto const inputWidth = dialogWidth - 4;
+
+    // Prompt
+    auto const promptRow = startRow + 1;
+    canvas.putString(promptRow, contentCol, _config.prompt, _config.titleStyle);
+
+    // Input field
+    auto const inputRow = promptRow + 1;
+
+    if (_value.empty())
+    {
+        auto placeholderStyle = Style {};
+        placeholderStyle.dim = true;
+        canvas.putString(inputRow, contentCol, _config.placeholder, placeholderStyle);
+    }
+    else
+    {
+        auto displayValue = _value;
+        if (static_cast<int>(displayValue.size()) > inputWidth)
+            displayValue = displayValue.substr(displayValue.size() - static_cast<std::size_t>(inputWidth));
+
+        canvas.putString(inputRow, contentCol, displayValue, _config.inputStyle);
+    }
+
+    // Position cursor
+    auto cursorCol = contentCol + static_cast<int>(_cursor);
+    if (cursorCol > contentCol + inputWidth - 1)
+        cursorCol = contentCol + inputWidth - 1;
+
+    canvas.setCursor(inputRow, cursorCol);
+}
+
+EventResult InputDialog::onEvent(InputEvent const& event)
+{
+    auto result = processEvent(event);
+
+    switch (result)
+    {
+        case DialogResult::Changed:
+        case DialogResult::Confirmed:
+        case DialogResult::Cancelled: invalidate(); return EventResult::Handled;
+        case DialogResult::None: return EventResult::Ignored;
+    }
+    return EventResult::Ignored;
+}
+
+Size InputDialog::preferredSize() const
+{
+    return { _config.width, 5 };
 }
 
 auto InputDialog::processEvent(InputEvent const& event) -> DialogResult
@@ -363,94 +439,6 @@ auto InputDialog::processEvent(InputEvent const& event) -> DialogResult
     }
 
     return DialogResult::None;
-}
-
-void InputDialog::render(TerminalOutput& output)
-{
-    auto const termCols = output.columns();
-    auto const termRows = output.rows();
-
-    auto const dialogWidth = std::min(_config.width, termCols - 4);
-    auto const dialogHeight = 5; // border + prompt + input + border
-
-    auto const startRow = (termRows - dialogHeight) / 2;
-    auto const startCol = (termCols - dialogWidth) / 2 + 1;
-
-    // Dim background
-    if (_config.dimBackground)
-    {
-        auto dimStyle = Style {};
-        dimStyle.dim = true;
-
-        for (auto row = 1; row <= termRows; ++row)
-        {
-            output.moveTo(row, 1);
-            output.write(std::string(static_cast<std::size_t>(termCols), ' '), dimStyle);
-        }
-    }
-
-    auto boxConfig = BoxConfig {
-        .row = startRow,
-        .col = startCol,
-        .width = dialogWidth,
-        .height = dialogHeight,
-        .border = _config.border,
-        .borderStyle = _config.borderStyle,
-        .title = _config.title,
-        .titleAlign = TitleAlign::Center,
-        .titleStyle = _config.titleStyle,
-        .paddingLeft = 1,
-        .paddingRight = 1,
-        .paddingTop = 0,
-        .paddingBottom = 0,
-        .fillBackground = true,
-        .backgroundStyle = {},
-    };
-
-    auto box = Box(boxConfig);
-    box.render(output);
-
-    // Prompt
-    auto const promptRow = box.contentStartRow();
-    auto const promptCol = box.contentStartCol();
-    output.moveTo(promptRow, promptCol);
-    output.write(_config.prompt, _config.titleStyle);
-
-    // Input field
-    auto const inputRow = promptRow + 1;
-    auto const inputWidth = box.innerWidth();
-
-    output.moveTo(inputRow, promptCol);
-
-    if (_value.empty())
-    {
-        auto placeholderStyle = Style {};
-        placeholderStyle.dim = true;
-        output.write(_config.placeholder, placeholderStyle);
-        auto const padLen = inputWidth - static_cast<int>(_config.placeholder.size());
-        if (padLen > 0)
-            output.writeRaw(std::string(static_cast<std::size_t>(padLen), ' '));
-    }
-    else
-    {
-        auto displayValue = _value;
-        if (static_cast<int>(displayValue.size()) > inputWidth)
-            displayValue = displayValue.substr(displayValue.size() - static_cast<std::size_t>(inputWidth));
-
-        output.write(displayValue, _config.inputStyle);
-
-        auto const padLen = inputWidth - static_cast<int>(displayValue.size());
-        if (padLen > 0)
-            output.writeRaw(std::string(static_cast<std::size_t>(padLen), ' '));
-    }
-
-    // Position cursor
-    auto cursorCol = promptCol + static_cast<int>(_cursor);
-    if (cursorCol > promptCol + inputWidth - 1)
-        cursorCol = promptCol + inputWidth - 1;
-
-    output.moveTo(inputRow, cursorCol);
-    output.showCursor();
 }
 
 auto InputDialog::value() const noexcept -> std::string_view

@@ -2,15 +2,31 @@ add_library(Shell STATIC
     AST.hpp
     ASTPrinter.hpp
     ASTPrinter.cpp
+    CommandCompleter.hpp
+    CommandCompleter.cpp
+    Completer.hpp
+    Completer.cpp
+    CompletionContext.hpp
+    CompletionContext.cpp
+    CompletionProvider.hpp
     DiagnosticsAdapter.hpp
     DiagnosticsAdapter.cpp
+    Environment.hpp
     Error.hpp
+    FileCompleter.hpp
+    FileCompleter.cpp
+    History.hpp
+    History.cpp
+    HistoryCompleter.hpp
+    HistoryCompleter.cpp
     IRGenerator.hpp
     IRGenerator.cpp
     Job.hpp
     Job.cpp
     Lexer.hpp
     Lexer.cpp
+    OptionCompleter.hpp
+    OptionCompleter.cpp
     Parser.hpp
     Parser.cpp
     Pipe.hpp
@@ -21,6 +37,8 @@ add_library(Shell STATIC
     ProcessGroup.hpp
     Prompt.hpp
     Prompt.cpp
+    PromptComponent.hpp
+    PromptComponent.cpp
     Shell.hpp
     Shell.cpp
     SignalHandler.hpp
@@ -29,6 +47,8 @@ add_library(Shell STATIC
     Suggestions.cpp
     TTY.hpp
     TTY.cpp
+    VariableCompleter.hpp
+    VariableCompleter.cpp
     Visitor.hpp
 )
 

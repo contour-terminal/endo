@@ -9,10 +9,13 @@
 #include <string_view>
 #include <vector>
 
+#include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 
 namespace tui
 {
+
+class Canvas;
 
 /// @brief Result of processing an input event in InputField.
 enum class InputFieldAction : std::uint8_t
@@ -24,10 +27,11 @@ enum class InputFieldAction : std::uint8_t
     None,    ///< Event not consumed by InputField.
 };
 
-/// @brief Pure-model text editor with Emacs keybindings, history, and kill ring.
+/// @brief Text editor component with Emacs keybindings, history, and kill ring.
 ///
-/// Accepts InputEvent objects and updates internal state. No I/O — the caller
-/// renders based on text() and cursor(). Operates on grapheme cluster boundaries
+/// InputField is a TUI component that provides rich text editing capabilities.
+/// It accepts InputEvent objects and updates internal state. The component
+/// renders itself using the Canvas API. Operates on grapheme cluster boundaries
 /// using libunicode for correct Unicode handling.
 ///
 /// Supports both single-line and multiline modes. In multiline mode:
@@ -35,9 +39,33 @@ enum class InputFieldAction : std::uint8_t
 /// - Up/Down navigate between lines (history when on first/last line)
 /// - Home/End move to start/end of current line
 /// - Ctrl+Home/Ctrl+End move to start/end of buffer
-class InputField
+///
+/// As a Component, InputField can be added to a Screen's component tree
+/// and will receive events through the standard event dispatch mechanism.
+class InputField: public Component
 {
   public:
+    InputField() = default;
+    ~InputField() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the input field to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    /// @param event The input event.
+    /// @return EventResult for event bubbling.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief InputField can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size based on content.
+    [[nodiscard]] Size preferredSize() const override;
+
+    // --- InputField-Specific Event Processing ---
+
     /// @brief Processes an input event and returns the resulting action.
     /// @param event The input event to process.
     /// @return The action resulting from the event.
@@ -142,6 +170,30 @@ class InputField
     [[nodiscard]] auto maxLines() const noexcept -> int;
 
     // ========================================================================
+    // Ghost text (fish-style autosuggestion)
+    // ========================================================================
+
+    /// @brief Sets the ghost text suggestion to display after the cursor.
+    ///
+    /// Ghost text appears dimmed after the cursor and can be accepted
+    /// with Right arrow or End key. It's automatically cleared when
+    /// the buffer is modified.
+    /// @param ghost The suggestion text (suffix to append).
+    void setGhostText(std::string_view ghost);
+
+    /// @brief Clears the ghost text suggestion.
+    void clearGhostText();
+
+    /// @brief Accepts the ghost text, inserting it at the cursor.
+    void acceptGhostText();
+
+    /// @brief Returns the current ghost text.
+    [[nodiscard]] auto ghostText() const noexcept -> std::string_view;
+
+    /// @brief Returns whether there is ghost text to display.
+    [[nodiscard]] auto hasGhostText() const noexcept -> bool;
+
+    // ========================================================================
     // Clipboard callback
     // ========================================================================
 
@@ -210,6 +262,7 @@ class InputField
     std::string _buffer;
     std::size_t _cursor = 0;
     std::string _prompt;
+    std::string _ghostText; ///< Ghost text suggestion (displayed dimmed after cursor)
     bool _multiline = false;
     int _maxLines = 0;     ///< 0 = unlimited
     int _scrollOffset = 0; ///< Scroll offset for multiline mode

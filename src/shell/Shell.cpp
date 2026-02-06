@@ -125,6 +125,15 @@ void TestEnvironment::exportVariable(std::string_view name)
         setenv(name.data(), i->second.data(), 1);
 }
 
+std::vector<std::string> TestEnvironment::keys() const
+{
+    std::vector<std::string> result;
+    result.reserve(_values.size());
+    for (auto const& [key, _]: _values)
+        result.push_back(key);
+    return result;
+}
+
 // ========================================================================
 // SystemEnvironment implementation
 // ========================================================================
@@ -154,6 +163,28 @@ void SystemEnvironment::exportVariable(std::string_view name)
 {
     if (auto i = _values.find(name.data()); i != _values.end())
         setenv(name.data(), i->second.data(), 1);
+}
+
+std::vector<std::string> SystemEnvironment::keys() const
+{
+    std::vector<std::string> result;
+
+    // First, collect from system environment
+    for (char** env = ::environ; *env != nullptr; ++env)
+    {
+        std::string_view entry(*env);
+        if (auto pos = entry.find('='); pos != std::string_view::npos)
+            result.emplace_back(entry.substr(0, pos));
+    }
+
+    // Add locally-set variables that might not be exported yet
+    for (auto const& [key, _]: _values)
+    {
+        if (std::find(result.begin(), result.end(), key) == result.end())
+            result.push_back(key);
+    }
+
+    return result;
 }
 
 SystemEnvironment& SystemEnvironment::instance()
@@ -256,6 +287,10 @@ Shell::Shell(TTY& tty, Environment& env):
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
 
+    // Initialize completion system
+    completer = std::make_unique<Completer>(_env, history);
+    prompt.setCompleter(completer.get());
+
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
@@ -328,6 +363,13 @@ int Shell::run()
             auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
+            // Add non-empty commands to history
+            if (!lineBuffer.empty())
+            {
+                prompt.addHistory(lineBuffer);
+                history.add(lineBuffer);
+            }
+
             auto const _ = Prompt::ScopedSuspend(prompt);
             _exitCode = execute(lineBuffer);
         }
@@ -338,6 +380,13 @@ int Shell::run()
     {
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
+
+        // Add non-empty commands to history
+        if (!lineBuffer.empty())
+        {
+            prompt.addHistory(lineBuffer);
+            history.add(lineBuffer);
+        }
 
         auto const _ = Prompt::ScopedSuspend(prompt);
         _exitCode = execute(lineBuffer);

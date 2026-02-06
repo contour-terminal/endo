@@ -7,8 +7,9 @@
 #include <string>
 #include <vector>
 
+#include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
-#include <tui/TerminalOutput.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
@@ -46,16 +47,34 @@ struct ListStyle
 /// @brief A scrollable, selectable list component.
 ///
 /// Supports keyboard navigation (Up/Down, j/k, Home/End, PageUp/PageDown),
-/// filtering, and selection. Renders within a specified region.
-class List
+/// filtering, and selection. As a Component, List can be added to a Screen's
+/// component tree and will receive events through the standard event dispatch.
+class List: public Component
 {
   public:
     /// @brief Constructs an empty list.
     List() = default;
+    ~List() override = default;
 
     /// @brief Constructs a list with the given items.
     /// @param items The items to display.
     explicit List(std::vector<ListItem> items);
+
+    // --- Component Interface ---
+
+    /// @brief Renders the list to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    /// @param event The input event.
+    /// @return EventResult for event bubbling.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief List can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size based on items.
+    [[nodiscard]] Size preferredSize() const override;
 
     /// @brief Sets the items in the list.
     /// @param items The items to display.
@@ -97,14 +116,6 @@ class List
     /// @param event The input event to process.
     /// @return The action resulting from the event.
     [[nodiscard]] auto processEvent(InputEvent const& event) -> ListAction;
-
-    /// @brief Renders the list within the specified region.
-    /// @param output The terminal output to render to.
-    /// @param startRow Starting row (1-based).
-    /// @param startCol Starting column (1-based).
-    /// @param width Maximum width for rendering.
-    /// @param maxRows Maximum number of rows to render.
-    void render(TerminalOutput& output, int startRow, int startCol, int width, int maxRows) const;
 
     /// @brief Sets the list style configuration.
     /// @param style The style configuration.

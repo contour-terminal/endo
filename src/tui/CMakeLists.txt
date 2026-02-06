@@ -1,10 +1,16 @@
 add_library(tui
     Box.cpp
+    Buffer.cpp
+    Canvas.cpp
+    Cell.cpp
+    Component.cpp
+    CompletionPopup.cpp
     Dialog.cpp
     InputField.cpp
     List.cpp
     LogPanel.cpp
     MarkdownRenderer.cpp
+    Screen.cpp
     Sixel.cpp
     Spinner.cpp
     StatusBar.cpp
@@ -33,6 +39,7 @@ enable_sanitizers(tui)
 add_executable(test-tui
     test_main.cpp
     InputField_test.cpp
+    Renderer_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

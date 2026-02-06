@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/Environment.hpp>
 #include <shell/ProcessGroup.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -14,6 +15,8 @@
 #include <string>
 #include <vector>
 
+#include "Completer.hpp"
+#include "History.hpp"
 #include "Job.hpp"
 #include "Pipe.hpp"
 #include "Process.hpp"
@@ -25,46 +28,6 @@ namespace endo
 {
 
 std::string readLine(TTY& tty, std::string_view prompt);
-
-class Environment
-{
-  public:
-    virtual ~Environment() = default;
-
-    virtual void set(std::string_view name, std::string_view value) = 0;
-    [[nodiscard]] virtual std::optional<std::string_view> get(std::string_view name) const = 0;
-    virtual void unset(std::string_view name) = 0;
-
-    virtual void exportVariable(std::string_view name) = 0;
-
-    void setAndExport(std::string_view name, std::string_view value);
-};
-
-class TestEnvironment: public Environment
-{
-  public:
-    void set(std::string_view name, std::string_view value) override;
-    [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override;
-    void unset(std::string_view name) override;
-    void exportVariable(std::string_view name) override;
-
-  private:
-    std::map<std::string, std::string> _values;
-};
-
-class SystemEnvironment: public Environment
-{
-  public:
-    void set(std::string_view name, std::string_view value) override;
-    [[nodiscard]] std::optional<std::string_view> get(std::string_view name) const override;
-    void unset(std::string_view name) override;
-    void exportVariable(std::string_view name) override;
-
-    static SystemEnvironment& instance();
-
-  private:
-    std::map<std::string, std::string> _values;
-};
 
 class Shell final: public CoreVM::Runtime
 {
@@ -90,7 +53,9 @@ class Shell final: public CoreVM::Runtime
 
     Prompt prompt;
     std::vector<ProcessGroup> processGroups;
-    JobTable jobTable; ///< Table of background jobs
+    JobTable jobTable;                    ///< Table of background jobs
+    InMemoryHistory history;              ///< Command history for completion
+    std::unique_ptr<Completer> completer; ///< Completion system
 
   private:
     void registerBuiltinFunctions();

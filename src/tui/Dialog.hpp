@@ -7,9 +7,9 @@
 #include <vector>
 
 #include <tui/Box.hpp>
+#include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/List.hpp>
-#include <tui/TerminalOutput.hpp>
 
 namespace tui
 {
@@ -42,20 +42,34 @@ struct SelectDialogConfig
 ///
 /// Renders centered on screen with optional background dimming.
 /// Supports keyboard navigation for list selection.
-class SelectDialog
+/// As a Component, SelectDialog can be added to a Screen's component tree.
+class SelectDialog: public Component
 {
   public:
     /// @brief Constructs a selection dialog with the given configuration.
     explicit SelectDialog(SelectDialogConfig config);
+    ~SelectDialog() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the dialog to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief Dialog can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size for the dialog.
+    [[nodiscard]] Size preferredSize() const override;
+
+    // --- SelectDialog-specific API ---
 
     /// @brief Processes an input event and returns the result.
     /// @param event The input event to process.
     /// @return The result of processing the event.
     [[nodiscard]] auto processEvent(InputEvent const& event) -> DialogResult;
-
-    /// @brief Renders the dialog centered on screen.
-    /// @param output The terminal output to render to.
-    void render(TerminalOutput& output);
 
     /// @brief Returns the selected item index.
     [[nodiscard]] auto selectedIndex() const noexcept -> std::size_t;
@@ -76,11 +90,6 @@ class SelectDialog
   private:
     SelectDialogConfig _config;
     List _list;
-    int _cachedTermCols = 80;
-    int _cachedTermRows = 24;
-
-    void renderBackground(TerminalOutput& output);
-    auto calculateBounds(int termCols, int termRows) const -> BoxConfig;
 };
 
 /// @brief Configuration for a confirmation dialog.
@@ -100,20 +109,34 @@ struct ConfirmDialogConfig
 };
 
 /// @brief A modal confirmation dialog with Yes/No buttons.
-class ConfirmDialog
+/// As a Component, ConfirmDialog can be added to a Screen's component tree.
+class ConfirmDialog: public Component
 {
   public:
     /// @brief Constructs a confirmation dialog.
     explicit ConfirmDialog(ConfirmDialogConfig config);
+    ~ConfirmDialog() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the dialog to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief Dialog can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size for the dialog.
+    [[nodiscard]] Size preferredSize() const override;
+
+    // --- ConfirmDialog-specific API ---
 
     /// @brief Processes an input event and returns the result.
     /// @param event The input event to process.
     /// @return The result of processing the event.
     [[nodiscard]] auto processEvent(InputEvent const& event) -> DialogResult;
-
-    /// @brief Renders the dialog centered on screen.
-    /// @param output The terminal output to render to.
-    void render(TerminalOutput& output);
 
     /// @brief Returns whether confirm is currently selected.
     [[nodiscard]] auto isConfirmSelected() const noexcept -> bool;
@@ -139,20 +162,34 @@ struct InputDialogConfig
 };
 
 /// @brief A modal input dialog with a text field.
-class InputDialog
+/// As a Component, InputDialog can be added to a Screen's component tree.
+class InputDialog: public Component
 {
   public:
     /// @brief Constructs an input dialog.
     explicit InputDialog(InputDialogConfig config);
+    ~InputDialog() override = default;
+
+    // --- Component Interface ---
+
+    /// @brief Renders the dialog to the canvas.
+    void render(Canvas& canvas) override;
+
+    /// @brief Handles input events via Component interface.
+    [[nodiscard]] EventResult onEvent(InputEvent const& event) override;
+
+    /// @brief Dialog can receive keyboard focus.
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    /// @brief Returns preferred size for the dialog.
+    [[nodiscard]] Size preferredSize() const override;
+
+    // --- InputDialog-specific API ---
 
     /// @brief Processes an input event and returns the result.
     /// @param event The input event to process.
     /// @return The result of processing the event.
     [[nodiscard]] auto processEvent(InputEvent const& event) -> DialogResult;
-
-    /// @brief Renders the dialog centered on screen.
-    /// @param output The terminal output to render to.
-    void render(TerminalOutput& output);
 
     /// @brief Returns the current input value.
     [[nodiscard]] auto value() const noexcept -> std::string_view;

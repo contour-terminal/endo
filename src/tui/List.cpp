@@ -2,7 +2,9 @@
 #include <algorithm>
 #include <cctype>
 
+#include <tui/Canvas.hpp>
 #include <tui/List.hpp>
+#include <tui/Theme.hpp>
 
 namespace tui
 {
@@ -35,6 +37,123 @@ List::List(std::vector<ListItem> items): _items(std::move(items))
 {
     _style = defaultListStyle();
     rebuildVisibleIndices();
+}
+
+// =============================================================================
+// Component Interface
+// =============================================================================
+
+void List::render(Canvas& canvas)
+{
+    auto const width = canvas.width();
+    auto const maxRows = canvas.height();
+
+    if (_visibleIndices.empty())
+    {
+        canvas.putString(0, 0, "  (no items)", _style.disabled);
+        return;
+    }
+
+    ensureSelectionVisible(maxRows);
+
+    auto const visibleCount =
+        std::min(static_cast<std::size_t>(maxRows), _visibleIndices.size() - _scrollOffset);
+
+    for (auto i = std::size_t { 0 }; i < static_cast<std::size_t>(maxRows); ++i)
+    {
+        auto const row = static_cast<int>(i);
+
+        if (i >= visibleCount)
+        {
+            // Clear remaining rows
+            canvas.fill(Rect { row, 0, width, 1 }, ' ', _style.normal);
+            continue;
+        }
+
+        auto const visibleIdx = _scrollOffset + i;
+        auto const itemIdx = _visibleIndices[visibleIdx];
+        auto const& item = _items[itemIdx];
+        auto const isSelected = (visibleIdx == _selectedVisibleIndex);
+
+        // Determine style
+        auto const& itemStyle = [&]() -> Style const& {
+            if (!item.enabled)
+                return _style.disabled;
+            return isSelected ? _style.selected : _style.normal;
+        }();
+
+        // Fill row background
+        canvas.fill(Rect { row, 0, width, 1 }, ' ', itemStyle);
+
+        // Cursor indicator
+        auto col = 0;
+        if (isSelected)
+        {
+            col = canvas.putString(row, col, _style.cursor, _style.selected);
+        }
+        else
+        {
+            col = canvas.putString(row, col, _style.noCursor, _style.normal);
+        }
+
+        // Item label
+        auto const labelMaxWidth = width - col;
+        auto displayLabel = item.label;
+        if (static_cast<int>(displayLabel.size()) > labelMaxWidth)
+            displayLabel = displayLabel.substr(0, static_cast<std::size_t>(labelMaxWidth - 1)) + "\u2026";
+
+        canvas.putString(row, col, displayLabel, itemStyle);
+    }
+
+    // Show scroll indicators if needed
+    if (_visibleIndices.size() > static_cast<std::size_t>(maxRows))
+    {
+        auto const hasMore = (_scrollOffset + static_cast<std::size_t>(maxRows) < _visibleIndices.size());
+        auto const hasLess = (_scrollOffset > 0);
+
+        if (hasLess)
+        {
+            canvas.put(0, width - 2, "\u25B2", _style.disabled); // Up arrow
+        }
+
+        if (hasMore)
+        {
+            canvas.put(maxRows - 1, width - 2, "\u25BC", _style.disabled); // Down arrow
+        }
+    }
+}
+
+EventResult List::onEvent(InputEvent const& event)
+{
+    auto action = processEvent(event);
+
+    switch (action)
+    {
+        case ListAction::Changed:
+        case ListAction::Selected:
+        case ListAction::Cancelled: invalidate(); return EventResult::Handled;
+        case ListAction::None: return EventResult::Ignored;
+    }
+    return EventResult::Ignored;
+}
+
+Size List::preferredSize() const
+{
+    if (_items.empty())
+        return { 20, 1 };
+
+    // Calculate max width from items
+    int maxWidth = 0;
+    for (auto const& item: _items)
+    {
+        auto const itemWidth = static_cast<int>(_style.cursor.size()) + static_cast<int>(item.label.size());
+        maxWidth = std::max(maxWidth, itemWidth);
+    }
+
+    // Height is the number of visible items (capped at a reasonable default)
+    auto const height = std::min(static_cast<int>(_visibleIndices.size()), 20);
+
+    return { maxWidth + 2, height }; // +2 for scroll indicator space
 }
 
 void List::setItems(std::vector<ListItem> items)
@@ -165,87 +284,6 @@ auto List::handleKey(KeyEvent const& key) -> ListAction
     }
 
     return ListAction::None;
-}
-
-void List::render(TerminalOutput& output, int startRow, int startCol, int width, int maxRows) const
-{
-    if (_visibleIndices.empty())
-    {
-        output.moveTo(startRow, startCol);
-        auto emptyStyle = _style.disabled;
-        output.write("  (no items)", emptyStyle);
-        return;
-    }
-
-    ensureSelectionVisible(maxRows);
-
-    auto const visibleCount =
-        std::min(static_cast<std::size_t>(maxRows), _visibleIndices.size() - _scrollOffset);
-
-    for (auto i = std::size_t { 0 }; i < static_cast<std::size_t>(maxRows); ++i)
-    {
-        auto const row = startRow + static_cast<int>(i);
-        output.moveTo(row, startCol);
-
-        if (i >= visibleCount)
-        {
-            // Clear remaining rows
-            output.writeRaw(std::string(static_cast<std::size_t>(width), ' '));
-            continue;
-        }
-
-        auto const visibleIdx = _scrollOffset + i;
-        auto const itemIdx = _visibleIndices[visibleIdx];
-        auto const& item = _items[itemIdx];
-        auto const isSelected = (visibleIdx == _selectedVisibleIndex);
-
-        // Cursor indicator
-        if (isSelected)
-            output.write(_style.cursor, _style.selected);
-        else
-            output.writeRaw(_style.noCursor);
-
-        // Item label
-        auto const cursorWidth = static_cast<int>(_style.cursor.size() > 2 ? 2 : _style.cursor.size());
-        auto const labelMaxWidth = width - cursorWidth;
-
-        auto const& itemStyle = [&]() -> Style const& {
-            if (!item.enabled)
-                return _style.disabled;
-            return isSelected ? _style.selected : _style.normal;
-        }();
-
-        auto displayLabel = item.label;
-        if (static_cast<int>(displayLabel.size()) > labelMaxWidth)
-            displayLabel = displayLabel.substr(0, static_cast<std::size_t>(labelMaxWidth - 1)) + "\u2026";
-
-        output.write(displayLabel, itemStyle);
-
-        // Padding
-        auto const labelLen = static_cast<int>(displayLabel.size());
-        auto const padding = std::max(0, labelMaxWidth - labelLen);
-        if (padding > 0)
-            output.writeRaw(std::string(static_cast<std::size_t>(padding), ' '));
-    }
-
-    // Show scroll indicator if needed
-    if (_visibleIndices.size() > static_cast<std::size_t>(maxRows))
-    {
-        auto const hasMore = (_scrollOffset + static_cast<std::size_t>(maxRows) < _visibleIndices.size());
-        auto const hasLess = (_scrollOffset > 0);
-
-        if (hasLess)
-        {
-            output.moveTo(startRow, startCol + width - 2);
-            output.write("\u25B2", _style.disabled); // ▲
-        }
-
-        if (hasMore)
-        {
-            output.moveTo(startRow + maxRows - 1, startCol + width - 2);
-            output.write("\u25BC", _style.disabled); // ▼
-        }
-    }
 }
 
 void List::setStyle(ListStyle style)

@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
 
-#include <tui/InputField.hpp>
+#include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
 
 namespace endo
 {
+
+// Forward declarations
+class Completer;
+class PromptComponent;
 
 /// @brief TUI-based prompt using tui::Terminal and tui::InputField.
 ///
@@ -75,6 +80,10 @@ class Prompt
     /// Re-enables raw mode and terminal protocols.
     void resume();
 
+    /// @brief Sets the completer to use for autocompletion.
+    /// @param completer The completer (ownership not transferred).
+    void setCompleter(Completer* completer);
+
     /// @brief RAII helper for suspend/resume scoping.
     ///
     /// Automatically calls suspend() on construction and resume() on destruction,
@@ -97,35 +106,15 @@ class Prompt
 
   private:
     tui::Terminal _terminal;
-    tui::InputField _inputField;
+    std::unique_ptr<tui::Screen> _screen;
+    std::unique_ptr<PromptComponent> _promptComponent;
+    Completer* _completer = nullptr;
     std::string _promptStr = "> ";
     bool _initialized = false;
     bool _aborted = false;
     bool _multilineEnabled = true; ///< Enable multiline editing by default
-    int _editorStartRow = 1;       ///< Row where editor region starts (1-based)
-    int _lastRenderedLines = 1;    ///< Number of lines rendered in last render()
-    int _scrollOffset = 0;         ///< Scroll offset for multiline display
 
     void initialize();
-    void render();
-
-    /// @brief Calculates the display width of a string.
-    [[nodiscard]] static int displayWidth(std::string_view text);
-
-    /// @brief Calculates the maximum height for the editor region (50% of terminal).
-    [[nodiscard]] int maxEditorHeight() const;
-
-    /// @brief Translates screen mouse coordinates to field-relative line/column.
-    ///
-    /// @param screenX Screen column (1-based from MouseEvent).
-    /// @param screenY Screen row (1-based from MouseEvent).
-    /// @param outLine Output: line index (0-based).
-    /// @param outColumn Output: grapheme column (0-based).
-    /// @return True if the mouse is within the editor region, false otherwise.
-    [[nodiscard]] bool translateMouseCoords(int screenX, int screenY, int& outLine, int& outColumn) const;
-
-    /// @brief Calculates the total width of the prompt prefix (left bar + padding + prompt text).
-    [[nodiscard]] int promptWidth() const;
 };
 
 } // namespace endo

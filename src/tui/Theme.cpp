@@ -75,6 +75,13 @@ auto darkTheme() -> Theme
     theme.error.fg = theme.colors.error;
     theme.info.fg = theme.colors.info;
 
+    // Completion styles
+    theme.ghostText.dim = true;                         // Default ghost text is dim (SGR 2)
+    theme.completionItem.fg = theme.colors.text;        // Normal menu item
+    theme.completionSelected.fg = theme.colors.primary; // Selected item
+    theme.completionSelected.inverse = true;            // Inverse for visibility
+    theme.completionDesc.fg = theme.colors.textMuted;   // Description text
+
     theme.borderStyle = BorderStyle::Rounded;
 
     return theme;
@@ -142,6 +149,13 @@ auto lightTheme() -> Theme
     theme.error.fg = theme.colors.error;
     theme.info.fg = theme.colors.info;
 
+    // Completion styles
+    theme.ghostText.dim = true;                         // Default ghost text is dim (SGR 2)
+    theme.completionItem.fg = theme.colors.text;        // Normal menu item
+    theme.completionSelected.fg = theme.colors.primary; // Selected item
+    theme.completionSelected.inverse = true;            // Inverse for visibility
+    theme.completionDesc.fg = theme.colors.textMuted;   // Description text
+
     theme.borderStyle = BorderStyle::Rounded;
 
     return theme;
@@ -203,6 +217,12 @@ auto monoTheme() -> Theme
     theme.error.bold = true;
     theme.error.inverse = true;
     theme.info.bold = true;
+
+    // Completion styles
+    theme.ghostText.dim = true;              // Default ghost text is dim
+    theme.completionItem = {};               // Normal
+    theme.completionSelected.inverse = true; // Selected
+    theme.completionDesc.dim = true;         // Description
 
     theme.borderStyle = BorderStyle::Single;
 
