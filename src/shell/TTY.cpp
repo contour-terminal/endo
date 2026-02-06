@@ -50,14 +50,21 @@ void safeClose(NativeHandle* fd) noexcept
 RealTTY::RealTTY()
 {
     for (NativeHandle fd: { STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO })
+    {
         if (isatty(fd) && tcgetattr(fd, &_originalTermios) == 0)
+        {
+            _hasTTY = true;
             return;
-    throw std::runtime_error("tcgetattr: " + std::string(strerror(errno)));
+        }
+    }
+    // No TTY available - this is fine for non-interactive mode
+    _hasTTY = false;
 }
 
 RealTTY::~RealTTY()
 {
-    restoreMode();
+    if (_hasTTY)
+        restoreMode();
 }
 
 RealTTY& RealTTY::instance()
@@ -78,7 +85,7 @@ NativeHandle RealTTY::outputFd() const noexcept
 
 bool RealTTY::isTerminal() const noexcept
 {
-    return isatty(STDIN_FILENO) != 0;
+    return _hasTTY;
 }
 
 std::expected<TerminalSize, ShellError> RealTTY::getSize() const
@@ -91,11 +98,15 @@ std::expected<TerminalSize, ShellError> RealTTY::getSize() const
 
 void RealTTY::setRawMode()
 {
-    endo::setRawMode(STDIN_FILENO);
+    if (_hasTTY)
+        endo::setRawMode(STDIN_FILENO);
 }
 
 void RealTTY::restoreMode()
 {
+    if (!_hasTTY)
+        return;
+
     int const result = tcsetattr(STDIN_FILENO, TCSAFLUSH, &_originalTermios);
     if (result == -1)
         throw std::runtime_error("tcsetattr: " + std::string(strerror(errno)));
@@ -103,9 +114,12 @@ void RealTTY::restoreMode()
 
 void RealTTY::setEchoEnabled(bool enabled)
 {
+    if (!_hasTTY)
+        return;
+
     termios tio;
     if (tcgetattr(STDIN_FILENO, &tio) == -1)
-        return; // Silently fail if not a terminal
+        return;
 
     if (enabled)
         tio.c_lflag |= ECHO;

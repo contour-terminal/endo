@@ -120,6 +120,7 @@ class RealTTY final: public TTY
 
   private:
     termios _originalTermios {};
+    bool _hasTTY = false; ///< Whether a real TTY is available
 };
 
 // This is a TTY implementation that can be used for testing.

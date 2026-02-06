@@ -55,6 +55,12 @@ class Shell final
 
     void setOptimize(bool optimize);
 
+    /// Set interactive mode (controls prompts, job notifications, etc.)
+    void setInteractive(bool interactive);
+
+    /// Set positional parameters ($0, $1, $2, ...)
+    void setPositionalParameters(std::vector<std::string> params);
+
     int run();
     int execute(std::string const& lineBuffer);
 
@@ -253,6 +259,7 @@ class Shell final
     std::optional<ProcessId> _rightPid;
 
     int _exitCode = -1;
+    bool _interactive = true; ///< Whether running in interactive mode
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID
     int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise

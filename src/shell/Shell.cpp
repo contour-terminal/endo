@@ -479,6 +479,16 @@ void Shell::setOptimize(bool optimize)
     _optimize = optimize;
 }
 
+void Shell::setInteractive(bool interactive)
+{
+    _interactive = interactive;
+}
+
+void Shell::setPositionalParameters(std::vector<std::string> params)
+{
+    _positionalParameters = std::move(params);
+}
+
 int Shell::run()
 {
 #if !defined(_WIN32)

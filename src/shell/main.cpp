@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <crispy/logstore.h>
 
+#include <cerrno>
 #include <cstdlib>
+#include <cstring>
+#include <fstream>
 #include <print>
 #include <span>
+#include <sstream>
+#include <string>
 #include <string_view>
 
 #include <unistd.h>
@@ -22,8 +27,8 @@ void printHelp(std::string_view programName)
 {
     std::print(R"(endo - A modern shell written in C++23
 
-Usage: {} [OPTIONS] [SCRIPT]
-       {} -c <COMMAND>
+Usage: {} [OPTIONS] [SCRIPT [ARGS...]]
+       {} -c <COMMAND> [ARGS...]
 
 Options:
   -h, --help         Show this help message and exit
@@ -40,14 +45,27 @@ Log Categories:
   vm.diag            VM diagnostics
   vm.pass            VM optimization passes
 
+Script Execution:
+  When executing a script file, arguments after the script become positional
+  parameters ($1, $2, ...). The script path is available as $0.
+  
+  When using -c, arguments after the command become positional parameters.
+  The program name is available as $0.
+
+  Scripts may start with a shebang line (#!/usr/bin/env endo) which is ignored.
+
 Examples:
-  {}                           Start interactive shell
-  {} script.sh                 Execute script file
-  {} -c 'echo hello'           Execute command string
-  {} --log=shell.debug         Enable shell debug logging
-  {} --log='shell.*,parser'    Enable multiple log categories
+  {}                              Start interactive shell
+  {} script.sh                    Execute script file
+  {} script.sh arg1 arg2          Execute script with arguments ($1=arg1, $2=arg2)
+  {} -c 'echo hello'              Execute command string
+  {} -c 'echo $1' foo             Execute command with argument ($1=foo)
+  {} --log=shell.debug            Enable shell debug logging
+  {} --log='shell.*,parser'       Enable multiple log categories
 
 )",
+               programName,
+               programName,
                programName,
                programName,
                programName,
@@ -84,7 +102,9 @@ struct ParsedArgs
     bool showLogList = false;
     std::string_view logPatterns;
     std::string_view command;
+    std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
     std::string_view scriptFile;
+    std::vector<std::string_view> scriptArgs; ///< Arguments after script file ($1, $2, ...)
 };
 
 ParsedArgs parseArguments(std::span<char const* const> args)
@@ -114,10 +134,25 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg == "-c" && i + 1 < args.size())
         {
             result.command = args[++i];
+            // Remaining arguments become $1, $2, ... for the command
+            for (size_t j = i + 1; j < args.size(); ++j)
+                result.commandArgs.push_back(args[j]);
+            break; // Stop parsing after -c command and its args
+        }
+        else if (arg == "--")
+        {
+            // Everything after -- is script arguments (if script is set)
+            for (size_t j = i + 1; j < args.size(); ++j)
+                result.scriptArgs.push_back(args[j]);
+            break;
         }
         else if (!arg.starts_with("-"))
         {
             result.scriptFile = arg;
+            // Remaining arguments become $1, $2, ... for the script
+            for (size_t j = i + 1; j < args.size(); ++j)
+                result.scriptArgs.push_back(args[j]);
+            break; // Stop parsing after script file and its args
         }
         else
         {
@@ -128,6 +163,48 @@ ParsedArgs parseArguments(std::span<char const* const> args)
     }
 
     return result;
+}
+
+int executeScript(endo::Shell& shell,
+                  std::string_view scriptPath,
+                  std::span<std::string_view const> scriptArgs,
+                  std::string_view programName)
+{
+    // 1. Open and read file
+    auto const scriptPathStr = std::string(scriptPath);
+    std::ifstream file(scriptPathStr);
+    if (!file)
+    {
+        std::print(stderr, "endo: {}: {}\n", scriptPath, strerror(errno));
+        return EXIT_FAILURE;
+    }
+
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    std::string content = ss.str();
+
+    // 2. Strip shebang line if present
+    if (content.starts_with("#!"))
+    {
+        auto const pos = content.find('\n');
+        if (pos != std::string::npos)
+            content = content.substr(pos + 1);
+        else
+            content.clear(); // Script is only a shebang
+    }
+
+    // 3. Set up non-interactive mode
+    shell.setInteractive(false);
+
+    // 4. Set positional parameters ($0 = script, $1... = args)
+    std::vector<std::string> params;
+    params.push_back(std::string(scriptPath));
+    for (auto const& arg: scriptArgs)
+        params.push_back(std::string(arg));
+    shell.setPositionalParameters(std::move(params));
+
+    // 5. Execute (parser validates entire script before execution)
+    return shell.execute(content);
 }
 
 } // namespace
@@ -164,11 +241,27 @@ int main(int argc, char const* argv[])
     auto shell = endo::Shell {};
     setsid();
 
+    // Handle -c command with optional arguments
     if (!parsed.command.empty())
+    {
+        shell.setInteractive(false);
+
+        // Set positional parameters: $0 = "endo", $1... = commandArgs
+        std::vector<std::string> params;
+        params.push_back(std::string(programName));
+        for (auto const& arg: parsed.commandArgs)
+            params.push_back(std::string(arg));
+        shell.setPositionalParameters(std::move(params));
+
         return shell.execute(std::string(parsed.command));
+    }
 
+    // Handle script file with optional arguments
     if (!parsed.scriptFile.empty())
-        return shell.execute(std::string(parsed.scriptFile));
+    {
+        return executeScript(shell, parsed.scriptFile, parsed.scriptArgs, programName);
+    }
 
+    // Interactive mode
     return shell.run();
 }
