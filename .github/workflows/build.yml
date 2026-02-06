@@ -52,12 +52,6 @@ jobs:
         set -ex
         ./get_contour_dirs.sh
 
-    - name: "install dependencies"
-      run: |
-        set -ex
-        ./scripts/install-deps.sh
-        sudo apt install -y librange-v3-dev
-
     - name: Install CMake
       uses: ssrobins/install-cmake@v1
 

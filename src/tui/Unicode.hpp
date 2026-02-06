@@ -50,7 +50,7 @@ inline int graphemeClusterWidth(std::u32string_view cluster) noexcept
 
     // For regular grapheme clusters with combining characters,
     // use the width of the base character (first codepoint)
-    int const baseWidth = unicode::width(cluster[0]);
+    int const baseWidth = static_cast<int>(unicode::width(cluster[0]));
 
     // Ensure at least width 1 for non-zero-width clusters
     return baseWidth > 0 ? baseWidth : 1;

@@ -57,6 +57,6 @@ target_include_directories(CoreVM PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(CoreVM PUBLIC range-v3::range-v3 Microsoft.GSL::GSL)
+target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
 
 enable_sanitizers(CoreVM)
