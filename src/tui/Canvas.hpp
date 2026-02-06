@@ -1,0 +1,163 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <string_view>
+
+#include <tui/Box.hpp>
+#include <tui/Buffer.hpp>
+#include <tui/Rect.hpp>
+
+namespace tui
+{
+
+// Forward declarations
+struct Theme;
+
+/// A bounded drawing context for rendering components.
+///
+/// Canvas provides a coordinate-translated view into a Buffer for a specific
+/// rectangular region. All drawing operations use coordinates relative to
+/// the Canvas's top-left corner, and are automatically clipped to the
+/// Canvas's bounds.
+///
+/// Canvases can be subdivided into smaller regions using subcanvas(),
+/// enabling hierarchical layout of components.
+class Canvas
+{
+  public:
+    /// Constructs a Canvas for the given buffer region.
+    /// @param buffer The buffer to draw into.
+    /// @param area The region of the buffer this canvas represents (in buffer coordinates).
+    /// @param theme The theme for styling.
+    Canvas(Buffer& buffer, Rect area, Theme const& theme);
+
+    // --- Drawing Operations ---
+
+    /// Puts a single grapheme at the given position.
+    /// @param row Row relative to this canvas (0-based).
+    /// @param col Column relative to this canvas (0-based).
+    /// @param grapheme UTF-8 grapheme cluster to draw.
+    /// @param style Style to apply.
+    void put(int row, int col, std::string_view grapheme, Style const& style);
+
+    /// Writes a string starting at the given position.
+    /// Handles wide characters automatically.
+    /// @param row Row relative to this canvas (0-based).
+    /// @param col Column relative to this canvas (0-based).
+    /// @param text UTF-8 text to write.
+    /// @param style Style to apply.
+    /// @return Number of columns consumed.
+    int putString(int row, int col, std::string_view text, Style const& style);
+
+    /// Fills a rectangular region with a character.
+    /// @param area Region to fill (relative to this canvas).
+    /// @param ch Character to fill with (ASCII).
+    /// @param style Style to apply.
+    void fill(Rect area, char ch, Style const& style);
+
+    /// Clears the entire canvas area.
+    /// @param style Style to apply (background color).
+    void clear(Style const& style = {});
+
+    // --- Box Drawing ---
+
+    /// Draws a box border within the given area.
+    /// @param area The area for the box (relative to this canvas).
+    /// @param border Border style to use.
+    /// @param style Style for the border.
+    void drawBox(Rect area, BorderStyle border, Style const& style);
+
+    /// Draws a box border with a title.
+    /// @param area The area for the box (relative to this canvas).
+    /// @param border Border style to use.
+    /// @param style Style for the border.
+    /// @param title Title text to display in the top border.
+    /// @param align Title alignment.
+    void drawBox(Rect area,
+                 BorderStyle border,
+                 Style const& style,
+                 std::string_view title,
+                 TitleAlign align = TitleAlign::Left);
+
+    /// Draws a horizontal line.
+    /// @param row Row for the line.
+    /// @param startCol Starting column.
+    /// @param width Width in columns.
+    /// @param ch Character to use (e.g., '-' or unicode box char).
+    /// @param style Style to apply.
+    void drawHLine(int row, int startCol, int width, std::string_view ch, Style const& style);
+
+    /// Draws a vertical line.
+    /// @param col Column for the line.
+    /// @param startRow Starting row.
+    /// @param height Height in rows.
+    /// @param ch Character to use (e.g., '|' or unicode box char).
+    /// @param style Style to apply.
+    void drawVLine(int col, int startRow, int height, std::string_view ch, Style const& style);
+
+    // --- Cursor ---
+
+    /// Sets the cursor position (relative to this canvas).
+    /// The cursor position is stored in the underlying buffer.
+    /// @param row Row relative to this canvas.
+    /// @param col Column relative to this canvas.
+    void setCursor(int row, int col);
+
+    /// Hides the cursor.
+    void hideCursor();
+
+    // --- Subcanvas ---
+
+    /// Creates a sub-canvas for a region within this canvas.
+    /// The returned canvas is clipped to both the given area and this canvas's bounds.
+    /// @param area Region for the sub-canvas (relative to this canvas).
+    /// @return A new Canvas for the specified region.
+    [[nodiscard]] Canvas subcanvas(Rect area) const;
+
+    // --- Properties ---
+
+    /// Returns the width of this canvas in columns.
+    [[nodiscard]] int width() const noexcept { return _area.width; }
+
+    /// Returns the height of this canvas in rows.
+    [[nodiscard]] int height() const noexcept { return _area.height; }
+
+    /// Returns the size of this canvas.
+    [[nodiscard]] Size size() const noexcept { return _area.size(); }
+
+    /// Returns the canvas area (always starts at 0,0 in local coordinates).
+    [[nodiscard]] Rect area() const noexcept { return Rect { 0, 0, _area.width, _area.height }; }
+
+    /// Returns the theme.
+    [[nodiscard]] Theme const& theme() const noexcept { return _theme; }
+
+    /// Returns the underlying buffer (for advanced use).
+    [[nodiscard]] Buffer& buffer() noexcept { return _buffer; }
+
+    [[nodiscard]] Buffer const& buffer() const noexcept { return _buffer; }
+
+  private:
+    Buffer& _buffer;
+    Rect _area; ///< This canvas's region in buffer coordinates
+    Theme const& _theme;
+
+    /// Translates local row to buffer row.
+    [[nodiscard]] int toBufferRow(int localRow) const noexcept { return _area.y + localRow; }
+
+    /// Translates local column to buffer column.
+    [[nodiscard]] int toBufferCol(int localCol) const noexcept { return _area.x + localCol; }
+
+    /// Checks if local coordinates are within this canvas's bounds.
+    [[nodiscard]] bool inBounds(int row, int col) const noexcept
+    {
+        return row >= 0 && row < _area.height && col >= 0 && col < _area.width;
+    }
+
+    /// Clips a local rectangle to this canvas's bounds.
+    [[nodiscard]] Rect clipToLocal(Rect localArea) const noexcept;
+
+    /// Translates a local rectangle to buffer coordinates.
+    [[nodiscard]] Rect toBufferRect(Rect localArea) const noexcept;
+};
+
+} // namespace tui

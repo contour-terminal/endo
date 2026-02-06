@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: Apache-2.0
+#pragma once
+
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+
+#include <tui/Buffer.hpp>
+#include <tui/Component.hpp>
+#include <tui/Theme.hpp>
+
+namespace tui
+{
+
+class Terminal;
+
+/// Viewport mode for the screen.
+enum class Viewport : uint8_t
+{
+    Fullscreen, ///< Uses entire terminal, clears on each frame.
+    Inline,     ///< Renders at current cursor position, grows downward.
+    Fixed,      ///< Fixed region of the terminal.
+};
+
+/// Render mode for performance testing.
+enum class RenderMode : uint8_t
+{
+    Diff, ///< Only write changed cells (default).
+    Full, ///< Always write all cells (for benchmarking).
+};
+
+/// Configuration for the Screen.
+struct ScreenConfig
+{
+    Viewport viewport = Viewport::Fullscreen;
+    Rect fixedArea;          ///< For Viewport::Fixed.
+    int inlineMaxHeight = 0; ///< For Viewport::Inline (0 = no limit).
+};
+
+/// Central coordinator for the TUI component system.
+///
+/// Screen manages the component tree, rendering, event dispatch, and focus.
+/// It owns the root component and coordinates all rendering through a
+/// double-buffered diff system for efficient terminal updates.
+///
+/// Usage:
+/// @code
+/// tui::Terminal terminal;
+/// tui::Screen screen(terminal);
+///
+/// // Add components to root
+/// MyComponent myComp;
+/// screen.root().addChild(myComp, {.area = {0, 0, 40, 10}});
+///
+/// // Main loop
+/// while (running) {
+///     screen.draw();  // Render and flush
+///     for (auto& event : terminal.poll())
+///         screen.dispatchEvent(event);
+/// }
+/// @endcode
+class Screen
+{
+  public:
+    /// Constructs a Screen attached to the given terminal.
+    /// @param terminal The terminal for input/output.
+    /// @param config Optional configuration.
+    explicit Screen(Terminal& terminal, ScreenConfig config = {});
+
+    ~Screen();
+
+    // Prevent copying
+    Screen(Screen const&) = delete;
+    Screen& operator=(Screen const&) = delete;
+
+    // --- Root Component ---
+
+    /// Returns the root component. Add top-level components as children.
+    [[nodiscard]] Component& root() noexcept;
+    [[nodiscard]] Component const& root() const noexcept;
+
+    // --- Rendering ---
+
+    /// Renders the component tree to the terminal.
+    /// Performs diff-based update (or full update if RenderMode::Full).
+    void draw();
+
+    /// Marks the entire screen as needing a full redraw.
+    void invalidate();
+
+    /// Marks a specific component as needing a redraw.
+    void invalidate(Component& component);
+
+    // --- Render Mode ---
+
+    /// Sets the render mode (Diff or Full).
+    void setRenderMode(RenderMode mode) { _renderMode = mode; }
+
+    /// Returns the current render mode.
+    [[nodiscard]] RenderMode renderMode() const noexcept { return _renderMode; }
+
+    // --- Theme ---
+
+    /// Sets the theme for all components.
+    void setTheme(Theme theme);
+
+    /// Returns the current theme.
+    [[nodiscard]] Theme const& theme() const noexcept { return _theme; }
+
+    // --- Dimensions ---
+
+    /// Returns the number of rows available for rendering.
+    [[nodiscard]] int rows() const noexcept;
+
+    /// Returns the number of columns available for rendering.
+    [[nodiscard]] int cols() const noexcept;
+
+    /// Returns the size of the rendering area.
+    [[nodiscard]] Size size() const noexcept;
+
+    // --- Viewport ---
+
+    /// Sets the viewport mode.
+    void setViewport(Viewport viewport);
+
+    /// Sets a fixed viewport area.
+    void setViewport(Rect fixedArea);
+
+    /// Returns the current viewport mode.
+    [[nodiscard]] Viewport viewport() const noexcept { return _config.viewport; }
+
+    /// Returns the current viewport area in terminal coordinates.
+    [[nodiscard]] Rect viewportArea() const noexcept;
+
+    // --- Event Dispatch ---
+
+    /// Dispatches an event through the component tree.
+    /// For mouse events: hit tests to find target, then bubbles up.
+    /// For keyboard events: sends to focused component, then bubbles up.
+    /// @param event The event to dispatch.
+    /// @return The result of event handling.
+    [[nodiscard]] EventResult dispatchEvent(InputEvent const& event);
+
+    // --- Focus Groups ---
+
+    /// Sets the active focus group.
+    /// Only the active group receives keyboard events.
+    void setActiveGroup(FocusGroupId const& group);
+
+    /// Returns the active focus group.
+    [[nodiscard]] FocusGroupId const& activeGroup() const noexcept { return _activeGroup; }
+
+    /// Sets the focused component within a focus group.
+    void setFocus(Component* component);
+
+    /// Sets the focused component within a specific focus group.
+    void setFocus(FocusGroupId const& group, Component* component);
+
+    /// Returns the focused component in the active group.
+    [[nodiscard]] Component* focusedComponent() const noexcept;
+
+    /// Returns the focused component in a specific group.
+    [[nodiscard]] Component* focusedComponent(FocusGroupId const& group) const noexcept;
+
+    /// Moves focus to the next focusable component in the active group.
+    void focusNext();
+
+    /// Moves focus to the previous focusable component in the active group.
+    void focusPrev();
+
+    // --- Terminal Access ---
+
+    /// Returns the terminal.
+    [[nodiscard]] Terminal& terminal() noexcept { return _terminal; }
+
+    [[nodiscard]] Terminal const& terminal() const noexcept { return _terminal; }
+
+  private:
+    Terminal& _terminal;
+    ScreenConfig _config;
+    Theme _theme;
+    RenderMode _renderMode = RenderMode::Diff;
+
+    std::unique_ptr<RootComponent> _root;
+    Buffer _current;
+    Buffer _previous;
+
+    bool _needsFullRedraw = true;
+    std::unordered_set<Component*> _dirtyComponents;
+    int _previousContentHeight = 0;
+    int _previousCursorRow = 0; ///< Cursor row at end of last inline render (for positioning)
+
+    // Focus state
+    FocusGroupId _activeGroup = std::string(DefaultFocusGroup);
+    std::unordered_map<FocusGroupId, Component*> _focusedComponents;
+
+    // Rendering phases
+    void beginFrame();
+    void renderTree();
+    void renderComponent(Component& component, Rect parentBounds);
+    void endFrame();
+    void flush();
+    void flushFullscreen();
+    void flushInline();
+    void flushFixed();
+
+    // Hit testing
+    [[nodiscard]] Component* componentAt(int row, int col) const;
+    [[nodiscard]] Component* componentAtRecursive(Component& component, int row, int col) const;
+
+    // Event dispatch helpers
+    [[nodiscard]] EventResult bubbleEvent(Component* target, InputEvent const& event);
+    [[nodiscard]] EventResult dispatchKeyEvent(InputEvent const& event);
+    [[nodiscard]] EventResult dispatchMouseEvent(MouseEvent const& mouse);
+
+    // Focus helpers
+    void updateFocus(Component* oldFocus, Component* newFocus);
+    [[nodiscard]] std::vector<Component*> collectFocusableComponents(FocusGroupId const& group) const;
+    void collectFocusableRecursive(Component& component,
+                                   FocusGroupId const& group,
+                                   std::vector<Component*>& out) const;
+};
+
+} // namespace tui
