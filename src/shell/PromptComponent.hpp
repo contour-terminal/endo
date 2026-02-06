@@ -88,11 +88,12 @@ class PromptComponent: public tui::Component
     /// @brief Result of processing input.
     enum class Action
     {
-        None,    ///< No action needed.
-        Changed, ///< Content changed, re-render needed.
-        Submit,  ///< User submitted input.
-        Abort,   ///< User aborted (Ctrl+C).
-        Eof,     ///< User pressed Ctrl+D on empty line.
+        None,        ///< No action needed.
+        Changed,     ///< Content changed, re-render needed.
+        Submit,      ///< User submitted input.
+        Abort,       ///< User aborted (Ctrl+C).
+        Eof,         ///< User pressed Ctrl+D on empty line.
+        ClearScreen, ///< User requested screen clear (Ctrl+L).
     };
 
     /// @brief Processes an input event and returns the action.

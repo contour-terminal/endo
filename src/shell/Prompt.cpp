@@ -147,6 +147,19 @@ std::string Prompt::read()
                     _screen->draw();
                     break;
                 }
+                case PromptComponent::Action::ClearScreen: {
+                    // Clear screen and move prompt to top
+                    auto& out = _terminal.output();
+                    out.clearScreen();
+                    out.flush();
+                    // Force full redraw since terminal was cleared
+                    _screen->invalidate();
+                    // Update component area and redraw
+                    auto pSize = _promptComponent->preferredSize();
+                    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                    _screen->draw();
+                    break;
+                }
                 case PromptComponent::Action::None: break;
             }
         }
@@ -220,6 +233,19 @@ std::optional<std::string> Prompt::processInput()
                 _aborted = true;
                 return std::string {};
             case PromptComponent::Action::Changed: {
+                auto pSize = _promptComponent->preferredSize();
+                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _screen->draw();
+                break;
+            }
+            case PromptComponent::Action::ClearScreen: {
+                // Clear screen and move prompt to top
+                auto& out = _terminal.output();
+                out.clearScreen();
+                out.flush();
+                // Force full redraw since terminal was cleared
+                _screen->invalidate();
+                // Update component area and redraw
                 auto pSize = _promptComponent->preferredSize();
                 _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
                 _screen->draw();

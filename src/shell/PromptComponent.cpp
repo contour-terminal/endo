@@ -320,6 +320,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             return Action::Changed;
         }
 
+        // Ctrl+L clears the screen
+        if (key->codepoint == 'l' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        {
+            return Action::ClearScreen;
+        }
+
         // Right arrow or End at end of line accepts ghost text
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
