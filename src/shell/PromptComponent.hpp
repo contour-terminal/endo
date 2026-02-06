@@ -108,6 +108,7 @@ class PromptComponent: public tui::Component
     static constexpr auto BackgroundColor = tui::RgbColor { .r = 45, .g = 50, .b = 55 };    // Soft gray
     static constexpr auto PromptTextColor = tui::RgbColor { .r = 180, .g = 180, .b = 180 }; // Light gray
     static constexpr auto InputTextColor = tui::RgbColor { .r = 220, .g = 220, .b = 220 };  // Brighter
+    static constexpr int HorizontalMargin = 1; // Left and right margin
     static constexpr int LeftBarWidth = 1;
     static constexpr int PaddingAfterBar = 1;
 

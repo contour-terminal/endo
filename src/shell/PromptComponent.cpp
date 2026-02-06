@@ -27,10 +27,13 @@ PromptComponent::PromptComponent()
 
 void PromptComponent::render(tui::Canvas& canvas)
 {
-    auto const width = canvas.width();
+    auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
     auto const promptTextWidth = displayWidth(_promptStr);
-    auto const totalPromptWidth = LeftBarWidth + PaddingAfterBar + promptTextWidth;
+    auto const totalPromptWidth = HorizontalMargin + LeftBarWidth + PaddingAfterBar + promptTextWidth;
+
+    // Effective content width (excluding margins)
+    auto const contentWidth = canvasWidth - 2 * HorizontalMargin;
 
     // Create styles
     tui::Style bgStyle;
@@ -66,17 +69,18 @@ void PromptComponent::render(tui::Canvas& canvas)
     {
         auto const lineContent = _inputField.lineAt(lineIndex);
 
-        // Fill line with background
-        canvas.fill(tui::Rect { lineIndex, 0, width, 1 }, ' ', bgStyle);
+        // Fill content area with background (with margins)
+        canvas.fill(tui::Rect { HorizontalMargin, lineIndex, contentWidth, 1 }, ' ', bgStyle);
 
-        // Draw left bar (thin vertical bar)
-        canvas.put(lineIndex, 0, "\xe2\x96\x8e", leftBarStyle); // U+258E LEFT ONE QUARTER BLOCK
+        // Draw left bar (thin vertical bar) after left margin
+        canvas.put(
+            lineIndex, HorizontalMargin, "\xe2\x96\x8e", leftBarStyle); // U+258E LEFT ONE QUARTER BLOCK
 
         // Padding after bar
-        canvas.put(lineIndex, 1, " ", bgStyle);
+        canvas.put(lineIndex, HorizontalMargin + 1, " ", bgStyle);
 
         // Prompt or continuation indicator
-        auto col = LeftBarWidth + PaddingAfterBar;
+        auto col = HorizontalMargin + LeftBarWidth + PaddingAfterBar;
         if (lineIndex == 0)
         {
             col += canvas.putString(lineIndex, col, _promptStr, promptStyle);
@@ -150,7 +154,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     auto const cursorLine = _inputField.cursorLine();
     auto const cursorColumn = _inputField.cursorColumn();
 
-    // Calculate cursor display position
+    // Calculate cursor display position (including left margin)
     auto const lineContent = _inputField.lineAt(cursorLine);
     int displayCol = totalPromptWidth;
 
@@ -174,10 +178,11 @@ void PromptComponent::render(tui::Canvas& canvas)
     if (_completionPopup.visible())
     {
         auto popupSize = _completionPopup.preferredSize();
-        auto popupRect = tui::Rect { cursorLine + 1, // Below cursor
-                                     totalPromptWidth,
-                                     std::min(popupSize.width, width - totalPromptWidth),
-                                     std::min(popupSize.height, canvas.height() - cursorLine - 1) };
+        auto popupRect =
+            tui::Rect { cursorLine + 1, // Below cursor
+                        totalPromptWidth,
+                        std::min(popupSize.width, canvasWidth - totalPromptWidth - HorizontalMargin),
+                        std::min(popupSize.height, canvas.height() - cursorLine - 1) };
 
         if (popupRect.height > 0)
         {
