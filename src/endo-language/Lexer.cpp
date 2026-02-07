@@ -242,10 +242,84 @@ void Lexer::consumeWhitespace()
 
 Token Lexer::consumeNumber()
 {
+    // Consume integer part
     while (_currentChar >= U'0' && _currentChar <= U'9')
     {
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
+    }
+
+    // Check for fractional part: '.' followed by digit
+    // Peek ahead to distinguish floats (2.5) from ranges (2..10) or filenames (2.txt)
+    if (_currentChar == U'.')
+    {
+        char32_t const afterDot = _source->peekChar();
+        if (afterDot >= U'0' && afterDot <= U'9')
+        {
+            // It's a float - consume the dot and fractional digits
+            _nextToken.literal += '.';
+            nextChar(); // consume '.'
+
+            while (_currentChar >= U'0' && _currentChar <= U'9')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+
+            // Check for exponent part: 'e' or 'E'
+            if (_currentChar == U'e' || _currentChar == U'E')
+            {
+                char32_t const afterE = _source->peekChar();
+                bool hasExponent = (afterE >= U'0' && afterE <= U'9') || afterE == U'+' || afterE == U'-';
+
+                if (hasExponent)
+                {
+                    _nextToken.literal += unicode::to_utf8(_currentChar);
+                    nextChar(); // consume 'e' or 'E'
+
+                    // Optional sign
+                    if (_currentChar == U'+' || _currentChar == U'-')
+                    {
+                        _nextToken.literal += unicode::to_utf8(_currentChar);
+                        nextChar();
+                    }
+
+                    // Exponent digits
+                    while (_currentChar >= U'0' && _currentChar <= U'9')
+                    {
+                        _nextToken.literal += unicode::to_utf8(_currentChar);
+                        nextChar();
+                    }
+                }
+            }
+        }
+        // else: it's not a float (e.g., "2..10" range or "2.txt" filename)
+    }
+    // Also check for exponent without fractional part (e.g., 2e10)
+    else if (_currentChar == U'e' || _currentChar == U'E')
+    {
+        char32_t const afterE = _source->peekChar();
+        bool hasExponent = (afterE >= U'0' && afterE <= U'9') || afterE == U'+' || afterE == U'-';
+
+        if (hasExponent)
+        {
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar(); // consume 'e' or 'E'
+
+            // Optional sign
+            if (_currentChar == U'+' || _currentChar == U'-')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+
+            // Exponent digits
+            while (_currentChar >= U'0' && _currentChar <= U'9')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+        }
     }
 
     return confirmToken(Token::Number);

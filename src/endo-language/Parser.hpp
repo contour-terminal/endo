@@ -88,6 +88,11 @@ class Parser
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     std::unique_ptr<ast::LambdaExpr> parseLambda();
     std::unique_ptr<ast::MatchExpr> parseMatch();
+    std::unique_ptr<ast::Expr> parseListLiteral(); ///< [1; 2; 3], [1..10], [for x in items -> x * 2]
+    std::unique_ptr<ast::Expr> parseListRangeFromContent(
+        std::string_view content); ///< Helper for range expressions
+    std::unique_ptr<ast::Expr> parseListElementFromString(
+        std::string_view elemStr); ///< Helper to parse a list element
 
     // F# expression parser (precedence climbing)
     // Precedence (low to high): |> || && comparisons +- */% ** unary application

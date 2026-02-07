@@ -60,6 +60,9 @@ struct BoolLiteralExpr;
 struct ParenExpr;
 struct LambdaExpr;
 struct MatchExpr;
+struct ListExpr;
+struct ListRangeExpr;
+struct ListComprehensionExpr;
 
 struct Visitor
 {
@@ -129,6 +132,9 @@ struct Visitor
     virtual void visit(ParenExpr const&) = 0;
     virtual void visit(LambdaExpr const&) = 0;
     virtual void visit(MatchExpr const&) = 0;
+    virtual void visit(ListExpr const&) = 0;
+    virtual void visit(ListRangeExpr const&) = 0;
+    virtual void visit(ListComprehensionExpr const&) = 0;
 };
 
 } // namespace endo::ast

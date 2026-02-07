@@ -1084,13 +1084,71 @@ struct MatchExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// List literal expression: `[1; 2; 3]`
+///
+/// Homogeneous list with semicolon-separated elements.
+/// An empty list `[]` is represented with an empty elements vector.
+struct ListExpr final: public Expr
+{
+    std::vector<std::unique_ptr<Expr>> elements; ///< List elements
+
+    explicit ListExpr(std::vector<std::unique_ptr<Expr>> elems): elements(std::move(elems)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// List range expression: `[1..10]` or `[start..step..end]`
+///
+/// Creates a list from a range of values.
+/// - `[1..10]` produces [1; 2; 3; ...; 10]
+/// - `[2; 4..20]` produces [2; 4; 6; ...; 20] (step inferred from first two elements)
+/// - `[10..-1..0]` produces [10; 9; 8; ...; 0] (explicit step)
+struct ListRangeExpr final: public Expr
+{
+    std::unique_ptr<Expr> start; ///< Starting value
+    std::unique_ptr<Expr> step;  ///< Optional step value (nullptr means step of 1)
+    std::unique_ptr<Expr> end;   ///< Ending value (inclusive)
+
+    ListRangeExpr(std::unique_ptr<Expr> s, std::unique_ptr<Expr> st, std::unique_ptr<Expr> e):
+        start(std::move(s)), step(std::move(st)), end(std::move(e))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// List comprehension expression: `[for x in items -> expr]` or `[for x in items when cond -> expr]`
+///
+/// Generates a list by transforming elements from a source collection.
+///
+/// Examples:
+/// - `[for x in 1..10 -> x * x]` - squares of 1 to 10
+/// - `[for x in items when x > 5 -> x * 2]` - double items greater than 5
+/// - `[for x in 1..3 -> for y in 1..3 -> (x, y)]` - cartesian product
+struct ListComprehensionExpr final: public Expr
+{
+    std::string variable;         ///< Iteration variable name
+    std::unique_ptr<Expr> source; ///< Source collection to iterate over
+    std::unique_ptr<Expr> filter; ///< Optional filter (when clause), nullptr if none
+    std::unique_ptr<Expr> body;   ///< Body expression to evaluate for each element
+
+    ListComprehensionExpr(std::string var,
+                          std::unique_ptr<Expr> src,
+                          std::unique_ptr<Expr> filt,
+                          std::unique_ptr<Expr> bodyExpr):
+        variable(std::move(var)), source(std::move(src)), filter(std::move(filt)), body(std::move(bodyExpr))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // F# Style - Deferred Features (Documented)
 // ============================================================================
 //
 // The following features are planned but not yet implemented:
 //
-// - List literals: [1; 2; 3]
 // - Tuple literals: (a, b, c)
 // - Record literals: { name = "Alice"; age = 30 }
 // - Type annotations: let x: int = 42

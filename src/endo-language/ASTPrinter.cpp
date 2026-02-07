@@ -688,4 +688,51 @@ void ASTPrinter::visit(MatchExpr const& node)
     }
 }
 
+void ASTPrinter::visit(ListExpr const& node)
+{
+    _result += '[';
+    for (size_t i = 0; i < node.elements.size(); ++i)
+    {
+        if (i > 0)
+            _result += "; ";
+        if (node.elements[i])
+            node.elements[i]->accept(*this);
+    }
+    _result += ']';
+}
+
+void ASTPrinter::visit(ListRangeExpr const& node)
+{
+    _result += '[';
+    if (node.start)
+        node.start->accept(*this);
+    _result += "..";
+    if (node.step)
+    {
+        node.step->accept(*this);
+        _result += "..";
+    }
+    if (node.end)
+        node.end->accept(*this);
+    _result += ']';
+}
+
+void ASTPrinter::visit(ListComprehensionExpr const& node)
+{
+    _result += "[for ";
+    _result += node.variable;
+    _result += " in ";
+    if (node.source)
+        node.source->accept(*this);
+    if (node.filter)
+    {
+        _result += " when ";
+        node.filter->accept(*this);
+    }
+    _result += " -> ";
+    if (node.body)
+        node.body->accept(*this);
+    _result += ']';
+}
+
 } // namespace endo::ast

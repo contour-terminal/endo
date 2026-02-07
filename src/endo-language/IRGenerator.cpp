@@ -1576,4 +1576,25 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     (void) node;
 }
 
+void IRGenerator::visit(ast::ListExpr const& node)
+{
+    // TODO: Implement list literals - requires list type in CoreVM
+    reportTypeError("F# list literals are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::ListRangeExpr const& node)
+{
+    // TODO: Implement list range expressions - requires list type in CoreVM
+    reportTypeError("F# list range expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::ListComprehensionExpr const& node)
+{
+    // TODO: Implement list comprehensions - requires list type and iteration in CoreVM
+    reportTypeError("F# list comprehensions are not yet implemented in IR generator");
+    (void) node;
+}
+
 } // namespace endo

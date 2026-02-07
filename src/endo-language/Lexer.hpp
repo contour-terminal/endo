@@ -144,6 +144,7 @@ class Source
 
     virtual void rewind() = 0;
     [[nodiscard]] virtual char32_t readChar() = 0;
+    [[nodiscard]] virtual char32_t peekChar() const = 0; ///< Look at next char without consuming
     [[nodiscard]] virtual std::string_view readGraphemeCluster() = 0;
     [[nodiscard]] virtual SourceLocation currentSourceLocation() const noexcept = 0;
 };
@@ -204,6 +205,20 @@ class StringSource final: public Source
     }
 
     [[nodiscard]] SourceLocation currentSourceLocation() const noexcept override { return _location; }
+
+    [[nodiscard]] char32_t peekChar() const override
+    {
+        if (_offset >= _source.size())
+            return static_cast<char32_t>(-1);
+
+        size_t bytesConsumed = 0;
+        auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);
+
+        if (!std::holds_alternative<unicode::Success>(result))
+            return U'\uFFFD'; // Invalid UTF-8: return replacement character
+
+        return std::get<unicode::Success>(result).value;
+    }
 
   private:
     SourceLocation _location;

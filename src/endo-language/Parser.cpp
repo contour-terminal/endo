@@ -2291,18 +2291,15 @@ bool Parser::isFSharpPrimary() const noexcept
     switch (_lexer.currentToken())
     {
         case Token::Number:
-        case Token::Identifier:
         case Token::RndOpen:
         case Token::Fun:
         case Token::Match: return true;
-        default:
-            // Check for true/false as bool literals in F# context
-            if (_lexer.currentToken() == Token::Identifier)
-            {
-                auto const& lit = _lexer.currentLiteral();
-                return lit == "true" || lit == "false";
-            }
-            return false;
+        case Token::Identifier: {
+            auto const& lit = _lexer.currentLiteral();
+            // Check for bool literals, or list literals starting with '['
+            return !lit.empty() && (lit == "true" || lit == "false" || lit[0] == '[');
+        }
+        default: return false;
     }
 }
 
@@ -2721,6 +2718,12 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return std::make_unique<ast::BoolLiteralExpr>(false);
             }
 
+            // Check for list literal starting with '['
+            if (!lit.empty() && lit[0] == '[')
+            {
+                return parseListLiteral();
+            }
+
             // Regular identifier
             std::string name = consumeLiteral();
             return std::make_unique<ast::IdentifierExpr>(std::move(name));
@@ -2753,6 +2756,355 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                _lexer.currentLiteral());
             return nullptr;
     }
+}
+
+// ============================================================================
+// List Literal Parsing
+// ============================================================================
+
+std::unique_ptr<ast::Expr> Parser::parseListLiteral()
+{
+    TRACE_SCOPE("parseListLiteral");
+
+    // The lexer handles list literals in different ways depending on content:
+    // 1. "[1..10]" or "[]" or "[42]" - lexed as single identifier (no internal semicolons)
+    // 2. "[1; 2; 3]" - split by semicolons into multiple tokens: "[1", ";", "2", ";", "3]"
+    //
+    // We handle both cases here.
+
+    auto const& lit = _lexer.currentLiteral();
+
+    if (lit.empty() || lit[0] != '[')
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected list literal starting with '['");
+        return nullptr;
+    }
+
+    // Check if the entire list is in one token (no internal semicolons)
+    // by looking for a closing ] in the current token
+    size_t depth = 0;
+    size_t closePos = std::string::npos;
+    for (size_t i = 0; i < lit.size(); ++i)
+    {
+        if (lit[i] == '[')
+            ++depth;
+        else if (lit[i] == ']')
+        {
+            --depth;
+            if (depth == 0)
+            {
+                closePos = i;
+                break;
+            }
+        }
+    }
+
+    // Case 1: Entire list is in one token (e.g., "[]", "[42]", "[1..10]")
+    if (closePos != std::string::npos)
+    {
+        std::string_view content = std::string_view(lit).substr(1, closePos - 1);
+
+        // Empty list: []
+        if (content.empty())
+        {
+            _lexer.nextToken();
+            return std::make_unique<ast::ListExpr>(std::vector<std::unique_ptr<ast::Expr>> {});
+        }
+
+        // Check for range expression: [1..10] or [1..2..10]
+        size_t rangePos = std::string::npos;
+        size_t bracketDepth = 0;
+        for (size_t i = 0; i + 1 < content.size(); ++i)
+        {
+            if (content[i] == '[')
+                ++bracketDepth;
+            else if (content[i] == ']')
+                --bracketDepth;
+            else if (bracketDepth == 0 && content[i] == '.' && content[i + 1] == '.')
+            {
+                rangePos = i;
+                break;
+            }
+        }
+
+        if (rangePos != std::string::npos)
+        {
+            // Parse range expression
+            return parseListRangeFromContent(content);
+        }
+
+        // Single element list (no semicolons in token)
+        std::vector<std::unique_ptr<ast::Expr>> elements;
+        auto elem = parseListElementFromString(content);
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+
+        _lexer.nextToken();
+        return std::make_unique<ast::ListExpr>(std::move(elements));
+    }
+
+    // Case 2: List has internal semicolons, so it's split into multiple tokens
+    // Current token is "[1" or just "[", we need to consume until we find "]"
+
+    std::vector<std::unique_ptr<ast::Expr>> elements;
+
+    // Parse first part: "[..." - extract content after '['
+    // Use string_view into the literal to avoid dangling reference
+    std::string_view firstPart = std::string_view(lit).substr(1); // Skip '['
+
+    // Trim leading whitespace
+    while (!firstPart.empty() && std::isspace(static_cast<unsigned char>(firstPart[0])))
+        firstPart.remove_prefix(1);
+
+    // If there's content after '[', parse it as first element
+    if (!firstPart.empty())
+    {
+        // Check if first part ends with ']' (single element list like "[42]")
+        if (firstPart.back() == ']')
+        {
+            firstPart.remove_suffix(1);
+            if (!firstPart.empty())
+            {
+                auto elem = parseListElementFromString(firstPart);
+                if (!elem)
+                    return nullptr;
+                elements.push_back(std::move(elem));
+            }
+            _lexer.nextToken();
+            return std::make_unique<ast::ListExpr>(std::move(elements));
+        }
+
+        auto elem = parseListElementFromString(firstPart);
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+    }
+
+    _lexer.nextToken(); // consume first token
+
+    // Continue parsing: expect pattern of (';' element)* ']' or 'element]'
+    while (true)
+    {
+        // Check for semicolon separator
+        if (_lexer.currentToken() == Token::Semicolon)
+        {
+            _lexer.nextToken(); // consume ';'
+            continue;
+        }
+
+        // Check for identifier token (next element or closing bracket)
+        if (_lexer.currentToken() == Token::Identifier || _lexer.currentToken() == Token::Number)
+        {
+            auto const& elemLit = _lexer.currentLiteral();
+
+            // Check if this token ends with ']'
+            bool endsWithBracket = !elemLit.empty() && elemLit.back() == ']';
+
+            // Create string_view directly from the reference
+            std::string_view elemContent(elemLit);
+            if (endsWithBracket)
+                elemContent = elemContent.substr(0, elemContent.size() - 1);
+
+            // Trim whitespace
+            while (!elemContent.empty() && std::isspace(static_cast<unsigned char>(elemContent[0])))
+                elemContent.remove_prefix(1);
+            while (!elemContent.empty() && std::isspace(static_cast<unsigned char>(elemContent.back())))
+                elemContent.remove_suffix(1);
+
+            if (!elemContent.empty())
+            {
+                auto elem = parseListElementFromString(elemContent);
+                if (!elem)
+                    return nullptr;
+                elements.push_back(std::move(elem));
+            }
+
+            _lexer.nextToken();
+
+            if (endsWithBracket)
+            {
+                // We found the closing bracket
+                return std::make_unique<ast::ListExpr>(std::move(elements));
+            }
+
+            continue;
+        }
+
+        // Unexpected token
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ']'" },
+                                           currentContextSnippet(),
+                                           "Unexpected token in list literal: '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+}
+
+// Helper to parse a range expression from content string like "1..10" or "2..2..20"
+std::unique_ptr<ast::Expr> Parser::parseListRangeFromContent(std::string_view content)
+{
+    // Find ".." pattern
+    size_t rangePos = std::string::npos;
+    size_t bracketDepth = 0;
+    for (size_t i = 0; i + 1 < content.size(); ++i)
+    {
+        if (content[i] == '[')
+            ++bracketDepth;
+        else if (content[i] == ']')
+            --bracketDepth;
+        else if (bracketDepth == 0 && content[i] == '.' && content[i + 1] == '.')
+        {
+            rangePos = i;
+            break;
+        }
+    }
+
+    if (rangePos == std::string::npos)
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected range '..' in list range expression");
+        return nullptr;
+    }
+
+    // Parse: [start..end] or [start..step..end]
+    std::string_view startPart = content.substr(0, rangePos);
+    std::string_view restPart = content.substr(rangePos + 2); // Skip ".."
+
+    // Check for second ".." (step)
+    size_t secondRangePos = std::string::npos;
+    bracketDepth = 0;
+    for (size_t i = 0; i + 1 < restPart.size(); ++i)
+    {
+        if (restPart[i] == '[')
+            ++bracketDepth;
+        else if (restPart[i] == ']')
+            --bracketDepth;
+        else if (bracketDepth == 0 && restPart[i] == '.' && restPart[i + 1] == '.')
+        {
+            secondRangePos = i;
+            break;
+        }
+    }
+
+    // Parse start value
+    auto startExpr = parseListElementFromString(startPart);
+    if (!startExpr)
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Invalid start value in list range");
+        return nullptr;
+    }
+
+    std::unique_ptr<ast::Expr> stepExpr;
+    std::unique_ptr<ast::Expr> endExpr;
+
+    if (secondRangePos != std::string::npos)
+    {
+        // Format: [start..step..end]
+        std::string_view stepPart = restPart.substr(0, secondRangePos);
+        std::string_view endPart = restPart.substr(secondRangePos + 2);
+
+        stepExpr = parseListElementFromString(stepPart);
+        if (!stepExpr)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Invalid step value in list range");
+            return nullptr;
+        }
+
+        endExpr = parseListElementFromString(endPart);
+        if (!endExpr)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Invalid end value in list range");
+            return nullptr;
+        }
+    }
+    else
+    {
+        // Format: [start..end]
+        endExpr = parseListElementFromString(restPart);
+        if (!endExpr)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Invalid end value in list range");
+            return nullptr;
+        }
+    }
+
+    _lexer.nextToken(); // consume the list literal token
+    return std::make_unique<ast::ListRangeExpr>(
+        std::move(startExpr), std::move(stepExpr), std::move(endExpr));
+}
+
+// Helper to parse a single element from a string
+std::unique_ptr<ast::Expr> Parser::parseListElementFromString(std::string_view elemStr)
+{
+    // Trim whitespace
+    while (!elemStr.empty() && std::isspace(static_cast<unsigned char>(elemStr.front())))
+        elemStr.remove_prefix(1);
+    while (!elemStr.empty() && std::isspace(static_cast<unsigned char>(elemStr.back())))
+        elemStr.remove_suffix(1);
+
+    if (elemStr.empty())
+        return nullptr;
+
+    // Check for bool literals
+    if (elemStr == "true")
+        return std::make_unique<ast::BoolLiteralExpr>(true);
+    if (elemStr == "false")
+        return std::make_unique<ast::BoolLiteralExpr>(false);
+
+    // Check for nested list
+    if (!elemStr.empty() && elemStr[0] == '[')
+    {
+        // Nested list - this would require recursive parsing
+        // For now, return an error
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Nested list literals are not yet supported");
+        return nullptr;
+    }
+
+    // Try to parse as integer or float
+    std::string elemStrCopy(elemStr);
+    if (elemStr.find('.') != std::string_view::npos || elemStr.find('e') != std::string_view::npos
+        || elemStr.find('E') != std::string_view::npos)
+    {
+        // Try float
+        try
+        {
+            double value = std::stod(elemStrCopy);
+            return std::make_unique<ast::FloatLiteralExpr>(value);
+        }
+        catch (...)
+        {
+            // Fall through to identifier
+        }
+    }
+    else
+    {
+        // Try integer (handle negative numbers too)
+        int64_t value = 0;
+        auto [ptr, ec] = std::from_chars(elemStr.data(), elemStr.data() + elemStr.size(), value);
+        if (ec == std::errc() && ptr == elemStr.data() + elemStr.size())
+        {
+            return std::make_unique<ast::IntLiteralExpr>(value);
+        }
+    }
+
+    // String literal (quoted)
+    if (elemStr.size() >= 2
+        && ((elemStr.front() == '"' && elemStr.back() == '"')
+            || (elemStr.front() == '\'' && elemStr.back() == '\'')))
+    {
+        std::string stringValue(elemStr.substr(1, elemStr.size() - 2));
+        return std::make_unique<ast::LiteralExpr>(std::move(stringValue));
+    }
+
+    // Identifier
+    return std::make_unique<ast::IdentifierExpr>(std::string(elemStr));
 }
 
 // ============================================================================

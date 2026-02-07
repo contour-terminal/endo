@@ -74,6 +74,9 @@ class ASTPrinter: public Visitor
     void visit(ParenExpr const& node) override;
     void visit(LambdaExpr const& node) override;
     void visit(MatchExpr const& node) override;
+    void visit(ListExpr const& node) override;
+    void visit(ListRangeExpr const& node) override;
+    void visit(ListComprehensionExpr const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

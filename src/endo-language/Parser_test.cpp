@@ -786,3 +786,292 @@ TEST_CASE("Parser.FSharp.ASTPrinter.match_constructor")
     std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
     CHECK(printed == "let r = match opt with | Some x -> x | None -> 0");
 }
+
+// ============================================================================
+// List Literal Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.list_empty")
+{
+    auto ast = parse("let xs = []");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "xs");
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    CHECK(listExpr->elements.empty());
+}
+
+TEST_CASE("Parser.FSharp.list_single_element")
+{
+    auto ast = parse("let xs = [42]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 1);
+
+    auto* elem = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[0].get());
+    REQUIRE(elem != nullptr);
+    CHECK(elem->value == 42);
+}
+
+TEST_CASE("Parser.FSharp.list_multiple_integers")
+{
+    auto ast = parse("let nums = [1;2;3]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "nums");
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+
+    auto* elem0 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[0].get());
+    auto* elem1 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[1].get());
+    auto* elem2 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[2].get());
+    REQUIRE(elem0 != nullptr);
+    REQUIRE(elem1 != nullptr);
+    REQUIRE(elem2 != nullptr);
+    CHECK(elem0->value == 1);
+    CHECK(elem1->value == 2);
+    CHECK(elem2->value == 3);
+}
+
+TEST_CASE("Parser.FSharp.list_with_spaces")
+{
+    auto ast = parse("let nums = [1; 2; 3]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+
+    auto* elem0 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[0].get());
+    auto* elem1 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[1].get());
+    auto* elem2 = dynamic_cast<endo::ast::IntLiteralExpr*>(listExpr->elements[2].get());
+    REQUIRE(elem0 != nullptr);
+    REQUIRE(elem1 != nullptr);
+    REQUIRE(elem2 != nullptr);
+    CHECK(elem0->value == 1);
+    CHECK(elem1->value == 2);
+    CHECK(elem2->value == 3);
+}
+
+TEST_CASE("Parser.FSharp.list_booleans")
+{
+    auto ast = parse("let flags = [true;false;true]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+
+    auto* elem0 = dynamic_cast<endo::ast::BoolLiteralExpr*>(listExpr->elements[0].get());
+    auto* elem1 = dynamic_cast<endo::ast::BoolLiteralExpr*>(listExpr->elements[1].get());
+    auto* elem2 = dynamic_cast<endo::ast::BoolLiteralExpr*>(listExpr->elements[2].get());
+    REQUIRE(elem0 != nullptr);
+    REQUIRE(elem1 != nullptr);
+    REQUIRE(elem2 != nullptr);
+    CHECK(elem0->value == true);
+    CHECK(elem1->value == false);
+    CHECK(elem2->value == true);
+}
+
+TEST_CASE("Parser.FSharp.list_floats")
+{
+    auto ast = parse("let ratios = [1.0;2.5;3.14]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+
+    auto* elem0 = dynamic_cast<endo::ast::FloatLiteralExpr*>(listExpr->elements[0].get());
+    auto* elem1 = dynamic_cast<endo::ast::FloatLiteralExpr*>(listExpr->elements[1].get());
+    auto* elem2 = dynamic_cast<endo::ast::FloatLiteralExpr*>(listExpr->elements[2].get());
+    REQUIRE(elem0 != nullptr);
+    REQUIRE(elem1 != nullptr);
+    REQUIRE(elem2 != nullptr);
+    CHECK(elem0->value == 1.0);
+    CHECK(elem1->value == 2.5);
+    CHECK(elem2->value == 3.14);
+}
+
+TEST_CASE("Parser.FSharp.list_identifiers")
+{
+    auto ast = parse("let vars = [x;y;z]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+
+    auto* elem0 = dynamic_cast<endo::ast::IdentifierExpr*>(listExpr->elements[0].get());
+    auto* elem1 = dynamic_cast<endo::ast::IdentifierExpr*>(listExpr->elements[1].get());
+    auto* elem2 = dynamic_cast<endo::ast::IdentifierExpr*>(listExpr->elements[2].get());
+    REQUIRE(elem0 != nullptr);
+    REQUIRE(elem1 != nullptr);
+    REQUIRE(elem2 != nullptr);
+    CHECK(elem0->name == "x");
+    CHECK(elem1->name == "y");
+    CHECK(elem2->name == "z");
+}
+
+// ============================================================================
+// List Range Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.list_range_simple")
+{
+    auto ast = parse("let nums = [1..10]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "nums");
+
+    auto* rangeExpr = dynamic_cast<endo::ast::ListRangeExpr*>(letStmt->value.get());
+    REQUIRE(rangeExpr != nullptr);
+
+    auto* start = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->start.get());
+    REQUIRE(start != nullptr);
+    CHECK(start->value == 1);
+
+    auto* end = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->end.get());
+    REQUIRE(end != nullptr);
+    CHECK(end->value == 10);
+
+    // No step specified
+    CHECK(rangeExpr->step == nullptr);
+}
+
+TEST_CASE("Parser.FSharp.list_range_with_step")
+{
+    auto ast = parse("let evens = [2..2..20]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* rangeExpr = dynamic_cast<endo::ast::ListRangeExpr*>(letStmt->value.get());
+    REQUIRE(rangeExpr != nullptr);
+
+    auto* start = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->start.get());
+    REQUIRE(start != nullptr);
+    CHECK(start->value == 2);
+
+    auto* step = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->step.get());
+    REQUIRE(step != nullptr);
+    CHECK(step->value == 2);
+
+    auto* end = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->end.get());
+    REQUIRE(end != nullptr);
+    CHECK(end->value == 20);
+}
+
+TEST_CASE("Parser.FSharp.list_range_countdown")
+{
+    auto ast = parse("let countdown = [10..-1..0]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* rangeExpr = dynamic_cast<endo::ast::ListRangeExpr*>(letStmt->value.get());
+    REQUIRE(rangeExpr != nullptr);
+
+    auto* start = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->start.get());
+    REQUIRE(start != nullptr);
+    CHECK(start->value == 10);
+
+    auto* step = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->step.get());
+    REQUIRE(step != nullptr);
+    CHECK(step->value == -1);
+
+    auto* end = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->end.get());
+    REQUIRE(end != nullptr);
+    CHECK(end->value == 0);
+}
+
+// ============================================================================
+// List ASTPrinter Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_empty")
+{
+    auto ast = parse("let xs = []");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let xs = []");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_elements")
+{
+    auto ast = parse("let nums = [1;2;3]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let nums = [1; 2; 3]");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_range")
+{
+    auto ast = parse("let nums = [1..10]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let nums = [1..10]");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_range_with_step")
+{
+    auto ast = parse("let evens = [2..2..20]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let evens = [2..2..20]");
+}
