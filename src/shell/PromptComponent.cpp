@@ -269,6 +269,13 @@ int PromptComponent::displayWidth(std::string_view text)
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
 {
+    // Hide tooltip when user starts typing
+    if (std::holds_alternative<tui::KeyEvent>(event))
+    {
+        if (auto* scr = screen())
+            scr->hideTooltip();
+    }
+
     // Track if popup was visible before processing (for dynamic filtering)
     bool const popupWasVisible = _completionPopup.visible();
     bool popupDismissedByTyping = false;

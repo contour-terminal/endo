@@ -89,10 +89,11 @@ void Prompt::setupHoverCallbacks()
         // Check if hovering over our prompt component
         if (hover.target == _promptComponent.get() || hover.target == nullptr)
         {
-            // Convert to component-relative coordinates
+            // hover.x and hover.y are viewport-relative 1-based coordinates
+            // Convert to component-relative 0-based coordinates
             auto const bounds = _promptComponent->screenBounds();
-            int const relX = hover.x - bounds.x;
-            int const relY = hover.y - bounds.y;
+            int const relX = hover.x - 1 - bounds.x;
+            int const relY = hover.y - 1 - bounds.y;
             _promptComponent->onHoverConfirmed(relX, relY);
         }
     });
@@ -197,8 +198,8 @@ std::string Prompt::read()
                     auto& out = _terminal.output();
                     out.clearScreen();
                     out.flush();
-                    // Force full redraw since terminal was cleared
-                    _screen->invalidate();
+                    // Reset cursor tracking since screen was cleared and cursor moved to top
+                    _screen->releaseCursor();
                     // Update component area and redraw
                     auto pSize = _promptComponent->preferredSize();
                     _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
@@ -288,8 +289,8 @@ std::optional<std::string> Prompt::processInput()
                 auto& out = _terminal.output();
                 out.clearScreen();
                 out.flush();
-                // Force full redraw since terminal was cleared
-                _screen->invalidate();
+                // Reset cursor tracking since screen was cleared and cursor moved to top
+                _screen->releaseCursor();
                 // Update component area and redraw
                 auto pSize = _promptComponent->preferredSize();
                 _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });

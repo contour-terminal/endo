@@ -544,6 +544,13 @@ Component (base class)
 - `CommandResolver` determines command type (external, builtin, alias, not found) and provides tooltip text
 - Screen overlay system used for tooltip positioning
 - Hover callbacks integrated into event loop with poll timeout management
+- Tooltip automatically hides when user starts typing
+- Inline mode coordinate tracking handles content shifts caused by tooltip/popup rendering:
+  - `_mainContentHeight` tracks main content height before overlays for accurate mouse hit-testing
+  - `_peakContentHeight` tracks maximum allocated space to avoid redundant newline emission
+  - `_totalNewlinesEmitted` tracks cumulative shift for correct coordinate translation
+  - `_inlineContentStartRow` recalculated each frame based on terminal size and newlines emitted
+  - Ctrl+L (clear screen) calls `releaseCursor()` to reset coordinate tracking and re-query cursor position
 
 ### Phase 2.6: Customizable Prompt
 

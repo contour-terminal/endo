@@ -65,6 +65,10 @@ class Terminal
     /// @brief Returns whether the terminal is currently suspended.
     [[nodiscard]] auto isSuspended() const noexcept -> bool;
 
+    /// @brief Queries the current cursor position from the terminal.
+    /// @return Pair of (row, column), both 1-based, or (0, 0) on failure.
+    [[nodiscard]] auto queryCursorPosition() -> std::pair<int, int>;
+
   private:
     TerminalInput _input;
     TerminalOutput _output;

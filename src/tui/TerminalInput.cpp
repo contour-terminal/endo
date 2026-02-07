@@ -216,16 +216,16 @@ void TerminalInput::enableProtocols()
 {
     writeToTerminal(EnableCsiU);
     writeToTerminal(EnableSGRMouse);             // SGR format for extended coordinates
-    writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover)
-    writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag)
+    writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
+    writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
     writeToTerminal(EnableBracketedPaste);
 }
 
 void TerminalInput::disableProtocols()
 {
     writeToTerminal(DisableBracketedPaste);
+    writeToTerminal(DisableAnyMotionTracking); // Disable in reverse order
     writeToTerminal(DisablePassiveMouseTracking);
-    writeToTerminal(DisableAnyMotionTracking);
     writeToTerminal(DisableSGRMouse);
     writeToTerminal(DisableCsiU);
 }

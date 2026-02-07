@@ -53,7 +53,14 @@ struct PasteEvent
     std::string text; ///< Pasted text content.
 };
 
+/// @brief Cursor position report event (response to DSR).
+struct CursorPositionReport
+{
+    int row;    ///< Cursor row (1-based).
+    int column; ///< Cursor column (1-based).
+};
+
 /// @brief Discriminated union of all possible terminal input events.
-using InputEvent = std::variant<KeyEvent, MouseEvent, ResizeEvent, PasteEvent>;
+using InputEvent = std::variant<KeyEvent, MouseEvent, ResizeEvent, PasteEvent, CursorPositionReport>;
 
 } // namespace tui

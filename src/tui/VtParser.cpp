@@ -399,6 +399,17 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         return;
     }
 
+    // Check for cursor position report: ESC[row;colR
+    if (finalByte == 'R')
+    {
+        auto const params = parseCsiParams(_paramBuf);
+        if (params.size() >= 2)
+        {
+            events.emplace_back(CursorPositionReport { .row = params[0], .column = params[1] });
+        }
+        return;
+    }
+
     // Check for bracketed paste start: ESC[200~
     if (finalByte == '~' && _paramBuf == "200")
     {

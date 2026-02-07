@@ -288,7 +288,12 @@ class Screen
     bool _needsFullRedraw = true;
     std::unordered_set<Component*> _dirtyComponents;
     int _previousContentHeight = 0;
-    int _previousCursorRow = 0; ///< Cursor row at end of last inline render (for positioning)
+    int _previousCursorRow = 0;         ///< Cursor row at end of last inline render (for positioning)
+    int _inlineContentStartRow = -1;    ///< Terminal row (0-based) where inline content starts (-1 = unknown)
+    int _mainContentHeight = 0;         ///< Content height before overlays (for mouse coordinate translation)
+    int _previousMainContentHeight = 0; ///< Previous main content height (for detecting real content growth)
+    int _peakContentHeight = 0;         ///< High water mark - max content height we've allocated space for
+    int _totalNewlinesEmitted = 0;      ///< Total newlines emitted since start (for tracking content shift)
     // NOTE: Unscroll feature is disabled until properly implemented for inline mode.
     // The _scrolledLinesCount and _unscrollSupported fields are kept for future use.
     // int _scrolledLinesCount = 0;   ///< Lines scrolled into scrollback (for unscroll)

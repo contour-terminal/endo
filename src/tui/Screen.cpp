@@ -70,6 +70,32 @@ void Screen::draw()
 {
     beginFrame();
     renderTree();
+
+    // Calculate main content height BEFORE overlays for mouse coordinate translation
+    if (_config.viewport == Viewport::Inline)
+    {
+        _previousMainContentHeight = _mainContentHeight;
+        _mainContentHeight = 0;
+        for (int row = _current.rows() - 1; row >= 0; --row)
+        {
+            bool hasContent = false;
+            for (int col = 0; col < _current.cols(); ++col)
+            {
+                Cell const& cell = _current.at(row, col);
+                if (!cell.grapheme.empty() && cell.grapheme != " ")
+                {
+                    hasContent = true;
+                    break;
+                }
+            }
+            if (hasContent)
+            {
+                _mainContentHeight = row + 1;
+                break;
+            }
+        }
+    }
+
     renderOverlays();
     endFrame();
     flush();
@@ -94,6 +120,9 @@ void Screen::releaseCursor()
     // is no longer where we think it is. Reset to 0 so next draw() starts fresh.
     _previousContentHeight = 0;
     _previousCursorRow = 0;
+    _peakContentHeight = 0;
+    _inlineContentStartRow = -1;
+    _totalNewlinesEmitted = 0;
     _needsFullRedraw = true;
     // Reset cursor shape tracking so we re-apply it on next flush
     _currentCursorShape = CursorShape::Default;
@@ -528,18 +557,49 @@ void Screen::flushInline()
             out.moveUp(_previousCursorRow);
     }
 
-    // If content grew, scroll terminal by emitting newlines
-    if (contentHeight > _previousContentHeight)
+    // If content grew beyond our peak, we need to emit newlines to make room
+    // Only emit newlines when growing BEYOND the peak, not when re-showing an overlay
+    // that we already made room for.
+    if (contentHeight > _peakContentHeight)
     {
-        int newLines = contentHeight - _previousContentHeight;
-        for (int i = 0; i < newLines; ++i)
-            out.writeRaw("\n");
+        if (_peakContentHeight == 0)
+        {
+            // First render - query cursor position to know where we're starting
+            auto const [cursorRow, cursorCol] = _terminal.queryCursorPosition();
+            if (cursorRow > 0)
+            {
+                // cursorRow is 1-based, convert to 0-based
+                _inlineContentStartRow = cursorRow - 1;
+            }
+            else
+            {
+                // Query failed, assume bottom of terminal
+                _inlineContentStartRow = _terminal.rows() - contentHeight;
+            }
+            _peakContentHeight = contentHeight;
+        }
+        else
+        {
+            // Content grew - emit newlines to make room
+            int newLines = contentHeight - _peakContentHeight;
+            for (int i = 0; i < newLines; ++i)
+                out.writeRaw("\n");
 
-        // Move cursor back to top of our region
-        // IMPORTANT: Move up by newLines (the amount we moved down), NOT contentHeight!
-        // Moving up by contentHeight causes cursor drift when content grows/shrinks repeatedly.
-        if (newLines > 0)
-            out.moveUp(newLines);
+            // Move cursor back to top of our region
+            if (newLines > 0)
+                out.moveUp(newLines);
+
+            _peakContentHeight = contentHeight;
+            _totalNewlinesEmitted += newLines;
+
+            // Adjust start row for emitted newlines
+            _inlineContentStartRow -= newLines;
+        }
+    }
+    else if (_inlineContentStartRow < 0)
+    {
+        // Haven't set start row yet but peak is already set (shouldn't happen, but handle it)
+        _inlineContentStartRow = _terminal.rows() - _mainContentHeight - _totalNewlinesEmitted;
     }
 
     // Track how many rows to clear if content shrank
@@ -747,29 +807,36 @@ EventResult Screen::dispatchKeyEvent(InputEvent const& event)
 
 EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
 {
-    // Skip if terminal UI handled it
-    if (mouse.uiHandled)
-        return EventResult::Ignored;
+    // Note: We intentionally ignore mouse.uiHandled to ensure hover detection
+    // works even when the terminal (e.g., Contour with passive tracking) has
+    // already processed the event for its own UI purposes.
 
-    // Translate mouse coordinates for inline mode
-    // In inline mode, content renders at the bottom of the terminal, but component
-    // screenBounds are relative to the viewport origin (0, 0). We need to translate
-    // the absolute terminal coordinates to viewport-relative coordinates.
     int mouseRow = mouse.y - 1; // Convert to 0-based
     int mouseCol = mouse.x - 1;
 
-    if (_config.viewport == Viewport::Inline && _previousContentHeight > 0)
+    // Translate mouse coordinates for inline mode
+    // Use _mainContentHeight (content before overlays) to avoid tooltip affecting coordinates
+    int const contentHeight = (_mainContentHeight > 0) ? _mainContentHeight : _previousContentHeight;
+    if (_config.viewport == Viewport::Inline && contentHeight > 0)
     {
-        // Content starts at: terminalRows - contentHeight
-        int const contentStartRow = _terminal.rows() - _previousContentHeight;
-        mouseRow = mouse.y - 1 - contentStartRow;
+        // _inlineContentStartRow is calculated in flushInline() based on terminal size and peak content
+        // height
+        if (_inlineContentStartRow < 0)
+        {
+            // Not yet rendered - skip mouse handling
+            if (mouse.type == MouseEvent::Type::Move)
+                _hoverState.onMouseMove(mouseCol + 1, 0, nullptr);
+            return EventResult::Ignored;
+        }
+
+        mouseRow = mouse.y - 1 - _inlineContentStartRow;
 
         // If mouse is above the inline content area, ignore
-        if (mouseRow < 0)
+        if (mouseRow < 0 || mouseRow >= contentHeight)
         {
             // Still update hover state (to trigger leave if needed)
             if (mouse.type == MouseEvent::Type::Move)
-                _hoverState.onMouseMove(mouse.x, mouse.y, nullptr);
+                _hoverState.onMouseMove(mouseCol + 1, mouseRow + 1, nullptr);
             return EventResult::Ignored;
         }
     }
@@ -778,9 +845,10 @@ EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
     Component* target = componentAt(mouseRow, mouseCol);
 
     // Update hover state for mouse move events
+    // Use viewport-relative 1-based coordinates for consistency with component bounds
     if (mouse.type == MouseEvent::Type::Move)
     {
-        _hoverState.onMouseMove(mouse.x, mouse.y, target);
+        _hoverState.onMouseMove(mouseCol + 1, mouseRow + 1, target);
     }
 
     if (!target)

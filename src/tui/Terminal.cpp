@@ -109,4 +109,27 @@ auto Terminal::isSuspended() const noexcept -> bool
     return _input.isSuspended();
 }
 
+auto Terminal::queryCursorPosition() -> std::pair<int, int>
+{
+    // Send DSR (Device Status Report) to query cursor position
+    // Response will be: CSI row ; col R
+    _output.writeRaw("\033[6n");
+    _output.flush();
+
+    // Read response with a short timeout
+    auto events = _input.poll(100); // 100ms timeout
+
+    // Look for cursor position report in the events
+    for (auto const& event: events)
+    {
+        if (auto const* cpr = std::get_if<CursorPositionReport>(&event))
+        {
+            return { cpr->row, cpr->column };
+        }
+    }
+
+    // Failed to get response
+    return { 0, 0 };
+}
+
 } // namespace tui
