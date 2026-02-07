@@ -557,7 +557,11 @@ Component (base class)
 **Dependency:** Phase 2.1
 
 **Notes:**
-- Remember that LSP support will be implemented too. Prepare for code-reuse.
+- Implement syntax highlighting through fully parsing the source (command line prompt), and emitting tokens with associated types (keyword, command, argument, variable, operator, etc.)
+- This infrastructure is then also used for semantic highlighting in Phase 5.3: Language Server Protocol (LSP)
+- Highlighting is applied in real-time as the user types, with efficient incremental updates
+- Semantic highlighting distinguishes valid commands (green) from invalid ones (red)
+- Color schemes are configurable via the Theme system
 
 **Tasks:**
 - [ ] Design syntax highlighting architecture
