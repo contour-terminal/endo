@@ -58,11 +58,14 @@ endif()
 # Tests
 add_executable(test-endo-language
     test_main.cpp
+    TestHelper.hpp
+    TestHelper.cpp
     Lexer_test.cpp
     Diagnostics_test.cpp
     Type_test.cpp
     Pattern_test.cpp
     Parser_test.cpp
+    IRGenerator_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
 add_test(NAME test-endo-language COMMAND test-endo-language)

@@ -1,73 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-#include <CoreVM/CoreVM.hpp>
-
 #include <catch2/catch_test_macros.hpp>
-
-#include <memory>
-#include <string>
-#include <string_view>
 
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
-#include "Lexer.hpp"
-#include "Parser.hpp"
+#include "TestHelper.hpp"
 
-using namespace std::string_view_literals;
-
-namespace
-{
-
-// Test runtime holder for parser tests
-struct TestRuntime
-{
-    CoreVM::Runtime runtime;
-    CoreVM::diagnostics::ConsoleReport report;
-
-    TestRuntime()
-    {
-        // Register minimal builtins for the parser to work
-        runtime.registerFunction("callproc")
-            .param<std::vector<std::string>>("args")
-            .returnType(CoreVM::LiteralType::Number)
-            .bind(&TestRuntime::dummyCallProc, this);
-
-        runtime.registerFunction("callproc")
-            .param<bool>("last_in_chain")
-            .param<std::vector<std::string>>("args")
-            .returnType(CoreVM::LiteralType::Number)
-            .bind(&TestRuntime::dummyCallProcPiped, this);
-    }
-
-    void dummyCallProc(CoreVM::Params&) {}
-
-    void dummyCallProcPiped(CoreVM::Params&) {}
-};
-
-// Helper to create a parser from source code
-std::unique_ptr<endo::ast::Statement> parse(std::string const& source)
-{
-    static TestRuntime testRuntime;
-
-    endo::Parser parser(
-        testRuntime.runtime, testRuntime.report, std::make_unique<endo::StringSource>(source));
-    return parser.parse();
-}
-
-// Helper to get the first statement from a compound statement
-endo::ast::Statement* getFirstStatement(endo::ast::Statement* stmt)
-{
-    if (auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(stmt))
-    {
-        if (!compound->statements.empty())
-        {
-            return dynamic_cast<endo::ast::Statement*>(compound->statements[0].get());
-        }
-    }
-    return nullptr;
-}
-
-} // namespace
+using namespace endo::test;
 
 // =============================================================================
 // F# Let Binding Tests
