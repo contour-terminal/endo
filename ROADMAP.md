@@ -342,6 +342,8 @@ src/
 - List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
 - Lexer enhanced with `peekChar()` to properly recognize float literals (e.g., `2.5` as single token)
 - Lexer enhanced with `DotDot` token (`..`) for cleaner range parsing
+- Lexer recognizes negative number literals (e.g., `-42` as a single Number token)
+- Parser handles unary negation for identifiers (e.g., `-a` parsed as `UnaryExpr(Neg, IdentifierExpr("a"))`)
 - List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause
 - Comprehension body supports simple expressions and binary operations (e.g., `x * x`, `x + 1`)
 
