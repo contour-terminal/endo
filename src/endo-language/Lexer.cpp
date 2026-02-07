@@ -8,6 +8,51 @@ using namespace std::string_view_literals;
 namespace endo
 {
 
+namespace
+{
+    // Maps F# keywords to their token types
+    // Returns Token::Identifier if not a keyword
+    Token keywordToToken(std::string_view literal)
+    {
+        // F# keywords
+        if (literal == "let")
+            return Token::Let;
+        if (literal == "mut")
+            return Token::Mut;
+        if (literal == "fun")
+            return Token::Fun;
+        if (literal == "match")
+            return Token::Match;
+        if (literal == "with")
+            return Token::With;
+        if (literal == "when")
+            return Token::When;
+        if (literal == "type")
+            return Token::Type;
+        if (literal == "of")
+            return Token::Of;
+        if (literal == "rec")
+            return Token::Rec;
+        if (literal == "and")
+            return Token::And;
+        if (literal == "as")
+            return Token::As;
+        // Note: 'in' is NOT recognized as a keyword here because it's used in bash
+        // for-loops (for x in list) and case statements (case x in). The parser
+        // will detect F# style 'in' (let x = 1 in expr) by context.
+
+        // F# constructors
+        if (literal == "Some")
+            return Token::OptionSome;
+        if (literal == "None")
+            return Token::OptionNone;
+        if (literal == "Ok")
+            return Token::ResultOk;
+
+        return Token::Identifier;
+    }
+} // namespace
+
 Token Lexer::nextToken()
 {
     // If we're inside a double-quoted string (and not inside a substitution), use the special tokenizer
@@ -34,6 +79,8 @@ Token Lexer::nextToken()
             nextChar();
             if (_currentChar == '|')
                 return consumeCharAndConfirmToken(Token::PipePipe);
+            if (_currentChar == '>')
+                return consumeCharAndConfirmToken(Token::ForwardPipe);
             return confirmToken(Token::Pipe);
         case '&':
             nextChar();
@@ -43,7 +90,7 @@ Token Lexer::nextToken()
         case '>':
             nextChar();
             if (_currentChar == '>')
-                return consumeCharAndConfirmToken(Token::GreaterGreater);
+                return consumeCharAndConfirmToken(Token::GreaterGreater); // >> (redirect append or compose)
             else if (_currentChar == '=')
                 return consumeCharAndConfirmToken(Token::GreaterEqual);
             else if (_currentChar == '&')
@@ -62,8 +109,10 @@ Token Lexer::nextToken()
                 else if (_currentChar == '-')
                     return consumeCharAndConfirmToken(Token::LessLessDash);
                 else
-                    return confirmToken(Token::LessLess);
+                    return confirmToken(Token::LessLess); // << (here-doc or back-compose)
             }
+            else if (_currentChar == '-')
+                return consumeCharAndConfirmToken(Token::LeftArrow); // <- (mutation)
             else if (_currentChar == '=')
                 return consumeCharAndConfirmToken(Token::LessEqual);
             else if (_currentChar == '(')
@@ -98,6 +147,20 @@ Token Lexer::nextToken()
                 --_dquoteSubstDepth; // Closing backtick
             return consumeCharAndConfirmToken(Token::Backtick);
         case '~': return consumeTilde();
+        // Note: ? , : are NOT tokenized here to preserve shell compatibility.
+        // - ? is used in glob patterns like file?.txt
+        // - , is used in brace expansion like {a,b,c}
+        // - : is used in PATH-like values like /usr/bin:/usr/local/bin
+        // The parser handles these in F# expression context.
+        // Note: . and .. are NOT tokenized here to preserve shell compatibility.
+        // The parser handles . for field access and .. for ranges in F# contexts.
+        case '-':
+            nextChar();
+            if (_currentChar == '>')
+                return consumeCharAndConfirmToken(Token::Arrow); // -> (lambda arrow, match arm)
+            // Not an arrow, treat - and what follows as identifier (e.g., -l, --help, file-name)
+            _nextToken.literal = "-";
+            return consumeIdentifier();
         case '$':
             nextChar();
             if (_currentChar == '(')
@@ -213,12 +276,16 @@ Token Lexer::consumeIdentifier(Token token)
         return confirmToken(token);
     }
 
-    // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single
-    // tokens Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single
-    // tokens
+    // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single tokens.
+    // Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single tokens.
+    // Note: - is NOT reserved to allow command-line flags like -l and filenames like file-name.txt.
+    // Note: , is NOT reserved to allow brace expansion {a,b,c} to be lexed as single tokens.
+    // Note: ? is NOT reserved to allow glob patterns like file?.txt to be lexed as single tokens.
+    // Note: : is NOT reserved to allow values like one:two:three (common in PATH, etc.)
+    //       The parser handles :: and : contextually for F# cons and type annotations.
     auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
     // In arithmetic context, operators are also reserved to allow expressions like 1+2
-    auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&:?,"sv;
+    auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:"sv;
     // Arithmetic operators that should be lexed as single-char tokens
     auto constexpr ArithOperators = U"+-*/%^:?,"sv;
 
@@ -237,6 +304,15 @@ Token Lexer::consumeIdentifier(Token token)
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
     }
+
+    // Check for F# keywords only for regular identifiers (not DollarName)
+    if (token == Token::Identifier)
+    {
+        Token const keywordToken = keywordToToken(_nextToken.literal);
+        if (keywordToken != Token::Identifier)
+            return confirmToken(keywordToken);
+    }
+
     return confirmToken(token);
 }
 

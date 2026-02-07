@@ -616,3 +616,494 @@ TEST_CASE("Lexer.dquote_complex_example")
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::DblQuoteEnd);
 }
+
+// ============================================================================
+// F# Style Keyword Tests
+// ============================================================================
+
+TEST_CASE("Lexer.fsharp_let")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x = 42"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    CHECK(lexer.currentLiteral() == "let");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}
+
+TEST_CASE("Lexer.fsharp_let_mut")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let mut counter = 0"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Mut);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "counter");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0");
+}
+
+TEST_CASE("Lexer.fsharp_fun_keyword")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("fun x -> x + 1"));
+    CHECK(lexer.currentToken() == endo::Token::Fun);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Arrow);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+}
+
+TEST_CASE("Lexer.fsharp_match_with")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("match x with"));
+    CHECK(lexer.currentToken() == endo::Token::Match);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::With);
+}
+
+TEST_CASE("Lexer.fsharp_when_guard")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("when x > 0"));
+    CHECK(lexer.currentToken() == endo::Token::When);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Greater);
+}
+
+TEST_CASE("Lexer.fsharp_type_keyword")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("type Point = { x: int }"));
+    CHECK(lexer.currentToken() == endo::Token::Type);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "Point");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+}
+
+TEST_CASE("Lexer.fsharp_of_keyword")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("Some of int"));
+    CHECK(lexer.currentToken() == endo::Token::OptionSome);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Of);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "int");
+}
+
+TEST_CASE("Lexer.fsharp_rec_and")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let rec fib n = n and foo x = x"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Rec);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "fib");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "n");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "n");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::And);
+}
+
+TEST_CASE("Lexer.fsharp_as_pattern")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("x as y"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::As);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "y");
+}
+
+TEST_CASE("Lexer.fsharp_in_not_keyword")
+{
+    // 'in' is NOT tokenized as a keyword to preserve bash for-loops
+    // The parser recognizes 'in' contextually for F# let-in expressions
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x = 1 in x + 1"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "1");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier); // 'in' is an identifier
+    CHECK(lexer.currentLiteral() == "in");
+}
+
+// ============================================================================
+// F# Style Constructor Tests
+// ============================================================================
+
+TEST_CASE("Lexer.fsharp_option_some")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("Some 42"));
+    CHECK(lexer.currentToken() == endo::Token::OptionSome);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}
+
+TEST_CASE("Lexer.fsharp_option_none")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("None"));
+    CHECK(lexer.currentToken() == endo::Token::OptionNone);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.fsharp_result_ok")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("Ok value"));
+    CHECK(lexer.currentToken() == endo::Token::ResultOk);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "value");
+}
+
+// ============================================================================
+// F# Style Operator Tests
+// ============================================================================
+
+TEST_CASE("Lexer.fsharp_arrow")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("x -> y"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Arrow);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "y");
+}
+
+TEST_CASE("Lexer.fsharp_left_arrow")
+{
+    // Mutation assignment: x <- value
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("x <- 42"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::LeftArrow);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}
+
+TEST_CASE("Lexer.fsharp_forward_pipe")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("x |> f"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::ForwardPipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "f");
+}
+
+TEST_CASE("Lexer.fsharp_forward_pipe_vs_shell_pipe")
+{
+    // Ensure |> and | are distinguished correctly
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("a | b |> c"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "a");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Pipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "b");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::ForwardPipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "c");
+}
+
+TEST_CASE("Lexer.fsharp_double_colon_in_identifier")
+{
+    // :: is NOT tokenized separately to preserve shell compatibility
+    // The parser handles :: for cons in F# contexts
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("1::rest"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "1");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "::rest"); // :: is part of identifier
+}
+
+TEST_CASE("Lexer.fsharp_colon_in_value")
+{
+    // : is NOT tokenized separately to preserve shell compatibility (PATH, etc.)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("/usr/bin:/usr/local/bin"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "/usr/bin:/usr/local/bin"); // entire PATH is one token
+}
+
+TEST_CASE("Lexer.fsharp_question_in_glob")
+{
+    // ? is NOT tokenized separately to preserve shell glob patterns
+    // The parser handles ? for error propagation in F# contexts
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("file?.txt"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "file?.txt"); // ? is part of identifier
+}
+
+TEST_CASE("Lexer.fsharp_comma_in_brace")
+{
+    // , is NOT tokenized separately to preserve shell brace expansion
+    // The parser handles , for tuples in F# contexts
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("{a,b,c}"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "{a,b,c}"); // entire brace expansion is one token
+}
+
+TEST_CASE("Lexer.fsharp_range_lexer_behavior")
+{
+    // Range syntax 1..10 is lexed as: Number(1), Identifier(..10)
+    // The parser will need to handle range detection
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("1..10"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "1");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "..10");
+}
+
+// ============================================================================
+// F# Compatibility with Shell Syntax
+// ============================================================================
+
+TEST_CASE("Lexer.shell_flags_preserved")
+{
+    // Command-line flags should still work
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("ls -la --help"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "ls");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "-la");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "--help");
+}
+
+TEST_CASE("Lexer.shell_filenames_with_dashes")
+{
+    // Filenames with dashes should still work
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cat my-file-name.txt"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cat");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "my-file-name.txt");
+}
+
+TEST_CASE("Lexer.shell_glob_patterns_preserved")
+{
+    // Glob patterns should still work
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("ls [a-z]*.txt"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "ls");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "[a-z]*.txt");
+}
+
+TEST_CASE("Lexer.shell_redirect_append")
+{
+    // >> should still work for redirect append
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo hello >> file.txt"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "hello");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::GreaterGreater);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "file.txt");
+}
+
+TEST_CASE("Lexer.shell_here_doc")
+{
+    // << should still work for here-documents
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cat << EOF"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cat");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::LessLess);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "EOF");
+}
+
+TEST_CASE("Lexer.fsharp_complex_expression")
+{
+    // Complex F# style expression
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let add x y = x + y |> Some"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "add");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "y");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "+");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "y");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::ForwardPipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::OptionSome);
+}
+
+TEST_CASE("Lexer.fsharp_match_arm")
+{
+    // Match arm with arrow
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("| Some x -> x"));
+    CHECK(lexer.currentToken() == endo::Token::Pipe);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::OptionSome);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Arrow);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+}
+
+TEST_CASE("Lexer.fsharp_type_annotation_lexer_behavior")
+{
+    // At the lexer level, : is not tokenized separately
+    // The parser will need to handle type annotations
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x: int = 42"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x:"); // x: is one token
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "int");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}

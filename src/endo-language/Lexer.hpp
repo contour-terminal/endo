@@ -65,6 +65,35 @@ enum class Token
     DblQuoteStart,  // " at the start of a double-quoted string
     DblQuoteEnd,    // " at the end of a double-quoted string
     StringFragment, // Literal text fragment within double-quoted string
+
+    // F# style keywords
+    Let,   // 'let'
+    Mut,   // 'mut'
+    Fun,   // 'fun'
+    Match, // 'match'
+    With,  // 'with'
+    When,  // 'when'
+    Type,  // 'type'
+    Of,    // 'of'
+    Rec,   // 'rec'
+    And,   // 'and' (mutual recursion)
+    As,    // 'as' (pattern alias)
+    // Note: 'in' is NOT a keyword token - it's recognized contextually by the parser
+
+    // F# style constructors
+    OptionSome, // 'Some' (Option constructor)
+    OptionNone, // 'None' (Option constructor)
+    ResultOk,   // 'Ok' (Result constructor)
+    // Note: Error already exists contextually (ResultError)
+
+    // F# style operators
+    Arrow,       // '->'
+    LeftArrow,   // '<-' (mutation)
+    ForwardPipe, // '|>'
+    // Note: >> uses GreaterGreater token (context determines compose vs redirect)
+    // Note: << uses LessLess token (context determines back-compose vs here-doc)
+    // Note: :: : .. [ ] , ? are lexed as part of identifiers to preserve shell compatibility.
+    //       The parser handles these in F# expression context.
 };
 
 enum class BuiltinFunction
@@ -319,6 +348,30 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case DblQuoteStart: name = "DblQuoteStart"; break;
             case DblQuoteEnd: name = "DblQuoteEnd"; break;
             case StringFragment: name = "StringFragment"; break;
+            // F# style keywords
+            case Let: name = "let"; break;
+            case Mut: name = "mut"; break;
+            case Fun: name = "fun"; break;
+            case Match: name = "match"; break;
+            case With: name = "with"; break;
+            case When: name = "when"; break;
+            case Type: name = "type"; break;
+            case Of: name = "of"; break;
+            case Rec: name = "rec"; break;
+            case And: name = "and"; break;
+            case As: name = "as"; break;
+            // F# style constructors
+            case OptionSome: name = "Some"; break;
+            case OptionNone: name = "None"; break;
+            case ResultOk: name = "Ok"; break;
+            // F# style operators
+            case Arrow: name = "->"; break;
+            case LeftArrow: name = "<-"; break;
+            case ForwardPipe:
+                name = "|>";
+                break;
+                // Note: >> and << use GreaterGreater/LessLess tokens
+                // Note: :: : .. are lexed as part of identifiers
         }
         return formatter<std::string_view>::format(name, ctx);
     }

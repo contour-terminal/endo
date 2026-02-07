@@ -21,6 +21,18 @@ add_library(endo STATIC
     IRGenerator.hpp
     IRGenerator.cpp
 
+    # Type System
+    Type.hpp
+    Type.cpp
+    TypeEnv.hpp
+    TypeEnv.cpp
+    Unification.hpp
+    Unification.cpp
+
+    # Pattern AST
+    Pattern.hpp
+    Pattern.cpp
+
     # Diagnostics
     DiagnosticsAdapter.hpp
     DiagnosticsAdapter.cpp
@@ -48,6 +60,8 @@ add_executable(test-endo-language
     test_main.cpp
     Lexer_test.cpp
     Diagnostics_test.cpp
+    Type_test.cpp
+    Pattern_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
 add_test(NAME test-endo-language COMMAND test-endo-language)

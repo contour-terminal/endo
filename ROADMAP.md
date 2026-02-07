@@ -307,9 +307,9 @@ src/
 **Tasks:**
 - [x] Complete language specification (`LANGUAGE.md`)
 - [x] Reorganize project structure (separate `endo-language` library from `shell`)
-- [ ] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `->`, `<-`, `|>`, `::`, etc.)
-- [ ] Implement type system foundation (`Type.hpp`, `TypeEnv.hpp`, `Unification.hpp`, `TypeInference.hpp`)
-- [ ] Add Pattern AST nodes (`Pattern.hpp`, `PatternVisitor.hpp`)
+- [x] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `rec`, `and`, `as`, `->`, `<-`, `|>`, `Some`, `None`, `Ok`)
+- [x] Implement type system foundation (`Type.hpp`, `TypeEnv.hpp`, `Unification.hpp` - TypeInference deferred until AST extensions)
+- [x] Add Pattern AST nodes (`Pattern.hpp` with PatternVisitor, utility functions, and factory functions)
 - [ ] Extend Parser for `let` bindings and function definitions
 - [ ] Extend Parser for lambda expressions
 - [ ] Extend Parser for match expressions with guards
