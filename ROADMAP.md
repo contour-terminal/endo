@@ -327,7 +327,11 @@ src/
 - [ ] Implement pattern matching compilation in IR generator
 - [ ] Implement Result and Option types with built-in support
 - [ ] Implement `?` error propagation operator
-- [ ] Implement full IR generation for F# expressions (currently stubs)
+- [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
+- [x] Implement IR generation for F# function definitions and application (inlining approach)
+- [x] Implement IR generation for F# pipelines (`|>` operator)
+- [ ] Implement closures and partial application in IR generator
+- [ ] Implement recursion support for F# functions
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
