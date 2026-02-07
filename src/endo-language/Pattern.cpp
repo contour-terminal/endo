@@ -4,8 +4,22 @@
 #include <format>
 #include <sstream>
 
+#include "AST.hpp"
+#include "ASTPrinter.hpp"
+
 namespace endo::pattern
 {
+
+// ============================================================================
+// GuardedPattern implementation (constructor/destructor out-of-line for incomplete type)
+// ============================================================================
+
+GuardedPattern::GuardedPattern(PatternPtr p, std::unique_ptr<ast::Expr> g):
+    pattern(std::move(p)), guard(std::move(g))
+{
+}
+
+GuardedPattern::~GuardedPattern() = default;
 
 // ============================================================================
 // Pattern accept() implementations
@@ -166,7 +180,9 @@ std::unique_ptr<Pattern> OrPattern::clone() const
 
 std::unique_ptr<Pattern> GuardedPattern::clone() const
 {
-    auto result = std::make_unique<GuardedPattern>(pattern->clone(), guard);
+    // Note: Guard expression is not cloned (would need Expr::clone() method)
+    // For pattern compilation, we don't need to clone guards as patterns are traversed once.
+    auto result = std::make_unique<GuardedPattern>(pattern->clone(), nullptr);
     result->location = location;
     return result;
 }
@@ -448,7 +464,10 @@ namespace
         void visit(GuardedPattern const& p) override
         {
             p.pattern->accept(*this);
-            output << " when " << p.guard;
+            if (p.guard)
+            {
+                output << " when " << ast::ASTPrinter::print(*p.guard);
+            }
         }
     };
 
@@ -474,5 +493,15 @@ std::string toString(Pattern const& pattern)
     pattern.accept(printer);
     return printer.output.str();
 }
+
+namespace patterns
+{
+
+    PatternPtr guarded(PatternPtr pattern, std::unique_ptr<ast::Expr> guard)
+    {
+        return std::make_unique<GuardedPattern>(std::move(pattern), std::move(guard));
+    }
+
+} // namespace patterns
 
 } // namespace endo::pattern

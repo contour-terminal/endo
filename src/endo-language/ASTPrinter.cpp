@@ -666,4 +666,26 @@ void ASTPrinter::visit(LambdaExpr const& node)
         node.body->accept(*this);
 }
 
+void ASTPrinter::visit(MatchExpr const& node)
+{
+    _result += "match ";
+    if (node.scrutinee)
+        node.scrutinee->accept(*this);
+    _result += " with";
+    for (auto const& arm: node.arms)
+    {
+        _result += " | ";
+        if (arm.pattern)
+            _result += pattern::toString(*arm.pattern);
+        if (arm.guard)
+        {
+            _result += " when ";
+            arm.guard->accept(*this);
+        }
+        _result += " -> ";
+        if (arm.body)
+            arm.body->accept(*this);
+    }
+}
+
 } // namespace endo::ast

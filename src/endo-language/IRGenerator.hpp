@@ -92,6 +92,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::BoolLiteralExpr const& node) override;
     void visit(ast::ParenExpr const& node) override;
     void visit(ast::LambdaExpr const& node) override;
+    void visit(ast::MatchExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);

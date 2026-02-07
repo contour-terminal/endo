@@ -10,6 +10,12 @@
 #include "Lexer.hpp"
 #include "Type.hpp"
 
+// Forward declaration to avoid circular dependency
+namespace endo::ast
+{
+struct Expr;
+}
+
 namespace endo::pattern
 {
 
@@ -252,16 +258,13 @@ struct OrPattern final: Pattern
 /// Examples:
 /// - `x when x < 0` matches negative numbers
 /// - `{ age } when age >= 18` matches adults
-///
-/// Note: The guard expression is represented as a string for now.
-/// Once the F# expression AST is implemented, this should be replaced
-/// with a proper expression node.
 struct GuardedPattern final: Pattern
 {
-    PatternPtr pattern; ///< The pattern to match
-    std::string guard;  ///< Guard expression (temporary: string representation)
+    PatternPtr pattern;               ///< The pattern to match
+    std::unique_ptr<ast::Expr> guard; ///< Guard expression
 
-    GuardedPattern(PatternPtr p, std::string g): pattern(std::move(p)), guard(std::move(g)) {}
+    GuardedPattern(PatternPtr p, std::unique_ptr<ast::Expr> g);
+    ~GuardedPattern() override; // Defined in .cpp to handle incomplete type
 
     void accept(PatternVisitor& visitor) const override;
     [[nodiscard]] std::unique_ptr<Pattern> clone() const override;
@@ -397,11 +400,8 @@ namespace patterns
         return std::make_unique<OrPattern>(std::move(alternatives));
     }
 
-    /// Create a guarded pattern
-    inline PatternPtr guarded(PatternPtr pattern, std::string guard)
-    {
-        return std::make_unique<GuardedPattern>(std::move(pattern), std::move(guard));
-    }
+    /// Create a guarded pattern (defined in Pattern.cpp due to incomplete type)
+    PatternPtr guarded(PatternPtr pattern, std::unique_ptr<ast::Expr> guard);
 
 } // namespace patterns
 

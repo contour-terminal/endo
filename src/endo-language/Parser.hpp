@@ -87,6 +87,7 @@ class Parser
     // F# style let bindings and expressions
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     std::unique_ptr<ast::LambdaExpr> parseLambda();
+    std::unique_ptr<ast::MatchExpr> parseMatch();
 
     // F# expression parser (precedence climbing)
     // Precedence (low to high): |> || && comparisons +- */% ** unary application
@@ -101,6 +102,25 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpUnary();       // - !
     std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
     std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ...
+
+    // Pattern parsing for match expressions
+    // Grammar: pattern ::= or_pattern ('when' expr)?
+    //          or_pattern ::= as_pattern ('|' as_pattern)*
+    //          as_pattern ::= cons_pattern ('as' IDENT)?
+    //          cons_pattern ::= primary ('::' cons_pattern)?
+    //          primary ::= literal | IDENT | '_' | constructor | '(' tuple ')' | '[' list ']' | '{' record
+    //          '}'
+    std::unique_ptr<pattern::Pattern> parsePattern(); // Entry point (handles guards internally for MatchArm)
+    std::unique_ptr<pattern::Pattern> parseOrPattern();      // `pat1 | pat2 | pat3`
+    std::unique_ptr<pattern::Pattern> parseAsPattern();      // `pattern as name`
+    std::unique_ptr<pattern::Pattern> parseConsPattern();    // `head :: tail`
+    std::unique_ptr<pattern::Pattern> parsePrimaryPattern(); // Literals, identifiers, wildcards
+    std::unique_ptr<pattern::Pattern> parseTuplePattern();   // `(a, b, c)`
+    std::unique_ptr<pattern::Pattern> parseListPattern();    // `[a; b; c]` or `[a; rest...]`
+    std::unique_ptr<pattern::Pattern> parseRecordPattern();  // `{ name; age = a }` (requires lexer extension)
+
+    /// Check if the current token can start a pattern
+    [[nodiscard]] bool canStartPattern() const;
 
     /// Check if looking at start of F# primary expression
     [[nodiscard]] bool isFSharpPrimary() const noexcept;

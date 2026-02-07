@@ -320,7 +320,7 @@ src/
 - [x] Extend Parser for lambda expressions (`fun x -> x * 2`)
 - [x] Add LambdaExpr AST node with ASTPrinter and IRGenerator stub
 - [x] Add comprehensive lambda tests (8 test cases covering single/multiple params, nesting, pipelines)
-- [ ] Extend Parser for match expressions with guards
+- [x] Extend Parser for match expressions with guards
 - [ ] Extend Parser for list literals and comprehensions
 - [ ] Extend Parser for record literals and type definitions
 - [ ] Implement pattern matching compilation in IR generator

@@ -1569,4 +1569,11 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     (void) node;
 }
 
+void IRGenerator::visit(ast::MatchExpr const& node)
+{
+    // TODO: Implement pattern matching compilation to decision trees
+    reportTypeError("F# match expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
 } // namespace endo

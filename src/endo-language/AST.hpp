@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "Lexer.hpp"
+#include "Pattern.hpp"
 #include "Visitor.hpp"
 
 namespace endo::ast
@@ -1038,6 +1039,51 @@ struct LambdaExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// A single arm in a match expression: `| pattern when guard -> body`
+///
+/// Examples:
+/// - `| 0 -> "zero"`
+/// - `| x when x < 0 -> "negative"`
+/// - `| Some n -> n`
+struct MatchArm
+{
+    std::unique_ptr<pattern::Pattern> pattern; ///< Pattern to match against
+    std::unique_ptr<Expr> guard;               ///< Optional guard expression (nullptr if no guard)
+    std::unique_ptr<Expr> body;                ///< Body expression to evaluate if matched
+
+    MatchArm(std::unique_ptr<pattern::Pattern> pat,
+             std::unique_ptr<Expr> guardExpr,
+             std::unique_ptr<Expr> bodyExpr):
+        pattern(std::move(pat)), guard(std::move(guardExpr)), body(std::move(bodyExpr))
+    {
+    }
+};
+
+/// Match expression: `match expr with | pattern -> body | ...`
+///
+/// F#-style pattern matching expression.
+///
+/// Examples:
+/// ```
+/// match x with
+/// | 0 -> "zero"
+/// | 1 -> "one"
+/// | n when n < 0 -> "negative"
+/// | _ -> "positive"
+/// ```
+struct MatchExpr final: public Expr
+{
+    std::unique_ptr<Expr> scrutinee; ///< Expression being matched against
+    std::vector<MatchArm> arms;      ///< Match arms (pattern -> body pairs)
+
+    MatchExpr(std::unique_ptr<Expr> scrut, std::vector<MatchArm> matchArms):
+        scrutinee(std::move(scrut)), arms(std::move(matchArms))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // F# Style - Deferred Features (Documented)
 // ============================================================================
@@ -1047,8 +1093,6 @@ struct LambdaExpr final: public Expr
 // - List literals: [1; 2; 3]
 // - Tuple literals: (a, b, c)
 // - Record literals: { name = "Alice"; age = 30 }
-// - Match expressions: match x with | pattern -> expr
-// - Lambda expressions: fun x -> x * 2
 // - Type annotations: let x: int = 42
 // - Recursive functions: let rec factorial n = ...
 // - Pattern-based parameters: let add (x, y) = x + y

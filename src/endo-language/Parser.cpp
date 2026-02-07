@@ -2293,7 +2293,8 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::Number:
         case Token::Identifier:
         case Token::RndOpen:
-        case Token::Fun: return true;
+        case Token::Fun:
+        case Token::Match: return true;
         default:
             // Check for true/false as bool literals in F# context
             if (_lexer.currentToken() == Token::Identifier)
@@ -2678,6 +2679,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             return parseLambda();
         }
 
+        case Token::Match: {
+            // Match expression: match x with | pattern -> expr
+            return parseMatch();
+        }
+
         case Token::Number: {
             // Parse as integer or float
             auto const& lit = _lexer.currentLiteral();
@@ -2747,6 +2753,525 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                _lexer.currentLiteral());
             return nullptr;
     }
+}
+
+// ============================================================================
+// Pattern Parsing for Match Expressions
+// ============================================================================
+
+std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
+{
+    TRACE_SCOPE("parseMatch");
+
+    // Consume 'match' keyword
+    if (_lexer.currentToken() != Token::Match)
+        return nullptr;
+    _lexer.nextToken();
+
+    // Parse scrutinee expression
+    auto scrutinee = parseFSharpExpr();
+    if (!scrutinee)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add an expression to match against" },
+                                           currentContextSnippet(),
+                                           "Expected expression after 'match'");
+        return nullptr;
+    }
+
+    // Expect 'with' keyword
+    if (_lexer.currentToken() != Token::With)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add 'with' keyword" },
+                                           currentContextSnippet(),
+                                           "Expected 'with' after match expression, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'with'
+
+    // Parse match arms: | pattern -> expr
+    std::vector<ast::MatchArm> arms;
+
+    while (_lexer.currentToken() == Token::Pipe)
+    {
+        _lexer.nextToken(); // consume '|'
+
+        // Parse pattern (without guard - we handle guard separately)
+        auto pattern = parseOrPattern();
+        if (!pattern)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected pattern after '|'");
+            return nullptr;
+        }
+
+        // Check for optional 'when' guard
+        std::unique_ptr<ast::Expr> guard = nullptr;
+        if (_lexer.currentToken() == Token::When)
+        {
+            _lexer.nextToken(); // consume 'when'
+            guard = parseFSharpExpr();
+            if (!guard)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected expression after 'when'");
+                return nullptr;
+            }
+        }
+
+        // Expect '->' arrow
+        if (_lexer.currentToken() != Token::Arrow)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '->' after pattern" },
+                                               currentContextSnippet(),
+                                               "Expected '->' after pattern, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '->'
+
+        // Parse body expression
+        auto body = parseFSharpExpr();
+        if (!body)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected expression after '->'");
+            return nullptr;
+        }
+
+        arms.emplace_back(std::move(pattern), std::move(guard), std::move(body));
+    }
+
+    if (arms.empty())
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add at least one match arm: | pattern -> expr" },
+                                           currentContextSnippet(),
+                                           "Match expression requires at least one arm");
+        return nullptr;
+    }
+
+    return std::make_unique<ast::MatchExpr>(std::move(scrutinee), std::move(arms));
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parsePattern()
+{
+    TRACE_SCOPE("parsePattern");
+    // For match arms, we handle 'when' in parseMatch() itself
+    // This method just parses the pattern without guard
+    return parseOrPattern();
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseOrPattern()
+{
+    TRACE_SCOPE("parseOrPattern");
+
+    auto first = parseAsPattern();
+    if (!first)
+        return nullptr;
+
+    // Check for '|' alternatives (but not in match arm context)
+    // Note: In match context, '|' starts a new arm, so we don't parse it here
+    // This handles patterns like: "quit" | "exit" within a single arm
+    std::vector<pattern::PatternPtr> alternatives;
+    alternatives.push_back(std::move(first));
+
+    // Look ahead for '|' that's followed by a pattern, not '->' or 'when'
+    // This is tricky because '|' is also used to separate match arms
+    // For now, we only handle or-patterns in specific contexts
+    // TODO: Improve or-pattern parsing within match arms
+
+    if (alternatives.size() == 1)
+        return std::move(alternatives[0]);
+
+    return pattern::patterns::or_(std::move(alternatives));
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseAsPattern()
+{
+    TRACE_SCOPE("parseAsPattern");
+
+    auto inner = parseConsPattern();
+    if (!inner)
+        return nullptr;
+
+    // Check for 'as' binding
+    if (_lexer.currentToken() == Token::As)
+    {
+        _lexer.nextToken(); // consume 'as'
+
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected identifier after 'as'");
+            return nullptr;
+        }
+        std::string name = _lexer.currentLiteral();
+        _lexer.nextToken();
+
+        return pattern::patterns::as(std::move(inner), std::move(name));
+    }
+
+    return inner;
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseConsPattern()
+{
+    TRACE_SCOPE("parseConsPattern");
+
+    auto head = parsePrimaryPattern();
+    if (!head)
+        return nullptr;
+
+    // Check for '::' cons operator (lexed as Identifier "::")
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "::")
+    {
+        _lexer.nextToken(); // consume '::'
+
+        auto tail = parseConsPattern(); // Right-associative
+        if (!tail)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected pattern after '::'");
+            return nullptr;
+        }
+
+        return pattern::patterns::cons(std::move(head), std::move(tail));
+    }
+
+    return head;
+}
+
+bool Parser::canStartPattern() const
+{
+    switch (_lexer.currentToken())
+    {
+        case Token::Identifier:
+        case Token::Number:
+        case Token::String:
+        case Token::RndOpen:
+        case Token::OptionSome:
+        case Token::OptionNone:
+        case Token::ResultOk:
+        case Token::Mut: return true;
+        default: return false;
+    }
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
+{
+    TRACE_SCOPE("parsePrimaryPattern");
+
+    switch (_lexer.currentToken())
+    {
+        case Token::OptionSome:
+        case Token::OptionNone:
+        case Token::ResultOk: {
+            // Constructor pattern: Some, None, Ok
+            std::string name = _lexer.currentLiteral();
+            Token constructorToken = _lexer.currentToken();
+            _lexer.nextToken();
+
+            // Check for optional payload (Some x, Ok value)
+            std::optional<pattern::PatternPtr> payload = std::nullopt;
+            if (constructorToken != Token::OptionNone)
+            {
+                // These constructors expect a payload, check if one follows
+                if (canStartPattern())
+                {
+                    payload = parsePrimaryPattern();
+                    if (!payload)
+                        return nullptr;
+                }
+            }
+
+            return pattern::patterns::constructor(std::move(name), std::move(payload));
+        }
+
+        case Token::Number: {
+            // Numeric literal
+            auto const& lit = _lexer.currentLiteral();
+
+            // Check for float (contains '.' or 'e'/'E')
+            if (lit.find('.') != std::string::npos || lit.find('e') != std::string::npos
+                || lit.find('E') != std::string::npos)
+            {
+                double value = std::stod(lit);
+                _lexer.nextToken();
+                return pattern::patterns::literal(value);
+            }
+
+            // Parse as integer
+            int64_t value = 0;
+            auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+            if (ec != std::errc())
+                value = 0;
+            _lexer.nextToken();
+            return pattern::patterns::literal(value);
+        }
+
+        case Token::String: {
+            // String literal pattern
+            std::string str = _lexer.currentLiteral();
+            // Remove quotes if present
+            if (!str.empty() && (str.front() == '"' || str.front() == '\''))
+                str = str.substr(1);
+            if (!str.empty() && (str.back() == '"' || str.back() == '\''))
+                str = str.substr(0, str.size() - 1);
+            _lexer.nextToken();
+            return pattern::patterns::literal(std::move(str));
+        }
+
+        case Token::Identifier: {
+            auto const& lit = _lexer.currentLiteral();
+
+            // Check for special identifiers
+            if (lit == "_")
+            {
+                // Wildcard pattern
+                _lexer.nextToken();
+                return pattern::patterns::wildcard();
+            }
+            if (lit == "true")
+            {
+                _lexer.nextToken();
+                return pattern::patterns::literal(true);
+            }
+            if (lit == "false")
+            {
+                _lexer.nextToken();
+                return pattern::patterns::literal(false);
+            }
+            if (lit == "Error")
+            {
+                // Error constructor pattern
+                _lexer.nextToken();
+                std::optional<pattern::PatternPtr> payload = std::nullopt;
+                if (canStartPattern())
+                {
+                    payload = parsePrimaryPattern();
+                    if (!payload)
+                        return nullptr;
+                }
+                return pattern::patterns::constructor("Error", std::move(payload));
+            }
+
+            // In pattern context, the lexer may have consumed more than we want.
+            // Shell lexer includes commas in identifiers (for brace expansion like {a,b,c}).
+            // In F# pattern context, we need to stop at commas.
+            // Check if the identifier ends with a comma and split it.
+            if (lit.size() > 1 && lit.back() == ',')
+            {
+                // Extract the variable name without the trailing comma.
+                // The tuple parser will detect this via hadTrailingComma.
+                std::string name = lit.substr(0, lit.size() - 1);
+                _lexer.nextToken();
+                return pattern::patterns::variable(std::move(name));
+            }
+
+            // Regular identifier (variable pattern)
+            std::string name = consumeLiteral();
+            return pattern::patterns::variable(std::move(name));
+        }
+
+        case Token::RndOpen:
+            // Tuple pattern: (a, b, c)
+            return parseTuplePattern();
+
+        case Token::Mut: {
+            // Mutable variable pattern: mut x
+            _lexer.nextToken(); // consume 'mut'
+
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected identifier after 'mut'");
+                return nullptr;
+            }
+            std::string name = consumeLiteral();
+            return pattern::patterns::variable(std::move(name), true);
+        }
+
+        default:
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected pattern, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+    }
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseTuplePattern()
+{
+    TRACE_SCOPE("parseTuplePattern");
+
+    if (_lexer.currentToken() != Token::RndOpen)
+        return nullptr;
+    _lexer.nextToken(); // consume '('
+
+    std::vector<pattern::PatternPtr> elements;
+
+    // Empty tuple: () is unit pattern
+    if (_lexer.currentToken() == Token::RndClose)
+    {
+        _lexer.nextToken();
+        return pattern::patterns::tuple(std::move(elements));
+    }
+
+    // Helper to parse a pattern element, handling comma-containing identifiers.
+    // Returns the pattern and sets hadTrailingComma if the literal ended with ','.
+    auto parsePatternElement = [this](bool& hadTrailingComma) -> pattern::PatternPtr {
+        hadTrailingComma = false;
+
+        // Save the literal before parsing to check for trailing comma
+        std::string savedLit;
+        if (_lexer.currentToken() == Token::Identifier)
+            savedLit = _lexer.currentLiteral();
+
+        auto pat = parsePattern();
+        if (!pat)
+            return nullptr;
+
+        // Check if the original literal ended with a comma
+        // and the pattern consumed it (pattern literal is one char shorter)
+        if (!savedLit.empty() && savedLit.back() == ',')
+            hadTrailingComma = true;
+
+        return pat;
+    };
+
+    // Parse first element
+    bool hadComma = false;
+    auto first = parsePatternElement(hadComma);
+    if (!first)
+        return nullptr;
+    elements.push_back(std::move(first));
+
+    // If the first element's literal had a trailing comma, we need to continue parsing
+    // remaining elements without looking for a comma separator.
+    while (hadComma)
+    {
+        auto elem = parsePatternElement(hadComma);
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+    }
+
+    // Parse remaining elements separated by ','
+    // Note: Comma is lexed as part of identifiers in shell context.
+    // We need to check if the current literal starts with ',' and handle it.
+    auto const startsWithComma = [this]() {
+        return _lexer.currentToken() == Token::Identifier && !_lexer.currentLiteral().empty()
+               && _lexer.currentLiteral()[0] == ',';
+    };
+
+    while (startsWithComma())
+    {
+        auto const& lit = _lexer.currentLiteral();
+
+        if (lit == ",")
+        {
+            // Just a comma, consume it and parse next element normally
+            _lexer.nextToken();
+        }
+        else
+        {
+            // Comma followed by more content (e.g., ",0" or ",x")
+            // The content after the comma is the next pattern element.
+            // We need to extract it and parse it.
+            std::string rest = lit.substr(1);
+
+            // Try to parse the rest as a pattern element inline
+            // First, advance past this token
+            _lexer.nextToken();
+
+            // Now we need to parse 'rest' as a pattern. Since the lexer doesn't support
+            // pushback, we handle common cases inline:
+            if (rest == "_")
+            {
+                elements.push_back(pattern::patterns::wildcard());
+            }
+            else if (rest == "true")
+            {
+                elements.push_back(pattern::patterns::literal(true));
+            }
+            else if (rest == "false")
+            {
+                elements.push_back(pattern::patterns::literal(false));
+            }
+            else if (!rest.empty() && (std::isdigit(rest[0]) || (rest[0] == '-' && rest.size() > 1)))
+            {
+                // Integer literal
+                int64_t value = 0;
+                auto [ptr, ec] = std::from_chars(rest.data(), rest.data() + rest.size(), value);
+                if (ec == std::errc())
+                    elements.push_back(pattern::patterns::literal(value));
+                else
+                    elements.push_back(pattern::patterns::variable(std::move(rest)));
+            }
+            else if (!rest.empty() && (std::isalpha(rest[0]) || rest[0] == '_'))
+            {
+                // Variable pattern
+                elements.push_back(pattern::patterns::variable(std::move(rest)));
+            }
+            else
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Invalid pattern element in tuple: '{}'",
+                                                   rest);
+                return nullptr;
+            }
+            continue; // Already added the element, continue to next
+        }
+
+        auto elem = parsePattern();
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+    }
+
+    if (_lexer.currentToken() != Token::RndClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ')'" },
+                                           currentContextSnippet(),
+                                           "Expected ')' or ',' in tuple pattern, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ')'
+
+    // Single element in parens is just a parenthesized pattern, not a tuple
+    if (elements.size() == 1)
+        return std::move(elements[0]);
+
+    return pattern::patterns::tuple(std::move(elements));
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseListPattern()
+{
+    TRACE_SCOPE("parseListPattern");
+    // List pattern parsing requires '[' and ']' tokens which aren't in the lexer
+    // For now, report an error suggesting this feature needs lexer extension
+    _report.syntaxErrorWithSuggestions(
+        currentLocation(), {}, currentContextSnippet(), "List patterns are not yet supported");
+    return nullptr;
+}
+
+std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
+{
+    TRACE_SCOPE("parseRecordPattern");
+    // Record pattern parsing requires '{' and '}' tokens which aren't in the lexer
+    // For now, report an error suggesting this feature needs lexer extension
+    _report.syntaxErrorWithSuggestions(
+        currentLocation(), {}, currentContextSnippet(), "Record patterns are not yet supported");
+    return nullptr;
 }
 
 } // namespace endo

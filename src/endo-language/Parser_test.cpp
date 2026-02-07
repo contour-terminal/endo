@@ -476,3 +476,313 @@ TEST_CASE("Parser.FSharp.ASTPrinter.lambda_multiple_params")
     std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
     CHECK(printed == "let add = fun x y -> x");
 }
+
+// =============================================================================
+// F# Match Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.match_literal_patterns")
+{
+    auto ast = parse("let r = match x with | 0 -> true | 1 -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "r");
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+
+    // Check scrutinee
+    auto* scrutinee = dynamic_cast<endo::ast::IdentifierExpr*>(matchExpr->scrutinee.get());
+    REQUIRE(scrutinee != nullptr);
+    CHECK(scrutinee->name == "x");
+
+    // Check arms count
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm: | 0 -> true
+    auto const& arm1 = matchExpr->arms[0];
+    REQUIRE(arm1.guard == nullptr); // No guard
+    auto* body1 = dynamic_cast<endo::ast::BoolLiteralExpr*>(arm1.body.get());
+    REQUIRE(body1 != nullptr);
+    CHECK(body1->value == true);
+
+    // Second arm: | 1 -> false
+    auto const& arm2 = matchExpr->arms[1];
+    REQUIRE(arm2.guard == nullptr);
+    auto* body2 = dynamic_cast<endo::ast::BoolLiteralExpr*>(arm2.body.get());
+    REQUIRE(body2 != nullptr);
+    CHECK(body2->value == false);
+}
+
+TEST_CASE("Parser.FSharp.match_wildcard_pattern")
+{
+    auto ast = parse("let r = match n with | _ -> 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 1);
+
+    // Check wildcard pattern
+    auto const& arm = matchExpr->arms[0];
+    auto* wildcardPattern = dynamic_cast<endo::pattern::WildcardPattern*>(arm.pattern.get());
+    REQUIRE(wildcardPattern != nullptr);
+
+    auto* body = dynamic_cast<endo::ast::IntLiteralExpr*>(arm.body.get());
+    REQUIRE(body != nullptr);
+    CHECK(body->value == 42);
+}
+
+TEST_CASE("Parser.FSharp.match_variable_pattern")
+{
+    auto ast = parse("let r = match x with | n -> n");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 1);
+
+    // Check variable pattern
+    auto const& arm = matchExpr->arms[0];
+    auto* varPattern = dynamic_cast<endo::pattern::VariablePattern*>(arm.pattern.get());
+    REQUIRE(varPattern != nullptr);
+    CHECK(varPattern->name == "n");
+
+    // Body should reference the bound variable
+    auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(arm.body.get());
+    REQUIRE(body != nullptr);
+    CHECK(body->name == "n");
+}
+
+TEST_CASE("Parser.FSharp.match_with_guard")
+{
+    auto ast = parse("let r = match n with | x when x < 0 -> true | _ -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm has a guard: x when x < 0
+    auto const& arm1 = matchExpr->arms[0];
+    auto* varPattern = dynamic_cast<endo::pattern::VariablePattern*>(arm1.pattern.get());
+    REQUIRE(varPattern != nullptr);
+    CHECK(varPattern->name == "x");
+
+    // Guard expression should be: x < 0
+    REQUIRE(arm1.guard != nullptr);
+    auto* guardExpr = dynamic_cast<endo::ast::BinaryExpr*>(arm1.guard.get());
+    REQUIRE(guardExpr != nullptr);
+    CHECK(guardExpr->op == endo::ast::BinaryOp::Lt);
+
+    // Second arm has no guard
+    auto const& arm2 = matchExpr->arms[1];
+    REQUIRE(arm2.guard == nullptr);
+}
+
+TEST_CASE("Parser.FSharp.match_constructor_pattern")
+{
+    auto ast = parse("let r = match opt with | Some x -> x | None -> 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm: Some x
+    auto const& arm1 = matchExpr->arms[0];
+    auto* ctorPattern1 = dynamic_cast<endo::pattern::ConstructorPattern*>(arm1.pattern.get());
+    REQUIRE(ctorPattern1 != nullptr);
+    CHECK(ctorPattern1->name == "Some");
+    REQUIRE(ctorPattern1->payload.has_value());
+    auto* argPattern = dynamic_cast<endo::pattern::VariablePattern*>(ctorPattern1->payload->get());
+    REQUIRE(argPattern != nullptr);
+    CHECK(argPattern->name == "x");
+
+    // Second arm: None
+    auto const& arm2 = matchExpr->arms[1];
+    auto* ctorPattern2 = dynamic_cast<endo::pattern::ConstructorPattern*>(arm2.pattern.get());
+    REQUIRE(ctorPattern2 != nullptr);
+    CHECK(ctorPattern2->name == "None");
+    CHECK(!ctorPattern2->payload.has_value());
+}
+
+TEST_CASE("Parser.FSharp.match_tuple_pattern_simple")
+{
+    // Test simple tuple pattern first
+    auto ast = parse("let r = match p with | (0, 0) -> true");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 1);
+
+    auto const& arm = matchExpr->arms[0];
+    auto* tuplePattern = dynamic_cast<endo::pattern::TuplePattern*>(arm.pattern.get());
+    REQUIRE(tuplePattern != nullptr);
+    REQUIRE(tuplePattern->elements.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.match_tuple_pattern")
+{
+    auto ast = parse("let r = match p with | (0, 0) -> true | (x, y) -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm: (0, 0)
+    auto const& arm1 = matchExpr->arms[0];
+    auto* tuplePattern1 = dynamic_cast<endo::pattern::TuplePattern*>(arm1.pattern.get());
+    REQUIRE(tuplePattern1 != nullptr);
+    REQUIRE(tuplePattern1->elements.size() == 2);
+
+    // Both elements should be literal patterns with value 0
+    auto* elem1 = dynamic_cast<endo::pattern::LiteralPattern*>(tuplePattern1->elements[0].get());
+    REQUIRE(elem1 != nullptr);
+    CHECK(std::get<int64_t>(elem1->value) == 0);
+
+    auto* elem2 = dynamic_cast<endo::pattern::LiteralPattern*>(tuplePattern1->elements[1].get());
+    REQUIRE(elem2 != nullptr);
+    CHECK(std::get<int64_t>(elem2->value) == 0);
+
+    // Second arm: (x, y)
+    auto const& arm2 = matchExpr->arms[1];
+    auto* tuplePattern2 = dynamic_cast<endo::pattern::TuplePattern*>(arm2.pattern.get());
+    REQUIRE(tuplePattern2 != nullptr);
+    REQUIRE(tuplePattern2->elements.size() == 2);
+
+    auto* xPattern = dynamic_cast<endo::pattern::VariablePattern*>(tuplePattern2->elements[0].get());
+    REQUIRE(xPattern != nullptr);
+    CHECK(xPattern->name == "x");
+
+    auto* yPattern = dynamic_cast<endo::pattern::VariablePattern*>(tuplePattern2->elements[1].get());
+    REQUIRE(yPattern != nullptr);
+    CHECK(yPattern->name == "y");
+}
+
+TEST_CASE("Parser.FSharp.match_as_pattern")
+{
+    auto ast = parse("let r = match p with | x as point -> point");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 1);
+
+    // Check as pattern: x as point
+    auto const& arm = matchExpr->arms[0];
+    auto* asPattern = dynamic_cast<endo::pattern::AsPattern*>(arm.pattern.get());
+    REQUIRE(asPattern != nullptr);
+    CHECK(asPattern->name == "point");
+
+    auto* innerPattern = dynamic_cast<endo::pattern::VariablePattern*>(asPattern->inner.get());
+    REQUIRE(innerPattern != nullptr);
+    CHECK(innerPattern->name == "x");
+
+    // Body references the alias
+    auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(arm.body.get());
+    REQUIRE(body != nullptr);
+    CHECK(body->name == "point");
+}
+
+TEST_CASE("Parser.FSharp.match_multiple_arms")
+{
+    auto ast = parse("let r = match n with | 0 -> 10 | 1 -> 20 | 2 -> 30 | _ -> 40");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 4);
+
+    // Verify the bodies have correct values
+    auto* body0 = dynamic_cast<endo::ast::IntLiteralExpr*>(matchExpr->arms[0].body.get());
+    REQUIRE(body0 != nullptr);
+    CHECK(body0->value == 10);
+
+    auto* body1 = dynamic_cast<endo::ast::IntLiteralExpr*>(matchExpr->arms[1].body.get());
+    REQUIRE(body1 != nullptr);
+    CHECK(body1->value == 20);
+
+    auto* body2 = dynamic_cast<endo::ast::IntLiteralExpr*>(matchExpr->arms[2].body.get());
+    REQUIRE(body2 != nullptr);
+    CHECK(body2->value == 30);
+
+    auto* body3 = dynamic_cast<endo::ast::IntLiteralExpr*>(matchExpr->arms[3].body.get());
+    REQUIRE(body3 != nullptr);
+    CHECK(body3->value == 40);
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.match_simple")
+{
+    auto ast = parse("let r = match x with | 0 -> true | _ -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let r = match x with | 0 -> true | _ -> false");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.match_with_guard")
+{
+    auto ast = parse("let r = match n with | x when x < 0 -> true | _ -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let r = match n with | x when (x < 0) -> true | _ -> false");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.match_constructor")
+{
+    auto ast = parse("let r = match opt with | Some x -> x | None -> 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let r = match opt with | Some x -> x | None -> 0");
+}
