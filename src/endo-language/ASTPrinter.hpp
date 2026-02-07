@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/AST.hpp>
-#include <shell/Visitor.hpp>
-
 #include <format>
 #include <string>
+
+#include "AST.hpp"
+#include "Visitor.hpp"
 
 namespace endo::ast
 {

@@ -259,7 +259,7 @@ Windows support.
 
 ### Phase 1.8: F# Style Syntax Extensions
 
-**Status:** Specification Complete, Implementation Pending
+**Status:** Specification Complete, Implementation In Progress
 
 **Dependency:** Milestone 1 core language features
 
@@ -279,17 +279,43 @@ bash-style syntax.
 - Result and Option types for error handling
 - Error propagation with `?` operator
 
+**Project Structure Reorganization (Completed):**
+The codebase has been reorganized for better separation of concerns:
+
+```
+src/
+├── endo-language/        # Core language library (CMake target: endo)
+│   ├── Lexer.hpp/cpp     # Tokenization
+│   ├── Parser.hpp/cpp    # Parsing
+│   ├── AST.hpp           # AST node definitions
+│   ├── Visitor.hpp       # AST visitor interface
+│   ├── ASTPrinter.hpp/cpp
+│   ├── IRGenerator.hpp/cpp
+│   ├── DiagnosticsAdapter.hpp/cpp
+│   ├── LogCategories.hpp/cpp
+│   ├── LogConfig.hpp
+│   └── ScopedLogger.hpp
+├── shell/                # Shell runtime (CMake target: endo-shell)
+│   ├── Shell.hpp/cpp     # Shell orchestration
+│   ├── Prompt.hpp/cpp    # Interactive prompt
+│   ├── Environment.hpp   # Environment variables
+│   └── ... (builtins, job control, completion, etc.)
+├── tui/                  # Terminal UI library (CMake target: tui)
+└── CoreVM/               # Virtual machine (CMake target: CoreVM)
+```
+
 **Tasks:**
 - [x] Complete language specification (`LANGUAGE.md`)
+- [x] Reorganize project structure (separate `endo-language` library from `shell`)
 - [ ] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `->`, `<-`, `|>`, `::`, etc.)
+- [ ] Implement type system foundation (`Type.hpp`, `TypeEnv.hpp`, `Unification.hpp`, `TypeInference.hpp`)
+- [ ] Add Pattern AST nodes (`Pattern.hpp`, `PatternVisitor.hpp`)
 - [ ] Extend Parser for `let` bindings and function definitions
 - [ ] Extend Parser for lambda expressions
 - [ ] Extend Parser for match expressions with guards
 - [ ] Extend Parser for list literals and comprehensions
 - [ ] Extend Parser for record literals and type definitions
-- [ ] Add Pattern AST nodes (LiteralPattern, VariablePattern, ConsPattern, etc.)
 - [ ] Implement pattern matching compilation in IR generator
-- [ ] Implement type inference engine (Hindley-Milner style)
 - [ ] Add `|>` forward pipe operator to expression parsing
 - [ ] Implement Result and Option types with built-in support
 - [ ] Implement `?` error propagation operator

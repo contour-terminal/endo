@@ -1,7 +1,8 @@
-add_library(Shell STATIC
-    AST.hpp
-    ASTPrinter.hpp
-    ASTPrinter.cpp
+# Endo Shell Runtime
+# This library contains the shell execution runtime, builtins, job control, etc.
+# It depends on the endo language library for parsing and IR generation.
+
+add_library(endo-shell STATIC
     CommandResolver.hpp
     CommandResolver.cpp
     Completer.hpp
@@ -19,22 +20,12 @@ add_library(Shell STATIC
     CompletionProviders/OptionCompleter.cpp
     CompletionProviders/VariableCompleter.hpp
     CompletionProviders/VariableCompleter.cpp
-    DiagnosticsAdapter.hpp
-    DiagnosticsAdapter.cpp
     Environment.hpp
     Error.hpp
     History.hpp
     History.cpp
-    LogCategories.hpp
-    LogCategories.cpp
-    IRGenerator.hpp
-    IRGenerator.cpp
     Job.hpp
     Job.cpp
-    Lexer.hpp
-    Lexer.cpp
-    Parser.hpp
-    Parser.cpp
     Pipe.hpp
     Pipe.cpp
     Platform.hpp
@@ -53,54 +44,43 @@ add_library(Shell STATIC
     Suggestions.cpp
     TTY.hpp
     TTY.cpp
-    Visitor.hpp
 )
 
 # Platform-specific implementations
 if(WIN32)
-    target_sources(Shell PRIVATE WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
+    target_sources(endo-shell PRIVATE WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
 endif()
 
 find_package(Threads REQUIRED)
 
-
-
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM tui)
+    target_link_libraries(endo-shell PUBLIC endo vtparser tui)
 else()
     # util for pty.h on POSIX systems
-    target_link_libraries(Shell PUBLIC vtparser crispy::core CoreVM tui Threads::Threads util)
+    target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
 endif()
-
 
 if(ENDO_TRACE_VM)
-  target_compile_definitions(Shell PUBLIC ENDO_TRACE_VM)
-endif()
-if(ENDO_TRACE_PARSER)
-  target_compile_definitions(Shell PUBLIC ENDO_TRACE_PARSER)
-endif()
-if(ENDO_TRACE_LEXER)
-  target_compile_definitions(Shell PUBLIC ENDO_TRACE_LEXER)
+  target_compile_definitions(endo-shell PUBLIC ENDO_TRACE_VM)
 endif()
 
-
-add_executable(endo
+add_executable(endo-bin
     main.cpp
 )
-target_link_libraries(endo PUBLIC Shell)
+set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
+target_link_libraries(endo-bin PUBLIC endo-shell)
 
-add_executable(test-endo
+add_executable(test-endo-shell
     test_main.cpp
-    Diagnostics_test.cpp
-    Lexer_test.cpp
     Shell_test.cpp
+    Suggestions_test.cpp
 )
-target_link_libraries(test-endo Shell Catch2::Catch2)
+target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 
-add_test(NAME test-endo COMMAND test-endo)
+add_test(NAME test-endo-shell COMMAND test-endo-shell)
 
 # Enable sanitizers for all targets
-enable_sanitizers(Shell)
-enable_sanitizers(endo)
-enable_sanitizers(test-endo)
+enable_sanitizers(endo-shell)
+enable_sanitizers(endo-bin)
+enable_sanitizers(test-endo-shell)

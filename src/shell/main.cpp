@@ -11,9 +11,9 @@
 #include <string>
 #include <string_view>
 
-#include "LogCategories.hpp"
-#include "LogConfig.hpp"
 #include "Shell.hpp"
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
 
 using namespace std::string_view_literals;
 

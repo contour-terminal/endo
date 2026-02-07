@@ -5,8 +5,8 @@
 #include <stdexcept>
 #include <string>
 
-#include "LogCategories.hpp"
-#include "LogConfig.hpp"
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
 
 #if !defined(_WIN32)
     #include <fcntl.h>

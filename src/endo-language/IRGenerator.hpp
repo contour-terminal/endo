@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/AST.hpp>
-#include <shell/Visitor.hpp>
-
 #include <CoreVM/CoreVM.hpp>
 
 #include <memory>
+
+#include "AST.hpp"
+#include "Visitor.hpp"
 
 namespace endo
 {

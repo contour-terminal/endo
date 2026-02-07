@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "IRGenerator.hpp"
-#include <shell/AST.hpp>
-#include <shell/DiagnosticsAdapter.hpp>
-#include <shell/ScopedLogger.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 
 #include <typeinfo>
 
+#include "AST.hpp"
 #include "ASTPrinter.hpp"
+#include "DiagnosticsAdapter.hpp"
+#include "ScopedLogger.hpp"
 
 // {{{ trace macros
 // clang-format off

@@ -1,15 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/AST.hpp>
-#include <shell/DiagnosticsAdapter.hpp>
-
 #include <CoreVM/CoreVM.hpp>
 
 #include <memory>
 #include <optional>
 #include <string_view>
 
+#include "AST.hpp"
+#include "DiagnosticsAdapter.hpp"
 #include "Lexer.hpp"
 
 namespace endo

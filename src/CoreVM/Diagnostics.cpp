@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 
-#include <shell/LogConfig.hpp>
-
 #include <format>
 #include <iostream>
 #include <print>
+
+#include <endo-language/LogConfig.hpp>
 
 namespace
 {

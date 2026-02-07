@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
-#include <shell/ProcessGroup.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 
@@ -21,18 +20,19 @@
 #include <set>
 #include <thread>
 
-#include "ASTPrinter.hpp"
 #include "Error.hpp"
-#include "IRGenerator.hpp"
-#include "Lexer.hpp"
-#include "LogCategories.hpp"
-#include "LogConfig.hpp"
-#include "Parser.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
+#include "ProcessGroup.hpp"
 #include "Prompt.hpp"
 #include "TTY.hpp"
+#include <endo-language/ASTPrinter.hpp>
+#include <endo-language/IRGenerator.hpp>
+#include <endo-language/Lexer.hpp>
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
+#include <endo-language/Parser.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>

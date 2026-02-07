@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Parser.hpp"
-#include <shell/AST.hpp>
-#include <shell/DiagnosticsAdapter.hpp>
-#include <shell/ScopedLogger.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 
@@ -15,10 +12,13 @@
 #include <optional>
 #include <ranges>
 
+#include "AST.hpp"
 #include "ASTPrinter.hpp"
+#include "DiagnosticsAdapter.hpp"
 #include "Lexer.hpp"
 #include "LogCategories.hpp"
 #include "LogConfig.hpp"
+#include "ScopedLogger.hpp"
 
 // Use centralized log category from LogCategories.hpp
 inline auto& parserLog()

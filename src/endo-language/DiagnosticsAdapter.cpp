@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/DiagnosticsAdapter.hpp>
+#include "DiagnosticsAdapter.hpp"
 
 #include <algorithm>
 #include <string>
