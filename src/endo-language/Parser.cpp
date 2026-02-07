@@ -2582,6 +2582,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
     TRACE_SCOPE("parseFSharpUnary");
 
     // Handle negation: -expr
+    // Case 1: standalone "-" identifier followed by expression
     if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "-")
     {
         _lexer.nextToken();
@@ -2589,6 +2590,25 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
         if (!operand)
             return nullptr;
         return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
+    }
+
+    // Case 2: identifier starting with "-" followed by identifier chars (e.g., "-a", "-foo")
+    // The lexer tokenizes "-a" as a single identifier, so we need to split it here
+    if (_lexer.currentToken() == Token::Identifier)
+    {
+        auto const& literal = _lexer.currentLiteral();
+        if (literal.size() > 1 && literal[0] == '-')
+        {
+            // Check if the rest is a valid identifier (not a flag like --help)
+            // We only treat it as negation if it's a single dash followed by identifier chars
+            if (literal[1] != '-')
+            {
+                std::string identName = literal.substr(1);
+                _lexer.nextToken();
+                auto operand = std::make_unique<ast::IdentifierExpr>(std::move(identName));
+                return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
+            }
+        }
     }
 
     // Handle logical not: !expr

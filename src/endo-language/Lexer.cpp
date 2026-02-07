@@ -163,7 +163,13 @@ Token Lexer::nextToken()
             nextChar();
             if (_currentChar == '>')
                 return consumeCharAndConfirmToken(Token::Arrow); // -> (lambda arrow, match arm)
-            // Not an arrow, treat - and what follows as identifier (e.g., -l, --help, file-name)
+            // Check for negative number: - followed by digit
+            if (_currentChar >= U'0' && _currentChar <= U'9')
+            {
+                _nextToken.literal = "-";
+                return consumeNumber(); // Will append digits to the "-" prefix
+            }
+            // Not an arrow or number, treat - and what follows as identifier (e.g., -l, --help, file-name)
             _nextToken.literal = "-";
             return consumeIdentifier();
         case '$':
