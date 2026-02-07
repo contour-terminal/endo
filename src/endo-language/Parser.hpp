@@ -69,7 +69,7 @@ class Parser
     std::unique_ptr<ast::ArithExpansionExpr> parseArithmeticExpansion();
     std::unique_ptr<ast::Expr> parseInterpolatedString();
 
-    // Arithmetic expression parser
+    // Arithmetic expression parser (for $((expr)))
     std::unique_ptr<ast::ArithExpr> parseArithOr();
     std::unique_ptr<ast::ArithExpr> parseArithAnd();
     std::unique_ptr<ast::ArithExpr> parseArithBitOr();
@@ -83,6 +83,29 @@ class Parser
     std::unique_ptr<ast::ArithExpr> parseArithPow();
     std::unique_ptr<ast::ArithExpr> parseArithUnary();
     std::unique_ptr<ast::ArithExpr> parseArithPrimary();
+
+    // F# style let bindings and expressions
+    std::unique_ptr<ast::LetBindingStmt> parseLet();
+
+    // F# expression parser (precedence climbing)
+    // Precedence (low to high): |> || && comparisons +- */% ** unary application
+    std::unique_ptr<ast::Expr> parseFSharpExpr();        // Entry point
+    std::unique_ptr<ast::Expr> parseFSharpPipeline();    // |>
+    std::unique_ptr<ast::Expr> parseFSharpOr();          // ||
+    std::unique_ptr<ast::Expr> parseFSharpAnd();         // &&
+    std::unique_ptr<ast::Expr> parseFSharpComparison();  // == != < <= > >=
+    std::unique_ptr<ast::Expr> parseFSharpAddSub();      // + -
+    std::unique_ptr<ast::Expr> parseFSharpMulDivMod();   // * / %
+    std::unique_ptr<ast::Expr> parseFSharpPow();         // **
+    std::unique_ptr<ast::Expr> parseFSharpUnary();       // - !
+    std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
+    std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr)
+
+    /// Check if looking at start of F# primary expression
+    [[nodiscard]] bool isFSharpPrimary() const noexcept;
+
+    /// Get current token column (1-based, for indentation tracking)
+    [[nodiscard]] size_t currentTokenColumn() const noexcept;
 
     std::unique_ptr<ast::Expr> parseParameter();
     std::unique_ptr<ast::Statement> parsePrimaryStmt();

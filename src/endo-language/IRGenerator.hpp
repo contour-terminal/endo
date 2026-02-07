@@ -80,6 +80,18 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::ContinueStmt const& node) override;
     void visit(ast::ReturnStmt const& node) override;
 
+    // F# style expressions and statements
+    void visit(ast::LetBindingStmt const& node) override;
+    void visit(ast::BinaryExpr const& node) override;
+    void visit(ast::UnaryExpr const& node) override;
+    void visit(ast::PipelineExpr const& node) override;
+    void visit(ast::ApplicationExpr const& node) override;
+    void visit(ast::IdentifierExpr const& node) override;
+    void visit(ast::IntLiteralExpr const& node) override;
+    void visit(ast::FloatLiteralExpr const& node) override;
+    void visit(ast::BoolLiteralExpr const& node) override;
+    void visit(ast::ParenExpr const& node) override;
+
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
 

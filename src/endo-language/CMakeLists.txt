@@ -62,6 +62,7 @@ add_executable(test-endo-language
     Diagnostics_test.cpp
     Type_test.cpp
     Pattern_test.cpp
+    Parser_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
 add_test(NAME test-endo-language COMMAND test-endo-language)

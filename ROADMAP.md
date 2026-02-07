@@ -310,16 +310,21 @@ src/
 - [x] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `rec`, `and`, `as`, `->`, `<-`, `|>`, `Some`, `None`, `Ok`)
 - [x] Implement type system foundation (`Type.hpp`, `TypeEnv.hpp`, `Unification.hpp` - TypeInference deferred until AST extensions)
 - [x] Add Pattern AST nodes (`Pattern.hpp` with PatternVisitor, utility functions, and factory functions)
-- [ ] Extend Parser for `let` bindings and function definitions
-- [ ] Extend Parser for lambda expressions
+- [x] Extend Parser for `let` bindings and function definitions
+- [x] Add F# expression AST nodes (`BinaryExpr`, `UnaryExpr`, `PipelineExpr`, `ApplicationExpr`, `IdentifierExpr`, `IntLiteralExpr`, `FloatLiteralExpr`, `BoolLiteralExpr`, `ParenExpr`)
+- [x] Implement F# expression parser with operator precedence (`|>`, `||`, `&&`, comparisons, `+/-`, `*/%`, `**`, unary, application)
+- [x] Add `|>` forward pipe operator to expression parsing
+- [x] Add comprehensive tests for F# let bindings and expressions (39 test cases with 214 assertions)
+- [x] Add ASTPrinter support for new F# nodes
+- [x] Add IRGenerator stubs for F# nodes (placeholder implementations for future work)
+- [ ] Extend Parser for lambda expressions (`fun x -> x * 2`)
 - [ ] Extend Parser for match expressions with guards
 - [ ] Extend Parser for list literals and comprehensions
 - [ ] Extend Parser for record literals and type definitions
 - [ ] Implement pattern matching compilation in IR generator
-- [ ] Add `|>` forward pipe operator to expression parsing
 - [ ] Implement Result and Option types with built-in support
 - [ ] Implement `?` error propagation operator
-- [ ] Add comprehensive tests for F# style features
+- [ ] Implement full IR generation for F# expressions (currently stubs)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 

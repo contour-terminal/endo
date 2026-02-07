@@ -159,6 +159,9 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
     TRACE_SCOPE("parseStmt");
     switch (_lexer.currentToken())
     {
+        case Token::Let:
+            // F# style let binding
+            return parseLet();
         case Token::String:
         case Token::Identifier:
             if (_lexer.isDirective("if"))
@@ -2272,6 +2275,430 @@ std::vector<std::string> Parser::expandBraces(std::string const& input)
     }
 
     return result;
+}
+
+// ============================================================================
+// F# Style Let Bindings and Expression Parser
+// ============================================================================
+
+size_t Parser::currentTokenColumn() const noexcept
+{
+    return static_cast<size_t>(_lexer.currentRange().begin.column) + 1; // 1-based
+}
+
+bool Parser::isFSharpPrimary() const noexcept
+{
+    switch (_lexer.currentToken())
+    {
+        case Token::Number:
+        case Token::Identifier:
+        case Token::RndOpen: return true;
+        default:
+            // Check for true/false as bool literals in F# context
+            if (_lexer.currentToken() == Token::Identifier)
+            {
+                auto const& lit = _lexer.currentLiteral();
+                return lit == "true" || lit == "false";
+            }
+            return false;
+    }
+}
+
+std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
+{
+    TRACE_SCOPE("parseLet");
+    _lexer.nextToken(); // consume 'let'
+
+    // Check for 'mut' modifier
+    bool const isMutable = _lexer.currentToken() == Token::Mut;
+    if (isMutable)
+        _lexer.nextToken(); // consume 'mut'
+
+    // Expect identifier (binding name)
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a name for the let binding" },
+                                           currentContextSnippet(),
+                                           "Expected identifier after 'let', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    std::string name = consumeLiteral();
+
+    // Collect parameters (for function definitions)
+    std::vector<std::string> parameters;
+    while (_lexer.currentToken() == Token::Identifier)
+    {
+        parameters.push_back(consumeLiteral());
+    }
+
+    // Expect '='
+    if (_lexer.currentToken() != Token::Equal)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '=' followed by an expression" },
+                                           currentContextSnippet(),
+                                           "Expected '=' in let binding, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '='
+
+    // Parse the value expression
+    auto value = parseFSharpExpr();
+    if (!value)
+        return nullptr;
+
+    return std::make_unique<ast::LetBindingStmt>(
+        isMutable, std::move(name), std::move(parameters), std::move(value));
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
+{
+    TRACE_SCOPE("parseFSharpExpr");
+    return parseFSharpPipeline();
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
+{
+    TRACE_SCOPE("parseFSharpPipeline");
+    auto left = parseFSharpOr();
+    if (!left)
+        return nullptr;
+
+    while (_lexer.currentToken() == Token::ForwardPipe)
+    {
+        _lexer.nextToken(); // consume '|>'
+        auto right = parseFSharpOr();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::PipelineExpr>(std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpOr()
+{
+    TRACE_SCOPE("parseFSharpOr");
+    auto left = parseFSharpAnd();
+    if (!left)
+        return nullptr;
+
+    while (_lexer.currentToken() == Token::PipePipe)
+    {
+        _lexer.nextToken(); // consume '||'
+        auto right = parseFSharpAnd();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::BinaryExpr>(ast::BinaryOp::Or, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpAnd()
+{
+    TRACE_SCOPE("parseFSharpAnd");
+    auto left = parseFSharpComparison();
+    if (!left)
+        return nullptr;
+
+    while (_lexer.currentToken() == Token::AmpAmp)
+    {
+        _lexer.nextToken(); // consume '&&'
+        auto right = parseFSharpComparison();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::BinaryExpr>(ast::BinaryOp::And, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpComparison()
+{
+    TRACE_SCOPE("parseFSharpComparison");
+    auto left = parseFSharpAddSub();
+    if (!left)
+        return nullptr;
+
+    while (true)
+    {
+        ast::BinaryOp op;
+        bool found = false;
+
+        switch (_lexer.currentToken())
+        {
+            case Token::Less:
+                op = ast::BinaryOp::Lt;
+                found = true;
+                break;
+            case Token::Greater:
+                op = ast::BinaryOp::Gt;
+                found = true;
+                break;
+            case Token::LessEqual:
+                op = ast::BinaryOp::Le;
+                found = true;
+                break;
+            case Token::GreaterEqual:
+                op = ast::BinaryOp::Ge;
+                found = true;
+                break;
+            default:
+                // Check for == and != as identifiers
+                if (_lexer.currentToken() == Token::Identifier)
+                {
+                    auto const& lit = _lexer.currentLiteral();
+                    if (lit == "==")
+                    {
+                        op = ast::BinaryOp::Eq;
+                        found = true;
+                    }
+                    else if (lit == "!=")
+                    {
+                        op = ast::BinaryOp::Ne;
+                        found = true;
+                    }
+                }
+                break;
+        }
+
+        if (!found)
+            break;
+
+        _lexer.nextToken();
+        auto right = parseFSharpAddSub();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpAddSub()
+{
+    TRACE_SCOPE("parseFSharpAddSub");
+    auto left = parseFSharpMulDivMod();
+    if (!left)
+        return nullptr;
+
+    while (true)
+    {
+        ast::BinaryOp op;
+        bool found = false;
+
+        if (_lexer.currentToken() == Token::Identifier)
+        {
+            auto const& lit = _lexer.currentLiteral();
+            if (lit == "+")
+            {
+                op = ast::BinaryOp::Add;
+                found = true;
+            }
+            else if (lit == "-")
+            {
+                op = ast::BinaryOp::Sub;
+                found = true;
+            }
+        }
+
+        if (!found)
+            break;
+
+        _lexer.nextToken();
+        auto right = parseFSharpMulDivMod();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpMulDivMod()
+{
+    TRACE_SCOPE("parseFSharpMulDivMod");
+    auto left = parseFSharpPow();
+    if (!left)
+        return nullptr;
+
+    while (true)
+    {
+        ast::BinaryOp op;
+        bool found = false;
+
+        if (_lexer.currentToken() == Token::Identifier)
+        {
+            auto const& lit = _lexer.currentLiteral();
+            if (lit == "*")
+            {
+                op = ast::BinaryOp::Mul;
+                found = true;
+            }
+            else if (lit == "/")
+            {
+                op = ast::BinaryOp::Div;
+                found = true;
+            }
+            else if (lit == "%")
+            {
+                op = ast::BinaryOp::Mod;
+                found = true;
+            }
+        }
+
+        if (!found)
+            break;
+
+        _lexer.nextToken();
+        auto right = parseFSharpPow();
+        if (!right)
+            return nullptr;
+        left = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpPow()
+{
+    TRACE_SCOPE("parseFSharpPow");
+    auto left = parseFSharpUnary();
+    if (!left)
+        return nullptr;
+
+    // ** is right-associative: 2**3**4 = 2**(3**4)
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "**")
+    {
+        _lexer.nextToken();
+        auto right = parseFSharpPow(); // Recursive for right-associativity
+        if (!right)
+            return nullptr;
+        return std::make_unique<ast::BinaryExpr>(ast::BinaryOp::Pow, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
+{
+    TRACE_SCOPE("parseFSharpUnary");
+
+    // Handle negation: -expr
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "-")
+    {
+        _lexer.nextToken();
+        auto operand = parseFSharpUnary();
+        if (!operand)
+            return nullptr;
+        return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
+    }
+
+    // Handle logical not: !expr
+    if (_lexer.currentToken() == Token::Not)
+    {
+        _lexer.nextToken();
+        auto operand = parseFSharpUnary();
+        if (!operand)
+            return nullptr;
+        return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Not, std::move(operand));
+    }
+
+    return parseFSharpApplication();
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
+{
+    TRACE_SCOPE("parseFSharpApplication");
+    auto func = parseFSharpPrimary();
+    if (!func)
+        return nullptr;
+
+    // Function application: func arg1 arg2 ...
+    // Continue while we see primary expressions (identifiers, numbers, parens)
+    while (isFSharpPrimary())
+    {
+        auto arg = parseFSharpPrimary();
+        if (!arg)
+            break;
+        func = std::make_unique<ast::ApplicationExpr>(std::move(func), std::move(arg));
+    }
+    return func;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
+{
+    TRACE_SCOPE("parseFSharpPrimary");
+
+    switch (_lexer.currentToken())
+    {
+        case Token::Number: {
+            // Parse as integer or float
+            auto const& lit = _lexer.currentLiteral();
+
+            // Check for float (contains '.' or 'e'/'E')
+            if (lit.find('.') != std::string::npos || lit.find('e') != std::string::npos
+                || lit.find('E') != std::string::npos)
+            {
+                double value = std::stod(lit);
+                _lexer.nextToken();
+                return std::make_unique<ast::FloatLiteralExpr>(value);
+            }
+
+            // Parse as integer
+            int64_t value = 0;
+            auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+            if (ec != std::errc())
+                value = 0;
+            _lexer.nextToken();
+            return std::make_unique<ast::IntLiteralExpr>(value);
+        }
+
+        case Token::Identifier: {
+            auto const& lit = _lexer.currentLiteral();
+
+            // Check for boolean literals
+            if (lit == "true")
+            {
+                _lexer.nextToken();
+                return std::make_unique<ast::BoolLiteralExpr>(true);
+            }
+            if (lit == "false")
+            {
+                _lexer.nextToken();
+                return std::make_unique<ast::BoolLiteralExpr>(false);
+            }
+
+            // Regular identifier
+            std::string name = consumeLiteral();
+            return std::make_unique<ast::IdentifierExpr>(std::move(name));
+        }
+
+        case Token::RndOpen: {
+            // Parenthesized expression: (expr)
+            _lexer.nextToken(); // consume '('
+            auto inner = parseFSharpExpr();
+            if (!inner)
+                return nullptr;
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add a closing ')'" },
+                                                   currentContextSnippet(),
+                                                   "Expected ')' after expression, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ')'
+            return std::make_unique<ast::ParenExpr>(std::move(inner));
+        }
+
+        default:
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected expression, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+    }
 }
 
 } // namespace endo

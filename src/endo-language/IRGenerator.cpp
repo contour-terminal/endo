@@ -1490,4 +1490,76 @@ bool IRGenerator::inFunction() const
     return _functionDepth > 0;
 }
 
+// ============================================================================
+// F# Style Expressions and Statements (Stubs)
+// ============================================================================
+// These are placeholder implementations. Full implementation will be added
+// in a future iteration once the type system and evaluation strategy are finalized.
+
+void IRGenerator::visit(ast::LetBindingStmt const& node)
+{
+    // TODO: Implement let bindings with F# environment
+    reportTypeError("F# let bindings are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::BinaryExpr const& node)
+{
+    // TODO: Implement binary expression evaluation
+    reportTypeError("F# binary expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::UnaryExpr const& node)
+{
+    // TODO: Implement unary expression evaluation
+    reportTypeError("F# unary expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::PipelineExpr const& node)
+{
+    // TODO: Implement pipeline expression evaluation
+    reportTypeError("F# pipeline expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::ApplicationExpr const& node)
+{
+    // TODO: Implement function application
+    reportTypeError("F# function application is not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::IdentifierExpr const& node)
+{
+    // TODO: Look up identifier in F# environment and return its value
+    reportTypeError("F# identifier lookup is not yet implemented in IR generator");
+    (void) node;
+}
+
+void IRGenerator::visit(ast::IntLiteralExpr const& node)
+{
+    // Integer literals can be directly converted to CoreVM numbers
+    _result = get(CoreVM::CoreNumber(node.value));
+}
+
+void IRGenerator::visit(ast::FloatLiteralExpr const& node)
+{
+    // TODO: CoreVM may need float support; for now, truncate to integer
+    _result = get(CoreVM::CoreNumber(static_cast<int64_t>(node.value)));
+}
+
+void IRGenerator::visit(ast::BoolLiteralExpr const& node)
+{
+    _result = get(node.value);
+}
+
+void IRGenerator::visit(ast::ParenExpr const& node)
+{
+    // Parentheses just evaluate the inner expression
+    if (node.inner)
+        codegen(node.inner.get());
+}
+
 } // namespace endo

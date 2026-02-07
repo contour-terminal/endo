@@ -542,4 +542,114 @@ void ASTPrinter::visit(BuiltinWhichStmt const& node)
     }
 }
 
+// ============================================================================
+// F# Style Expressions and Statements
+// ============================================================================
+
+void ASTPrinter::visit(LetBindingStmt const& node)
+{
+    _result += "let ";
+    if (node.isMutable)
+        _result += "mut ";
+    _result += node.name;
+    for (auto const& param: node.parameters)
+    {
+        _result += ' ';
+        _result += param;
+    }
+    _result += " = ";
+    if (node.value)
+        node.value->accept(*this);
+}
+
+void ASTPrinter::visit(BinaryExpr const& node)
+{
+    _result += '(';
+    if (node.left)
+        node.left->accept(*this);
+    _result += ' ';
+    switch (node.op)
+    {
+        case BinaryOp::Add: _result += '+'; break;
+        case BinaryOp::Sub: _result += '-'; break;
+        case BinaryOp::Mul: _result += '*'; break;
+        case BinaryOp::Div: _result += '/'; break;
+        case BinaryOp::Mod: _result += '%'; break;
+        case BinaryOp::Pow: _result += "**"; break;
+        case BinaryOp::Eq: _result += "=="; break;
+        case BinaryOp::Ne: _result += "!="; break;
+        case BinaryOp::Lt: _result += '<'; break;
+        case BinaryOp::Le: _result += "<="; break;
+        case BinaryOp::Gt: _result += '>'; break;
+        case BinaryOp::Ge: _result += ">="; break;
+        case BinaryOp::And: _result += "&&"; break;
+        case BinaryOp::Or: _result += "||"; break;
+    }
+    _result += ' ';
+    if (node.right)
+        node.right->accept(*this);
+    _result += ')';
+}
+
+void ASTPrinter::visit(UnaryExpr const& node)
+{
+    switch (node.op)
+    {
+        case UnaryOp::Neg: _result += '-'; break;
+        case UnaryOp::Not: _result += '!'; break;
+    }
+    if (node.operand)
+        node.operand->accept(*this);
+}
+
+void ASTPrinter::visit(PipelineExpr const& node)
+{
+    _result += '(';
+    if (node.value)
+        node.value->accept(*this);
+    _result += " |> ";
+    if (node.function)
+        node.function->accept(*this);
+    _result += ')';
+}
+
+void ASTPrinter::visit(ApplicationExpr const& node)
+{
+    _result += '(';
+    if (node.function)
+        node.function->accept(*this);
+    _result += ' ';
+    if (node.argument)
+        node.argument->accept(*this);
+    _result += ')';
+}
+
+void ASTPrinter::visit(IdentifierExpr const& node)
+{
+    _result += node.name;
+}
+
+void ASTPrinter::visit(IntLiteralExpr const& node)
+{
+    _result += std::to_string(node.value);
+}
+
+void ASTPrinter::visit(FloatLiteralExpr const& node)
+{
+    _result += std::format("{}", node.value);
+}
+
+void ASTPrinter::visit(BoolLiteralExpr const& node)
+{
+    _result += node.value ? "true" : "false";
+}
+
+void ASTPrinter::visit(ParenExpr const& node)
+{
+    _result += '(';
+    if (node.inner)
+        node.inner->accept(*this);
+    _result += ')';
+}
+
 } // namespace endo::ast

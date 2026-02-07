@@ -47,6 +47,18 @@ struct TildeExpr;
 struct VariableExpr;
 struct WhileStmt;
 
+// F# style expressions and statements
+struct LetBindingStmt;
+struct BinaryExpr;
+struct UnaryExpr;
+struct PipelineExpr;
+struct ApplicationExpr;
+struct IdentifierExpr;
+struct IntLiteralExpr;
+struct FloatLiteralExpr;
+struct BoolLiteralExpr;
+struct ParenExpr;
+
 struct Visitor
 {
   public:
@@ -101,6 +113,18 @@ struct Visitor
     virtual void visit(CommandFileSubst const&) = 0;
     virtual void visit(TildeExpr const&) = 0;
     virtual void visit(VariableExpr const&) = 0;
+
+    // F# style expressions and statements
+    virtual void visit(LetBindingStmt const&) = 0;
+    virtual void visit(BinaryExpr const&) = 0;
+    virtual void visit(UnaryExpr const&) = 0;
+    virtual void visit(PipelineExpr const&) = 0;
+    virtual void visit(ApplicationExpr const&) = 0;
+    virtual void visit(IdentifierExpr const&) = 0;
+    virtual void visit(IntLiteralExpr const&) = 0;
+    virtual void visit(FloatLiteralExpr const&) = 0;
+    virtual void visit(BoolLiteralExpr const&) = 0;
+    virtual void visit(ParenExpr const&) = 0;
 };
 
 } // namespace endo::ast

@@ -841,4 +841,202 @@ struct ReturnStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+// ============================================================================
+// F# Style Expressions and Statements
+// ============================================================================
+
+/// F# style let binding: `let x = 42` or `let add x y = x + y`
+///
+/// Represents both simple bindings and function definitions:
+/// - Simple: `let x = 42` → parameters empty, value is the expression
+/// - Function: `let add x y = x + y` → parameters are [x, y], value is body
+///
+/// Note: Accessed via identifier name directly (not $x).
+/// Environment variables ($VAR) are a separate namespace.
+struct LetBindingStmt final: public Statement
+{
+    bool isMutable;                      ///< True for `let mut`
+    std::string name;                    ///< Binding/function name
+    std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
+    std::unique_ptr<Expr> value;         ///< Value expression or function body
+
+    LetBindingStmt(bool mut, std::string n, std::vector<std::string> params, std::unique_ptr<Expr> val):
+        isMutable(mut), name(std::move(n)), parameters(std::move(params)), value(std::move(val))
+    {
+    }
+
+    /// Is this a function definition (has parameters)?
+    [[nodiscard]] bool isFunction() const noexcept { return !parameters.empty(); }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Binary operators for F# style expressions
+enum class BinaryOp
+{
+    // Arithmetic
+    Add, // +
+    Sub, // -
+    Mul, // *
+    Div, // /
+    Mod, // %
+    Pow, // **
+
+    // Comparison
+    Eq, // ==
+    Ne, // !=
+    Lt, // <
+    Le, // <=
+    Gt, // >
+    Ge, // >=
+
+    // Logical
+    And, // &&
+    Or,  // ||
+};
+
+/// Unary operators for F# style expressions
+enum class UnaryOp
+{
+    Neg, // -x
+    Not, // !x
+};
+
+/// Binary expression: `left op right`
+///
+/// Used for arithmetic, comparison, and logical operations.
+struct BinaryExpr final: public Expr
+{
+    BinaryOp op;
+    std::unique_ptr<Expr> left;
+    std::unique_ptr<Expr> right;
+
+    BinaryExpr(BinaryOp operation, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r):
+        op(operation), left(std::move(l)), right(std::move(r))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Unary expression: `op operand`
+///
+/// Used for negation and logical not.
+struct UnaryExpr final: public Expr
+{
+    UnaryOp op;
+    std::unique_ptr<Expr> operand;
+
+    UnaryExpr(UnaryOp operation, std::unique_ptr<Expr> e): op(operation), operand(std::move(e)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Pipeline expression: `value |> func`
+///
+/// Syntactic sugar for function application: `value |> f` is equivalent to `f value`.
+/// Multiple pipelines chain: `x |> f |> g` is `g (f x)`.
+struct PipelineExpr final: public Expr
+{
+    std::unique_ptr<Expr> value;    ///< Left-hand side (the value being piped)
+    std::unique_ptr<Expr> function; ///< Right-hand side (function to apply)
+
+    PipelineExpr(std::unique_ptr<Expr> val, std::unique_ptr<Expr> func):
+        value(std::move(val)), function(std::move(func))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Function application expression: `func arg1 arg2 ...`
+///
+/// Represents curried function application. `add 1 2` is parsed as
+/// ApplicationExpr(ApplicationExpr(add, 1), 2).
+struct ApplicationExpr final: public Expr
+{
+    std::unique_ptr<Expr> function; ///< Function being applied
+    std::unique_ptr<Expr> argument; ///< Argument being passed
+
+    ApplicationExpr(std::unique_ptr<Expr> func, std::unique_ptr<Expr> arg):
+        function(std::move(func)), argument(std::move(arg))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Identifier expression: reference to a variable in F# namespace
+///
+/// Note: This is distinct from VariableExpr which handles $VAR shell variables.
+/// IdentifierExpr accesses let-bound variables directly by name.
+struct IdentifierExpr final: public Expr
+{
+    std::string name;
+
+    explicit IdentifierExpr(std::string n): name(std::move(n)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Integer literal expression: `42`, `-17`, `0xFF`
+struct IntLiteralExpr final: public Expr
+{
+    int64_t value;
+
+    explicit IntLiteralExpr(int64_t v): value(v) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Float literal expression: `3.14`, `-0.5`, `1e10`
+struct FloatLiteralExpr final: public Expr
+{
+    double value;
+
+    explicit FloatLiteralExpr(double v): value(v) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Boolean literal expression: `true`, `false`
+struct BoolLiteralExpr final: public Expr
+{
+    bool value;
+
+    explicit BoolLiteralExpr(bool v): value(v) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Parenthesized expression: `(expr)`
+///
+/// Used to override operator precedence or for clarity.
+struct ParenExpr final: public Expr
+{
+    std::unique_ptr<Expr> inner;
+
+    explicit ParenExpr(std::unique_ptr<Expr> e): inner(std::move(e)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+// ============================================================================
+// F# Style - Deferred Features (Documented)
+// ============================================================================
+//
+// The following features are planned but not yet implemented:
+//
+// - List literals: [1; 2; 3]
+// - Tuple literals: (a, b, c)
+// - Record literals: { name = "Alice"; age = 30 }
+// - Match expressions: match x with | pattern -> expr
+// - Lambda expressions: fun x -> x * 2
+// - Type annotations: let x: int = 42
+// - Recursive functions: let rec factorial n = ...
+// - Pattern-based parameters: let add (x, y) = x + y
+//
+// Error reporting will be enhanced with suggestions in a future iteration.
+// ============================================================================
+
 } // namespace endo::ast
