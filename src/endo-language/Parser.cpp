@@ -1414,30 +1414,25 @@ std::unique_ptr<ast::ArithExpr> Parser::parseArithEquality()
 
     while (true)
     {
-        // Check for == or != as identifiers (since lexer doesn't tokenize these specially)
-        if (_lexer.currentToken() == Token::Identifier)
+        if (_lexer.currentToken() == Token::EqualEqual)
         {
-            auto const& lit = _lexer.currentLiteral();
-            if (lit == "==")
-            {
-                _lexer.nextToken();
-                auto right = parseArithComparison();
-                if (!right)
-                    return nullptr;
-                left = std::make_unique<ast::ArithBinaryExpr>(
-                    ast::ArithOp::Eq, std::move(left), std::move(right));
-                continue;
-            }
-            else if (lit == "!=")
-            {
-                _lexer.nextToken();
-                auto right = parseArithComparison();
-                if (!right)
-                    return nullptr;
-                left = std::make_unique<ast::ArithBinaryExpr>(
-                    ast::ArithOp::Ne, std::move(left), std::move(right));
-                continue;
-            }
+            _lexer.nextToken();
+            auto right = parseArithComparison();
+            if (!right)
+                return nullptr;
+            left =
+                std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Eq, std::move(left), std::move(right));
+            continue;
+        }
+        else if (_lexer.currentToken() == Token::NotEqual)
+        {
+            _lexer.nextToken();
+            auto right = parseArithComparison();
+            if (!right)
+                return nullptr;
+            left =
+                std::make_unique<ast::ArithBinaryExpr>(ast::ArithOp::Ne, std::move(left), std::move(right));
+            continue;
         }
         break;
     }
@@ -2448,23 +2443,15 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComparison()
                 op = ast::BinaryOp::Ge;
                 found = true;
                 break;
-            default:
-                // Check for == and != as identifiers
-                if (_lexer.currentToken() == Token::Identifier)
-                {
-                    auto const& lit = _lexer.currentLiteral();
-                    if (lit == "==")
-                    {
-                        op = ast::BinaryOp::Eq;
-                        found = true;
-                    }
-                    else if (lit == "!=")
-                    {
-                        op = ast::BinaryOp::Ne;
-                        found = true;
-                    }
-                }
+            case Token::EqualEqual:
+                op = ast::BinaryOp::Eq;
+                found = true;
                 break;
+            case Token::NotEqual:
+                op = ast::BinaryOp::Ne;
+                found = true;
+                break;
+            default: break;
         }
 
         if (!found)

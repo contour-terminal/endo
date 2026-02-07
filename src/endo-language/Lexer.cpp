@@ -74,7 +74,11 @@ Token Lexer::nextToken()
             if (_currentChar == ';')
                 return consumeCharAndConfirmToken(Token::DblSemicolon);
             return confirmToken(Token::Semicolon);
-        case '=': return consumeCharAndConfirmToken(Token::Equal);
+        case '=':
+            nextChar();
+            if (_currentChar == '=')
+                return consumeCharAndConfirmToken(Token::EqualEqual);
+            return confirmToken(Token::Equal);
         case '|':
             nextChar();
             if (_currentChar == '|')
@@ -141,7 +145,11 @@ Token Lexer::nextToken()
                 --_dquoteSubstDepth; // Closing $(
             return confirmToken(Token::RndClose);
         case '\\': return consumeCharAndConfirmToken(Token::Backslash);
-        case '!': return consumeCharAndConfirmToken(Token::Not);
+        case '!':
+            nextChar();
+            if (_currentChar == '=')
+                return consumeCharAndConfirmToken(Token::NotEqual);
+            return confirmToken(Token::Not);
         case '`':
             if (_inDoubleQuote && _dquoteSubstDepth > 0)
                 --_dquoteSubstDepth; // Closing backtick

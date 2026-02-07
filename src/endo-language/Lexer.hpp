@@ -91,6 +91,8 @@ enum class Token
     LeftArrow,   // '<-' (mutation)
     ForwardPipe, // '|>'
     DotDot,      // '..' (range operator)
+    EqualEqual,  // '==' (equality comparison)
+    NotEqual,    // '!=' (inequality comparison)
     // Note: >> uses GreaterGreater token (context determines compose vs redirect)
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
     // Note: :: : [ ] , ? are lexed as part of identifiers to preserve shell compatibility.
@@ -384,8 +386,10 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Arrow: name = "->"; break;
             case LeftArrow: name = "<-"; break;
             case ForwardPipe: name = "|>"; break;
-            case DotDot:
-                name = "..";
+            case DotDot: name = ".."; break;
+            case EqualEqual: name = "=="; break;
+            case NotEqual:
+                name = "!=";
                 break;
                 // Note: >> and << use GreaterGreater/LessLess tokens
                 // Note: :: : are lexed as part of identifiers
