@@ -158,6 +158,18 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void bindFSharpVariable(std::string const& name, CoreVM::Value* value);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
 
+    // F# function management
+    struct FSharpFunction
+    {
+        std::vector<std::string> parameters; ///< Parameter names in order
+        ast::Expr const* body;               ///< Function body expression (for inlining)
+
+        size_t arity() const { return parameters.size(); }
+    };
+
+    void registerFSharpFunction(std::string const& name, FSharpFunction func);
+    [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
     CoreVM::diagnostics::Report& _report;
     CoreVM::Runtime& _runtime;
     CoreVM::SourceLocation _currentLocation;
@@ -171,6 +183,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     // F# scope chain (owned via raw pointer chain, root scope is unique_ptr)
     std::unique_ptr<FSharpScope> _rootFSharpScope;
     FSharpScope* _currentFSharpScope = nullptr;
+
+    // F# function table (name -> function metadata)
+    std::unordered_map<std::string, FSharpFunction> _fsharpFunctions;
 };
 
 } // namespace endo

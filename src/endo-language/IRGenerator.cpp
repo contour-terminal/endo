@@ -106,6 +106,20 @@ CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
     return nullptr;
 }
 
+// F# function management implementation
+void IRGenerator::registerFSharpFunction(std::string const& name, FSharpFunction func)
+{
+    _fsharpFunctions[name] = std::move(func);
+}
+
+IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string const& name) const
+{
+    auto it = _fsharpFunctions.find(name);
+    if (it != _fsharpFunctions.end())
+        return &it->second;
+    return nullptr;
+}
+
 CoreVM::NativeCallback* IRGenerator::findCallback(std::string const& signature) const
 {
     return _runtime.find(signature);
@@ -1553,14 +1567,22 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 {
     TRACE_SCOPE("visit(LetBindingStmt)");
 
-    // For now, only handle simple bindings (not function definitions)
     if (node.isFunction())
     {
-        // Function definitions require lambda/closure support (Phase C)
-        reportTypeError("F# function definitions in let bindings are not yet implemented");
+        // Function definition: let add x y = x + y
+        // Store the function for later inlining during application
+        // We don't compile it now - we'll inline the body when called
+
+        FSharpFunction func;
+        func.parameters = node.parameters;
+        func.body = node.value.get(); // Store pointer to body AST for inlining
+        registerFSharpFunction(node.name, std::move(func));
+
+        _result = nullptr;
         return;
     }
 
+    // Simple binding: let x = expr
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
     if (!value)
@@ -1655,16 +1677,137 @@ void IRGenerator::visit(ast::UnaryExpr const& node)
 
 void IRGenerator::visit(ast::PipelineExpr const& node)
 {
-    // TODO: Implement pipeline expression evaluation
-    reportTypeError("F# pipeline expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(PipelineExpr)");
+
+    // Pipeline: value |> function
+    // This is syntactic sugar for function application: f(value)
+    // value |> f is equivalent to f value
+
+    // Evaluate the value (left-hand side)
+    CoreVM::Value* value = codegen(node.value.get());
+    if (!value)
+    {
+        reportTypeError("Failed to evaluate pipeline value");
+        return;
+    }
+
+    // The function (right-hand side) should be a function identifier
+    // For now, we only support simple identifiers (not partial applications)
+    auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(node.function.get());
+    if (!funcIdent)
+    {
+        // Could be a partial application like (add 1) - not yet supported
+        reportTypeError("Pipeline function must be an identifier (partial application not yet supported)");
+        return;
+    }
+
+    // Look up the function
+    FSharpFunction const* func = lookupFSharpFunction(funcIdent->name);
+    if (!func)
+    {
+        reportTypeError("Undefined function in pipeline: {}", std::string_view(funcIdent->name));
+        return;
+    }
+
+    // For pipeline, the value becomes the first (and for now, only) argument
+    if (func->arity() != 1)
+    {
+        reportTypeError("Pipeline function '{}' must take exactly 1 argument, got {}",
+                        std::string_view(funcIdent->name),
+                        func->arity());
+        return;
+    }
+
+    // Inline the function body with the piped value as argument
+    pushFSharpScope();
+
+    // Bind the piped value to the parameter
+    CoreVM::LiteralType storageType = value->type();
+    CoreVM::AllocaInstr* storage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[0]);
+    createStore(storage, value, func->parameters[0]);
+    bindFSharpVariable(func->parameters[0], storage);
+
+    // Inline the function body
+    _result = codegen(func->body);
+
+    popFSharpScope();
 }
 
 void IRGenerator::visit(ast::ApplicationExpr const& node)
 {
-    // TODO: Implement function application
-    reportTypeError("F# function application is not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(ApplicationExpr)");
+
+    // Function application: f x y is parsed as ApplicationExpr(ApplicationExpr(f, x), y)
+    // We need to flatten this to get the function name and all arguments
+
+    // Collect arguments in reverse order (innermost first)
+    std::vector<CoreVM::Value*> args;
+    ast::Expr const* current = &node;
+
+    while (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(current))
+    {
+        // Evaluate the argument
+        CoreVM::Value* argValue = codegen(app->argument.get());
+        if (!argValue)
+        {
+            reportTypeError("Failed to evaluate function argument");
+            return;
+        }
+        args.push_back(argValue);
+        current = app->function.get();
+    }
+
+    // Reverse to get arguments in correct order (first arg first)
+    std::reverse(args.begin(), args.end());
+
+    // The base should be an identifier (the function name)
+    auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(current);
+    if (!funcIdent)
+    {
+        reportTypeError("Function application requires a function name");
+        return;
+    }
+
+    // Look up the function
+    FSharpFunction const* func = lookupFSharpFunction(funcIdent->name);
+    if (!func)
+    {
+        reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
+        return;
+    }
+
+    // Check arity
+    if (args.size() != func->arity())
+    {
+        reportTypeError("Function '{}' expects {} arguments, got {}",
+                        std::string_view(funcIdent->name),
+                        func->arity(),
+                        args.size());
+        return;
+    }
+
+    // Inline the function body:
+    // 1. Push a new scope for the function call
+    // 2. Bind arguments to parameters
+    // 3. Evaluate the function body
+    // 4. Pop scope and return result
+
+    pushFSharpScope();
+
+    // Bind arguments to parameter names
+    for (size_t i = 0; i < func->parameters.size(); ++i)
+    {
+        CoreVM::LiteralType storageType = args[i]->type();
+        CoreVM::AllocaInstr* storage =
+            createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[i]);
+        createStore(storage, args[i], func->parameters[i]);
+        bindFSharpVariable(func->parameters[i], storage);
+    }
+
+    // Inline the function body
+    _result = codegen(func->body);
+
+    popFSharpScope();
 }
 
 void IRGenerator::visit(ast::IdentifierExpr const& node)

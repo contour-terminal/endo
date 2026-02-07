@@ -2296,8 +2296,12 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::Match: return true;
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
-            // Check for bool literals, or list literals starting with '['
-            return !lit.empty() && (lit == "true" || lit == "false" || lit[0] == '[');
+            if (lit.empty())
+                return false;
+            // Variable identifiers start with alphanumeric or underscore
+            // Operators like +, -, *, /, |>, etc. start with symbols
+            char const first = lit[0];
+            return std::isalnum(static_cast<unsigned char>(first)) || first == '_' || first == '[';
         }
         default: return false;
     }
