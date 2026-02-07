@@ -16,6 +16,8 @@
 #include <tui/Canvas.hpp>
 #include <tui/EditAction.hpp>
 #include <tui/InputField.hpp>
+#include <tui/Screen.hpp>
+#include <tui/Terminal.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 
@@ -110,11 +112,16 @@ void InputField::render(Canvas& canvas)
     if (width <= 0 || height <= 0)
         return;
 
-    // Determine styles based on focus state
-    Style const& textStyle = focused() ? theme.inputFocused : theme.inputNormal;
-    Style selectionStyle = textStyle;
-    selectionStyle.inverse = true;
-    Style const& ghostStyle = theme.ghostText;
+    // Determine styles: use custom styles if set, otherwise theme defaults
+    Style textStyle = _styles.text.value_or(focused() ? theme.inputFocused : theme.inputNormal);
+    Style selectionStyle = _styles.selection.value_or(textStyle);
+    if (!_styles.selection.has_value())
+        selectionStyle.inverse = true;
+    Style ghostStyle = _styles.ghost.value_or(theme.ghostText);
+
+    // Fill background if custom background style is set
+    if (_styles.background.has_value())
+        canvas.fill(Rect { 0, 0, width, height }, ' ', *_styles.background);
 
     // For now, render single-line mode
     // TODO: Implement multiline rendering
@@ -243,6 +250,11 @@ void InputField::setPrompt(std::string_view prompt)
 auto InputField::prompt() const noexcept -> std::string_view
 {
     return _prompt;
+}
+
+void InputField::setStyles(InputFieldStyles styles)
+{
+    _styles = std::move(styles);
 }
 
 void InputField::clear()

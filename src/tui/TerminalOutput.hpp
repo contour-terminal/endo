@@ -6,6 +6,7 @@
 #include <string_view>
 #include <variant>
 
+#include <tui/CursorShape.hpp>
 #include <tui/Error.hpp>
 
 namespace tui
@@ -147,6 +148,10 @@ class TerminalOutput
 
     /// @brief Restores the cursor position (ESC 8).
     void restoreCursor();
+
+    /// @brief Sets the cursor shape using DECSCUSR (CSI Ps SP q).
+    /// @param shape The desired cursor shape.
+    void setCursorShape(CursorShape shape);
 
     /// @brief Sets the scroll region to the given rows (1-based, inclusive).
     /// @param top First row of the scroll region.

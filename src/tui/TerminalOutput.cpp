@@ -345,6 +345,11 @@ void TerminalOutput::restoreCursor()
     _buffer += "\0338";
 }
 
+void TerminalOutput::setCursorShape(CursorShape shape)
+{
+    _buffer += std::format("\033[{} q", static_cast<int>(shape));
+}
+
 void TerminalOutput::setScrollRegion(int top, int bottom)
 {
     _buffer += std::format("\033[{};{}r", top, bottom);

@@ -38,6 +38,9 @@ class PromptComponent: public tui::Component
 
     [[nodiscard]] bool focusable() const override { return true; }
 
+    /// @brief PromptComponent uses I-beam cursor when focused.
+    [[nodiscard]] tui::CursorShape cursorShape() const override { return tui::CursorShape::SteadyBar; }
+
     [[nodiscard]] tui::Size preferredSize() const override;
 
     // --- Prompt-specific API ---

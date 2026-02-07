@@ -9,14 +9,29 @@
 #include <string_view>
 #include <vector>
 
+#include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/KeyBindings.hpp>
+#include <tui/TerminalOutput.hpp>
+#include <tui/completer/CompletionProvider.hpp>
 
 namespace tui
 {
 
 class Canvas;
+
+/// @brief Style configuration for InputField.
+///
+/// Allows parent components to customize InputField's appearance.
+/// If not set, InputField uses theme defaults.
+struct InputFieldStyles
+{
+    std::optional<Style> text;       ///< Normal text style
+    std::optional<Style> ghost;      ///< Ghost text (dimmed suggestion) style
+    std::optional<Style> selection;  ///< Selected text style
+    std::optional<Style> background; ///< Background fill style
+};
 
 /// @brief Result of processing an input event in InputField.
 enum class InputFieldAction : std::uint8_t
@@ -62,6 +77,9 @@ class InputField: public Component
     /// @brief InputField can receive keyboard focus.
     [[nodiscard]] bool focusable() const override { return true; }
 
+    /// @brief InputField uses I-beam cursor when focused.
+    [[nodiscard]] CursorShape cursorShape() const override { return CursorShape::SteadyBar; }
+
     /// @brief Returns preferred size based on content.
     [[nodiscard]] Size preferredSize() const override;
 
@@ -84,6 +102,16 @@ class InputField: public Component
 
     /// @brief Returns the current prompt string.
     [[nodiscard]] auto prompt() const noexcept -> std::string_view;
+
+    /// @brief Sets custom styles for the input field.
+    ///
+    /// Allows parent components to customize InputField's appearance.
+    /// Any style set to std::nullopt will use theme defaults.
+    /// @param styles The styles to apply.
+    void setStyles(InputFieldStyles styles);
+
+    /// @brief Returns the current custom styles.
+    [[nodiscard]] InputFieldStyles const& styles() const noexcept { return _styles; }
 
     /// @brief Clears the buffer and resets cursor to position 0.
     void clear();
@@ -278,7 +306,8 @@ class InputField: public Component
     std::size_t _cursor = 0;
     std::string _prompt;
     KeyBindings _keyBindings = KeyBindings::defaults();
-    std::string _ghostText; ///< Ghost text suggestion (displayed dimmed after cursor)
+    InputFieldStyles _styles; ///< Custom styles (nullopt values use theme defaults)
+    std::string _ghostText;   ///< Ghost text suggestion (displayed dimmed after cursor)
     bool _multiline = false;
     int _maxLines = 0;     ///< 0 = unlimited
     int _scrollOffset = 0; ///< Scroll offset for multiline mode

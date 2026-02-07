@@ -7,6 +7,7 @@
 
 #include <tui/Buffer.hpp>
 #include <tui/Component.hpp>
+#include <tui/CursorShape.hpp>
 #include <tui/Theme.hpp>
 
 namespace tui
@@ -218,6 +219,29 @@ class Screen
 
     [[nodiscard]] Terminal const& terminal() const noexcept { return _terminal; }
 
+    // --- Overlay System ---
+
+    /// Shows an overlay component at the given absolute screen position.
+    ///
+    /// Overlays are rendered above all regular components and are not clipped
+    /// by their logical parent's bounds. Use this for popups, tooltips, menus, etc.
+    ///
+    /// @param overlay The overlay component to show.
+    /// @param position Absolute screen position (top-left corner of overlay).
+    void showOverlay(Component& overlay, Point position);
+
+    /// Hides/removes an overlay from the screen.
+    /// @param overlay The overlay to hide.
+    void hideOverlay(Component& overlay);
+
+    /// Updates an overlay's position.
+    /// @param overlay The overlay to reposition.
+    /// @param position New absolute screen position.
+    void positionOverlay(Component& overlay, Point position);
+
+    /// Returns true if the overlay is currently visible.
+    [[nodiscard]] bool isOverlayVisible(Component const& overlay) const noexcept;
+
   private:
     Terminal& _terminal;
     ScreenConfig _config;
@@ -240,16 +264,28 @@ class Screen
     // Focus state
     FocusGroupId _activeGroup = std::string(DefaultFocusGroup);
     std::unordered_map<FocusGroupId, Component*> _focusedComponents;
+    CursorShape _currentCursorShape = CursorShape::Default; ///< Last applied cursor shape
+
+    // Overlay state
+    struct OverlayEntry
+    {
+        Component* component;
+        Point position;
+    };
+
+    std::vector<OverlayEntry> _overlays;
 
     // Rendering phases
     void beginFrame();
     void renderTree();
     void renderComponent(Component& component, Rect parentBounds);
+    void renderOverlays();
     void endFrame();
     void flush();
     void flushFullscreen();
     void flushInline();
     void flushFixed();
+    void applyCursorShape(); ///< Applies cursor shape based on focused component.
 
     // Hit testing
     [[nodiscard]] Component* componentAt(int row, int col) const;

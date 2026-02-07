@@ -69,6 +69,7 @@ void Screen::draw()
 {
     beginFrame();
     renderTree();
+    renderOverlays();
     endFrame();
     flush();
 }
@@ -93,6 +94,8 @@ void Screen::releaseCursor()
     _previousContentHeight = 0;
     _previousCursorRow = 0;
     _needsFullRedraw = true;
+    // Reset cursor shape tracking so we re-apply it on next flush
+    _currentCursorShape = CursorShape::Default;
 }
 
 void Screen::setTheme(Theme theme)
@@ -328,6 +331,91 @@ void Screen::renderComponent(Component& component, Rect parentBounds)
     }
 }
 
+void Screen::renderOverlays()
+{
+    // Render overlays on top of the main tree, without clipping to parent bounds
+    for (auto const& entry: _overlays)
+    {
+        if (!entry.component || !entry.component->visible())
+            continue;
+
+        // Calculate overlay bounds at absolute position
+        Size overlaySize = entry.component->preferredSize();
+        Rect overlayBounds { entry.position.x, entry.position.y, overlaySize.width, overlaySize.height };
+
+        // Clip only to screen bounds, not to any parent
+        Rect screenBounds = viewportArea();
+        overlayBounds = overlayBounds.intersect(screenBounds);
+        if (overlayBounds.empty())
+            continue;
+
+        entry.component->setScreenBounds(overlayBounds);
+
+        // Create canvas for overlay (clipped to screen only)
+        Canvas canvas(_current, overlayBounds, _theme);
+        entry.component->render(canvas);
+
+        // Render overlay's children (if any)
+        for (Component* child: entry.component->children())
+        {
+            if (child->visible())
+                renderComponent(*child, overlayBounds);
+        }
+    }
+}
+
+void Screen::showOverlay(Component& overlay, Point position)
+{
+    // Check if already visible
+    auto it = std::find_if(
+        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+
+    if (it != _overlays.end())
+    {
+        // Update position
+        it->position = position;
+    }
+    else
+    {
+        // Add new overlay
+        _overlays.push_back({ &overlay, position });
+        overlay.setScreen(this);
+    }
+    invalidate();
+}
+
+void Screen::hideOverlay(Component& overlay)
+{
+    auto it = std::find_if(
+        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+
+    if (it != _overlays.end())
+    {
+        it->component->setScreen(nullptr);
+        _overlays.erase(it);
+        invalidate();
+    }
+}
+
+void Screen::positionOverlay(Component& overlay, Point position)
+{
+    auto it = std::find_if(
+        _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; });
+
+    if (it != _overlays.end())
+    {
+        it->position = position;
+        invalidate();
+    }
+}
+
+bool Screen::isOverlayVisible(Component const& overlay) const noexcept
+{
+    return std::find_if(
+               _overlays.begin(), _overlays.end(), [&](auto const& e) { return e.component == &overlay; })
+           != _overlays.end();
+}
+
 void Screen::endFrame()
 {
     // Swap buffers for next frame
@@ -345,6 +433,9 @@ void Screen::flush()
         case Viewport::Inline: flushInline(); break;
         case Viewport::Fixed: flushFixed(); break;
     }
+
+    // Apply cursor shape based on focused component
+    applyCursorShape();
 
     // Swap buffers
     std::swap(_current, _previous);
@@ -586,6 +677,19 @@ void Screen::flushFixed()
     }
 
     out.flush();
+}
+
+void Screen::applyCursorShape()
+{
+    CursorShape desiredShape = CursorShape::Default;
+    if (Component* focused = focusedComponent())
+        desiredShape = focused->cursorShape();
+
+    if (desiredShape != _currentCursorShape)
+    {
+        _terminal.output().setCursorShape(desiredShape);
+        _currentCursorShape = desiredShape;
+    }
 }
 
 Component* Screen::componentAt(int row, int col) const

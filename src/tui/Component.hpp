@@ -6,6 +6,7 @@
 #include <string>
 #include <vector>
 
+#include <tui/CursorShape.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/Rect.hpp>
 
@@ -93,6 +94,10 @@ class Component
 
     /// Returns true if this component currently has focus within its group.
     [[nodiscard]] bool focused() const noexcept { return _focused; }
+
+    /// Returns the cursor shape to use when this component is focused.
+    /// Default is CursorShape::Default, which lets the terminal decide.
+    [[nodiscard]] virtual CursorShape cursorShape() const { return CursorShape::Default; }
 
     // --- Visibility ---
 
