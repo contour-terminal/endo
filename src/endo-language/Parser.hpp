@@ -86,6 +86,7 @@ class Parser
 
     // F# style let bindings and expressions
     std::unique_ptr<ast::LetBindingStmt> parseLet();
+    std::unique_ptr<ast::LambdaExpr> parseLambda();
 
     // F# expression parser (precedence climbing)
     // Precedence (low to high): |> || && comparisons +- */% ** unary application
@@ -99,7 +100,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpPow();         // **
     std::unique_ptr<ast::Expr> parseFSharpUnary();       // - !
     std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
-    std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr)
+    std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ...
 
     /// Check if looking at start of F# primary expression
     [[nodiscard]] bool isFSharpPrimary() const noexcept;

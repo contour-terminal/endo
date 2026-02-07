@@ -1021,6 +1021,23 @@ struct ParenExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Lambda expression: `fun x -> x * 2` or `fun x y -> x + y`
+///
+/// Anonymous function with one or more parameters.
+/// Supports curried parameters: `fun x y -> x + y` is sugar for `fun x -> fun y -> x + y`.
+struct LambdaExpr final: public Expr
+{
+    std::vector<std::string> parameters; ///< Parameter names
+    std::unique_ptr<Expr> body;          ///< Lambda body expression
+
+    LambdaExpr(std::vector<std::string> params, std::unique_ptr<Expr> bodyExpr):
+        parameters(std::move(params)), body(std::move(bodyExpr))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // F# Style - Deferred Features (Documented)
 // ============================================================================

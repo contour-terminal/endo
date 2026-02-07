@@ -652,4 +652,18 @@ void ASTPrinter::visit(ParenExpr const& node)
     _result += ')';
 }
 
+void ASTPrinter::visit(LambdaExpr const& node)
+{
+    _result += "fun ";
+    for (size_t i = 0; i < node.parameters.size(); ++i)
+    {
+        if (i > 0)
+            _result += ' ';
+        _result += node.parameters[i];
+    }
+    _result += " -> ";
+    if (node.body)
+        node.body->accept(*this);
+}
+
 } // namespace endo::ast

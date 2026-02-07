@@ -317,7 +317,9 @@ src/
 - [x] Add comprehensive tests for F# let bindings and expressions (39 test cases with 214 assertions)
 - [x] Add ASTPrinter support for new F# nodes
 - [x] Add IRGenerator stubs for F# nodes (placeholder implementations for future work)
-- [ ] Extend Parser for lambda expressions (`fun x -> x * 2`)
+- [x] Extend Parser for lambda expressions (`fun x -> x * 2`)
+- [x] Add LambdaExpr AST node with ASTPrinter and IRGenerator stub
+- [x] Add comprehensive lambda tests (8 test cases covering single/multiple params, nesting, pipelines)
 - [ ] Extend Parser for match expressions with guards
 - [ ] Extend Parser for list literals and comprehensions
 - [ ] Extend Parser for record literals and type definitions

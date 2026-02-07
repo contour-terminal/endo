@@ -2292,7 +2292,8 @@ bool Parser::isFSharpPrimary() const noexcept
     {
         case Token::Number:
         case Token::Identifier:
-        case Token::RndOpen: return true;
+        case Token::RndOpen:
+        case Token::Fun: return true;
         default:
             // Check for true/false as bool literals in F# context
             if (_lexer.currentToken() == Token::Identifier)
@@ -2624,12 +2625,59 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
     return func;
 }
 
+std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
+{
+    TRACE_SCOPE("parseLambda");
+    _lexer.nextToken(); // consume 'fun'
+
+    // Parse parameters until we see '->'
+    std::vector<std::string> parameters;
+    while (_lexer.currentToken() == Token::Identifier && _lexer.currentToken() != Token::Arrow)
+    {
+        parameters.push_back(consumeLiteral());
+    }
+
+    if (parameters.empty())
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide at least one parameter for the lambda" },
+                                           currentContextSnippet(),
+                                           "Expected parameter after 'fun', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    // Expect '->'
+    if (_lexer.currentToken() != Token::Arrow)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Use '->' to separate parameters from body" },
+                                           currentContextSnippet(),
+                                           "Expected '->' in lambda expression, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '->'
+
+    // Parse the lambda body expression
+    auto body = parseFSharpExpr();
+    if (!body)
+        return nullptr;
+
+    return std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body));
+}
+
 std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 {
     TRACE_SCOPE("parseFSharpPrimary");
 
     switch (_lexer.currentToken())
     {
+        case Token::Fun: {
+            // Lambda expression: fun x -> expr
+            return parseLambda();
+        }
+
         case Token::Number: {
             // Parse as integer or float
             auto const& lit = _lexer.currentLiteral();

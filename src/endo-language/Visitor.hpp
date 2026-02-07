@@ -58,6 +58,7 @@ struct IntLiteralExpr;
 struct FloatLiteralExpr;
 struct BoolLiteralExpr;
 struct ParenExpr;
+struct LambdaExpr;
 
 struct Visitor
 {
@@ -125,6 +126,7 @@ struct Visitor
     virtual void visit(FloatLiteralExpr const&) = 0;
     virtual void visit(BoolLiteralExpr const&) = 0;
     virtual void visit(ParenExpr const&) = 0;
+    virtual void visit(LambdaExpr const&) = 0;
 };
 
 } // namespace endo::ast

@@ -324,3 +324,155 @@ TEST_CASE("Parser.FSharp.ASTPrinter.bool_literal")
     std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
     CHECK(printed == "let b = true");
 }
+
+// =============================================================================
+// F# Lambda Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.lambda_simple")
+{
+    auto ast = parse("let f = fun x -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "f");
+    CHECK(letStmt->parameters.empty());
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0] == "x");
+
+    auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(lambda->body.get());
+    REQUIRE(body != nullptr);
+    CHECK(body->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.lambda_multiple_params")
+{
+    auto ast = parse("let add = fun x y -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 2);
+    CHECK(lambda->parameters[0] == "x");
+    CHECK(lambda->parameters[1] == "y");
+}
+
+TEST_CASE("Parser.FSharp.lambda_with_binary_expr")
+{
+    auto ast = parse("let double = fun x -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0] == "x");
+}
+
+TEST_CASE("Parser.FSharp.lambda_nested")
+{
+    // fun x -> fun y -> x is equivalent to fun x y -> x
+    auto ast = parse("let f = fun x -> fun y -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* outerLambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(outerLambda != nullptr);
+    REQUIRE(outerLambda->parameters.size() == 1);
+    CHECK(outerLambda->parameters[0] == "x");
+
+    auto* innerLambda = dynamic_cast<endo::ast::LambdaExpr*>(outerLambda->body.get());
+    REQUIRE(innerLambda != nullptr);
+    REQUIRE(innerLambda->parameters.size() == 1);
+    CHECK(innerLambda->parameters[0] == "y");
+
+    auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(innerLambda->body.get());
+    REQUIRE(body != nullptr);
+    CHECK(body->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.lambda_in_pipeline")
+{
+    // Lambda used in a pipeline
+    auto ast = parse("let mapped = x |> fun n -> n");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* pipeline = dynamic_cast<endo::ast::PipelineExpr*>(letStmt->value.get());
+    REQUIRE(pipeline != nullptr);
+
+    auto* value = dynamic_cast<endo::ast::IdentifierExpr*>(pipeline->value.get());
+    REQUIRE(value != nullptr);
+    CHECK(value->name == "x");
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(pipeline->function.get());
+    REQUIRE(lambda != nullptr);
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0] == "n");
+}
+
+TEST_CASE("Parser.FSharp.lambda_parenthesized")
+{
+    auto ast = parse("let f = (fun x -> x)");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* parenExpr = dynamic_cast<endo::ast::ParenExpr*>(letStmt->value.get());
+    REQUIRE(parenExpr != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(parenExpr->inner.get());
+    REQUIRE(lambda != nullptr);
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0] == "x");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.lambda_simple")
+{
+    auto ast = parse("let f = fun x -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let f = fun x -> x");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.lambda_multiple_params")
+{
+    auto ast = parse("let add = fun x y -> x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let add = fun x y -> x");
+}

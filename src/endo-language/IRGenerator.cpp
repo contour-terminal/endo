@@ -1562,4 +1562,11 @@ void IRGenerator::visit(ast::ParenExpr const& node)
         codegen(node.inner.get());
 }
 
+void IRGenerator::visit(ast::LambdaExpr const& node)
+{
+    // TODO: Implement lambda expressions with closures
+    reportTypeError("F# lambda expressions are not yet implemented in IR generator");
+    (void) node;
+}
+
 } // namespace endo
