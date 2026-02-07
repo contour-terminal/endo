@@ -120,6 +120,11 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
     return nullptr;
 }
 
+std::string IRGenerator::generateLambdaName()
+{
+    return std::format("__lambda_{}", _lambdaCounter++);
+}
+
 CoreVM::NativeCallback* IRGenerator::findCallback(std::string const& signature) const
 {
     return _runtime.find(signature);
@@ -1583,6 +1588,18 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     }
 
     // Simple binding: let x = expr
+    // Special case: let f = fun x -> x * 2 (lambda assigned to variable)
+    // We register the lambda as a function under the variable name
+    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(node.value.get()))
+    {
+        FSharpFunction func;
+        func.parameters = lambda->parameters;
+        func.body = lambda->body.get();
+        registerFSharpFunction(node.name, std::move(func));
+        _result = nullptr;
+        return;
+    }
+
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
     if (!value)
@@ -1691,21 +1708,44 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         return;
     }
 
-    // The function (right-hand side) should be a function identifier
-    // For now, we only support simple identifiers (not partial applications)
-    auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(node.function.get());
-    if (!funcIdent)
+    // The function (right-hand side) can be:
+    // 1. An identifier (named function): 5 |> double
+    // 2. A lambda expression: 5 |> (fun x -> x * 2)
+    // 3. A parenthesized lambda: 5 |> (fun x -> x * 2)
+    FSharpFunction const* func = nullptr;
+    std::string funcName;
+
+    // Unwrap ParenExpr if present
+    ast::Expr const* funcExpr = node.function.get();
+    while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(funcExpr))
+        funcExpr = paren->inner.get();
+
+    if (auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(funcExpr))
+    {
+        // Named function or stored lambda
+        funcName = funcIdent->name;
+        func = lookupFSharpFunction(funcName);
+        if (!func)
+        {
+            reportTypeError("Undefined function in pipeline: {}", std::string_view(funcName));
+            return;
+        }
+    }
+    else if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(funcExpr))
+    {
+        // Lambda expression - register it as an anonymous function
+        funcName = generateLambdaName();
+        FSharpFunction lambdaFunc;
+        lambdaFunc.parameters = lambda->parameters;
+        lambdaFunc.body = lambda->body.get();
+        registerFSharpFunction(funcName, std::move(lambdaFunc));
+        func = lookupFSharpFunction(funcName);
+    }
+    else
     {
         // Could be a partial application like (add 1) - not yet supported
-        reportTypeError("Pipeline function must be an identifier (partial application not yet supported)");
-        return;
-    }
-
-    // Look up the function
-    FSharpFunction const* func = lookupFSharpFunction(funcIdent->name);
-    if (!func)
-    {
-        reportTypeError("Undefined function in pipeline: {}", std::string_view(funcIdent->name));
+        reportTypeError(
+            "Pipeline function must be an identifier or lambda (partial application not yet supported)");
         return;
     }
 
@@ -1713,7 +1753,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     if (func->arity() != 1)
     {
         reportTypeError("Pipeline function '{}' must take exactly 1 argument, got {}",
-                        std::string_view(funcIdent->name),
+                        std::string_view(funcName),
                         func->arity());
         return;
     }
@@ -1760,19 +1800,40 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     // Reverse to get arguments in correct order (first arg first)
     std::reverse(args.begin(), args.end());
 
-    // The base should be an identifier (the function name)
-    auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(current);
-    if (!funcIdent)
-    {
-        reportTypeError("Function application requires a function name");
-        return;
-    }
+    // Unwrap ParenExpr if present
+    while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(current))
+        current = paren->inner.get();
 
-    // Look up the function
-    FSharpFunction const* func = lookupFSharpFunction(funcIdent->name);
-    if (!func)
+    // The base can be:
+    // 1. An identifier (named function): double 5
+    // 2. A lambda expression: (fun x -> x * 2) 5
+    FSharpFunction const* func = nullptr;
+    std::string funcName;
+
+    if (auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(current))
     {
-        reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
+        // Named function or stored lambda
+        funcName = funcIdent->name;
+        func = lookupFSharpFunction(funcName);
+        if (!func)
+        {
+            reportTypeError("Undefined function: {}", std::string_view(funcName));
+            return;
+        }
+    }
+    else if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(current))
+    {
+        // Lambda expression - register it as an anonymous function
+        funcName = generateLambdaName();
+        FSharpFunction lambdaFunc;
+        lambdaFunc.parameters = lambda->parameters;
+        lambdaFunc.body = lambda->body.get();
+        registerFSharpFunction(funcName, std::move(lambdaFunc));
+        func = lookupFSharpFunction(funcName);
+    }
+    else
+    {
+        reportTypeError("Function application requires a function name or lambda");
         return;
     }
 
@@ -1780,7 +1841,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     if (args.size() != func->arity())
     {
         reportTypeError("Function '{}' expects {} arguments, got {}",
-                        std::string_view(funcIdent->name),
+                        std::string_view(funcName),
                         func->arity(),
                         args.size());
         return;
@@ -1852,9 +1913,24 @@ void IRGenerator::visit(ast::ParenExpr const& node)
 
 void IRGenerator::visit(ast::LambdaExpr const& node)
 {
-    // TODO: Implement lambda expressions with closures
-    reportTypeError("F# lambda expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(LambdaExpr)");
+
+    // Lambda expressions are registered as anonymous functions.
+    // When used directly in application/pipeline contexts, they are handled there.
+    // When used standalone (e.g., let f = fun x -> x * 2), we register and return
+    // a "function reference" that can be looked up later.
+
+    std::string lambdaName = generateLambdaName();
+
+    FSharpFunction func;
+    func.parameters = node.parameters;
+    func.body = node.body.get();
+    registerFSharpFunction(lambdaName, std::move(func));
+
+    // Store the lambda name in a way that can be retrieved by the calling context.
+    // We use a string constant to represent the function reference.
+    // This allows let bindings to store the function name for later lookup.
+    _result = get(lambdaName);
 }
 
 void IRGenerator::visit(ast::MatchExpr const& node)

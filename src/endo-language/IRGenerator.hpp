@@ -186,6 +186,10 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     // F# function table (name -> function metadata)
     std::unordered_map<std::string, FSharpFunction> _fsharpFunctions;
+
+    // Lambda counter for generating unique anonymous function names
+    size_t _lambdaCounter = 0;
+    [[nodiscard]] std::string generateLambdaName();
 };
 
 } // namespace endo

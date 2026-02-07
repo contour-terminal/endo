@@ -273,3 +273,67 @@ TEST_CASE("IRGenerator.FSharp.pipeline_with_expression")
     // Pipeline with expression on left side
     REQUIRE(generatesIRSuccessfully("let double x = x * 2; let result = (3 + 2) |> double"));
 }
+
+// =============================================================================
+// F# Lambda Expression Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.lambda_simple")
+{
+    // Simple lambda assigned to a variable
+    REQUIRE(generatesIRSuccessfully("let f = fun x -> x * 2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_two_params")
+{
+    // Lambda with two parameters
+    REQUIRE(generatesIRSuccessfully("let add = fun x y -> x + y"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_application_direct")
+{
+    // Lambda applied directly: (fun x -> x * 2) 5
+    REQUIRE(generatesIRSuccessfully("let result = (fun x -> x * 2) 5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_application_two_args")
+{
+    // Lambda with two args applied directly
+    REQUIRE(generatesIRSuccessfully("let result = (fun x y -> x + y) 3 4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_in_pipeline")
+{
+    // Lambda in pipeline: 5 |> (fun x -> x * 2)
+    REQUIRE(generatesIRSuccessfully("let result = 5 |> (fun x -> x * 2)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_pipeline_chain")
+{
+    // Chained lambdas in pipeline
+    REQUIRE(generatesIRSuccessfully("let result = 5 |> (fun x -> x * 2) |> (fun x -> x + 1)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_with_named_function")
+{
+    // Mix lambda and named function in pipeline
+    REQUIRE(generatesIRSuccessfully("let double x = x * 2; let result = 5 |> double |> (fun x -> x + 1)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_stored_and_called")
+{
+    // Store lambda in variable, then call it
+    REQUIRE(generatesIRSuccessfully("let f = fun x -> x * 2; let result = f 5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_stored_in_pipeline")
+{
+    // Store lambda in variable, use in pipeline
+    REQUIRE(generatesIRSuccessfully("let double = fun x -> x * 2; let result = 5 |> double"));
+}
+
+TEST_CASE("IRGenerator.FSharp.lambda_with_complex_body")
+{
+    // Lambda with complex expression body
+    REQUIRE(generatesIRSuccessfully("let result = (fun x -> x * x + x) 5"));
+}
