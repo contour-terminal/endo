@@ -10,6 +10,10 @@ namespace endo
 
 Token Lexer::nextToken()
 {
+    // If we're inside a double-quoted string (and not inside a substitution), use the special tokenizer
+    if (_inDoubleQuote && _dquoteSubstDepth == 0)
+        return consumeDoubleQuotedContent();
+
     consumeWhitespace();
     switch (_currentChar)
     {
@@ -69,16 +73,30 @@ Token Lexer::nextToken()
         case '(':
             nextChar();
             if (_currentChar == '(')
+            {
+                ++_arithDepth; // Entering (( arithmetic context
                 return consumeCharAndConfirmToken(Token::DblRndOpen);
+            }
             return confirmToken(Token::RndOpen);
         case ')':
             nextChar();
             if (_currentChar == ')')
+            {
+                if (_inDoubleQuote && _dquoteSubstDepth > 0)
+                    --_dquoteSubstDepth; // Closing $((
+                if (_arithDepth > 0)
+                    --_arithDepth; // Leaving arithmetic context
                 return consumeCharAndConfirmToken(Token::DblRndClose);
+            }
+            if (_inDoubleQuote && _dquoteSubstDepth > 0)
+                --_dquoteSubstDepth; // Closing $(
             return confirmToken(Token::RndClose);
         case '\\': return consumeCharAndConfirmToken(Token::Backslash);
         case '!': return consumeCharAndConfirmToken(Token::Not);
-        case '`': return consumeCharAndConfirmToken(Token::Backtick);
+        case '`':
+            if (_inDoubleQuote && _dquoteSubstDepth > 0)
+                --_dquoteSubstDepth; // Closing backtick
+            return consumeCharAndConfirmToken(Token::Backtick);
         case '~': return consumeTilde();
         case '$':
             nextChar();
@@ -86,7 +104,10 @@ Token Lexer::nextToken()
             {
                 nextChar();
                 if (_currentChar == '(')
+                {
+                    ++_arithDepth; // Entering $(( arithmetic context
                     return consumeCharAndConfirmToken(Token::DollarDblRndOpen);
+                }
                 return confirmToken(Token::DollarRndOpen);
             }
             else if (_currentChar == '$')
@@ -119,7 +140,11 @@ Token Lexer::nextToken()
         case '8':
         case '9': return consumeNumber();
         case '"':
-        case '\'': return consumeString();
+            // Start of double-quoted string with interpolation support
+            _inDoubleQuote = true;
+            _fragmentBuffer.clear();
+            return consumeCharAndConfirmToken(Token::DblQuoteStart);
+        case '\'': return consumeSingleQuotedString();
         default: return consumeIdentifier();
     }
     return confirmToken(Token::Invalid);
@@ -170,12 +195,44 @@ Token Lexer::consumeIdentifier()
 
 Token Lexer::consumeIdentifier(Token token)
 {
+    // For DollarName tokens, only consume valid variable name characters [a-zA-Z0-9_]
+    if (token == Token::DollarName)
+    {
+        while (!eof())
+        {
+            if ((_currentChar >= U'a' && _currentChar <= U'z')
+                || (_currentChar >= U'A' && _currentChar <= U'Z')
+                || (_currentChar >= U'0' && _currentChar <= U'9') || _currentChar == U'_')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+            else
+                break;
+        }
+        return confirmToken(token);
+    }
+
     // Note: {} are NOT reserved to allow brace expansion patterns like {a,b,c} to be lexed as single
     // tokens Note: [] are NOT reserved to allow glob bracket expressions like [abc] to be lexed as single
     // tokens
     auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
+    // In arithmetic context, operators are also reserved to allow expressions like 1+2
+    auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&:?,"sv;
+    // Arithmetic operators that should be lexed as single-char tokens
+    auto constexpr ArithOperators = U"+-*/%^:?,"sv;
 
-    while (!eof() && ReservedSymbols.find(_currentChar) == std::string_view::npos)
+    auto const& reserved = _arithDepth > 0 ? ArithReservedSymbols : ReservedSymbols;
+
+    // In arithmetic mode, if current char is an operator, consume it as a single-char token
+    if (_arithDepth > 0 && ArithOperators.find(_currentChar) != std::u32string_view::npos)
+    {
+        _nextToken.literal += unicode::to_utf8(_currentChar);
+        nextChar();
+        return confirmToken(token);
+    }
+
+    while (!eof() && reserved.find(_currentChar) == std::string_view::npos)
     {
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
@@ -183,35 +240,165 @@ Token Lexer::consumeIdentifier(Token token)
     return confirmToken(token);
 }
 
-Token Lexer::consumeString()
+Token Lexer::consumeSingleQuotedString()
 {
-    auto const quote = _currentChar;
-    nextChar();
-    while (_currentChar != quote && !eof())
+    // Single-quoted strings: no interpolation, backslash is literal
+    nextChar(); // consume opening '
+    while (_currentChar != '\'' && !eof())
     {
-        if (_currentChar == '\\')
-        {
-            // In double quotes, only certain escapes are special: \\ \" \$ \` \newline
-            // In single quotes, backslash is literal (except for \' in some shells)
-            // For simplicity, preserve the backslash for all escapes
-            _nextToken.literal += '\\';
-            nextChar();
-            if (eof())
-                break;
-            // Special case: \\ should become single backslash
-            if (_currentChar == '\\')
-            {
-                // Already added one backslash, just continue to add the second
-            }
-            // For all other cases, add the character after the backslash
-        }
         _nextToken.literal += unicode::to_utf8(_currentChar);
         nextChar();
     }
     if (eof())
         return confirmToken(Token::Invalid); // Unterminated string
-    nextChar();
+    nextChar();                              // consume closing '
     return confirmToken(Token::String);
+}
+
+Token Lexer::consumeDoubleQuotedContent()
+{
+    // We're inside a double-quoted string, tokenize content with interpolation support
+    // This is called repeatedly until we hit the closing quote
+
+    // Set up location tracking
+    auto const [line, column, name] = _source->currentSourceLocation();
+    _nextToken.location.name = name;
+    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.end = _nextToken.location.begin;
+    _nextToken.literal.clear();
+
+    while (!eof())
+    {
+        switch (_currentChar)
+        {
+            case '"':
+                // End of double-quoted string
+                if (!_fragmentBuffer.empty())
+                {
+                    // Emit pending fragment first
+                    _nextToken.literal = std::move(_fragmentBuffer);
+                    _fragmentBuffer.clear();
+                    return confirmToken(Token::StringFragment);
+                }
+                // Emit the closing quote
+                _inDoubleQuote = false;
+                return consumeCharAndConfirmToken(Token::DblQuoteEnd);
+
+            case '\\':
+                // Escape sequences in double quotes
+                nextChar();
+                if (eof())
+                {
+                    // Unterminated string with trailing backslash
+                    _inDoubleQuote = false;
+                    return confirmToken(Token::Invalid);
+                }
+                switch (_currentChar)
+                {
+                    case '"':
+                    case '\\':
+                    case '$':
+                    case '`':
+                        // These escapes are recognized in double quotes
+                        _fragmentBuffer += static_cast<char>(_currentChar);
+                        nextChar();
+                        break;
+                    case 'n':
+                        _fragmentBuffer += '\n';
+                        nextChar();
+                        break;
+                    case 't':
+                        _fragmentBuffer += '\t';
+                        nextChar();
+                        break;
+                    case 'r':
+                        _fragmentBuffer += '\r';
+                        nextChar();
+                        break;
+                    default:
+                        // Unknown escape: keep both backslash and character
+                        _fragmentBuffer += '\\';
+                        _fragmentBuffer += unicode::to_utf8(_currentChar);
+                        nextChar();
+                        break;
+                }
+                break;
+
+            case '$':
+                // Variable or command substitution - emit pending fragment first
+                if (!_fragmentBuffer.empty())
+                {
+                    _nextToken.literal = std::move(_fragmentBuffer);
+                    _fragmentBuffer.clear();
+                    return confirmToken(Token::StringFragment);
+                }
+                // Now handle the $ sequence
+                nextChar();
+                if (_currentChar == '(')
+                {
+                    nextChar();
+                    if (_currentChar == '(')
+                    {
+                        ++_dquoteSubstDepth; // Entering $((
+                        ++_arithDepth;       // Enter arithmetic context
+                        return consumeCharAndConfirmToken(Token::DollarDblRndOpen);
+                    }
+                    ++_dquoteSubstDepth; // Entering $(
+                    return confirmToken(Token::DollarRndOpen);
+                }
+                else if (_currentChar == '{')
+                    return consumeBracedVariable();
+                else if (_currentChar == '$')
+                    return consumeCharAndConfirmToken(Token::DollarDollar);
+                else if (_currentChar == '!')
+                    return consumeCharAndConfirmToken(Token::DollarNot);
+                else if (_currentChar == '?')
+                    return consumeCharAndConfirmToken(Token::DollarQuestion);
+                else if (_currentChar < 0x80 && std::isalpha(static_cast<char>(_currentChar)))
+                    return consumeIdentifier(Token::DollarName);
+                else if (_currentChar == '_')
+                    return consumeIdentifier(Token::DollarName);
+                else if (_currentChar < 0x80 && std::isdigit(static_cast<char>(_currentChar)))
+                {
+                    _nextToken.literal += static_cast<char>(_currentChar);
+                    return consumeCharAndConfirmToken(Token::DollarNumber);
+                }
+                else
+                {
+                    // Bare $ followed by something else - treat as literal
+                    _fragmentBuffer += '$';
+                }
+                break;
+
+            case '`':
+                // Backtick command substitution - emit pending fragment first
+                if (!_fragmentBuffer.empty())
+                {
+                    _nextToken.literal = std::move(_fragmentBuffer);
+                    _fragmentBuffer.clear();
+                    return confirmToken(Token::StringFragment);
+                }
+                ++_dquoteSubstDepth; // Entering backtick substitution
+                return consumeCharAndConfirmToken(Token::Backtick);
+
+            default:
+                // Regular character - add to fragment buffer
+                _fragmentBuffer += unicode::to_utf8(_currentChar);
+                nextChar();
+                break;
+        }
+    }
+
+    // EOF while inside double-quoted string
+    // First emit any pending fragment
+    if (!_fragmentBuffer.empty())
+    {
+        _nextToken.literal = std::move(_fragmentBuffer);
+        _fragmentBuffer.clear();
+        return confirmToken(Token::StringFragment);
+    }
+    _inDoubleQuote = false;
+    return confirmToken(Token::Invalid);
 }
 
 Token Lexer::consumeBracedVariable()

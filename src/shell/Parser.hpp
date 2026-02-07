@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "Lexer.hpp"
-
 #include <shell/AST.hpp>
 #include <shell/DiagnosticsAdapter.hpp>
 
@@ -11,6 +9,8 @@
 #include <memory>
 #include <optional>
 #include <string_view>
+
+#include "Lexer.hpp"
 
 namespace endo
 {
@@ -68,6 +68,7 @@ class Parser
     std::unique_ptr<ast::ParamExpansionExpr> parseParamExpansion();
     std::unique_ptr<ast::TildeExpr> parseTildeExpansion();
     std::unique_ptr<ast::ArithExpansionExpr> parseArithmeticExpansion();
+    std::unique_ptr<ast::Expr> parseInterpolatedString();
 
     // Arithmetic expression parser
     std::unique_ptr<ast::ArithExpr> parseArithOr();

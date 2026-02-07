@@ -49,6 +49,7 @@ class ASTPrinter: public Visitor
     void visit(CommandFileSubst const& node) override;
     void visit(TildeExpr const& node) override;
     void visit(GlobExpr const& node) override;
+    void visit(ConcatExpr const& node) override;
     void visit(ArithExpansionExpr const& node) override;
     void visit(ParamExpansionExpr const& node) override;
     void visit(VariableExpr const& node) override;

@@ -122,7 +122,8 @@ bool Parser::isParameterToken() const noexcept
         case Token::DollarBraceParam:
         case Token::LessRndOpen:
         case Token::GreaterRndOpen:
-        case Token::Tilde: return true;
+        case Token::Tilde:
+        case Token::DblQuoteStart: return true;
         case Token::Backtick:
             // Backtick is a parameter token only at nesting level 0
             return _backtickNestingLevel == 0;
@@ -1204,6 +1205,103 @@ std::unique_ptr<ast::TildeExpr> Parser::parseTildeExpansion()
     return std::make_unique<ast::TildeExpr>(std::move(user), std::move(suffix));
 }
 
+std::unique_ptr<ast::Expr> Parser::parseInterpolatedString()
+{
+    TRACE_SCOPE("parseInterpolatedString");
+
+    // We've already consumed DblQuoteStart
+    _lexer.nextToken(); // consume DblQuoteStart
+
+    std::vector<std::unique_ptr<ast::Expr>> parts;
+
+    // Collect parts until we hit DblQuoteEnd
+    while (_lexer.currentToken() != Token::DblQuoteEnd && _lexer.currentToken() != Token::EndOfInput
+           && _lexer.currentToken() != Token::Invalid)
+    {
+        switch (_lexer.currentToken())
+        {
+            case Token::StringFragment:
+                parts.push_back(std::make_unique<ast::LiteralExpr>(consumeLiteral()));
+                break;
+
+            case Token::DollarName:
+                parts.push_back(
+                    std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, false));
+                break;
+
+            case Token::DollarBraceName:
+                parts.push_back(
+                    std::make_unique<ast::VariableExpr>(consumeLiteral(), ast::VariableType::Named, true));
+                break;
+
+            case Token::DollarBraceParam: parts.push_back(parseParamExpansion()); break;
+
+            case Token::DollarQuestion:
+                _lexer.nextToken();
+                parts.push_back(
+                    std::make_unique<ast::VariableExpr>("?", ast::VariableType::ExitStatus, false));
+                break;
+
+            case Token::DollarDollar:
+                _lexer.nextToken();
+                parts.push_back(
+                    std::make_unique<ast::VariableExpr>("$", ast::VariableType::ProcessId, false));
+                break;
+
+            case Token::DollarNot:
+                _lexer.nextToken();
+                parts.push_back(
+                    std::make_unique<ast::VariableExpr>("!", ast::VariableType::BackgroundId, false));
+                break;
+
+            case Token::DollarNumber:
+                parts.push_back(std::make_unique<ast::VariableExpr>(
+                    consumeLiteral(), ast::VariableType::Positional, false));
+                break;
+
+            case Token::DollarRndOpen: parts.push_back(parseCommandSubstitution()); break;
+
+            case Token::DollarDblRndOpen: parts.push_back(parseArithmeticExpansion()); break;
+
+            case Token::Backtick: parts.push_back(parseBacktickSubstitution()); break;
+
+            default:
+                // Unexpected token inside interpolated string
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Unexpected token '{}' in interpolated string",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+        }
+    }
+
+    if (_lexer.currentToken() != Token::DblQuoteEnd)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing double quote" },
+                                           currentContextSnippet(),
+                                           "Unterminated double-quoted string");
+        return nullptr;
+    }
+
+    _lexer.nextToken(); // consume DblQuoteEnd
+
+    // Optimize: if only one part and it's a literal, return it directly
+    if (parts.size() == 1)
+    {
+        if (dynamic_cast<ast::LiteralExpr*>(parts[0].get()))
+            return std::move(parts[0]);
+    }
+
+    // If empty string, return empty literal
+    if (parts.empty())
+        return std::make_unique<ast::LiteralExpr>("");
+
+    // Otherwise create a ConcatExpr
+    return std::make_unique<ast::ConcatExpr>(std::move(parts));
+}
+
 std::unique_ptr<ast::ArithExpansionExpr> Parser::parseArithmeticExpansion()
 {
     TRACE_SCOPE("parseArithmeticExpansion");
@@ -1686,6 +1784,7 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
         case Token::LessRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Read);
         case Token::GreaterRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Write);
         case Token::Tilde: return parseTildeExpansion();
+        case Token::DblQuoteStart: return parseInterpolatedString();
         default:
             _report.syntaxErrorWithSuggestions(currentLocation(),
                                                {},

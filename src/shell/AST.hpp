@@ -181,6 +181,21 @@ struct GlobExpr final: Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Concatenation expression for interpolated strings.
+///
+/// Represents a sequence of expressions that should be concatenated at runtime.
+/// Used for double-quoted strings with variable interpolation, e.g.:
+/// - `"hello $USER"` → ConcatExpr([LiteralExpr("hello "), VariableExpr("USER")])
+/// - `"$(date): $MSG"` → ConcatExpr([SubstitutionExpr(...), LiteralExpr(": "), VariableExpr("MSG")])
+struct ConcatExpr final: Expr
+{
+    std::vector<std::unique_ptr<Expr>> parts; ///< Parts to concatenate
+
+    explicit ConcatExpr(std::vector<std::unique_ptr<Expr>> p): parts(std::move(p)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // Arithmetic Expansion $((expr))
 // ============================================================================

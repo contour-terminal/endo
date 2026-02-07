@@ -60,6 +60,11 @@ enum class Token
     DblRndOpen,       // ((    (C-style for loop)
     DblSemicolon,     // ;;    (case clause terminator)
     Ampersand,        // &     (background execution)
+
+    // String interpolation tokens
+    DblQuoteStart,  // " at the start of a double-quoted string
+    DblQuoteEnd,    // " at the end of a double-quoted string
+    StringFragment, // Literal text fragment within double-quoted string
 };
 
 enum class BuiltinFunction
@@ -210,7 +215,8 @@ class Lexer
     Token consumeNumber();
     Token consumeIdentifier();
     Token consumeIdentifier(Token token);
-    Token consumeString();
+    Token consumeSingleQuotedString();
+    Token consumeDoubleQuotedContent();
     Token consumeBracedVariable();
     Token consumeTilde();
     char32_t nextChar();
@@ -222,6 +228,10 @@ class Lexer
     TokenInfo _currentToken = TokenInfo {};
     TokenInfo _nextToken = TokenInfo {};
     SourceLocationRange _currentRange {};
+    bool _inDoubleQuote = false; // State: inside double-quoted string
+    int _dquoteSubstDepth = 0;   // Nesting depth for $() and backticks inside double quotes
+    int _arithDepth = 0;         // Nesting depth for $(()), operators are reserved when > 0
+    std::string _fragmentBuffer; // Buffer for accumulating string fragments
 };
 
 } // namespace endo
@@ -306,6 +316,9 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Tilde: name = "~"; break;
             case DollarBraceParam: name = "DollarBraceParam"; break;
             case Ampersand: name = "&"; break;
+            case DblQuoteStart: name = "DblQuoteStart"; break;
+            case DblQuoteEnd: name = "DblQuoteEnd"; break;
+            case StringFragment: name = "StringFragment"; break;
         }
         return formatter<std::string_view>::format(name, ctx);
     }

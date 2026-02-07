@@ -458,6 +458,50 @@ void IRGenerator::visit(ast::GlobExpr const& node)
     _result = nullptr; // Result is captured via cmdBuilderArgs
 }
 
+void IRGenerator::visit(ast::ConcatExpr const& node)
+{
+    // Generate code for each part and concatenate them
+    if (node.parts.empty())
+    {
+        _result = get("");
+        return;
+    }
+
+    // Generate code for the first part
+    auto* result = codegen(node.parts[0].get());
+    if (!result)
+        return;
+
+    // Ensure result is a string
+    if (result->type() != CoreVM::LiteralType::String)
+    {
+        // Convert to string if needed
+        auto* callback = findCallback("expand.to_string(I)S");
+        if (callback)
+            result = createCallFunction(getBuiltinFunction(*callback), { result }, "to_string");
+    }
+
+    // Concatenate remaining parts
+    for (size_t i = 1; i < node.parts.size(); ++i)
+    {
+        auto* part = codegen(node.parts[i].get());
+        if (!part)
+            return;
+
+        // Ensure part is a string
+        if (part->type() != CoreVM::LiteralType::String)
+        {
+            auto* callback = findCallback("expand.to_string(I)S");
+            if (callback)
+                part = createCallFunction(getBuiltinFunction(*callback), { part }, "to_string");
+        }
+
+        result = createSAdd(result, part, "concat");
+    }
+
+    _result = result;
+}
+
 void IRGenerator::visit(ast::ArithExpansionExpr const& node)
 {
     // Evaluate the arithmetic expression and return the result as a string
@@ -1283,6 +1327,8 @@ bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> co
         if (dynamic_cast<ast::GlobExpr const*>(expr.get()) != nullptr)
             return true;
         if (dynamic_cast<ast::ArithExpansionExpr const*>(expr.get()) != nullptr)
+            return true;
+        if (dynamic_cast<ast::ConcatExpr const*>(expr.get()) != nullptr)
             return true;
     }
     return false;

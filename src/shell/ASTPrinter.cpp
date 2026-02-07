@@ -328,6 +328,14 @@ void ASTPrinter::visit(GlobExpr const& node)
     _result += node.pattern;
 }
 
+void ASTPrinter::visit(ConcatExpr const& node)
+{
+    _result += '"';
+    for (auto const& part: node.parts)
+        part->accept(*this);
+    _result += '"';
+}
+
 void ASTPrinter::visit(ArithExpansionExpr const& node)
 {
     _result += "$((";

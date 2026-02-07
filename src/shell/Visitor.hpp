@@ -24,6 +24,7 @@ struct CallPipeline;
 struct CaseStmt;
 struct CommandFileSubst;
 struct CompoundStmt;
+struct ConcatExpr;
 struct ContinueStmt;
 struct FileDescriptor;
 struct ForCStyleStmt;
@@ -92,6 +93,7 @@ struct Visitor
 
     // expressions
     virtual void visit(ArithExpansionExpr const&) = 0;
+    virtual void visit(ConcatExpr const&) = 0;
     virtual void visit(GlobExpr const&) = 0;
     virtual void visit(LiteralExpr const&) = 0;
     virtual void visit(ParamExpansionExpr const&) = 0;

@@ -1869,3 +1869,186 @@ TEST_CASE("FileCompleter.prefix_match_scores_higher_than_fuzzy")
     // Fuzzy match should have matchPositions for 's' and 'r'
     CHECK_FALSE(results[1].matchPositions.empty());
 }
+
+// ========================================================================
+// String Interpolation Tests
+// ========================================================================
+
+TEST_CASE("shell.interpolation.simple_variable")
+{
+    // "hello $USER" should expand the variable
+    TestShell shell;
+    shell("set NAME world");
+    CHECK(escape(shell("echo \"hello $NAME\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.interpolation.braced_variable")
+{
+    // "hello ${USER}" should expand the variable
+    TestShell shell;
+    shell("set NAME world");
+    CHECK(escape(shell("echo \"hello ${NAME}\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.interpolation.multiple_variables")
+{
+    // Multiple variables in one string
+    TestShell shell;
+    shell("set FIRST hello");
+    shell("set SECOND world");
+    CHECK(escape(shell("echo \"$FIRST $SECOND\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.interpolation.adjacent_variables")
+{
+    // Adjacent variables without space
+    TestShell shell;
+    shell("set A foo");
+    shell("set B bar");
+    CHECK(escape(shell("echo \"$A$B\"").output()) == escape("foobar\n"));
+}
+
+TEST_CASE("shell.interpolation.braced_and_simple")
+{
+    // Mix of braced and simple variable syntax
+    TestShell shell;
+    shell("set USER alice");
+    CHECK(escape(shell("echo \"hello ${USER}, or $USER\"").output()) == escape("hello alice, or alice\n"));
+}
+
+TEST_CASE("shell.interpolation.empty_string")
+{
+    // Empty double-quoted string
+    TestShell shell;
+    CHECK(escape(shell("echo \"\"").output()) == escape("\n"));
+}
+
+TEST_CASE("shell.interpolation.no_variables")
+{
+    // Double-quoted string without variables
+    TestShell shell;
+    CHECK(escape(shell("echo \"hello world\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.interpolation.undefined_variable")
+{
+    // Undefined variable expands to empty string
+    TestShell shell;
+    CHECK(escape(shell("echo \"hello $UNDEFINED_VAR!\"").output()) == escape("hello !\n"));
+}
+
+TEST_CASE("shell.interpolation.special_variable_exit_status")
+{
+    // $? inside double quotes
+    TestShell shell;
+    shell("true");
+    CHECK(escape(shell("echo \"Exit: $?\"").output()) == escape("Exit: 0\n"));
+}
+
+TEST_CASE("shell.interpolation.special_variable_pid")
+{
+    // $$ inside double quotes (should produce a number)
+    TestShell shell;
+    auto result = shell("echo \"PID: $$\"").output();
+    CHECK(result.starts_with("PID: "));
+    // Should have digits after "PID: "
+    CHECK(result.size() > 6);
+}
+
+TEST_CASE("shell.interpolation.command_substitution")
+{
+    // $(command) inside double quotes
+    TestShell shell;
+    CHECK(escape(shell("echo \"Today: $(echo date)\"").output()) == escape("Today: date\n"));
+}
+
+TEST_CASE("shell.interpolation.backtick_substitution")
+{
+    // `command` inside double quotes
+    TestShell shell;
+    CHECK(escape(shell("echo \"User: `echo alice`\"").output()) == escape("User: alice\n"));
+}
+
+TEST_CASE("shell.interpolation.arithmetic_expansion")
+{
+    // $((expr)) inside double quotes
+    TestShell shell;
+    CHECK(escape(shell("echo \"Sum: $((1+2))\"").output()) == escape("Sum: 3\n"));
+}
+
+TEST_CASE("shell.interpolation.param_expansion")
+{
+    // ${VAR:-default} inside double quotes
+    TestShell shell;
+    CHECK(escape(shell("echo \"${UNSET:-default}\"").output()) == escape("default\n"));
+}
+
+TEST_CASE("shell.interpolation.param_expansion_length")
+{
+    // ${#VAR} inside double quotes
+    TestShell shell;
+    shell("set TEXT hello");
+    CHECK(escape(shell("echo \"Length: ${#TEXT}\"").output()) == escape("Length: 5\n"));
+}
+
+TEST_CASE("shell.interpolation.escaped_dollar")
+{
+    // \$ should produce literal $
+    TestShell shell;
+    CHECK(escape(shell("echo \"Price: \\$100\"").output()) == escape("Price: $100\n"));
+}
+
+TEST_CASE("shell.interpolation.escaped_quote")
+{
+    // \" should produce literal "
+    TestShell shell;
+    CHECK(escape(shell("echo \"He said \\\"hi\\\"\"").output()) == escape("He said \"hi\"\n"));
+}
+
+TEST_CASE("shell.interpolation.escaped_backslash")
+{
+    // \\ should produce single backslash
+    TestShell shell;
+    CHECK(escape(shell("echo \"path\\\\name\"").output()) == escape("path\\name\n"));
+}
+
+TEST_CASE("shell.interpolation.newline_escape")
+{
+    // \n should produce newline
+    TestShell shell;
+    CHECK(escape(shell("echo \"line1\\nline2\"").output()) == escape("line1\nline2\n"));
+}
+
+TEST_CASE("shell.interpolation.single_quote_no_interpolation")
+{
+    // Single quotes should NOT interpolate
+    TestShell shell;
+    shell("set NAME world");
+    CHECK(escape(shell("echo '$NAME'").output()) == escape("$NAME\n"));
+}
+
+TEST_CASE("shell.interpolation.mixed_quotes")
+{
+    // Mix single and double quotes
+    TestShell shell;
+    shell("set NAME world");
+    CHECK(escape(shell("echo 'hello' \"$NAME\"").output()) == escape("hello world\n"));
+}
+
+TEST_CASE("shell.interpolation.nested_command_substitution")
+{
+    // Nested command substitution
+    TestShell shell;
+    shell("set MSG hello");
+    CHECK(escape(shell("echo \"Result: $(echo $MSG)\"").output()) == escape("Result: hello\n"));
+}
+
+TEST_CASE("shell.interpolation.complex_example")
+{
+    // Complex interpolation with multiple types
+    TestShell shell;
+    shell("set USER alice");
+    shell("set COUNT 42");
+    CHECK(escape(shell("echo \"User: $USER, Count: ${COUNT}, Sum: $((1+1))\"").output())
+          == escape("User: alice, Count: 42, Sum: 2\n"));
+}

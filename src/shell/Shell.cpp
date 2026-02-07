@@ -400,7 +400,25 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
         else if ((entry.type == Type::HereDoc || entry.type == Type::HereString)
                  && entry.targetFd == STDIN_FILENO)
         {
-            // Here-doc/here-string content is already in a pipe
+            // Lazily create the pipe if not already created
+            if (entry.openedFd == -1)
+            {
+                auto pipeResult = createPipe();
+                if (pipeResult.has_value())
+                {
+                    auto pipe = std::move(pipeResult.value());
+                    // Write content to pipe
+                    write(pipe->writer(), entry.content.data(), entry.content.size());
+                    // Add trailing newline for herestrings if needed
+                    if (entry.type == Type::HereString && !entry.content.empty()
+                        && entry.content.back() != '\n')
+                    {
+                        write(pipe->writer(), "\n", 1);
+                    }
+                    pipe->closeWriter();
+                    entry.openedFd = pipe->releaseReader();
+                }
+            }
             if (entry.openedFd != -1)
                 return entry.openedFd;
         }

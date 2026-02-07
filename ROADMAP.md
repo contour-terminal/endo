@@ -34,6 +34,7 @@ the primary project; Endo development follows as resources permit.
 | Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd`, `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep` | ✅ |
 | Environment variables (set/get/export) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
+| String interpolation in double-quoted strings (`"hello $USER"`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |
 | Process substitution (`<(cmd)`, `>(cmd)`) | ✅ |
 | Logical operators (`&&`, `||`) | ✅ |
@@ -180,6 +181,7 @@ Windows support.
 - [x] Add expansion tests
 
 **Implementation Notes:**
+- String interpolation: Double-quoted strings support variable expansion (`"hello $USER"`), braced variables (`"count: ${COUNT}"`), command substitution (`"date: $(date)"`), arithmetic expansion (`"sum: $((1+2))"`), and escape sequences (`"\n"`, `"\""`). The lexer emits `DblQuoteStart`, content tokens (StringFragment, DollarName, etc.), and `DblQuoteEnd`. The parser creates a `ConcatExpr` AST node with all parts concatenated at runtime.
 - Tilde expansion: `~` expands to `$HOME`, `~user` expands to user's home directory
 - Brace expansion: Handled at parse time for efficiency (no runtime overhead)
 - Parameter expansion: Supports length (`${#VAR}`), defaults (`${VAR:-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR:?error}`), prefix/suffix removal (`${VAR#pattern}`, `${VAR##pattern}`, `${VAR%pattern}`, `${VAR%%pattern}`), and replacement (`${VAR/pattern/replacement}`, `${VAR//pattern/replacement}`)

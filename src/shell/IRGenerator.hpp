@@ -57,6 +57,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::LiteralExpr const& node) override;
     void visit(ast::TildeExpr const& node) override;
     void visit(ast::GlobExpr const& node) override;
+    void visit(ast::ConcatExpr const& node) override;
     void visit(ast::ArithExpansionExpr const& node) override;
     void visit(ast::ParamExpansionExpr const& node) override;
     void visit(ast::VariableExpr const& node) override;
