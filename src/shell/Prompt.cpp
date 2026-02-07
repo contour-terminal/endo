@@ -147,8 +147,12 @@ std::string Prompt::read()
                 continue;
             }
 
-            // Dispatch through Screen first (updates hover state for mouse events)
-            (void) _screen->dispatchEvent(event);
+            // Dispatch mouse events through Screen (updates hover state)
+            // Key events go directly to processInput to avoid double-processing
+            if (std::holds_alternative<tui::MouseEvent>(event))
+            {
+                (void) _screen->dispatchEvent(event);
+            }
 
             // Process event through PromptComponent
             auto action = _promptComponent->processInput(event);

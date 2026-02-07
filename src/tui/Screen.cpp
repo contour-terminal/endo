@@ -751,9 +751,31 @@ EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
     if (mouse.uiHandled)
         return EventResult::Ignored;
 
+    // Translate mouse coordinates for inline mode
+    // In inline mode, content renders at the bottom of the terminal, but component
+    // screenBounds are relative to the viewport origin (0, 0). We need to translate
+    // the absolute terminal coordinates to viewport-relative coordinates.
+    int mouseRow = mouse.y - 1; // Convert to 0-based
+    int mouseCol = mouse.x - 1;
+
+    if (_config.viewport == Viewport::Inline && _previousContentHeight > 0)
+    {
+        // Content starts at: terminalRows - contentHeight
+        int const contentStartRow = _terminal.rows() - _previousContentHeight;
+        mouseRow = mouse.y - 1 - contentStartRow;
+
+        // If mouse is above the inline content area, ignore
+        if (mouseRow < 0)
+        {
+            // Still update hover state (to trigger leave if needed)
+            if (mouse.type == MouseEvent::Type::Move)
+                _hoverState.onMouseMove(mouse.x, mouse.y, nullptr);
+            return EventResult::Ignored;
+        }
+    }
+
     // Hit test to find target component
-    // Mouse coordinates are 1-based, convert to 0-based
-    Component* target = componentAt(mouse.y - 1, mouse.x - 1);
+    Component* target = componentAt(mouseRow, mouseCol);
 
     // Update hover state for mouse move events
     if (mouse.type == MouseEvent::Type::Move)
@@ -767,8 +789,8 @@ EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
     // Create adjusted event with component-relative coordinates
     MouseEvent adjusted = mouse;
     Rect bounds = target->screenBounds();
-    adjusted.x = mouse.x - bounds.x;
-    adjusted.y = mouse.y - bounds.y;
+    adjusted.x = mouseCol - bounds.x + 1; // Back to 1-based for component
+    adjusted.y = mouseRow - bounds.y + 1;
 
     return bubbleEvent(target, adjusted);
 }
