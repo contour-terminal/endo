@@ -14,6 +14,7 @@ namespace endo
 
 // Forward declarations
 class Completer;
+class CommandResolver;
 class PromptComponent;
 
 /// @brief TUI-based prompt using tui::Terminal and tui::InputField.
@@ -131,6 +132,7 @@ class Prompt
     tui::Terminal _terminal;
     std::unique_ptr<tui::Screen> _screen;
     std::unique_ptr<PromptComponent> _promptComponent;
+    std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
     std::string _promptStr = "> ";
     bool _initialized = false;
@@ -138,6 +140,7 @@ class Prompt
     bool _multilineEnabled = true; ///< Enable multiline editing by default
 
     void initialize();
+    void setupHoverCallbacks();
 };
 
 } // namespace endo

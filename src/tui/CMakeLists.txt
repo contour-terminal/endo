@@ -6,6 +6,7 @@ add_library(tui
     Component.cpp
     CompletionPopup.cpp
     Dialog.cpp
+    HoverState.cpp
     InputField.cpp
     KeyBindings.cpp
     List.cpp
@@ -15,11 +16,13 @@ add_library(tui
     Sixel.cpp
     Spinner.cpp
     StatusBar.cpp
+    StyledText.cpp
     Terminal.cpp
     TerminalInput.cpp
     TerminalOutput.cpp
     Text.cpp
     Theme.cpp
+    Tooltip.cpp
     VtParser.cpp
     completer/Completer.cpp
     completer/FuzzyMatch.cpp

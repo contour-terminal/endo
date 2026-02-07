@@ -458,15 +458,29 @@ Component (base class)
 
 ### Phase 2.5: Tooltips and Help
 
+**Status:** Partially Complete (hover tooltips for commands)
+
 **Dependency:** Phase 2.2 (mouse), Phase 2.3 (completion data), Phase 5.3 (LSP as shared backend)
 
 **Tasks:**
-- [ ] Implement mouse-hover tooltip display
+- [x] Implement mouse-hover tooltip display
+- [x] Implement command path tooltips (show full path for executables in $PATH)
+- [x] Implement builtin command tooltips (show "shell builtin" for builtins)
+- [x] Implement "command not found" tooltips
+- [ ] Implement alias expansion tooltips (placeholder for when aliases are implemented)
 - [ ] Implement inline help for commands
 - [ ] Implement error tooltips with suggestions
 - [ ] Integrate with man pages for command help
 - [ ] Consume LSP hover/diagnostics capabilities via in-process API for consistent behavior
   between the interactive shell and external editors
+
+**Implementation Notes:**
+- `HoverState` class tracks mouse position with 500ms delay before showing tooltip
+- `Tooltip` component supports both plain text and markdown content with scrolling
+- `StyledText` class provides styled text rendering with markdown parsing (reuses parsing from `MarkdownRenderer`)
+- `CommandResolver` determines command type (external, builtin, alias, not found) and provides tooltip text
+- Screen overlay system used for tooltip positioning
+- Hover callbacks integrated into event loop with poll timeout management
 
 ### Phase 2.6: Customizable Prompt
 

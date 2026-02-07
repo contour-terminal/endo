@@ -3,6 +3,7 @@
 
 #include <algorithm>
 
+#include "CommandResolver.hpp"
 #include "Completer.hpp"
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
@@ -491,6 +492,118 @@ void PromptComponent::insertCompletion(std::string_view text)
 
     // Update the input field
     _inputField.setText(newBuffer);
+}
+
+void PromptComponent::onHoverConfirmed(int x, int y)
+{
+    // Only handle hover on line 0 (where the command is)
+    if (y != 0 || !_commandResolver)
+        return;
+
+    // Check if hovering over command position
+    auto const cmd = getCommandAtColumn(x);
+    if (!cmd)
+        return;
+
+    // Resolve the command
+    auto const info = _commandResolver->resolve(*cmd);
+
+    // Show tooltip via screen
+    if (auto* scr = screen())
+    {
+        auto const bounds = screenBounds();
+        auto const [cmdStart, cmdEnd] = getCommandBounds();
+
+        // Position tooltip below the command, at the command's start
+        tui::Point tooltipPos { bounds.x + cmdStart, bounds.y + 1 };
+        scr->showTooltip(info.tooltip, tooltipPos, tui::TooltipContentType::PlainText);
+    }
+}
+
+void PromptComponent::onHoverLeave()
+{
+    if (auto* scr = screen())
+    {
+        scr->hideTooltip();
+    }
+}
+
+std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn) const
+{
+    // Calculate the prompt prefix width
+    auto const totalPromptWidth =
+        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+
+    // Check if column is within command bounds
+    auto const [cmdStart, cmdEnd] = getCommandBounds();
+    if (screenColumn < cmdStart || screenColumn >= cmdEnd)
+        return std::nullopt;
+
+    // Extract the command from input text
+    auto const text = _inputField.text();
+    if (text.empty())
+        return std::nullopt;
+
+    // Skip leading whitespace to find command start
+    auto pos = std::size_t { 0 };
+    while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
+        ++pos;
+
+    if (pos >= text.size())
+        return std::nullopt;
+
+    // Find command end (first whitespace, pipe, semicolon, etc.)
+    auto cmdEndPos = pos;
+    while (cmdEndPos < text.size() && text[cmdEndPos] != ' ' && text[cmdEndPos] != '\t'
+           && text[cmdEndPos] != '|' && text[cmdEndPos] != ';' && text[cmdEndPos] != '&'
+           && text[cmdEndPos] != '\n' && text[cmdEndPos] != '(' && text[cmdEndPos] != ')')
+    {
+        ++cmdEndPos;
+    }
+
+    if (cmdEndPos <= pos)
+        return std::nullopt;
+
+    return std::string(text.substr(pos, cmdEndPos - pos));
+}
+
+std::pair<int, int> PromptComponent::getCommandBounds() const
+{
+    auto const totalPromptWidth =
+        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+
+    auto const text = _inputField.text();
+    if (text.empty())
+        return { totalPromptWidth, totalPromptWidth };
+
+    // Skip leading whitespace
+    auto pos = std::size_t { 0 };
+    int leadingSpaceWidth = 0;
+    while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
+    {
+        leadingSpaceWidth += (text[pos] == '\t') ? 8 : 1; // Approximate tab width
+        ++pos;
+    }
+
+    if (pos >= text.size())
+        return { totalPromptWidth + leadingSpaceWidth, totalPromptWidth + leadingSpaceWidth };
+
+    // Find command end and calculate display width
+    auto cmdEndPos = pos;
+    while (cmdEndPos < text.size() && text[cmdEndPos] != ' ' && text[cmdEndPos] != '\t'
+           && text[cmdEndPos] != '|' && text[cmdEndPos] != ';' && text[cmdEndPos] != '&'
+           && text[cmdEndPos] != '\n' && text[cmdEndPos] != '(' && text[cmdEndPos] != ')')
+    {
+        ++cmdEndPos;
+    }
+
+    auto const cmdText = text.substr(pos, cmdEndPos - pos);
+    auto const cmdWidth = displayWidth(cmdText);
+
+    int const cmdStart = totalPromptWidth + leadingSpaceWidth;
+    int const cmdEnd = cmdStart + cmdWidth;
+
+    return { cmdStart, cmdEnd };
 }
 
 } // namespace endo

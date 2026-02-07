@@ -2,6 +2,7 @@
 #include "Screen.hpp"
 
 #include <algorithm>
+#include <chrono>
 
 #include <tui/Canvas.hpp>
 #include <tui/Terminal.hpp>
@@ -753,6 +754,13 @@ EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
     // Hit test to find target component
     // Mouse coordinates are 1-based, convert to 0-based
     Component* target = componentAt(mouse.y - 1, mouse.x - 1);
+
+    // Update hover state for mouse move events
+    if (mouse.type == MouseEvent::Type::Move)
+    {
+        _hoverState.onMouseMove(mouse.x, mouse.y, target);
+    }
+
     if (!target)
         return EventResult::Ignored;
 
@@ -763,6 +771,52 @@ EventResult Screen::dispatchMouseEvent(MouseEvent const& mouse)
     adjusted.y = mouse.y - bounds.y;
 
     return bubbleEvent(target, adjusted);
+}
+
+int Screen::pollTimeoutMs() const
+{
+    return _hoverState.timeoutMs();
+}
+
+void Screen::tickHover()
+{
+    _hoverState.tick(std::chrono::steady_clock::now());
+}
+
+void Screen::showTooltip(std::string_view text, Point position, TooltipContentType contentType)
+{
+    _tooltip.setContent(text, contentType);
+
+    // Calculate tooltip size and adjust position to fit on screen
+    auto const tooltipSize = _tooltip.preferredSize();
+    auto const screenArea = viewportArea();
+
+    // Adjust X to keep tooltip on screen
+    int x = position.x;
+    if (x + tooltipSize.width > screenArea.width)
+        x = std::max(0, screenArea.width - tooltipSize.width);
+
+    // Prefer showing below, but show above if not enough room
+    int y = position.y + 1; // Below cursor
+    if (y + tooltipSize.height > screenArea.height)
+    {
+        // Try above
+        y = position.y - tooltipSize.height;
+        if (y < 0)
+            y = 0; // Clamp to top
+    }
+
+    showOverlay(_tooltip, Point { x, y });
+    _tooltipVisible = true;
+}
+
+void Screen::hideTooltip()
+{
+    if (_tooltipVisible)
+    {
+        hideOverlay(_tooltip);
+        _tooltipVisible = false;
+    }
 }
 
 void Screen::updateFocus(Component* oldFocus, Component* newFocus)

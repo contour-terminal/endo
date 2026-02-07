@@ -2,6 +2,8 @@ add_library(Shell STATIC
     AST.hpp
     ASTPrinter.hpp
     ASTPrinter.cpp
+    CommandResolver.hpp
+    CommandResolver.cpp
     Completer.hpp
     Completer.cpp
     CompletionContext.hpp

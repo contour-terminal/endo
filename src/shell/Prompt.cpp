@@ -3,7 +3,9 @@
 
 #include <unistd.h>
 
+#include "CommandResolver.hpp"
 #include "Completer.hpp"
+#include "Environment.hpp"
 #include "PromptComponent.hpp"
 #include <tui/Screen.hpp>
 
@@ -42,11 +44,15 @@ void Prompt::initialize()
     // Ensure any protocol enable sequences are flushed
     _terminal.output().flush();
 
+    // Create CommandResolver for tooltip support
+    _commandResolver = std::make_unique<CommandResolver>(SystemEnvironment::instance());
+
     // Create PromptComponent
     _promptComponent = std::make_unique<PromptComponent>();
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
     _promptComponent->setCompleter(_completer);
+    _promptComponent->setCommandResolver(_commandResolver.get());
 
     // Set up clipboard callback to use OSC 52
     _promptComponent->setClipboardCallback([this](std::string_view text) {
@@ -70,7 +76,29 @@ void Prompt::initialize()
     // Set initial focus
     _screen->setFocus(_promptComponent.get());
 
+    // Set up hover callbacks for tooltip support
+    setupHoverCallbacks();
+
     _initialized = true;
+}
+
+void Prompt::setupHoverCallbacks()
+{
+    // Set up hover confirmed callback
+    _screen->hoverState().setOnHoverConfirmed([this](tui::HoverInfo const& hover) {
+        // Check if hovering over our prompt component
+        if (hover.target == _promptComponent.get() || hover.target == nullptr)
+        {
+            // Convert to component-relative coordinates
+            auto const bounds = _promptComponent->screenBounds();
+            int const relX = hover.x - bounds.x;
+            int const relY = hover.y - bounds.y;
+            _promptComponent->onHoverConfirmed(relX, relY);
+        }
+    });
+
+    // Set up hover leave callback
+    _screen->hoverState().setOnHoverLeave([this]() { _promptComponent->onHoverLeave(); });
 }
 
 std::string Prompt::read()
@@ -94,7 +122,17 @@ std::string Prompt::read()
     // Event loop
     while (ready())
     {
-        auto events = _terminal.poll(-1); // Block until input
+        // Use hover timeout if hovering, otherwise block indefinitely
+        int const timeout = _screen->pollTimeoutMs();
+        auto events = _terminal.poll(timeout);
+
+        // If no events received (timeout), process hover timer
+        if (events.empty())
+        {
+            _screen->tickHover();
+            _screen->draw(); // Redraw in case tooltip was shown
+            continue;
+        }
 
         for (auto const& event: events)
         {

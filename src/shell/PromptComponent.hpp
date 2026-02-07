@@ -2,6 +2,7 @@
 #pragma once
 
 #include <chrono>
+#include <optional>
 #include <string>
 
 #include <tui/CompletionPopup.hpp>
@@ -12,6 +13,7 @@ namespace endo
 {
 
 class Completer;
+class CommandResolver;
 
 /// @brief A styled prompt component for the shell.
 ///
@@ -69,6 +71,18 @@ class PromptComponent: public tui::Component
     /// @brief Sets the completer for autocompletion.
     void setCompleter(Completer* completer) { _completer = completer; }
 
+    /// @brief Sets the command resolver for tooltip display.
+    void setCommandResolver(CommandResolver* resolver) { _commandResolver = resolver; }
+
+    /// @brief Called when a hover is confirmed over this component.
+    ///
+    /// This is called by the Screen's hover system after the hover delay.
+    /// The coordinates are component-relative.
+    void onHoverConfirmed(int x, int y);
+
+    /// @brief Called when a hover leaves this component.
+    void onHoverLeave();
+
     /// @brief Returns whether the completion popup is visible.
     [[nodiscard]] bool completionVisible() const noexcept { return _completionPopup.visible(); }
 
@@ -106,6 +120,7 @@ class PromptComponent: public tui::Component
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup;
     Completer* _completer = nullptr;
+    CommandResolver* _commandResolver = nullptr;
     std::string _promptStr = "> ";
 
     // Style constants (OpenCode-inspired)
@@ -128,6 +143,16 @@ class PromptComponent: public tui::Component
     void triggerCompletion(bool forceShowPopup);
     void updateCompletionPopup();
     void insertCompletion(std::string_view text);
+
+    // Tooltip helpers
+    /// @brief Gets the command at a screen column position (if any).
+    /// @param screenColumn The screen column (0-based).
+    /// @return The command string if hovering over command position.
+    [[nodiscard]] std::optional<std::string> getCommandAtColumn(int screenColumn) const;
+
+    /// @brief Gets the bounds (start/end column) of the command token.
+    /// @return Pair of (start, end) columns in screen coordinates.
+    [[nodiscard]] std::pair<int, int> getCommandBounds() const;
 
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime {};

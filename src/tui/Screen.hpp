@@ -8,7 +8,9 @@
 #include <tui/Buffer.hpp>
 #include <tui/Component.hpp>
 #include <tui/CursorShape.hpp>
+#include <tui/HoverState.hpp>
 #include <tui/Theme.hpp>
+#include <tui/Tooltip.hpp>
 
 namespace tui
 {
@@ -242,6 +244,37 @@ class Screen
     /// Returns true if the overlay is currently visible.
     [[nodiscard]] bool isOverlayVisible(Component const& overlay) const noexcept;
 
+    // --- Hover and Tooltip System ---
+
+    /// Returns the hover state manager.
+    [[nodiscard]] HoverState& hoverState() noexcept { return _hoverState; }
+
+    [[nodiscard]] HoverState const& hoverState() const noexcept { return _hoverState; }
+
+    /// Returns the recommended poll timeout in ms, considering hover state.
+    ///
+    /// Returns -1 if no timeout needed (block indefinitely).
+    /// Returns 0 if immediate processing needed.
+    /// Returns >0 for hover delay timeout.
+    [[nodiscard]] int pollTimeoutMs() const;
+
+    /// Processes hover timer tick. Call this when poll times out with no events.
+    void tickHover();
+
+    /// Shows a tooltip at the specified position.
+    /// @param text Tooltip content.
+    /// @param position Absolute screen position for tooltip.
+    /// @param contentType Content type (plain text or markdown).
+    void showTooltip(std::string_view text,
+                     Point position,
+                     TooltipContentType contentType = TooltipContentType::PlainText);
+
+    /// Hides the current tooltip.
+    void hideTooltip();
+
+    /// Returns true if a tooltip is currently visible.
+    [[nodiscard]] bool isTooltipVisible() const noexcept { return _tooltipVisible; }
+
   private:
     Terminal& _terminal;
     ScreenConfig _config;
@@ -274,6 +307,11 @@ class Screen
     };
 
     std::vector<OverlayEntry> _overlays;
+
+    // Hover and Tooltip state
+    HoverState _hoverState;
+    Tooltip _tooltip;
+    bool _tooltipVisible = false;
 
     // Rendering phases
     void beginFrame();
