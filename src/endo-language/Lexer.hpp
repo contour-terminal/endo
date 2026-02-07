@@ -90,9 +90,10 @@ enum class Token
     Arrow,       // '->'
     LeftArrow,   // '<-' (mutation)
     ForwardPipe, // '|>'
+    DotDot,      // '..' (range operator)
     // Note: >> uses GreaterGreater token (context determines compose vs redirect)
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
-    // Note: :: : .. [ ] , ? are lexed as part of identifiers to preserve shell compatibility.
+    // Note: :: : [ ] , ? are lexed as part of identifiers to preserve shell compatibility.
     //       The parser handles these in F# expression context.
 };
 
@@ -382,11 +383,12 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             // F# style operators
             case Arrow: name = "->"; break;
             case LeftArrow: name = "<-"; break;
-            case ForwardPipe:
-                name = "|>";
+            case ForwardPipe: name = "|>"; break;
+            case DotDot:
+                name = "..";
                 break;
                 // Note: >> and << use GreaterGreater/LessLess tokens
-                // Note: :: : .. are lexed as part of identifiers
+                // Note: :: : are lexed as part of identifiers
         }
         return formatter<std::string_view>::format(name, ctx);
     }

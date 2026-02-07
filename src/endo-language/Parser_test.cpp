@@ -1075,3 +1075,166 @@ TEST_CASE("Parser.FSharp.ASTPrinter.list_range_with_step")
     std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
     CHECK(printed == "let evens = [2..2..20]");
 }
+
+// ============================================================================
+// List Comprehension Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.list_comprehension_simple")
+{
+    auto ast = parse("let squares = [for x in 1..10 -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "squares");
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+    CHECK(compExpr->variable == "x");
+    CHECK(compExpr->filter == nullptr);
+
+    // Source should be a range expression
+    auto* rangeExpr = dynamic_cast<endo::ast::ListRangeExpr*>(compExpr->source.get());
+    REQUIRE(rangeExpr != nullptr);
+
+    // Body should be an identifier "x"
+    auto* bodyId = dynamic_cast<endo::ast::IdentifierExpr*>(compExpr->body.get());
+    REQUIRE(bodyId != nullptr);
+    CHECK(bodyId->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.list_comprehension_with_binary_expr")
+{
+    auto ast = parse("let squares = [for x in 1..10 -> x * x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+    CHECK(compExpr->variable == "x");
+
+    // Body should be a binary expression x * x
+    auto* binExpr = dynamic_cast<endo::ast::BinaryExpr*>(compExpr->body.get());
+    REQUIRE(binExpr != nullptr);
+    CHECK(binExpr->op == endo::ast::BinaryOp::Mul);
+
+    auto* left = dynamic_cast<endo::ast::IdentifierExpr*>(binExpr->left.get());
+    auto* right = dynamic_cast<endo::ast::IdentifierExpr*>(binExpr->right.get());
+    REQUIRE(left != nullptr);
+    REQUIRE(right != nullptr);
+    CHECK(left->name == "x");
+    CHECK(right->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.list_comprehension_with_filter")
+{
+    auto ast = parse("let evens = [for x in 1..10 when x > 5 -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+    CHECK(compExpr->variable == "x");
+
+    // Filter should be x > 5
+    REQUIRE(compExpr->filter != nullptr);
+    auto* filterExpr = dynamic_cast<endo::ast::BinaryExpr*>(compExpr->filter.get());
+    REQUIRE(filterExpr != nullptr);
+    CHECK(filterExpr->op == endo::ast::BinaryOp::Gt);
+}
+
+TEST_CASE("Parser.FSharp.list_comprehension_with_identifier_source")
+{
+    auto ast = parse("let doubled = [for x in items -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+
+    // Source should be identifier "items"
+    auto* srcId = dynamic_cast<endo::ast::IdentifierExpr*>(compExpr->source.get());
+    REQUIRE(srcId != nullptr);
+    CHECK(srcId->name == "items");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_comprehension_simple")
+{
+    auto ast = parse("let squares = [for x in 1..10 -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let squares = [for x in [1..10] -> x]");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.list_comprehension_with_filter")
+{
+    auto ast = parse("let evens = [for x in items when x > 5 -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
+    CHECK(printed == "let evens = [for x in items when (x > 5) -> x]");
+}
+
+TEST_CASE("Parser.FSharp.list_comprehension_with_addition")
+{
+    auto ast = parse("let incremented = [for x in 1..5 -> x + 1]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+
+    // Body should be a binary expression x + 1
+    auto* binExpr = dynamic_cast<endo::ast::BinaryExpr*>(compExpr->body.get());
+    REQUIRE(binExpr != nullptr);
+    CHECK(binExpr->op == endo::ast::BinaryOp::Add);
+}
+
+TEST_CASE("Parser.FSharp.list_comprehension_with_step_range")
+{
+    auto ast = parse("let evens = [for x in 2..2..10 -> x]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* compExpr = dynamic_cast<endo::ast::ListComprehensionExpr*>(letStmt->value.get());
+    REQUIRE(compExpr != nullptr);
+
+    // Source should be a range with step
+    auto* rangeExpr = dynamic_cast<endo::ast::ListRangeExpr*>(compExpr->source.get());
+    REQUIRE(rangeExpr != nullptr);
+    REQUIRE(rangeExpr->step != nullptr); // Should have a step
+
+    auto* start = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->start.get());
+    auto* step = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->step.get());
+    auto* end = dynamic_cast<endo::ast::IntLiteralExpr*>(rangeExpr->end.get());
+    REQUIRE(start != nullptr);
+    REQUIRE(step != nullptr);
+    REQUIRE(end != nullptr);
+    CHECK(start->value == 2);
+    CHECK(step->value == 2);
+    CHECK(end->value == 10);
+}

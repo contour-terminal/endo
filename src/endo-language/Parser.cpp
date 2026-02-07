@@ -2769,8 +2769,9 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
     // The lexer handles list literals in different ways depending on content:
     // 1. "[1..10]" or "[]" or "[42]" - lexed as single identifier (no internal semicolons)
     // 2. "[1; 2; 3]" - split by semicolons into multiple tokens: "[1", ";", "2", ";", "3]"
+    // 3. "[for x in items -> expr]" - list comprehension (multiple tokens)
     //
-    // We handle both cases here.
+    // We handle all cases here.
 
     auto const& lit = _lexer.currentLiteral();
 
@@ -2779,6 +2780,15 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
         _report.syntaxErrorWithSuggestions(
             currentLocation(), {}, currentContextSnippet(), "Expected list literal starting with '['");
         return nullptr;
+    }
+
+    // Check for list comprehension: [for ...] or [for...] (no space after [)
+    // The token could be "[for" or "[" followed by "for" token
+    std::string_view afterBracket = std::string_view(lit).substr(1);
+    if (afterBracket == "for" || afterBracket.starts_with("for"))
+    {
+        // This is a list comprehension
+        return parseListComprehension();
     }
 
     // Check if the entire list is in one token (no internal semicolons)
@@ -3105,6 +3115,343 @@ std::unique_ptr<ast::Expr> Parser::parseListElementFromString(std::string_view e
 
     // Identifier
     return std::make_unique<ast::IdentifierExpr>(std::string(elemStr));
+}
+
+// Parse list comprehension: [for x in source -> body] or [for x in source when cond -> body]
+std::unique_ptr<ast::Expr> Parser::parseListComprehension()
+{
+    TRACE_SCOPE("parseListComprehension");
+
+    // Current token is "[for" or "[" - we need to extract the start and get to the variable name
+    auto const& lit = _lexer.currentLiteral();
+
+    // Handle the case where token is "[for" (no space after [)
+    std::string_view afterBracket = std::string_view(lit).substr(1);
+
+    // If afterBracket is exactly "for", consume and move to next token (variable name)
+    // If afterBracket is "for" followed by more (like "forx" - unlikely but handle it)
+    if (afterBracket == "for")
+    {
+        _lexer.nextToken(); // consume "[for", next should be variable name
+    }
+    else if (afterBracket.starts_with("for"))
+    {
+        // Edge case: "[forx" where "forx" is an identifier, not a comprehension
+        // This shouldn't happen in valid code, but handle gracefully
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a space after 'for': [for x in ...]" },
+                                           currentContextSnippet(),
+                                           "Expected space after 'for' in list comprehension");
+        return nullptr;
+    }
+    else
+    {
+        // Shouldn't reach here based on caller check, but be defensive
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected 'for' at start of list comprehension");
+        return nullptr;
+    }
+
+    // Parse variable name
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a variable name: [for x in ...]" },
+                                           currentContextSnippet(),
+                                           "Expected variable name after 'for', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    std::string variable = _lexer.currentLiteral();
+    _lexer.nextToken();
+
+    // Expect 'in' keyword
+    if (!_lexer.isDirective("in"))
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add 'in' keyword: [for x in ...]" },
+                                           currentContextSnippet(),
+                                           "Expected 'in' after variable name, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'in'
+
+    // Parse source expression - stop at 'when', '->', or ']'
+    // Source can be:
+    // 1. A single identifier: "items"
+    // 2. A range: start..end or start..step..end
+    std::unique_ptr<ast::Expr> source;
+
+    // Parse the first element of the source (could be start of a range or just an identifier)
+    std::unique_ptr<ast::Expr> firstExpr;
+    if (_lexer.currentToken() == Token::Number)
+    {
+        firstExpr = parseListElementFromString(_lexer.currentLiteral());
+        _lexer.nextToken();
+    }
+    else if (_lexer.currentToken() == Token::Identifier)
+    {
+        firstExpr = std::make_unique<ast::IdentifierExpr>(_lexer.currentLiteral());
+        _lexer.nextToken();
+    }
+    else
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           {},
+                                           currentContextSnippet(),
+                                           "Expected source expression after 'in', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    // Check if this is a range expression (followed by ..)
+    if (_lexer.currentToken() == Token::DotDot)
+    {
+        _lexer.nextToken(); // consume '..'
+
+        // Parse second element (could be end or step)
+        std::unique_ptr<ast::Expr> secondExpr;
+        if (_lexer.currentToken() == Token::Number)
+        {
+            secondExpr = parseListElementFromString(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+        else if (_lexer.currentToken() == Token::Identifier)
+        {
+            secondExpr = parseListElementFromString(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+        else
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Expected value after '..' in range, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+
+        // Check for another '..' (step..end)
+        if (_lexer.currentToken() == Token::DotDot)
+        {
+            _lexer.nextToken(); // consume second '..'
+
+            // Parse the end value
+            std::unique_ptr<ast::Expr> endExpr;
+            if (_lexer.currentToken() == Token::Number)
+            {
+                endExpr = parseListElementFromString(_lexer.currentLiteral());
+                _lexer.nextToken();
+            }
+            else if (_lexer.currentToken() == Token::Identifier)
+            {
+                endExpr = parseListElementFromString(_lexer.currentLiteral());
+                _lexer.nextToken();
+            }
+            else
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Expected end value after '..' in range, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+
+            // start..step..end
+            source = std::make_unique<ast::ListRangeExpr>(
+                std::move(firstExpr), std::move(secondExpr), std::move(endExpr));
+        }
+        else
+        {
+            // start..end (no step)
+            source =
+                std::make_unique<ast::ListRangeExpr>(std::move(firstExpr), nullptr, std::move(secondExpr));
+        }
+    }
+    else
+    {
+        // Just a simple identifier/number as source
+        source = std::move(firstExpr);
+    }
+
+    // Check for optional 'when' filter
+    std::unique_ptr<ast::Expr> filter;
+    if (_lexer.currentToken() == Token::When)
+    {
+        _lexer.nextToken(); // consume 'when'
+
+        // Parse filter expression - stop at '->' or ']'
+        // For now, parse a simple expression (identifier or comparison)
+        filter = parseFSharpComparison();
+        if (!filter)
+            return nullptr;
+    }
+
+    // Expect '->' arrow
+    if (_lexer.currentToken() != Token::Arrow)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '->' before the body expression" },
+                                           currentContextSnippet(),
+                                           "Expected '->' in list comprehension, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '->'
+
+    // Parse body expression - need to stop at ']'
+    // The challenge is that ']' is embedded in the last token (e.g., "x]" or "2]")
+    // We need to collect tokens and parse them as an expression, stripping the final ']'
+
+    // Collect all tokens until we find one ending with ']'
+    std::vector<std::string> bodyTokens;
+    bool foundClosingBracket = false;
+    int bracketDepth = 1; // We're inside one '[' already
+
+    while (!foundClosingBracket && _lexer.currentToken() != Token::EndOfInput
+           && _lexer.currentToken() != Token::LineFeed && _lexer.currentToken() != Token::Semicolon)
+    {
+        if (_lexer.currentToken() == Token::Identifier || _lexer.currentToken() == Token::Number)
+        {
+            std::string tokenLit = _lexer.currentLiteral();
+
+            // Count brackets in this token
+            for (char c: tokenLit)
+            {
+                if (c == '[')
+                    ++bracketDepth;
+                else if (c == ']')
+                {
+                    --bracketDepth;
+                    if (bracketDepth == 0)
+                    {
+                        foundClosingBracket = true;
+                        // Strip trailing ']' from this token
+                        size_t bracketPos = tokenLit.rfind(']');
+                        if (bracketPos != std::string::npos)
+                            tokenLit = tokenLit.substr(0, bracketPos);
+                        break;
+                    }
+                }
+            }
+
+            if (!tokenLit.empty())
+                bodyTokens.push_back(tokenLit);
+            _lexer.nextToken();
+        }
+        else if (_lexer.currentToken() == Token::Arrow)
+        {
+            // Nested comprehension? For now, error
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Nested list comprehensions are not yet supported");
+            return nullptr;
+        }
+        else
+        {
+            // Other tokens (operators become identifiers in shell mode)
+            bodyTokens.push_back(_lexer.currentLiteral());
+            _lexer.nextToken();
+        }
+    }
+
+    if (!foundClosingBracket)
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), { "Add closing ']'" }, currentContextSnippet(), "Unclosed list comprehension");
+        return nullptr;
+    }
+
+    // Now parse the collected tokens as an expression
+    // For simple cases like "x" or "x * x", we can handle directly
+    std::unique_ptr<ast::Expr> body;
+
+    if (bodyTokens.empty())
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Empty body in list comprehension");
+        return nullptr;
+    }
+
+    if (bodyTokens.size() == 1)
+    {
+        // Simple body: single identifier or literal
+        body = parseListElementFromString(bodyTokens[0]);
+    }
+    else if (bodyTokens.size() == 3)
+    {
+        // Binary expression like "x * x" or "x + 1"
+        auto left = parseListElementFromString(bodyTokens[0]);
+        auto right = parseListElementFromString(bodyTokens[2]);
+        std::string const& opStr = bodyTokens[1];
+
+        if (!left || !right)
+            return nullptr;
+
+        // Convert operator string to BinaryOp
+        ast::BinaryOp op;
+        if (opStr == "+")
+            op = ast::BinaryOp::Add;
+        else if (opStr == "-")
+            op = ast::BinaryOp::Sub;
+        else if (opStr == "*")
+            op = ast::BinaryOp::Mul;
+        else if (opStr == "/")
+            op = ast::BinaryOp::Div;
+        else if (opStr == "%")
+            op = ast::BinaryOp::Mod;
+        else if (opStr == "**")
+            op = ast::BinaryOp::Pow;
+        else if (opStr == "==")
+            op = ast::BinaryOp::Eq;
+        else if (opStr == "!=")
+            op = ast::BinaryOp::Ne;
+        else if (opStr == "<")
+            op = ast::BinaryOp::Lt;
+        else if (opStr == "<=")
+            op = ast::BinaryOp::Le;
+        else if (opStr == ">")
+            op = ast::BinaryOp::Gt;
+        else if (opStr == ">=")
+            op = ast::BinaryOp::Ge;
+        else if (opStr == "&&")
+            op = ast::BinaryOp::And;
+        else if (opStr == "||")
+            op = ast::BinaryOp::Or;
+        else
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               {},
+                                               currentContextSnippet(),
+                                               "Unknown operator '{}' in list comprehension",
+                                               opStr);
+            return nullptr;
+        }
+
+        body = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    else
+    {
+        // More complex expression - for now, try to parse as a sequence of binary ops
+        // This is a simplified approach; a full parser would handle precedence properly
+        // For now, we'll report that complex expressions need parentheses
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(),
+            { "Use parentheses for complex expressions: [for x in items -> (x * x + 1)]" },
+            currentContextSnippet(),
+            "Complex expressions in list comprehension body require parentheses (found {} tokens)",
+            bodyTokens.size());
+        return nullptr;
+    }
+
+    if (!body)
+        return nullptr;
+
+    return std::make_unique<ast::ListComprehensionExpr>(
+        std::move(variable), std::move(source), std::move(filter), std::move(body));
 }
 
 // ============================================================================

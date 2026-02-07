@@ -935,15 +935,18 @@ TEST_CASE("Lexer.fsharp_comma_in_brace")
 
 TEST_CASE("Lexer.fsharp_range_lexer_behavior")
 {
-    // Range syntax 1..10 is lexed as: Number(1), Identifier(..10)
-    // The parser will need to handle range detection
+    // Range syntax 1..10 is lexed as: Number(1), DotDot(..), Number(10)
     auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("1..10"));
     CHECK(lexer.currentToken() == endo::Token::Number);
     CHECK(lexer.currentLiteral() == "1");
 
     lexer.nextToken();
-    CHECK(lexer.currentToken() == endo::Token::Identifier);
-    CHECK(lexer.currentLiteral() == "..10");
+    CHECK(lexer.currentToken() == endo::Token::DotDot);
+    CHECK(lexer.currentLiteral() == "");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "10");
 }
 
 // ============================================================================

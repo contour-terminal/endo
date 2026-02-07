@@ -92,7 +92,8 @@ class Parser
     std::unique_ptr<ast::Expr> parseListRangeFromContent(
         std::string_view content); ///< Helper for range expressions
     std::unique_ptr<ast::Expr> parseListElementFromString(
-        std::string_view elemStr); ///< Helper to parse a list element
+        std::string_view elemStr);                       ///< Helper to parse a list element
+    std::unique_ptr<ast::Expr> parseListComprehension(); ///< [for x in source -> body]
 
     // F# expression parser (precedence climbing)
     // Precedence (low to high): |> || && comparisons +- */% ** unary application

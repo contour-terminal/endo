@@ -152,8 +152,13 @@ Token Lexer::nextToken()
         // - , is used in brace expansion like {a,b,c}
         // - : is used in PATH-like values like /usr/bin:/usr/local/bin
         // The parser handles these in F# expression context.
-        // Note: . and .. are NOT tokenized here to preserve shell compatibility.
-        // The parser handles . for field access and .. for ranges in F# contexts.
+        case '.':
+            nextChar();
+            if (_currentChar == '.')
+                return consumeCharAndConfirmToken(Token::DotDot); // .. (range operator)
+            // Single dot - treat as identifier (e.g., ./script, file.txt)
+            _nextToken.literal = ".";
+            return consumeIdentifier();
         case '-':
             nextChar();
             if (_currentChar == '>')

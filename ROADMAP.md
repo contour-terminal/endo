@@ -321,7 +321,8 @@ src/
 - [x] Add LambdaExpr AST node with ASTPrinter and IRGenerator stub
 - [x] Add comprehensive lambda tests (8 test cases covering single/multiple params, nesting, pipelines)
 - [x] Extend Parser for match expressions with guards
-- [x] Extend Parser for list literals and ranges (comprehensions deferred)
+- [x] Extend Parser for list literals and ranges
+- [x] Extend Parser for list comprehensions (`[for x in items -> expr]`)
 - [ ] Extend Parser for record literals and type definitions
 - [ ] Implement pattern matching compilation in IR generator
 - [ ] Implement Result and Option types with built-in support
@@ -340,7 +341,9 @@ src/
 - Pattern matching compiles to decision trees for efficient execution
 - List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
 - Lexer enhanced with `peekChar()` to properly recognize float literals (e.g., `2.5` as single token)
-- List comprehensions (`[for x in items -> x * 2]`) deferred - requires more complex parsing
+- Lexer enhanced with `DotDot` token (`..`) for cleaner range parsing
+- List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause
+- Comprehension body supports simple expressions and binary operations (e.g., `x * x`, `x + 1`)
 
 ---
 
