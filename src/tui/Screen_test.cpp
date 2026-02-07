@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
+#include <thread>
+
+#include <tui/HoverState.hpp>
 #include <tui/Screen.hpp>
 
 using namespace tui;
@@ -207,4 +211,161 @@ TEST_CASE("Screen.screenConfig_customUnscrollMode")
     ScreenConfig configDisabled;
     configDisabled.unscrollMode = UnscrollMode::Disabled;
     CHECK(configDisabled.unscrollMode == UnscrollMode::Disabled);
+}
+
+// ============================================================================
+// HoverState tests
+// ============================================================================
+
+TEST_CASE("HoverState.initialState")
+{
+    HoverState hover;
+    CHECK_FALSE(hover.isHoverConfirmed());
+    CHECK_FALSE(hover.currentHover().has_value());
+    CHECK_FALSE(hover.mousePosition().has_value());
+    CHECK(hover.timeoutMs() == -1); // No timeout when not hovering
+}
+
+TEST_CASE("HoverState.onMouseMove_startsHover")
+{
+    HoverState hover(std::chrono::milliseconds(100));
+
+    hover.onMouseMove(10, 20, nullptr);
+
+    CHECK_FALSE(hover.isHoverConfirmed()); // Not confirmed yet
+    CHECK(hover.currentHover().has_value());
+    CHECK(hover.currentHover()->x == 10);
+    CHECK(hover.currentHover()->y == 20);
+    CHECK(hover.timeoutMs() > 0); // Timeout active
+    CHECK(hover.timeoutMs() <= 100);
+}
+
+TEST_CASE("HoverState.onMouseMove_samePosition_noReset")
+{
+    HoverState hover(std::chrono::milliseconds(100));
+
+    hover.onMouseMove(10, 20, nullptr);
+    auto const initialTimeout = hover.timeoutMs();
+
+    // Small delay
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+    // Same position - should NOT reset the timer
+    hover.onMouseMove(10, 20, nullptr);
+    auto const secondTimeout = hover.timeoutMs();
+
+    // Timer should have progressed (second timeout should be less)
+    CHECK(secondTimeout < initialTimeout);
+}
+
+TEST_CASE("HoverState.onMouseMove_differentPosition_resetsTimer")
+{
+    HoverState hover(std::chrono::milliseconds(100));
+
+    hover.onMouseMove(10, 20, nullptr);
+
+    // Wait a bit
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+    // Move to different position - should reset the timer
+    hover.onMouseMove(15, 25, nullptr);
+    auto const timeout = hover.timeoutMs();
+
+    // Timer should be close to full delay again
+    CHECK(timeout > 80); // Allowing some tolerance
+    CHECK(hover.currentHover()->x == 15);
+    CHECK(hover.currentHover()->y == 25);
+}
+
+TEST_CASE("HoverState.tick_triggersCallback")
+{
+    HoverState hover(std::chrono::milliseconds(10));
+
+    bool callbackCalled = false;
+    HoverInfo capturedInfo;
+
+    hover.setOnHoverConfirmed([&](HoverInfo const& info) {
+        callbackCalled = true;
+        capturedInfo = info;
+    });
+
+    hover.onMouseMove(50, 60, nullptr);
+
+    // Wait for hover delay to expire
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    hover.tick(std::chrono::steady_clock::now());
+
+    CHECK(callbackCalled);
+    CHECK(hover.isHoverConfirmed());
+    CHECK(capturedInfo.x == 50);
+    CHECK(capturedInfo.y == 60);
+}
+
+TEST_CASE("HoverState.onMouseLeave_triggersCallback")
+{
+    HoverState hover(std::chrono::milliseconds(10));
+
+    bool leaveCallbackCalled = false;
+
+    hover.setOnHoverConfirmed([](HoverInfo const&) {});
+    hover.setOnHoverLeave([&]() { leaveCallbackCalled = true; });
+
+    hover.onMouseMove(10, 20, nullptr);
+
+    // Confirm hover
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    hover.tick(std::chrono::steady_clock::now());
+    CHECK(hover.isHoverConfirmed());
+
+    // Leave
+    hover.onMouseLeave();
+
+    CHECK(leaveCallbackCalled);
+    CHECK_FALSE(hover.isHoverConfirmed());
+    CHECK_FALSE(hover.currentHover().has_value());
+}
+
+TEST_CASE("HoverState.reset_clearsState")
+{
+    HoverState hover(std::chrono::milliseconds(10));
+
+    bool leaveCallbackCalled = false;
+    hover.setOnHoverLeave([&]() { leaveCallbackCalled = true; });
+
+    hover.onMouseMove(10, 20, nullptr);
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    hover.tick(std::chrono::steady_clock::now());
+    CHECK(hover.isHoverConfirmed());
+
+    hover.reset();
+
+    CHECK(leaveCallbackCalled);
+    CHECK_FALSE(hover.isHoverConfirmed());
+    CHECK_FALSE(hover.currentHover().has_value());
+    CHECK(hover.timeoutMs() == -1);
+}
+
+TEST_CASE("HoverState.mouseMove_whileConfirmed_triggersLeaveAndRestart")
+{
+    HoverState hover(std::chrono::milliseconds(10));
+
+    int leaveCount = 0;
+
+    hover.setOnHoverLeave([&]() { ++leaveCount; });
+
+    hover.onMouseMove(10, 20, nullptr);
+
+    // Confirm hover
+    std::this_thread::sleep_for(std::chrono::milliseconds(15));
+    hover.tick(std::chrono::steady_clock::now());
+    CHECK(hover.isHoverConfirmed());
+
+    // Move to different position - should trigger leave and restart
+    hover.onMouseMove(30, 40, nullptr);
+
+    CHECK(leaveCount == 1);
+    CHECK_FALSE(hover.isHoverConfirmed());   // No longer confirmed
+    CHECK(hover.currentHover().has_value()); // But still tracking
+    CHECK(hover.currentHover()->x == 30);
 }
