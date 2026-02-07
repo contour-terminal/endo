@@ -56,6 +56,11 @@ auto& traceLog()
     return endo::log::vmTrace();
 }
 
+auto& irLog()
+{
+    return endo::log::vmIR();
+}
+
 std::string processEscapeSequences(std::string_view input)
 {
     std::string result;
@@ -637,10 +642,12 @@ int Shell::execute(std::string const& lineBuffer)
             pm.run(irProgram.get());
         }
 
-        debugLog()()("================================================\n");
-        debugLog()()("Optimized IR program:\n");
-        if (debugLog().is_enabled())
-            irProgram->dump();
+        if (irLog().is_enabled())
+        {
+            irLog()()("================================================\n");
+            irLog()()("Optimized IR program (SSA form):\n");
+            irLog()()("{}", irProgram->dumpToString());
+        }
 
         _currentProgram = CoreVM::TargetCodeGenerator {}.generate(irProgram.get());
         if (!_currentProgram)
@@ -650,10 +657,12 @@ int Shell::execute(std::string const& lineBuffer)
         }
         _currentProgram->link(&_runtime, &report);
 
-        debugLog()()("================================================\n");
-        debugLog()()("Linked target code:\n");
-        if (debugLog().is_enabled())
-            _currentProgram->dump();
+        if (irLog().is_enabled())
+        {
+            irLog()()("================================================\n");
+            irLog()()("Linked target code (bytecode):\n");
+            irLog()()("{}", _currentProgram->dumpToString());
+        }
 
         CoreVM::Handler* main = _currentProgram->findHandler("@main");
         assert(main != nullptr);

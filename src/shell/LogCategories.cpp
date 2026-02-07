@@ -20,6 +20,12 @@ logstore::category& vmTrace()
     return instance;
 }
 
+logstore::category& vmIR()
+{
+    static auto instance = logstore::category("vm.ir", "VM IR and bytecode dump", categoryState("vm.ir"));
+    return instance;
+}
+
 logstore::category& parser()
 {
     static auto instance = logstore::category("parser", "Parser debug output", categoryState("parser"));
@@ -37,6 +43,7 @@ void registerAllCategories()
     // Force initialization of all categories by calling the accessors
     (void) shellDebug();
     (void) vmTrace();
+    (void) vmIR();
     (void) parser();
     (void) pipe();
     // vm.diag and vm.pass are in CoreVM, they'll be registered when that code runs

@@ -587,6 +587,7 @@ class ConstantPool
     }
 
     void dump() const;
+    [[nodiscard]] std::string dumpToString() const;
 
   private:
     // constant primitives
@@ -641,6 +642,7 @@ class Program
     bool link(Runtime* runtime, diagnostics::Report* report);
 
     void dump();
+    [[nodiscard]] std::string dumpToString() const;
 
     /// Creates a handler with the given name and bytecode.
     /// Useful for dynamically adding pre-compiled function handlers.
@@ -1688,6 +1690,7 @@ class IRHandler: public Constant
     void setParent(IRProgram* prog) { _program = prog; }
 
     void dump();
+    [[nodiscard]] std::string dumpToString() const;
 
     [[nodiscard]] bool empty() const noexcept { return _blocks.empty(); }
 
@@ -1759,6 +1762,7 @@ class IRProgram
     ~IRProgram();
 
     void dump();
+    [[nodiscard]] std::string dumpToString() const;
 
     ConstantBoolean* getBoolean(bool literal) { return literal ? &_trueLiteral : &_falseLiteral; }
 
@@ -2196,6 +2200,7 @@ class BasicBlock: public Value
     [[nodiscard]] std::vector<BasicBlock*> immediateDominators();
 
     void dump();
+    [[nodiscard]] std::string dumpToString() const;
 
     /**
      * Performs sanity checks on internal data structures.

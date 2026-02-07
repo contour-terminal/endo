@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
-
 #include <CoreVM/util/assert.hpp>
-#include <memory>
+
 #include <algorithm>
 #include <cassert>
+#include <format>
+#include <iostream>
+#include <memory>
+#include <sstream>
+
 namespace CoreVM
 {
 
@@ -64,16 +68,23 @@ void IRHandler::setEntryBlock(BasicBlock* bb)
 
 void IRHandler::dump()
 {
-    printf(".handler %s %*c; entryPoint = %%%s\n",
-           name().c_str(),
-           10 - (int) name().size(),
-           ' ',
-           getEntryBlock()->name().c_str());
+    std::cerr << dumpToString();
+}
 
-    for (auto& bb: _blocks)
-        bb->dump();
+std::string IRHandler::dumpToString() const
+{
+    std::ostringstream sstr;
+    sstr << std::format(".handler {} {:>{}}; entryPoint = %{}\n",
+                        name(),
+                        "",
+                        std::max(0, 10 - static_cast<int>(name().size())),
+                        getEntryBlock()->name());
 
-    printf("\n");
+    for (auto const& bb: _blocks)
+        sstr << bb->dumpToString();
+
+    sstr << "\n";
+    return sstr.str();
 }
 
 bool IRHandler::isAfter(const BasicBlock* bb, const BasicBlock* afterThat) const

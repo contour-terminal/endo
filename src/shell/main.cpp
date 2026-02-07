@@ -42,6 +42,7 @@ Options:
 Log Categories:
   shell.debug        Shell execution debug output
   vm.trace           VM instruction execution trace
+  vm.ir              VM IR (SSA) and bytecode dump
   parser             Parser debug output
   pipe               Unix pipe operations
   vm.diag            VM diagnostics

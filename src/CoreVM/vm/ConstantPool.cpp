@@ -6,7 +6,9 @@
 #include <format>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <vector>
+
 namespace CoreVM
 {
 
@@ -74,6 +76,7 @@ inline size_t ensureValue(std::vector<T>& table, const U& literal)
     table.push_back(literal);
     return table.size() - 1;
 }
+
 // }}}
 
 size_t ConstantPool::makeInteger(CoreNumber value)
@@ -187,173 +190,178 @@ size_t ConstantPool::makeHandler(const std::string& name)
 }
 
 template <typename T>
-void dumpArrays(const std::vector<std::vector<T>>& vv, const char* name)
+void dumpArrays(std::ostream& out, const std::vector<std::vector<T>>& vv, const char* name)
 {
     if (vv.empty())
         return;
 
-    std::cout << "\n; Constant " << name << " Arrays\n";
+    out << "\n; Constant " << name << " Arrays\n";
     for (size_t i = 0, e = vv.size(); i != e; ++i)
     {
         const auto& array = vv[i];
-        std::cout << ".const array<" << name << "> " << std::setw(3) << i << " = [";
+        out << ".const array<" << name << "> " << std::setw(3) << i << " = [";
         for (size_t k = 0, m = array.size(); k != m; ++k)
         {
             if (k)
-                std::cout << ", ";
-            std::cout << std::format("{}", array[k]);
+                out << ", ";
+            out << std::format("{}", array[k]);
         }
-        std::cout << "];\n";
+        out << "];\n";
     }
 }
 
 void ConstantPool::dump() const
 {
-    printf("; Program\n");
+    std::cerr << dumpToString();
+}
+
+std::string ConstantPool::dumpToString() const
+{
+    std::ostringstream sstr;
+    sstr << "; Program\n";
 
     if (!_modules.empty())
     {
-        printf("\n; Modules\n");
+        sstr << "\n; Modules\n";
         for (size_t i = 0, e = _modules.size(); i != e; ++i)
         {
             if (_modules[i].second.empty())
-                printf(".module '%s'\n", _modules[i].first.c_str());
+                sstr << std::format(".module '{}'\n", _modules[i].first);
             else
-                printf(".module '%s' from '%s'\n", _modules[i].first.c_str(), _modules[i].second.c_str());
+                sstr << std::format(".module '{}' from '{}'\n", _modules[i].first, _modules[i].second);
         }
     }
 
     if (!_nativeFunctionSignatures.empty())
     {
-        printf("\n; External Functions\n");
+        sstr << "\n; External Functions\n";
         for (size_t i = 0, e = _nativeFunctionSignatures.size(); i != e; ++i)
         {
-            printf(".extern function %3zu = %-20s\n", i, _nativeFunctionSignatures[i].c_str());
+            sstr << std::format(".extern function {:3} = {:<20}\n", i, _nativeFunctionSignatures[i]);
         }
     }
 
     if (!_nativeHandlerSignatures.empty())
     {
-        printf("\n; External Handlers\n");
+        sstr << "\n; External Handlers\n";
         for (size_t i = 0, e = _nativeHandlerSignatures.size(); i != e; ++i)
         {
-            printf(".extern handler %4zu = %-20s\n", i, _nativeHandlerSignatures[i].c_str());
+            sstr << std::format(".extern handler {:4} = {:<20}\n", i, _nativeHandlerSignatures[i]);
         }
     }
 
     if (!_numbers.empty())
     {
-        printf("\n; Integer Constants\n");
+        sstr << "\n; Integer Constants\n";
         for (size_t i = 0, e = _numbers.size(); i != e; ++i)
         {
-            printf(".const integer %5zu = %" PRIi64 "\n", i, (CoreNumber) _numbers[i]);
+            sstr << std::format(".const integer {:5} = {}\n", i, static_cast<CoreNumber>(_numbers[i]));
         }
     }
 
     if (!_strings.empty())
     {
-        printf("\n; String Constants\n");
+        sstr << "\n; String Constants\n";
         for (size_t i = 0, e = _strings.size(); i != e; ++i)
         {
-            printf(".const string %6zu = '%s'\n", i, _strings[i].c_str());
+            sstr << std::format(".const string {:6} = '{}'\n", i, _strings[i]);
         }
     }
 
     if (!_ipaddrs.empty())
     {
-        printf("\n; IP Constants\n");
+        sstr << "\n; IP Constants\n";
         for (size_t i = 0, e = _ipaddrs.size(); i != e; ++i)
         {
-            printf(".const ipaddr %6zu = %s\n", i, _ipaddrs[i].str().c_str());
+            sstr << std::format(".const ipaddr {:6} = {}\n", i, _ipaddrs[i].str());
         }
     }
 
     if (!_cidrs.empty())
     {
-        printf("\n; CIDR Constants\n");
+        sstr << "\n; CIDR Constants\n";
         for (size_t i = 0, e = _cidrs.size(); i != e; ++i)
         {
-            printf(".const cidr %8zu = %s\n", i, _cidrs[i].str().c_str());
+            sstr << std::format(".const cidr {:8} = {}\n", i, _cidrs[i].str());
         }
     }
 
     if (!_regularExpressions.empty())
     {
-        printf("\n; Regular Expression Constants\n");
+        sstr << "\n; Regular Expression Constants\n";
         for (size_t i = 0, e = _regularExpressions.size(); i != e; ++i)
         {
-            printf(".const regex %7zu = /%s/\n", i, _regularExpressions[i].c_str());
+            sstr << std::format(".const regex {:7} = /{}/\n", i, _regularExpressions[i].c_str());
         }
     }
 
     if (!_stringArrays.empty())
     {
-        std::cout << "\n; Constant String Arrays\n";
+        sstr << "\n; Constant String Arrays\n";
         for (size_t i = 0, e = _stringArrays.size(); i != e; ++i)
         {
             const std::vector<std::string>& array = _stringArrays[i];
-            std::cout << ".const array<string> " << std::setw(3) << i << " = [";
+            sstr << ".const array<string> " << std::setw(3) << i << " = [";
             for (size_t k = 0, m = array.size(); k != m; ++k)
             {
                 if (k)
-                    std::cout << ", ";
-                std::cout << '"' << array[k] << '"';
+                    sstr << ", ";
+                sstr << '"' << array[k] << '"';
             }
-            std::cout << "];\n";
+            sstr << "];\n";
         }
     }
 
-    dumpArrays(_intArrays, "Integer");
-    dumpArrays(_ipaddrArrays, "IPAddress");
-    dumpArrays(_cidrArrays, "Cidr");
+    dumpArrays(sstr, _intArrays, "Integer");
+    dumpArrays(sstr, _ipaddrArrays, "IPAddress");
+    dumpArrays(sstr, _cidrArrays, "Cidr");
 
     if (!_matchDefs.empty())
-    { // {{{
-        printf("\n; Match Table\n");
+    {
+        sstr << "\n; Match Table\n";
         for (size_t i = 0, e = _matchDefs.size(); i != e; ++i)
         {
             const MatchDef& def = _matchDefs[i];
-            printf(".const match %7zu = handler %zu, op %s, elsePC %" PRIu64 " ; %s\n",
-                   i,
-                   def.handlerId,
-                   tos(def.op).c_str(),
-                   def.elsePC,
-                   _handlers[def.handlerId].first.c_str());
+            sstr << std::format(".const match {:7} = handler {}, op {}, elsePC {} ; {}\n",
+                                i,
+                                def.handlerId,
+                                tos(def.op),
+                                def.elsePC,
+                                _handlers[def.handlerId].first);
 
             for (size_t k = 0, m = def.cases.size(); k != m; ++k)
             {
                 const MatchCaseDef& one = def.cases[k];
 
-                printf("                       case %3zu = label %2" PRIu64 ", pc %4" PRIu64 " ; ",
-                       k,
-                       one.label,
-                       one.pc);
+                sstr << std::format(
+                    "                       case {:3} = label {:2}, pc {:4} ; ", k, one.label, one.pc);
 
                 if (def.op == MatchClass::RegExp)
                 {
-                    printf("/%s/\n", _regularExpressions[one.label].c_str());
+                    sstr << std::format("/{}/\n", _regularExpressions[one.label].c_str());
                 }
                 else
                 {
-                    printf("'%s'\n", _strings[one.label].c_str());
+                    sstr << std::format("'{}'\n", _strings[one.label]);
                 }
             }
         }
-    } // }}}
+    }
 
     for (const auto& handler: getHandlers())
     {
         const auto& name = handler.first;
         const auto& code = handler.second;
 
-        printf("\n.handler %-27s ; (%zu stack size, %zu instructions)\n",
-               name.c_str(),
-               computeStackSize(code.data(), code.size()),
-               code.size());
-        printf("%s", disassemble(code.data(), code.size(), "  ", this).c_str());
+        sstr << std::format("\n.handler {:<27} ; ({} stack size, {} instructions)\n",
+                            name,
+                            computeStackSize(code.data(), code.size()),
+                            code.size());
+        sstr << disassemble(code.data(), code.size(), "  ", this);
     }
 
-    printf("\n\n");
+    sstr << "\n\n";
+    return sstr.str();
 }
 
 } // namespace CoreVM

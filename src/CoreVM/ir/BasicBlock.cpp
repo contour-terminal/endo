@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
-
 #include <CoreVM/util/assert.hpp>
 
 #include <algorithm>
@@ -187,6 +186,11 @@ bool BasicBlock::isAfter(const BasicBlock* otherBB) const
 
 void BasicBlock::dump()
 {
+    std::cerr << dumpToString();
+}
+
+std::string BasicBlock::dumpToString() const
+{
     std::stringstream sstr;
 
     sstr << '%' << name() << ':';
@@ -222,7 +226,7 @@ void BasicBlock::dump()
 
     sstr << "\n";
 
-    std::cerr << sstr.str();
+    return sstr.str();
 }
 
 void BasicBlock::linkSuccessor(BasicBlock* successor)

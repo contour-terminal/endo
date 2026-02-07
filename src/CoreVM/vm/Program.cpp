@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 #include <vector>
+
 namespace CoreVM
 {
 
@@ -105,6 +106,11 @@ int Program::indexOf(const Handler* that) const noexcept
 void Program::dump()
 {
     _cp.dump();
+}
+
+std::string Program::dumpToString() const
+{
+    return _cp.dumpToString();
 }
 
 /**

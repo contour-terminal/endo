@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 
-#include <cassert>
-#include <memory>
 #include <algorithm>
+#include <cassert>
+#include <iostream>
+#include <memory>
+#include <sstream>
+
 namespace CoreVM
 {
 
@@ -42,10 +45,18 @@ IRProgram::~IRProgram()
 
 void IRProgram::dump()
 {
-    printf("; IRProgram\n");
+    std::cerr << dumpToString();
+}
 
-    for (auto& handler: _handlers)
-        handler->dump();
+std::string IRProgram::dumpToString() const
+{
+    std::ostringstream sstr;
+    sstr << "; IRProgram\n";
+
+    for (auto const& handler: _handlers)
+        sstr << handler->dumpToString();
+
+    return sstr.str();
 }
 
 IRHandler* IRProgram::createHandler(const std::string& name)
@@ -66,7 +77,8 @@ IRHandler* IRProgram::createHandler(const std::string& name)
 // template ConstantIP* IRProgram::get<ConstantIP, util::IPAddress>(std::vector<std::unique_ptr<ConstantIP>>&,
 //                                                                  util::IPAddress&&);
 //
-// template ConstantCidr* IRProgram::get<ConstantCidr, util::Cidr>(std::vector<std::unique_ptr<ConstantCidr>>&,
+// template ConstantCidr* IRProgram::get<ConstantCidr,
+// util::Cidr>(std::vector<std::unique_ptr<ConstantCidr>>&,
 //                                                                 util::Cidr&&);
 //
 // template ConstantRegExp* IRProgram::get<ConstantRegExp, util::RegExp>(
