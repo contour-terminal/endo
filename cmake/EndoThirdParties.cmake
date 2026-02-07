@@ -4,7 +4,13 @@
 # It first tries to find packages on the system, and falls back to CPM if not found.
 # This removes the need for the scripts/install-deps.sh script.
 
-include(CPM)
+file(
+  DOWNLOAD
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.8/CPM.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
+  EXPECTED_HASH SHA256=78ba32abdf798bc616bab7c73aac32a17bbd7b06ad9e26a6add69de8f3ae4791
+)
+include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
 
 # Helper macro for displaying dependency status
 macro(EndoThirdPartiesSummary2)
@@ -65,7 +71,7 @@ if(TARGET yaml-cpp::yaml-cpp OR TARGET yaml-cpp)
 else()
     CPMAddPackage(
         NAME yaml-cpp
-        VERSION 0.8.0
+        GIT_TAG yaml-cpp-0.9.0
         GITHUB_REPOSITORY jbeder/yaml-cpp
         OPTIONS
             "YAML_CPP_BUILD_TESTS OFF"
@@ -73,7 +79,7 @@ else()
             "YAML_CPP_BUILD_CONTRIB OFF"
         EXCLUDE_FROM_ALL YES
     )
-    set(THIRDPARTY_BUILTIN_yaml_cpp "CPM (v0.8.0)")
+    set(THIRDPARTY_BUILTIN_yaml_cpp "CPM (v0.9.0)")
 endif()
 
 # ==============================================================================
