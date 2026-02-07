@@ -21,6 +21,20 @@ the primary project; Endo development follows as resources permit.
 
 ## Current Status
 
+### Language Specification
+
+The Endo language specification (`LANGUAGE.md`) is complete and defines a hybrid shell language
+combining F# functional programming with bash shell scripting. Key features include:
+
+- **F# style bindings**: `let x = 42`, `let mut counter = 0`, `let add x y = x + y`
+- **Type inference**: Types are automatically deduced; annotations optional
+- **Pattern matching**: Full `match` expressions with guards and destructuring
+- **Dual pipelines**: `|>` for function composition, `|` for process pipes
+- **Records and unions**: Algebraic data types for structured data
+- **Result/Option types**: Functional error handling with `?` propagation
+
+The specification serves as the design document for Phase 1.8 implementation.
+
 ### Fully Implemented
 
 | Component | Status |
@@ -242,6 +256,55 @@ Windows support.
 - SIGTSTP handling for shell itself: When the shell receives SIGTSTP (e.g., from parent shell via `kill -TSTP`), it restores terminal to cooked mode, re-raises SIGTSTP with default handling to actually stop, and when resumed (SIGCONT), restores raw mode and redraws the prompt
 - Note: Ctrl+Z at the prompt (when no foreground job is running) is used for undo (TUI feature)
 - Job control builtins (`jobs`, `fg`, `bg`, `wait`) are recognized as parser directives with dedicated AST nodes
+
+### Phase 1.8: F# Style Syntax Extensions
+
+**Status:** Specification Complete, Implementation Pending
+
+**Dependency:** Milestone 1 core language features
+
+**Rationale:** Endo aims to be a modern shell that combines bash convenience with F# functional
+programming ergonomics. This phase adds F#-inspired syntax for variable bindings, functions,
+pattern matching, and pipelines while maintaining full backward compatibility with existing
+bash-style syntax.
+
+**Specification:** See `LANGUAGE.md` for the complete language specification including:
+- `let` bindings with type inference (immutable by default, `let mut` for mutable)
+- Curried functions with partial application (`let add x y = x + y`)
+- Lambda expressions (`fun x -> x * 2`)
+- Pattern matching with guards (`match x with | pattern when guard -> result`)
+- Discriminated unions and records
+- F# style lists (`[1; 2; 3]`) with comprehensions
+- Forward pipe operator (`|>`) alongside shell pipe (`|`)
+- Result and Option types for error handling
+- Error propagation with `?` operator
+
+**Tasks:**
+- [x] Complete language specification (`LANGUAGE.md`)
+- [ ] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `->`, `<-`, `|>`, `::`, etc.)
+- [ ] Extend Parser for `let` bindings and function definitions
+- [ ] Extend Parser for lambda expressions
+- [ ] Extend Parser for match expressions with guards
+- [ ] Extend Parser for list literals and comprehensions
+- [ ] Extend Parser for record literals and type definitions
+- [ ] Add Pattern AST nodes (LiteralPattern, VariablePattern, ConsPattern, etc.)
+- [ ] Implement pattern matching compilation in IR generator
+- [ ] Implement type inference engine (Hindley-Milner style)
+- [ ] Add `|>` forward pipe operator to expression parsing
+- [ ] Implement Result and Option types with built-in support
+- [ ] Implement `?` error propagation operator
+- [ ] Add comprehensive tests for F# style features
+- [ ] Update syntax highlighting for new constructs (Phase 2.4)
+- [ ] Update completion for F# style (Phase 2.3)
+
+**Implementation Notes:**
+- See `LANGUAGE.md` Section 14 for detailed parser implementation notes
+- Type inference uses Hindley-Milner algorithm with let-polymorphism
+- `let` keyword unambiguously starts F# style (bash style uses `VAR=value` without spaces)
+- `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
+- Dual semantics: expression context captures output, statement context prints to terminal
+- Records and unions are compiled to efficient runtime representations
+- Pattern matching compiles to decision trees for efficient execution
 
 ---
 
