@@ -38,6 +38,7 @@ int SignalHandler::initialize(Shell* shell)
     sigaddset(&mask, SIGCHLD);
     sigaddset(&mask, SIGTSTP);
     sigaddset(&mask, SIGCONT);
+    sigaddset(&mask, SIGINT);
     sigprocmask(SIG_BLOCK, &mask, nullptr);
 
     // Ignore SIGTTOU so tcsetpgrp() doesn't stop the shell when transferring terminal control
@@ -67,6 +68,10 @@ int SignalHandler::initialize(Shell* shell)
     // Ignore SIGTTOU so tcsetpgrp() doesn't stop the shell when transferring terminal control
     signal(SIGTTOU, SIG_IGN);
 
+    // Ignore SIGINT - the shell doesn't need it (child processes reset to SIG_DFL)
+    // At the prompt, terminal is in raw mode so Ctrl+C is a keypress, not a signal
+    signal(SIGINT, SIG_IGN);
+
     _sigchldPending.store(false);
     _sigtstpPending.store(false);
     _sigcontPending.store(false);
@@ -91,6 +96,7 @@ void SignalHandler::restore()
     sigaddset(&mask, SIGCHLD);
     sigaddset(&mask, SIGTSTP);
     sigaddset(&mask, SIGCONT);
+    sigaddset(&mask, SIGINT);
     sigprocmask(SIG_UNBLOCK, &mask, nullptr);
 
     // Restore default handlers
@@ -98,12 +104,14 @@ void SignalHandler::restore()
     signal(SIGTSTP, SIG_DFL);
     signal(SIGCONT, SIG_DFL);
     signal(SIGTTOU, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
 #else
     // Restore default signal handlers
     signal(SIGCHLD, SIG_DFL);
     signal(SIGTSTP, SIG_DFL);
     signal(SIGCONT, SIG_DFL);
     signal(SIGTTOU, SIG_DFL);
+    signal(SIGINT, SIG_DFL);
     _sigchldPending.store(false);
     _sigtstpPending.store(false);
     _sigcontPending.store(false);

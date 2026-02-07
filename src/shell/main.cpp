@@ -11,8 +11,6 @@
 #include <string>
 #include <string_view>
 
-#include <unistd.h>
-
 #include "LogCategories.hpp"
 #include "LogConfig.hpp"
 #include "Shell.hpp"
@@ -249,7 +247,6 @@ int main(int argc, char const* argv[])
     }
 
     auto shell = endo::Shell {};
-    setsid();
 
     // Handle -c command with optional arguments
     if (!parsed.command.empty())

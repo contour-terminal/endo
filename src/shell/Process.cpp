@@ -46,19 +46,22 @@ std::expected<ProcessId, ShellError> PosixProcessManager::spawn(SpawnConfig cons
         // Child process
 
         // Unblock signals that the shell blocked for signalfd.
-        // Child processes need to receive job control signals (e.g., SIGTSTP from Ctrl+Z).
-        // The signal mask is inherited across fork() and preserved across exec().
+        // Child processes need to receive job control signals (e.g., SIGTSTP from Ctrl+Z)
+        // and SIGINT (Ctrl+C). The signal mask is inherited across fork() and preserved across exec().
         sigset_t mask;
         sigemptyset(&mask);
         sigaddset(&mask, SIGCHLD);
         sigaddset(&mask, SIGTSTP);
         sigaddset(&mask, SIGCONT);
+        sigaddset(&mask, SIGINT);
         sigprocmask(SIG_UNBLOCK, &mask, nullptr);
 
-        // Reset job control signals to default behavior.
+        // Reset signals to default behavior.
+        // SIGINT: Interrupt (Ctrl+C) - child should be interruptible
         // SIGTSTP: Terminal stop (Ctrl+Z)
         // SIGTTIN: Background process reading from terminal
         // SIGTTOU: Background process writing to terminal
+        signal(SIGINT, SIG_DFL);
         signal(SIGTSTP, SIG_DFL);
         signal(SIGTTIN, SIG_DFL);
         signal(SIGTTOU, SIG_DFL);
