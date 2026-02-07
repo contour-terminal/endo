@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 
+#include "LogCategories.hpp"
 #include "LogConfig.hpp"
 
 #if !defined(_WIN32)
@@ -19,11 +20,10 @@ namespace endo
 
 namespace
 {
-    // Use function-local static to avoid C++20 module static initialization issues
+    // Use centralized log category from LogCategories.hpp
     auto& pipeLog()
     {
-        static auto instance = logstore::category("pipe", "Unix pipe log", endo::log::categoryState("pipe"));
-        return instance;
+        return endo::log::pipe();
     }
 } // namespace
 
@@ -52,10 +52,10 @@ class PosixPipe final: public Pipe
     /// @throws std::runtime_error if pipe creation fails
     explicit PosixPipe(unsigned flags = 0): _pfd { InvalidHandle, InvalidHandle }
     {
-#if defined(__linux__)
+    #if defined(__linux__)
         if (pipe2(_pfd, static_cast<int>(flags)) < 0)
             throw std::runtime_error { "Failed to create pipe. "s + strerror(errno) };
-#else
+    #else
         if (pipe(_pfd) < 0)
             throw std::runtime_error { "Failed to create pipe. "s + strerror(errno) };
         // Apply flags manually on non-Linux systems
@@ -68,7 +68,7 @@ class PosixPipe final: public Pipe
                     fcntl(fd, F_SETFD, currentFlags | static_cast<int>(flags));
             }
         }
-#endif
+    #endif
         pipeLog()()("Created pipe: {} {}\n", _pfd[0], _pfd[1]);
     }
 

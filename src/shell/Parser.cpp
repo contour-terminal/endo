@@ -17,13 +17,13 @@
 
 #include "ASTPrinter.hpp"
 #include "Lexer.hpp"
+#include "LogCategories.hpp"
 #include "LogConfig.hpp"
 
-// Use function-local static to avoid C++20 module static initialization issues
+// Use centralized log category from LogCategories.hpp
 inline auto& parserLog()
 {
-    static auto instance = logstore::category("parser", "Parser logger", endo::log::categoryState("parser"));
-    return instance;
+    return endo::log::parser();
 }
 
 #define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog() };

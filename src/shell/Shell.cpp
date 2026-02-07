@@ -25,6 +25,7 @@
 #include "Error.hpp"
 #include "IRGenerator.hpp"
 #include "Lexer.hpp"
+#include "LogCategories.hpp"
 #include "LogConfig.hpp"
 #include "Parser.hpp"
 #include "Pipe.hpp"
@@ -44,12 +45,15 @@
 
 namespace
 {
-// Use function-local static to avoid C++20 module static initialization issues
+// Use centralized log categories from LogCategories.hpp
 auto& debugLog()
 {
-    static auto instance =
-        logstore::category("shell.debug", "Shell debug log", endo::log::categoryState("shell.debug"));
-    return instance;
+    return endo::log::shellDebug();
+}
+
+auto& traceLog()
+{
+    return endo::log::vmTrace();
 }
 
 std::string processEscapeSequences(std::string_view input)
@@ -4626,7 +4630,7 @@ std::expected<std::filesystem::path, ShellError> Shell::resolveProgram(std::stri
 
 void Shell::trace(CoreVM::Instruction instr, size_t ip, size_t sp)
 {
-    debugLog()()("trace: {}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
+    traceLog()()("{}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
 }
 
 std::vector<std::string>& Shell::cmdBuilderArgs()

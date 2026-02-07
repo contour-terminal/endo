@@ -23,6 +23,8 @@ add_library(Shell STATIC
     Error.hpp
     History.hpp
     History.cpp
+    LogCategories.hpp
+    LogCategories.cpp
     IRGenerator.hpp
     IRGenerator.cpp
     Job.hpp

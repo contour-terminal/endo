@@ -13,6 +13,7 @@
 
 #include <unistd.h>
 
+#include "LogCategories.hpp"
 #include "LogConfig.hpp"
 #include "Shell.hpp"
 
@@ -40,6 +41,7 @@ Options:
 
 Log Categories:
   shell.debug        Shell execution debug output
+  vm.trace           VM instruction execution trace
   parser             Parser debug output
   pipe               Unix pipe operations
   vm.diag            VM diagnostics
@@ -218,7 +220,14 @@ int main(int argc, char const* argv[])
 
     // Handle --log option first (patterns are stored for lazy category initialization)
     if (!parsed.logPatterns.empty())
+    {
         endo::log::Config::instance().setPatterns(parsed.logPatterns);
+        // Enable the console sink so log output is visible
+        logstore::sink::console().set_enabled(true);
+    }
+
+    // Register all known log categories so they appear in --log-list
+    endo::log::registerAllCategories();
 
     if (parsed.showHelp)
     {
