@@ -36,7 +36,14 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     generator.setProgram(std::make_unique<CoreVM::IRProgram>());
     generator.setHandler(generator.getHandler(GLOBAL_SCOPE_INIT_NAME));
     generator.setInsertPoint(generator.createBlock("EntryPoint"));
+
+    // Initialize F# root scope
+    generator.pushFSharpScope();
+
     generator.codegen(&rootNode);
+
+    // Clean up F# scope
+    generator.popFSharpScope();
 
     if (generator._hasErrors)
         return nullptr;
@@ -51,6 +58,52 @@ IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& r
 {
     _processCallSignature.setReturnType(CoreVM::LiteralType::Number);
     _processCallSignature.setName("ProcessCall");
+}
+
+// F# scope management implementation
+void IRGenerator::pushFSharpScope()
+{
+    auto newScope = std::make_unique<FSharpScope>();
+    newScope->parent = _currentFSharpScope;
+    if (!_rootFSharpScope)
+    {
+        _rootFSharpScope = std::move(newScope);
+        _currentFSharpScope = _rootFSharpScope.get();
+    }
+    else
+    {
+        _currentFSharpScope = newScope.release();
+    }
+}
+
+void IRGenerator::popFSharpScope()
+{
+    if (_currentFSharpScope)
+    {
+        FSharpScope* parent = _currentFSharpScope->parent;
+        if (_currentFSharpScope != _rootFSharpScope.get())
+        {
+            delete _currentFSharpScope;
+        }
+        _currentFSharpScope = parent;
+    }
+}
+
+void IRGenerator::bindFSharpVariable(std::string const& name, CoreVM::Value* value)
+{
+    if (_currentFSharpScope)
+        _currentFSharpScope->bindings[name] = value;
+}
+
+CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
+{
+    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
+    {
+        auto it = scope->bindings.find(name);
+        if (it != scope->bindings.end())
+            return it->second;
+    }
+    return nullptr;
 }
 
 CoreVM::NativeCallback* IRGenerator::findCallback(std::string const& signature) const
@@ -1498,23 +1551,106 @@ bool IRGenerator::inFunction() const
 
 void IRGenerator::visit(ast::LetBindingStmt const& node)
 {
-    // TODO: Implement let bindings with F# environment
-    reportTypeError("F# let bindings are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(LetBindingStmt)");
+
+    // For now, only handle simple bindings (not function definitions)
+    if (node.isFunction())
+    {
+        // Function definitions require lambda/closure support (Phase C)
+        reportTypeError("F# function definitions in let bindings are not yet implemented");
+        return;
+    }
+
+    // Codegen the value expression
+    CoreVM::Value* value = codegen(node.value.get());
+    if (!value)
+    {
+        reportTypeError("Failed to generate code for let binding value");
+        return;
+    }
+
+    // Determine the type for storage
+    CoreVM::LiteralType storageType = value->type();
+
+    // Create storage (alloca) for the variable
+    CoreVM::AllocaInstr* storage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), node.name);
+
+    // Store the value
+    createStore(storage, value, node.name);
+
+    // Register in F# scope - store the alloca instruction so we can load from it later
+    bindFSharpVariable(node.name, storage);
+
+    // Let bindings as statements don't produce a result value
+    _result = nullptr;
 }
 
 void IRGenerator::visit(ast::BinaryExpr const& node)
 {
-    // TODO: Implement binary expression evaluation
-    reportTypeError("F# binary expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(BinaryExpr)");
+
+    // Codegen both operands
+    CoreVM::Value* left = codegen(node.left.get());
+    if (!left)
+        return;
+
+    CoreVM::Value* right = codegen(node.right.get());
+    if (!right)
+        return;
+
+    // For arithmetic and comparison, ensure operands are numbers
+    // String operations would need different handling (future work)
+    if (left->type() == CoreVM::LiteralType::String)
+        left = createS2N(left);
+    if (right->type() == CoreVM::LiteralType::String)
+        right = createS2N(right);
+
+    switch (node.op)
+    {
+        // Arithmetic operators
+        case ast::BinaryOp::Add: _result = createAdd(left, right, "add"); break;
+        case ast::BinaryOp::Sub: _result = createSub(left, right, "sub"); break;
+        case ast::BinaryOp::Mul: _result = createMul(left, right, "mul"); break;
+        case ast::BinaryOp::Div: _result = createDiv(left, right, "div"); break;
+        case ast::BinaryOp::Mod: _result = createRem(left, right, "mod"); break;
+        case ast::BinaryOp::Pow: _result = createPow(left, right, "pow"); break;
+
+        // Comparison operators (return boolean)
+        case ast::BinaryOp::Eq: _result = createNCmpEQ(left, right, "eq"); break;
+        case ast::BinaryOp::Ne: _result = createNCmpNE(left, right, "ne"); break;
+        case ast::BinaryOp::Lt: _result = createNCmpLT(left, right, "lt"); break;
+        case ast::BinaryOp::Le: _result = createNCmpLE(left, right, "le"); break;
+        case ast::BinaryOp::Gt: _result = createNCmpGT(left, right, "gt"); break;
+        case ast::BinaryOp::Ge: _result = createNCmpGE(left, right, "ge"); break;
+
+        // Logical operators
+        case ast::BinaryOp::And: _result = createBAnd(toBool(left), toBool(right), "and"); break;
+        case ast::BinaryOp::Or:
+            // Note: CoreVM uses BXor for logical OR (see comment in CoreVM.hpp)
+            _result = createBXor(toBool(left), toBool(right), "or");
+            break;
+    }
 }
 
 void IRGenerator::visit(ast::UnaryExpr const& node)
 {
-    // TODO: Implement unary expression evaluation
-    reportTypeError("F# unary expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(UnaryExpr)");
+
+    CoreVM::Value* operand = codegen(node.operand.get());
+    if (!operand)
+        return;
+
+    switch (node.op)
+    {
+        case ast::UnaryOp::Neg:
+            // Ensure operand is a number for negation
+            if (operand->type() == CoreVM::LiteralType::String)
+                operand = createS2N(operand);
+            _result = createNeg(operand, "neg");
+            break;
+
+        case ast::UnaryOp::Not: _result = createBNot(toBool(operand), "not"); break;
+    }
 }
 
 void IRGenerator::visit(ast::PipelineExpr const& node)
@@ -1533,9 +1669,18 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
 void IRGenerator::visit(ast::IdentifierExpr const& node)
 {
-    // TODO: Look up identifier in F# environment and return its value
-    reportTypeError("F# identifier lookup is not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(IdentifierExpr)");
+
+    // Look up in F# scope
+    CoreVM::Value* storage = lookupFSharpVariable(node.name);
+    if (!storage)
+    {
+        reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
+        return;
+    }
+
+    // Load the value from storage
+    _result = createLoad(storage, node.name);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)

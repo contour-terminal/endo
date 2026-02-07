@@ -4,6 +4,8 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "AST.hpp"
 #include "Visitor.hpp"
@@ -144,6 +146,18 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void popFunctionContext();
     [[nodiscard]] bool inFunction() const;
 
+    // F# variable scope management
+    struct FSharpScope
+    {
+        std::unordered_map<std::string, CoreVM::Value*> bindings;
+        FSharpScope* parent = nullptr;
+    };
+
+    void pushFSharpScope();
+    void popFSharpScope();
+    void bindFSharpVariable(std::string const& name, CoreVM::Value* value);
+    [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
+
     CoreVM::diagnostics::Report& _report;
     CoreVM::Runtime& _runtime;
     CoreVM::SourceLocation _currentLocation;
@@ -153,6 +167,10 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;
+
+    // F# scope chain (owned via raw pointer chain, root scope is unique_ptr)
+    std::unique_ptr<FSharpScope> _rootFSharpScope;
+    FSharpScope* _currentFSharpScope = nullptr;
 };
 
 } // namespace endo
