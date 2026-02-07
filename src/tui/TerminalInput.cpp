@@ -34,11 +34,23 @@ namespace
     constexpr auto EnableBracketedPaste = "\033[?2004h"sv;
     constexpr auto DisableBracketedPaste = "\033[?2004l"sv;
 
+    // SGR extended mouse format (mode 1006) - allows coordinates > 223
+    // Uses CSI < button ; column ; row M/m format instead of legacy X10 encoding
+    constexpr auto EnableSGRMouse = "\033[?1006h"sv;
+    constexpr auto DisableSGRMouse = "\033[?1006l"sv;
+
+    // Any-motion mouse tracking (mode 1003) - reports ALL mouse movements
+    // Required for hover tooltips - tracks mouse even without button held
+    // Without this, only button press/release events are reported
+    constexpr auto EnableAnyMotionTracking = "\033[?1003h"sv;
+    constexpr auto DisableAnyMotionTracking = "\033[?1003l"sv;
+
     // Passive mouse tracking (DEC mode 2029) - Contour terminal extension
-    // Automatically enables SGR format and button tracking.
-    // Reports mouse events with an additional uiHandled parameter indicating
-    // whether the terminal UI consumed the event (e.g., for scrollback selection).
+    // Adds an additional uiHandled parameter indicating whether the terminal UI
+    // consumed the event (e.g., for scrollback selection).
     // Format: CSI < button ; column ; row ; uiHandled M/m
+    // Note: In Contour, this automatically enables SGR format, but we enable it
+    // explicitly above for compatibility with other terminals.
     constexpr auto EnablePassiveMouseTracking = "\033[?2029h"sv;
     constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv;
 
@@ -203,7 +215,9 @@ void TerminalInput::disableRawMode()
 void TerminalInput::enableProtocols()
 {
     writeToTerminal(EnableCsiU);
-    writeToTerminal(EnablePassiveMouseTracking);
+    writeToTerminal(EnableSGRMouse);             // SGR format for extended coordinates
+    writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover)
+    writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag)
     writeToTerminal(EnableBracketedPaste);
 }
 
@@ -211,6 +225,8 @@ void TerminalInput::disableProtocols()
 {
     writeToTerminal(DisableBracketedPaste);
     writeToTerminal(DisablePassiveMouseTracking);
+    writeToTerminal(DisableAnyMotionTracking);
+    writeToTerminal(DisableSGRMouse);
     writeToTerminal(DisableCsiU);
 }
 
