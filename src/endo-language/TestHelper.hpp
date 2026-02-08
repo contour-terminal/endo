@@ -3,9 +3,11 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <expected>
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace endo::ast
 {
@@ -15,23 +17,71 @@ class Statement;
 namespace endo::test
 {
 
+/// Error type for test execution failures
+enum class TestError
+{
+    ParseFailed,
+    IRGenerationFailed,
+    CodeGenerationFailed,
+    LinkFailed,
+    HandlerNotFound,
+    ExecutionFailed,
+};
+
+/// Converts a TestError to a human-readable string
+[[nodiscard]] constexpr std::string_view toString(TestError error) noexcept
+{
+    switch (error)
+    {
+        case TestError::ParseFailed: return "parse failed";
+        case TestError::IRGenerationFailed: return "IR generation failed";
+        case TestError::CodeGenerationFailed: return "code generation failed";
+        case TestError::LinkFailed: return "link failed";
+        case TestError::HandlerNotFound: return "handler not found";
+        case TestError::ExecutionFailed: return "execution failed";
+    }
+    return "unknown error";
+}
+
+/// Success result from test execution
+struct TestExecutionSuccess
+{
+    int64_t exitCode;   ///< Exit code from the program (0 = success)
+    std::string output; ///< Captured output from print/println calls
+};
+
+/// Result of executing generated IR
+using ExecutionResult = std::expected<TestExecutionSuccess, TestError>;
+
 /// Test runtime holder that provides minimal CoreVM setup for parser and IR generator tests.
-/// This includes dummy callproc functions required by the parser.
+/// This includes dummy callproc functions required by the parser and print builtins for output capture.
 struct TestRuntime
 {
     CoreVM::Runtime runtime;
-    CoreVM::diagnostics::BufferedReport report; // Buffered to track errors
+    CoreVM::diagnostics::BufferedReport report;
+    std::string capturedOutput; ///< Buffer for captured output from print/println
 
     TestRuntime();
 
+    // Dummy handlers for shell command execution
     void dummyCallProc(CoreVM::Params&);
     void dummyCallProcPiped(CoreVM::Params&);
+
+    // Print builtins for output capture
+    void builtinPrint(CoreVM::Params& params);   ///< print without newline
+    void builtinPrintln(CoreVM::Params& params); ///< print with newline
 
     /// Clears any accumulated errors before a new test.
     void clearErrors();
 
+    /// Clears the captured output buffer.
+    void clearOutput();
+
     /// Returns true if any errors were reported.
     [[nodiscard]] bool hasErrors() const;
+
+    /// Returns the captured output.
+    [[nodiscard]] std::string const& output() const;
 
     /// Returns the singleton instance of TestRuntime.
     static TestRuntime& instance();
@@ -58,8 +108,36 @@ struct ParseError: std::runtime_error
     using std::runtime_error::runtime_error;
 };
 
+/// Exception thrown when execution fails in test helpers.
+struct ExecutionError: std::runtime_error
+{
+    TestError error;
+
+    explicit ExecutionError(TestError e): std::runtime_error(std::string(toString(e))), error(e) {}
+};
+
 /// Parses source code and returns the AST-printed representation.
 /// Throws ParseError if parsing fails (errors are logged before throwing).
 std::string parseAndPrintAST(std::string const& source);
+
+/// Generates IR from source code, compiles to bytecode, and executes it.
+/// Returns the execution result (exit code and captured output) or an error.
+ExecutionResult executeSource(std::string const& source);
+
+/// Executes source code and returns the captured output.
+/// Throws ExecutionError if execution fails.
+std::string executeSourceAndGetOutput(std::string const& source);
+
+/// Returns true if the source code executes successfully with exit code 0.
+bool executesSuccessfully(std::string const& source);
+
+/// Returns true if the source code executes and returns the expected exit code.
+bool executesWithExitCode(std::string const& source, int64_t expectedExitCode);
+
+/// Returns true if the source code executes and produces the expected output.
+bool executesWithOutput(std::string const& source, std::string_view expectedOutput);
+
+/// Returns true if execution succeeds with expected exit code AND output.
+bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput);
 
 } // namespace endo::test

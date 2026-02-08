@@ -25,6 +25,18 @@ TestRuntime::TestRuntime()
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&TestRuntime::dummyCallProcPiped, this);
+
+    // Register print builtin (no newline)
+    runtime.registerFunction("print")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&TestRuntime::builtinPrint, this);
+
+    // Register println builtin (with newline)
+    runtime.registerFunction("println")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&TestRuntime::builtinPrintln, this);
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params&)
@@ -35,14 +47,35 @@ void TestRuntime::dummyCallProcPiped(CoreVM::Params&)
 {
 }
 
+void TestRuntime::builtinPrint(CoreVM::Params& params)
+{
+    capturedOutput += params.getString(1);
+}
+
+void TestRuntime::builtinPrintln(CoreVM::Params& params)
+{
+    capturedOutput += params.getString(1);
+    capturedOutput += '\n';
+}
+
 void TestRuntime::clearErrors()
 {
     report.clear();
 }
 
+void TestRuntime::clearOutput()
+{
+    capturedOutput.clear();
+}
+
 bool TestRuntime::hasErrors() const
 {
     return report.containsFailures();
+}
+
+std::string const& TestRuntime::output() const
+{
+    return capturedOutput;
 }
 
 TestRuntime& TestRuntime::instance()
@@ -61,7 +94,6 @@ std::unique_ptr<ast::Statement> parse(std::string const& source)
 
     if (testRuntime.hasErrors())
     {
-        testRuntime.report.log(); // Print errors for debugging
         return nullptr;
     }
 
@@ -78,15 +110,13 @@ std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source)
 
     if (!ast || testRuntime.hasErrors())
     {
-        testRuntime.report.log(); // Print errors for debugging
         return nullptr;
     }
 
     auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime);
 
-    if (testRuntime.hasErrors())
+    if (!ir || testRuntime.hasErrors())
     {
-        testRuntime.report.log(); // Print errors for debugging
         return nullptr;
     }
 
@@ -116,10 +146,78 @@ std::string parseAndPrintAST(std::string const& source)
     auto ast = parse(source);
     if (!ast)
     {
-        // parse() already logs errors via testRuntime.report.log()
         throw ParseError("Parse failed for: \"" + source + "\"");
     }
     return ast::ASTPrinter::print(*ast);
+}
+
+ExecutionResult executeSource(std::string const& source)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    // Generate IR
+    auto ir = generateIR(source);
+    if (!ir)
+        return std::unexpected(TestError::IRGenerationFailed);
+
+    // Generate target code
+    CoreVM::TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(ir.get());
+    if (!targetProgram)
+        return std::unexpected(TestError::CodeGenerationFailed);
+
+    // Link the program to the runtime (required for native function calls like print/println)
+    if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+        return std::unexpected(TestError::LinkFailed);
+
+    // Find the main handler
+    CoreVM::Handler const* handler = targetProgram->findHandler("@main");
+    if (!handler)
+        return std::unexpected(TestError::HandlerNotFound);
+
+    // Execute
+    CoreVM::Runner::Globals globals;
+    CoreVM::Runner runner(handler, nullptr, &globals, nullptr);
+
+    // Runner::run() returns true if exit code was non-zero, false if it was 0
+    bool exitNonZero = runner.run();
+    int64_t exitCode = exitNonZero ? 1 : 0;
+
+    return TestExecutionSuccess { .exitCode = exitCode, .output = testRuntime.output() };
+}
+
+std::string executeSourceAndGetOutput(std::string const& source)
+{
+    auto result = executeSource(source);
+    if (!result.has_value())
+        throw ExecutionError(result.error());
+    return std::move(result->output);
+}
+
+bool executesSuccessfully(std::string const& source)
+{
+    auto result = executeSource(source);
+    return result.has_value() && result->exitCode == 0;
+}
+
+bool executesWithExitCode(std::string const& source, int64_t expectedExitCode)
+{
+    auto result = executeSource(source);
+    return result.has_value() && result->exitCode == expectedExitCode;
+}
+
+bool executesWithOutput(std::string const& source, std::string_view expectedOutput)
+{
+    auto result = executeSource(source);
+    return result.has_value() && result->output == expectedOutput;
+}
+
+bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput)
+{
+    auto result = executeSource(source);
+    return result.has_value() && result->exitCode == expectedExitCode && result->output == expectedOutput;
 }
 
 } // namespace endo::test
