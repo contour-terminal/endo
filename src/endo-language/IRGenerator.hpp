@@ -4,6 +4,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -185,6 +186,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         std::vector<std::string> parameters; ///< Parameter names in order
         ast::Expr const* body;               ///< Function body expression (for inlining)
         bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
+        bool isRecursive = false;            ///< Whether function is declared with `let rec`
 
         size_t arity() const { return parameters.size(); }
     };
@@ -238,6 +240,19 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     // F# function context stack for error propagation
     std::vector<FSharpFunctionContext> _fsharpFunctionContextStack;
+
+    /// Tracks the active recursive function compilation for loop-based tail-call optimization.
+    /// When set, recursive calls within the body become jumps back to the entry block.
+    struct RecursiveCallContext
+    {
+        std::string functionName;                       ///< Name of the recursive function
+        CoreVM::BasicBlock* entryBlock;                 ///< Loop entry block to jump back to
+        std::vector<CoreVM::AllocaInstr*> paramAllocas; ///< Parameter storage for updating on recursion
+        CoreVM::AllocaInstr* resultStorage;             ///< Storage for the final result
+        CoreVM::BasicBlock* exitBlock;                  ///< Block to continue after recursion completes
+    };
+
+    std::optional<RecursiveCallContext> _activeRecursion;
 };
 
 } // namespace endo

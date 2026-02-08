@@ -1739,6 +1739,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.parameters = node.parameters;
         func.body = node.value.get(); // Store pointer to body AST for inlining
         func.returnsResultOrOption = isBodyResultOrOption(func.body);
+        func.isRecursive = node.isRecursive;
         registerFSharpFunction(node.name, std::move(func));
 
         _result = nullptr;
@@ -1814,11 +1815,25 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     // Codegen both operands
     CoreVM::Value* left = codegen(node.left.get());
     if (!left)
+    {
+        if (_activeRecursion)
+        {
+            reportTypeError("Non-tail recursive call detected. Recursive calls must be in tail position. "
+                            "Use an accumulator parameter to restructure the recursion.");
+        }
         return;
+    }
 
     CoreVM::Value* right = codegen(node.right.get());
     if (!right)
+    {
+        if (_activeRecursion)
+        {
+            reportTypeError("Non-tail recursive call detected. Recursive calls must be in tail position. "
+                            "Use an accumulator parameter to restructure the recursion.");
+        }
         return;
+    }
 
     // For arithmetic and comparison, ensure operands are numbers
     // String operations would need different handling (future work)
@@ -1961,7 +1976,49 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         return;
     }
 
-    // Inline the function body with the piped value as argument
+    // Handle recursive function via pipeline (e.g., 10 |> countdown)
+    if (func->isRecursive)
+    {
+        // Reuse the same loop-based compilation as ApplicationExpr Case A
+        auto* entryBlock = createBlock("rec.entry");
+        auto* exitBlock = createBlock("rec.exit");
+
+        auto* paramAlloca = createAllocaInEntryBlock(value->type(), "rec.param." + func->parameters[0]);
+        createStore(paramAlloca, value, "rec.param.init");
+
+        auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+
+        _activeRecursion = RecursiveCallContext {
+            .functionName = funcName,
+            .entryBlock = entryBlock,
+            .paramAllocas = { paramAlloca },
+            .resultStorage = resultStorage,
+            .exitBlock = exitBlock,
+        };
+
+        createBr(entryBlock);
+        setInsertPoint(entryBlock);
+
+        pushFSharpScope();
+        bindFSharpVariable(func->parameters[0], paramAlloca);
+
+        auto* bodyResult = codegen(func->body);
+        if (bodyResult)
+        {
+            createStore(resultStorage, bodyResult, "rec.store.result");
+            createBr(exitBlock);
+        }
+
+        popFSharpScope();
+
+        setInsertPoint(exitBlock);
+        _result = createLoad(resultStorage, "rec.load.result");
+
+        _activeRecursion.reset();
+        return;
+    }
+
+    // Non-recursive: inline the function body with the piped value as argument
     pushFSharpScope();
 
     // Only set up return infrastructure for functions that return Result/Option
@@ -2104,7 +2161,83 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         return;
     }
 
-    // Inline the function body:
+    // Handle recursive function calls (let rec)
+    if (func->isRecursive)
+    {
+        // Case B: Recursive tail-call from within body — jump back to entry block
+        if (_activeRecursion && _activeRecursion->functionName == funcName)
+        {
+            // Store new argument values into parameter allocas
+            for (size_t i = 0; i < args.size(); ++i)
+                createStore(_activeRecursion->paramAllocas[i], args[i], "rec.arg.update");
+
+            // Jump back to the entry block (tail-call as loop iteration)
+            createBr(_activeRecursion->entryBlock);
+
+            // Create unreachable continuation block (code after tail call is dead)
+            auto* unreachable = createBlock("rec.unreachable");
+            setInsertPoint(unreachable);
+
+            // Signal tail call: result is nullptr (no value produced inline)
+            _result = nullptr;
+            return;
+        }
+
+        // Case A: First (external) call to recursive function — set up loop
+        auto* entryBlock = createBlock("rec.entry");
+        auto* exitBlock = createBlock("rec.exit");
+
+        // Create parameter allocas and result storage in the handler entry block
+        std::vector<CoreVM::AllocaInstr*> paramAllocas;
+        for (size_t i = 0; i < func->parameters.size(); ++i)
+        {
+            auto* alloca = createAllocaInEntryBlock(args[i]->type(), "rec.param." + func->parameters[i]);
+            createStore(alloca, args[i], "rec.param.init");
+            paramAllocas.push_back(alloca);
+        }
+
+        auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+
+        // Set up the recursion context
+        _activeRecursion = RecursiveCallContext {
+            .functionName = funcName,
+            .entryBlock = entryBlock,
+            .paramAllocas = paramAllocas,
+            .resultStorage = resultStorage,
+            .exitBlock = exitBlock,
+        };
+
+        // Jump to entry block and begin the loop
+        createBr(entryBlock);
+        setInsertPoint(entryBlock);
+
+        // Push scope and bind parameters from allocas
+        pushFSharpScope();
+        for (size_t i = 0; i < func->parameters.size(); ++i)
+            bindFSharpVariable(func->parameters[i], paramAllocas[i]);
+
+        // Codegen the function body (recursive calls will hit Case B above)
+        auto* bodyResult = codegen(func->body);
+
+        // If body produced a result (non-tail path), store it and branch to exit
+        if (bodyResult)
+        {
+            createStore(resultStorage, bodyResult, "rec.store.result");
+            createBr(exitBlock);
+        }
+
+        popFSharpScope();
+
+        // Continue from the exit block, load the result
+        setInsertPoint(exitBlock);
+        _result = createLoad(resultStorage, "rec.load.result");
+
+        // Clear the recursion context
+        _activeRecursion.reset();
+        return;
+    }
+
+    // Non-recursive function: inline the function body
     // 1. Push a new scope for the function call
     // 2. Set up return infrastructure for ? operator (only if function returns Result/Option)
     // 3. Bind arguments to parameters
@@ -2334,21 +2467,28 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
         // For constructor patterns (Error e, Some x), we need to extract the payload
         // For simple variable patterns, we bind the whole scrutinee
-        CoreVM::Value* bindingSource = createLoad(scrutineeStorage, "scrutinee.reload");
-
-        if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+        // Only load the scrutinee if there are actual bindings to store.
+        // Dead loads leave values on the stack that accumulate in loops (e.g., let rec).
+        if (!preAllocatedBindings.empty()
+            || dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
         {
-            // Extract payload from slot 0 for constructor patterns
-            if (ctorPat->payload.has_value())
+            CoreVM::Value* bindingSource = createLoad(scrutineeStorage, "scrutinee.reload");
+
+            if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
             {
-                bindingSource = createObjGetSlot(bindingSource, get(CoreVM::CoreNumber(0)), "ctor.payload");
+                // Extract payload from slot 0 for constructor patterns
+                if (ctorPat->payload.has_value())
+                {
+                    bindingSource =
+                        createObjGetSlot(bindingSource, get(CoreVM::CoreNumber(0)), "ctor.payload");
+                }
             }
-        }
 
-        for (auto const& [name, storage]: preAllocatedBindings)
-        {
-            createStore(storage, bindingSource, name + ".store");
-            bindFSharpVariable(name, storage);
+            for (auto const& [name, storage]: preAllocatedBindings)
+            {
+                createStore(storage, bindingSource, name + ".store");
+                bindFSharpVariable(name, storage);
+            }
         }
 
         // If there's a guard, evaluate it and branch accordingly
@@ -2380,6 +2520,12 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
         if (!bodyResult)
         {
+            // A null result inside an active recursion means a tail call was made.
+            // The branch back to the entry block has already been emitted, so skip
+            // the store-and-branch-to-merge for this arm.
+            if (_activeRecursion)
+                continue;
+
             reportTypeError("Failed to evaluate match arm body");
             return;
         }

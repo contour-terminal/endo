@@ -2335,6 +2335,23 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     if (isMutable)
         _lexer.nextToken(); // consume 'mut'
 
+    // Check for 'rec' modifier
+    bool const isRecursive = _lexer.currentToken() == Token::Rec;
+    if (isRecursive)
+    {
+        if (isMutable)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let rec' without 'mut'" },
+                currentContextSnippet(),
+                "'let mut rec' is not allowed; 'mut' and 'rec' are mutually exclusive");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'rec'
+    }
+
     // Expect identifier (binding name)
     if (_lexer.currentToken() != Token::Identifier)
     {
@@ -2354,6 +2371,18 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     while (_lexer.currentToken() == Token::Identifier)
     {
         parameters.push_back(consumeLiteral());
+    }
+
+    // Validate: 'let rec' requires parameters (must be a function definition)
+    if (isRecursive && parameters.empty())
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(),
+            { "Add parameters to define a recursive function: 'let rec f x = ...'" },
+            currentContextSnippet(),
+            "'let rec' requires parameters (must be a function definition)");
+        _lexer.leaveFSharpExpr();
+        return nullptr;
     }
 
     // Expect '='
@@ -2379,7 +2408,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 
     _lexer.leaveFSharpExpr();
     return std::make_unique<ast::LetBindingStmt>(
-        isMutable, std::move(name), std::move(parameters), std::move(value));
+        isMutable, isRecursive, std::move(name), std::move(parameters), std::move(value));
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()

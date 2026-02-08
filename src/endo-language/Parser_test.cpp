@@ -1347,3 +1347,78 @@ TEST_CASE("Parser.FSharp.ASTPrinter.try_with")
     CHECK(parseAndPrintAST("let r = try getValue x with | Error e -> 0")
           == "let r = try (getValue x) with | Error e -> 0");
 }
+
+// =============================================================================
+// F# Let Rec Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.let_rec_basic")
+{
+    auto ast = parse("let rec countdown n = n");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "countdown");
+    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->isRecursive == true);
+    CHECK(letStmt->isFunction() == true);
+    REQUIRE(letStmt->parameters.size() == 1);
+    CHECK(letStmt->parameters[0] == "n");
+}
+
+TEST_CASE("Parser.FSharp.let_rec_multiple_params")
+{
+    auto ast = parse("let rec factorial n acc = n");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "factorial");
+    CHECK(letStmt->isRecursive == true);
+    REQUIRE(letStmt->parameters.size() == 2);
+    CHECK(letStmt->parameters[0] == "n");
+    CHECK(letStmt->parameters[1] == "acc");
+}
+
+TEST_CASE("Parser.FSharp.let_rec_no_params_error")
+{
+    // let rec x = 42 should fail (rec requires parameters)
+    auto ast = parse("let rec x = 42");
+    // The parser should fail and return nullptr (or a compound with no valid stmts)
+    // Since parse() returns a statement, check if it's null or the inner is null
+    if (ast != nullptr)
+    {
+        auto* firstStmt = getFirstStatement(ast.get());
+        CHECK(firstStmt == nullptr);
+    }
+}
+
+TEST_CASE("Parser.FSharp.let_mut_rec_error")
+{
+    // let mut rec should fail (mut and rec are mutually exclusive)
+    auto ast = parse("let mut rec f x = x");
+    if (ast != nullptr)
+    {
+        auto* firstStmt = getFirstStatement(ast.get());
+        CHECK(firstStmt == nullptr);
+    }
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.let_rec")
+{
+    CHECK(parseAndPrintAST("let rec countdown n = n") == "let rec countdown n = n");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.let_rec_multiple_params")
+{
+    CHECK(parseAndPrintAST("let rec factorial n acc = n") == "let rec factorial n acc = n");
+}

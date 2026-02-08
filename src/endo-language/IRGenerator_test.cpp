@@ -986,3 +986,57 @@ TEST_CASE("IRGenerator.FSharp.exec_print_number_expression")
     // Print works with numeric expressions
     CHECK(executeSourceAndGetOutput("let x = 10; print (x * 2 + 5)") == "25");
 }
+
+// =============================================================================
+// F# Recursive Function (let rec) Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_countdown")
+{
+    // Simple recursive countdown to 0
+    CHECK(executeSourceAndGetOutput("let rec countdown n = match n with | 0 -> 0 | _ -> countdown (n - 1); "
+                                    "print (countdown 10)")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_factorial")
+{
+    // Tail-recursive factorial with accumulator
+    CHECK(executeSourceAndGetOutput(
+              "let rec factorial n acc = match n with | 0 -> acc | _ -> factorial (n - 1) (n * acc); "
+              "print (factorial 5 1)")
+          == "120");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_fibonacci")
+{
+    // Tail-recursive fibonacci with two accumulators
+    CHECK(executeSourceAndGetOutput("let rec fib n a b = match n with | 0 -> a | _ -> fib (n - 1) b (a + b); "
+                                    "print (fib 10 0 1)")
+          == "55");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_sum")
+{
+    // Tail-recursive sum with accumulator
+    CHECK(
+        executeSourceAndGetOutput("let rec sum n acc = match n with | 0 -> acc | _ -> sum (n - 1) (acc + n); "
+                                  "print (sum 10 0)")
+        == "55");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_pipeline")
+{
+    // Recursive function invoked via pipeline
+    CHECK(executeSourceAndGetOutput("let rec countdown n = match n with | 0 -> 0 | _ -> countdown (n - 1); "
+                                    "print (10 |> countdown)")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
+{
+    // Non-tail recursive call (n * f(n-1)) should fail to compile when called
+    CHECK_FALSE(
+        generatesIRSuccessfully("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
+                                "let r = factorial 5"));
+}

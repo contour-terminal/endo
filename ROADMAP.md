@@ -394,7 +394,7 @@ src/
 - [x] Implement IR generation for F# lambda expressions (`fun x -> x * 2`)
 - [ ] Implement closures (capturing outer scope variables)
 - [ ] Implement partial application in IR generator
-- [ ] Implement recursion support for F# functions
+- [x] Implement recursion support for F# functions (`let rec` with tail-call optimization)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 

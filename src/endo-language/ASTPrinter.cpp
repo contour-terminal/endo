@@ -551,6 +551,8 @@ void ASTPrinter::visit(LetBindingStmt const& node)
     _result += "let ";
     if (node.isMutable)
         _result += "mut ";
+    if (node.isRecursive)
+        _result += "rec ";
     _result += node.name;
     for (auto const& param: node.parameters)
     {

@@ -857,12 +857,18 @@ struct ReturnStmt final: public Statement
 struct LetBindingStmt final: public Statement
 {
     bool isMutable;                      ///< True for `let mut`
+    bool isRecursive;                    ///< True for `let rec`
     std::string name;                    ///< Binding/function name
     std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
     std::unique_ptr<Expr> value;         ///< Value expression or function body
 
-    LetBindingStmt(bool mut, std::string n, std::vector<std::string> params, std::unique_ptr<Expr> val):
-        isMutable(mut), name(std::move(n)), parameters(std::move(params)), value(std::move(val))
+    LetBindingStmt(
+        bool mut, bool rec, std::string n, std::vector<std::string> params, std::unique_ptr<Expr> val):
+        isMutable(mut),
+        isRecursive(rec),
+        name(std::move(n)),
+        parameters(std::move(params)),
+        value(std::move(val))
     {
     }
 
