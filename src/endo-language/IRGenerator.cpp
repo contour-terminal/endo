@@ -1961,4 +1961,43 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     (void) node;
 }
 
+void IRGenerator::visit(ast::ShellCommandExpr const& node)
+{
+    // Shell command expression: & git status
+    // Captures command output as a string (like command substitution).
+    //
+    // IR pattern (same as SubstitutionExpr):
+    //   1. Start capture - redirects stdout to a pipe
+    //   2. Execute the command pipeline
+    //   3. End capture - reads captured output and returns as string
+
+    if (!node.command)
+    {
+        // Empty command - result is empty string
+        _result = get("");
+        return;
+    }
+
+    // 1. Start capture - redirects stdout to a pipe
+    auto* startCb = findCallback("internal.subst_start()V");
+    if (!startCb)
+    {
+        reportTypeError("Internal error: internal.subst_start builtin not found");
+        return;
+    }
+    createCallFunction(getBuiltinFunction(*startCb), {}, "subst_start");
+
+    // 2. Execute the command pipeline
+    codegen(node.command.get());
+
+    // 3. End capture - reads captured output and returns as string
+    auto* endCb = findCallback("internal.subst_end()S");
+    if (!endCb)
+    {
+        reportTypeError("Internal error: internal.subst_end builtin not found");
+        return;
+    }
+    _result = createCallFunction(getBuiltinFunction(*endCb), {}, "subst_end");
+}
+
 } // namespace endo

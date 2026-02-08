@@ -2288,7 +2288,10 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::Number:
         case Token::RndOpen:
         case Token::Fun:
-        case Token::Match: return true;
+        case Token::Match:
+        case Token::BracketOpen: // List literal: [1; 2; 3]
+        case Token::Ampersand:   // Shell command expression: & git status
+            return true;
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
             if (lit.empty())
@@ -2307,6 +2310,9 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     TRACE_SCOPE("parseLet");
     _lexer.nextToken(); // consume 'let'
 
+    // Enter F# expression mode for proper operator tokenization
+    _lexer.enterFSharpExpr();
+
     // Check for 'mut' modifier
     bool const isMutable = _lexer.currentToken() == Token::Mut;
     if (isMutable)
@@ -2320,6 +2326,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                            currentContextSnippet(),
                                            "Expected identifier after 'let', got '{}'",
                                            _lexer.currentLiteral());
+        _lexer.leaveFSharpExpr();
         return nullptr;
     }
 
@@ -2340,6 +2347,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                            currentContextSnippet(),
                                            "Expected '=' in let binding, got '{}'",
                                            _lexer.currentLiteral());
+        _lexer.leaveFSharpExpr();
         return nullptr;
     }
     _lexer.nextToken(); // consume '='
@@ -2347,8 +2355,12 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     // Parse the value expression
     auto value = parseFSharpExpr();
     if (!value)
+    {
+        _lexer.leaveFSharpExpr();
         return nullptr;
+    }
 
+    _lexer.leaveFSharpExpr();
     return std::make_unique<ast::LetBindingStmt>(
         isMutable, std::move(name), std::move(parameters), std::move(value));
 }
@@ -2478,19 +2490,17 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpAddSub()
         ast::BinaryOp op;
         bool found = false;
 
-        if (_lexer.currentToken() == Token::Identifier)
+        switch (_lexer.currentToken())
         {
-            auto const& lit = _lexer.currentLiteral();
-            if (lit == "+")
-            {
+            case Token::Plus:
                 op = ast::BinaryOp::Add;
                 found = true;
-            }
-            else if (lit == "-")
-            {
+                break;
+            case Token::Minus:
                 op = ast::BinaryOp::Sub;
                 found = true;
-            }
+                break;
+            default: break;
         }
 
         if (!found)
@@ -2517,24 +2527,21 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpMulDivMod()
         ast::BinaryOp op;
         bool found = false;
 
-        if (_lexer.currentToken() == Token::Identifier)
+        switch (_lexer.currentToken())
         {
-            auto const& lit = _lexer.currentLiteral();
-            if (lit == "*")
-            {
+            case Token::Star:
                 op = ast::BinaryOp::Mul;
                 found = true;
-            }
-            else if (lit == "/")
-            {
+                break;
+            case Token::Slash:
                 op = ast::BinaryOp::Div;
                 found = true;
-            }
-            else if (lit == "%")
-            {
+                break;
+            case Token::Percent:
                 op = ast::BinaryOp::Mod;
                 found = true;
-            }
+                break;
+            default: break;
         }
 
         if (!found)
@@ -2557,7 +2564,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPow()
         return nullptr;
 
     // ** is right-associative: 2**3**4 = 2**(3**4)
-    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "**")
+    if (_lexer.currentToken() == Token::StarStar)
     {
         _lexer.nextToken();
         auto right = parseFSharpPow(); // Recursive for right-associativity
@@ -2573,33 +2580,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
     TRACE_SCOPE("parseFSharpUnary");
 
     // Handle negation: -expr
-    // Case 1: standalone "-" identifier followed by expression
-    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "-")
+    if (_lexer.currentToken() == Token::Minus)
     {
         _lexer.nextToken();
         auto operand = parseFSharpUnary();
         if (!operand)
             return nullptr;
         return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
-    }
-
-    // Case 2: identifier starting with "-" followed by identifier chars (e.g., "-a", "-foo")
-    // The lexer tokenizes "-a" as a single identifier, so we need to split it here
-    if (_lexer.currentToken() == Token::Identifier)
-    {
-        auto const& literal = _lexer.currentLiteral();
-        if (literal.size() > 1 && literal[0] == '-')
-        {
-            // Check if the rest is a valid identifier (not a flag like --help)
-            // We only treat it as negation if it's a single dash followed by identifier chars
-            if (literal[1] != '-')
-            {
-                std::string identName = literal.substr(1);
-                _lexer.nextToken();
-                auto operand = std::make_unique<ast::IdentifierExpr>(std::move(identName));
-                return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
-            }
-        }
     }
 
     // Handle logical not: !expr
@@ -2676,6 +2663,38 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
     return std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body));
 }
 
+std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
+{
+    TRACE_SCOPE("parseShellCommandExpr");
+
+    // Shell command expression: & git status
+    // Parses a shell command in F# expression context.
+    // The output is captured as a string.
+
+    _lexer.nextToken(); // consume '&'
+
+    // Leave F# mode to parse the shell command with shell tokenization rules
+    _lexer.leaveFSharpExpr();
+
+    // Parse the shell command as a logical expression (same as command substitution)
+    // This handles pipes, &&, ||, etc.
+    auto command = parseLogicalExpr();
+
+    // Re-enter F# mode
+    _lexer.enterFSharpExpr();
+
+    if (!command)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a command after '&'" },
+                                           currentContextSnippet(),
+                                           "Expected shell command after '&'");
+        return nullptr;
+    }
+
+    return std::make_unique<ast::ShellCommandExpr>(std::move(command));
+}
+
 std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 {
     TRACE_SCOPE("parseFSharpPrimary");
@@ -2714,6 +2733,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             return std::make_unique<ast::IntLiteralExpr>(value);
         }
 
+        case Token::BracketOpen: {
+            // List literal: [1; 2; 3] or [1..10] or [for x in xs -> x * 2]
+            return parseListLiteral();
+        }
+
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
 
@@ -2729,7 +2753,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return std::make_unique<ast::BoolLiteralExpr>(false);
             }
 
-            // Check for list literal starting with '['
+            // Check for list literal starting with '[' (in non-F# mode, [ is part of identifier)
             if (!lit.empty() && lit[0] == '[')
             {
                 return parseListLiteral();
@@ -2759,6 +2783,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             return std::make_unique<ast::ParenExpr>(std::move(inner));
         }
 
+        case Token::Ampersand: {
+            // Shell command expression: & git status
+            return parseShellCommandExpr();
+        }
+
         default:
             _report.syntaxErrorWithSuggestions(currentLocation(),
                                                {},
@@ -2777,6 +2806,13 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
 {
     TRACE_SCOPE("parseListLiteral");
 
+    // In F# mode, [ is a separate BracketOpen token
+    if (_lexer.currentToken() == Token::BracketOpen)
+    {
+        return parseListLiteralTokenized();
+    }
+
+    // In shell mode (or when [ is part of identifier), parse from literal
     // The lexer handles list literals in different ways depending on content:
     // 1. "[1..10]" or "[]" or "[42]" - lexed as single identifier (no internal semicolons)
     // 2. "[1; 2; 3]" - split by semicolons into multiple tokens: "[1", ";", "2", ";", "3]"
@@ -2961,6 +2997,223 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
                                            _lexer.currentLiteral());
         return nullptr;
     }
+}
+
+// Parse list literal when [ is a separate BracketOpen token (F# mode)
+std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
+{
+    TRACE_SCOPE("parseListLiteralTokenized");
+
+    _lexer.nextToken(); // consume '['
+
+    // Empty list: []
+    if (_lexer.currentToken() == Token::BracketClose)
+    {
+        _lexer.nextToken();
+        return std::make_unique<ast::ListExpr>(std::vector<std::unique_ptr<ast::Expr>> {});
+    }
+
+    // Check for list comprehension: [for ...
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "for")
+    {
+        return parseListComprehensionTokenized();
+    }
+
+    // Parse first element
+    auto firstElem = parseFSharpExpr();
+    if (!firstElem)
+        return nullptr;
+
+    // Check for range expression: [start..end] or [start..step..end]
+    if (_lexer.currentToken() == Token::DotDot)
+    {
+        _lexer.nextToken(); // consume '..'
+
+        auto second = parseFSharpExpr();
+        if (!second)
+            return nullptr;
+
+        // Check for step: [start..step..end]
+        if (_lexer.currentToken() == Token::DotDot)
+        {
+            _lexer.nextToken(); // consume '..'
+
+            auto endExpr = parseFSharpExpr();
+            if (!endExpr)
+                return nullptr;
+
+            if (_lexer.currentToken() != Token::BracketClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add closing ']'" },
+                                                   currentContextSnippet(),
+                                                   "Expected ']' after range expression, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ']'
+
+            return std::make_unique<ast::ListRangeExpr>(
+                std::move(firstElem), std::move(second), std::move(endExpr));
+        }
+
+        // Simple range: [start..end]
+        if (_lexer.currentToken() != Token::BracketClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add closing ']'" },
+                                               currentContextSnippet(),
+                                               "Expected ']' after range expression, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ']'
+
+        return std::make_unique<ast::ListRangeExpr>(std::move(firstElem), nullptr, std::move(second));
+    }
+
+    // Regular list: [elem; elem; ...]
+    std::vector<std::unique_ptr<ast::Expr>> elements;
+    elements.push_back(std::move(firstElem));
+
+    while (_lexer.currentToken() == Token::Semicolon || _lexer.currentToken() == Token::Comma)
+    {
+        _lexer.nextToken(); // consume separator
+
+        // Allow trailing separator
+        if (_lexer.currentToken() == Token::BracketClose)
+            break;
+
+        auto elem = parseFSharpExpr();
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+    }
+
+    if (_lexer.currentToken() != Token::BracketClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ']'" },
+                                           currentContextSnippet(),
+                                           "Expected ']' or ';' in list literal, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ']'
+
+    return std::make_unique<ast::ListExpr>(std::move(elements));
+}
+
+// Parse list comprehension when [ is already consumed (F# mode)
+std::unique_ptr<ast::Expr> Parser::parseListComprehensionTokenized()
+{
+    TRACE_SCOPE("parseListComprehensionTokenized");
+
+    // Expect 'for'
+    if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "for")
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected 'for' in list comprehension");
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'for'
+
+    // Parse binding variable
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           {},
+                                           currentContextSnippet(),
+                                           "Expected variable name after 'for', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    std::string varName = consumeLiteral();
+
+    // Expect 'in'
+    if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "in")
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected 'in' after variable name");
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'in'
+
+    // Parse source expression - may be a range like 1..10 or 1..2..10
+    auto source = parseFSharpExpr();
+    if (!source)
+        return nullptr;
+
+    // Check for range expression: start..end or start..step..end
+    if (_lexer.currentToken() == Token::DotDot)
+    {
+        _lexer.nextToken(); // consume '..'
+
+        auto second = parseFSharpExpr();
+        if (!second)
+            return nullptr;
+
+        // Check for step: start..step..end
+        if (_lexer.currentToken() == Token::DotDot)
+        {
+            _lexer.nextToken(); // consume '..'
+
+            auto endExpr = parseFSharpExpr();
+            if (!endExpr)
+                return nullptr;
+
+            // start..step..end
+            source = std::make_unique<ast::ListRangeExpr>(
+                std::move(source), std::move(second), std::move(endExpr));
+        }
+        else
+        {
+            // start..end (no step)
+            source = std::make_unique<ast::ListRangeExpr>(std::move(source), nullptr, std::move(second));
+        }
+    }
+
+    // Check for optional 'when' filter
+    std::unique_ptr<ast::Expr> filter;
+    if (_lexer.currentToken() == Token::When)
+    {
+        _lexer.nextToken(); // consume 'when'
+        filter = parseFSharpExpr();
+        if (!filter)
+            return nullptr;
+    }
+
+    // Expect '->'
+    if (_lexer.currentToken() != Token::Arrow)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           {},
+                                           currentContextSnippet(),
+                                           "Expected '->' in list comprehension, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '->'
+
+    // Parse body expression
+    auto body = parseFSharpExpr();
+    if (!body)
+        return nullptr;
+
+    // Expect ']'
+    if (_lexer.currentToken() != Token::BracketClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ']'" },
+                                           currentContextSnippet(),
+                                           "Expected ']' after list comprehension, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ']'
+
+    return std::make_unique<ast::ListComprehensionExpr>(
+        std::move(varName), std::move(source), std::move(filter), std::move(body));
 }
 
 // Helper to parse a range expression from content string like "1..10" or "2..2..20"
@@ -3872,15 +4125,28 @@ std::unique_ptr<pattern::Pattern> Parser::parseTuplePattern()
     }
 
     // Parse remaining elements separated by ','
-    // Note: Comma is lexed as part of identifiers in shell context.
-    // We need to check if the current literal starts with ',' and handle it.
+    // Note: In F# mode, comma is lexed as Token::Comma. In shell context,
+    // comma is lexed as part of identifiers. We need to handle both cases.
     auto const startsWithComma = [this]() {
+        if (_lexer.currentToken() == Token::Comma)
+            return true;
         return _lexer.currentToken() == Token::Identifier && !_lexer.currentLiteral().empty()
                && _lexer.currentLiteral()[0] == ',';
     };
 
     while (startsWithComma())
     {
+        // In F# mode, comma is a separate token
+        if (_lexer.currentToken() == Token::Comma)
+        {
+            _lexer.nextToken(); // consume ','
+            auto elem = parsePattern();
+            if (!elem)
+                return nullptr;
+            elements.push_back(std::move(elem));
+            continue;
+        }
+
         auto const& lit = _lexer.currentLiteral();
 
         if (lit == ",")

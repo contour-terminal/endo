@@ -88,7 +88,9 @@ class Parser
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     std::unique_ptr<ast::LambdaExpr> parseLambda();
     std::unique_ptr<ast::MatchExpr> parseMatch();
-    std::unique_ptr<ast::Expr> parseListLiteral(); ///< [1; 2; 3], [1..10], [for x in items -> x * 2]
+    std::unique_ptr<ast::Expr> parseListLiteral();          ///< [1; 2; 3], [1..10], [for x in items -> x * 2]
+    std::unique_ptr<ast::Expr> parseListLiteralTokenized(); ///< List literal when [ is BracketOpen token
+    std::unique_ptr<ast::Expr> parseListComprehensionTokenized(); ///< List comprehension when [ is consumed
     std::unique_ptr<ast::Expr> parseListRangeFromContent(
         std::string_view content); ///< Helper for range expressions
     std::unique_ptr<ast::Expr> parseListElementFromString(
@@ -107,7 +109,8 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpPow();         // **
     std::unique_ptr<ast::Expr> parseFSharpUnary();       // - !
     std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
-    std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ...
+    std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ..., & command
+    std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
 
     // Pattern parsing for match expressions
     // Grammar: pattern ::= or_pattern ('when' expr)?

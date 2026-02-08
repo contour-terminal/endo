@@ -177,6 +177,9 @@ Token Lexer::nextToken()
                 _nextToken.literal = "-";
                 return consumeNumber(); // Will append digits to the "-" prefix
             }
+            // In F# mode, - not followed by digit is Minus token
+            if (_fsharpDepth > 0)
+                return confirmToken(Token::Minus);
             // Not an arrow or number, treat - and what follows as identifier (e.g., -l, --help, file-name)
             _nextToken.literal = "-";
             return consumeIdentifier();
@@ -227,6 +230,65 @@ Token Lexer::nextToken()
             _fragmentBuffer.clear();
             return consumeCharAndConfirmToken(Token::DblQuoteStart);
         case '\'': return consumeSingleQuotedString();
+        // F# mode operators - only tokenized separately when in F# expression context
+        case '+':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Plus);
+            return consumeIdentifier();
+        case '*':
+            if (_fsharpDepth > 0)
+            {
+                nextChar();
+                if (_currentChar == '*')
+                    return consumeCharAndConfirmToken(Token::StarStar);
+                return confirmToken(Token::Star);
+            }
+            return consumeIdentifier();
+        case '/':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Slash);
+            return consumeIdentifier();
+        case '%':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Percent);
+            return consumeIdentifier();
+        case '^':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Caret);
+            return consumeIdentifier();
+        case ':':
+            if (_fsharpDepth > 0)
+            {
+                nextChar();
+                if (_currentChar == ':')
+                    return consumeCharAndConfirmToken(Token::ColonColon);
+                return confirmToken(Token::Colon);
+            }
+            return consumeIdentifier();
+        case ',':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Comma);
+            return consumeIdentifier();
+        case '[':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::BracketOpen);
+            return consumeIdentifier();
+        case ']':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::BracketClose);
+            return consumeIdentifier();
+        case '{':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::BraceOpen);
+            return consumeIdentifier();
+        case '}':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::BraceClose);
+            return consumeIdentifier();
+        case '?':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::Question);
+            return consumeIdentifier();
         default: return consumeIdentifier();
     }
     return confirmToken(Token::Invalid);
@@ -379,10 +441,14 @@ Token Lexer::consumeIdentifier(Token token)
     auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
     // In arithmetic context, operators are also reserved to allow expressions like 1+2
     auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:"sv;
+    // In F# expression context, brackets and operators are reserved
+    auto constexpr FSharpReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:[]{}#"sv;
     // Arithmetic operators that should be lexed as single-char tokens
     auto constexpr ArithOperators = U"+-*/%^:?,"sv;
 
-    auto const& reserved = _arithDepth > 0 ? ArithReservedSymbols : ReservedSymbols;
+    auto const& reserved = _fsharpDepth > 0  ? FSharpReservedSymbols
+                           : _arithDepth > 0 ? ArithReservedSymbols
+                                             : ReservedSymbols;
 
     // In arithmetic mode, if current char is an operator, consume it as a single-char token
     if (_arithDepth > 0 && ArithOperators.find(_currentChar) != std::u32string_view::npos)

@@ -352,6 +352,19 @@ src/
 - Parser handles unary negation for identifiers (e.g., `-a` parsed as `UnaryExpr(Neg, IdentifierExpr("a"))`)
 - List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause
 - Comprehension body supports simple expressions and binary operations (e.g., `x * x`, `x + 1`)
+- Lexer F# mode: Context-sensitive tokenization for F# expressions
+  - `enterFSharpExpr()`/`leaveFSharpExpr()` manage depth counter for proper nesting
+  - F# mode reserves additional symbols: `[]{},:+-*/%^&#` to prevent them from being consumed into identifiers
+  - Operators tokenized separately: `+`, `-`, `*`, `/`, `%`, `**`, `^`, `::`, `,`, `:`, `[`, `]`, `{`, `}`, `?`
+  - `-` followed by digit returns `Token::Number` (negative literal); otherwise `Token::Minus`
+  - Parser calls `enterFSharpExpr()` at start of `let` bindings, ensuring proper tokenization of list literals like `[x;y;z]`
+- Tuple patterns in match expressions: `,` is now tokenized as `Token::Comma` in F# mode, allowing proper parsing of `(a, b)` patterns
+- Shell command expressions: `& command` syntax for embedding shell commands in F# expressions
+  - `let output = & git status` captures command output to variable
+  - `let diff = & git diff HEAD..master` - special characters like `..` parsed as shell tokens, not F# operators
+  - `let lines = & cat file.txt | grep pattern` - shell pipes work within the `&` expression
+  - Parser temporarily leaves F# mode when parsing the command after `&`, then re-enters
+  - IR generation reuses `SubstitutionExpr` logic: `subst_start()` → execute → `subst_end()` to capture output
 
 ---
 

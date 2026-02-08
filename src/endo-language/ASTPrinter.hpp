@@ -77,6 +77,7 @@ class ASTPrinter: public Visitor
     void visit(ListExpr const& node) override;
     void visit(ListRangeExpr const& node) override;
     void visit(ListComprehensionExpr const& node) override;
+    void visit(ShellCommandExpr const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

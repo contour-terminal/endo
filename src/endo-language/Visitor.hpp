@@ -63,6 +63,7 @@ struct MatchExpr;
 struct ListExpr;
 struct ListRangeExpr;
 struct ListComprehensionExpr;
+struct ShellCommandExpr;
 
 struct Visitor
 {
@@ -135,6 +136,7 @@ struct Visitor
     virtual void visit(ListExpr const&) = 0;
     virtual void visit(ListRangeExpr const&) = 0;
     virtual void visit(ListComprehensionExpr const&) = 0;
+    virtual void visit(ShellCommandExpr const&) = 0;
 };
 
 } // namespace endo::ast

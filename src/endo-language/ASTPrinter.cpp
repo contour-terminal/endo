@@ -735,4 +735,11 @@ void ASTPrinter::visit(ListComprehensionExpr const& node)
     _result += ']';
 }
 
+void ASTPrinter::visit(ShellCommandExpr const& node)
+{
+    _result += "& ";
+    if (node.command)
+        node.command->accept(*this);
+}
+
 } // namespace endo::ast

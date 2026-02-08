@@ -1143,6 +1143,27 @@ struct ListComprehensionExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Shell command expression: `& git status` or `& git diff HEAD..origin/master`
+///
+/// Executes a shell command in F# expression context.
+/// - In expression context (let binding, pipeline): captures stdout as a string
+/// - At statement level: executes the command with output going to terminal
+///
+/// The `&` prefix allows shell commands to be used as expressions in F# mode,
+/// where special characters like `..` would otherwise be tokenized as operators.
+///
+/// Examples:
+/// - `let output = & git status` - capture output to variable
+/// - `& git diff HEAD..master |> String.trim` - capture and pipe to F# function
+struct ShellCommandExpr final: public Expr
+{
+    std::unique_ptr<Statement> command; ///< The shell command/pipeline to execute
+
+    explicit ShellCommandExpr(std::unique_ptr<Statement> cmd): command(std::move(cmd)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // F# Style - Deferred Features (Documented)
 // ============================================================================

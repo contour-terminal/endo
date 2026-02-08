@@ -218,50 +218,22 @@ TEST_CASE("Parser.FSharp.function_application_curried")
 
 TEST_CASE("Parser.FSharp.ASTPrinter.let_simple")
 {
-    auto ast = parse("let x = 42");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let x = 42");
+    CHECK(parseAndPrintAST("let x = 42") == "let x = 42");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.let_mutable")
 {
-    auto ast = parse("let mut x = 0");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let mut x = 0");
+    CHECK(parseAndPrintAST("let mut x = 0") == "let mut x = 0");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.let_function")
 {
-    auto ast = parse("let add x y = x");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let add x y = x");
+    CHECK(parseAndPrintAST("let add x y = x") == "let add x y = x");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.bool_literal")
 {
-    auto ast = parse("let b = true");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let b = true");
+    CHECK(parseAndPrintAST("let b = true") == "let b = true");
 }
 
 // =============================================================================
@@ -394,26 +366,12 @@ TEST_CASE("Parser.FSharp.lambda_parenthesized")
 
 TEST_CASE("Parser.FSharp.ASTPrinter.lambda_simple")
 {
-    auto ast = parse("let f = fun x -> x");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let f = fun x -> x");
+    CHECK(parseAndPrintAST("let f = fun x -> x") == "let f = fun x -> x");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.lambda_multiple_params")
 {
-    auto ast = parse("let add = fun x y -> x");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let add = fun x y -> x");
+    CHECK(parseAndPrintAST("let add = fun x y -> x") == "let add = fun x y -> x");
 }
 
 // =============================================================================
@@ -692,38 +650,20 @@ TEST_CASE("Parser.FSharp.match_multiple_arms")
 
 TEST_CASE("Parser.FSharp.ASTPrinter.match_simple")
 {
-    auto ast = parse("let r = match x with | 0 -> true | _ -> false");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let r = match x with | 0 -> true | _ -> false");
+    CHECK(parseAndPrintAST("let r = match x with | 0 -> true | _ -> false")
+          == "let r = match x with | 0 -> true | _ -> false");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.match_with_guard")
 {
-    auto ast = parse("let r = match n with | x when x < 0 -> true | _ -> false");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let r = match n with | x when (x < 0) -> true | _ -> false");
+    CHECK(parseAndPrintAST("let r = match n with | x when x < 0 -> true | _ -> false")
+          == "let r = match n with | x when (x < 0) -> true | _ -> false");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.match_constructor")
 {
-    auto ast = parse("let r = match opt with | Some x -> x | None -> 0");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let r = match opt with | Some x -> x | None -> 0");
+    CHECK(parseAndPrintAST("let r = match opt with | Some x -> x | None -> 0")
+          == "let r = match opt with | Some x -> x | None -> 0");
 }
 
 // ============================================================================
@@ -969,50 +909,22 @@ TEST_CASE("Parser.FSharp.list_range_countdown")
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_empty")
 {
-    auto ast = parse("let xs = []");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let xs = []");
+    CHECK(parseAndPrintAST("let xs = []") == "let xs = []");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_elements")
 {
-    auto ast = parse("let nums = [1;2;3]");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let nums = [1; 2; 3]");
+    CHECK(parseAndPrintAST("let nums = [1;2;3]") == "let nums = [1; 2; 3]");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_range")
 {
-    auto ast = parse("let nums = [1..10]");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let nums = [1..10]");
+    CHECK(parseAndPrintAST("let nums = [1..10]") == "let nums = [1..10]");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_range_with_step")
 {
-    auto ast = parse("let evens = [2..2..20]");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let evens = [2..2..20]");
+    CHECK(parseAndPrintAST("let evens = [2..2..20]") == "let evens = [2..2..20]");
 }
 
 // ============================================================================
@@ -1110,26 +1022,13 @@ TEST_CASE("Parser.FSharp.list_comprehension_with_identifier_source")
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_comprehension_simple")
 {
-    auto ast = parse("let squares = [for x in 1..10 -> x]");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let squares = [for x in [1..10] -> x]");
+    CHECK(parseAndPrintAST("let squares = [for x in 1..10 -> x]") == "let squares = [for x in [1..10] -> x]");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.list_comprehension_with_filter")
 {
-    auto ast = parse("let evens = [for x in items when x > 5 -> x]");
-    REQUIRE(ast != nullptr);
-
-    auto* firstStmt = getFirstStatement(ast.get());
-    REQUIRE(firstStmt != nullptr);
-
-    std::string printed = endo::ast::ASTPrinter::print(*firstStmt);
-    CHECK(printed == "let evens = [for x in items when (x > 5) -> x]");
+    CHECK(parseAndPrintAST("let evens = [for x in items when x > 5 -> x]")
+          == "let evens = [for x in items when (x > 5) -> x]");
 }
 
 TEST_CASE("Parser.FSharp.list_comprehension_with_addition")
@@ -1176,4 +1075,35 @@ TEST_CASE("Parser.FSharp.list_comprehension_with_step_range")
     CHECK(start->value == 2);
     CHECK(step->value == 2);
     CHECK(end->value == 10);
+}
+
+// ============================================================================
+// Shell Command Expression Tests (& prefix)
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.shell_command_simple")
+{
+    CHECK(parseAndPrintAST("let output = & echo hello") == "let output = & echo hello");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_with_args")
+{
+    CHECK(parseAndPrintAST("let files = & ls -la /tmp") == "let files = & ls -la /tmp");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_git_diff")
+{
+    // Verifies that .. is not tokenized as F# range operator
+    CHECK(parseAndPrintAST("let diff = & git diff HEAD..master") == "let diff = & git diff HEAD..master");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_with_redirect")
+{
+    CHECK(parseAndPrintAST("let output = & cat < input.txt") == "let output = & cat <input.txt");
+}
+
+TEST_CASE("Parser.FSharp.shell_command_with_shell_pipe")
+{
+    CHECK(parseAndPrintAST("let lines = & cat file.txt | grep pattern")
+          == "let lines = & cat file.txt | grep pattern");
 }

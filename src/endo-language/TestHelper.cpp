@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "AST.hpp"
+#include "ASTPrinter.hpp"
 #include "IRGenerator.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
@@ -34,6 +35,16 @@ void TestRuntime::dummyCallProcPiped(CoreVM::Params&)
 {
 }
 
+void TestRuntime::clearErrors()
+{
+    report.clear();
+}
+
+bool TestRuntime::hasErrors() const
+{
+    return report.containsFailures();
+}
+
 TestRuntime& TestRuntime::instance()
 {
     static TestRuntime instance;
@@ -43,21 +54,43 @@ TestRuntime& TestRuntime::instance()
 std::unique_ptr<ast::Statement> parse(std::string const& source)
 {
     auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
 
     Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
-    return parser.parse();
+    auto result = parser.parse();
+
+    if (testRuntime.hasErrors())
+    {
+        testRuntime.report.log(); // Print errors for debugging
+        return nullptr;
+    }
+
+    return result;
 }
 
 std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source)
 {
     auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
 
     Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
     auto ast = parser.parse();
-    if (!ast)
-        return nullptr;
 
-    return IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime);
+    if (!ast || testRuntime.hasErrors())
+    {
+        testRuntime.report.log(); // Print errors for debugging
+        return nullptr;
+    }
+
+    auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime);
+
+    if (testRuntime.hasErrors())
+    {
+        testRuntime.report.log(); // Print errors for debugging
+        return nullptr;
+    }
+
+    return ir;
 }
 
 bool generatesIRSuccessfully(std::string const& source)
@@ -76,6 +109,17 @@ ast::Statement* getFirstStatement(ast::Statement* stmt)
         }
     }
     return nullptr;
+}
+
+std::string parseAndPrintAST(std::string const& source)
+{
+    auto ast = parse(source);
+    if (!ast)
+    {
+        // parse() already logs errors via testRuntime.report.log()
+        throw ParseError("Parse failed for: \"" + source + "\"");
+    }
+    return ast::ASTPrinter::print(*ast);
 }
 
 } // namespace endo::test

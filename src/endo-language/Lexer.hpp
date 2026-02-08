@@ -93,10 +93,25 @@ enum class Token
     DotDot,      // '..' (range operator)
     EqualEqual,  // '==' (equality comparison)
     NotEqual,    // '!=' (inequality comparison)
+
+    // F# arithmetic/structural operators (context-sensitive, only in F# mode)
+    Plus,         // '+'
+    Minus,        // '-' (when not followed by digit)
+    Star,         // '*'
+    Slash,        // '/'
+    Percent,      // '%'
+    StarStar,     // '**' (exponentiation)
+    Caret,        // '^' (bitwise XOR)
+    ColonColon,   // '::' (list cons)
+    Comma,        // ','
+    Colon,        // ':'
+    BracketOpen,  // '['
+    BracketClose, // ']'
+    BraceOpen,    // '{'
+    BraceClose,   // '}'
+    Question,     // '?'
     // Note: >> uses GreaterGreater token (context determines compose vs redirect)
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
-    // Note: :: : [ ] , ? are lexed as part of identifiers to preserve shell compatibility.
-    //       The parser handles these in F# expression context.
 };
 
 enum class BuiltinFunction
@@ -253,6 +268,19 @@ class Lexer
 
     static std::vector<TokenInfo> tokenize(std::unique_ptr<Source> source);
 
+    /// Enter F# expression mode - operators become separate tokens
+    void enterFSharpExpr() { ++_fsharpDepth; }
+
+    /// Leave F# expression mode
+    void leaveFSharpExpr()
+    {
+        if (_fsharpDepth > 0)
+            --_fsharpDepth;
+    }
+
+    /// Check if currently in F# expression mode
+    [[nodiscard]] bool inFSharpMode() const noexcept { return _fsharpDepth > 0; }
+
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
 
@@ -278,6 +306,7 @@ class Lexer
     bool _inDoubleQuote = false; // State: inside double-quoted string
     int _dquoteSubstDepth = 0;   // Nesting depth for $() and backticks inside double quotes
     int _arithDepth = 0;         // Nesting depth for $(()), operators are reserved when > 0
+    int _fsharpDepth = 0;        // Nesting depth for F# expressions, operators are tokens when > 0
     std::string _fragmentBuffer; // Buffer for accumulating string fragments
 };
 
@@ -388,11 +417,26 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case ForwardPipe: name = "|>"; break;
             case DotDot: name = ".."; break;
             case EqualEqual: name = "=="; break;
-            case NotEqual:
-                name = "!=";
+            case NotEqual: name = "!="; break;
+            // F# arithmetic/structural operators
+            case Plus: name = "+"; break;
+            case Minus: name = "-"; break;
+            case Star: name = "*"; break;
+            case Slash: name = "/"; break;
+            case Percent: name = "%"; break;
+            case StarStar: name = "**"; break;
+            case Caret: name = "^"; break;
+            case ColonColon: name = "::"; break;
+            case Comma: name = ","; break;
+            case Colon: name = ":"; break;
+            case BracketOpen: name = "["; break;
+            case BracketClose: name = "]"; break;
+            case BraceOpen: name = "{"; break;
+            case BraceClose: name = "}"; break;
+            case Question:
+                name = "?";
                 break;
                 // Note: >> and << use GreaterGreater/LessLess tokens
-                // Note: :: : are lexed as part of identifiers
         }
         return formatter<std::string_view>::format(name, ctx);
     }

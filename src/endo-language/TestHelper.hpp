@@ -4,6 +4,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 namespace endo::ast
@@ -19,12 +20,18 @@ namespace endo::test
 struct TestRuntime
 {
     CoreVM::Runtime runtime;
-    CoreVM::diagnostics::ConsoleReport report;
+    CoreVM::diagnostics::BufferedReport report; // Buffered to track errors
 
     TestRuntime();
 
     void dummyCallProc(CoreVM::Params&);
     void dummyCallProcPiped(CoreVM::Params&);
+
+    /// Clears any accumulated errors before a new test.
+    void clearErrors();
+
+    /// Returns true if any errors were reported.
+    [[nodiscard]] bool hasErrors() const;
 
     /// Returns the singleton instance of TestRuntime.
     static TestRuntime& instance();
@@ -44,5 +51,15 @@ bool generatesIRSuccessfully(std::string const& source);
 /// Helper to get the first statement from a compound statement.
 /// Returns nullptr if the statement is not a compound statement or is empty.
 ast::Statement* getFirstStatement(ast::Statement* stmt);
+
+/// Exception thrown when parsing fails in test helpers.
+struct ParseError: std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
+/// Parses source code and returns the AST-printed representation.
+/// Throws ParseError if parsing fails (errors are logged before throwing).
+std::string parseAndPrintAST(std::string const& source);
 
 } // namespace endo::test
