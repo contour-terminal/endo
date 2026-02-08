@@ -337,3 +337,68 @@ TEST_CASE("IRGenerator.FSharp.lambda_with_complex_body")
     // Lambda with complex expression body
     REQUIRE(generatesIRSuccessfully("let result = (fun x -> x * x + x) 5"));
 }
+
+// =============================================================================
+// F# Match Expression IR Generation Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.match_literal_int")
+{
+    // Match with integer literal patterns
+    REQUIRE(generatesIRSuccessfully("let r = match 0 with | 0 -> 42 | _ -> 99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_literal_multiple")
+{
+    // Match with multiple integer literals
+    REQUIRE(generatesIRSuccessfully("let r = match 1 with | 0 -> 0 | 1 -> 10 | 2 -> 20 | _ -> 99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_wildcard")
+{
+    // Wildcard pattern always matches
+    REQUIRE(generatesIRSuccessfully("let r = match 42 with | _ -> 100"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_variable_binding")
+{
+    // Variable pattern binds and uses the matched value
+    REQUIRE(generatesIRSuccessfully("let r = match 5 with | n -> n * 2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_with_guard")
+{
+    // Match with when guard
+    REQUIRE(generatesIRSuccessfully("let r = match 10 with | n when n > 0 -> 1 | _ -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_guard_negative")
+{
+    // Guard with negative check
+    REQUIRE(
+        generatesIRSuccessfully("let r = match -5 with | n when n < 0 -> 1 | n when n > 0 -> 2 | _ -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_variable_in_expression")
+{
+    // Use bound variable in body expression
+    REQUIRE(generatesIRSuccessfully("let r = match 7 with | x -> x + x + x"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_with_function")
+{
+    // Match result used with a function
+    REQUIRE(generatesIRSuccessfully("let double x = x * 2; let r = match 5 with | n -> double n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_in_let_binding")
+{
+    // Match as part of let binding chain
+    REQUIRE(generatesIRSuccessfully("let x = 10; let r = match x with | 0 -> 0 | n -> n * n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bool_literals")
+{
+    // Match with boolean literal patterns
+    REQUIRE(generatesIRSuccessfully("let r = match true with | true -> 1 | false -> 0"));
+}

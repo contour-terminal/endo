@@ -8,6 +8,7 @@
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
 #include "DiagnosticsAdapter.hpp"
+#include "PatternIRGenerator.hpp"
 #include "ScopedLogger.hpp"
 
 // {{{ trace macros
@@ -125,6 +126,21 @@ std::string IRGenerator::generateLambdaName()
     return std::format("__lambda_{}", _lambdaCounter++);
 }
 
+CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
+{
+    // Get the entry block of the current handler
+    CoreVM::BasicBlock* entryBlock = handler()->getEntryBlock();
+
+    // Create the alloca instruction
+    auto allocaInstr =
+        std::make_unique<CoreVM::AllocaInstr>(type, get(CoreVM::CoreNumber(1)), makeName(name));
+
+    // Insert before terminator in entry block (handles case where entry block already has a branch)
+    CoreVM::Instr* inserted = entryBlock->insertBeforeTerminator(std::move(allocaInstr));
+
+    return static_cast<CoreVM::AllocaInstr*>(inserted);
+}
+
 CoreVM::NativeCallback* IRGenerator::findCallback(std::string const& signature) const
 {
     return _runtime.find(signature);
@@ -158,9 +174,25 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
         exitCode = get(CoreVM::CoreNumber(0));
     else
     {
-        exitCode = codegen(node.code.get());
+        // Special handling: if the exit code is a LiteralExpr that looks like an identifier,
+        // check if it's an F# variable first (e.g., "exit r" where r is a let-bound variable)
+        if (auto const* literal = dynamic_cast<ast::LiteralExpr const*>(node.code.get()))
+        {
+            // Check if this literal is an F# variable name
+            if (CoreVM::Value* fsharpVar = lookupFSharpVariable(literal->value))
+            {
+                // It's an F# variable - load its value
+                exitCode = createLoad(fsharpVar, literal->value);
+            }
+        }
+
         if (!exitCode)
-            return; // Error already reported
+        {
+            exitCode = codegen(node.code.get());
+            if (!exitCode)
+                return; // Error already reported
+        }
+
         if (exitCode->type() == CoreVM::LiteralType::String)
             exitCode = createS2N(exitCode);
         else if (exitCode->type() != CoreVM::LiteralType::Number)
@@ -1611,8 +1643,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Determine the type for storage
     CoreVM::LiteralType storageType = value->type();
 
-    // Create storage (alloca) for the variable
-    CoreVM::AllocaInstr* storage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), node.name);
+    // Create storage (alloca) for the variable in the entry block
+    // This ensures proper stack tracking in TargetCodeGenerator even if the value
+    // expression created new blocks (like match expressions)
+    CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, node.name);
 
     // Store the value
     createStore(storage, value, node.name);
@@ -1935,9 +1969,158 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
 
 void IRGenerator::visit(ast::MatchExpr const& node)
 {
-    // TODO: Implement pattern matching compilation to decision trees
-    reportTypeError("F# match expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(MatchExpr)");
+
+    // Evaluate the scrutinee (expression being matched against)
+    node.scrutinee->accept(*this);
+    CoreVM::Value* scrutinee = _result;
+    if (!scrutinee)
+    {
+        reportTypeError("Failed to evaluate match scrutinee");
+        return;
+    }
+
+    // Store scrutinee in a local variable so it's available across all arms
+    // Use createAllocaInEntryBlock to ensure proper stack tracking
+    CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
+    createStore(scrutineeStorage, scrutinee, "scrutinee.store");
+
+    // Infer result type from the first arm's body expression
+    // This determines the type of storage we need for the match result
+    CoreVM::LiteralType resultType = CoreVM::LiteralType::Number; // Default to Number
+    if (!node.arms.empty() && node.arms[0].body)
+    {
+        // Evaluate first arm body to determine its type
+        // For now, use a simple heuristic based on AST node types
+        auto* body = node.arms[0].body.get();
+        if (dynamic_cast<ast::IntLiteralExpr const*>(body))
+            resultType = CoreVM::LiteralType::Number;
+        else if (dynamic_cast<ast::BoolLiteralExpr const*>(body))
+            resultType = CoreVM::LiteralType::Boolean;
+        // For other expressions (binary ops, function calls, etc.), default to Number
+    }
+
+    // Use createAllocaInEntryBlock to ensure proper stack tracking
+    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(resultType, "match.result");
+
+    // Pre-allocate storage for all bindings from all arms in the entry block
+    // This is critical: all allocas must be created before any branching to ensure
+    // the TargetCodeGenerator's stack tracking remains consistent across all paths.
+    PatternIRGenerator patternIRGenerator(*this);
+    std::vector<std::vector<std::pair<std::string, CoreVM::AllocaInstr*>>> armBindingStorage;
+
+    for (size_t i = 0; i < node.arms.size(); ++i)
+    {
+        auto const& arm = node.arms[i];
+        patternIRGenerator.clearBindings();
+
+        // Compile pattern just to collect bindings (we don't emit branches yet)
+        // We use a dummy compilation to extract binding names
+        patternIRGenerator.collectBindings(*arm.pattern);
+
+        std::vector<std::pair<std::string, CoreVM::AllocaInstr*>> bindings;
+        for (auto const& binding: patternIRGenerator.bindings())
+        {
+            // Use createAllocaInEntryBlock to ensure proper stack tracking
+            auto* storage =
+                createAllocaInEntryBlock(scrutinee->type(), binding.name + ".arm" + std::to_string(i));
+            bindings.emplace_back(binding.name, storage);
+        }
+        armBindingStorage.push_back(std::move(bindings));
+    }
+
+    // Create the merge block where all arms will eventually converge
+    auto* mergeBlock = createBlock("match.merge");
+
+    // Create blocks for each arm body and pattern check
+    std::vector<CoreVM::BasicBlock*> armBodyBlocks;
+    std::vector<CoreVM::BasicBlock*> patternCheckBlocks;
+
+    for (size_t i = 0; i < node.arms.size(); ++i)
+    {
+        patternCheckBlocks.push_back(createBlock("match.check." + std::to_string(i)));
+        armBodyBlocks.push_back(createBlock("match.arm." + std::to_string(i)));
+    }
+
+    // Branch to first pattern check block
+    createBr(patternCheckBlocks[0]);
+
+    // Process each arm
+    for (size_t i = 0; i < node.arms.size(); ++i)
+    {
+        auto const& arm = node.arms[i];
+
+        // Set insert point to this arm's pattern check block
+        setInsertPoint(patternCheckBlocks[i]);
+
+        // Determine where to jump on pattern failure
+        CoreVM::BasicBlock* onFailure = (i + 1 < node.arms.size()) ? patternCheckBlocks[i + 1] : mergeBlock;
+
+        // Load the scrutinee for this pattern check
+        CoreVM::Value* scrutineeValue = createLoad(scrutineeStorage, "scrutinee.load");
+
+        // Compile the pattern (this emits the pattern matching IR)
+        patternIRGenerator.clearBindings();
+        patternIRGenerator.compile(*arm.pattern, scrutineeValue, armBodyBlocks[i], onFailure);
+
+        // Emit the arm body
+        setInsertPoint(armBodyBlocks[i]);
+
+        // Install variable bindings from pattern matching in a new scope
+        // Use pre-allocated storage from entry block
+        pushFSharpScope();
+        auto const& preAllocatedBindings = armBindingStorage[i];
+        for (auto const& [name, storage]: preAllocatedBindings)
+        {
+            // Reload the scrutinee from storage and store to pre-allocated binding slot
+            CoreVM::Value* bindingValue = createLoad(scrutineeStorage, name + ".load");
+            createStore(storage, bindingValue, name + ".store");
+            bindFSharpVariable(name, storage);
+        }
+
+        // If there's a guard, evaluate it and branch accordingly
+        if (arm.guard)
+        {
+            auto* guardPassBlock = createBlock("match.guard." + std::to_string(i) + ".pass");
+
+            arm.guard->accept(*this);
+            CoreVM::Value* guardResult = _result;
+            if (!guardResult)
+            {
+                popFSharpScope();
+                reportTypeError("Failed to evaluate match guard");
+                return;
+            }
+
+            // Convert to bool if needed
+            CoreVM::Value* guardBool = toBool(guardResult);
+            createCondBr(guardBool, guardPassBlock, onFailure);
+
+            setInsertPoint(guardPassBlock);
+        }
+
+        // Evaluate the arm body
+        arm.body->accept(*this);
+        CoreVM::Value* bodyResult = _result;
+
+        popFSharpScope();
+
+        if (!bodyResult)
+        {
+            reportTypeError("Failed to evaluate match arm body");
+            return;
+        }
+
+        // Store the result
+        createStore(resultStorage, bodyResult, "match.result.store");
+
+        // Branch to merge block
+        createBr(mergeBlock);
+    }
+
+    // Set insert point to merge block and load the result
+    setInsertPoint(mergeBlock);
+    _result = createLoad(resultStorage, "match.result.load");
 }
 
 void IRGenerator::visit(ast::ListExpr const& node)

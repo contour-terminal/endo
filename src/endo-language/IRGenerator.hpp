@@ -13,9 +13,13 @@
 namespace endo
 {
 
+class PatternIRGenerator; // Forward declaration
+
 /// Generates IR code from an AST.
 class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 {
+    friend class PatternIRGenerator; // Allow PatternIRGenerator to access protected IRBuilder methods
+
   public:
     /// Generates IR code from an AST.
     ///
@@ -170,6 +174,11 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    /// Creates an alloca in the entry block of the current handler.
+    /// This ensures allocas are always at the beginning, which is required
+    /// for proper stack tracking in the TargetCodeGenerator.
+    CoreVM::AllocaInstr* createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name);
 
     CoreVM::diagnostics::Report& _report;
     CoreVM::Runtime& _runtime;

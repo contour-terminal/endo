@@ -20,6 +20,8 @@ add_library(endo STATIC
     # IR Generation
     IRGenerator.hpp
     IRGenerator.cpp
+    PatternIRGenerator.hpp
+    PatternIRGenerator.cpp
 
     # Type System
     Type.hpp
