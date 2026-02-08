@@ -6,6 +6,7 @@
 #include <cassert>
 #include <format>
 #include <utility> // make_pair
+
 namespace CoreVM
 {
 
@@ -20,6 +21,7 @@ inline std::vector<U> join(const T& a, const std::vector<U>& vec) // {{{
 
     return std::move(res);
 }
+
 // }}}
 const char* cstr(UnaryOperator op) // {{{
 {
@@ -33,6 +35,7 @@ const char* cstr(UnaryOperator op) // {{{
     }
     crispy::unreachable();
 }
+
 // }}}
 const char* cstr(BinaryOperator op) // {{{
 {
@@ -80,6 +83,7 @@ const char* cstr(BinaryOperator op) // {{{
         default: return "?";
     };
 }
+
 // }}}
 // {{{ NopInstr
 std::string NopInstr::to_string() const
@@ -96,6 +100,7 @@ void NopInstr::accept(InstructionVisitor& v)
 {
     v.visit(*this);
 }
+
 // }}}
 // {{{ CastInstr
 std::string CastInstr::to_string() const
@@ -112,6 +117,7 @@ void CastInstr::accept(InstructionVisitor& v)
 {
     v.visit(*this);
 }
+
 // }}}
 // {{{ CondBrInstr
 CondBrInstr::CondBrInstr(Value* cond, BasicBlock* trueBlock, BasicBlock* falseBlock):
@@ -133,6 +139,7 @@ void CondBrInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ BrInstr
 BrInstr::BrInstr(BasicBlock* targetBlock): TerminateInstr({ targetBlock })
@@ -153,6 +160,7 @@ void BrInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ MatchInstr
 MatchInstr::MatchInstr(MatchClass op, Value* cond): TerminateInstr({ cond, nullptr }), _op(op)
@@ -217,6 +225,7 @@ void MatchInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ RetInstr
 RetInstr::RetInstr(Value* result): TerminateInstr({ result })
@@ -237,6 +246,7 @@ void RetInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ CallInstr
 CallInstr::CallInstr(const std::vector<Value*>& args, const std::string& name):
@@ -263,6 +273,7 @@ void CallInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ HandlerCallInstr
 HandlerCallInstr::HandlerCallInstr(const std::vector<Value*>& args): Instr(LiteralType::Void, args, "")
@@ -290,6 +301,7 @@ void HandlerCallInstr::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ PhiNode
 PhiNode::PhiNode(const std::vector<Value*>& ops, const std::string& name): Instr(ops[0]->type(), ops, name)
@@ -310,6 +322,7 @@ void PhiNode::accept(InstructionVisitor& visitor)
 {
     visitor.visit(*this);
 }
+
 // }}}
 // {{{ other instructions
 void AllocaInstr::accept(InstructionVisitor& visitor)
@@ -370,6 +383,153 @@ std::unique_ptr<Instr> RegExpGroupInstr::clone()
 void RegExpGroupInstr::accept(InstructionVisitor& v)
 {
     return v.visit(*this);
+}
+
+// }}}
+// {{{ Object instructions
+
+// ObjAllocInstr
+std::string ObjAllocInstr::to_string() const
+{
+    return formatOne("oalloc");
+}
+
+std::unique_ptr<Instr> ObjAllocInstr::clone()
+{
+    return std::make_unique<ObjAllocInstr>(typeId(), name());
+}
+
+void ObjAllocInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjRetainInstr
+std::string ObjRetainInstr::to_string() const
+{
+    return formatOne("oretain");
+}
+
+std::unique_ptr<Instr> ObjRetainInstr::clone()
+{
+    return std::make_unique<ObjRetainInstr>(object(), name());
+}
+
+void ObjRetainInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjReleaseInstr
+std::string ObjReleaseInstr::to_string() const
+{
+    return formatOne("orelease");
+}
+
+std::unique_ptr<Instr> ObjReleaseInstr::clone()
+{
+    return std::make_unique<ObjReleaseInstr>(object(), name());
+}
+
+void ObjReleaseInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjGetTagInstr
+std::string ObjGetTagInstr::to_string() const
+{
+    return formatOne("ogettag");
+}
+
+std::unique_ptr<Instr> ObjGetTagInstr::clone()
+{
+    return std::make_unique<ObjGetTagInstr>(object(), name());
+}
+
+void ObjGetTagInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjSetTagInstr
+std::string ObjSetTagInstr::to_string() const
+{
+    return formatOne("osettag");
+}
+
+std::unique_ptr<Instr> ObjSetTagInstr::clone()
+{
+    return std::make_unique<ObjSetTagInstr>(object(), tag(), name());
+}
+
+void ObjSetTagInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjGetSlotInstr
+std::string ObjGetSlotInstr::to_string() const
+{
+    return formatOne("ogetslot");
+}
+
+std::unique_ptr<Instr> ObjGetSlotInstr::clone()
+{
+    return std::make_unique<ObjGetSlotInstr>(object(), slotIndex(), name());
+}
+
+void ObjGetSlotInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjSetSlotInstr
+std::string ObjSetSlotInstr::to_string() const
+{
+    return formatOne("osetslot");
+}
+
+std::unique_ptr<Instr> ObjSetSlotInstr::clone()
+{
+    return std::make_unique<ObjSetSlotInstr>(object(), slotIndex(), value(), name());
+}
+
+void ObjSetSlotInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjTypeIdInstr
+std::string ObjTypeIdInstr::to_string() const
+{
+    return formatOne("otypeid");
+}
+
+std::unique_ptr<Instr> ObjTypeIdInstr::clone()
+{
+    return std::make_unique<ObjTypeIdInstr>(object(), name());
+}
+
+void ObjTypeIdInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// ObjIsTypeInstr
+std::string ObjIsTypeInstr::to_string() const
+{
+    return formatOne("oistype");
+}
+
+std::unique_ptr<Instr> ObjIsTypeInstr::clone()
+{
+    return std::make_unique<ObjIsTypeInstr>(object(), typeId(), name());
+}
+
+void ObjIsTypeInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
 }
 
 // }}}

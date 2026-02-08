@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
-
 #include <CoreVM/util/strings.hpp>
 
 #include <cassert>
 #include <cinttypes>
 #include <cmath>
-#include <vector>
 #include <memory>
+#include <vector>
+
 namespace CoreVM
 {
 
@@ -33,6 +33,7 @@ std::string IRBuilder::makeName(std::string name)
     snprintf(buf, sizeof(buf), "%s%lu", theName.c_str(), id);
     return buf;
 }
+
 // }}}
 // {{{ context management
 void IRBuilder::setProgram(std::unique_ptr<IRProgram> prog)
@@ -73,6 +74,7 @@ Instr* IRBuilder::insert(std::unique_ptr<Instr> instr)
 
     return getInsertPoint()->push_back(std::move(instr));
 }
+
 // }}}
 // {{{ handler pool
 IRHandler* IRBuilder::getHandler(const std::string& name)
@@ -87,6 +89,7 @@ IRHandler* IRBuilder::findHandler(const std::string& name)
 {
     return _program->findHandler(name);
 }
+
 // }}}
 // {{{ value management
 /**
@@ -133,6 +136,7 @@ Instr* IRBuilder::createPhi(const std::vector<Value*>& incomings, const std::str
 {
     return insert<PhiNode>(incomings, makeName(name));
 }
+
 // }}}
 // {{{ boolean ops
 Value* IRBuilder::createBNot(Value* rhs, const std::string& name)
@@ -166,6 +170,7 @@ Value* IRBuilder::createBXor(Value* lhs, Value* rhs, const std::string& name)
 
     return insert<BAndInstr>(lhs, rhs, makeName(name));
 }
+
 // }}}
 // {{{ numerical ops
 Value* IRBuilder::createNeg(Value* rhs, const std::string& name)
@@ -391,6 +396,7 @@ Value* IRBuilder::createNCmpGT(Value* lhs, Value* rhs, const std::string& name)
 
     return insert<ICmpGTInstr>(lhs, rhs, makeName(name));
 }
+
 // }}}
 // {{{ string ops
 Value* IRBuilder::createSAdd(Value* lhs, Value* rhs, const std::string& name)
@@ -559,6 +565,7 @@ Value* IRBuilder::createSLen(Value* value, const std::string& name)
 
     return insert<SLenInstr>(value, makeName(name));
 }
+
 // }}}
 // {{{ ip ops
 Value* IRBuilder::createPCmpEQ(Value* lhs, Value* rhs, const std::string& name)
@@ -587,12 +594,14 @@ Value* IRBuilder::createPInCidr(Value* lhs, Value* rhs, const std::string& name)
 
     return insert<PInCidrInstr>(lhs, rhs, makeName(name));
 }
+
 // }}}
 // {{{ RegExp
 RegExpGroupInstr* IRBuilder::createRegExpGroup(ConstantInt* groupId, const std::string& name)
 {
     return insert<RegExpGroupInstr>(groupId, makeName(name));
 }
+
 // }}}
 // {{{ cast ops
 Value* IRBuilder::createB2S(Value* rhs, const std::string& name)
@@ -667,11 +676,10 @@ Value* IRBuilder::createS2N(Value* rhs, const std::string& name)
 
     return insert<CastInstr>(LiteralType::Number, rhs, makeName(name));
 }
+
 // }}}
 // {{{ call creators
-Instr* IRBuilder::createCallFunction(IRBuiltinFunction* callee,
-                                     std::vector<Value*> args,
-                                     std::string name)
+Instr* IRBuilder::createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name)
 {
     return insert<CallInstr>(callee, std::move(args), makeName(std::move(name)));
 }
@@ -680,6 +688,7 @@ Instr* IRBuilder::createInvokeHandler(IRBuiltinHandler* callee, const std::vecto
 {
     return insert<HandlerCallInstr>(callee, args);
 }
+
 // }}}
 // {{{ exit point creators
 Instr* IRBuilder::createRet(Value* result)
@@ -721,6 +730,57 @@ Value* IRBuilder::createMatchRegExp(Value* cond)
 {
     return createMatch(MatchClass::RegExp, cond);
 }
+
+// }}}
+// {{{ object operations
+ObjAllocInstr* IRBuilder::createObjAlloc(ConstantInt* typeId, const std::string& name)
+{
+    return insert<ObjAllocInstr>(typeId, makeName(name));
+}
+
+ObjRetainInstr* IRBuilder::createObjRetain(Value* object, const std::string& name)
+{
+    return insert<ObjRetainInstr>(object, makeName(name));
+}
+
+ObjReleaseInstr* IRBuilder::createObjRelease(Value* object, const std::string& name)
+{
+    return insert<ObjReleaseInstr>(object, makeName(name));
+}
+
+ObjGetTagInstr* IRBuilder::createObjGetTag(Value* object, const std::string& name)
+{
+    return insert<ObjGetTagInstr>(object, makeName(name));
+}
+
+ObjSetTagInstr* IRBuilder::createObjSetTag(Value* object, Value* tag, const std::string& name)
+{
+    return insert<ObjSetTagInstr>(object, tag, makeName(name));
+}
+
+ObjGetSlotInstr* IRBuilder::createObjGetSlot(Value* object, ConstantInt* slotIndex, const std::string& name)
+{
+    return insert<ObjGetSlotInstr>(object, slotIndex, makeName(name));
+}
+
+ObjSetSlotInstr* IRBuilder::createObjSetSlot(Value* object,
+                                             ConstantInt* slotIndex,
+                                             Value* value,
+                                             const std::string& name)
+{
+    return insert<ObjSetSlotInstr>(object, slotIndex, value, makeName(name));
+}
+
+ObjTypeIdInstr* IRBuilder::createObjTypeId(Value* object, const std::string& name)
+{
+    return insert<ObjTypeIdInstr>(object, makeName(name));
+}
+
+ObjIsTypeInstr* IRBuilder::createObjIsType(Value* object, ConstantInt* typeId, const std::string& name)
+{
+    return insert<ObjIsTypeInstr>(object, typeId, makeName(name));
+}
+
 // }}}
 
 } // namespace CoreVM

@@ -2,6 +2,8 @@
 #pragma once
 
 #include <CoreVM/enums.hpp>
+#include <CoreVM/types/TypeRegistry.hpp>
+#include <CoreVM/types/TypedObject.hpp>
 #include <CoreVM/util.hpp>
 
 #include <cassert>
@@ -14,6 +16,7 @@
 #include <functional> // hash<>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <optional>
 #include <print>
 #include <regex>
@@ -72,6 +75,17 @@ class RetInstr;
 class MatchInstr;
 class RegExpGroupInstr;
 class CastInstr;
+
+// Object operations (for composite types)
+class ObjAllocInstr;
+class ObjRetainInstr;
+class ObjReleaseInstr;
+class ObjGetTagInstr;
+class ObjSetTagInstr;
+class ObjGetSlotInstr;
+class ObjSetSlotInstr;
+class ObjTypeIdInstr;
+class ObjIsTypeInstr;
 
 using Register = uint64_t; // vm
 using CoreNumber = int64_t;
@@ -188,6 +202,17 @@ class InstructionVisitor
     virtual void visit(PCmpEQInstr& instr) = 0;
     virtual void visit(PCmpNEInstr& instr) = 0;
     virtual void visit(PInCidrInstr& instr) = 0;
+
+    // object operations
+    virtual void visit(ObjAllocInstr& instr) = 0;
+    virtual void visit(ObjRetainInstr& instr) = 0;
+    virtual void visit(ObjReleaseInstr& instr) = 0;
+    virtual void visit(ObjGetTagInstr& instr) = 0;
+    virtual void visit(ObjSetTagInstr& instr) = 0;
+    virtual void visit(ObjGetSlotInstr& instr) = 0;
+    virtual void visit(ObjSetSlotInstr& instr) = 0;
+    virtual void visit(ObjTypeIdInstr& instr) = 0;
+    virtual void visit(ObjIsTypeInstr& instr) = 0;
 };
 
 // {{{ array types
@@ -402,6 +427,13 @@ class Runner
 
     const util::Cidr* getCidrPtr(int si) const { return (util::Cidr*) _stack[si]; }
 
+    // Object helpers
+    TypedObject* getObject(int si) const { return reinterpret_cast<TypedObject*>(_stack[si]); }
+
+    TypedObject* allocObject(uint16_t typeId);
+    void freeObject(TypedObject* obj);
+    const TypeRegistry& typeRegistry() const;
+
     void push(Value value) { _stack.push(value); }
 
     Value pop() { return _stack.pop(); }
@@ -409,6 +441,8 @@ class Runner
     void discard(size_t n) { _stack.discard(n); }
 
     void pushString(const CoreString* value) { push((Value) value); }
+
+    void pushObject(TypedObject* obj) { push(reinterpret_cast<Value>(obj)); }
 
     bool loop();
 
@@ -441,6 +475,10 @@ class Runner
     Globals& _globals; //!< runtime global scope
 
     std::list<std::string> _stringGarbage;
+
+    // Object pool for heap-allocated composite types (Option, Result, etc.)
+    std::vector<std::unique_ptr<uint8_t[]>> _objectPool;
+    size_t _objectAllocCount = 0; //!< Allocation counter for GC threshold
 };
 
 struct MatchCaseDef
@@ -589,6 +627,11 @@ class ConstantPool
     void dump() const;
     [[nodiscard]] std::string dumpToString() const;
 
+    // type registry
+    [[nodiscard]] TypeRegistry& typeRegistry() noexcept { return _typeRegistry; }
+
+    [[nodiscard]] const TypeRegistry& typeRegistry() const noexcept { return _typeRegistry; }
+
   private:
     // constant primitives
     std::vector<CoreNumber> _numbers;
@@ -609,6 +652,9 @@ class ConstantPool
     std::vector<MatchDef> _matchDefs;
     std::vector<std::string> _nativeHandlerSignatures;
     std::vector<std::string> _nativeFunctionSignatures;
+
+    // type registry for composite types (Option, Result, etc.)
+    TypeRegistry _typeRegistry;
 };
 
 class Program
@@ -1588,6 +1634,152 @@ class MatchInstr: public TerminateInstr
     std::vector<std::pair<Constant*, BasicBlock*>> _cases;
 };
 
+// =============================================================================
+// Object Instructions (for composite types: Option, Result, tuples, closures)
+// =============================================================================
+
+/// Allocates a new typed object on the heap.
+/// @param typeId The type ID from the TypeRegistry
+class ObjAllocInstr: public Instr
+{
+  public:
+    ObjAllocInstr(ConstantInt* typeId, const std::string& name): Instr(LiteralType::Object, { typeId }, name)
+    {
+    }
+
+    [[nodiscard]] ConstantInt* typeId() const { return static_cast<ConstantInt*>(operand(0)); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Increments the reference count of an object.
+class ObjRetainInstr: public Instr
+{
+  public:
+    ObjRetainInstr(Value* object, const std::string& name): Instr(LiteralType::Object, { object }, name) {}
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Decrements the reference count and frees if zero.
+class ObjReleaseInstr: public Instr
+{
+  public:
+    ObjReleaseInstr(Value* object, const std::string& name): Instr(LiteralType::Void, { object }, name) {}
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Gets the tag (variant discriminant) from a sum type object.
+class ObjGetTagInstr: public Instr
+{
+  public:
+    ObjGetTagInstr(Value* object, const std::string& name): Instr(LiteralType::Number, { object }, name) {}
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Sets the tag (variant discriminant) on a sum type object.
+class ObjSetTagInstr: public Instr
+{
+  public:
+    ObjSetTagInstr(Value* object, Value* tag, const std::string& name):
+        Instr(LiteralType::Object, { object, tag }, name)
+    {
+    }
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] Value* tag() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Gets a slot value from an object.
+class ObjGetSlotInstr: public Instr
+{
+  public:
+    ObjGetSlotInstr(Value* object, ConstantInt* slotIndex, const std::string& name):
+        Instr(LiteralType::Void, { object, slotIndex }, name) // Void because actual type depends on content
+    {
+    }
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] ConstantInt* slotIndex() const { return static_cast<ConstantInt*>(operand(1)); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Sets a slot value in an object.
+class ObjSetSlotInstr: public Instr
+{
+  public:
+    ObjSetSlotInstr(Value* object, ConstantInt* slotIndex, Value* value, const std::string& name):
+        Instr(LiteralType::Object, { object, slotIndex, value }, name)
+    {
+    }
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] ConstantInt* slotIndex() const { return static_cast<ConstantInt*>(operand(1)); }
+
+    [[nodiscard]] Value* value() const { return operand(2); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Gets the type ID of an object.
+class ObjTypeIdInstr: public Instr
+{
+  public:
+    ObjTypeIdInstr(Value* object, const std::string& name): Instr(LiteralType::Number, { object }, name) {}
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Checks if an object is of a specific type.
+class ObjIsTypeInstr: public Instr
+{
+  public:
+    ObjIsTypeInstr(Value* object, ConstantInt* typeId, const std::string& name):
+        Instr(LiteralType::Boolean, { object, typeId }, name)
+    {
+    }
+
+    [[nodiscard]] Value* object() const { return operand(0); }
+
+    [[nodiscard]] ConstantInt* typeId() const { return static_cast<ConstantInt*>(operand(1)); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
 class IsSameInstruction: public InstructionVisitor
 {
   public:
@@ -1672,6 +1864,17 @@ class IsSameInstruction: public InstructionVisitor
     void visit(PCmpEQInstr& instr) override;
     void visit(PCmpNEInstr& instr) override;
     void visit(PInCidrInstr& instr) override;
+
+    // object operations
+    void visit(ObjAllocInstr& instr) override;
+    void visit(ObjRetainInstr& instr) override;
+    void visit(ObjReleaseInstr& instr) override;
+    void visit(ObjGetTagInstr& instr) override;
+    void visit(ObjSetTagInstr& instr) override;
+    void visit(ObjGetSlotInstr& instr) override;
+    void visit(ObjSetSlotInstr& instr) override;
+    void visit(ObjTypeIdInstr& instr) override;
+    void visit(ObjIsTypeInstr& instr) override;
 };
 
 class IRHandler: public Constant
@@ -2038,6 +2241,20 @@ class IRBuilder
     Value* createMatchHead(Value* cond);
     Value* createMatchTail(Value* cond);
     Value* createMatchRegExp(Value* cond);
+
+    // object operations
+    ObjAllocInstr* createObjAlloc(ConstantInt* typeId, const std::string& name = "");
+    ObjRetainInstr* createObjRetain(Value* object, const std::string& name = "");
+    ObjReleaseInstr* createObjRelease(Value* object, const std::string& name = "");
+    ObjGetTagInstr* createObjGetTag(Value* object, const std::string& name = "");
+    ObjSetTagInstr* createObjSetTag(Value* object, Value* tag, const std::string& name = "");
+    ObjGetSlotInstr* createObjGetSlot(Value* object, ConstantInt* slotIndex, const std::string& name = "");
+    ObjSetSlotInstr* createObjSetSlot(Value* object,
+                                      ConstantInt* slotIndex,
+                                      Value* value,
+                                      const std::string& name = "");
+    ObjTypeIdInstr* createObjTypeId(Value* object, const std::string& name = "");
+    ObjIsTypeInstr* createObjIsType(Value* object, ConstantInt* typeId, const std::string& name = "");
 };
 
 /**
@@ -2705,6 +2922,17 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(PCmpNEInstr& instr) override;
     void visit(PInCidrInstr& instr) override;
 
+    // object operations
+    void visit(ObjAllocInstr& instr) override;
+    void visit(ObjRetainInstr& instr) override;
+    void visit(ObjReleaseInstr& instr) override;
+    void visit(ObjGetTagInstr& instr) override;
+    void visit(ObjSetTagInstr& instr) override;
+    void visit(ObjGetSlotInstr& instr) override;
+    void visit(ObjSetSlotInstr& instr) override;
+    void visit(ObjTypeIdInstr& instr) override;
+    void visit(ObjIsTypeInstr& instr) override;
+
   private:
     struct ConditionalJump
     {
@@ -3137,6 +3365,9 @@ struct std::formatter<CoreVM::LiteralType>: std::formatter<std::string_view>
             case CoreVM::LiteralType::IPAddrArray: name = "IPAddrArray"; break;
             case CoreVM::LiteralType::CidrArray: name = "CidrArray"; break;
             case CoreVM::LiteralType::IntPair: name = "IntPair"; break;
+            case CoreVM::LiteralType::Option: name = "Option"; break;
+            case CoreVM::LiteralType::Result: name = "Result"; break;
+            case CoreVM::LiteralType::Object: name = "Object"; break;
         }
         return std::formatter<std::string_view>::format(name, ctx);
     }

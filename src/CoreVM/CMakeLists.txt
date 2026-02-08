@@ -40,6 +40,7 @@ target_sources(CoreVM
     vm/Program.cpp
     vm/Runner.cpp
     vm/Runtime.cpp
+    types/TypeRegistry.cpp
   )
 
 target_compile_definitions(CoreVM PUBLIC
@@ -65,6 +66,7 @@ enable_sanitizers(CoreVM)
 add_executable(test-corevm
     test_main.cpp
     TargetCodeGenerator_test.cpp
+    types/TypeSystem_test.cpp
 )
 target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
 add_test(NAME test-corevm COMMAND test-corevm)

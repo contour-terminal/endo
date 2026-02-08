@@ -144,6 +144,17 @@ static InstructionInfo instructionInfos[] = {
     // invokation
     IIDEF(CALL, III, 0, Void),
     IIDEF(HANDLER, II, 0, Void),
+
+    // object operations
+    IIDEF(OALLOC, I, 1, Object),   // typeId → push new object
+    IIDEF(ORETAIN, V, 0, Void),    // increment refcount of top
+    IIDEF(ORELEASE, V, -1, Void),  // decrement refcount, pop
+    IIDEF(OGETTAG, V, 0, Number),  // pop obj, push tag
+    IIDEF(OSETTAG, V, -1, Void),   // pop tag, pop obj, set tag, push obj
+    IIDEF(OGETSLOT, I, 0, Void),   // pop obj, push slot[imm] (replaces obj with slot value)
+    IIDEF(OSETSLOT, I, -1, Void),  // pop value, pop obj, set slot[imm] = value, push obj
+    IIDEF(OTYPEID, V, 0, Number),  // pop obj, push type ID
+    IIDEF(OISTYPE, I, 0, Boolean), // pop obj, push (obj.typeId == imm)
 };
 
 // }}}

@@ -109,6 +109,17 @@ enum Opcode : uint16_t
     // CALL A = id, B = argc
     CALL,    // calls A with B arguments, always pushes result to stack
     HANDLER, // calls A with B arguments (never leaves result on stack)
+
+    // object operations (for composite types: Option, Result, tuples, closures, etc.)
+    OALLOC,   // OALLOC typeId       ; allocate object of type typeId, push pointer
+    ORETAIN,  // ORETAIN             ; increment refcount of object at top of stack
+    ORELEASE, // ORELEASE            ; decrement refcount, free if zero
+    OGETTAG,  // OGETTAG             ; push tag value from object (for sum types)
+    OSETTAG,  // OSETTAG             ; pop tag, pop object, set tag on object
+    OGETSLOT, // OGETSLOT imm        ; push slot[imm] from object at top of stack
+    OSETSLOT, // OSETSLOT imm        ; pop value, pop object, set slot[imm] = value
+    OTYPEID,  // OTYPEID             ; push type ID of object at top of stack
+    OISTYPE,  // OISTYPE typeId      ; push (object.typeId == typeId)
 };
 
 enum class MatchClass
@@ -194,6 +205,9 @@ enum class LiteralType
     IPAddrArray = 11, // array<IPAddress>
     CidrArray = 12,   // array<Cidr>
     IntPair = 13,     // array<int, 2>
+    Option = 14,      // Option<T>: (tag: 0=None|1=Some, value: T) [deprecated, use Object]
+    Result = 15,      // Result<T,E>: (tag: 0=Error|1=Ok, payload: T|E) [deprecated, use Object]
+    Object = 16,      // TypedObject*: pointer to heap-allocated typed object
 };
 
 template <const UnaryOperator Operator, const LiteralType ResultType>

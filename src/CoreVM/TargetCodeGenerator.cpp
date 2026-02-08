@@ -843,6 +843,73 @@ void TargetCodeGenerator::visit(PInCidrInstr& instr)
     emitBinary(instr, Opcode::PINCIDR);
 }
 
+// {{{ Object instructions
+void TargetCodeGenerator::visit(ObjAllocInstr& instr)
+{
+    emitInstr(Opcode::OALLOC, static_cast<Operand>(instr.typeId()->get()));
+    changeStack(0, &instr);
+}
+
+void TargetCodeGenerator::visit(ObjRetainInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::ORETAIN);
+    // ORETAIN doesn't change stack - object remains on top
+}
+
+void TargetCodeGenerator::visit(ObjReleaseInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::ORELEASE);
+    changeStack(1, nullptr); // pops the object
+}
+
+void TargetCodeGenerator::visit(ObjGetTagInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::OGETTAG);
+    changeStack(1, &instr); // replaces object with tag
+}
+
+void TargetCodeGenerator::visit(ObjSetTagInstr& instr)
+{
+    emitLoad(instr.object());
+    emitLoad(instr.tag());
+    emitInstr(Opcode::OSETTAG);
+    changeStack(2, &instr); // pops tag and object, pushes object back
+}
+
+void TargetCodeGenerator::visit(ObjGetSlotInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::OGETSLOT, static_cast<Operand>(instr.slotIndex()->get()));
+    changeStack(1, &instr); // replaces object with slot value
+}
+
+void TargetCodeGenerator::visit(ObjSetSlotInstr& instr)
+{
+    emitLoad(instr.object());
+    emitLoad(instr.value());
+    emitInstr(Opcode::OSETSLOT, static_cast<Operand>(instr.slotIndex()->get()));
+    changeStack(2, &instr); // pops value and object, pushes object back
+}
+
+void TargetCodeGenerator::visit(ObjTypeIdInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::OTYPEID);
+    changeStack(1, &instr); // replaces object with type ID
+}
+
+void TargetCodeGenerator::visit(ObjIsTypeInstr& instr)
+{
+    emitLoad(instr.object());
+    emitInstr(Opcode::OISTYPE, static_cast<Operand>(instr.typeId()->get()));
+    changeStack(1, &instr); // replaces object with boolean
+}
+
+// }}}
+
 // }}}
 
 } // namespace CoreVM

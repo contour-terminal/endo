@@ -196,6 +196,62 @@ CoreString* Runner::catString(const CoreString& a, const CoreString& b)
     return &_stringGarbage.back();
 }
 
+const TypeRegistry& Runner::typeRegistry() const
+{
+    return _program->constants().typeRegistry();
+}
+
+TypedObject* Runner::allocObject(uint16_t typeId)
+{
+    const TypeDescriptor* type = typeRegistry().get(typeId);
+    if (!type)
+    {
+        // Invalid type ID - this is a programming error
+        COREVM_ASSERT(false, "Invalid type ID in OALLOC");
+        return nullptr;
+    }
+
+    // Allocate memory for the object
+    size_t allocSize = TypedObject::allocationSize(type);
+    auto storage = std::make_unique<uint8_t[]>(allocSize);
+
+    // Initialize the object
+    auto* obj = reinterpret_cast<TypedObject*>(storage.get());
+    obj->type = type;
+    obj->refCount.store(1, std::memory_order_relaxed);
+    obj->tag = 0;
+
+    // Zero-initialize slots
+    for (uint16_t i = 0; i < type->slotCount; ++i)
+    {
+        obj->setSlot(i, 0);
+    }
+
+    // Track the allocation
+    _objectPool.push_back(std::move(storage));
+    ++_objectAllocCount;
+
+    return obj;
+}
+
+void Runner::freeObject(TypedObject* obj)
+{
+    if (!obj)
+        return;
+
+    // Find and remove from the object pool
+    // Note: This is O(n) but we expect few objects in practice.
+    // For better performance, we could use a free list or arena allocator.
+    for (auto it = _objectPool.begin(); it != _objectPool.end(); ++it)
+    {
+        if (reinterpret_cast<TypedObject*>(it->get()) == obj)
+        {
+            _objectPool.erase(it);
+            return;
+        }
+    }
+}
+
 bool Runner::run()
 {
     assert(_state == Inactive);
@@ -324,6 +380,17 @@ bool Runner::loop()
         // invokation
         label(CALL),
         label(HANDLER),
+
+        // object operations
+        label(OALLOC),
+        label(ORETAIN),
+        label(ORELEASE),
+        label(OGETTAG),
+        label(OSETTAG),
+        label(OGETSLOT),
+        label(OSETSLOT),
+        label(OTYPEID),
+        label(OISTYPE),
     };
 #endif
 // }}}
@@ -941,6 +1008,91 @@ bool Runner::loop()
         }
         set_pc(_ip);
         jump;
+    }
+    // }}}
+    // {{{ object operations
+    instr(OALLOC)
+    {
+        // A = typeId
+        TypedObject* obj = allocObject(A);
+        pushObject(obj);
+        next;
+    }
+
+    instr(ORETAIN)
+    {
+        // Increment refcount of object at top of stack
+        TypedObject* obj = getObject(-1);
+        retainObject(obj);
+        next;
+    }
+
+    instr(ORELEASE)
+    {
+        // Decrement refcount, free if zero, pop
+        TypedObject* obj = getObject(-1);
+        pop();
+        if (releaseObject(obj))
+        {
+            freeObject(obj);
+        }
+        next;
+    }
+
+    instr(OGETTAG)
+    {
+        // Pop object, push its tag
+        TypedObject* obj = getObject(-1);
+        SP(-1) = obj->tag;
+        next;
+    }
+
+    instr(OSETTAG)
+    {
+        // Pop tag, pop object, set tag, push object
+        CoreNumber tag = getNumber(-1);
+        pop();
+        TypedObject* obj = getObject(-1);
+        obj->tag = static_cast<uint8_t>(tag);
+        // Object stays on stack
+        next;
+    }
+
+    instr(OGETSLOT)
+    {
+        // A = slot index
+        // Pop object, push slot[A]
+        TypedObject* obj = getObject(-1);
+        SP(-1) = obj->getSlot(static_cast<uint8_t>(A));
+        next;
+    }
+
+    instr(OSETSLOT)
+    {
+        // A = slot index
+        // Pop value, pop object, set slot[A] = value, push object
+        Value value = pop();
+        TypedObject* obj = getObject(-1);
+        obj->setSlot(static_cast<uint8_t>(A), value);
+        // Object stays on stack
+        next;
+    }
+
+    instr(OTYPEID)
+    {
+        // Pop object, push type ID
+        TypedObject* obj = getObject(-1);
+        SP(-1) = obj->type->id;
+        next;
+    }
+
+    instr(OISTYPE)
+    {
+        // A = typeId to check
+        // Pop object, push boolean (obj.typeId == A)
+        TypedObject* obj = getObject(-1);
+        SP(-1) = (obj->type->id == A) ? 1 : 0;
+        next;
     }
     // }}}
 

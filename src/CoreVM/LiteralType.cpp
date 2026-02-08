@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
-
 #include <CoreVM/util/assert.hpp>
 
 namespace CoreVM
@@ -23,6 +22,9 @@ std::string tos(LiteralType type)
         case LiteralType::IPAddrArray: return "IPAddrArray";
         case LiteralType::CidrArray: return "CidrArray";
         case LiteralType::IntPair: return "IntPair";
+        case LiteralType::Option: return "Option";
+        case LiteralType::Result: return "Result";
+        case LiteralType::Object: return "Object";
         default: COREVM_ASSERT(false, "InvalidArgumentError");
     }
 }
@@ -56,6 +58,9 @@ LiteralType elementTypeOf(LiteralType type)
         case LiteralType::IPAddrArray: return LiteralType::IPAddress;
         case LiteralType::CidrArray: return LiteralType::Cidr;
         case LiteralType::IntPair: return LiteralType::Number;
+        case LiteralType::Option: return LiteralType::Void; // Element type depends on inner type
+        case LiteralType::Result: return LiteralType::Void; // Element type depends on inner type
+        case LiteralType::Object: return LiteralType::Void; // Element type depends on TypeDescriptor
         default: COREVM_ASSERT(false, "InvalidArgumentError");
     }
 }
