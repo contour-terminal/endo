@@ -24,6 +24,7 @@
 #include "Prompt.hpp"
 #include "SignalHandler.hpp"
 #include "TTY.hpp"
+#include <endo-language/IRGenerator.hpp>
 
 namespace endo
 {
@@ -227,6 +228,7 @@ class Shell final
     CoreVM::Runtime _runtime;
     Environment& _env;
     TTY& _tty;
+    FSharpPersistentState _fsharpState; ///< F# function definitions persisted across REPL prompts
 
     ProcessManager& _processManager;
 

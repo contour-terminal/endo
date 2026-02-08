@@ -140,4 +140,22 @@ bool executesWithOutput(std::string const& source, std::string_view expectedOutp
 /// Returns true if execution succeeds with expected exit code AND output.
 bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput);
 
+// =============================================================================
+// Multi-prompt (REPL session) test helpers
+// =============================================================================
+
+/// Simulates a REPL session: executes multiple prompts in sequence with
+/// persistent F# state, as if the user typed them one after another.
+///
+/// @param prompts  The source strings to execute in order
+/// @return The execution result of the **last** prompt
+ExecutionResult executeSession(std::vector<std::string> const& prompts);
+
+/// Executes a multi-prompt session and returns the captured output from the last prompt.
+/// Throws ExecutionError if any prompt fails.
+std::string executeSessionAndGetOutput(std::vector<std::string> const& prompts);
+
+/// Returns true if the last prompt in a session produces the expected output.
+bool sessionProducesOutput(std::vector<std::string> const& prompts, std::string_view expectedOutput);
+
 } // namespace endo::test

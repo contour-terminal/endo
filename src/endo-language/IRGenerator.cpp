@@ -32,7 +32,8 @@ namespace endo
 
 std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& rootNode,
                                                          CoreVM::diagnostics::Report& report,
-                                                         CoreVM::Runtime& runtime)
+                                                         CoreVM::Runtime& runtime,
+                                                         FSharpPersistentState* persistentState)
 {
     IRGenerator generator(report, runtime);
 
@@ -43,7 +44,41 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     // Initialize F# root scope
     generator.pushFSharpScope();
 
+    // Pre-populate function table from persistent state (REPL session continuity)
+    if (persistentState)
+    {
+        for (auto const& [name, persisted]: persistentState->functions)
+        {
+            FSharpFunction func;
+            func.parameters = persisted.parameters;
+            func.body = persisted.body;
+            func.returnsResultOrOption = persisted.returnsResultOrOption;
+            func.isRecursive = persisted.isRecursive;
+            // capturedBindings intentionally left empty — captures from previous
+            // IR programs are no longer valid; only pure functions persist correctly.
+            generator.registerFSharpFunction(name, std::move(func));
+        }
+    }
+
     generator.codegen(&rootNode);
+
+    // Persist newly defined functions back to persistent state
+    if (persistentState)
+    {
+        for (auto const& [name, func]: generator._fsharpFunctions)
+        {
+            // Skip auto-generated lambda names (partial application intermediates)
+            if (name.starts_with("__lambda_"))
+                continue;
+
+            FSharpPersistentState::PersistedFunction persisted;
+            persisted.parameters = func.parameters;
+            persisted.body = func.body;
+            persisted.returnsResultOrOption = func.returnsResultOrOption;
+            persisted.isRecursive = func.isRecursive;
+            persistentState->functions[name] = std::move(persisted);
+        }
+    }
 
     // Clean up F# scope
     generator.popFSharpScope();

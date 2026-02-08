@@ -1119,3 +1119,62 @@ TEST_CASE("IRGenerator.FSharp.exec_partial_over_application_error")
     // Over-application should fail
     CHECK_FALSE(generatesIRSuccessfully("let add x y = x + y; let r = add 1 2 3"));
 }
+
+// =============================================================================
+// REPL Session Persistence Tests (multi-prompt)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.session_simple_function")
+{
+    // Define function in first prompt, call it in second prompt
+    CHECK(sessionProducesOutput({ "let double x = x * 2", "print (double 5)" }, "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_recursive_function")
+{
+    // Define tail-recursive function in first prompt, call it in second prompt
+    CHECK(sessionProducesOutput(
+        { "let rec factorial n acc = match n with | 0 -> acc | _ -> factorial (n - 1) (n * acc)",
+          "print (factorial 5 1)" },
+        "120"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_multiple_functions")
+{
+    // Define two functions across prompts, use both
+    CHECK(sessionProducesOutput({ "let add x y = x + y", "let mul x y = x * y", "print (add (mul 3 4) 5)" },
+                                "17"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_function_reuse_across_three_prompts")
+{
+    // Define in prompt 1, use in prompt 2 and 3
+    CHECK(sessionProducesOutput({ "let square x = x * x", "print (square 4)", "print (square 7)" }, "49"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_function_redefinition")
+{
+    // Define function, redefine it, verify new definition is used
+    CHECK(sessionProducesOutput({ "let f x = x + 1", "let f x = x * 10", "print (f 5)" }, "50"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_function_calling_persisted_function")
+{
+    // Define helper function, then define function using it
+    CHECK(sessionProducesOutput(
+        { "let double x = x * 2", "let quadruple x = double (double x)", "print (quadruple 3)" }, "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_recursive_fibonacci")
+{
+    // Tail-recursive fibonacci across prompts
+    CHECK(sessionProducesOutput(
+        { "let rec fib n a b = match n with | 0 -> a | _ -> fib (n - 1) b (a + b)", "print (fib 10 0 1)" },
+        "55"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_lambda_bound_function")
+{
+    // Lambda assigned to variable persists
+    CHECK(sessionProducesOutput({ "let inc = fun x -> x + 1", "print (inc 41)" }, "42"));
+}

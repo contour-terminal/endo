@@ -16,6 +16,30 @@ namespace endo
 
 class PatternIRGenerator; // Forward declaration
 
+/// Persistent state for F# definitions that survives across REPL prompts.
+///
+/// When running interactively, `let` function definitions (including `let rec`)
+/// are stored here so that subsequent prompts can call previously defined functions.
+///
+/// Owned by the Shell; passed to IRGenerator::generate() for each execution.
+struct FSharpPersistentState
+{
+    /// A persisted function definition (captures are not preserved across prompts).
+    struct PersistedFunction
+    {
+        std::vector<std::string> parameters; ///< Parameter names in order
+        ast::Expr const* body;               ///< Function body expression (for inlining)
+        bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
+        bool isRecursive = false;            ///< Whether function is declared with `let rec`
+    };
+
+    /// Function table persisted across REPL prompts (name -> function metadata).
+    std::unordered_map<std::string, PersistedFunction> functions;
+
+    /// AST nodes retained to keep PersistedFunction::body pointers valid.
+    std::vector<std::unique_ptr<ast::Statement>> retainedASTs;
+};
+
 /// Generates IR code from an AST.
 class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 {
@@ -27,10 +51,14 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     /// @param rootNode The root statement of the AST
     /// @param report Diagnostics report for error messages
     /// @param runtime Runtime instance for accessing builtins
+    /// @param persistentState Optional persistent state for REPL sessions.
+    ///        When non-null, previously defined functions are pre-loaded and
+    ///        newly defined functions are stored back for future prompts.
     /// @return The generated IR program, or nullptr if errors occurred
     static std::unique_ptr<CoreVM::IRProgram> generate(ast::Statement const& rootNode,
                                                        CoreVM::diagnostics::Report& report,
-                                                       CoreVM::Runtime& runtime);
+                                                       CoreVM::Runtime& runtime,
+                                                       FSharpPersistentState* persistentState = nullptr);
 
   private:
     explicit IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& runtime);

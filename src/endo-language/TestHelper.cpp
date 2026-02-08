@@ -220,4 +220,75 @@ bool executesWithResult(std::string const& source, int64_t expectedExitCode, std
     return result.has_value() && result->exitCode == expectedExitCode && result->output == expectedOutput;
 }
 
+// =============================================================================
+// Multi-prompt (REPL session) test helpers
+// =============================================================================
+
+ExecutionResult executeSession(std::vector<std::string> const& prompts)
+{
+    auto& testRuntime = TestRuntime::instance();
+    FSharpPersistentState fsharpState;
+
+    ExecutionResult lastResult = std::unexpected(TestError::ExecutionFailed);
+
+    for (auto const& source: prompts)
+    {
+        testRuntime.clearErrors();
+        testRuntime.clearOutput();
+
+        // Parse
+        Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+        auto ast = parser.parse();
+        if (!ast || testRuntime.hasErrors())
+            return std::unexpected(TestError::ParseFailed);
+
+        // Generate IR with persistent state
+        auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime, &fsharpState);
+        if (!ir || testRuntime.hasErrors())
+            return std::unexpected(TestError::IRGenerationFailed);
+
+        // Retain the AST so persisted function body pointers remain valid
+        fsharpState.retainedASTs.push_back(std::move(ast));
+
+        // Generate target code
+        CoreVM::TargetCodeGenerator codegen;
+        auto targetProgram = codegen.generate(ir.get());
+        if (!targetProgram)
+            return std::unexpected(TestError::CodeGenerationFailed);
+
+        // Link
+        if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+            return std::unexpected(TestError::LinkFailed);
+
+        // Find main handler
+        CoreVM::Handler const* handler = targetProgram->findHandler("@main");
+        if (!handler)
+            return std::unexpected(TestError::HandlerNotFound);
+
+        // Execute
+        CoreVM::Runner::Globals globals;
+        CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+        bool exitNonZero = runner.run();
+        int64_t exitCode = exitNonZero ? 1 : 0;
+
+        lastResult = TestExecutionSuccess { .exitCode = exitCode, .output = testRuntime.output() };
+    }
+
+    return lastResult;
+}
+
+std::string executeSessionAndGetOutput(std::vector<std::string> const& prompts)
+{
+    auto result = executeSession(prompts);
+    if (!result.has_value())
+        throw ExecutionError(result.error());
+    return std::move(result->output);
+}
+
+bool sessionProducesOutput(std::vector<std::string> const& prompts, std::string_view expectedOutput)
+{
+    auto result = executeSession(prompts);
+    return result.has_value() && result->output == expectedOutput;
+}
+
 } // namespace endo::test

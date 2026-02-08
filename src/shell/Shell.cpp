@@ -605,7 +605,7 @@ int Shell::execute(std::string const& lineBuffer)
     {
         CoreVM::diagnostics::ConsoleReport report;
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
-        auto const rootNode = parser.parse();
+        auto rootNode = parser.parse();
 
         // Check for parser errors
         if (report.containsFailures())
@@ -616,7 +616,7 @@ int Shell::execute(std::string const& lineBuffer)
 
         debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime);
+        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState);
 
         // Check for IR generation errors
         if (report.containsFailures())
@@ -624,6 +624,9 @@ int Shell::execute(std::string const& lineBuffer)
 
         if (!irProgram)
             return EXIT_FAILURE;
+
+        // Retain the AST so that persisted F# function body pointers remain valid
+        _fsharpState.retainedASTs.push_back(std::move(rootNode));
 
         if (_optimize)
         {

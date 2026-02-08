@@ -395,6 +395,7 @@ src/
 - [x] Implement closures (capturing outer scope variables)
 - [x] Implement partial application in IR generator
 - [x] Implement recursion support for F# functions (`let rec` with tail-call optimization)
+- [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
@@ -442,6 +443,13 @@ src/
   - `let lines = & cat file.txt | grep pattern` - shell pipes work within the `&` expression
   - Parser temporarily leaves F# mode when parsing the command after `&`, then re-enters
   - IR generation reuses `SubstitutionExpr` logic: `subst_start()` → execute → `subst_end()` to capture output
+- REPL session persistence for F# definitions:
+  - `FSharpPersistentState` struct holds function definitions and retained ASTs across REPL prompts
+  - `IRGenerator::generate()` accepts optional persistent state: pre-populates function table on entry, stores new definitions on exit
+  - `Shell` retains parsed ASTs so that function body pointers remain valid across prompts
+  - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
+  - Limitations: closure captures from previous prompts are not preserved (pure functions only); simple value bindings (`let x = 42`) do not persist
+  - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
 
 ---
 
