@@ -1,0 +1,536 @@
+// SPDX-License-Identifier: Apache-2.0
+// Tests for TargetCodeGenerator - specifically testing multi-block control flow
+// with allocas to verify proper stack tracking across basic blocks.
+
+#include <CoreVM/CoreVM.hpp>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include <memory>
+#include <string>
+
+using namespace CoreVM;
+
+namespace
+{
+
+// Helper to build IR, generate code, and run it
+// Uses a global to capture the result value for verification
+class IRTestRunner
+{
+  public:
+    IRTestRunner() { _builder.setProgram(std::make_unique<IRProgram>()); }
+
+    IRBuilder& builder() { return _builder; }
+
+    // Create a handler and return it
+    IRHandler* createHandler(std::string const& name)
+    {
+        auto* handler = _builder.getHandler(name);
+        _builder.setHandler(handler);
+        return handler;
+    }
+
+    // Generate target code and run the handler
+    // Returns pair of (completed, exit_code_was_zero)
+    std::pair<bool, bool> run(std::string const& handlerName)
+    {
+        TargetCodeGenerator codegen;
+        auto targetProgram = codegen.generate(_builder.program());
+
+        Handler const* handler = targetProgram->findHandler(handlerName);
+        if (!handler)
+            return { false, false };
+
+        Runner::Globals globals;
+        Runner runner(handler, nullptr, &globals, nullptr);
+        bool success = runner.run();
+
+        // run() returns false if EXIT code was 0 (success in shell terms)
+        // run() returns true if EXIT code was non-zero (failure)
+        // This is inverted from typical shell convention
+        return { true, !success };
+    }
+
+  private:
+    IRBuilder _builder;
+};
+
+} // namespace
+
+// =============================================================================
+// Basic tests - single block with allocas
+// =============================================================================
+
+TEST_CASE("TargetCodeGenerator.single_block_alloca_store_ret")
+{
+    // Simple test: alloca, store, ret the stored value
+    // entry:
+    //   %0 = alloca i64
+    //   store 42, %0
+    //   %1 = load %0
+    //   ret %1
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    builder.setInsertPoint(entry);
+
+    auto* alloca = builder.createAlloca(LiteralType::Number, builder.get(1), "x");
+    builder.createStore(alloca, builder.get(CoreNumber(42)), "store");
+    auto* loaded = builder.createLoad(alloca, "load");
+    builder.createRet(loaded);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    // 42 is non-zero, so success should be false (non-zero exit code)
+    CHECK_FALSE(success);
+}
+
+TEST_CASE("TargetCodeGenerator.single_block_ret_zero")
+{
+    // Simple test: ret 0
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    builder.setInsertPoint(entry);
+    builder.createRet(builder.get(CoreNumber(0)));
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // 0 is success
+}
+
+TEST_CASE("TargetCodeGenerator.single_block_multiple_allocas")
+{
+    // Multiple allocas in single block, verify they work correctly
+    // entry:
+    //   %a = alloca i64
+    //   %b = alloca i64
+    //   store 10, %a
+    //   store 20, %b
+    //   %va = load %a
+    //   %vb = load %b
+    //   %sum = add %va, %vb
+    //   ret %sum
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    builder.setInsertPoint(entry);
+
+    auto* allocaA = builder.createAlloca(LiteralType::Number, builder.get(1), "a");
+    auto* allocaB = builder.createAlloca(LiteralType::Number, builder.get(1), "b");
+    builder.createStore(allocaA, builder.get(CoreNumber(10)), "store.a");
+    builder.createStore(allocaB, builder.get(CoreNumber(20)), "store.b");
+    auto* loadedA = builder.createLoad(allocaA, "load.a");
+    auto* loadedB = builder.createLoad(allocaB, "load.b");
+    auto* sum = builder.createAdd(loadedA, loadedB, "sum");
+    builder.createRet(sum);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    // 30 is non-zero, so success should be false
+    CHECK_FALSE(success);
+}
+
+// =============================================================================
+// Multi-block tests - the core issue being tested
+// =============================================================================
+
+TEST_CASE("TargetCodeGenerator.two_blocks_simple_branch")
+{
+    // Simple unconditional branch between blocks
+    // entry:
+    //   %x = alloca i64
+    //   store 0, %x
+    //   br next
+    // next:
+    //   %v = load %x
+    //   ret %v
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* next = builder.createBlock("next");
+
+    builder.setInsertPoint(entry);
+    auto* alloca = builder.createAlloca(LiteralType::Number, builder.get(1), "x");
+    builder.createStore(alloca, builder.get(CoreNumber(0)), "store");
+    builder.createBr(next);
+
+    builder.setInsertPoint(next);
+    auto* loaded = builder.createLoad(alloca, "load");
+    builder.createRet(loaded);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // 0 is success
+}
+
+TEST_CASE("TargetCodeGenerator.conditional_branch_true_path")
+{
+    // Conditional branch - takes true path
+    // entry:
+    //   %result = alloca i64
+    //   store 1, %result    ; non-zero default
+    //   %cond = true
+    //   condbr %cond, if.true, if.false
+    // if.true:
+    //   store 0, %result    ; zero = success
+    //   br merge
+    // if.false:
+    //   store 2, %result
+    //   br merge
+    // merge:
+    //   %v = load %result
+    //   ret %v
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* ifTrue = builder.createBlock("if.true");
+    auto* ifFalse = builder.createBlock("if.false");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(result, builder.get(CoreNumber(1)), "init");
+    auto* cond = builder.get(true);
+    builder.createCondBr(cond, ifTrue, ifFalse);
+
+    builder.setInsertPoint(ifTrue);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.true");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(ifFalse);
+    builder.createStore(result, builder.get(CoreNumber(2)), "store.false");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* loaded = builder.createLoad(result, "load");
+    builder.createRet(loaded);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should store 0 via true path
+}
+
+TEST_CASE("TargetCodeGenerator.conditional_branch_false_path")
+{
+    // Same as above but takes false path
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* ifTrue = builder.createBlock("if.true");
+    auto* ifFalse = builder.createBlock("if.false");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(result, builder.get(CoreNumber(1)), "init");
+    auto* cond = builder.get(false); // false this time
+    builder.createCondBr(cond, ifTrue, ifFalse);
+
+    builder.setInsertPoint(ifTrue);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.true");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(ifFalse);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.false"); // also 0 for testing
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* loaded = builder.createLoad(result, "load");
+    builder.createRet(loaded);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should store 0 via false path
+}
+
+TEST_CASE("TargetCodeGenerator.multiple_allocas_with_conditional")
+{
+    // This is the pattern that match expressions generate - multiple allocas
+    // with conditional branches between check and arm blocks.
+    //
+    // entry:
+    //   %scrutinee = alloca i64
+    //   %result = alloca i64
+    //   store 5, %scrutinee
+    //   br check.0
+    // check.0:
+    //   %s = load %scrutinee
+    //   %match = cmp eq %s, 5
+    //   condbr %match, arm.0, check.1
+    // arm.0:
+    //   store 0, %result   ; matched - success
+    //   br merge
+    // check.1:
+    //   store 1, %result   ; default - failure
+    //   br merge
+    // merge:
+    //   %r = load %result
+    //   ret %r
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* check0 = builder.createBlock("check.0");
+    auto* arm0 = builder.createBlock("arm.0");
+    auto* check1 = builder.createBlock("check.1");
+    auto* merge = builder.createBlock("merge");
+
+    // Entry block - allocate storage
+    builder.setInsertPoint(entry);
+    auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(scrutinee, builder.get(CoreNumber(5)), "store.scrutinee");
+    builder.createBr(check0);
+
+    // First pattern check
+    builder.setInsertPoint(check0);
+    auto* s = builder.createLoad(scrutinee, "load.scrutinee");
+    auto* match = builder.createNCmpEQ(s, builder.get(CoreNumber(5)), "match");
+    builder.createCondBr(match, arm0, check1);
+
+    // First arm body - matched!
+    builder.setInsertPoint(arm0);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.result.matched");
+    builder.createBr(merge);
+
+    // Second check (default case) - not matched
+    builder.setInsertPoint(check1);
+    builder.createStore(result, builder.get(CoreNumber(1)), "store.default");
+    builder.createBr(merge);
+
+    // Merge block
+    builder.setInsertPoint(merge);
+    auto* r = builder.createLoad(result, "load.result");
+    builder.createRet(r);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should match first pattern and return 0
+}
+
+TEST_CASE("TargetCodeGenerator.match_pattern_fallthrough")
+{
+    // Same structure but scrutinee = 7 (doesn't match 5)
+    // Should fall through to default
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* check0 = builder.createBlock("check.0");
+    auto* arm0 = builder.createBlock("arm.0");
+    auto* check1 = builder.createBlock("check.1");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(scrutinee, builder.get(CoreNumber(7)), "store.scrutinee"); // 7 != 5
+    builder.createBr(check0);
+
+    builder.setInsertPoint(check0);
+    auto* s = builder.createLoad(scrutinee, "load.scrutinee");
+    auto* match = builder.createNCmpEQ(s, builder.get(CoreNumber(5)), "match");
+    builder.createCondBr(match, arm0, check1);
+
+    builder.setInsertPoint(arm0);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.matched");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(check1);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.default"); // 0 for verification
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* r = builder.createLoad(result, "load.result");
+    builder.createRet(r);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should take default path and return 0
+}
+
+TEST_CASE("TargetCodeGenerator.three_way_branch_second_match")
+{
+    // Three pattern checks with fallthrough
+    // scrutinee = 2
+    // check 1: == 1 -> arm1 (returns 1 - failure)
+    // check 2: == 2 -> arm2 (returns 0 - success)  <- should match
+    // default: -> arm3 (returns 3 - failure)
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* check0 = builder.createBlock("check.0");
+    auto* arm0 = builder.createBlock("arm.0");
+    auto* check1 = builder.createBlock("check.1");
+    auto* arm1 = builder.createBlock("arm.1");
+    auto* defaultBlock = builder.createBlock("default");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(scrutinee, builder.get(CoreNumber(2)), "store.scrutinee");
+    builder.createBr(check0);
+
+    builder.setInsertPoint(check0);
+    auto* s0 = builder.createLoad(scrutinee, "load.s0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    builder.createCondBr(match0, arm0, check1);
+
+    builder.setInsertPoint(arm0);
+    builder.createStore(result, builder.get(CoreNumber(1)), "store.1"); // non-zero
+    builder.createBr(merge);
+
+    builder.setInsertPoint(check1);
+    auto* s1 = builder.createLoad(scrutinee, "load.s1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    builder.createCondBr(match1, arm1, defaultBlock);
+
+    builder.setInsertPoint(arm1);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createBr(merge);
+
+    builder.setInsertPoint(defaultBlock);
+    builder.createStore(result, builder.get(CoreNumber(3)), "store.3"); // non-zero
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* r = builder.createLoad(result, "load.result");
+    builder.createRet(r);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should match second pattern and return 0
+}
+
+TEST_CASE("TargetCodeGenerator.three_way_branch_first_match")
+{
+    // Same as above but scrutinee = 1 (matches first)
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* check0 = builder.createBlock("check.0");
+    auto* arm0 = builder.createBlock("arm.0");
+    auto* check1 = builder.createBlock("check.1");
+    auto* arm1 = builder.createBlock("arm.1");
+    auto* defaultBlock = builder.createBlock("default");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(scrutinee, builder.get(CoreNumber(1)), "store.scrutinee");
+    builder.createBr(check0);
+
+    builder.setInsertPoint(check0);
+    auto* s0 = builder.createLoad(scrutinee, "load.s0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    builder.createCondBr(match0, arm0, check1);
+
+    builder.setInsertPoint(arm0);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createBr(merge);
+
+    builder.setInsertPoint(check1);
+    auto* s1 = builder.createLoad(scrutinee, "load.s1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    builder.createCondBr(match1, arm1, defaultBlock);
+
+    builder.setInsertPoint(arm1);
+    builder.createStore(result, builder.get(CoreNumber(2)), "store.2");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(defaultBlock);
+    builder.createStore(result, builder.get(CoreNumber(3)), "store.3");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* r = builder.createLoad(result, "load.result");
+    builder.createRet(r);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should match first pattern and return 0
+}
+
+TEST_CASE("TargetCodeGenerator.three_way_branch_default")
+{
+    // Same as above but scrutinee = 99 (matches default)
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    auto* check0 = builder.createBlock("check.0");
+    auto* arm0 = builder.createBlock("arm.0");
+    auto* check1 = builder.createBlock("check.1");
+    auto* arm1 = builder.createBlock("arm.1");
+    auto* defaultBlock = builder.createBlock("default");
+    auto* merge = builder.createBlock("merge");
+
+    builder.setInsertPoint(entry);
+    auto* scrutinee = builder.createAlloca(LiteralType::Number, builder.get(1), "scrutinee");
+    auto* result = builder.createAlloca(LiteralType::Number, builder.get(1), "result");
+    builder.createStore(scrutinee, builder.get(CoreNumber(99)), "store.scrutinee");
+    builder.createBr(check0);
+
+    builder.setInsertPoint(check0);
+    auto* s0 = builder.createLoad(scrutinee, "load.s0");
+    auto* match0 = builder.createNCmpEQ(s0, builder.get(CoreNumber(1)), "match0");
+    builder.createCondBr(match0, arm0, check1);
+
+    builder.setInsertPoint(arm0);
+    builder.createStore(result, builder.get(CoreNumber(1)), "store.1");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(check1);
+    auto* s1 = builder.createLoad(scrutinee, "load.s1");
+    auto* match1 = builder.createNCmpEQ(s1, builder.get(CoreNumber(2)), "match1");
+    builder.createCondBr(match1, arm1, defaultBlock);
+
+    builder.setInsertPoint(arm1);
+    builder.createStore(result, builder.get(CoreNumber(2)), "store.2");
+    builder.createBr(merge);
+
+    builder.setInsertPoint(defaultBlock);
+    builder.createStore(result, builder.get(CoreNumber(0)), "store.0"); // zero = success
+    builder.createBr(merge);
+
+    builder.setInsertPoint(merge);
+    auto* r = builder.createLoad(result, "load.result");
+    builder.createRet(r);
+
+    auto [completed, success] = testRunner.run("test");
+    CHECK(completed);
+    CHECK(success); // Should match default and return 0
+}

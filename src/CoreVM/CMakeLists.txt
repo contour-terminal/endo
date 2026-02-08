@@ -60,3 +60,12 @@ target_include_directories(CoreVM PUBLIC
 target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
 
 enable_sanitizers(CoreVM)
+
+# Tests
+add_executable(test-corevm
+    test_main.cpp
+    TargetCodeGenerator_test.cpp
+)
+target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
+add_test(NAME test-corevm COMMAND test-corevm)
+enable_sanitizers(test-corevm)
