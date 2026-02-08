@@ -668,7 +668,20 @@ int Shell::execute(std::string const& lineBuffer)
         assert(main != nullptr);
         auto runner = CoreVM::Runner(main, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
         _runner = &runner;
-        runner.run();
+
+        // Save current exit code before running - $? expansion will see this value
+        int const savedExitCode = _exitCode;
+
+        // Run the handler - run() returns true if exit code was non-zero
+        bool const runnerExitNonZero = runner.run();
+
+        // If _exitCode wasn't changed during execution (no command ran),
+        // set it based on the runner's result
+        if (_exitCode == savedExitCode)
+        {
+            _exitCode = runnerExitNonZero ? 1 : 0;
+        }
+
         return _exitCode;
     }
     catch (std::exception const& e)
@@ -3948,7 +3961,7 @@ void Shell::builtinBg(CoreVM::Params& context)
 void Shell::builtinWait(CoreVM::Params& context)
 {
 #if !defined(_WIN32)
-    if (context.count() > 1)
+    if (context.count() >= 1)
     {
         // Wait for specific job
         int const jobId = static_cast<int>(context.getInt(1));
