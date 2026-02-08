@@ -4,12 +4,10 @@
 #include <stdexcept>
 #include <variant>
 
-#include "IRGenerator.hpp"
-
 namespace endo
 {
 
-PatternIRGenerator::PatternIRGenerator(IRGenerator& gen): _gen(gen)
+PatternIRGenerator::PatternIRGenerator(CoreVM::IRBuilder& builder): _builder(builder)
 {
 }
 
@@ -52,20 +50,20 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
             using T = std::decay_t<decltype(arg)>;
             if constexpr (std::is_same_v<T, int64_t>)
             {
-                return _gen.get(CoreVM::CoreNumber(arg));
+                return _builder.get(CoreVM::CoreNumber(arg));
             }
             else if constexpr (std::is_same_v<T, double>)
             {
                 // CoreVM uses integers; truncate for now
-                return _gen.get(CoreVM::CoreNumber(static_cast<int64_t>(arg)));
+                return _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(arg)));
             }
             else if constexpr (std::is_same_v<T, bool>)
             {
-                return _gen.get(arg);
+                return _builder.get(arg);
             }
             else if constexpr (std::is_same_v<T, std::string>)
             {
-                return _gen.get(arg);
+                return _builder.get(arg);
             }
             else
             {
@@ -76,7 +74,7 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
 
     if (!literal)
     {
-        _gen.createBr(_failureBlock);
+        _builder.createBr(_failureBlock);
         return;
     }
 
@@ -85,22 +83,22 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
     if (literal->type() == CoreVM::LiteralType::String)
     {
         // String comparison
-        cmp = _gen.createSCmpEQ(_scrutinee, literal, "pat.str.eq");
+        cmp = _builder.createSCmpEQ(_scrutinee, literal, "pat.str.eq");
     }
     else if (_scrutinee->type() == CoreVM::LiteralType::Void
              || _scrutinee->type() == CoreVM::LiteralType::Object)
     {
         // Dynamic value comparison (for values from OGETSLOT with unknown compile-time type)
-        cmp = _gen.createVCmpEQ(_scrutinee, literal, "pat.dyn.eq");
+        cmp = _builder.createVCmpEQ(_scrutinee, literal, "pat.dyn.eq");
     }
     else
     {
         // Numeric/boolean comparison (known types at compile time)
-        cmp = _gen.createNCmpEQ(_scrutinee, literal, "pat.num.eq");
+        cmp = _builder.createNCmpEQ(_scrutinee, literal, "pat.num.eq");
     }
 
     // Conditional branch: on match go to success, otherwise try next pattern
-    _gen.createCondBr(cmp, _successBlock, _failureBlock);
+    _builder.createCondBr(cmp, _successBlock, _failureBlock);
 }
 
 void PatternIRGenerator::visit(pattern::VariablePattern const& pat)
@@ -112,7 +110,7 @@ void PatternIRGenerator::visit(pattern::VariablePattern const& pat)
         return;
 
     // Unconditionally branch to success
-    _gen.createBr(_successBlock);
+    _builder.createBr(_successBlock);
 }
 
 void PatternIRGenerator::visit(pattern::WildcardPattern const&)
@@ -121,7 +119,7 @@ void PatternIRGenerator::visit(pattern::WildcardPattern const&)
     if (_collectOnly)
         return;
 
-    _gen.createBr(_successBlock);
+    _builder.createBr(_successBlock);
 }
 
 void PatternIRGenerator::visit(pattern::AsPattern const& pat)
@@ -138,7 +136,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
     if (pat.alternatives.empty())
     {
         if (!_collectOnly)
-            _gen.createBr(_failureBlock);
+            _builder.createBr(_failureBlock);
         return;
     }
 
@@ -159,7 +157,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
     std::vector<CoreVM::BasicBlock*> altBlocks;
     for (size_t i = 1; i < pat.alternatives.size(); ++i)
     {
-        altBlocks.push_back(_gen.createBlock("pat.or.alt." + std::to_string(i)));
+        altBlocks.push_back(_builder.createBlock("pat.or.alt." + std::to_string(i)));
     }
 
     // Try each alternative
@@ -169,7 +167,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
 
         // Compile this alternative with success going to original success,
         // and failure going to next alternative (or final failure)
-        PatternIRGenerator altCompiler(_gen);
+        PatternIRGenerator altCompiler(_builder);
         altCompiler.compile(*pat.alternatives[i], _scrutinee, _scrutineeStorage, _successBlock, nextTry);
 
         // Collect any bindings from this alternative
@@ -186,7 +184,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
         // Move to next alternative's check block
         if (i + 1 < pat.alternatives.size())
         {
-            _gen.setInsertPoint(altBlocks[i]);
+            _builder.setInsertPoint(altBlocks[i]);
         }
     }
 }
@@ -207,7 +205,7 @@ void PatternIRGenerator::visit(pattern::TuplePattern const&)
     // Tuples require runtime representation
     if (_collectOnly)
         return;
-    _gen.createBr(_failureBlock);
+    _builder.createBr(_failureBlock);
 }
 
 void PatternIRGenerator::visit(pattern::ListPattern const&)
@@ -215,7 +213,7 @@ void PatternIRGenerator::visit(pattern::ListPattern const&)
     // Lists require runtime representation
     if (_collectOnly)
         return;
-    _gen.createBr(_failureBlock);
+    _builder.createBr(_failureBlock);
 }
 
 void PatternIRGenerator::visit(pattern::ConsPattern const&)
@@ -223,7 +221,7 @@ void PatternIRGenerator::visit(pattern::ConsPattern const&)
     // Cons patterns require runtime list representation
     if (_collectOnly)
         return;
-    _gen.createBr(_failureBlock);
+    _builder.createBr(_failureBlock);
 }
 
 void PatternIRGenerator::visit(pattern::RecordPattern const&)
@@ -231,7 +229,7 @@ void PatternIRGenerator::visit(pattern::RecordPattern const&)
     // Records require runtime representation
     if (_collectOnly)
         return;
-    _gen.createBr(_failureBlock);
+    _builder.createBr(_failureBlock);
 }
 
 void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
@@ -257,7 +255,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
         // TODO: Support user-defined ADTs
         if (_collectOnly)
             return;
-        _gen.createBr(_failureBlock);
+        _builder.createBr(_failureBlock);
         return;
     }
 
@@ -274,28 +272,28 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
     }
 
     // Get the tag from the object using OGETTAG
-    CoreVM::Value* tag = _gen.createObjGetTag(_scrutinee, "ctor.tag");
+    CoreVM::Value* tag = _builder.createObjGetTag(_scrutinee, "ctor.tag");
 
     // Check if tag matches expected
     CoreVM::Value* tagMatches =
-        _gen.createNCmpEQ(tag, _gen.get(CoreVM::CoreNumber(expectedTag)), "ctor.tag.eq");
+        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(expectedTag)), "ctor.tag.eq");
 
     // If pattern has a payload, we need an intermediate block to extract and match it
     if (pat.payload)
     {
-        auto* payloadBlock = _gen.createBlock("ctor.payload");
-        _gen.createCondBr(tagMatches, payloadBlock, _failureBlock);
+        auto* payloadBlock = _builder.createBlock("ctor.payload");
+        _builder.createCondBr(tagMatches, payloadBlock, _failureBlock);
 
-        _gen.setInsertPoint(payloadBlock);
+        _builder.setInsertPoint(payloadBlock);
 
         // Reload scrutinee from storage since we're in a new basic block.
         // The stack tracking resets at block boundaries, so we must reload
         // to ensure the value is available for use.
-        CoreVM::Value* scrutineeReloaded = _gen.createLoad(_scrutineeStorage, "scrutinee.reload");
+        CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
 
         // Extract payload from slot 0 using OGETSLOT
-        CoreVM::Value* payloadValue =
-            _gen.createObjGetSlot(scrutineeReloaded, _gen.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+        CoreVM::Value* payloadValue = _builder.createObjGetSlot(
+            scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
 
         // Recursively match the payload pattern
         CoreVM::Value* savedScrutinee = _scrutinee;
@@ -306,7 +304,7 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
     else
     {
         // No payload pattern - just check the tag
-        _gen.createCondBr(tagMatches, _successBlock, _failureBlock);
+        _builder.createCondBr(tagMatches, _successBlock, _failureBlock);
     }
 }
 

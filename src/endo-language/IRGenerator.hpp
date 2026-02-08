@@ -14,8 +14,6 @@
 namespace endo
 {
 
-class PatternIRGenerator; // Forward declaration
-
 /// Persistent state for F# definitions that survives across REPL prompts.
 ///
 /// When running interactively, `let` function definitions (including `let rec`)
@@ -41,11 +39,12 @@ struct FSharpPersistentState
 };
 
 /// Generates IR code from an AST.
-class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
+class IRGenerator final: public ast::Visitor
 {
-    friend class PatternIRGenerator; // Allow PatternIRGenerator to access protected IRBuilder methods
-
   public:
+    /// Returns the underlying IR builder.
+    [[nodiscard]] CoreVM::IRBuilder& builder() noexcept { return _builder; }
+
     /// Generates IR code from an AST.
     ///
     /// @param rootNode The root statement of the AST
@@ -253,9 +252,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     /// for proper stack tracking in the TargetCodeGenerator.
     CoreVM::AllocaInstr* createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name);
 
+    CoreVM::IRBuilder _builder;
     CoreVM::diagnostics::Report& _report;
     CoreVM::Runtime& _runtime;
-    CoreVM::SourceLocation _currentLocation;
     bool _hasErrors = false;
     CoreVM::Value* _result = nullptr;
     CoreVM::Signature _processCallSignature;

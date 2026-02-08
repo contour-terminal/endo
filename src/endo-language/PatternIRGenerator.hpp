@@ -12,8 +12,6 @@
 namespace endo
 {
 
-class IRGenerator;
-
 /// Generates IR for pattern matching using decision trees with conditional branches.
 ///
 /// This class visits pattern AST nodes and generates IR code that tests whether
@@ -32,7 +30,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
         CoreVM::Value* value;
     };
 
-    explicit PatternIRGenerator(IRGenerator& gen);
+    explicit PatternIRGenerator(CoreVM::IRBuilder& builder);
 
     /// Compiles a pattern to IR code.
     ///
@@ -73,7 +71,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     void visit(pattern::OrPattern const& pat) override;
     void visit(pattern::GuardedPattern const& pat) override;
 
-    IRGenerator& _gen;
+    CoreVM::IRBuilder& _builder;
     CoreVM::Value* _scrutinee = nullptr;
     CoreVM::AllocaInstr* _scrutineeStorage = nullptr; ///< Storage for reloading scrutinee across blocks
     CoreVM::BasicBlock* _successBlock = nullptr;

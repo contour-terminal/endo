@@ -37,9 +37,9 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
 {
     IRGenerator generator(report, runtime);
 
-    generator.setProgram(std::make_unique<CoreVM::IRProgram>());
-    generator.setHandler(generator.getHandler(GLOBAL_SCOPE_INIT_NAME));
-    generator.setInsertPoint(generator.createBlock("EntryPoint"));
+    generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
+    generator._builder.setHandler(generator._builder.getHandler(GLOBAL_SCOPE_INIT_NAME));
+    generator._builder.setInsertPoint(generator._builder.createBlock("EntryPoint"));
 
     // Initialize F# root scope
     generator.pushFSharpScope();
@@ -86,9 +86,9 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     if (generator._hasErrors)
         return nullptr;
 
-    generator.createRet(generator.get(CoreVM::CoreNumber(0)));
+    generator._builder.createRet(generator._builder.get(CoreVM::CoreNumber(0)));
 
-    return generator.takeProgram();
+    return generator._builder.takeProgram();
 }
 
 IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& runtime):
@@ -124,7 +124,7 @@ void IRGenerator::popFSharpScope()
         // This avoids cross-block value tracking issues.
         for (CoreVM::AllocaInstr* storage: _currentFSharpScope->objectVariables)
         {
-            createObjRelease(storage, "scope.exit.release");
+            _builder.createObjRelease(storage, "scope.exit.release");
         }
 
         FSharpScope* parent = _currentFSharpScope->parent;
@@ -386,11 +386,11 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
 CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
 {
     // Get the entry block of the current handler
-    CoreVM::BasicBlock* entryBlock = handler()->getEntryBlock();
+    CoreVM::BasicBlock* entryBlock = _builder.handler()->getEntryBlock();
 
     // Create the alloca instruction
-    auto allocaInstr =
-        std::make_unique<CoreVM::AllocaInstr>(type, get(CoreVM::CoreNumber(1)), makeName(name));
+    auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
+        type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
 
     // Insert before terminator in entry block (handles case where entry block already has a branch)
     CoreVM::Instr* inserted = entryBlock->insertBeforeTerminator(std::move(allocaInstr));
@@ -412,8 +412,7 @@ CoreVM::Value* IRGenerator::codegen(ast::Node const* node)
         // Track current location for error reporting and IR instruction annotation
         if (node->location.has_value())
         {
-            _currentLocation = toCoreLoc(node->location.value());
-            setSourceLocation(_currentLocation); // IRBuilder method - sets location for new instructions
+            _builder.setSourceLocation(toCoreLoc(node->location.value()));
         }
         node->accept(*this);
     }
@@ -423,7 +422,7 @@ CoreVM::Value* IRGenerator::codegen(ast::Node const* node)
 template <typename... Args>
 void IRGenerator::reportTypeError(std::format_string<Args...> f, Args&&... args)
 {
-    _report.typeError(_currentLocation, f, std::forward<Args>(args)...);
+    _report.typeError(_builder.sourceLocation(), f, std::forward<Args>(args)...);
     _hasErrors = true;
 }
 
@@ -431,7 +430,7 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
 {
     CoreVM::Value* exitCode = nullptr;
     if (!node.code)
-        exitCode = get(CoreVM::CoreNumber(0));
+        exitCode = _builder.get(CoreVM::CoreNumber(0));
     else
     {
         // Special handling: if the exit code is a LiteralExpr that looks like an identifier,
@@ -442,7 +441,7 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
             if (CoreVM::Value* fsharpVar = lookupFSharpVariable(literal->value))
             {
                 // It's an F# variable - load its value
-                exitCode = createLoad(fsharpVar, literal->value);
+                exitCode = _builder.createLoad(fsharpVar, literal->value);
             }
         }
 
@@ -454,21 +453,23 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
         }
 
         if (exitCode->type() == CoreVM::LiteralType::String)
-            exitCode = createS2N(exitCode);
+            exitCode = _builder.createS2N(exitCode);
         else if (exitCode->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("exit code must be a number, got {}", exitCode->type());
             return;
         }
     }
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), { exitCode }, "exit");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), { exitCode }, "exit");
 }
 
 void IRGenerator::visit(ast::BuiltinExportStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};
-    callArguments.push_back(get(node.name));
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "export");
+    callArguments.push_back(_builder.get(node.name));
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(node.callback.get()), callArguments, "export");
 }
 
 void IRGenerator::visit(ast::BuiltinChDirStmt const& node)
@@ -477,7 +478,8 @@ void IRGenerator::visit(ast::BuiltinChDirStmt const& node)
     if (node.path)
         callArguments.push_back(codegen(node.path.get()));
 
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "chdir");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "chdir");
 }
 
 void IRGenerator::visit(ast::BuiltinSetStmt const& node)
@@ -490,26 +492,28 @@ void IRGenerator::visit(ast::BuiltinSetStmt const& node)
         callArguments.push_back(codegen(node.value.get()));
     }
 
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "set");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "set");
 }
 
 void IRGenerator::visit(ast::BuiltinFalseStmt const& node)
 {
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "false");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "false");
 }
 
 void IRGenerator::visit(ast::BuiltinReadStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};
     if (!node.parameters.empty())
-        callArguments.emplace_back(get(createCallArgs(node.parameters)));
+        callArguments.emplace_back(_builder.get(createCallArgs(node.parameters)));
 
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "read");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "read");
 }
 
 void IRGenerator::visit(ast::BuiltinTrueStmt const& node)
 {
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "true");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "true");
 }
 
 void IRGenerator::visit(ast::CallPipeline const& node)
@@ -536,7 +540,8 @@ void IRGenerator::visit(ast::CallPipeline const& node)
         {
             auto* startCallback = findCallback("internal.redirect_start()V");
             if (startCallback)
-                createCallFunction(getBuiltinFunction(*startCallback), {}, "redirect_start");
+                _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*startCallback), {}, "redirect_start");
         }
 
         // Generate code for all redirects
@@ -580,10 +585,10 @@ void IRGenerator::visit(ast::CallPipeline const& node)
             {
                 // Use constant array (fast path)
                 std::vector<CoreVM::Value*> callArguments {};
-                callArguments.push_back(get(lastInChain));
-                callArguments.push_back(get(createCallArgs(call->program, call->parameters)));
-                _result = createCallFunction(
-                    getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
+                callArguments.push_back(_builder.get(lastInChain));
+                callArguments.push_back(_builder.get(createCallArgs(call->program, call->parameters)));
+                _result = _builder.createCallFunction(
+                    _builder.getBuiltinFunction(call->callback.get()), callArguments, "callProcess");
             }
         }
 
@@ -592,7 +597,7 @@ void IRGenerator::visit(ast::CallPipeline const& node)
         {
             auto* endCallback = findCallback("internal.redirect_end()V");
             if (endCallback)
-                createCallFunction(getBuiltinFunction(*endCallback), {}, "redirect_end");
+                _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
         }
     }
 }
@@ -612,35 +617,36 @@ void IRGenerator::visit(ast::CommandFileSubst const& node)
         return;
     }
 
-    auto* forkResult = createCallFunction(getBuiltinFunction(*forkCb), { get(isWrite) }, "procsubst_fork");
+    auto* forkResult = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*forkCb), { _builder.get(isWrite) }, "procsubst_fork");
 
     // Check if we're the child (result == 0)
-    auto* isChild = createNCmpEQ(forkResult, get(CoreVM::CoreNumber(0)));
+    auto* isChild = _builder.createNCmpEQ(forkResult, _builder.get(CoreVM::CoreNumber(0)));
 
-    CoreVM::BasicBlock* childBlock = createBlock("procsubst.child");
-    CoreVM::BasicBlock* contBlock = createBlock("procsubst.cont");
+    CoreVM::BasicBlock* childBlock = _builder.createBlock("procsubst.child");
+    CoreVM::BasicBlock* contBlock = _builder.createBlock("procsubst.cont");
 
-    createCondBr(isChild, childBlock, contBlock);
+    _builder.createCondBr(isChild, childBlock, contBlock);
 
     // Child block: execute command, then exit
-    setInsertPoint(childBlock);
+    _builder.setInsertPoint(childBlock);
     codegen(node.command.get());
 
     // Child exits after running command
     auto* exitCb = findCallback("internal.procsubst_exit()V");
     if (exitCb)
-        createCallFunction(getBuiltinFunction(*exitCb), {}, "procsubst_exit");
-    createBr(contBlock); // Unreachable due to exit, but needed for valid IR
+        _builder.createCallFunction(_builder.getBuiltinFunction(*exitCb), {}, "procsubst_exit");
+    _builder.createBr(contBlock); // Unreachable due to exit, but needed for valid IR
 
     // Continue block: parent gets the fd path
-    setInsertPoint(contBlock);
+    _builder.setInsertPoint(contBlock);
     auto* pathCb = findCallback("internal.procsubst_get_path()S");
     if (!pathCb)
     {
         reportTypeError("Internal error: internal.procsubst_get_path builtin not found");
         return;
     }
-    _result = createCallFunction(getBuiltinFunction(*pathCb), {}, "procsubst_get_path");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*pathCb), {}, "procsubst_get_path");
 }
 
 void IRGenerator::visit(ast::CompoundStmt const& node)
@@ -649,7 +655,7 @@ void IRGenerator::visit(ast::CompoundStmt const& node)
     {
         codegen(stmt.get());
         // Stop generating code after a terminator (break, continue, return, etc.)
-        if (getInsertPoint() && getInsertPoint()->getTerminator() != nullptr)
+        if (_builder.getInsertPoint() && _builder.getInsertPoint()->getTerminator() != nullptr)
             break;
     }
 
@@ -658,29 +664,29 @@ void IRGenerator::visit(ast::CompoundStmt const& node)
 
 void IRGenerator::visit(ast::FileDescriptor const& node)
 {
-    _result = get(CoreVM::CoreNumber { node.value });
+    _result = _builder.get(CoreVM::CoreNumber { node.value });
 }
 
 void IRGenerator::visit(ast::IfStmt const& node)
 {
-    CoreVM::BasicBlock* cond = createBlock("if.cond");
-    CoreVM::BasicBlock* trueBlock = createBlock("if.trueBlock");
-    CoreVM::BasicBlock* falseBlock = createBlock("if.falseBlock");
-    CoreVM::BasicBlock* end = createBlock("if.end");
+    CoreVM::BasicBlock* cond = _builder.createBlock("if.cond");
+    CoreVM::BasicBlock* trueBlock = _builder.createBlock("if.trueBlock");
+    CoreVM::BasicBlock* falseBlock = _builder.createBlock("if.falseBlock");
+    CoreVM::BasicBlock* end = _builder.createBlock("if.end");
 
-    createBr(cond);
-    setInsertPoint(cond);
-    createCondBr(toBool(codegen(node.condition.get())), trueBlock, falseBlock);
+    _builder.createBr(cond);
+    _builder.setInsertPoint(cond);
+    _builder.createCondBr(toBool(codegen(node.condition.get())), trueBlock, falseBlock);
 
-    setInsertPoint(trueBlock);
+    _builder.setInsertPoint(trueBlock);
     codegen(node.thenBlock.get());
-    createBr(end);
+    _builder.createBr(end);
 
-    setInsertPoint(falseBlock);
+    _builder.setInsertPoint(falseBlock);
     codegen(node.elseBlock.get());
-    createBr(end);
+    _builder.createBr(end);
 
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
 }
 
 void IRGenerator::visit(ast::LogicalAndStmt const& node)
@@ -690,21 +696,21 @@ void IRGenerator::visit(ast::LogicalAndStmt const& node)
     //   eval A
     //   if A succeeded (exit code == 0): eval B, result = B's exit code
     //   else: result = A's exit code
-    CoreVM::BasicBlock* evalRight = createBlock("and.evalRight");
-    CoreVM::BasicBlock* end = createBlock("and.end");
+    CoreVM::BasicBlock* evalRight = _builder.createBlock("and.evalRight");
+    CoreVM::BasicBlock* end = _builder.createBlock("and.end");
 
     // Evaluate left side
     auto* leftResult = codegen(node.left.get());
 
     // If left succeeded (exit code == 0), evaluate right side
-    createCondBr(toBool(leftResult), evalRight, end);
+    _builder.createCondBr(toBool(leftResult), evalRight, end);
 
     // Evaluate right side
-    setInsertPoint(evalRight);
+    _builder.setInsertPoint(evalRight);
     codegen(node.right.get());
-    createBr(end);
+    _builder.createBr(end);
 
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
     // Note: The exit code is automatically set by the last executed command
 }
 
@@ -715,22 +721,22 @@ void IRGenerator::visit(ast::LogicalOrStmt const& node)
     //   eval A
     //   if A failed (exit code != 0): eval B, result = B's exit code
     //   else: result = A's exit code (which is 0, success)
-    CoreVM::BasicBlock* evalRight = createBlock("or.evalRight");
-    CoreVM::BasicBlock* end = createBlock("or.end");
+    CoreVM::BasicBlock* evalRight = _builder.createBlock("or.evalRight");
+    CoreVM::BasicBlock* end = _builder.createBlock("or.end");
 
     // Evaluate left side
     auto* leftResult = codegen(node.left.get());
 
     // If left failed (exit code != 0), evaluate right side
     // toBool returns true for exit code 0 (success), so we flip the branches
-    createCondBr(toBool(leftResult), end, evalRight);
+    _builder.createCondBr(toBool(leftResult), end, evalRight);
 
     // Evaluate right side
-    setInsertPoint(evalRight);
+    _builder.setInsertPoint(evalRight);
     codegen(node.right.get());
-    createBr(end);
+    _builder.createBr(end);
 
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
     // Note: The exit code is automatically set by the last executed command
 }
 
@@ -742,11 +748,12 @@ void IRGenerator::visit(ast::InputRedirect const& node)
         reportTypeError("Internal error: internal.redirect_input builtin not found");
         return;
     }
-    auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
     auto* source = codegen(node.source.get());
     if (!source)
         return;
-    _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, source }, "redirect_input");
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { targetFd, source }, "redirect_input");
 }
 
 void IRGenerator::visit(ast::HereDocument const& node)
@@ -757,9 +764,10 @@ void IRGenerator::visit(ast::HereDocument const& node)
         reportTypeError("Internal error: internal.redirect_heredoc builtin not found");
         return;
     }
-    auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
-    auto* content = get(node.content);
-    _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
+    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* content = _builder.get(node.content);
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { targetFd, content }, "redirect_heredoc");
 }
 
 void IRGenerator::visit(ast::HereString const& node)
@@ -770,16 +778,17 @@ void IRGenerator::visit(ast::HereString const& node)
         reportTypeError("Internal error: internal.redirect_herestring builtin not found");
         return;
     }
-    auto* targetFd = get(CoreVM::CoreNumber(node.targetFd->value));
+    auto* targetFd = _builder.get(CoreVM::CoreNumber(node.targetFd->value));
     auto* content = codegen(node.content.get());
     if (!content)
         return;
-    _result = createCallFunction(getBuiltinFunction(*callback), { targetFd, content }, "redirect_herestring");
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { targetFd, content }, "redirect_herestring");
 }
 
 void IRGenerator::visit(ast::LiteralExpr const& node)
 {
-    _result = get(node.value);
+    _result = _builder.get(node.value);
 }
 
 void IRGenerator::visit(ast::TildeExpr const& node)
@@ -793,7 +802,8 @@ void IRGenerator::visit(ast::TildeExpr const& node)
             reportTypeError("Internal error: expand.tilde builtin not found");
             return;
         }
-        _result = createCallFunction(getBuiltinFunction(*callback), { get(node.suffix) }, "expand.tilde");
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { _builder.get(node.suffix) }, "expand.tilde");
     }
     else
     {
@@ -804,8 +814,9 @@ void IRGenerator::visit(ast::TildeExpr const& node)
             reportTypeError("Internal error: expand.tilde_user builtin not found");
             return;
         }
-        _result = createCallFunction(
-            getBuiltinFunction(*callback), { get(node.user), get(node.suffix) }, "expand.tilde_user");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback),
+                                              { _builder.get(node.user), _builder.get(node.suffix) },
+                                              "expand.tilde_user");
     }
 }
 
@@ -818,7 +829,8 @@ void IRGenerator::visit(ast::GlobExpr const& node)
         return;
     }
     // Glob expansion is handled specially - it adds multiple arguments to the command builder
-    createCallFunction(getBuiltinFunction(*callback), { get(node.pattern) }, "expand.glob");
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { _builder.get(node.pattern) }, "expand.glob");
     _result = nullptr; // Result is captured via cmdBuilderArgs
 }
 
@@ -827,7 +839,7 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
     // Generate code for each part and concatenate them
     if (node.parts.empty())
     {
-        _result = get("");
+        _result = _builder.get("");
         return;
     }
 
@@ -842,7 +854,8 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
         // Convert to string if needed
         auto* callback = findCallback("expand.to_string(I)S");
         if (callback)
-            result = createCallFunction(getBuiltinFunction(*callback), { result }, "to_string");
+            result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { result }, "to_string");
     }
 
     // Concatenate remaining parts
@@ -857,10 +870,11 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
         {
             auto* callback = findCallback("expand.to_string(I)S");
             if (callback)
-                part = createCallFunction(getBuiltinFunction(*callback), { part }, "to_string");
+                part = _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { part }, "to_string");
         }
 
-        result = createSAdd(result, part, "concat");
+        result = _builder.createSAdd(result, part, "concat");
     }
 
     _result = result;
@@ -880,14 +894,15 @@ void IRGenerator::visit(ast::ArithExpansionExpr const& node)
         reportTypeError("Internal error: expand.arith_to_string builtin not found");
         return;
     }
-    _result = createCallFunction(getBuiltinFunction(*callback), { result }, "expand.arith_to_string");
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { result }, "expand.arith_to_string");
 }
 
 CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
 {
     if (auto const* lit = dynamic_cast<ast::ArithLiteralExpr const*>(expr))
     {
-        return get(CoreVM::CoreNumber(lit->value));
+        return _builder.get(CoreVM::CoreNumber(lit->value));
     }
     else if (auto const* var = dynamic_cast<ast::ArithVarExpr const*>(expr))
     {
@@ -898,7 +913,8 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
             reportTypeError("Internal error: expand.arith_getvar builtin not found");
             return nullptr;
         }
-        return createCallFunction(getBuiltinFunction(*callback), { get(var->name) }, "expand.arith_getvar");
+        return _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { _builder.get(var->name) }, "expand.arith_getvar");
     }
     else if (auto const* binary = dynamic_cast<ast::ArithBinaryExpr const*>(expr))
     {
@@ -909,11 +925,11 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
 
         switch (binary->op)
         {
-            case ast::ArithOp::Add: return createAdd(left, right);
-            case ast::ArithOp::Sub: return createSub(left, right);
-            case ast::ArithOp::Mul: return createMul(left, right);
-            case ast::ArithOp::Div: return createDiv(left, right);
-            case ast::ArithOp::Mod: return createRem(left, right);
+            case ast::ArithOp::Add: return _builder.createAdd(left, right);
+            case ast::ArithOp::Sub: return _builder.createSub(left, right);
+            case ast::ArithOp::Mul: return _builder.createMul(left, right);
+            case ast::ArithOp::Div: return _builder.createDiv(left, right);
+            case ast::ArithOp::Mod: return _builder.createRem(left, right);
             case ast::ArithOp::Pow: {
                 // Power operation via builtin
                 auto* callback = findCallback("expand.arith_pow(II)I");
@@ -922,21 +938,22 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
                     reportTypeError("Internal error: expand.arith_pow builtin not found");
                     return nullptr;
                 }
-                return createCallFunction(getBuiltinFunction(*callback), { left, right }, "expand.arith_pow");
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { left, right }, "expand.arith_pow");
             }
-            case ast::ArithOp::Lt: return createNCmpLT(left, right);
-            case ast::ArithOp::Gt: return createNCmpGT(left, right);
-            case ast::ArithOp::Le: return createNCmpLE(left, right);
-            case ast::ArithOp::Ge: return createNCmpGE(left, right);
-            case ast::ArithOp::Eq: return createNCmpEQ(left, right);
-            case ast::ArithOp::Ne: return createNCmpNE(left, right);
-            case ast::ArithOp::And: return createAnd(left, right);
-            case ast::ArithOp::Or: return createOr(left, right);
-            case ast::ArithOp::BitAnd: return createAnd(left, right);
-            case ast::ArithOp::BitOr: return createOr(left, right);
-            case ast::ArithOp::BitXor: return createXor(left, right);
-            case ast::ArithOp::Shl: return createShl(left, right);
-            case ast::ArithOp::Shr: return createShr(left, right);
+            case ast::ArithOp::Lt: return _builder.createNCmpLT(left, right);
+            case ast::ArithOp::Gt: return _builder.createNCmpGT(left, right);
+            case ast::ArithOp::Le: return _builder.createNCmpLE(left, right);
+            case ast::ArithOp::Ge: return _builder.createNCmpGE(left, right);
+            case ast::ArithOp::Eq: return _builder.createNCmpEQ(left, right);
+            case ast::ArithOp::Ne: return _builder.createNCmpNE(left, right);
+            case ast::ArithOp::And: return _builder.createAnd(left, right);
+            case ast::ArithOp::Or: return _builder.createOr(left, right);
+            case ast::ArithOp::BitAnd: return _builder.createAnd(left, right);
+            case ast::ArithOp::BitOr: return _builder.createOr(left, right);
+            case ast::ArithOp::BitXor: return _builder.createXor(left, right);
+            case ast::ArithOp::Shl: return _builder.createShl(left, right);
+            case ast::ArithOp::Shr: return _builder.createShr(left, right);
             default: reportTypeError("Unsupported arithmetic operator"); return nullptr;
         }
     }
@@ -950,9 +967,9 @@ CoreVM::Value* IRGenerator::codegenArith(ast::ArithExpr const* expr)
         {
             case ast::ArithOp::Neg:
                 // Implement negation as 0 - operand for proper signed behavior
-                return createSub(get(CoreVM::CoreNumber(0)), operand);
-            case ast::ArithOp::Not: return createNot(operand);
-            case ast::ArithOp::BitNot: return createNot(operand); // Bitwise NOT
+                return _builder.createSub(_builder.get(CoreVM::CoreNumber(0)), operand);
+            case ast::ArithOp::Not: return _builder.createNot(operand);
+            case ast::ArithOp::BitNot: return _builder.createNot(operand); // Bitwise NOT
             default: reportTypeError("Unsupported unary arithmetic operator"); return nullptr;
         }
     }
@@ -970,65 +987,65 @@ void IRGenerator::visit(ast::ParamExpansionExpr const& node)
     {
         case ast::ParamExpansionOp::Length:
             callbackName = "expand.param_length(S)S";
-            args.push_back(get(node.variable));
+            args.push_back(_builder.get(node.variable));
             break;
         case ast::ParamExpansionOp::DefaultValue:
             callbackName = "expand.param_default(SS)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
             break;
         case ast::ParamExpansionOp::AlternateValue:
             callbackName = "expand.param_alternate(SS)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
             break;
         case ast::ParamExpansionOp::AssignDefault:
             callbackName = "expand.param_assign(SS)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
             break;
         case ast::ParamExpansionOp::ErrorIfUnset:
             callbackName = "expand.param_error(SS)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
             break;
         case ast::ParamExpansionOp::RemovePrefixShort:
             callbackName = "expand.param_remove_prefix(SSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(false)); // shortest
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(false)); // shortest
             break;
         case ast::ParamExpansionOp::RemovePrefixLong:
             callbackName = "expand.param_remove_prefix(SSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(true)); // longest
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(true)); // longest
             break;
         case ast::ParamExpansionOp::RemoveSuffixShort:
             callbackName = "expand.param_remove_suffix(SSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(false)); // shortest
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(false)); // shortest
             break;
         case ast::ParamExpansionOp::RemoveSuffixLong:
             callbackName = "expand.param_remove_suffix(SSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(true)); // longest
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(true)); // longest
             break;
         case ast::ParamExpansionOp::ReplaceFirst:
             callbackName = "expand.param_replace(SSSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(node.operand2));
-            args.push_back(get(false)); // first only
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(node.operand2));
+            args.push_back(_builder.get(false)); // first only
             break;
         case ast::ParamExpansionOp::ReplaceAll:
             callbackName = "expand.param_replace(SSSB)S";
-            args.push_back(get(node.variable));
-            args.push_back(get(node.operand1));
-            args.push_back(get(node.operand2));
-            args.push_back(get(true)); // all
+            args.push_back(_builder.get(node.variable));
+            args.push_back(_builder.get(node.operand1));
+            args.push_back(_builder.get(node.operand2));
+            args.push_back(_builder.get(true)); // all
             break;
     }
 
@@ -1038,7 +1055,7 @@ void IRGenerator::visit(ast::ParamExpansionExpr const& node)
         reportTypeError("Internal error: parameter expansion builtin not found");
         return;
     }
-    _result = createCallFunction(getBuiltinFunction(*callback), args, "expand.param");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), args, "expand.param");
 }
 
 void IRGenerator::visit(ast::VariableExpr const& node)
@@ -1053,7 +1070,8 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 reportTypeError("Internal error: getvar builtin not found");
                 return;
             }
-            _result = createCallFunction(getBuiltinFunction(*callback), { get(node.name) }, "getvar");
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { _builder.get(node.name) }, "getvar");
             break;
         }
         case ast::VariableType::ExitStatus: {
@@ -1063,7 +1081,8 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 reportTypeError("Internal error: getvar.exitstatus builtin not found");
                 return;
             }
-            _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.exitstatus");
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "getvar.exitstatus");
             break;
         }
         case ast::VariableType::ProcessId: {
@@ -1073,7 +1092,8 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 reportTypeError("Internal error: getvar.processid builtin not found");
                 return;
             }
-            _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.processid");
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "getvar.processid");
             break;
         }
         case ast::VariableType::BackgroundId: {
@@ -1083,7 +1103,8 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 reportTypeError("Internal error: getvar.backgroundid builtin not found");
                 return;
             }
-            _result = createCallFunction(getBuiltinFunction(*callback), {}, "getvar.backgroundid");
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), {}, "getvar.backgroundid");
             break;
         }
         case ast::VariableType::Positional: {
@@ -1098,8 +1119,9 @@ void IRGenerator::visit(ast::VariableExpr const& node)
                 reportTypeError("Internal error: getvar.positional builtin not found");
                 return;
             }
-            _result = createCallFunction(
-                getBuiltinFunction(*callback), { get(CoreVM::CoreNumber(index)) }, "getvar.positional");
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback),
+                                                  { _builder.get(CoreVM::CoreNumber(index)) },
+                                                  "getvar.positional");
             break;
         }
     }
@@ -1108,20 +1130,21 @@ void IRGenerator::visit(ast::VariableExpr const& node)
 void IRGenerator::visit(ast::BuiltinUnsetStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};
-    callArguments.push_back(get(node.name));
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "unset");
+    callArguments.push_back(_builder.get(node.name));
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "unset");
 }
 
 void IRGenerator::visit(ast::BuiltinJobsStmt const& node)
 {
-    _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "jobs");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "jobs");
 }
 
 void IRGenerator::visit(ast::BuiltinFgStmt const& node)
 {
     if (!node.jobId)
     {
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "fg");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "fg");
     }
     else
     {
@@ -1129,13 +1152,14 @@ void IRGenerator::visit(ast::BuiltinFgStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
-            jobIdValue = createS2N(jobIdValue);
+            jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", jobIdValue->type());
             return;
         }
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "fg");
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), { jobIdValue }, "fg");
     }
 }
 
@@ -1143,7 +1167,7 @@ void IRGenerator::visit(ast::BuiltinBgStmt const& node)
 {
     if (!node.jobId)
     {
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "bg");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "bg");
     }
     else
     {
@@ -1151,13 +1175,14 @@ void IRGenerator::visit(ast::BuiltinBgStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
-            jobIdValue = createS2N(jobIdValue);
+            jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", jobIdValue->type());
             return;
         }
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "bg");
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), { jobIdValue }, "bg");
     }
 }
 
@@ -1165,7 +1190,7 @@ void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
 {
     if (!node.jobId)
     {
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "wait");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "wait");
     }
     else
     {
@@ -1173,13 +1198,14 @@ void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
         if (!jobIdValue)
             return;
         if (jobIdValue->type() == CoreVM::LiteralType::String)
-            jobIdValue = createS2N(jobIdValue);
+            jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
             reportTypeError("job ID must be a number, got {}", jobIdValue->type());
             return;
         }
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), { jobIdValue }, "wait");
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), { jobIdValue }, "wait");
     }
 }
 
@@ -1187,13 +1213,14 @@ void IRGenerator::visit(ast::BuiltinBindStmt const& node)
 {
     if (node.args.empty())
     {
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "bind");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "bind");
     }
     else
     {
         auto callArguments = std::vector<CoreVM::Value*> {};
-        callArguments.emplace_back(get(createCallArgs(node.args)));
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "bind");
+        callArguments.emplace_back(_builder.get(createCallArgs(node.args)));
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), callArguments, "bind");
     }
 }
 
@@ -1201,13 +1228,14 @@ void IRGenerator::visit(ast::BuiltinWhichStmt const& node)
 {
     if (node.args.empty())
     {
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), {}, "which");
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "which");
     }
     else
     {
         auto callArguments = std::vector<CoreVM::Value*> {};
-        callArguments.emplace_back(get(createCallArgs(node.args)));
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "which");
+        callArguments.emplace_back(_builder.get(createCallArgs(node.args)));
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), callArguments, "which");
     }
 }
 
@@ -1222,11 +1250,11 @@ void IRGenerator::visit(ast::OutputRedirect const& node)
             reportTypeError("Internal error: internal.redirect_fd_dup builtin not found");
             return;
         }
-        auto* sourceFd = get(CoreVM::CoreNumber(node.source->value));
-        auto* targetFd =
-            get(CoreVM::CoreNumber(std::get<std::unique_ptr<ast::FileDescriptor>>(node.target)->value));
-        _result =
-            createCallFunction(getBuiltinFunction(*callback), { sourceFd, targetFd }, "redirect_fd_dup");
+        auto* sourceFd = _builder.get(CoreVM::CoreNumber(node.source->value));
+        auto* targetFd = _builder.get(
+            CoreVM::CoreNumber(std::get<std::unique_ptr<ast::FileDescriptor>>(node.target)->value));
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { sourceFd, targetFd }, "redirect_fd_dup");
     }
     else
     {
@@ -1237,13 +1265,13 @@ void IRGenerator::visit(ast::OutputRedirect const& node)
             reportTypeError("Internal error: internal.redirect_output builtin not found");
             return;
         }
-        auto* sourceFd = get(CoreVM::CoreNumber(node.source->value));
+        auto* sourceFd = _builder.get(CoreVM::CoreNumber(node.source->value));
         auto* target = codegen(std::get<std::unique_ptr<ast::Expr>>(node.target).get());
         if (!target)
             return;
-        auto* append = get(node.append);
-        _result = createCallFunction(
-            getBuiltinFunction(*callback), { sourceFd, target, append }, "redirect_output");
+        auto* append = _builder.get(node.append);
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { sourceFd, target, append }, "redirect_output");
     }
 }
 
@@ -1259,7 +1287,7 @@ void IRGenerator::visit(ast::ProgramCall const& node)
     {
         auto* startCallback = findCallback("internal.redirect_start()V");
         if (startCallback)
-            createCallFunction(getBuiltinFunction(*startCallback), {}, "redirect_start");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*startCallback), {}, "redirect_start");
     }
 
     // Generate code for all redirects
@@ -1285,8 +1313,9 @@ void IRGenerator::visit(ast::ProgramCall const& node)
     {
         // Use constant array (fast path)
         auto callArguments = std::vector<CoreVM::Value*> {};
-        callArguments.push_back(get(createCallArgs(node.program, node.parameters)));
-        _result = createCallFunction(getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
+        callArguments.push_back(_builder.get(createCallArgs(node.program, node.parameters)));
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(node.callback.get()), callArguments, "callProcess");
     }
 
     // End redirect context
@@ -1294,7 +1323,7 @@ void IRGenerator::visit(ast::ProgramCall const& node)
     {
         auto* endCallback = findCallback("internal.redirect_end()V");
         if (endCallback)
-            createCallFunction(getBuiltinFunction(*endCallback), {}, "redirect_end");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
     }
 }
 
@@ -1308,7 +1337,7 @@ void IRGenerator::visit(ast::SubstitutionExpr const& node)
         reportTypeError("Internal error: internal.subst_start builtin not found");
         return;
     }
-    createCallFunction(getBuiltinFunction(*startCb), {}, "subst_start");
+    _builder.createCallFunction(_builder.getBuiltinFunction(*startCb), {}, "subst_start");
 
     // 2. Execute the command pipeline
     codegen(node.pipeline.get());
@@ -1320,29 +1349,29 @@ void IRGenerator::visit(ast::SubstitutionExpr const& node)
         reportTypeError("Internal error: internal.subst_end builtin not found");
         return;
     }
-    _result = createCallFunction(getBuiltinFunction(*endCb), {}, "subst_end");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*endCb), {}, "subst_end");
 }
 
 void IRGenerator::visit(ast::WhileStmt const& node)
 {
-    CoreVM::BasicBlock* cond = createBlock("while.cond");
-    CoreVM::BasicBlock* body = createBlock("while.body");
-    CoreVM::BasicBlock* end = createBlock("while.end");
+    CoreVM::BasicBlock* cond = _builder.createBlock("while.cond");
+    CoreVM::BasicBlock* body = _builder.createBlock("while.body");
+    CoreVM::BasicBlock* end = _builder.createBlock("while.end");
 
-    createBr(cond);
+    _builder.createBr(cond);
 
-    setInsertPoint(cond);
-    createCondBr(toBool(codegen(node.condition.get())), body, end);
+    _builder.setInsertPoint(cond);
+    _builder.createCondBr(toBool(codegen(node.condition.get())), body, end);
 
-    setInsertPoint(body);
+    _builder.setInsertPoint(body);
     pushLoopContext(cond, end);
     codegen(node.body.get());
     popLoopContext();
     // Only add loop-back branch if body wasn't terminated (by break/continue/return)
-    if (getInsertPoint() && !getInsertPoint()->getTerminator())
-        createBr(cond);
+    if (_builder.getInsertPoint() && !_builder.getInsertPoint()->getTerminator())
+        _builder.createBr(cond);
 
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
 }
 
 void IRGenerator::visit(ast::ForListStmt const& node)
@@ -1363,7 +1392,8 @@ void IRGenerator::visit(ast::ForListStmt const& node)
         reportTypeError("Internal error: internal.for_init builtin not found");
         return;
     }
-    createCallFunction(getBuiltinFunction(*initIterCb), { get(node.variable) }, "for_init");
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*initIterCb), { _builder.get(node.variable) }, "for_init");
 
     // Add all items to the iterator
     auto* addItemCb = findCallback("internal.for_add_item(S)V");
@@ -1376,53 +1406,55 @@ void IRGenerator::visit(ast::ForListStmt const& node)
     {
         auto* itemValue = codegen(item.get());
         if (itemValue)
-            createCallFunction(getBuiltinFunction(*addItemCb), { itemValue }, "for_add_item");
+            _builder.createCallFunction(
+                _builder.getBuiltinFunction(*addItemCb), { itemValue }, "for_add_item");
     }
 
-    CoreVM::BasicBlock* cond = createBlock("for.cond");
-    CoreVM::BasicBlock* body = createBlock("for.body");
-    CoreVM::BasicBlock* step = createBlock("for.step");
-    CoreVM::BasicBlock* end = createBlock("for.end");
+    CoreVM::BasicBlock* cond = _builder.createBlock("for.cond");
+    CoreVM::BasicBlock* body = _builder.createBlock("for.body");
+    CoreVM::BasicBlock* step = _builder.createBlock("for.step");
+    CoreVM::BasicBlock* end = _builder.createBlock("for.end");
 
-    createBr(cond);
+    _builder.createBr(cond);
 
     // Condition: check if there are more items
-    setInsertPoint(cond);
+    _builder.setInsertPoint(cond);
     auto* hasMoreCb = findCallback("internal.for_has_more()B");
     if (!hasMoreCb)
     {
         reportTypeError("Internal error: internal.for_has_more builtin not found");
         return;
     }
-    auto* hasMore = createCallFunction(getBuiltinFunction(*hasMoreCb), {}, "for_has_more");
-    createCondBr(hasMore, body, end);
+    auto* hasMore = _builder.createCallFunction(_builder.getBuiltinFunction(*hasMoreCb), {}, "for_has_more");
+    _builder.createCondBr(hasMore, body, end);
 
     // Body: set variable to next item and execute body
-    setInsertPoint(body);
+    _builder.setInsertPoint(body);
     auto* nextCb = findCallback("internal.for_next(S)V");
     if (!nextCb)
     {
         reportTypeError("Internal error: internal.for_next builtin not found");
         return;
     }
-    createCallFunction(getBuiltinFunction(*nextCb), { get(node.variable) }, "for_next");
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*nextCb), { _builder.get(node.variable) }, "for_next");
 
     pushLoopContext(step, end);
     codegen(node.body.get());
     popLoopContext();
     // Only add step branch if body wasn't terminated (by break/continue/return)
-    if (getInsertPoint() && !getInsertPoint()->getTerminator())
-        createBr(step);
+    if (_builder.getInsertPoint() && !_builder.getInsertPoint()->getTerminator())
+        _builder.createBr(step);
 
     // Step: just loop back to condition (next was already called)
-    setInsertPoint(step);
-    createBr(cond);
+    _builder.setInsertPoint(step);
+    _builder.createBr(cond);
 
     // End: clean up the for-loop state
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
     auto* cleanupCb = findCallback("internal.for_cleanup()V");
     if (cleanupCb)
-        createCallFunction(getBuiltinFunction(*cleanupCb), {}, "for_cleanup");
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "for_cleanup");
 }
 
 void IRGenerator::visit(ast::ForCStyleStmt const& node)
@@ -1436,22 +1468,22 @@ void IRGenerator::visit(ast::ForCStyleStmt const& node)
     //   forc.step: eval(step); goto forc.cond
     //   forc.end:
 
-    CoreVM::BasicBlock* initBlock = createBlock("forc.init");
-    CoreVM::BasicBlock* cond = createBlock("forc.cond");
-    CoreVM::BasicBlock* body = createBlock("forc.body");
-    CoreVM::BasicBlock* step = createBlock("forc.step");
-    CoreVM::BasicBlock* end = createBlock("forc.end");
+    CoreVM::BasicBlock* initBlock = _builder.createBlock("forc.init");
+    CoreVM::BasicBlock* cond = _builder.createBlock("forc.cond");
+    CoreVM::BasicBlock* body = _builder.createBlock("forc.body");
+    CoreVM::BasicBlock* step = _builder.createBlock("forc.step");
+    CoreVM::BasicBlock* end = _builder.createBlock("forc.end");
 
-    createBr(initBlock);
+    _builder.createBr(initBlock);
 
     // Init: evaluate init expression
-    setInsertPoint(initBlock);
+    _builder.setInsertPoint(initBlock);
     if (node.init)
         codegenArith(node.init.get());
-    createBr(cond);
+    _builder.createBr(cond);
 
     // Condition: check condition
-    setInsertPoint(cond);
+    _builder.setInsertPoint(cond);
     if (node.condition)
     {
         auto* condValue = codegenArith(node.condition.get());
@@ -1459,29 +1491,29 @@ void IRGenerator::visit(ast::ForCStyleStmt const& node)
         // Otherwise, convert to Boolean by comparing with 0
         CoreVM::Value* condBool = condValue;
         if (condValue->type() != CoreVM::LiteralType::Boolean)
-            condBool = createNCmpNE(condValue, get(CoreVM::CoreNumber(0)));
-        createCondBr(condBool, body, end);
+            condBool = _builder.createNCmpNE(condValue, _builder.get(CoreVM::CoreNumber(0)));
+        _builder.createCondBr(condBool, body, end);
     }
     else
     {
         // No condition = infinite loop (always enter body)
-        createBr(body);
+        _builder.createBr(body);
     }
 
     // Body
-    setInsertPoint(body);
+    _builder.setInsertPoint(body);
     pushLoopContext(step, end);
     codegen(node.body.get());
     popLoopContext();
-    createBr(step);
+    _builder.createBr(step);
 
     // Step: evaluate step expression and loop
-    setInsertPoint(step);
+    _builder.setInsertPoint(step);
     if (node.step)
         codegenArith(node.step.get());
-    createBr(cond);
+    _builder.createBr(cond);
 
-    setInsertPoint(end);
+    _builder.setInsertPoint(end);
 }
 
 void IRGenerator::visit(ast::CaseStmt const& node)
@@ -1502,7 +1534,7 @@ void IRGenerator::visit(ast::CaseStmt const& node)
     if (!wordValue)
         return;
 
-    CoreVM::BasicBlock* endBlock = createBlock("case.end");
+    CoreVM::BasicBlock* endBlock = _builder.createBlock("case.end");
 
     // Create blocks for each clause
     std::vector<CoreVM::BasicBlock*> bodyBlocks;
@@ -1510,12 +1542,12 @@ void IRGenerator::visit(ast::CaseStmt const& node)
 
     for (size_t i = 0; i < node.clauses.size(); ++i)
     {
-        checkBlocks.push_back(createBlock(std::format("case.check{}", i)));
-        bodyBlocks.push_back(createBlock(std::format("case.body{}", i)));
+        checkBlocks.push_back(_builder.createBlock(std::format("case.check{}", i)));
+        bodyBlocks.push_back(_builder.createBlock(std::format("case.body{}", i)));
     }
 
     // Start checking patterns
-    createBr(checkBlocks.empty() ? endBlock : checkBlocks[0]);
+    _builder.createBr(checkBlocks.empty() ? endBlock : checkBlocks[0]);
 
     // Generate pattern matching checks
     auto* matchCb = findCallback("internal.case_match(SS)B");
@@ -1528,7 +1560,7 @@ void IRGenerator::visit(ast::CaseStmt const& node)
     for (size_t i = 0; i < node.clauses.size(); ++i)
     {
         auto const& clause = node.clauses[i];
-        setInsertPoint(checkBlocks[i]);
+        _builder.setInsertPoint(checkBlocks[i]);
 
         // Check each pattern (pipe-separated)
         // For multiple patterns, we chain the checks: if any pattern matches, go to body
@@ -1537,36 +1569,37 @@ void IRGenerator::visit(ast::CaseStmt const& node)
         for (size_t p = 0; p < clause.patterns.size(); ++p)
         {
             auto const& pattern = clause.patterns[p];
-            auto* match =
-                createCallFunction(getBuiltinFunction(*matchCb), { wordValue, get(pattern) }, "case_match");
+            auto* match = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*matchCb), { wordValue, _builder.get(pattern) }, "case_match");
 
             // Create intermediate check block for next pattern (if any)
             CoreVM::BasicBlock* nextPatternCheck =
-                (p + 1 < clause.patterns.size()) ? createBlock(std::format("case.check{}.pat{}", i, p + 1))
-                                                 : nextClause;
+                (p + 1 < clause.patterns.size())
+                    ? _builder.createBlock(std::format("case.check{}.pat{}", i, p + 1))
+                    : nextClause;
 
-            createCondBr(match, bodyBlocks[i], nextPatternCheck);
+            _builder.createCondBr(match, bodyBlocks[i], nextPatternCheck);
 
             if (p + 1 < clause.patterns.size())
-                setInsertPoint(nextPatternCheck);
+                _builder.setInsertPoint(nextPatternCheck);
         }
 
         // Handle empty patterns (shouldn't happen, but defensive)
         if (clause.patterns.empty())
-            createBr(nextClause);
+            _builder.createBr(nextClause);
     }
 
     // Generate body blocks
     for (size_t i = 0; i < node.clauses.size(); ++i)
     {
         auto const& clause = node.clauses[i];
-        setInsertPoint(bodyBlocks[i]);
+        _builder.setInsertPoint(bodyBlocks[i]);
         if (clause.body)
             codegen(clause.body.get());
-        createBr(endBlock);
+        _builder.createBr(endBlock);
     }
 
-    setInsertPoint(endBlock);
+    _builder.setInsertPoint(endBlock);
 }
 
 void IRGenerator::visit(ast::FunctionDefStmt const& node)
@@ -1581,28 +1614,29 @@ void IRGenerator::visit(ast::FunctionDefStmt const& node)
     }
 
     // Save current handler and insertion point
-    auto* savedHandler = handler();
-    auto* savedBlock = getInsertPoint();
+    auto* savedHandler = _builder.handler();
+    auto* savedBlock = _builder.getInsertPoint();
 
     // Create a new handler for the function and switch to it
-    auto* funcHandler = getHandler(node.name);
-    setHandler(funcHandler);
-    auto* entryBlock = createBlock(node.name + ".entry");
-    setInsertPoint(entryBlock);
+    auto* funcHandler = _builder.getHandler(node.name);
+    _builder.setHandler(funcHandler);
+    auto* entryBlock = _builder.createBlock(node.name + ".entry");
+    _builder.setInsertPoint(entryBlock);
 
     pushFunctionContext();
     codegen(node.body.get());
     popFunctionContext();
 
     // Always add return at the end - the VM will handle duplicate terminators
-    createRet(get(CoreVM::CoreNumber(0)));
+    _builder.createRet(_builder.get(CoreVM::CoreNumber(0)));
 
     // Restore to main handler
-    setHandler(savedHandler);
-    setInsertPoint(savedBlock);
+    _builder.setHandler(savedHandler);
+    _builder.setInsertPoint(savedBlock);
 
     // Register the function name
-    createCallFunction(getBuiltinFunction(*registerCb), { get(node.name) }, "function_register");
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*registerCb), { _builder.get(node.name) }, "function_register");
 }
 
 void IRGenerator::visit(ast::BreakStmt const& node)
@@ -1613,7 +1647,7 @@ void IRGenerator::visit(ast::BreakStmt const& node)
         reportTypeError("break: not in a loop");
         return;
     }
-    createBr(ctx->breakTarget);
+    _builder.createBr(ctx->breakTarget);
 }
 
 void IRGenerator::visit(ast::ContinueStmt const& node)
@@ -1624,7 +1658,7 @@ void IRGenerator::visit(ast::ContinueStmt const& node)
         reportTypeError("continue: not in a loop");
         return;
     }
-    createBr(ctx->continueTarget);
+    _builder.createBr(ctx->continueTarget);
 }
 
 void IRGenerator::visit(ast::ReturnStmt const& node)
@@ -1642,7 +1676,7 @@ void IRGenerator::visit(ast::ReturnStmt const& node)
         if (!returnValue)
             return;
         if (returnValue->type() == CoreVM::LiteralType::String)
-            returnValue = createS2N(returnValue);
+            returnValue = _builder.createS2N(returnValue);
     }
     else
     {
@@ -1650,28 +1684,30 @@ void IRGenerator::visit(ast::ReturnStmt const& node)
         auto* exitStatusCb = findCallback("getvar.exitstatus()S");
         if (exitStatusCb)
         {
-            auto* exitStr = createCallFunction(getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
-            returnValue = createS2N(exitStr);
+            auto* exitStr = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
+            returnValue = _builder.createS2N(exitStr);
         }
         else
         {
-            returnValue = get(CoreVM::CoreNumber(0));
+            returnValue = _builder.get(CoreVM::CoreNumber(0));
         }
     }
 
     // Set $? to the return value before exiting
     auto* setExitCb = findCallback("setvar.exitstatus(I)V");
     if (setExitCb)
-        createCallFunction(getBuiltinFunction(*setExitCb), { returnValue }, "setvar.exitstatus");
+        _builder.createCallFunction(
+            _builder.getBuiltinFunction(*setExitCb), { returnValue }, "setvar.exitstatus");
 
-    createRet(returnValue);
+    _builder.createRet(returnValue);
 }
 
 CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
 {
     if (value->type() == CoreVM::LiteralType::Boolean)
         return value;
-    return createNCmpEQ(value, get(CoreVM::CoreNumber(0)));
+    return _builder.createNCmpEQ(value, _builder.get(CoreVM::CoreNumber(0)));
 }
 
 bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> const& expressions) const
@@ -1733,7 +1769,8 @@ void IRGenerator::buildCommandArgs(std::string const& programName,
         reportTypeError("Internal error: internal.cmd_start builtin not found");
         return;
     }
-    createCallFunction(getBuiltinFunction(*cmdStartCallback), { get(programName) }, "cmd_start");
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*cmdStartCallback), { _builder.get(programName) }, "cmd_start");
 
     // Add each argument
     auto* cmdArgCallback = findCallback("internal.cmd_arg(S)V");
@@ -1749,7 +1786,7 @@ void IRGenerator::buildCommandArgs(std::string const& programName,
         if (!value)
             continue; // Error already reported
 
-        createCallFunction(getBuiltinFunction(*cmdArgCallback), { value }, "cmd_arg");
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCallback), { value }, "cmd_arg");
     }
 }
 
@@ -1761,7 +1798,7 @@ CoreVM::Value* IRGenerator::execBuiltCommand()
         reportTypeError("Internal error: internal.cmd_exec builtin not found");
         return nullptr;
     }
-    return createCallFunction(getBuiltinFunction(*cmdExecCallback), {}, "cmd_exec");
+    return _builder.createCallFunction(_builder.getBuiltinFunction(*cmdExecCallback), {}, "cmd_exec");
 }
 
 CoreVM::Value* IRGenerator::execBuiltCommandPiped(bool lastInChain)
@@ -1772,7 +1809,8 @@ CoreVM::Value* IRGenerator::execBuiltCommandPiped(bool lastInChain)
         reportTypeError("Internal error: internal.cmd_exec_piped builtin not found");
         return nullptr;
     }
-    return createCallFunction(getBuiltinFunction(*cmdExecCallback), { get(lastInChain) }, "cmd_exec_piped");
+    return _builder.createCallFunction(
+        _builder.getBuiltinFunction(*cmdExecCallback), { _builder.get(lastInChain) }, "cmd_exec_piped");
 }
 
 CoreVM::Value* IRGenerator::execBuiltCommandPipedBackground(
@@ -1794,8 +1832,9 @@ CoreVM::Value* IRGenerator::execBuiltCommandPipedBackground(
     }
     command += " &";
 
-    return createCallFunction(
-        getBuiltinFunction(*cmdExecCallback), { get(command) }, "cmd_exec_piped_background");
+    return _builder.createCallFunction(_builder.getBuiltinFunction(*cmdExecCallback),
+                                       { _builder.get(command) },
+                                       "cmd_exec_piped_background");
 }
 
 void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewline)
@@ -1814,13 +1853,13 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     if (argValue->type() == CoreVM::LiteralType::Number)
     {
         // Use N2S intrinsic to convert number to string
-        argValue = createN2S(argValue, "print.n2s");
+        argValue = _builder.createN2S(argValue, "print.n2s");
     }
     else if (argValue->type() == CoreVM::LiteralType::Void || argValue->type() == CoreVM::LiteralType::Object)
     {
         // Dynamically-typed value (e.g., from pattern matching or OGETSLOT)
         // Assume it's a number at runtime and convert
-        argValue = createN2S(argValue, "print.n2s");
+        argValue = _builder.createN2S(argValue, "print.n2s");
     }
     else if (argValue->type() != CoreVM::LiteralType::String)
     {
@@ -1843,7 +1882,7 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 
     // Generate native call
     std::string funcName = appendNewline ? "println" : "print";
-    createCallFunction(getBuiltinFunction(*callback), { argValue }, funcName);
+    _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argValue }, funcName);
     _result = nullptr; // print/println returns void
 }
 
@@ -1859,7 +1898,7 @@ std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
 {
     TRACE_SCOPE("createCallArgs");
     auto callArguments = createConstantArray(args);
-    callArguments.insert(callArguments.begin(), get(programName));
+    callArguments.insert(callArguments.begin(), _builder.get(programName));
     return callArguments;
 }
 
@@ -1998,7 +2037,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, node.name);
 
     // Store the value
-    createStore(storage, value, node.name);
+    _builder.createStore(storage, value, node.name);
 
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
@@ -2053,52 +2092,52 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     // For arithmetic and comparison, ensure operands are numbers
     // String operations would need different handling (future work)
     if (left->type() == CoreVM::LiteralType::String)
-        left = createS2N(left);
+        left = _builder.createS2N(left);
     if (right->type() == CoreVM::LiteralType::String)
-        right = createS2N(right);
+        right = _builder.createS2N(right);
 
     switch (node.op)
     {
         // Arithmetic operators
-        case ast::BinaryOp::Add: _result = createAdd(left, right, "add"); break;
-        case ast::BinaryOp::Sub: _result = createSub(left, right, "sub"); break;
-        case ast::BinaryOp::Mul: _result = createMul(left, right, "mul"); break;
-        case ast::BinaryOp::Div: _result = createDiv(left, right, "div"); break;
-        case ast::BinaryOp::Mod: _result = createRem(left, right, "mod"); break;
-        case ast::BinaryOp::Pow: _result = createPow(left, right, "pow"); break;
+        case ast::BinaryOp::Add: _result = _builder.createAdd(left, right, "add"); break;
+        case ast::BinaryOp::Sub: _result = _builder.createSub(left, right, "sub"); break;
+        case ast::BinaryOp::Mul: _result = _builder.createMul(left, right, "mul"); break;
+        case ast::BinaryOp::Div: _result = _builder.createDiv(left, right, "div"); break;
+        case ast::BinaryOp::Mod: _result = _builder.createRem(left, right, "mod"); break;
+        case ast::BinaryOp::Pow: _result = _builder.createPow(left, right, "pow"); break;
 
         // Comparison operators (return boolean)
         // Use dynamic comparison (VCmpXX) when operands have unknown compile-time types
         case ast::BinaryOp::Eq:
-            _result = needsDynamicCompare(left, right) ? createVCmpEQ(left, right, "eq")
-                                                       : createNCmpEQ(left, right, "eq");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpEQ(left, right, "eq")
+                                                       : _builder.createNCmpEQ(left, right, "eq");
             break;
         case ast::BinaryOp::Ne:
-            _result = needsDynamicCompare(left, right) ? createVCmpNE(left, right, "ne")
-                                                       : createNCmpNE(left, right, "ne");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpNE(left, right, "ne")
+                                                       : _builder.createNCmpNE(left, right, "ne");
             break;
         case ast::BinaryOp::Lt:
-            _result = needsDynamicCompare(left, right) ? createVCmpLT(left, right, "lt")
-                                                       : createNCmpLT(left, right, "lt");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpLT(left, right, "lt")
+                                                       : _builder.createNCmpLT(left, right, "lt");
             break;
         case ast::BinaryOp::Le:
-            _result = needsDynamicCompare(left, right) ? createVCmpLE(left, right, "le")
-                                                       : createNCmpLE(left, right, "le");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpLE(left, right, "le")
+                                                       : _builder.createNCmpLE(left, right, "le");
             break;
         case ast::BinaryOp::Gt:
-            _result = needsDynamicCompare(left, right) ? createVCmpGT(left, right, "gt")
-                                                       : createNCmpGT(left, right, "gt");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpGT(left, right, "gt")
+                                                       : _builder.createNCmpGT(left, right, "gt");
             break;
         case ast::BinaryOp::Ge:
-            _result = needsDynamicCompare(left, right) ? createVCmpGE(left, right, "ge")
-                                                       : createNCmpGE(left, right, "ge");
+            _result = needsDynamicCompare(left, right) ? _builder.createVCmpGE(left, right, "ge")
+                                                       : _builder.createNCmpGE(left, right, "ge");
             break;
 
         // Logical operators
-        case ast::BinaryOp::And: _result = createBAnd(toBool(left), toBool(right), "and"); break;
+        case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
         case ast::BinaryOp::Or:
             // Note: CoreVM uses BXor for logical OR (see comment in CoreVM.hpp)
-            _result = createBXor(toBool(left), toBool(right), "or");
+            _result = _builder.createBXor(toBool(left), toBool(right), "or");
             break;
     }
 }
@@ -2116,11 +2155,11 @@ void IRGenerator::visit(ast::UnaryExpr const& node)
         case ast::UnaryOp::Neg:
             // Ensure operand is a number for negation
             if (operand->type() == CoreVM::LiteralType::String)
-                operand = createS2N(operand);
-            _result = createNeg(operand, "neg");
+                operand = _builder.createS2N(operand);
+            _result = _builder.createNeg(operand, "neg");
             break;
 
-        case ast::UnaryOp::Not: _result = createBNot(toBool(operand), "not"); break;
+        case ast::UnaryOp::Not: _result = _builder.createBNot(toBool(operand), "not"); break;
     }
 }
 
@@ -2245,7 +2284,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         CoreVM::AllocaInstr* returnStorage = nullptr;
         if (func->returnsResultOrOption)
         {
-            returnBlock = createBlock("pipe.return");
+            returnBlock = _builder.createBlock("pipe.return");
             returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
             pushFSharpFunctionContext(returnBlock, returnStorage, true);
         }
@@ -2253,8 +2292,9 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         for (size_t i = 0; i < func->parameters.size(); ++i)
         {
             auto storageType = allArgs[i]->type();
-            auto* paramStorage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[i]);
-            createStore(paramStorage, allArgs[i], func->parameters[i]);
+            auto* paramStorage =
+                _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[i]);
+            _builder.createStore(paramStorage, allArgs[i], func->parameters[i]);
             bindFSharpVariable(func->parameters[i], paramStorage);
         }
 
@@ -2264,11 +2304,11 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         {
             if (bodyResult)
             {
-                createStore(returnStorage, bodyResult, "store.result");
-                createBr(returnBlock);
+                _builder.createStore(returnStorage, bodyResult, "store.result");
+                _builder.createBr(returnBlock);
             }
-            setInsertPoint(returnBlock);
-            _result = createLoad(returnStorage, "load.result");
+            _builder.setInsertPoint(returnBlock);
+            _result = _builder.createLoad(returnStorage, "load.result");
             popFSharpFunctionContext();
         }
         else
@@ -2298,11 +2338,11 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     if (func->isRecursive)
     {
         // Reuse the same loop-based compilation as ApplicationExpr Case A
-        auto* entryBlock = createBlock("rec.entry");
-        auto* exitBlock = createBlock("rec.exit");
+        auto* entryBlock = _builder.createBlock("rec.entry");
+        auto* exitBlock = _builder.createBlock("rec.exit");
 
         auto* paramAlloca = createAllocaInEntryBlock(value->type(), "rec.param." + func->parameters[0]);
-        createStore(paramAlloca, value, "rec.param.init");
+        _builder.createStore(paramAlloca, value, "rec.param.init");
 
         auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
 
@@ -2314,8 +2354,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             .exitBlock = exitBlock,
         };
 
-        createBr(entryBlock);
-        setInsertPoint(entryBlock);
+        _builder.createBr(entryBlock);
+        _builder.setInsertPoint(entryBlock);
 
         pushFSharpScope();
         for (auto const& [capName, capStorage]: func->capturedBindings)
@@ -2325,14 +2365,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         auto* bodyResult = codegen(func->body);
         if (bodyResult)
         {
-            createStore(resultStorage, bodyResult, "rec.store.result");
-            createBr(exitBlock);
+            _builder.createStore(resultStorage, bodyResult, "rec.store.result");
+            _builder.createBr(exitBlock);
         }
 
         popFSharpScope();
 
-        setInsertPoint(exitBlock);
-        _result = createLoad(resultStorage, "rec.load.result");
+        _builder.setInsertPoint(exitBlock);
+        _result = _builder.createLoad(resultStorage, "rec.load.result");
 
         _activeRecursion.reset();
         return;
@@ -2351,15 +2391,16 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     if (func->returnsResultOrOption)
     {
-        returnBlock = createBlock("pipe.return");
+        returnBlock = _builder.createBlock("pipe.return");
         returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
         pushFSharpFunctionContext(returnBlock, returnStorage, true);
     }
 
     // Bind the piped value to the parameter
     CoreVM::LiteralType storageType = value->type();
-    CoreVM::AllocaInstr* storage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[0]);
-    createStore(storage, value, func->parameters[0]);
+    CoreVM::AllocaInstr* storage =
+        _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[0]);
+    _builder.createStore(storage, value, func->parameters[0]);
     bindFSharpVariable(func->parameters[0], storage);
 
     // Inline the function body
@@ -2370,13 +2411,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Store result and jump to return block (normal path)
         if (bodyResult)
         {
-            createStore(returnStorage, bodyResult, "store.result");
-            createBr(returnBlock);
+            _builder.createStore(returnStorage, bodyResult, "store.result");
+            _builder.createBr(returnBlock);
         }
 
         // Continue from return block (merges normal and early return paths)
-        setInsertPoint(returnBlock);
-        _result = createLoad(returnStorage, "load.result");
+        _builder.setInsertPoint(returnBlock);
+        _result = _builder.createLoad(returnStorage, "load.result");
 
         popFSharpFunctionContext();
     }
@@ -2494,7 +2535,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         {
             auto const& paramName = func->parameters[i];
             auto* alloca = createAllocaInEntryBlock(args[i]->type(), "partial." + paramName);
-            createStore(alloca, args[i], "partial.store." + paramName);
+            _builder.createStore(alloca, args[i], "partial.store." + paramName);
             newCaptures[paramName] = alloca;
         }
 
@@ -2508,7 +2549,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         partialFunc.capturedBindings = std::move(newCaptures);
 
         registerFSharpFunction(partialName, std::move(partialFunc));
-        _result = get(partialName);
+        _result = _builder.get(partialName);
         return;
     }
 
@@ -2520,14 +2561,14 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         {
             // Store new argument values into parameter allocas
             for (size_t i = 0; i < args.size(); ++i)
-                createStore(_activeRecursion->paramAllocas[i], args[i], "rec.arg.update");
+                _builder.createStore(_activeRecursion->paramAllocas[i], args[i], "rec.arg.update");
 
             // Jump back to the entry block (tail-call as loop iteration)
-            createBr(_activeRecursion->entryBlock);
+            _builder.createBr(_activeRecursion->entryBlock);
 
             // Create unreachable continuation block (code after tail call is dead)
-            auto* unreachable = createBlock("rec.unreachable");
-            setInsertPoint(unreachable);
+            auto* unreachable = _builder.createBlock("rec.unreachable");
+            _builder.setInsertPoint(unreachable);
 
             // Signal tail call: result is nullptr (no value produced inline)
             _result = nullptr;
@@ -2535,15 +2576,15 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
 
         // Case A: First (external) call to recursive function — set up loop
-        auto* entryBlock = createBlock("rec.entry");
-        auto* exitBlock = createBlock("rec.exit");
+        auto* entryBlock = _builder.createBlock("rec.entry");
+        auto* exitBlock = _builder.createBlock("rec.exit");
 
         // Create parameter allocas and result storage in the handler entry block
         std::vector<CoreVM::AllocaInstr*> paramAllocas;
         for (size_t i = 0; i < func->parameters.size(); ++i)
         {
             auto* alloca = createAllocaInEntryBlock(args[i]->type(), "rec.param." + func->parameters[i]);
-            createStore(alloca, args[i], "rec.param.init");
+            _builder.createStore(alloca, args[i], "rec.param.init");
             paramAllocas.push_back(alloca);
         }
 
@@ -2559,8 +2600,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         };
 
         // Jump to entry block and begin the loop
-        createBr(entryBlock);
-        setInsertPoint(entryBlock);
+        _builder.createBr(entryBlock);
+        _builder.setInsertPoint(entryBlock);
 
         // Push scope and bind captures and parameters from allocas
         pushFSharpScope();
@@ -2575,15 +2616,15 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         // If body produced a result (non-tail path), store it and branch to exit
         if (bodyResult)
         {
-            createStore(resultStorage, bodyResult, "rec.store.result");
-            createBr(exitBlock);
+            _builder.createStore(resultStorage, bodyResult, "rec.store.result");
+            _builder.createBr(exitBlock);
         }
 
         popFSharpScope();
 
         // Continue from the exit block, load the result
-        setInsertPoint(exitBlock);
-        _result = createLoad(resultStorage, "rec.load.result");
+        _builder.setInsertPoint(exitBlock);
+        _result = _builder.createLoad(resultStorage, "rec.load.result");
 
         // Clear the recursion context
         _activeRecursion.reset();
@@ -2612,7 +2653,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     if (func->returnsResultOrOption)
     {
-        returnBlock = createBlock("func.return");
+        returnBlock = _builder.createBlock("func.return");
         returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "func.result");
         pushFSharpFunctionContext(returnBlock, returnStorage, true);
     }
@@ -2622,8 +2663,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     {
         CoreVM::LiteralType storageType = args[i]->type();
         CoreVM::AllocaInstr* storage =
-            createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[i]);
-        createStore(storage, args[i], func->parameters[i]);
+            _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[i]);
+        _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
     }
 
@@ -2635,13 +2676,13 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         // Store result and jump to return block (normal path)
         if (bodyResult)
         {
-            createStore(returnStorage, bodyResult, "store.result");
-            createBr(returnBlock);
+            _builder.createStore(returnStorage, bodyResult, "store.result");
+            _builder.createBr(returnBlock);
         }
 
         // Continue from return block (merges normal and early return paths)
-        setInsertPoint(returnBlock);
-        _result = createLoad(returnStorage, "load.result");
+        _builder.setInsertPoint(returnBlock);
+        _result = _builder.createLoad(returnStorage, "load.result");
 
         popFSharpFunctionContext();
     }
@@ -2665,7 +2706,7 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
         // Fall back to function name lookup (function-as-value)
         if (lookupFSharpFunction(node.name))
         {
-            _result = get(node.name);
+            _result = _builder.get(node.name);
             return;
         }
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
@@ -2673,24 +2714,24 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     }
 
     // Load the value from storage
-    _result = createLoad(storage, node.name);
+    _result = _builder.createLoad(storage, node.name);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
 {
     // Integer literals can be directly converted to CoreVM numbers
-    _result = get(CoreVM::CoreNumber(node.value));
+    _result = _builder.get(CoreVM::CoreNumber(node.value));
 }
 
 void IRGenerator::visit(ast::FloatLiteralExpr const& node)
 {
     // TODO: CoreVM may need float support; for now, truncate to integer
-    _result = get(CoreVM::CoreNumber(static_cast<int64_t>(node.value)));
+    _result = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(node.value)));
 }
 
 void IRGenerator::visit(ast::BoolLiteralExpr const& node)
 {
-    _result = get(node.value);
+    _result = _builder.get(node.value);
 }
 
 void IRGenerator::visit(ast::ParenExpr const& node)
@@ -2721,7 +2762,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     // Store the lambda name in a way that can be retrieved by the calling context.
     // We use a string constant to represent the function reference.
     // This allows let bindings to store the function name for later lookup.
-    _result = get(lambdaName);
+    _result = _builder.get(lambdaName);
 }
 
 void IRGenerator::visit(ast::MatchExpr const& node)
@@ -2740,7 +2781,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     // Store scrutinee in a local variable so it's available across all arms
     // Use createAllocaInEntryBlock to ensure proper stack tracking
     CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
-    createStore(scrutineeStorage, scrutinee, "scrutinee.store");
+    _builder.createStore(scrutineeStorage, scrutinee, "scrutinee.store");
 
     // Infer result type from the first arm's body expression
     // This determines the type of storage we need for the match result
@@ -2763,7 +2804,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     // Pre-allocate storage for all bindings from all arms in the entry block
     // This is critical: all allocas must be created before any branching to ensure
     // the TargetCodeGenerator's stack tracking remains consistent across all paths.
-    PatternIRGenerator patternIRGenerator(*this);
+    PatternIRGenerator patternIRGenerator(_builder);
     std::vector<std::vector<std::pair<std::string, CoreVM::AllocaInstr*>>> armBindingStorage;
 
     for (size_t i = 0; i < node.arms.size(); ++i)
@@ -2787,7 +2828,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     }
 
     // Create the merge block where all arms will eventually converge
-    auto* mergeBlock = createBlock("match.merge");
+    auto* mergeBlock = _builder.createBlock("match.merge");
 
     // Create blocks for each arm body and pattern check
     std::vector<CoreVM::BasicBlock*> armBodyBlocks;
@@ -2795,12 +2836,12 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
     for (size_t i = 0; i < node.arms.size(); ++i)
     {
-        patternCheckBlocks.push_back(createBlock("match.check." + std::to_string(i)));
-        armBodyBlocks.push_back(createBlock("match.arm." + std::to_string(i)));
+        patternCheckBlocks.push_back(_builder.createBlock("match.check." + std::to_string(i)));
+        armBodyBlocks.push_back(_builder.createBlock("match.arm." + std::to_string(i)));
     }
 
     // Branch to first pattern check block
-    createBr(patternCheckBlocks[0]);
+    _builder.createBr(patternCheckBlocks[0]);
 
     // Process each arm
     for (size_t i = 0; i < node.arms.size(); ++i)
@@ -2808,13 +2849,13 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         auto const& arm = node.arms[i];
 
         // Set insert point to this arm's pattern check block
-        setInsertPoint(patternCheckBlocks[i]);
+        _builder.setInsertPoint(patternCheckBlocks[i]);
 
         // Determine where to jump on pattern failure
         CoreVM::BasicBlock* onFailure = (i + 1 < node.arms.size()) ? patternCheckBlocks[i + 1] : mergeBlock;
 
         // Load the scrutinee for this pattern check
-        CoreVM::Value* scrutineeValue = createLoad(scrutineeStorage, "scrutinee.load");
+        CoreVM::Value* scrutineeValue = _builder.createLoad(scrutineeStorage, "scrutinee.load");
 
         // Compile the pattern (this emits the pattern matching IR)
         // Pass scrutineeStorage so the pattern can reload when crossing block boundaries
@@ -2823,7 +2864,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             *arm.pattern, scrutineeValue, scrutineeStorage, armBodyBlocks[i], onFailure);
 
         // Emit the arm body
-        setInsertPoint(armBodyBlocks[i]);
+        _builder.setInsertPoint(armBodyBlocks[i]);
 
         // Install variable bindings from pattern matching in a new scope
         // Use pre-allocated storage from entry block
@@ -2837,21 +2878,21 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         if (!preAllocatedBindings.empty()
             || dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
         {
-            CoreVM::Value* bindingSource = createLoad(scrutineeStorage, "scrutinee.reload");
+            CoreVM::Value* bindingSource = _builder.createLoad(scrutineeStorage, "scrutinee.reload");
 
             if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
             {
                 // Extract payload from slot 0 for constructor patterns
                 if (ctorPat->payload.has_value())
                 {
-                    bindingSource =
-                        createObjGetSlot(bindingSource, get(CoreVM::CoreNumber(0)), "ctor.payload");
+                    bindingSource = _builder.createObjGetSlot(
+                        bindingSource, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload");
                 }
             }
 
             for (auto const& [name, storage]: preAllocatedBindings)
             {
-                createStore(storage, bindingSource, name + ".store");
+                _builder.createStore(storage, bindingSource, name + ".store");
                 bindFSharpVariable(name, storage);
             }
         }
@@ -2859,7 +2900,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // If there's a guard, evaluate it and branch accordingly
         if (arm.guard)
         {
-            auto* guardPassBlock = createBlock("match.guard." + std::to_string(i) + ".pass");
+            auto* guardPassBlock = _builder.createBlock("match.guard." + std::to_string(i) + ".pass");
 
             arm.guard->accept(*this);
             CoreVM::Value* guardResult = _result;
@@ -2872,9 +2913,9 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
             // Convert to bool if needed
             CoreVM::Value* guardBool = toBool(guardResult);
-            createCondBr(guardBool, guardPassBlock, onFailure);
+            _builder.createCondBr(guardBool, guardPassBlock, onFailure);
 
-            setInsertPoint(guardPassBlock);
+            _builder.setInsertPoint(guardPassBlock);
         }
 
         // Evaluate the arm body
@@ -2896,15 +2937,15 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         }
 
         // Store the result
-        createStore(resultStorage, bodyResult, "match.result.store");
+        _builder.createStore(resultStorage, bodyResult, "match.result.store");
 
         // Branch to merge block
-        createBr(mergeBlock);
+        _builder.createBr(mergeBlock);
     }
 
     // Set insert point to merge block and load the result
-    setInsertPoint(mergeBlock);
-    _result = createLoad(resultStorage, "match.result.load");
+    _builder.setInsertPoint(mergeBlock);
+    _result = _builder.createLoad(resultStorage, "match.result.load");
 }
 
 void IRGenerator::visit(ast::ListExpr const& node)
@@ -2941,7 +2982,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
     if (!node.command)
     {
         // Empty command - result is empty string
-        _result = get("");
+        _result = _builder.get("");
         return;
     }
 
@@ -2952,7 +2993,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         reportTypeError("Internal error: internal.subst_start builtin not found");
         return;
     }
-    createCallFunction(getBuiltinFunction(*startCb), {}, "subst_start");
+    _builder.createCallFunction(_builder.getBuiltinFunction(*startCb), {}, "subst_start");
 
     // 2. Execute the command pipeline
     codegen(node.command.get());
@@ -2964,7 +3005,7 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         reportTypeError("Internal error: internal.subst_end builtin not found");
         return;
     }
-    _result = createCallFunction(getBuiltinFunction(*endCb), {}, "subst_end");
+    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*endCb), {}, "subst_end");
 }
 
 // ============================================================================
@@ -3000,8 +3041,8 @@ void IRGenerator::visit(ast::OptionExpr const& node)
     // - Tag 1 = Some (1 slot payload)
 
     // Allocate Option object
-    auto* typeId = get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* obj = createObjAlloc(typeId, "option");
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "option");
 
     if (node.isSome)
     {
@@ -3016,14 +3057,14 @@ void IRGenerator::visit(ast::OptionExpr const& node)
             return;
 
         // Set tag to 1 (Some) and store the value in slot 0
-        obj = createObjSetTag(obj, get(CoreVM::CoreNumber(1)), "option.tag");
-        obj = createObjSetSlot(obj, get(CoreVM::CoreNumber(0)), innerValue, "option.value");
+        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "option.tag");
+        obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), innerValue, "option.value");
         _result = obj;
     }
     else
     {
         // None - just set tag to 0, no payload needed
-        obj = createObjSetTag(obj, get(CoreVM::CoreNumber(0)), "option.tag");
+        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(0)), "option.tag");
         _result = obj;
     }
 }
@@ -3047,13 +3088,13 @@ void IRGenerator::visit(ast::ResultExpr const& node)
         return;
 
     // Allocate Result object
-    auto* typeId = get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
-    CoreVM::Value* obj = createObjAlloc(typeId, "result");
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "result");
 
     // Set tag (0=Error, 1=Ok) and store the payload in slot 0
-    CoreVM::Value* tag = get(CoreVM::CoreNumber(node.isOk ? 1 : 0));
-    obj = createObjSetTag(obj, tag, "result.tag");
-    obj = createObjSetSlot(obj, get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
+    CoreVM::Value* tag = _builder.get(CoreVM::CoreNumber(node.isOk ? 1 : 0));
+    obj = _builder.createObjSetTag(obj, tag, "result.tag");
+    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
     _result = obj;
 }
 
@@ -3090,46 +3131,48 @@ void IRGenerator::visit(ast::TryExpr const& node)
     // Store the object in an alloca so we can reload it in successor blocks.
     // This is necessary because the stack tracking resets at block boundaries.
     CoreVM::AllocaInstr* objStorage = createAllocaInEntryBlock(obj->type(), "try.obj");
-    createStore(objStorage, obj, "try.obj.store");
+    _builder.createStore(objStorage, obj, "try.obj.store");
 
     // Extract tag using OGETTAG
-    CoreVM::Value* tag = createObjGetTag(obj, "try.tag");
+    CoreVM::Value* tag = _builder.createObjGetTag(obj, "try.tag");
 
     // Check if success (tag == 1 means Some/Ok)
-    CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "try.is_success");
+    CoreVM::Value* isSuccess =
+        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "try.is_success");
 
     // Pre-allocate result storage in entry block for consistent stack tracking.
     // Use Object type since the inner value could be another Option/Result (nested case).
     CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "try.result");
 
     // Create blocks
-    auto* successBlock = createBlock("try.success");
-    auto* errorBlock = createBlock("try.error");
-    auto* continueBlock = createBlock("try.continue");
+    auto* successBlock = _builder.createBlock("try.success");
+    auto* errorBlock = _builder.createBlock("try.error");
+    auto* continueBlock = _builder.createBlock("try.continue");
 
-    createCondBr(isSuccess, successBlock, errorBlock);
+    _builder.createCondBr(isSuccess, successBlock, errorBlock);
 
     // Success path: reload object and extract inner value using OGETSLOT
-    setInsertPoint(successBlock);
-    CoreVM::Value* objReload1 = createLoad(objStorage, "try.obj.reload");
-    CoreVM::Value* innerValue = createObjGetSlot(objReload1, get(CoreVM::CoreNumber(0)), "try.inner");
+    _builder.setInsertPoint(successBlock);
+    CoreVM::Value* objReload1 = _builder.createLoad(objStorage, "try.obj.reload");
+    CoreVM::Value* innerValue =
+        _builder.createObjGetSlot(objReload1, _builder.get(CoreVM::CoreNumber(0)), "try.inner");
 
     // Store result and branch to continue
-    createStore(resultStorage, innerValue, "try.result.store");
-    createBr(continueBlock);
+    _builder.createStore(resultStorage, innerValue, "try.result.store");
+    _builder.createBr(continueBlock);
 
     // Error path: reload object and propagate (early return)
-    setInsertPoint(errorBlock);
-    CoreVM::Value* objReload2 = createLoad(objStorage, "try.obj.reload");
+    _builder.setInsertPoint(errorBlock);
+    CoreVM::Value* objReload2 = _builder.createLoad(objStorage, "try.obj.reload");
     // Store the error object in the function return storage and jump to return block
     // NOTE: Using local copies of returnStorage/returnBlock since funcCtx pointer
     // may have been invalidated by codegen() above.
-    createStore(returnStorage, objReload2, "try.error.store");
-    createBr(returnBlock);
+    _builder.createStore(returnStorage, objReload2, "try.error.store");
+    _builder.createBr(returnBlock);
 
     // Continue with extracted value
-    setInsertPoint(continueBlock);
-    _result = createLoad(resultStorage, "try.result.load");
+    _builder.setInsertPoint(continueBlock);
+    _result = _builder.createLoad(resultStorage, "try.result.load");
 }
 
 void IRGenerator::visit(ast::TryWithExpr const& node)
@@ -3154,9 +3197,9 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
         createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.result");
 
     // Create blocks
-    auto* successBlock = createBlock("trywith.success");
-    auto* errorBlock = createBlock("trywith.error");
-    auto* mergeBlock = createBlock("trywith.merge");
+    auto* successBlock = _builder.createBlock("trywith.success");
+    auto* errorBlock = _builder.createBlock("trywith.error");
+    auto* mergeBlock = _builder.createBlock("trywith.merge");
 
     // Evaluate body (should be an Option or Result object)
     CoreVM::Value* bodyObj = codegen(node.body.get());
@@ -3166,60 +3209,61 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
     // Store bodyObj in an alloca for cross-block access
     // This is required because values don't persist across basic block boundaries
     CoreVM::AllocaInstr* bodyStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.body");
-    createStore(bodyStorage, bodyObj, "trywith.body.store");
+    _builder.createStore(bodyStorage, bodyObj, "trywith.body.store");
 
     // Extract tag using OGETTAG
-    CoreVM::Value* tag = createObjGetTag(bodyObj, "trywith.tag");
-    CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "trywith.is_success");
+    CoreVM::Value* tag = _builder.createObjGetTag(bodyObj, "trywith.tag");
+    CoreVM::Value* isSuccess =
+        _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "trywith.is_success");
 
-    createCondBr(isSuccess, successBlock, errorBlock);
+    _builder.createCondBr(isSuccess, successBlock, errorBlock);
 
     // Success path: reload object and extract inner value using OGETSLOT
-    setInsertPoint(successBlock);
-    CoreVM::Value* bodyReload1 = createLoad(bodyStorage, "trywith.body.reload");
+    _builder.setInsertPoint(successBlock);
+    CoreVM::Value* bodyReload1 = _builder.createLoad(bodyStorage, "trywith.body.reload");
     CoreVM::Value* successValue =
-        createObjGetSlot(bodyReload1, get(CoreVM::CoreNumber(0)), "trywith.success_value");
-    createStore(resultStorage, successValue, "trywith.success.store");
-    createBr(mergeBlock);
+        _builder.createObjGetSlot(bodyReload1, _builder.get(CoreVM::CoreNumber(0)), "trywith.success_value");
+    _builder.createStore(resultStorage, successValue, "trywith.success.store");
+    _builder.createBr(mergeBlock);
 
     // Error path: match against handlers
-    setInsertPoint(errorBlock);
+    _builder.setInsertPoint(errorBlock);
 
     if (node.handlers.empty())
     {
         // No handlers - just return the error object as-is
-        CoreVM::Value* bodyReload2 = createLoad(bodyStorage, "trywith.body.reload");
-        createStore(resultStorage, bodyReload2, "trywith.error.store");
-        createBr(mergeBlock);
+        CoreVM::Value* bodyReload2 = _builder.createLoad(bodyStorage, "trywith.body.reload");
+        _builder.createStore(resultStorage, bodyReload2, "trywith.error.store");
+        _builder.createBr(mergeBlock);
     }
     else
     {
         // Reload the body object for error handling
-        CoreVM::Value* bodyReload2 = createLoad(bodyStorage, "trywith.body.reload");
+        CoreVM::Value* bodyReload2 = _builder.createLoad(bodyStorage, "trywith.body.reload");
 
         // Extract error value from slot 0 (the payload of Error/None)
-        CoreVM::Value* errorValue =
-            createObjGetSlot(bodyReload2, get(CoreVM::CoreNumber(0)), "trywith.error_value");
+        CoreVM::Value* errorValue = _builder.createObjGetSlot(
+            bodyReload2, _builder.get(CoreVM::CoreNumber(0)), "trywith.error_value");
 
         // Store error value for pattern matching
         CoreVM::AllocaInstr* errorStorage =
             createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.error");
-        createStore(errorStorage, errorValue, "trywith.error.bind");
+        _builder.createStore(errorStorage, errorValue, "trywith.error.bind");
 
         // Pre-create blocks for all handlers
         std::vector<CoreVM::BasicBlock*> handlerCheckBlocks;
         std::vector<CoreVM::BasicBlock*> handlerBodyBlocks;
         for (size_t i = 0; i < node.handlers.size(); ++i)
         {
-            handlerCheckBlocks.push_back(createBlock("trywith.check." + std::to_string(i)));
-            handlerBodyBlocks.push_back(createBlock("trywith.body." + std::to_string(i)));
+            handlerCheckBlocks.push_back(_builder.createBlock("trywith.check." + std::to_string(i)));
+            handlerBodyBlocks.push_back(_builder.createBlock("trywith.body." + std::to_string(i)));
         }
 
         // Default block - when no handler matches, propagate error as-is
-        auto* defaultBlock = createBlock("trywith.default");
+        auto* defaultBlock = _builder.createBlock("trywith.default");
 
         // Branch to first handler check
-        createBr(handlerCheckBlocks[0]);
+        _builder.createBr(handlerCheckBlocks[0]);
 
         // Process each handler
         for (size_t i = 0; i < node.handlers.size(); ++i)
@@ -3227,14 +3271,14 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             auto const& arm = node.handlers[i];
 
             // Set insert point to this handler's check block
-            setInsertPoint(handlerCheckBlocks[i]);
+            _builder.setInsertPoint(handlerCheckBlocks[i]);
 
             // Determine where to jump on pattern/guard failure
             CoreVM::BasicBlock* onFailure =
                 (i + 1 < node.handlers.size()) ? handlerCheckBlocks[i + 1] : defaultBlock;
 
             // Reload error value for pattern matching
-            CoreVM::Value* errorReload = createLoad(errorStorage, "trywith.error.reload");
+            CoreVM::Value* errorReload = _builder.createLoad(errorStorage, "trywith.error.reload");
 
             // Check if pattern matches
             bool patternAlwaysMatches = false;
@@ -3259,10 +3303,11 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                         // Compare error value with literal
                         if (auto* intVal = std::get_if<int64_t>(&litPat->value))
                         {
-                            CoreVM::Value* litValue = get(CoreVM::CoreNumber(*intVal));
+                            CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
                             // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
-                            CoreVM::Value* matches = createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
-                            createCondBr(matches, handlerBodyBlocks[i], onFailure);
+                            CoreVM::Value* matches =
+                                _builder.createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
+                            _builder.createCondBr(matches, handlerBodyBlocks[i], onFailure);
                         }
                         else
                         {
@@ -3292,10 +3337,10 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                 // Direct literal pattern - compare error value
                 if (auto* intVal = std::get_if<int64_t>(&litPat->value))
                 {
-                    CoreVM::Value* litValue = get(CoreVM::CoreNumber(*intVal));
+                    CoreVM::Value* litValue = _builder.get(CoreVM::CoreNumber(*intVal));
                     // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
-                    CoreVM::Value* matches = createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
-                    createCondBr(matches, handlerBodyBlocks[i], onFailure);
+                    CoreVM::Value* matches = _builder.createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
+                    _builder.createCondBr(matches, handlerBodyBlocks[i], onFailure);
                 }
                 else
                 {
@@ -3306,11 +3351,11 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
 
             if (patternAlwaysMatches)
             {
-                createBr(handlerBodyBlocks[i]);
+                _builder.createBr(handlerBodyBlocks[i]);
             }
 
             // Now emit the handler body
-            setInsertPoint(handlerBodyBlocks[i]);
+            _builder.setInsertPoint(handlerBodyBlocks[i]);
 
             pushFSharpScope();
 
@@ -3334,7 +3379,7 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             // Check guard if present
             if (arm.guard)
             {
-                auto* guardPassBlock = createBlock("trywith.guard." + std::to_string(i) + ".pass");
+                auto* guardPassBlock = _builder.createBlock("trywith.guard." + std::to_string(i) + ".pass");
 
                 CoreVM::Value* guardResult = codegen(arm.guard.get());
                 if (!guardResult)
@@ -3343,9 +3388,9 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
                     return;
                 }
                 CoreVM::Value* guardBool = toBool(guardResult);
-                createCondBr(guardBool, guardPassBlock, onFailure);
+                _builder.createCondBr(guardBool, guardPassBlock, onFailure);
 
-                setInsertPoint(guardPassBlock);
+                _builder.setInsertPoint(guardPassBlock);
             }
 
             // Evaluate handler body
@@ -3355,20 +3400,21 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
             if (!handlerResult)
                 return;
 
-            createStore(resultStorage, handlerResult, "trywith.handler." + std::to_string(i) + ".store");
-            createBr(mergeBlock);
+            _builder.createStore(
+                resultStorage, handlerResult, "trywith.handler." + std::to_string(i) + ".store");
+            _builder.createBr(mergeBlock);
         }
 
         // Default block: no handler matched - propagate error as-is
-        setInsertPoint(defaultBlock);
-        CoreVM::Value* bodyReload3 = createLoad(bodyStorage, "trywith.body.reload");
-        createStore(resultStorage, bodyReload3, "trywith.default.store");
-        createBr(mergeBlock);
+        _builder.setInsertPoint(defaultBlock);
+        CoreVM::Value* bodyReload3 = _builder.createLoad(bodyStorage, "trywith.body.reload");
+        _builder.createStore(resultStorage, bodyReload3, "trywith.default.store");
+        _builder.createBr(mergeBlock);
     }
 
     // Merge block: load result
-    setInsertPoint(mergeBlock);
-    _result = createLoad(resultStorage, "trywith.result.load");
+    _builder.setInsertPoint(mergeBlock);
+    _result = _builder.createLoad(resultStorage, "trywith.result.load");
 }
 
 } // namespace endo

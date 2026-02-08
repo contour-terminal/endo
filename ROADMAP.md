@@ -450,6 +450,10 @@ src/
   - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
   - Limitations: closure captures from previous prompts are not preserved (pure functions only); simple value bindings (`let x = 42`) do not persist
   - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
+- IRGenerator refactored from inheritance to composition with IRBuilder:
+  - `IRGenerator` no longer inherits from `CoreVM::IRBuilder`; uses `_builder` member instead
+  - `PatternIRGenerator` takes `CoreVM::IRBuilder&` directly, eliminating its dependency on `IRGenerator`
+  - Cleaner separation of concerns: IR generation logic vs. IR building API
 
 ---
 
