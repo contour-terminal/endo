@@ -325,8 +325,30 @@ src/
 - [x] Extend Parser for list comprehensions (`[for x in items -> expr]`)
 - [ ] Extend Parser for record literals and type definitions
 - [x] Implement pattern matching compilation in IR generator
-- [ ] Implement Result and Option types with built-in support
-- [ ] Implement `?` error propagation operator
+- [x] Add AST nodes for Option/Result types (`OptionExpr`, `ResultExpr`) and error propagation (`TryExpr`, `TryWithExpr`)
+- [x] Extend Parser for Option/Result constructors (`Some`, `None`, `Ok`, `Error`)
+- [x] Extend Parser for `?` postfix operator and `try expr with | pattern -> handler` expressions
+- [x] Add IR generation stubs for Option/Result/Try expressions (runtime support requires CoreVM sum types)
+- [~] Complete runtime support for Option/Result types in CoreVM (sum type representation) - In Progress
+  - [x] Type descriptor infrastructure (`TypeDescriptor.hpp`, `TypeRegistry.hpp/cpp`)
+  - [x] Typed object structure with reference counting (`TypedObject.hpp`)
+  - [x] Runtime configuration for error propagation and type checks (`RuntimeConfig.hpp`)
+  - [x] Unit tests for type system (19 tests passing)
+  - [x] VM opcodes for object operations (OALLOC, ORETAIN, ORELEASE, OGETTAG, OSETTAG, OGETSLOT, OSETSLOT, OTYPEID, OISTYPE)
+  - [x] IR instruction classes for object operations (ObjAllocInstr, ObjRetainInstr, etc.)
+  - [x] TargetCodeGenerator visitor implementations for object instructions
+  - [x] IRBuilder methods for creating object instructions
+  - [x] VM Runner execution of object instructions (OALLOC, ORETAIN, ORELEASE, etc.)
+  - [x] TypeRegistry integrated into ConstantPool for type lookup at runtime
+  - [x] IRGenerator emits object instructions for Option/Result expressions
+  - [x] PatternIRGenerator handles constructor patterns (Some/None/Ok/Error)
+  - [x] Scope-based reference counting (ORELEASE on scope exit)
+  - [x] Comprehensive IR generation tests for Option/Result
+  - [ ] Mark-and-sweep GC for cycle collection
+  - [ ] Fix VM stack tracking bug with pattern matching execution
+- [~] Complete `?` operator runtime implementation (unwrap or propagate) - Partial
+  - [x] IRGenerator emits tag check and early return for `?` operator
+  - [ ] Full integration with function context for error propagation
 - [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
 - [x] Implement IR generation for F# function definitions and application (inlining approach)
 - [x] Implement IR generation for F# pipelines (`|>` operator)
@@ -358,7 +380,22 @@ src/
   - Operators tokenized separately: `+`, `-`, `*`, `/`, `%`, `**`, `^`, `::`, `,`, `:`, `[`, `]`, `{`, `}`, `?`
   - `-` followed by digit returns `Token::Number` (negative literal); otherwise `Token::Minus`
   - Parser calls `enterFSharpExpr()` at start of `let` bindings, ensuring proper tokenization of list literals like `[x;y;z]`
+- Option/Result type system: Parser and AST support for F#-style error handling
+  - `Some expr`, `None`, `Ok expr`, `Error expr` parsed as constructor expressions
+  - `expr?` postfix operator for error propagation (TryExpr)
+  - `try expr with | pattern -> handler` for structured error handling (TryWithExpr)
+  - Pattern matching supports `Some x`, `None`, `Ok n`, `Error e` constructor patterns
+  - IR generation creates tagged values (temporary encoding until CoreVM has native sum types)
+  - Full runtime semantics deferred until CoreVM supports discriminated unions
 - Tuple patterns in match expressions: `,` is now tokenized as `Token::Comma` in F# mode, allowing proper parsing of `(a, b)` patterns
+- Test infrastructure improvements:
+  - `ExecutionResult` refactored to `std::expected<TestExecutionSuccess, TestError>` for proper error handling
+  - `TestExecutionSuccess` includes both `exitCode` and `output` for comprehensive test verification
+  - `print`/`println` builtins registered in TestRuntime for output capture during test execution
+  - `ExprStmt` AST node added to wrap F# expressions as statements (used for `print`/`println` at top level)
+  - Parser handles `print`/`println` at statement level by entering F# expression mode
+  - `Token::DblQuoteStart` properly recognized as F# primary expression for double-quoted strings
+  - `Program::link()` call added to `executeSource()` to enable native function calls in tests
 - Shell command expressions: `& command` syntax for embedding shell commands in F# expressions
   - `let output = & git status` captures command output to variable
   - `let diff = & git diff HEAD..master` - special characters like `..` parsed as shell tokens, not F# operators
