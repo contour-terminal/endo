@@ -542,7 +542,8 @@ void TargetCodeGenerator::visit(CondBrInstr& condBrInstr)
     // - Repeat until condition is at _allocaCount
     // Then DISCARD the extras that are now on top.
 
-    size_t extrasCount = _stack.size() - _allocaCount - 1; // -1 for condition at top
+    size_t extrasCount = (_stack.size() > _allocaCount + 1) ? (_stack.size() - _allocaCount - 1)
+                                                            : 0; // -1 for condition at top
     if (extrasCount > 0)
     {
         // Current: [allocas...][extras...][condition]  (condition at top = index size-1)

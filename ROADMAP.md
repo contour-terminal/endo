@@ -365,6 +365,9 @@ src/
     - [x] `CondBrInstr` now properly discards extras before branching to ensure consistent stack state
     - [x] Uses STACKROT to move condition to correct position, then DISCARD for extras
     - [x] Block boundary handling emits DISCARD when tracking stack exceeds alloca count
+    - [x] Fix DISCARD underflow: all function parameter allocas now use `createAllocaInEntryBlock()` instead of `_builder.createAlloca()`
+    - [x] Fix dead `scrutinee.reload` in constructor patterns without payload (e.g., `None` arms)
+    - [x] Added underflow guard in CondBrInstr visitor for defense-in-depth
 - [x] Complete `?` operator runtime implementation (unwrap or propagate)
   - [x] IRGenerator emits tag check and early return for `?` operator
   - [x] Full integration with function context for error propagation

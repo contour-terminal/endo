@@ -2780,8 +2780,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         for (size_t i = 0; i < func->parameters.size(); ++i)
         {
             auto storageType = allArgs[i]->type();
-            auto* paramStorage =
-                _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[i]);
+            auto* paramStorage = createAllocaInEntryBlock(storageType, func->parameters[i]);
             _builder.createStore(paramStorage, allArgs[i], func->parameters[i]);
             bindFSharpVariable(func->parameters[i], paramStorage);
         }
@@ -2886,8 +2885,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Bind the piped value to the parameter
     CoreVM::LiteralType storageType = value->type();
-    CoreVM::AllocaInstr* storage =
-        _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[0]);
+    CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[0]);
     _builder.createStore(storage, value, func->parameters[0]);
     bindFSharpVariable(func->parameters[0], storage);
 
@@ -3283,8 +3281,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     for (size_t i = 0; i < func->parameters.size(); ++i)
     {
         CoreVM::LiteralType storageType = args[i]->type();
-        CoreVM::AllocaInstr* storage =
-            _builder.createAlloca(storageType, _builder.get(CoreVM::CoreNumber(1)), func->parameters[i]);
+        CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[i]);
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
     }
@@ -3515,9 +3512,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // For constructor patterns (Error e, Some x), we need to extract the payload
         // For simple variable patterns, we bind the whole scrutinee
         // Only load the scrutinee if there are actual bindings to store.
-        // Dead loads leave values on the stack that accumulate in loops (e.g., let rec).
-        else if (!preAllocatedBindings.empty()
-                 || dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+        // Dead loads leave values on the stack that accumulate in loops (e.g., let rec)
+        // and corrupt stack state across basic blocks.
+        else if (auto* ctorPatCheck = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get());
+                 !preAllocatedBindings.empty() || (ctorPatCheck && ctorPatCheck->payload.has_value()))
         {
             CoreVM::Value* bindingSource = _builder.createLoad(scrutineeStorage, "scrutinee.reload");
 

@@ -1805,3 +1805,157 @@ TEST_CASE("IRGenerator.FSharp.float_mod")
 {
     CHECK(executesWithOutput("print (7.5 % 2.0)", "1.5"));
 }
+
+// =============================================================================
+// Non-entry-block alloca regression tests (DISCARD underflow fix)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_multiple_function_calls")
+{
+    // Calling a function twice triggers the second call in a non-entry block.
+    // Previously this created allocas outside the entry block, causing DISCARD underflow.
+    auto const source = R"(
+        let double x = x * 2
+        print (double 3)
+        print " "
+        print (double 5)
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "6 10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_function_call_after_match")
+{
+    // Function application in a match merge block exercises non-entry-block codegen.
+    auto const source = R"(
+        let id x = x
+        let r = match Some 1 with | Some n -> n | None -> 0
+        print (id r)
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_chained_try_with")
+{
+    // Multiple try-with expressions with error handlers.
+    auto const source = R"(
+        let getErr x = Error x
+        let r1 = try getErr 1 with | Error e -> e
+        let r2 = try getErr 2 with | Error e -> e
+        print r1
+        print " "
+        print r2
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "1 2");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_with_multiple_handlers")
+{
+    // try-with with multiple error pattern arms.
+    auto const source = R"(
+        let getErr x = Error x
+        let r1 = try getErr 1 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        let r2 = try getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        let r3 = try getErr 99 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        print r1
+        print " "
+        print r2
+        print " "
+        print r3
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "10 20 0");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_with_guards")
+{
+    // try-with with guard conditions on error patterns.
+    auto const source = R"(
+        let getErr x = Error x
+        let r = try getErr 5 with | Error e when e > 3 -> 100 | Error _ -> 0
+        print r
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_mixed_function_calls_and_try")
+{
+    // Combination of match, function calls, and error handling.
+    auto const source = R"(
+        let id x = x
+        let getErr x = Error x
+        let r1 = match Some 42 with | Some n -> n | None -> 0
+        let r2 = try getErr 99 with | Error e -> e
+        print (id r1)
+        print " "
+        print (id r2)
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "42 99");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_function_call_inside_match_arm")
+{
+    // Function application within a match arm body.
+    auto const source = R"(
+        let double x = x * 2
+        let r = match Some 5 with | Some n -> double n | None -> 0
+        print r
+    )";
+    CHECK(executeSourceAndGetOutput(source) == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_options_and_results_full")
+{
+    // End-to-end test matching examples/options_and_results.endo
+    auto const source = R"(
+        let some_val = Some 42
+        let no_val = None
+        let get_or_default opt = match opt with | Some n -> n | None -> 0
+        print "Some 42 -> "; println (get_or_default some_val)
+        print "None -> "; println (get_or_default no_val)
+        let ok_val = Ok 100
+        let err_val = Error 404
+        let unwrap_result r = match r with | Ok n -> n | Error e -> e
+        print "Ok 100 -> "; println (unwrap_result ok_val)
+        print "Error 404 -> "; println (unwrap_result err_val)
+        let unwrap opt = opt?
+        let r1 = unwrap (Some 42)
+        print "unwrap Some 42 = "; println r1
+        let unwrap_res res = res?
+        let r2 = unwrap_res (Ok 77)
+        print "unwrap Ok 77 = "; println r2
+        let getValue x = Ok x
+        let safe = try getValue 42 with | Error e -> 0
+        print "try Ok 42 = "; println safe
+        let getErr x = Error x
+        let handled = try getErr 99 with | Error e -> e
+        print "try Error 99 = "; println handled
+        let r3 = try getErr 1 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        print "Error 1 matched = "; println r3
+        let r4 = try getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        print "Error 2 matched = "; println r4
+        let r5 = try getErr 99 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0
+        print "Error 99 fallback = "; println r5
+        let r6 = try getErr 5 with | Error e when e > 3 -> 100 | Error _ -> 0
+        print "Error 5 (>3 guard) = "; println r6
+        let getOpt x = Some x
+        let r7 = try getOpt 42 with | None -> 0
+        print "try Some 42 = "; println r7
+        let getNone x = None
+        let r8 = try getNone 0 with | None -> 99
+        print "try None = "; println r8
+    )";
+    auto const expected = "Some 42 -> 42\n"
+                          "None -> 0\n"
+                          "Ok 100 -> 100\n"
+                          "Error 404 -> 404\n"
+                          "unwrap Some 42 = 42\n"
+                          "unwrap Ok 77 = 77\n"
+                          "try Ok 42 = 42\n"
+                          "try Error 99 = 99\n"
+                          "Error 1 matched = 10\n"
+                          "Error 2 matched = 20\n"
+                          "Error 99 fallback = 0\n"
+                          "Error 5 (>3 guard) = 100\n"
+                          "try Some 42 = 42\n"
+                          "try None = 99\n";
+    CHECK(executeSourceAndGetOutput(source) == expected);
+}
