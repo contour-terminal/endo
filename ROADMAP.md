@@ -403,6 +403,7 @@ src/
 - [x] Fix logical OR operator (3 copy-paste bugs: `createBXor` emitted `BAndInstr`, `BOrInstr` visitor emitted `BAND`, `||` codegen used `createBXor` instead of `createBOr`)
 - [x] Fix string concatenation with `+` operator (was always converting to numbers; now detects string operands and uses `createSAdd`)
 - [x] Implement if-then-else expressions (`IfExpr` AST node, parser, IR codegen with alloca/branch/merge)
+- [x] Fix if-then-else result type inference (defer alloca creation until branch type is known, fixes string/float results)
 - [x] Implement mutable variable assignment (`MutAssignStmt` AST node, `<-` operator, mutability tracking via `BindingInfo`)
 - [x] Implement tuple expressions (`TupleExpr` AST node, 2-/3-element tuples via TypedObject with Tuple2/Tuple3 types)
 - [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)
@@ -504,6 +505,7 @@ src/
 - If-then-else expressions:
   - `IfExpr` AST node with condition, thenExpr, elseExpr (separate from `IfStmt` for bash-style)
   - IR codegen: alloca for result storage, condBr on condition, then/else blocks store result, merge block loads
+  - Result alloca type is deferred until after branch codegen — uses `thenResult->type()` (or `elseResult->type()` if then is a tail call) instead of hardcoded `Void`
   - `then` and `else` added to `isFSharpPrimary()` exclusion list to prevent argument consumption
 - Mutable assignment:
   - `BindingInfo { Value*, bool isMutable }` replaces raw `Value*` in `FSharpScope::bindings`

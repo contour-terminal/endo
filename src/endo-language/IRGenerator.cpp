@@ -2103,8 +2103,9 @@ void IRGenerator::visit(ast::IfExpr const& node)
 {
     TRACE_SCOPE("visit(IfExpr)");
 
-    // Allocate result storage in entry block
-    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "if.result");
+    // Result storage is created lazily after we know the actual type from the branches.
+    // createAllocaInEntryBlock() always inserts into the entry block, so calling it later is safe.
+    CoreVM::AllocaInstr* resultStorage = nullptr;
 
     // Codegen condition
     auto* condValue = codegen(node.condition.get());
@@ -2127,6 +2128,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
     auto* thenResult = codegen(node.thenExpr.get());
     if (thenResult)
     {
+        resultStorage = createAllocaInEntryBlock(thenResult->type(), "if.result");
         _builder.createStore(resultStorage, thenResult, "if.then.store");
         _builder.createBr(mergeBlock);
     }
@@ -2145,6 +2147,8 @@ void IRGenerator::visit(ast::IfExpr const& node)
     auto* elseResult = codegen(node.elseExpr.get());
     if (elseResult)
     {
+        if (!resultStorage)
+            resultStorage = createAllocaInEntryBlock(elseResult->type(), "if.result");
         _builder.createStore(resultStorage, elseResult, "if.else.store");
         _builder.createBr(mergeBlock);
     }
@@ -2160,7 +2164,10 @@ void IRGenerator::visit(ast::IfExpr const& node)
 
     // Merge block: load result
     _builder.setInsertPoint(mergeBlock);
-    _result = _builder.createLoad(resultStorage, "if.result");
+    if (resultStorage)
+        _result = _builder.createLoad(resultStorage, "if.result");
+    else
+        _result = nullptr; // Both branches are tail calls — merge is unreachable
 }
 
 void IRGenerator::visit(ast::TupleExpr const& node)

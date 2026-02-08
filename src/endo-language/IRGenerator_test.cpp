@@ -1478,6 +1478,26 @@ TEST_CASE("IRGenerator.FSharp.if_expr_false")
     CHECK(executesWithOutput("let x = if false then 1 else 2; print x", "2"));
 }
 
+TEST_CASE("IRGenerator.FSharp.if_expr_string_true")
+{
+    CHECK(executesWithOutput("print (if true then \"Hello\" else \"World\")", "Hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_string_false")
+{
+    CHECK(executesWithOutput("print (if false then \"Hello\" else \"World\")", "World"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_float_true")
+{
+    CHECK(executesWithOutput("print (if true then 3.14 else 2.81)", "3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_float_false")
+{
+    CHECK(executesWithOutput("print (if false then 3.14 else 2.81)", "2.81"));
+}
+
 TEST_CASE("IRGenerator.FSharp.if_expr_with_comparison")
 {
     CHECK(executesWithOutput("let id x = x; print (id 5)", "5"));
