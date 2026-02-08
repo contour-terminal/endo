@@ -61,6 +61,14 @@ namespace
 
 Token Lexer::nextToken()
 {
+    // If a token was pushed back, return it
+    if (_pushedBack)
+    {
+        _pushedBack = false;
+        _currentToken = _pushedBackToken;
+        return _currentToken.token;
+    }
+
     // If we're inside a double-quoted string (and not inside a substitution), use the special tokenizer
     if (_inDoubleQuote && _dquoteSubstDepth == 0)
         return consumeDoubleQuotedContent();
@@ -131,7 +139,8 @@ Token Lexer::nextToken()
                 return confirmToken(Token::Less);
         case '(':
             nextChar();
-            if (_currentChar == '(')
+            // Only merge '((' into DblRndOpen for shell arithmetic contexts, not F# mode.
+            if (_currentChar == '(' && _fsharpDepth == 0)
             {
                 ++_arithDepth; // Entering (( arithmetic context
                 return consumeCharAndConfirmToken(Token::DblRndOpen);
@@ -139,7 +148,9 @@ Token Lexer::nextToken()
             return confirmToken(Token::RndOpen);
         case ')':
             nextChar();
-            if (_currentChar == ')')
+            // In F# mode without arithmetic context, each ')' is a separate RndClose token.
+            // Only merge '))' into DblRndClose for shell arithmetic or $((…)) contexts.
+            if (_currentChar == ')' && (_arithDepth > 0 || (_inDoubleQuote && _dquoteSubstDepth > 0)))
             {
                 if (_inDoubleQuote && _dquoteSubstDepth > 0)
                     --_dquoteSubstDepth; // Closing $((

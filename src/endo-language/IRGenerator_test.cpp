@@ -1400,3 +1400,201 @@ TEST_CASE("IRGenerator.FSharp.session_lambda_bound_function")
     // Lambda assigned to variable persists
     CHECK(sessionProducesOutput({ "let inc = fun x -> x + 1", "print (inc 41)" }, "42"));
 }
+
+// =============================================================================
+// Phase 2 — Bug Fixes
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.logical_or_true_false")
+{
+    CHECK(executesWithOutput("let x = true || false; print x", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.logical_or_false_true")
+{
+    CHECK(executesWithOutput("let x = false || true; print x", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.print_bool_true")
+{
+    CHECK(executesWithOutput("let x = true; print x", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.print_bool_false")
+{
+    CHECK(executesWithOutput("let x = false; print x", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.logical_or_false_false")
+{
+    CHECK(executesWithOutput("let x = false || false; print x", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.logical_or_true_true")
+{
+    CHECK(executesWithOutput("let x = true || true; print x", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.logical_and_true_false")
+{
+    CHECK(executesWithOutput("let x = true && false; print x", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.logical_and_true_true")
+{
+    CHECK(executesWithOutput("let x = true && true; print x", "true"));
+}
+
+// =============================================================================
+// Phase 2 — String Concatenation
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.string_concat_basic")
+{
+    CHECK(executesWithOutput(R"(let s = "hello" + " world"; print s)", "hello world"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_concat_number_right")
+{
+    CHECK(executesWithOutput(R"(let s = "count: " + 42; print s)", "count: 42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_concat_number_left")
+{
+    CHECK(executesWithOutput(R"(let s = 42 + " items"; print s)", "42 items"));
+}
+
+// =============================================================================
+// Phase 2 — If-Then-Else Expressions
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.if_expr_true")
+{
+    CHECK(executesWithOutput("let x = if true then 1 else 2; print x", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_false")
+{
+    CHECK(executesWithOutput("let x = if false then 1 else 2; print x", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_with_comparison")
+{
+    CHECK(executesWithOutput("let id x = x; print (id 5)", "5"));
+    CHECK(executesWithOutput("print (7)", "7"));
+    CHECK(executesWithOutput("let id x = x; print (id (7))", "7"));
+    CHECK(executesWithOutput("let id x = x; print (id (0 - 7))", "-7"));
+    CHECK(executesWithOutput("let abs x = if x < 0 then 0 - x else x; print (abs (0 - 7))", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_nested")
+{
+    CHECK(executesWithOutput(
+        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 50)", "50"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_nested_low")
+{
+    CHECK(executesWithOutput(
+        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp (0 - 5))", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_nested_high")
+{
+    CHECK(executesWithOutput(
+        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 200)", "100"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_recursive_factorial")
+{
+    CHECK(executesWithOutput(
+        "let rec fact n acc = if n <= 1 then acc else fact (n - 1) (acc * n); print (fact 5 1)", "120"));
+}
+
+// =============================================================================
+// Phase 2 — Mutable Variable Assignment
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.mutable_assignment_basic")
+{
+    CHECK(executesWithOutput("let mut x = 1; x <- 42; print x", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.mutable_assignment_increment")
+{
+    CHECK(executesWithOutput("let mut counter = 0; counter <- counter + 1; print counter", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.immutable_assignment_error")
+{
+    // Assigning to an immutable variable should produce an error
+    CHECK_FALSE(generatesIRSuccessfully("let x = 1; x <- 42"));
+}
+
+// =============================================================================
+// Phase 2 — Tuple Expressions and Pattern Matching
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.tuple_fst")
+{
+    CHECK(executesWithOutput("let t = (1, 2); print (fst t)", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_snd")
+{
+    CHECK(executesWithOutput("let t = (1, 2); print (snd t)", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_pattern_match")
+{
+    CHECK(executesWithOutput("let t = (3, 4); let r = match t with | (a, b) -> a + b; print r", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_3_elements")
+{
+    CHECK(executesWithOutput("let t = (10, 20, 30); print (fst t)", "10"));
+}
+
+// =============================================================================
+// Phase 2 — Standard Library Builtins
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_length")
+{
+    CHECK(executesWithOutput(R"(print (string_length "hello"))", "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_of_int")
+{
+    CHECK(executesWithOutput(R"(print (string_of_int 42))", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_int_of_string")
+{
+    CHECK(executesWithOutput(R"(let n = int_of_string "7"; print (n + 3))", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_not_true")
+{
+    CHECK(executesWithOutput("let x = not true; print x", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_not_false")
+{
+    CHECK(executesWithOutput("let x = not false; print x", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_pipeline_string_of_int_length")
+{
+    CHECK(executesWithOutput("let r = 42 |> string_of_int |> string_length; print r", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_fst_direct")
+{
+    CHECK(executesWithOutput("print (fst (1, 2))", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_snd_direct")
+{
+    CHECK(executesWithOutput("print (snd (1, 2))", "2"));
+}

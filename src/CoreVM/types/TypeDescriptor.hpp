@@ -101,10 +101,8 @@ namespace BuiltinTypeId
 {
     constexpr uint16_t Option = 1;
     constexpr uint16_t Result = 2;
-    // Future built-in types would go here:
-    // constexpr uint16_t Tuple2 = 3;
-    // constexpr uint16_t List = 4;
-    // etc.
+    constexpr uint16_t Tuple2 = 3;
+    constexpr uint16_t Tuple3 = 4;
 } // namespace BuiltinTypeId
 
 } // namespace CoreVM

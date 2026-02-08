@@ -171,14 +171,33 @@ Value* IRBuilder::createBXor(Value* lhs, Value* rhs, const std::string& name)
         if (auto* b = dynamic_cast<ConstantBoolean*>(rhs))
             return getBoolean(a->get() ^ b->get());
 
-    return insert<BAndInstr>(lhs, rhs, makeName(name));
+    return insert<BXorInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createBOr(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(rhs->type() == LiteralType::Boolean);
+
+    if (auto* a = dynamic_cast<ConstantBoolean*>(lhs))
+        if (auto* b = dynamic_cast<ConstantBoolean*>(rhs))
+            return getBoolean(a->get() || b->get());
+
+    return insert<BOrInstr>(lhs, rhs, makeName(name));
 }
 
 // }}}
 // {{{ numerical ops
+
+/// Returns true if the type is Number or a dynamically-typed value (Void/Object)
+/// that represents a number at runtime.
+static bool isNumberCompatible(LiteralType t)
+{
+    return t == LiteralType::Number || t == LiteralType::Void || t == LiteralType::Object;
+}
+
 Value* IRBuilder::createNeg(Value* rhs, const std::string& name)
 {
-    assert(rhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(rhs))
         return get(-a->get());
@@ -188,7 +207,7 @@ Value* IRBuilder::createNeg(Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNot(Value* rhs, const std::string& name)
 {
-    assert(rhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(rhs))
         return get(~a->get());
@@ -198,8 +217,7 @@ Value* IRBuilder::createNot(Value* rhs, const std::string& name)
 
 Value* IRBuilder::createAdd(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -210,8 +228,7 @@ Value* IRBuilder::createAdd(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSub(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -222,8 +239,7 @@ Value* IRBuilder::createSub(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createMul(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -234,8 +250,7 @@ Value* IRBuilder::createMul(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createDiv(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -246,8 +261,7 @@ Value* IRBuilder::createDiv(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createRem(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -258,8 +272,7 @@ Value* IRBuilder::createRem(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createShl(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -270,8 +283,7 @@ Value* IRBuilder::createShl(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createShr(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -282,8 +294,7 @@ Value* IRBuilder::createShr(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createPow(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -294,8 +305,7 @@ Value* IRBuilder::createPow(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createAnd(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -306,8 +316,7 @@ Value* IRBuilder::createAnd(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createOr(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -318,8 +327,7 @@ Value* IRBuilder::createOr(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createXor(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -330,8 +338,7 @@ Value* IRBuilder::createXor(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpEQ(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -342,8 +349,7 @@ Value* IRBuilder::createNCmpEQ(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpNE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -354,8 +360,7 @@ Value* IRBuilder::createNCmpNE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpLE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -366,8 +371,7 @@ Value* IRBuilder::createNCmpLE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpGE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -378,8 +382,7 @@ Value* IRBuilder::createNCmpGE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpLT(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))
@@ -390,8 +393,7 @@ Value* IRBuilder::createNCmpLT(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createNCmpGT(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::Number);
+    assert(isNumberCompatible(lhs->type()) && isNumberCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantInt*>(lhs))
         if (auto* b = dynamic_cast<ConstantInt*>(rhs))

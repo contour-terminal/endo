@@ -400,6 +400,17 @@ src/
 - [x] Implement or-patterns in match expressions (`| 1 | 2 | 3 -> "small"`)
 - [x] Implement as-patterns in match expressions (`| n as val -> ...`)
 - [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
+- [x] Fix logical OR operator (3 copy-paste bugs: `createBXor` emitted `BAndInstr`, `BOrInstr` visitor emitted `BAND`, `||` codegen used `createBXor` instead of `createBOr`)
+- [x] Fix string concatenation with `+` operator (was always converting to numbers; now detects string operands and uses `createSAdd`)
+- [x] Implement if-then-else expressions (`IfExpr` AST node, parser, IR codegen with alloca/branch/merge)
+- [x] Implement mutable variable assignment (`MutAssignStmt` AST node, `<-` operator, mutability tracking via `BindingInfo`)
+- [x] Implement tuple expressions (`TupleExpr` AST node, 2-/3-element tuples via TypedObject with Tuple2/Tuple3 types)
+- [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)
+- [x] Implement standard library builtins (`fst`, `snd`, `string_length`, `int_of_string`, `string_of_int`, `not`)
+- [x] Fix boolean literal codegen (`_builder.getBoolean()` instead of `_builder.get()` which silently converted `bool` to `int64_t`)
+- [x] Fix `print` for boolean values (conditional branch to `"true"`/`"false"` since no `B2S` opcode exists)
+- [x] Fix lexer `))` merging in F# mode (consecutive `)` no longer merged to `DblRndClose` except in arithmetic contexts)
+- [x] Add `LANGUAGE_STATUS.md` for tracking F# feature implementation status
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
@@ -474,6 +485,41 @@ src/
   - `IRGenerator` no longer inherits from `CoreVM::IRBuilder`; uses `_builder` member instead
   - `PatternIRGenerator` takes `CoreVM::IRBuilder&` directly, eliminating its dependency on `IRGenerator`
   - Cleaner separation of concerns: IR generation logic vs. IR building API
+- Boolean value handling:
+  - `BoolLiteralExpr` must use `_builder.getBoolean()` not `_builder.get()` — `bool` implicitly converts to `int64_t`, producing `ConstantInt` with `Number` type instead of `ConstantBoolean` with `Boolean` type
+  - `toBool()` uses shell semantics (0=true, non-zero=false), so `Number`-typed booleans get inverted logic
+  - `print` handles `Boolean` type via conditional branch IR (`if bool then "true" else "false"`) since no `B2S` VM opcode exists
+  - `PatternIRGenerator` also uses `getBoolean()` for bool literals and BXor+BNot for boolean comparison
+- If-then-else expressions:
+  - `IfExpr` AST node with condition, thenExpr, elseExpr (separate from `IfStmt` for bash-style)
+  - IR codegen: alloca for result storage, condBr on condition, then/else blocks store result, merge block loads
+  - `then` and `else` added to `isFSharpPrimary()` exclusion list to prevent argument consumption
+- Mutable assignment:
+  - `BindingInfo { Value*, bool isMutable }` replaces raw `Value*` in `FSharpScope::bindings`
+  - `MutAssignStmt` codegen: lookup binding, verify mutability, store new value via `createStore`
+- Tuple expressions and patterns:
+  - `TupleExpr`: codegen allocates TypedObject (Tuple2/Tuple3), sets slots for each element
+  - `TuplePattern` in PatternIRGenerator: extracts slots via `createObjGetSlot`, chains sub-pattern matches
+  - Pre-allocated binding storage (`setBindingStorage()`) allows PatternIRGenerator to store values during pattern matching, avoiding cross-block references
+  - Tuple scrutinee reloaded from storage for subsequent slot extractions after block boundaries
+- String concatenation:
+  - `visit(BinaryExpr)` checks if either operand is `LiteralType::String` for `Add` operator
+  - Converts non-string operands via `createN2S()`, then uses `createSAdd()` for concatenation
+  - All other operators continue with existing numeric coercion path
+- Standard library builtins:
+  - `tryGenerateBuiltinCall()` helper consolidates dispatch, following existing `print`/`println` pattern
+  - `fst`/`snd` use `createObjGetSlot(obj, 0/1)`
+  - `string_length` uses `createSLen()`, `int_of_string` uses `createS2N()`, `string_of_int` uses `createN2S()`
+  - `not` uses `createBNot(toBool(v))`
+- Lexer fix for nested parentheses:
+  - In F# mode, consecutive `)` characters were merged into `DblRndClose` (shell arithmetic `))`)
+  - Fix: only merge `))` when `_arithDepth > 0` or in `$((…))` context
+  - Similarly, `((` only produces `DblRndOpen` when `_fsharpDepth == 0`
+- Arithmetic assertion relaxation:
+  - `isNumberCompatible()` helper accepts `Number`, `Void`, and `Object` types for dynamic values from `ObjGetSlot`
+  - All arithmetic and numeric comparison assertions updated to use this helper
+- Feature status tracking:
+  - `LANGUAGE_STATUS.md` tracks implementation status of all F# features from `LANGUAGE.md`
 
 ---
 

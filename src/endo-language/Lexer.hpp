@@ -284,6 +284,15 @@ class Lexer
     /// Check if currently in F# expression mode
     [[nodiscard]] bool inFSharpMode() const noexcept { return _fsharpDepth > 0; }
 
+    /// Pushes back a token so that currentToken() returns it immediately,
+    /// and the current token is deferred to the next nextToken() call.
+    void pushBackToken(Token token, std::string literal)
+    {
+        _pushedBack = true;
+        _pushedBackToken = _currentToken;
+        _currentToken = TokenInfo { .token = token, .literal = std::move(literal) };
+    }
+
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
 
@@ -306,11 +315,13 @@ class Lexer
     TokenInfo _currentToken = TokenInfo {};
     TokenInfo _nextToken = TokenInfo {};
     SourceLocationRange _currentRange {};
-    bool _inDoubleQuote = false; // State: inside double-quoted string
-    int _dquoteSubstDepth = 0;   // Nesting depth for $() and backticks inside double quotes
-    int _arithDepth = 0;         // Nesting depth for $(()), operators are reserved when > 0
-    int _fsharpDepth = 0;        // Nesting depth for F# expressions, operators are tokens when > 0
-    std::string _fragmentBuffer; // Buffer for accumulating string fragments
+    bool _inDoubleQuote = false;   // State: inside double-quoted string
+    int _dquoteSubstDepth = 0;     // Nesting depth for $() and backticks inside double quotes
+    int _arithDepth = 0;           // Nesting depth for $(()), operators are reserved when > 0
+    int _fsharpDepth = 0;          // Nesting depth for F# expressions, operators are tokens when > 0
+    std::string _fragmentBuffer;   // Buffer for accumulating string fragments
+    bool _pushedBack = false;      // True if a token has been pushed back
+    TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
 };
 
 } // namespace endo

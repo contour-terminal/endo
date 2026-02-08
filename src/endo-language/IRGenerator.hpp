@@ -115,6 +115,9 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::ReturnStmt const& node) override;
 
     // F# style expressions and statements
+    void visit(ast::IfExpr const& node) override;
+    void visit(ast::TupleExpr const& node) override;
+    void visit(ast::MutAssignStmt const& node) override;
     void visit(ast::LetBindingStmt const& node) override;
     void visit(ast::LetInExpr const& node) override;
     void visit(ast::ExprStmt const& node) override;
@@ -169,6 +172,10 @@ class IRGenerator final: public ast::Visitor
     /// @param appendNewline If true, appends newline after printing (println)
     void generatePrintCall(ast::Expr const* argument, bool appendNewline);
 
+    /// Tries to generate IR for a builtin function call (fst, snd, string_length, etc.).
+    /// @return true if the name matched a builtin and code was generated
+    bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
+
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
@@ -194,9 +201,15 @@ class IRGenerator final: public ast::Visitor
     [[nodiscard]] bool needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const;
 
     // F# variable scope management
+    struct BindingInfo
+    {
+        CoreVM::Value* value;
+        bool isMutable;
+    };
+
     struct FSharpScope
     {
-        std::unordered_map<std::string, CoreVM::Value*> bindings;
+        std::unordered_map<std::string, BindingInfo> bindings;
         std::vector<CoreVM::AllocaInstr*>
             objectVariables; ///< Variables holding objects (for ORELEASE at scope exit)
         FSharpScope* parent = nullptr;
@@ -204,9 +217,12 @@ class IRGenerator final: public ast::Visitor
 
     void pushFSharpScope();
     void popFSharpScope();
-    void bindFSharpVariable(std::string const& name, CoreVM::Value* value);
-    void bindFSharpObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage);
+    void bindFSharpVariable(std::string const& name, CoreVM::Value* value, bool isMutable = false);
+    void bindFSharpObjectVariable(std::string const& name,
+                                  CoreVM::AllocaInstr* storage,
+                                  bool isMutable = false);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
+    [[nodiscard]] BindingInfo const* lookupFSharpBinding(std::string const& name) const;
 
     // F# function management
     struct FSharpFunction

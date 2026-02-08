@@ -194,6 +194,33 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             }
             else
             {
+                // Check for F# mutable assignment: identifier <- expr
+                // We need to peek ahead to see if the next token is '<-'
+                // This is safe because in shell mode, '<-' is also tokenized as LeftArrow
+                auto const& ident = _lexer.currentLiteral();
+                if (!ident.empty() && (std::isalpha(static_cast<unsigned char>(ident[0])) || ident[0] == '_'))
+                {
+                    auto savedToken = _lexer.currentToken();
+                    auto savedLiteral = ident;
+                    _lexer.nextToken(); // consume identifier
+                    if (_lexer.currentToken() == Token::LeftArrow)
+                    {
+                        _lexer.nextToken(); // consume '<-'
+                        _lexer.enterFSharpExpr();
+                        auto value = parseFSharpExpr();
+                        _lexer.leaveFSharpExpr();
+                        if (!value)
+                            return nullptr;
+                        return std::make_unique<ast::MutAssignStmt>(std::move(savedLiteral),
+                                                                    std::move(value));
+                    }
+                    // Not a mutable assignment — we consumed the identifier, need to push it back.
+                    // Instead, we inject it as the command name and continue parsing.
+                    // The identifier was consumed; fall through to command parsing by
+                    // reconstructing a ProgramCall manually.
+                    _lexer.pushBackToken(savedToken, savedLiteral);
+                }
+
                 // All other statements (builtins and commands) can participate
                 // in logical expressions (&&, ||)
                 return parseLogicalExpr();
@@ -2313,8 +2340,8 @@ bool Parser::isFSharpPrimary() const noexcept
             auto const& lit = _lexer.currentLiteral();
             if (lit.empty())
                 return false;
-            // 'in' is a contextual keyword (used in let...in and for...in), not a primary expression
-            if (lit == "in")
+            // Contextual keywords that should not be treated as primary expressions
+            if (lit == "in" || lit == "then" || lit == "else")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -3035,6 +3062,48 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return std::make_unique<ast::BoolLiteralExpr>(false);
             }
 
+            // Check for if-then-else expression
+            if (lit == "if")
+            {
+                _lexer.nextToken(); // consume 'if'
+                auto condition = parseFSharpExpr();
+                if (!condition)
+                    return nullptr;
+
+                if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "then")
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Add 'then' after the condition" },
+                                                       currentContextSnippet(),
+                                                       "Expected 'then' in if-expression, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume 'then'
+
+                auto thenExpr = parseFSharpExpr();
+                if (!thenExpr)
+                    return nullptr;
+
+                if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "else")
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Add 'else' branch" },
+                                                       currentContextSnippet(),
+                                                       "Expected 'else' in if-expression, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume 'else'
+
+                auto elseExpr = parseFSharpExpr();
+                if (!elseExpr)
+                    return nullptr;
+
+                return std::make_unique<ast::IfExpr>(
+                    std::move(condition), std::move(thenExpr), std::move(elseExpr));
+            }
+
             // Check for list literal starting with '[' (in non-F# mode, [ is part of identifier)
             if (!lit.empty() && lit[0] == '[')
             {
@@ -3047,11 +3116,38 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         }
 
         case Token::RndOpen: {
-            // Parenthesized expression: (expr)
+            // Parenthesized expression or tuple: (expr) or (expr, expr, ...)
             _lexer.nextToken(); // consume '('
-            auto inner = parseFSharpExpr();
-            if (!inner)
+            auto first = parseFSharpExpr();
+            if (!first)
                 return nullptr;
+
+            // Check for comma → tuple
+            if (_lexer.currentToken() == Token::Comma)
+            {
+                std::vector<std::unique_ptr<ast::Expr>> elements;
+                elements.push_back(std::move(first));
+                while (_lexer.currentToken() == Token::Comma)
+                {
+                    _lexer.nextToken(); // consume ','
+                    auto elem = parseFSharpExpr();
+                    if (!elem)
+                        return nullptr;
+                    elements.push_back(std::move(elem));
+                }
+                if (_lexer.currentToken() != Token::RndClose)
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Add a closing ')'" },
+                                                       currentContextSnippet(),
+                                                       "Expected ')' after tuple, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume ')'
+                return std::make_unique<ast::TupleExpr>(std::move(elements));
+            }
+
             if (_lexer.currentToken() != Token::RndClose)
             {
                 _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -3062,7 +3158,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return nullptr;
             }
             _lexer.nextToken(); // consume ')'
-            return std::make_unique<ast::ParenExpr>(std::move(inner));
+            return std::make_unique<ast::ParenExpr>(std::move(first));
         }
 
         case Token::Ampersand: {

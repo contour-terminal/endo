@@ -136,20 +136,22 @@ void IRGenerator::popFSharpScope()
     }
 }
 
-void IRGenerator::bindFSharpVariable(std::string const& name, CoreVM::Value* value)
+void IRGenerator::bindFSharpVariable(std::string const& name, CoreVM::Value* value, bool isMutable)
 {
     if (_currentFSharpScope)
-        _currentFSharpScope->bindings[name] = value;
+        _currentFSharpScope->bindings[name] = BindingInfo { value, isMutable };
 }
 
-void IRGenerator::bindFSharpObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage)
+void IRGenerator::bindFSharpObjectVariable(std::string const& name,
+                                           CoreVM::AllocaInstr* storage,
+                                           bool isMutable)
 {
     if (_currentFSharpScope)
     {
         // Track the storage for ORELEASE at scope exit
         _currentFSharpScope->objectVariables.push_back(storage);
         // Also bind as a regular variable
-        _currentFSharpScope->bindings[name] = storage;
+        _currentFSharpScope->bindings[name] = BindingInfo { storage, isMutable };
     }
 }
 
@@ -159,7 +161,18 @@ CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
     {
         auto it = scope->bindings.find(name);
         if (it != scope->bindings.end())
-            return it->second;
+            return it->second.value;
+    }
+    return nullptr;
+}
+
+IRGenerator::BindingInfo const* IRGenerator::lookupFSharpBinding(std::string const& name) const
+{
+    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
+    {
+        auto it = scope->bindings.find(name);
+        if (it != scope->bindings.end())
+            return &it->second;
     }
     return nullptr;
 }
@@ -372,6 +385,21 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
                 if (comp->filter)
                     walk(comp->filter.get(), innerBound);
                 walk(comp->body.get(), innerBound);
+                return;
+            }
+
+            if (auto const* ifExpr = dynamic_cast<ast::IfExpr const*>(expr))
+            {
+                walk(ifExpr->condition.get(), bound);
+                walk(ifExpr->thenExpr.get(), bound);
+                walk(ifExpr->elseExpr.get(), bound);
+                return;
+            }
+
+            if (auto const* tupleExpr = dynamic_cast<ast::TupleExpr const*>(expr))
+            {
+                for (auto const& elem: tupleExpr->elements)
+                    walk(elem.get(), bound);
                 return;
             }
 
@@ -1852,13 +1880,28 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     // Convert to string if needed
     if (argValue->type() == CoreVM::LiteralType::Number)
     {
-        // Use N2S intrinsic to convert number to string
         argValue = _builder.createN2S(argValue, "print.n2s");
+    }
+    else if (argValue->type() == CoreVM::LiteralType::Boolean)
+    {
+        // Convert boolean to "true"/"false" string via conditional branch
+        auto* trueBlock = _builder.createBlock("print.b2s.true");
+        auto* falseBlock = _builder.createBlock("print.b2s.false");
+        auto* mergeBlock = _builder.createBlock("print.b2s.merge");
+        auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String, "print.b2s.tmp");
+        _builder.createCondBr(argValue, trueBlock, falseBlock);
+        _builder.setInsertPoint(trueBlock);
+        _builder.createStore(storage, _builder.get("true"));
+        _builder.createBr(mergeBlock);
+        _builder.setInsertPoint(falseBlock);
+        _builder.createStore(storage, _builder.get("false"));
+        _builder.createBr(mergeBlock);
+        _builder.setInsertPoint(mergeBlock);
+        argValue = _builder.createLoad(storage, "print.b2s");
     }
     else if (argValue->type() == CoreVM::LiteralType::Void || argValue->type() == CoreVM::LiteralType::Object)
     {
         // Dynamically-typed value (e.g., from pattern matching or OGETSLOT)
-        // Assume it's a number at runtime and convert
         argValue = _builder.createN2S(argValue, "print.n2s");
     }
     else if (argValue->type() != CoreVM::LiteralType::String)
@@ -1884,6 +1927,104 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     std::string funcName = appendNewline ? "println" : "print";
     _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argValue }, funcName);
     _result = nullptr; // print/println returns void
+}
+
+bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
+                                         std::vector<ast::Expr const*> const& argExprs)
+{
+    if (name == "fst" || name == "snd")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError(
+                "{} requires exactly 1 argument, got {}", std::string_view(name), argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate {} argument", std::string_view(name));
+            return true;
+        }
+        auto slotIndex = (name == "fst") ? 0 : 1;
+        _result = _builder.createObjGetSlot(argVal, _builder.get(CoreVM::CoreNumber(slotIndex)), name);
+        return true;
+    }
+
+    if (name == "string_length")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("string_length requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate string_length argument");
+            return true;
+        }
+        if (argVal->type() != CoreVM::LiteralType::String)
+        {
+            reportTypeError("string_length requires a string argument");
+            return true;
+        }
+        _result = _builder.createSLen(argVal, "slen");
+        return true;
+    }
+
+    if (name == "int_of_string")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("int_of_string requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate int_of_string argument");
+            return true;
+        }
+        _result = _builder.createS2N(argVal, "s2n");
+        return true;
+    }
+
+    if (name == "string_of_int")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("string_of_int requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate string_of_int argument");
+            return true;
+        }
+        _result = _builder.createN2S(argVal, "n2s");
+        return true;
+    }
+
+    if (name == "not")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("not requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate not argument");
+            return true;
+        }
+        _result = _builder.createBNot(toBool(argVal), "not");
+        return true;
+    }
+
+    return false;
 }
 
 std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
@@ -1951,6 +2092,144 @@ bool IRGenerator::needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) co
 
 // ============================================================================
 // F# Style Expressions and Statements (Stubs)
+// ============================================================================
+// F# Phase 2 expressions: if-then-else, tuples, mutable assignment
+
+void IRGenerator::visit(ast::IfExpr const& node)
+{
+    TRACE_SCOPE("visit(IfExpr)");
+
+    // Allocate result storage in entry block
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "if.result");
+
+    // Codegen condition
+    auto* condValue = codegen(node.condition.get());
+    if (!condValue)
+    {
+        reportTypeError("Failed to generate code for if condition");
+        return;
+    }
+    auto* condBool = toBool(condValue);
+
+    // Create basic blocks
+    auto* thenBlock = _builder.createBlock("if.then");
+    auto* elseBlock = _builder.createBlock("if.else");
+    auto* mergeBlock = _builder.createBlock("if.merge");
+
+    _builder.createCondBr(condBool, thenBlock, elseBlock);
+
+    // Then branch
+    _builder.setInsertPoint(thenBlock);
+    auto* thenResult = codegen(node.thenExpr.get());
+    if (thenResult)
+    {
+        _builder.createStore(resultStorage, thenResult, "if.then.store");
+        _builder.createBr(mergeBlock);
+    }
+    else if (_activeRecursion || _activeMutualRecursion)
+    {
+        // Tail call in then branch — no merge needed from this path
+    }
+    else
+    {
+        reportTypeError("Failed to generate code for if-then branch");
+        return;
+    }
+
+    // Else branch
+    _builder.setInsertPoint(elseBlock);
+    auto* elseResult = codegen(node.elseExpr.get());
+    if (elseResult)
+    {
+        _builder.createStore(resultStorage, elseResult, "if.else.store");
+        _builder.createBr(mergeBlock);
+    }
+    else if (_activeRecursion || _activeMutualRecursion)
+    {
+        // Tail call in else branch — no merge needed from this path
+    }
+    else
+    {
+        reportTypeError("Failed to generate code for if-else branch");
+        return;
+    }
+
+    // Merge block: load result
+    _builder.setInsertPoint(mergeBlock);
+    _result = _builder.createLoad(resultStorage, "if.result");
+}
+
+void IRGenerator::visit(ast::TupleExpr const& node)
+{
+    TRACE_SCOPE("visit(TupleExpr)");
+
+    if (node.elements.size() < 2 || node.elements.size() > 3)
+    {
+        reportTypeError("Tuples must have 2 or 3 elements, got {}", node.elements.size());
+        return;
+    }
+
+    // Determine the type ID
+    auto typeId = node.elements.size() == 2 ? CoreVM::BuiltinTypeId::Tuple2 : CoreVM::BuiltinTypeId::Tuple3;
+
+    // Codegen all elements
+    std::vector<CoreVM::Value*> elemValues;
+    for (auto const& elem: node.elements)
+    {
+        auto* val = codegen(elem.get());
+        if (!val)
+        {
+            reportTypeError("Failed to generate code for tuple element");
+            return;
+        }
+        elemValues.push_back(val);
+    }
+
+    // Allocate the tuple object
+    auto* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)), "tuple");
+
+    // Set each slot
+    for (size_t i = 0; i < elemValues.size(); ++i)
+    {
+        _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemValues[i], "tuple.slot");
+    }
+
+    _result = obj;
+}
+
+void IRGenerator::visit(ast::MutAssignStmt const& node)
+{
+    TRACE_SCOPE("visit(MutAssignStmt)");
+
+    // Look up the binding
+    auto const* binding = lookupFSharpBinding(node.name);
+    if (!binding)
+    {
+        reportTypeError("Undefined variable: {}", std::string_view(node.name));
+        return;
+    }
+
+    if (!binding->isMutable)
+    {
+        reportTypeError(
+            "Cannot assign to immutable variable '{}'. Use 'let mut' to declare mutable variables.",
+            std::string_view(node.name));
+        return;
+    }
+
+    // Codegen the new value
+    auto* newValue = codegen(node.value.get());
+    if (!newValue)
+    {
+        reportTypeError("Failed to generate code for assignment value");
+        return;
+    }
+
+    // Store the new value
+    _builder.createStore(binding->value, newValue, node.name + ".assign");
+    _result = nullptr;
+}
+
 // ============================================================================
 // These are placeholder implementations. Full implementation will be added
 // in a future iteration once the type system and evaluation strategy are finalized.
@@ -2033,11 +2312,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
-    // Check if the expression produces an object (Option/Result)
+    // Check if the expression produces an object (Option/Result/Tuple)
     // These need special tracking for reference counting
     bool isObjectExpr = dynamic_cast<ast::OptionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ResultExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::TryExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::TryExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::TupleExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
@@ -2077,11 +2357,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(node.name, storage);
+        bindFSharpObjectVariable(node.name, storage, node.isMutable);
     }
     else
     {
-        bindFSharpVariable(node.name, storage);
+        bindFSharpVariable(node.name, storage, node.isMutable);
     }
 
     // Let bindings as statements don't produce a result value
@@ -2164,8 +2444,19 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         return;
     }
 
+    // String concatenation: if + operator and either operand is a string, concat
+    if (node.op == ast::BinaryOp::Add
+        && (left->type() == CoreVM::LiteralType::String || right->type() == CoreVM::LiteralType::String))
+    {
+        if (left->type() != CoreVM::LiteralType::String)
+            left = _builder.createN2S(left);
+        if (right->type() != CoreVM::LiteralType::String)
+            right = _builder.createN2S(right);
+        _result = _builder.createSAdd(left, right, "concat");
+        return;
+    }
+
     // For arithmetic and comparison, ensure operands are numbers
-    // String operations would need different handling (future work)
     if (left->type() == CoreVM::LiteralType::String)
         left = _builder.createS2N(left);
     if (right->type() == CoreVM::LiteralType::String)
@@ -2210,10 +2501,7 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
 
         // Logical operators
         case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
-        case ast::BinaryOp::Or:
-            // Note: CoreVM uses BXor for logical OR (see comment in CoreVM.hpp)
-            _result = _builder.createBXor(toBool(left), toBool(right), "or");
-            break;
+        case ast::BinaryOp::Or: _result = _builder.createBOr(toBool(left), toBool(right), "or"); break;
     }
 }
 
@@ -2268,6 +2556,66 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     if (auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(funcExpr))
     {
+        // Check for builtin functions first (fst, snd, string_length, etc.)
+        // For pipelines, we need to pass the piped value as the single argument
+        if (funcIdent->name == "print" || funcIdent->name == "println")
+        {
+            // Special case: pipe to print/println
+            // Convert value to string if needed
+            CoreVM::Value* argValue = value;
+            if (argValue->type() == CoreVM::LiteralType::Number)
+                argValue = _builder.createN2S(argValue, "pipe.n2s");
+            else if (argValue->type() == CoreVM::LiteralType::Void
+                     || argValue->type() == CoreVM::LiteralType::Object)
+                argValue = _builder.createN2S(argValue, "pipe.n2s");
+
+            auto* callback = findCallback(funcIdent->name == "println" ? "println(S)V" : "print(S)V");
+            if (callback)
+            {
+                _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { argValue }, funcIdent->name);
+            }
+            _result = nullptr;
+            return;
+        }
+
+        // Check other builtins
+        // Build a temporary argument expression list pointing to a synthetic node.
+        // Since builtins codegen their args, and we already have the value, we use
+        // a different approach: codegen the value manually for builtins.
+        if (funcIdent->name == "fst" || funcIdent->name == "snd")
+        {
+            auto slotIndex = (funcIdent->name == "fst") ? 0 : 1;
+            _result = _builder.createObjGetSlot(
+                value, _builder.get(CoreVM::CoreNumber(slotIndex)), funcIdent->name);
+            return;
+        }
+        if (funcIdent->name == "string_length")
+        {
+            if (value->type() != CoreVM::LiteralType::String)
+            {
+                reportTypeError("string_length requires a string argument");
+                return;
+            }
+            _result = _builder.createSLen(value, "slen");
+            return;
+        }
+        if (funcIdent->name == "int_of_string")
+        {
+            _result = _builder.createS2N(value, "s2n");
+            return;
+        }
+        if (funcIdent->name == "string_of_int")
+        {
+            _result = _builder.createN2S(value, "n2s");
+            return;
+        }
+        if (funcIdent->name == "not")
+        {
+            _result = _builder.createBNot(toBool(value), "not");
+            return;
+        }
+
         // Named function or stored lambda
         funcName = funcIdent->name;
         func = lookupFSharpFunction(funcName);
@@ -2542,6 +2890,10 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             generatePrintCall(argExprs[0], funcIdent->name == "println");
             return;
         }
+
+        // Check for standard library builtins (fst, snd, string_length, etc.)
+        if (tryGenerateBuiltinCall(funcIdent->name, argExprs))
+            return;
     }
 
     // Evaluate all arguments
@@ -2935,7 +3287,7 @@ void IRGenerator::visit(ast::FloatLiteralExpr const& node)
 
 void IRGenerator::visit(ast::BoolLiteralExpr const& node)
 {
-    _result = _builder.get(node.value);
+    _result = _builder.getBoolean(node.value);
 }
 
 void IRGenerator::visit(ast::ParenExpr const& node)
@@ -3064,6 +3416,16 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Compile the pattern (this emits the pattern matching IR)
         // Pass scrutineeStorage so the pattern can reload when crossing block boundaries
         patternIRGenerator.clearBindings();
+
+        // Provide pre-allocated binding storage so the pattern compiler stores values
+        // in the same basic block where they're extracted (avoiding cross-block references)
+        {
+            std::unordered_map<std::string, CoreVM::AllocaInstr*> storageMap;
+            for (auto const& [name, storage]: armBindingStorage[i])
+                storageMap[name] = storage;
+            patternIRGenerator.setBindingStorage(std::move(storageMap));
+        }
+
         patternIRGenerator.compile(
             *arm.pattern, scrutineeValue, scrutineeStorage, armBodyBlocks[i], onFailure);
 
@@ -3075,12 +3437,23 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         pushFSharpScope();
         auto const& preAllocatedBindings = armBindingStorage[i];
 
+        bool const isTuplePattern = dynamic_cast<pattern::TuplePattern const*>(arm.pattern.get()) != nullptr;
+
+        if (isTuplePattern)
+        {
+            // Tuple patterns: values were already stored into allocas by PatternIRGenerator
+            // Just register the allocas as variable bindings
+            for (auto const& [name, storage]: preAllocatedBindings)
+            {
+                bindFSharpVariable(name, storage);
+            }
+        }
         // For constructor patterns (Error e, Some x), we need to extract the payload
         // For simple variable patterns, we bind the whole scrutinee
         // Only load the scrutinee if there are actual bindings to store.
         // Dead loads leave values on the stack that accumulate in loops (e.g., let rec).
-        if (!preAllocatedBindings.empty()
-            || dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+        else if (!preAllocatedBindings.empty()
+                 || dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
         {
             CoreVM::Value* bindingSource = _builder.createLoad(scrutineeStorage, "scrutinee.reload");
 

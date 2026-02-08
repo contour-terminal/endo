@@ -38,8 +38,33 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(resultType));
 
+    // Tuple2: 2-element product type
+    auto tuple2Type = std::make_unique<TypeDescriptor>();
+    tuple2Type->kind = TypeKind::Product;
+    tuple2Type->id = BuiltinTypeId::Tuple2;
+    tuple2Type->name = "Tuple2";
+    tuple2Type->slotCount = 2;
+    tuple2Type->fields = {
+        { "", 0 }, // slot 0 (unnamed positional)
+        { "", 1 }, // slot 1
+    };
+    addType(std::move(tuple2Type));
+
+    // Tuple3: 3-element product type
+    auto tuple3Type = std::make_unique<TypeDescriptor>();
+    tuple3Type->kind = TypeKind::Product;
+    tuple3Type->id = BuiltinTypeId::Tuple3;
+    tuple3Type->name = "Tuple3";
+    tuple3Type->slotCount = 3;
+    tuple3Type->fields = {
+        { "", 0 }, // slot 0
+        { "", 1 }, // slot 1
+        { "", 2 }, // slot 2
+    };
+    addType(std::move(tuple3Type));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::Result + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::Tuple3 + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

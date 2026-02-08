@@ -4,7 +4,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <string>
-#include <utility>
+#include <unordered_map>
 #include <vector>
 
 #include "Pattern.hpp"
@@ -57,6 +57,14 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     /// Clears collected bindings (call before compiling next arm).
     void clearBindings() { _bindings.clear(); }
 
+    /// Sets pre-allocated allocas for storing binding values during pattern compilation.
+    /// When set, the pattern compiler stores each extracted value into its corresponding
+    /// alloca during IR generation (in the same basic block), avoiding cross-block references.
+    void setBindingStorage(std::unordered_map<std::string, CoreVM::AllocaInstr*> storage)
+    {
+        _bindingStorage = std::move(storage);
+    }
+
   private:
     // Pattern visitor implementations
     void visit(pattern::LiteralPattern const& pat) override;
@@ -77,6 +85,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     CoreVM::BasicBlock* _successBlock = nullptr;
     CoreVM::BasicBlock* _failureBlock = nullptr;
     std::vector<Binding> _bindings;
+    std::unordered_map<std::string, CoreVM::AllocaInstr*> _bindingStorage; ///< Pre-allocated alloca storage
     bool _collectOnly = false; ///< When true, only collect bindings without emitting IR
 };
 

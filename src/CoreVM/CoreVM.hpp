@@ -2368,8 +2368,10 @@ class IRBuilder
     Value* createBNot(Value* rhs, const std::string& name = ""); // !
     Value* createBAnd(Value* lhs, Value* rhs,
                       const std::string& name = ""); // &&
+    Value* createBOr(Value* lhs, Value* rhs,
+                     const std::string& name = ""); // ||
     Value* createBXor(Value* lhs, Value* rhs,
-                      const std::string& name = ""); // ||
+                      const std::string& name = ""); // ^
 
     // numerical operations
     Value* createNeg(Value* rhs, const std::string& name = "");             // -

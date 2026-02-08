@@ -59,7 +59,7 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
             }
             else if constexpr (std::is_same_v<T, bool>)
             {
-                return _builder.get(arg);
+                return _builder.getBoolean(arg);
             }
             else if constexpr (std::is_same_v<T, std::string>)
             {
@@ -91,9 +91,16 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
         // Dynamic value comparison (for values from OGETSLOT with unknown compile-time type)
         cmp = _builder.createVCmpEQ(_scrutinee, literal, "pat.dyn.eq");
     }
+    else if (literal->type() == CoreVM::LiteralType::Boolean
+             || _scrutinee->type() == CoreVM::LiteralType::Boolean)
+    {
+        // Boolean comparison — check equality via XOR+NOT: a == b iff !(a ^ b)
+        auto* xorResult = _builder.createBXor(_scrutinee, literal, "pat.bool.xor");
+        cmp = _builder.createBNot(xorResult, "pat.bool.eq");
+    }
     else
     {
-        // Numeric/boolean comparison (known types at compile time)
+        // Numeric comparison (known types at compile time)
         cmp = _builder.createNCmpEQ(_scrutinee, literal, "pat.num.eq");
     }
 
@@ -108,6 +115,13 @@ void PatternIRGenerator::visit(pattern::VariablePattern const& pat)
 
     if (_collectOnly)
         return;
+
+    // If pre-allocated storage exists for this binding, store the value now
+    // (in the same basic block where it was produced, avoiding cross-block references)
+    if (auto it = _bindingStorage.find(pat.name); it != _bindingStorage.end())
+    {
+        _builder.createStore(it->second, _scrutinee, pat.name + ".pat.store");
+    }
 
     // Unconditionally branch to success
     _builder.createBr(_successBlock);
@@ -174,8 +188,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
         // Compile this alternative with success going to original success,
         // and failure going to next alternative (or final failure)
         PatternIRGenerator altCompiler(_builder);
-        altCompiler.compile(
-            *pat.alternatives[i], scrutineeForAlt, _scrutineeStorage, _successBlock, nextTry);
+        altCompiler.compile(*pat.alternatives[i], scrutineeForAlt, _scrutineeStorage, _successBlock, nextTry);
 
         // Collect any bindings from this alternative
         // Note: All alternatives in an or-pattern should bind the same variables
@@ -207,12 +220,55 @@ void PatternIRGenerator::visit(pattern::GuardedPattern const&)
 
 // Patterns that require runtime type support - emit errors for now
 
-void PatternIRGenerator::visit(pattern::TuplePattern const&)
+void PatternIRGenerator::visit(pattern::TuplePattern const& pat)
 {
-    // Tuples require runtime representation
     if (_collectOnly)
+    {
+        // Collect bindings from sub-patterns
+        for (auto const& elem: pat.elements)
+            elem->accept(*this);
         return;
-    _builder.createBr(_failureBlock);
+    }
+
+    // Match tuple by extracting each slot and recursively matching sub-patterns.
+    // Chain: slot[0] match → slot[1] match → ... → success
+    // Any sub-pattern failure jumps to the overall failure block.
+    auto* currentScrutinee = _scrutinee;
+    auto* savedStorage = _scrutineeStorage;
+    auto* finalSuccess = _successBlock;
+
+    for (size_t i = 0; i < pat.elements.size(); ++i)
+    {
+        // For subsequent elements, reload the scrutinee from storage since we're in a new block
+        auto* tupleValue =
+            (i > 0 && savedStorage) ? _builder.createLoad(savedStorage, "tuple.reload") : currentScrutinee;
+
+        // Extract slot[i] from the tuple object
+        auto* slotValue = _builder.createObjGetSlot(
+            tupleValue, _builder.get(CoreVM::CoreNumber(i)), "tuple.slot." + std::to_string(i));
+
+        // Create a success block for this sub-pattern (chains to next sub-pattern or final success)
+        auto* subSuccess = (i + 1 < pat.elements.size())
+                               ? _builder.createBlock("tuple.match." + std::to_string(i + 1))
+                               : finalSuccess;
+
+        // Compile the sub-pattern against the extracted slot
+        _scrutinee = slotValue;
+        _scrutineeStorage = nullptr; // Sub-patterns don't need to reload from storage
+        _successBlock = subSuccess;
+        // _failureBlock stays the same — any failure goes to the overall failure
+
+        pat.elements[i]->accept(*this);
+
+        // If there's a next sub-pattern, set insert point to the sub-success block
+        if (i + 1 < pat.elements.size())
+            _builder.setInsertPoint(subSuccess);
+    }
+
+    // Restore original state
+    _scrutinee = currentScrutinee;
+    _scrutineeStorage = savedStorage;
+    _successBlock = finalSuccess;
 }
 
 void PatternIRGenerator::visit(pattern::ListPattern const&)

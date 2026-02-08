@@ -546,6 +546,35 @@ void ASTPrinter::visit(BuiltinWhichStmt const& node)
 // F# Style Expressions and Statements
 // ============================================================================
 
+void ASTPrinter::visit(IfExpr const& node)
+{
+    _result += "if ";
+    node.condition->accept(*this);
+    _result += " then ";
+    node.thenExpr->accept(*this);
+    _result += " else ";
+    node.elseExpr->accept(*this);
+}
+
+void ASTPrinter::visit(TupleExpr const& node)
+{
+    _result += '(';
+    for (size_t i = 0; i < node.elements.size(); ++i)
+    {
+        if (i > 0)
+            _result += ", ";
+        node.elements[i]->accept(*this);
+    }
+    _result += ')';
+}
+
+void ASTPrinter::visit(MutAssignStmt const& node)
+{
+    _result += node.name;
+    _result += " <- ";
+    node.value->accept(*this);
+}
+
 void ASTPrinter::visit(LetBindingStmt const& node)
 {
     _result += "let ";

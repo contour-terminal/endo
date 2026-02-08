@@ -62,6 +62,9 @@ class ASTPrinter: public Visitor
     void visit(BuiltinWhichStmt const& node) override;
 
     // F# style expressions and statements
+    void visit(IfExpr const& node) override;
+    void visit(TupleExpr const& node) override;
+    void visit(MutAssignStmt const& node) override;
     void visit(LetBindingStmt const& node) override;
     void visit(LetInExpr const& node) override;
     void visit(ExprStmt const& node) override;

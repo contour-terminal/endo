@@ -932,6 +932,48 @@ struct LetInExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// If-then-else expression: `if cond then e1 else e2`
+///
+/// F# style conditional expression that evaluates to a value.
+struct IfExpr final: public Expr
+{
+    std::unique_ptr<Expr> condition; ///< Boolean condition
+    std::unique_ptr<Expr> thenExpr;  ///< Expression when condition is true
+    std::unique_ptr<Expr> elseExpr;  ///< Expression when condition is false
+
+    IfExpr(std::unique_ptr<Expr> cond, std::unique_ptr<Expr> thenE, std::unique_ptr<Expr> elseE):
+        condition(std::move(cond)), thenExpr(std::move(thenE)), elseExpr(std::move(elseE))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Tuple expression: `(a, b)` or `(a, b, c)`
+///
+/// Represents a fixed-size tuple with 2 or more elements.
+struct TupleExpr final: public Expr
+{
+    std::vector<std::unique_ptr<Expr>> elements; ///< Tuple elements (2+)
+
+    explicit TupleExpr(std::vector<std::unique_ptr<Expr>> elems): elements(std::move(elems)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Mutable variable assignment: `name <- value`
+///
+/// Assigns a new value to a previously declared `let mut` binding.
+struct MutAssignStmt final: public Statement
+{
+    std::string name;            ///< Variable name
+    std::unique_ptr<Expr> value; ///< New value expression
+
+    MutAssignStmt(std::string n, std::unique_ptr<Expr> val): name(std::move(n)), value(std::move(val)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Binary operators for F# style expressions
 enum class BinaryOp
 {

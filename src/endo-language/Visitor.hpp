@@ -48,6 +48,9 @@ struct VariableExpr;
 struct WhileStmt;
 
 // F# style expressions and statements
+struct IfExpr;
+struct TupleExpr;
+struct MutAssignStmt;
 struct LetBindingStmt;
 struct LetInExpr;
 struct ExprStmt;
@@ -127,6 +130,9 @@ struct Visitor
     virtual void visit(VariableExpr const&) = 0;
 
     // F# style expressions and statements
+    virtual void visit(IfExpr const&) = 0;
+    virtual void visit(TupleExpr const&) = 0;
+    virtual void visit(MutAssignStmt const&) = 0;
     virtual void visit(LetBindingStmt const&) = 0;
     virtual void visit(LetInExpr const&) = 0;
     virtual void visit(ExprStmt const&) = 0;
