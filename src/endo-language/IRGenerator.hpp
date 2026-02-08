@@ -116,6 +116,7 @@ class IRGenerator final: public ast::Visitor
 
     // F# style expressions and statements
     void visit(ast::LetBindingStmt const& node) override;
+    void visit(ast::LetInExpr const& node) override;
     void visit(ast::ExprStmt const& node) override;
     void visit(ast::BinaryExpr const& node) override;
     void visit(ast::UnaryExpr const& node) override;
@@ -214,6 +215,8 @@ class IRGenerator final: public ast::Visitor
         ast::Expr const* body;               ///< Function body expression (for inlining)
         bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
         bool isRecursive = false;            ///< Whether function is declared with `let rec`
+        /// Names of all functions in the mutual recursion group (empty for non-mutual).
+        std::vector<std::string> mutualGroup;
         /// Captured variable bindings from the enclosing scope at function creation time.
         /// Maps variable names to their storage (entry-block allocas).
         std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
@@ -287,7 +290,37 @@ class IRGenerator final: public ast::Visitor
         CoreVM::BasicBlock* exitBlock;                  ///< Block to continue after recursion completes
     };
 
+    /// Tracks active mutual recursion compilation with dispatch-loop optimization.
+    /// Each function in the group has its own parameter allocas; a dispatch tag
+    /// selects which body to execute on each iteration.
+    struct MutualRecursionContext
+    {
+        /// One slot per function in the mutual recursion group.
+        struct FunctionSlot
+        {
+            std::string name;                               ///< Function name
+            int dispatchIndex;                              ///< Dispatch tag value for this function
+            std::vector<CoreVM::AllocaInstr*> paramAllocas; ///< Parameter storage
+        };
+
+        std::vector<FunctionSlot> functions; ///< All functions in the mutual group
+        CoreVM::AllocaInstr* dispatchTag;    ///< Dispatch tag storage (selects which body to run)
+        CoreVM::BasicBlock* dispatchBlock;   ///< Dispatch loop entry block
+        CoreVM::AllocaInstr* resultStorage;  ///< Shared result storage
+        CoreVM::BasicBlock* exitBlock;       ///< Exit block after recursion completes
+
+        /// Finds a function slot by name, or nullptr if not found.
+        [[nodiscard]] FunctionSlot const* findFunction(std::string const& name) const
+        {
+            for (auto const& f: functions)
+                if (f.name == name)
+                    return &f;
+            return nullptr;
+        }
+    };
+
     std::optional<RecursiveCallContext> _activeRecursion;
+    std::optional<MutualRecursionContext> _activeMutualRecursion;
 };
 
 } // namespace endo

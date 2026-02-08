@@ -2313,6 +2313,9 @@ bool Parser::isFSharpPrimary() const noexcept
             auto const& lit = _lexer.currentLiteral();
             if (lit.empty())
                 return false;
+            // 'in' is a contextual keyword (used in let...in and for...in), not a primary expression
+            if (lit == "in")
+                return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
             char const first = lit[0];
@@ -2406,9 +2409,144 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    _lexer.leaveFSharpExpr();
-    return std::make_unique<ast::LetBindingStmt>(
+    auto result = std::make_unique<ast::LetBindingStmt>(
         isMutable, isRecursive, std::move(name), std::move(parameters), std::move(value));
+
+    // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
+    while (isRecursive && _lexer.currentToken() == Token::And)
+    {
+        _lexer.nextToken(); // consume 'and'
+
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide a name for the 'and' binding" },
+                                               currentContextSnippet(),
+                                               "Expected identifier after 'and', got '{}'",
+                                               _lexer.currentLiteral());
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        auto andName = consumeLiteral();
+
+        std::vector<std::string> andParams;
+        while (_lexer.currentToken() == Token::Identifier)
+            andParams.push_back(consumeLiteral());
+
+        if (andParams.empty())
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Add parameters: 'and f x = ...'" },
+                currentContextSnippet(),
+                "'and' binding in 'let rec' must be a function definition (needs parameters)");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        if (_lexer.currentToken() != Token::Equal)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '=' followed by function body" },
+                                               currentContextSnippet(),
+                                               "Expected '=' in 'and' binding, got '{}'",
+                                               _lexer.currentLiteral());
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '='
+
+        auto andValue = parseFSharpExpr();
+        if (!andValue)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        result->andBindings.push_back(
+            ast::AndBinding { std::move(andName), std::move(andParams), std::move(andValue) });
+    }
+
+    _lexer.leaveFSharpExpr();
+    return result;
+}
+
+std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
+{
+    TRACE_SCOPE("parseLetInExpr");
+    _lexer.nextToken(); // consume 'let'
+
+    // Check for 'rec' modifier
+    auto const isRecursive = _lexer.currentToken() == Token::Rec;
+    if (isRecursive)
+        _lexer.nextToken(); // consume 'rec'
+
+    // Expect identifier (binding name)
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a name for the let binding" },
+                                           currentContextSnippet(),
+                                           "Expected identifier after 'let', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    auto name = consumeLiteral();
+
+    // Collect parameters (for function definitions)
+    std::vector<std::string> parameters;
+    while (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() != "in")
+        parameters.push_back(consumeLiteral());
+
+    // Validate: 'let rec' requires parameters
+    if (isRecursive && parameters.empty())
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(),
+            { "Add parameters: 'let rec f x = ... in ...'" },
+            currentContextSnippet(),
+            "'let rec' in expression requires parameters (must be a function definition)");
+        return nullptr;
+    }
+
+    // Expect '='
+    if (_lexer.currentToken() != Token::Equal)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '=' followed by an expression" },
+                                           currentContextSnippet(),
+                                           "Expected '=' in let-in binding, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '='
+
+    // Parse the value expression
+    auto value = parseFSharpExpr();
+    if (!value)
+        return nullptr;
+
+    // Expect 'in' keyword
+    if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "in")
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add 'in' followed by body expression" },
+                                           currentContextSnippet(),
+                                           "Expected 'in' after let binding value, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'in'
+
+    // Parse the body expression
+    auto body = parseFSharpExpr();
+    if (!body)
+        return nullptr;
+
+    return std::make_unique<ast::LetInExpr>(
+        isRecursive, std::move(name), std::move(parameters), std::move(value), std::move(body));
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
@@ -2840,6 +2978,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
     switch (_lexer.currentToken())
     {
+        case Token::Let: {
+            // Let-in expression: let x = 5 in x + 10
+            return parseLetInExpr();
+        }
+
         case Token::Fun: {
             // Lambda expression: fun x -> expr
             return parseLambda();
@@ -3971,13 +4114,37 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
     {
         _lexer.nextToken(); // consume '|'
 
-        // Parse pattern (without guard - we handle guard separately)
-        auto pattern = parseOrPattern();
+        // Parse first pattern of this arm
+        auto pattern = parseAsPattern();
         if (!pattern)
         {
             _report.syntaxErrorWithSuggestions(
                 currentLocation(), {}, currentContextSnippet(), "Expected pattern after '|'");
             return nullptr;
+        }
+
+        // Check for or-pattern alternatives: | pat1 | pat2 | pat3 -> expr
+        // If we see '|' before '->' or 'when', it's an or-pattern within this arm
+        if (_lexer.currentToken() == Token::Pipe)
+        {
+            std::vector<pattern::PatternPtr> alternatives;
+            alternatives.push_back(std::move(pattern));
+            while (_lexer.currentToken() == Token::Pipe)
+            {
+                _lexer.nextToken(); // consume '|'
+                auto alt = parseAsPattern();
+                if (!alt)
+                {
+                    _report.syntaxErrorWithSuggestions(
+                        currentLocation(), {}, currentContextSnippet(), "Expected pattern after '|'");
+                    return nullptr;
+                }
+                // If this alternative is followed by '->' or 'when', it's the last one
+                alternatives.push_back(std::move(alt));
+                if (_lexer.currentToken() == Token::Arrow || _lexer.currentToken() == Token::When)
+                    break;
+            }
+            pattern = pattern::patterns::or_(std::move(alternatives));
         }
 
         // Check for optional 'when' guard

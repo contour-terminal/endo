@@ -1965,19 +1965,54 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // Store the function for later inlining during application
         // We don't compile it now - we'll inline the body when called
 
-        FSharpFunction func;
-        func.parameters = node.parameters;
-        func.body = node.value.get(); // Store pointer to body AST for inlining
-        func.returnsResultOrOption = isBodyResultOrOption(func.body);
-        func.isRecursive = node.isRecursive;
-
-        // Capture free variables from the enclosing scope
-        auto allBound = node.parameters;
+        // For mutual recursion (let rec f ... and g ...), register all names first
+        // so that captured-variable analysis can see sibling functions
+        auto allRecNames = std::vector<std::string> {};
         if (node.isRecursive)
-            allBound.push_back(node.name);
-        func.capturedBindings = collectFreeVariables(func.body, allBound);
+        {
+            allRecNames.push_back(node.name);
+            for (auto const& ab: node.andBindings)
+                allRecNames.push_back(ab.name);
+        }
 
-        registerFSharpFunction(node.name, std::move(func));
+        auto const isMutual = allRecNames.size() > 1;
+
+        // Register the primary function
+        {
+            FSharpFunction func;
+            func.parameters = node.parameters;
+            func.body = node.value.get();
+            func.returnsResultOrOption = isBodyResultOrOption(func.body);
+            func.isRecursive = node.isRecursive;
+            if (isMutual)
+                func.mutualGroup = allRecNames;
+
+            auto allBound = node.parameters;
+            for (auto const& rn: allRecNames)
+                allBound.push_back(rn);
+            func.capturedBindings = collectFreeVariables(func.body, allBound);
+
+            registerFSharpFunction(node.name, std::move(func));
+        }
+
+        // Register 'and' bindings (mutual recursion partners)
+        for (auto const& ab: node.andBindings)
+        {
+            FSharpFunction func;
+            func.parameters = ab.parameters;
+            func.body = ab.value.get();
+            func.returnsResultOrOption = isBodyResultOrOption(func.body);
+            func.isRecursive = true;
+            if (isMutual)
+                func.mutualGroup = allRecNames;
+
+            auto allBound = ab.parameters;
+            for (auto const& rn: allRecNames)
+                allBound.push_back(rn);
+            func.capturedBindings = collectFreeVariables(func.body, allBound);
+
+            registerFSharpFunction(ab.name, std::move(func));
+        }
 
         _result = nullptr;
         return;
@@ -2051,6 +2086,46 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;
+}
+
+void IRGenerator::visit(ast::LetInExpr const& node)
+{
+    TRACE_SCOPE("visit(LetInExpr)");
+
+    pushFSharpScope();
+
+    if (node.isFunction())
+    {
+        // Function binding: let f x = body in expr
+        FSharpFunction func;
+        func.parameters = node.parameters;
+        func.body = node.value.get();
+        func.returnsResultOrOption = isBodyResultOrOption(func.body);
+        func.isRecursive = node.isRecursive;
+        func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+
+        registerFSharpFunction(node.name, std::move(func));
+    }
+    else
+    {
+        // Simple binding: let x = expr in body
+        auto* value = codegen(node.value.get());
+        if (!value)
+        {
+            popFSharpScope();
+            reportTypeError("Failed to evaluate let-in binding value");
+            return;
+        }
+
+        auto* storage = createAllocaInEntryBlock(value->type(), node.name);
+        _builder.createStore(storage, value, node.name + ".store");
+        bindFSharpVariable(node.name, storage);
+    }
+
+    // Evaluate the body expression with the binding in scope
+    _result = codegen(node.body.get());
+
+    popFSharpScope();
 }
 
 void IRGenerator::visit(ast::ExprStmt const& node)
@@ -2556,6 +2631,135 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     // Handle recursive function calls (let rec)
     if (func->isRecursive)
     {
+        // === Mutual recursion: dispatch-loop approach ===
+        if (!func->mutualGroup.empty())
+        {
+            // Case B (mutual): Tail-call from within a mutual recursion body
+            if (_activeMutualRecursion)
+            {
+                if (auto const* slot = _activeMutualRecursion->findFunction(funcName))
+                {
+                    // Store new argument values into the target function's param allocas
+                    for (size_t i = 0; i < args.size(); ++i)
+                        _builder.createStore(slot->paramAllocas[i], args[i], "mutual.arg.update");
+
+                    // Set dispatch tag to route to the target function
+                    _builder.createStore(_activeMutualRecursion->dispatchTag,
+                                         _builder.get(CoreVM::CoreNumber(slot->dispatchIndex)),
+                                         "mutual.dispatch.update");
+
+                    // Jump back to dispatch loop entry
+                    _builder.createBr(_activeMutualRecursion->dispatchBlock);
+
+                    // Create unreachable continuation block (code after tail call is dead)
+                    auto* unreachable = _builder.createBlock("mutual.unreachable");
+                    _builder.setInsertPoint(unreachable);
+
+                    _result = nullptr;
+                    return;
+                }
+            }
+
+            // Case A (mutual): First external call — set up dispatch loop
+            auto* dispatchBlock = _builder.createBlock("mutual.dispatch");
+            auto* exitBlock = _builder.createBlock("mutual.exit");
+            auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.result");
+            auto* dispatchTag = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.tag");
+
+            // Build the mutual recursion context with param allocas for every function
+            MutualRecursionContext ctx;
+            ctx.dispatchBlock = dispatchBlock;
+            ctx.exitBlock = exitBlock;
+            ctx.resultStorage = resultStorage;
+            ctx.dispatchTag = dispatchTag;
+
+            int calledIndex = -1;
+            for (size_t i = 0; i < func->mutualGroup.size(); ++i)
+            {
+                auto const& fnName = func->mutualGroup[i];
+                auto const* fn = lookupFSharpFunction(fnName);
+
+                MutualRecursionContext::FunctionSlot slot;
+                slot.name = fnName;
+                slot.dispatchIndex = static_cast<int>(i);
+                for (auto const& param: fn->parameters)
+                {
+                    auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number,
+                                                            "mutual." + fnName + "." + param);
+                    slot.paramAllocas.push_back(alloca);
+                }
+                ctx.functions.push_back(std::move(slot));
+
+                if (fnName == funcName)
+                    calledIndex = static_cast<int>(i);
+            }
+
+            // Store initial dispatch tag and arguments for the called function
+            _builder.createStore(
+                dispatchTag, _builder.get(CoreVM::CoreNumber(calledIndex)), "mutual.tag.init");
+            for (size_t i = 0; i < args.size(); ++i)
+                _builder.createStore(ctx.functions[calledIndex].paramAllocas[i], args[i], "mutual.arg.init");
+
+            _activeMutualRecursion = std::move(ctx);
+
+            // Jump to the dispatch loop
+            _builder.createBr(dispatchBlock);
+            _builder.setInsertPoint(dispatchBlock);
+
+            // Create body blocks for each function
+            std::vector<CoreVM::BasicBlock*> bodyBlocks;
+            for (auto const& fn: func->mutualGroup)
+                bodyBlocks.push_back(_builder.createBlock("mutual.body." + fn));
+
+            // Generate dispatch chain: tag == 0 → body[0], tag == 1 → body[1], ...
+            auto* tagValue = _builder.createLoad(dispatchTag, "mutual.tag.load");
+            for (size_t i = 0; i + 1 < func->mutualGroup.size(); ++i)
+            {
+                auto* nextCheck = _builder.createBlock("mutual.check." + std::to_string(i + 1));
+                auto* cmp =
+                    _builder.createNCmpEQ(tagValue, _builder.get(CoreVM::CoreNumber(static_cast<int>(i))));
+                _builder.createCondBr(cmp, bodyBlocks[i], nextCheck);
+                _builder.setInsertPoint(nextCheck);
+            }
+            // Last function: unconditional branch
+            _builder.createBr(bodyBlocks.back());
+
+            // Generate each function body
+            for (size_t i = 0; i < func->mutualGroup.size(); ++i)
+            {
+                _builder.setInsertPoint(bodyBlocks[i]);
+                auto const& fnName = func->mutualGroup[i];
+                auto const* fn = lookupFSharpFunction(fnName);
+                auto const& slot = _activeMutualRecursion->functions[i];
+
+                pushFSharpScope();
+                for (auto const& [capName, capStorage]: fn->capturedBindings)
+                    bindFSharpVariable(capName, capStorage);
+                for (size_t j = 0; j < fn->parameters.size(); ++j)
+                    bindFSharpVariable(fn->parameters[j], slot.paramAllocas[j]);
+
+                // Codegen body (recursive calls within will hit Case B above)
+                auto* bodyResult = codegen(fn->body);
+
+                if (bodyResult)
+                {
+                    _builder.createStore(resultStorage, bodyResult, "mutual.store.result");
+                    _builder.createBr(exitBlock);
+                }
+
+                popFSharpScope();
+            }
+
+            // Continue from exit block
+            _builder.setInsertPoint(exitBlock);
+            _result = _builder.createLoad(resultStorage, "mutual.load.result");
+
+            _activeMutualRecursion.reset();
+            return;
+        }
+
+        // === Self-recursion: simple loop approach ===
+
         // Case B: Recursive tail-call from within body — jump back to entry block
         if (_activeRecursion && _activeRecursion->functionName == funcName)
         {
@@ -2929,7 +3133,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             // A null result inside an active recursion means a tail call was made.
             // The branch back to the entry block has already been emitted, so skip
             // the store-and-branch-to-merge for this arm.
-            if (_activeRecursion)
+            if (_activeRecursion || _activeMutualRecursion)
                 continue;
 
             reportTypeError("Failed to evaluate match arm body");

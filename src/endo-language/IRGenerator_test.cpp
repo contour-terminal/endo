@@ -426,13 +426,13 @@ TEST_CASE("IRGenerator.FSharp.option_some_with_expression")
     REQUIRE(generatesIRSuccessfully("let a = 5; let x = Some (a + 10)"));
 }
 
-// NOTE: Matching on Option/Result constructors requires runtime type info support
-// This is deferred to a future phase when CoreVM supports proper sum types
-// TEST_CASE("IRGenerator.FSharp.option_match")
-// {
-//     // Match on Option value
-//     REQUIRE(generatesIRSuccessfully("let x = Some 42; let r = match x with | Some n -> n | None -> 0"));
-// }
+TEST_CASE("IRGenerator.FSharp.option_match")
+{
+    // Match on Option value and verify correct arm is taken
+    CHECK(
+        executeSourceAndGetOutput("let x = Some 42; let r = match x with | Some n -> n | None -> 0; print r")
+        == "42");
+}
 
 // =============================================================================
 // F# Result Expression IR Generation Tests
@@ -456,13 +456,12 @@ TEST_CASE("IRGenerator.FSharp.result_ok_with_expression")
     REQUIRE(generatesIRSuccessfully("let a = 10; let r = Ok (a * 2)"));
 }
 
-// NOTE: Matching on Option/Result constructors requires runtime type info support
-// This is deferred to a future phase when CoreVM supports proper sum types
-// TEST_CASE("IRGenerator.FSharp.result_match")
-// {
-//     // Match on Result value
-//     REQUIRE(generatesIRSuccessfully("let r = Ok 42; let x = match r with | Ok n -> n | Error e -> 0"));
-// }
+TEST_CASE("IRGenerator.FSharp.result_match")
+{
+    // Match on Result value and verify correct arm is taken
+    CHECK(executeSourceAndGetOutput("let r = Ok 42; let x = match r with | Ok n -> n | Error e -> 0; print x")
+          == "42");
+}
 
 // =============================================================================
 // F# Try Expression (? operator) IR Generation Tests
@@ -596,13 +595,14 @@ TEST_CASE("IRGenerator.FSharp.try_with_simple")
     REQUIRE(generatesIRSuccessfully("let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0"));
 }
 
-// NOTE: Multiple handlers not yet implemented - only first handler is used
-// TEST_CASE("IRGenerator.FSharp.try_with_multiple_handlers")
-// {
-//     // Try-with with multiple error handlers
-//     REQUIRE(generatesIRSuccessfully(
-//         "let getValue x = Ok x; let r = try getValue 42 with | Error 1 -> 10 | Error _ -> 0"));
-// }
+TEST_CASE("IRGenerator.FSharp.try_with_multiple_handlers")
+{
+    // Try-with with multiple error handlers - verify pattern matching selects correct handler
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 1 with | Error 1 -> 10 | Error _ -> 0; "
+                                    "print r")
+          == "10");
+}
 
 // =============================================================================
 // F# Option/Result Execution Tests
@@ -636,6 +636,88 @@ TEST_CASE("IRGenerator.FSharp.exec_simple_arithmetic")
     // Verify basic arithmetic executes without error
     REQUIRE(executesSuccessfully("let x = 2 + 3"));
 }
+
+// =============================================================================
+// F# Arithmetic Output Verification Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_add")
+{
+    CHECK(executeSourceAndGetOutput("let x = 2 + 3; print x") == "5");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_sub")
+{
+    CHECK(executeSourceAndGetOutput("let x = 10 - 3; print x") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_mul")
+{
+    CHECK(executeSourceAndGetOutput("let x = 4 * 5; print x") == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_div")
+{
+    CHECK(executeSourceAndGetOutput("let x = 15 / 3; print x") == "5");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_mod")
+{
+    CHECK(executeSourceAndGetOutput("let x = 17 % 5; print x") == "2");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_pow")
+{
+    CHECK(executeSourceAndGetOutput("let x = 2 ** 8; print x") == "256");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_neg")
+{
+    CHECK(executeSourceAndGetOutput("let x = 10; print (0 - x)") == "-10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_complex")
+{
+    // Precedence: 2 + 3 * 4 = 14
+    CHECK(executeSourceAndGetOutput("let x = 2 + 3 * 4; print x") == "14");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_arith_parens")
+{
+    // Override precedence: (2 + 3) * 4 = 20
+    CHECK(executeSourceAndGetOutput("let x = (2 + 3) * 4; print x") == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_comparison_eq")
+{
+    // Comparison via guard expression (avoids matching on boolean directly)
+    CHECK(executeSourceAndGetOutput("let r = match 0 with | _ when 5 == 5 -> 1 | _ -> 0; print r") == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_comparison_ne")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 0 with | _ when 5 != 3 -> 1 | _ -> 0; print r") == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_comparison_lt")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 0 with | _ when 3 < 5 -> 1 | _ -> 0; print r") == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_comparison_gt")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 0 with | _ when 5 > 3 -> 1 | _ -> 0; print r") == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_logical_and")
+{
+    CHECK(executeSourceAndGetOutput("let a = 5; let r = match 0 with | _ when a > 3 && a < 10 -> 1 | _ -> 0; "
+                                    "print r")
+          == "1");
+}
+
+// NOTE: Logical OR (||) in guard expressions has a known issue - tracked separately
+// TEST_CASE("IRGenerator.FSharp.exec_logical_or") { ... }
 
 TEST_CASE("IRGenerator.FSharp.exec_option_construction")
 {
@@ -903,6 +985,68 @@ TEST_CASE("IRGenerator.FSharp.exec_match_guard_complex")
 }
 
 // =============================================================================
+// F# Or Pattern Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_or_pattern_first")
+{
+    // Or pattern: first alternative matches
+    CHECK(executeSourceAndGetOutput("let x = 1; "
+                                    "let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; "
+                                    "print r")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_or_pattern_middle")
+{
+    // Or pattern: middle alternative matches
+    CHECK(executeSourceAndGetOutput("let x = 2; "
+                                    "let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; "
+                                    "print r")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_or_pattern_last")
+{
+    // Or pattern: last alternative matches
+    CHECK(executeSourceAndGetOutput("let x = 3; "
+                                    "let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; "
+                                    "print r")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_or_pattern_no_match")
+{
+    // Or pattern: none match, falls through to wildcard
+    CHECK(executeSourceAndGetOutput("let x = 99; "
+                                    "let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; "
+                                    "print r")
+          == "0");
+}
+
+// =============================================================================
+// F# As Pattern Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_as_pattern_binding")
+{
+    // As pattern: bind the entire value while also matching
+    CHECK(executeSourceAndGetOutput("let x = 42; "
+                                    "let r = match x with | n as val -> val; "
+                                    "print r")
+          == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_as_pattern_with_literal")
+{
+    // As pattern with literal inner pattern
+    CHECK(executeSourceAndGetOutput("let x = 5; "
+                                    "let r = match x with | 5 as val -> val | _ -> 0; "
+                                    "print r")
+          == "5");
+}
+
+// =============================================================================
 // F# print/println Execution Tests
 // =============================================================================
 
@@ -1039,6 +1183,84 @@ TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
     CHECK_FALSE(
         generatesIRSuccessfully("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
                                 "let r = factorial 5"));
+}
+
+// =============================================================================
+// Mutual Recursion Tests (let rec ... and ...)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.mutual_rec_even_odd")
+{
+    // Classic mutual recursion: isEven/isOdd
+    CHECK(executeSourceAndGetOutput("let rec isEven n = match n with | 0 -> 1 | _ -> isOdd (n - 1) "
+                                    "and isOdd n = match n with | 0 -> 0 | _ -> isEven (n - 1); "
+                                    "print (isEven 4)")
+          == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.mutual_rec_even_odd_false")
+{
+    // isEven on odd number should return 0
+    CHECK(executeSourceAndGetOutput("let rec isEven n = match n with | 0 -> 1 | _ -> isOdd (n - 1) "
+                                    "and isOdd n = match n with | 0 -> 0 | _ -> isEven (n - 1); "
+                                    "print (isEven 3)")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.mutual_rec_isOdd")
+{
+    // Call the second function in the mutual recursion
+    CHECK(executeSourceAndGetOutput("let rec isEven n = match n with | 0 -> 1 | _ -> isOdd (n - 1) "
+                                    "and isOdd n = match n with | 0 -> 0 | _ -> isEven (n - 1); "
+                                    "print (isOdd 5)")
+          == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.mutual_rec_parser_test")
+{
+    // Verify mutual recursion parses and generates IR
+    REQUIRE(generatesIRSuccessfully("let rec f n = match n with | 0 -> 0 | _ -> g (n - 1) "
+                                    "and g n = match n with | 0 -> 1 | _ -> f (n - 1)"));
+}
+
+// =============================================================================
+// Let-In Expression Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.let_in_simple")
+{
+    // Simple let-in binding
+    CHECK(executeSourceAndGetOutput("let r = let x = 5 in x + 10; print r") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_in_function")
+{
+    // Function binding in let-in
+    CHECK(executeSourceAndGetOutput("let r = let double x = x * 2 in double 5; print r") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_in_nested")
+{
+    // Nested let-in expressions
+    CHECK(executeSourceAndGetOutput("let r = let a = 1 in let b = 2 in a + b; print r") == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_in_scoping")
+{
+    // Variable in let-in should not leak to outer scope
+    CHECK(executeSourceAndGetOutput("let x = 100; let r = let x = 5 in x + 1; print r") == "6");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_in_with_outer_variable")
+{
+    // Let-in body can access outer scope
+    CHECK(executeSourceAndGetOutput("let y = 10; let r = let x = 5 in x + y; print r") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_in_parenthesized")
+{
+    // Let-in inside parentheses (as function argument)
+    CHECK(executeSourceAndGetOutput("print (let x = 7 in x * 3)") == "21");
 }
 
 // =============================================================================

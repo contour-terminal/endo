@@ -165,10 +165,17 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
     {
         CoreVM::BasicBlock* nextTry = (i + 1 < pat.alternatives.size()) ? altBlocks[i] : _failureBlock;
 
+        // For alternatives after the first, we're in a new basic block where
+        // the scrutinee isn't on the stack. Reload it from storage.
+        auto* scrutineeForAlt = _scrutinee;
+        if (i > 0 && _scrutineeStorage)
+            scrutineeForAlt = _builder.createLoad(_scrutineeStorage, "scrutinee.or.reload");
+
         // Compile this alternative with success going to original success,
         // and failure going to next alternative (or final failure)
         PatternIRGenerator altCompiler(_builder);
-        altCompiler.compile(*pat.alternatives[i], _scrutinee, _scrutineeStorage, _successBlock, nextTry);
+        altCompiler.compile(
+            *pat.alternatives[i], scrutineeForAlt, _scrutineeStorage, _successBlock, nextTry);
 
         // Collect any bindings from this alternative
         // Note: All alternatives in an or-pattern should bind the same variables

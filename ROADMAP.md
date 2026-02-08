@@ -395,6 +395,10 @@ src/
 - [x] Implement closures (capturing outer scope variables)
 - [x] Implement partial application in IR generator
 - [x] Implement recursion support for F# functions (`let rec` with tail-call optimization)
+- [x] Implement mutual recursion (`let rec f ... and g ...`) with dispatch-loop optimization
+- [x] Implement `let...in` expressions for scoped bindings (`let x = 5 in x + 10`)
+- [x] Implement or-patterns in match expressions (`| 1 | 2 | 3 -> "small"`)
+- [x] Implement as-patterns in match expressions (`| n as val -> ...`)
 - [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
@@ -450,6 +454,22 @@ src/
   - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
   - Limitations: closure captures from previous prompts are not preserved (pure functions only); simple value bindings (`let x = 42`) do not persist
   - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
+- Mutual recursion (`let rec f ... and g ...`):
+  - Parser handles `and` keyword after `let rec` to chain function definitions
+  - `AndBinding` AST node stores name, parameters, and body for each `and`-binding
+  - IR generation uses dispatch-loop optimization: integer tag selects function body, tail calls update tag and jump back
+  - `MutualRecursionContext` tracks per-function param allocas, dispatch tag, and shared result storage
+  - Separate from self-recursion path which uses simpler single-function loop
+- `let...in` expressions for scoped bindings:
+  - `LetInExpr` AST node: binding (name, optional params, value) + body expression
+  - Parsed in `parseFSharpPrimary()` when `Token::Let` appears in expression context
+  - `in` keyword treated as contextual: excluded from `isFSharpPrimary()` to prevent application parser from consuming it
+  - Supports both simple bindings (`let x = 5 in x + 1`) and function bindings (`let f x = x * 2 in f 5`)
+  - Nested `let...in` supported naturally via recursive parsing
+- Or-patterns and as-patterns in match expressions:
+  - Or-patterns (`| 1 | 2 | 3 -> expr`) parsed at match arm level, accumulated into `OrPattern`
+  - PatternIRGenerator reloads scrutinee from storage for each alternative (stack resets at block boundaries)
+  - As-patterns (`| n as val -> expr`) bind matched value to additional name
 - IRGenerator refactored from inheritance to composition with IRBuilder:
   - `IRGenerator` no longer inherits from `CoreVM::IRBuilder`; uses `_builder` member instead
   - `PatternIRGenerator` takes `CoreVM::IRBuilder&` directly, eliminating its dependency on `IRGenerator`

@@ -49,6 +49,7 @@ struct WhileStmt;
 
 // F# style expressions and statements
 struct LetBindingStmt;
+struct LetInExpr;
 struct ExprStmt;
 struct BinaryExpr;
 struct UnaryExpr;
@@ -127,6 +128,7 @@ struct Visitor
 
     // F# style expressions and statements
     virtual void visit(LetBindingStmt const&) = 0;
+    virtual void visit(LetInExpr const&) = 0;
     virtual void visit(ExprStmt const&) = 0;
     virtual void visit(BinaryExpr const&) = 0;
     virtual void visit(UnaryExpr const&) = 0;

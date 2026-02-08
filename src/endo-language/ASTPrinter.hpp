@@ -63,6 +63,7 @@ class ASTPrinter: public Visitor
 
     // F# style expressions and statements
     void visit(LetBindingStmt const& node) override;
+    void visit(LetInExpr const& node) override;
     void visit(ExprStmt const& node) override;
     void visit(BinaryExpr const& node) override;
     void visit(UnaryExpr const& node) override;

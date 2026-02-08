@@ -854,6 +854,14 @@ struct ReturnStmt final: public Statement
 ///
 /// Note: Accessed via identifier name directly (not $x).
 /// Environment variables ($VAR) are a separate namespace.
+/// Represents a single function binding in a `let rec ... and ...` group.
+struct AndBinding
+{
+    std::string name;                    ///< Function name
+    std::vector<std::string> parameters; ///< Function parameters
+    std::unique_ptr<Expr> value;         ///< Function body
+};
+
 struct LetBindingStmt final: public Statement
 {
     bool isMutable;                      ///< True for `let mut`
@@ -861,6 +869,7 @@ struct LetBindingStmt final: public Statement
     std::string name;                    ///< Binding/function name
     std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
     std::unique_ptr<Expr> value;         ///< Value expression or function body
+    std::vector<AndBinding> andBindings; ///< Additional mutually recursive bindings (`and` keyword)
 
     LetBindingStmt(
         bool mut, bool rec, std::string n, std::vector<std::string> params, std::unique_ptr<Expr> val):
@@ -888,6 +897,37 @@ struct ExprStmt final: public Statement
     std::unique_ptr<Expr> expr;
 
     explicit ExprStmt(std::unique_ptr<Expr> e): expr(std::move(e)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Let-in expression: `let x = 5 in x + 10`
+///
+/// Scoped binding that introduces a variable (or function) visible only within
+/// the body expression following `in`.
+struct LetInExpr final: public Expr
+{
+    bool isRecursive;                    ///< True for `let rec`
+    std::string name;                    ///< Binding/function name
+    std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
+    std::unique_ptr<Expr> value;         ///< Value expression or function body
+    std::unique_ptr<Expr> body;          ///< Body expression evaluated with the binding in scope
+
+    LetInExpr(bool rec,
+              std::string n,
+              std::vector<std::string> params,
+              std::unique_ptr<Expr> val,
+              std::unique_ptr<Expr> b):
+        isRecursive(rec),
+        name(std::move(n)),
+        parameters(std::move(params)),
+        value(std::move(val)),
+        body(std::move(b))
+    {
+    }
+
+    /// Is this a function definition (has parameters)?
+    [[nodiscard]] bool isFunction() const noexcept { return !parameters.empty(); }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

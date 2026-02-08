@@ -562,6 +562,39 @@ void ASTPrinter::visit(LetBindingStmt const& node)
     _result += " = ";
     if (node.value)
         node.value->accept(*this);
+
+    for (auto const& ab: node.andBindings)
+    {
+        _result += " and ";
+        _result += ab.name;
+        for (auto const& param: ab.parameters)
+        {
+            _result += ' ';
+            _result += param;
+        }
+        _result += " = ";
+        if (ab.value)
+            ab.value->accept(*this);
+    }
+}
+
+void ASTPrinter::visit(LetInExpr const& node)
+{
+    _result += "let ";
+    if (node.isRecursive)
+        _result += "rec ";
+    _result += node.name;
+    for (auto const& param: node.parameters)
+    {
+        _result += ' ';
+        _result += param;
+    }
+    _result += " = ";
+    if (node.value)
+        node.value->accept(*this);
+    _result += " in ";
+    if (node.body)
+        node.body->accept(*this);
 }
 
 void ASTPrinter::visit(ExprStmt const& node)

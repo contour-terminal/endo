@@ -86,6 +86,7 @@ class Parser
 
     // F# style let bindings and expressions
     std::unique_ptr<ast::LetBindingStmt> parseLet();
+    std::unique_ptr<ast::LetInExpr> parseLetInExpr();
     std::unique_ptr<ast::LambdaExpr> parseLambda();
     std::unique_ptr<ast::MatchExpr> parseMatch();
     std::unique_ptr<ast::Expr> parseListLiteral();          ///< [1; 2; 3], [1..10], [for x in items -> x * 2]
