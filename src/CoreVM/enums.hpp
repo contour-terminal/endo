@@ -20,10 +20,11 @@ enum Opcode : uint16_t
     GSTORE,  // GSTORE imm         ; globals[imm] = stack[--sp]
 
     // control
-    EXIT, // EXIT imm           ; exit program
-    JMP,  // JMP imm            ; unconditional jump to A
-    JN,   // JN imm             ; conditional jump to A if (pop() != 0)
-    JZ,   // JZ imm             ; conditional jump to A if (pop() == 0)
+    EXIT,    // EXIT imm           ; exit program with constant exit code
+    EXITPOP, // EXITPOP            ; exit program with exit code popped from stack
+    JMP,     // JMP imm            ; unconditional jump to A
+    JN,      // JN imm             ; conditional jump to A if (pop() != 0)
+    JZ,      // JZ imm             ; conditional jump to A if (pop() == 0)
 
     // const arrays
     ITLOAD, // stack[sp++] = intArray[imm]
@@ -265,7 +266,8 @@ constexpr inline unsigned getPrice(Opcode opcode)
 {
     switch (opcode)
     {
-        case Opcode::EXIT: return 0;
+        case Opcode::EXIT:
+        case Opcode::EXITPOP: return 0;
         case Opcode::JMP: return 1;
         case Opcode::JN:
         case Opcode::JZ: return 2;

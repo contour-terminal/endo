@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
-#include <CoreVM/util.hpp>
-
 #include <CoreVM/sysconfig.h>
-#include <CoreVM/util/strings.hpp>
+#include <CoreVM/util.hpp>
 #include <CoreVM/util/assert.hpp>
+#include <CoreVM/util/strings.hpp>
 
 #include <cinttypes>
 #include <cmath>
@@ -28,10 +27,10 @@ namespace CoreVM
 {
 
 // {{{ VM helper preprocessor definitions
-#define OP opcode((Instruction) *pc)
-#define A  operandA((Instruction) *pc)
-#define B  operandB((Instruction) *pc)
-#define C  operandC((Instruction) *pc)
+#define OP opcode((Instruction) * pc)
+#define A  operandA((Instruction) * pc)
+#define B  operandB((Instruction) * pc)
+#define C  operandC((Instruction) * pc)
 
 #define SP(i)          _stack[(i)]
 #define popStringPtr() ((CoreString*) _stack.pop())
@@ -46,10 +45,10 @@ namespace CoreVM
         set_pc(offset); \
         jump;           \
     } while (0)
-#define tracelog()                                                \
-    do                                                            \
-    {                                                             \
-        _traceLogger((Instruction) *pc, get_pc(), _stack.size()); \
+#define tracelog()                                                 \
+    do                                                             \
+    {                                                              \
+        _traceLogger((Instruction) * pc, get_pc(), _stack.size()); \
     } while (0)
 
 #if defined(COREVM_VM_LOOP_SWITCH)
@@ -89,10 +88,10 @@ namespace CoreVM
         l_##name: ++pc; \
         tracelog();
     #define get_pc() ((pc - code.data()) / 2)
-    #define set_pc(offset)                  \
-        do                                  \
-        {                                   \
-            pc = code.data() + (offset) *2; \
+    #define set_pc(offset)                   \
+        do                                   \
+        {                                    \
+            pc = code.data() + (offset) * 2; \
         } while (0)
     #define next  \
         do        \
@@ -143,6 +142,7 @@ void Runner::Stack::rotate(size_t n)
     }
     _stack[_stack.size() - 1] = tmp;
 }
+
 // }}}
 static CoreString* t = nullptr;
 
@@ -151,18 +151,19 @@ Runner::Runner(const Handler* handler, void* userdata, Globals* globals, TraceLo
 {
 }
 
-Runner::Runner(const Handler* handler, void* userdata, Globals* globals, Quota quota, TraceLogger traceLogger)
-    : _quota{quota},
-      _handler(handler),
-      _traceLogger{traceLogger ? std::move(traceLogger) : [](Instruction, size_t, size_t) {}},
-      _program(handler->program()),
-      _userdata(userdata),
-      _regexpContext(),
-      _state(Inactive),
-      _ip(0),
-      _stack(_handler->stackSize()),
-      _globals{*globals},
-      _stringGarbage()
+Runner::Runner(
+    const Handler* handler, void* userdata, Globals* globals, Quota quota, TraceLogger traceLogger):
+    _quota { quota },
+    _handler(handler),
+    _traceLogger { traceLogger ? std::move(traceLogger) : [](Instruction, size_t, size_t) {} },
+    _program(handler->program()),
+    _userdata(userdata),
+    _regexpContext(),
+    _state(Inactive),
+    _ip(0),
+    _stack(_handler->stackSize()),
+    _globals { *globals },
+    _stringGarbage()
 {
     // initialize emptyString()
     t = newString("");
@@ -235,6 +236,7 @@ bool Runner::loop()
 
         // control
         label(EXIT),
+        label(EXITPOP),
         label(JMP),
         label(JN),
         label(JZ),
@@ -402,6 +404,14 @@ bool Runner::loop()
         _state = Inactive;
         _ip = get_pc();
         return A != 0;
+    }
+
+    instr(EXITPOP)
+    {
+        _state = Inactive;
+        _ip = get_pc();
+        CoreNumber exitCode = static_cast<CoreNumber>(pop());
+        return exitCode != 0;
     }
 
     instr(JMP)

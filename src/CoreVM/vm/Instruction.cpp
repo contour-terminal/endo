@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+
 namespace CoreVM
 {
 
@@ -56,6 +57,7 @@ static InstructionInfo instructionInfos[] = {
 
     // control
     IIDEF(EXIT, I, 0, Void),
+    IIDEF(EXITPOP, V, -1, Void),
     IIDEF(JMP, I, 0, Void),
     IIDEF(JN, I, -1, Void),
     IIDEF(JZ, I, -1, Void),
@@ -143,6 +145,7 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(CALL, III, 0, Void),
     IIDEF(HANDLER, II, 0, Void),
 };
+
 // }}}
 
 int getStackChange(Instruction instr)
