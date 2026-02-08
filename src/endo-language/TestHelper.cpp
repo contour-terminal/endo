@@ -179,7 +179,7 @@ ExecutionResult executeSource(std::string const& source)
 
     // Execute
     CoreVM::Runner::Globals globals;
-    CoreVM::Runner runner(handler, nullptr, &globals, nullptr);
+    CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
 
     // Runner::run() returns true if exit code was non-zero, false if it was 0
     bool exitNonZero = runner.run();

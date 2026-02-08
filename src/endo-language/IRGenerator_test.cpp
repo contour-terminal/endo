@@ -468,19 +468,28 @@ TEST_CASE("IRGenerator.FSharp.result_ok_with_expression")
 // F# Try Expression (? operator) IR Generation Tests
 // =============================================================================
 
-// NOTE: The ? operator requires proper sum type runtime support
-// These tests are deferred to a future phase
-// TEST_CASE("IRGenerator.FSharp.try_expr_in_function")
-// {
-//     // Try expression inside a function (required for error propagation)
-//     REQUIRE(generatesIRSuccessfully("let unwrap opt = opt?; let r = unwrap (Some 42)"));
-// }
-//
-// TEST_CASE("IRGenerator.FSharp.try_expr_chained")
-// {
-//     // Chained try expressions
-//     REQUIRE(generatesIRSuccessfully("let unwrap2 opt = opt??; let r = unwrap2 (Some (Some 5))"));
-// }
+TEST_CASE("IRGenerator.FSharp.try_expr_in_function")
+{
+    // Try expression inside a function (required for error propagation)
+    // The function returns an Option (due to opt?), so function context is set up
+    REQUIRE(generatesIRSuccessfully("let unwrap opt = opt?; let r = unwrap (Some 42)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.try_expr_chained")
+{
+    // Test step by step
+    REQUIRE(generatesIRSuccessfully("let f x = x??"));                     // Just function definition
+    REQUIRE(generatesIRSuccessfully("let f x = x??; let y = 5"));          // With another statement
+    REQUIRE(generatesIRSuccessfully("let f x = x??; let r = f 5"));        // With function call (simple)
+    REQUIRE(generatesIRSuccessfully("let f x = x??; let r = f (Some 5)")); // With Option arg
+    REQUIRE(generatesIRSuccessfully("let x = Some (Some 5)"));             // Nested Some by itself
+    REQUIRE(
+        generatesIRSuccessfully("let nested = Some (Some 5); let f x = x; let r = f nested")); // Via variable
+
+    // Full chained try expressions using variable binding (workaround for parser limitation)
+    REQUIRE(generatesIRSuccessfully(
+        "let nested = Some (Some 5); let unwrap2 opt = opt??; let r = unwrap2 nested"));
+}
 
 // =============================================================================
 // F# Option/Result - Additional Tests (after basic tests above)
@@ -581,14 +590,13 @@ TEST_CASE("IRGenerator.FSharp.nested_scope_option")
 // F# Try-With Expression IR Generation Tests
 // =============================================================================
 
-// NOTE: try-with requires proper sum type runtime support
-// These tests are deferred to a future phase
-// TEST_CASE("IRGenerator.FSharp.try_with_simple")
-// {
-//     // Simple try-with expression
-//     REQUIRE(generatesIRSuccessfully("let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0"));
-// }
-//
+TEST_CASE("IRGenerator.FSharp.try_with_simple")
+{
+    // Simple try-with expression - IR generation
+    REQUIRE(generatesIRSuccessfully("let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0"));
+}
+
+// NOTE: Multiple handlers not yet implemented - only first handler is used
 // TEST_CASE("IRGenerator.FSharp.try_with_multiple_handlers")
 // {
 //     // Try-with with multiple error handlers
@@ -603,32 +611,25 @@ TEST_CASE("IRGenerator.FSharp.nested_scope_option")
 // not just that it compiles. Note: The main handler always returns 0
 // (shell success convention), so we test that execution completes without error.
 
-// TODO: Fix VM stack tracking bug with constructor pattern matching in execution
-// These tests compile successfully but fail during execution with:
-// "BUG: emitLoad: value not yet on the stack but referenced as operand."
-// The issue is in the code generator's handling of allocas across multiple blocks
-// in the pattern matching code paths.
-//
-// TEST_CASE("IRGenerator.FSharp.exec_match_option_some")
-// {
-//     REQUIRE(executesSuccessfully("let opt = Some 42; let r = match opt with | Some x -> x | None -> 0"));
-// }
-//
-// TEST_CASE("IRGenerator.FSharp.exec_match_option_none")
-// {
-//     REQUIRE(executesSuccessfully("let opt = None; let r = match opt with | Some x -> x | None -> 0"));
-// }
-//
-// TEST_CASE("IRGenerator.FSharp.exec_match_result_ok")
-// {
-//     REQUIRE(executesSuccessfully("let res = Ok 100; let r = match res with | Ok n -> n | Error e -> 0"));
-// }
-//
-// TEST_CASE("IRGenerator.FSharp.exec_match_result_error")
-// {
-//     REQUIRE(executesSuccessfully("let res = Error 404; let r = match res with | Ok n -> n | Error e ->
-//     0"));
-// }
+TEST_CASE("IRGenerator.FSharp.exec_match_option_some")
+{
+    REQUIRE(executesSuccessfully("let opt = Some 42; let r = match opt with | Some x -> x | None -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_option_none")
+{
+    REQUIRE(executesSuccessfully("let opt = None; let r = match opt with | Some x -> x | None -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_result_ok")
+{
+    REQUIRE(executesSuccessfully("let res = Ok 100; let r = match res with | Ok n -> n | Error e -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_result_error")
+{
+    REQUIRE(executesSuccessfully("let res = Error 404; let r = match res with | Ok n -> n | Error e -> 0"));
+}
 
 TEST_CASE("IRGenerator.FSharp.exec_simple_arithmetic")
 {
@@ -648,17 +649,258 @@ TEST_CASE("IRGenerator.FSharp.exec_result_construction")
     REQUIRE(executesSuccessfully("let a = Ok 100; let b = Error 404"));
 }
 
-// TODO: These tests trigger the same VM stack tracking bug due to ORELEASE
-// instructions emitted at scope exit for object variables.
-// TEST_CASE("IRGenerator.FSharp.exec_nested_option")
-// {
-//     REQUIRE(executesSuccessfully("let x = Some (Some 42)"));
-// }
-//
-// TEST_CASE("IRGenerator.FSharp.exec_option_in_result")
-// {
-//     REQUIRE(executesSuccessfully("let x = Ok (Some 42)"));
-// }
+TEST_CASE("IRGenerator.FSharp.exec_nested_option")
+{
+    // Nested Option - tests ORELEASE at scope exit
+    REQUIRE(executesSuccessfully("let x = Some (Some 42)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_option_in_result")
+{
+    // Option inside Result - tests ORELEASE at scope exit
+    REQUIRE(executesSuccessfully("let x = Ok (Some 42)"));
+}
+
+// =============================================================================
+// F# Try Expression (? operator) Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_try_unwrap_some")
+{
+    // ? operator unwraps Some value - function returns unwrapped value
+    REQUIRE(executesSuccessfully("let unwrap opt = opt?; let r = unwrap (Some 42)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_propagate_none")
+{
+    // ? operator on None propagates the None - function early returns
+    REQUIRE(executesSuccessfully("let unwrap opt = opt?; let r = unwrap None"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_chained")
+{
+    // Chained ? operators for nested Option
+    REQUIRE(
+        executesSuccessfully("let nested = Some (Some 5); let unwrap2 opt = opt??; let r = unwrap2 nested"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_with_result_ok")
+{
+    // ? operator unwraps Ok value
+    REQUIRE(executesSuccessfully("let unwrap res = res?; let r = unwrap (Ok 100)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_with_result_error")
+{
+    // ? operator on Error propagates the Error
+    REQUIRE(executesSuccessfully("let unwrap res = res?; let r = unwrap (Error 404)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_with_function_call")
+{
+    // Regression test: ? operator on function call result
+    // This tests the fix for use-after-free when codegen(operand) pushes a new FSharpFunctionContext
+    REQUIRE(executesSuccessfully("let inc x = Some (x + 1); let f x = (inc x)?; let r = f 5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_nested_function_calls")
+{
+    // Regression test: nested function calls with ? operator
+    // Stress test for FSharpFunctionContext stack stability
+    // Each function call pushes a context, verifying no use-after-free with multiple context pushes
+    REQUIRE(executesSuccessfully("let inc x = Some (x + 1); "
+                                 "let f x = (inc x)?; "
+                                 "let r = f 5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_multiple_unwraps_same_function")
+{
+    // Multiple ? operators in the same function, each on a function call
+    // This thoroughly tests the context pointer stability across multiple codegen calls
+    REQUIRE(executesSuccessfully("let wrap x = Some x; "
+                                 "let f x = (wrap (wrap x)?)?; "
+                                 "let r = f 42"));
+}
+
+// =============================================================================
+// F# Try-With Expression Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_ok_passthrough")
+{
+    // try-with with Ok value - should extract inner value
+    REQUIRE(executesSuccessfully("let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_error_handled")
+{
+    // try-with catching Error - should run handler
+    REQUIRE(executesSuccessfully("let getErr x = Error x; let r = try getErr 42 with | Error e -> e"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_some_passthrough")
+{
+    // try-with with Some value - should extract inner value
+    REQUIRE(executesSuccessfully("let getOpt x = Some x; let r = try getOpt 42 with | None -> 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_none_handled")
+{
+    // try-with catching None - should run handler
+    REQUIRE(executesSuccessfully("let getNone x = None; let r = try getNone 42 with | None -> 99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_multiple_handlers_first")
+{
+    // Multiple handlers - first pattern matches
+    CHECK(
+        executeSourceAndGetOutput("let getErr x = Error x; "
+                                  "let r = try getErr 1 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0; "
+                                  "print r")
+        == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_multiple_handlers_second")
+{
+    // Multiple handlers - second pattern matches
+    CHECK(
+        executeSourceAndGetOutput("let getErr x = Error x; "
+                                  "let r = try getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0; "
+                                  "print r")
+        == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_multiple_handlers_fallback")
+{
+    // Multiple handlers - fallback pattern matches
+    CHECK(executeSourceAndGetOutput(
+              "let getErr x = Error x; "
+              "let r = try getErr 99 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0; "
+              "print r")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_ok_not_caught")
+{
+    // Ok value should not trigger any error handler
+    CHECK(executeSourceAndGetOutput("let getValue x = Ok x; "
+                                    "let r = try getValue 42 with | Error 1 -> 10 | Error _ -> 0; "
+                                    "print r")
+          == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_constructor_literal_first")
+{
+    // Match expression with constructor and literal payload - first pattern
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = match getErr 1 with | Error 1 -> 10 | Error 2 -> 20 | _ -> 0; "
+                                    "print r")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_constructor_literal_second")
+{
+    // Match expression with constructor and literal payload - second pattern
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = match getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | _ -> 0; "
+                                    "print r")
+          == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_constructor_literal_fallback")
+{
+    // Match expression with constructor and literal payload - fallback
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = match getErr 99 with | Error 1 -> 10 | Error 2 -> 20 | _ -> 0; "
+                                    "print r")
+          == "0");
+}
+
+// =============================================================================
+// F# Guard Expression Tests (try-with and match)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_gt_pass")
+{
+    // Guard with > that passes
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 5 with | Error e when e > 3 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_gt_fail")
+{
+    // Guard with > that fails - falls through to next handler
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 2 with | Error e when e > 3 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_lt")
+{
+    // Guard with <
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 2 with | Error e when e < 5 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_ge")
+{
+    // Guard with >=
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 5 with | Error e when e >= 5 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_le")
+{
+    // Guard with <=
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 5 with | Error e when e <= 5 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_ne")
+{
+    // Guard with !=
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 5 with | Error e when e != 3 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_trywith_guard_eq")
+{
+    // Guard with ==
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = try getErr 5 with | Error e when e == 5 -> 100 | Error _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_guard_gt")
+{
+    // Match expression with guard
+    CHECK(executeSourceAndGetOutput("let getErr x = Error x; "
+                                    "let r = match getErr 5 with | Error e when e > 3 -> 100 | _ -> 0; "
+                                    "print r")
+          == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_match_guard_complex")
+{
+    // Match expression with multiple guards
+    CHECK(executeSourceAndGetOutput(
+              "let getErr x = Error x; "
+              "let r = match getErr 5 with | Error e when e > 10 -> 1 | Error e when e > 3 -> 2 | _ -> 0; "
+              "print r")
+          == "2");
+}
 
 // =============================================================================
 // F# print/println Execution Tests
@@ -731,4 +973,16 @@ TEST_CASE("IRGenerator.FSharp.exec_print_preserves_exit_code")
     REQUIRE(result.has_value());
     CHECK(result->exitCode == 0);
     CHECK(result->output == "test");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_print_number")
+{
+    // Print automatically converts numbers to strings via N2S
+    CHECK(executeSourceAndGetOutput("print 42") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_print_number_expression")
+{
+    // Print works with numeric expressions
+    CHECK(executeSourceAndGetOutput("let x = 10; print (x * 2 + 5)") == "25");
 }

@@ -15,10 +15,12 @@ PatternIRGenerator::PatternIRGenerator(IRGenerator& gen): _gen(gen)
 
 void PatternIRGenerator::compile(pattern::Pattern const& pattern,
                                  CoreVM::Value* scrutinee,
+                                 CoreVM::AllocaInstr* scrutineeStorage,
                                  CoreVM::BasicBlock* onSuccess,
                                  CoreVM::BasicBlock* onFailure)
 {
     _scrutinee = scrutinee;
+    _scrutineeStorage = scrutineeStorage;
     _successBlock = onSuccess;
     _failureBlock = onFailure;
     _collectOnly = false;
@@ -85,9 +87,15 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
         // String comparison
         cmp = _gen.createSCmpEQ(_scrutinee, literal, "pat.str.eq");
     }
+    else if (_scrutinee->type() == CoreVM::LiteralType::Void
+             || _scrutinee->type() == CoreVM::LiteralType::Object)
+    {
+        // Dynamic value comparison (for values from OGETSLOT with unknown compile-time type)
+        cmp = _gen.createVCmpEQ(_scrutinee, literal, "pat.dyn.eq");
+    }
     else
     {
-        // Numeric/boolean comparison
+        // Numeric/boolean comparison (known types at compile time)
         cmp = _gen.createNCmpEQ(_scrutinee, literal, "pat.num.eq");
     }
 
@@ -162,7 +170,7 @@ void PatternIRGenerator::visit(pattern::OrPattern const& pat)
         // Compile this alternative with success going to original success,
         // and failure going to next alternative (or final failure)
         PatternIRGenerator altCompiler(_gen);
-        altCompiler.compile(*pat.alternatives[i], _scrutinee, _successBlock, nextTry);
+        altCompiler.compile(*pat.alternatives[i], _scrutinee, _scrutineeStorage, _successBlock, nextTry);
 
         // Collect any bindings from this alternative
         // Note: All alternatives in an or-pattern should bind the same variables
@@ -280,9 +288,14 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
 
         _gen.setInsertPoint(payloadBlock);
 
+        // Reload scrutinee from storage since we're in a new basic block.
+        // The stack tracking resets at block boundaries, so we must reload
+        // to ensure the value is available for use.
+        CoreVM::Value* scrutineeReloaded = _gen.createLoad(_scrutineeStorage, "scrutinee.reload");
+
         // Extract payload from slot 0 using OGETSLOT
         CoreVM::Value* payloadValue =
-            _gen.createObjGetSlot(_scrutinee, _gen.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+            _gen.createObjGetSlot(scrutineeReloaded, _gen.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
 
         // Recursively match the payload pattern
         CoreVM::Value* savedScrutinee = _scrutinee;

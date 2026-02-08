@@ -165,6 +165,8 @@ class Shell final
     void builtinCmdExecPipedBackground(CoreVM::Params& context);
     void builtinBind(CoreVM::Params& context);
     void builtinWhich(CoreVM::Params& context);
+    void builtinPrint(CoreVM::Params& context);
+    void builtinPrintln(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();

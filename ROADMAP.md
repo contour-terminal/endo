@@ -344,11 +344,50 @@ src/
   - [x] PatternIRGenerator handles constructor patterns (Some/None/Ok/Error)
   - [x] Scope-based reference counting (ORELEASE on scope exit)
   - [x] Comprehensive IR generation tests for Option/Result
+  - [x] Source location infrastructure for runtime error reporting
+    - [x] `SourceLocation` member on `Instr` class with getter/setter
+    - [x] `IRBuilder::setSourceLocation()` for current location tracking
+    - [x] `IRGenerator` sets location from AST nodes during code generation
+    - [x] Sparse location table in `Handler` for memory-efficient storage
+    - [x] `TargetCodeGenerator` builds location table during code emission
+    - [x] `ConstantPool` stores location tables for handlers
+    - [x] `Handler::locationOf()` binary search lookup for instruction offsets
+    - [x] `RuntimeError` struct with message and location for error reporting
+    - [x] `Runner::runWithResult()` returns `std::expected<bool, RuntimeError>`
+    - [x] Unit tests for location propagation
+  - [x] Runtime checks when `RuntimeConfig::typeChecksEnabled` is true
+    - [x] Division by zero check in `NDIV` and `NREM` instructions
+    - [x] Invalid type ID check in `OALLOC` instruction
+    - [x] Null object dereference checks in all object operations (`ORETAIN`, `ORELEASE`, `OGETTAG`, `OSETTAG`, `OGETSLOT`, `OSETSLOT`, `OTYPEID`, `OISTYPE`)
+    - [x] Slot index out of bounds checks in `OGETSLOT` and `OSETSLOT`
   - [ ] Mark-and-sweep GC for cycle collection
-  - [ ] Fix VM stack tracking bug with pattern matching execution
-- [~] Complete `?` operator runtime implementation (unwrap or propagate) - Partial
+  - [x] Fix VM stack tracking bug with pattern matching and `?` operator execution
+    - [x] `CondBrInstr` now properly discards extras before branching to ensure consistent stack state
+    - [x] Uses STACKROT to move condition to correct position, then DISCARD for extras
+    - [x] Block boundary handling emits DISCARD when tracking stack exceeds alloca count
+- [x] Complete `?` operator runtime implementation (unwrap or propagate)
   - [x] IRGenerator emits tag check and early return for `?` operator
-  - [ ] Full integration with function context for error propagation
+  - [x] Full integration with function context for error propagation
+  - [x] `FSharpFunctionContext` pushed only for functions returning Result/Option
+  - [x] Early return block and storage created for `?` operator unwrap-or-propagate
+  - [x] Fix use-after-free bug when `?` is applied to function call results
+    - [x] Copy `returnBlock` and `returnStorage` from context before `codegen(operand)` call
+    - [x] Prevents invalidation when nested function calls push new contexts onto vector
+- [x] Implement `try-with` expression IR generation
+  - [x] Store body object in alloca for cross-block access
+  - [x] Handle `ConstructorPattern` (e.g., `Error e`, `None`) for error binding
+  - [x] Extract success value on Ok/Some, run handler on Error/None
+  - [x] Multiple handler support with literal pattern matching
+    - [x] Added `VCMPEQ` opcode for dynamic value comparison (compares values regardless of compile-time type)
+    - [x] Added `VCmpEQInstr` IR instruction and `createVCmpEQ` builder method
+    - [x] Updated `PatternIRGenerator` to use dynamic comparison for `Void`/`Object` typed values
+    - [x] Added cast support for `Void`/`Object` to `String` via `N2S` for print compatibility
+  - [x] Guard expressions in handlers
+    - [x] Added full set of dynamic comparison opcodes (`VCMPNE`, `VCMPLT`, `VCMPLE`, `VCMPGT`, `VCMPGE`)
+    - [x] Added corresponding IR instructions and IRBuilder methods
+    - [x] Updated `IRGenerator::visit(BinaryExpr)` to use `VCmpXX` when operands have dynamic types
+    - [x] Added `needsDynamicCompare()` helper to detect `Void`/`Object` typed values
+    - [x] Fixed match expression variable binding for constructor patterns to extract payload correctly
 - [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
 - [x] Implement IR generation for F# function definitions and application (inlining approach)
 - [x] Implement IR generation for F# pipelines (`|>` operator)
@@ -396,6 +435,7 @@ src/
   - Parser handles `print`/`println` at statement level by entering F# expression mode
   - `Token::DblQuoteStart` properly recognized as F# primary expression for double-quoted strings
   - `Program::link()` call added to `executeSource()` to enable native function calls in tests
+  - `print`/`println` now auto-convert numbers and dynamic values (from pattern matching) to strings via `N2S`
 - Shell command expressions: `& command` syntax for embedding shell commands in F# expressions
   - `let output = & git status` captures command output to variable
   - `let diff = & git diff HEAD..master` - special characters like `..` parsed as shell tokens, not F# operators

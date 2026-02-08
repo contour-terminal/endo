@@ -120,6 +120,14 @@ enum Opcode : uint16_t
     OSETSLOT, // OSETSLOT imm        ; pop value, pop object, set slot[imm] = value
     OTYPEID,  // OTYPEID             ; push type ID of object at top of stack
     OISTYPE,  // OISTYPE typeId      ; push (object.typeId == typeId)
+
+    // dynamic value comparison (for pattern matching with unknown types)
+    VCMPEQ, // VCMPEQ               ; A = pop() == pop() (compares as numbers)
+    VCMPNE, // VCMPNE               ; A = pop() != pop() (compares as numbers)
+    VCMPLT, // VCMPLT               ; A = pop() < pop() (compares as numbers)
+    VCMPLE, // VCMPLE               ; A = pop() <= pop() (compares as numbers)
+    VCMPGT, // VCMPGT               ; A = pop() > pop() (compares as numbers)
+    VCMPGE, // VCMPGE               ; A = pop() >= pop() (compares as numbers)
 };
 
 enum class MatchClass

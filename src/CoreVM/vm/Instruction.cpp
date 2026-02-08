@@ -155,6 +155,14 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(OSETSLOT, I, -1, Void),  // pop value, pop obj, set slot[imm] = value, push obj
     IIDEF(OTYPEID, V, 0, Number),  // pop obj, push type ID
     IIDEF(OISTYPE, I, 0, Boolean), // pop obj, push (obj.typeId == imm)
+
+    // dynamic value comparison
+    IIDEF(VCMPEQ, V, -1, Boolean), // pop B, pop A, push (A == B) as numbers
+    IIDEF(VCMPNE, V, -1, Boolean), // pop B, pop A, push (A != B) as numbers
+    IIDEF(VCMPLT, V, -1, Boolean), // pop B, pop A, push (A < B) as numbers
+    IIDEF(VCMPLE, V, -1, Boolean), // pop B, pop A, push (A <= B) as numbers
+    IIDEF(VCMPGT, V, -1, Boolean), // pop B, pop A, push (A > B) as numbers
+    IIDEF(VCMPGE, V, -1, Boolean), // pop B, pop A, push (A >= B) as numbers
 };
 
 // }}}

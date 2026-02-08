@@ -161,6 +161,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void popFunctionContext();
     [[nodiscard]] bool inFunction() const;
 
+    // Helper for dynamic type comparison
+    [[nodiscard]] bool needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const;
+
     // F# variable scope management
     struct FSharpScope
     {
@@ -181,12 +184,16 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     {
         std::vector<std::string> parameters; ///< Parameter names in order
         ast::Expr const* body;               ///< Function body expression (for inlining)
+        bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
 
         size_t arity() const { return parameters.size(); }
     };
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    /// Analyzes a function body to determine if it returns Result or Option type
+    [[nodiscard]] bool isBodyResultOrOption(ast::Expr const* body) const;
 
     // F# function context for error propagation (? operator)
     // Tracks return block and storage for early returns from try expressions

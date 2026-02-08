@@ -43,7 +43,7 @@ class IRTestRunner
             return { false, false };
 
         Runner::Globals globals;
-        Runner runner(handler, nullptr, &globals, nullptr);
+        Runner runner(handler, nullptr, &globals, RuntimeConfig::defaultConfig(), nullptr);
         bool success = runner.run();
 
         // run() returns false if EXIT code was 0 (success in shell terms)
@@ -533,4 +533,97 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_default")
     auto [completed, success] = testRunner.run("test");
     CHECK(completed);
     CHECK(success); // Should match default and return 0
+}
+
+// =============================================================================
+// Source location propagation tests
+// =============================================================================
+
+TEST_CASE("TargetCodeGenerator.source_location_propagation")
+{
+    // Test that source locations from IR instructions are recorded
+    // in the Handler's sparse location table and can be looked up.
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    // Create instructions with source locations
+    SourceLocation loc1("test.endo", FilePos { 1, 1, 0 }, FilePos { 1, 10, 9 });
+    SourceLocation loc2("test.endo", FilePos { 2, 1, 10 }, FilePos { 2, 15, 24 });
+
+    auto* entry = builder.createBlock("entry");
+    builder.setInsertPoint(entry);
+
+    // Set location for first instruction
+    builder.setSourceLocation(loc1);
+    auto* x = builder.get(CoreNumber(42));
+    auto* y = builder.get(CoreNumber(10));
+    auto* sum = builder.createAdd(x, y, "sum");
+
+    // Set different location for second instruction
+    builder.setSourceLocation(loc2);
+    builder.createRet(sum);
+
+    // Generate target code
+    TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(builder.program());
+
+    Handler const* handler = targetProgram->findHandler("test");
+    REQUIRE(handler != nullptr);
+
+    // Verify that the handler has source locations recorded
+    // The exact offsets depend on code generation, but we can verify
+    // that locations are properly recorded and lookup works
+
+    // Find an offset that maps to loc1
+    bool foundLoc1 = false;
+    bool foundLoc2 = false;
+    for (size_t i = 0; i < handler->code().size(); ++i)
+    {
+        auto const& loc = handler->locationOf(i);
+        if (!loc.filename.empty())
+        {
+            if (loc.begin.line == 1)
+                foundLoc1 = true;
+            if (loc.begin.line == 2)
+                foundLoc2 = true;
+        }
+    }
+
+    // At least one of the locations should be found
+    // (loc1 for the add, loc2 for the ret)
+    CHECK((foundLoc1 || foundLoc2));
+
+    // The file name should be correct
+    auto const& anyLoc = handler->locationOf(0);
+    if (!anyLoc.filename.empty())
+    {
+        CHECK(anyLoc.filename == "test.endo");
+    }
+}
+
+TEST_CASE("TargetCodeGenerator.empty_location_table")
+{
+    // Test that lookups work when no locations were set
+
+    IRTestRunner testRunner;
+    testRunner.createHandler("test");
+    auto& builder = testRunner.builder();
+
+    auto* entry = builder.createBlock("entry");
+    builder.setInsertPoint(entry);
+
+    // No setSourceLocation calls - should use empty location
+    builder.createRet(builder.get(CoreNumber(0)));
+
+    TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(builder.program());
+
+    Handler const* handler = targetProgram->findHandler("test");
+    REQUIRE(handler != nullptr);
+
+    // Location lookup should return empty location
+    auto const& loc = handler->locationOf(0);
+    CHECK(loc.filename.empty());
 }

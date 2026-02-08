@@ -2,6 +2,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <cstddef>
+
 namespace CoreVM
 {
 
@@ -95,6 +96,25 @@ IS_SAME_INSTR_IMPL(SInInstr)
 IS_SAME_INSTR_IMPL(PCmpEQInstr)
 IS_SAME_INSTR_IMPL(PCmpNEInstr)
 IS_SAME_INSTR_IMPL(PInCidrInstr)
+
+// Object operations
+IS_SAME_INSTR_IMPL(ObjAllocInstr)
+IS_SAME_INSTR_IMPL(ObjRetainInstr)
+IS_SAME_INSTR_IMPL(ObjReleaseInstr)
+IS_SAME_INSTR_IMPL(ObjGetTagInstr)
+IS_SAME_INSTR_IMPL(ObjSetTagInstr)
+IS_SAME_INSTR_IMPL(ObjGetSlotInstr)
+IS_SAME_INSTR_IMPL(ObjSetSlotInstr)
+IS_SAME_INSTR_IMPL(ObjTypeIdInstr)
+IS_SAME_INSTR_IMPL(ObjIsTypeInstr)
+
+// Dynamic value comparison
+IS_SAME_INSTR_IMPL(VCmpEQInstr)
+IS_SAME_INSTR_IMPL(VCmpNEInstr)
+IS_SAME_INSTR_IMPL(VCmpLTInstr)
+IS_SAME_INSTR_IMPL(VCmpLEInstr)
+IS_SAME_INSTR_IMPL(VCmpGTInstr)
+IS_SAME_INSTR_IMPL(VCmpGEInstr)
 // }}}
 
 } // namespace CoreVM

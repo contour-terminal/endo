@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <CoreVM/RuntimeConfig.hpp>
 #include <CoreVM/enums.hpp>
 #include <CoreVM/types/TypeRegistry.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -12,6 +13,7 @@
 #include <cstdlib>
 #include <cstring> // memset()
 #include <deque>
+#include <expected>
 #include <format>
 #include <functional> // hash<>
 #include <iostream>
@@ -61,6 +63,8 @@ class ConstantPool;
 class Program;
 class Handler;
 class Runner;
+struct SourceLocation;
+struct RuntimeError;
 class Runtime;
 class NopInstr;
 class AllocaInstr;
@@ -86,6 +90,12 @@ class ObjGetSlotInstr;
 class ObjSetSlotInstr;
 class ObjTypeIdInstr;
 class ObjIsTypeInstr;
+class VCmpEQInstr;
+class VCmpNEInstr;
+class VCmpLTInstr;
+class VCmpLEInstr;
+class VCmpGTInstr;
+class VCmpGEInstr;
 
 using Register = uint64_t; // vm
 using CoreNumber = int64_t;
@@ -213,6 +223,12 @@ class InstructionVisitor
     virtual void visit(ObjSetSlotInstr& instr) = 0;
     virtual void visit(ObjTypeIdInstr& instr) = 0;
     virtual void visit(ObjIsTypeInstr& instr) = 0;
+    virtual void visit(VCmpEQInstr& instr) = 0;
+    virtual void visit(VCmpNEInstr& instr) = 0;
+    virtual void visit(VCmpLTInstr& instr) = 0;
+    virtual void visit(VCmpLEInstr& instr) = 0;
+    virtual void visit(VCmpGTInstr& instr) = 0;
+    virtual void visit(VCmpGEInstr& instr) = 0;
 };
 
 // {{{ array types
@@ -292,6 +308,49 @@ inline size_t operator-(const FilePos& a, const FilePos& b)
 }
 
 // }}}
+
+struct SourceLocation // {{{
+{
+    SourceLocation() = default;
+
+    SourceLocation(std::string fileName): filename(std::move(fileName)) {}
+
+    SourceLocation(std::string fileName, FilePos beg, FilePos end):
+        filename(std::move(fileName)), begin(beg), end(end)
+    {
+    }
+
+    std::string filename;
+    FilePos begin;
+    FilePos end;
+
+    SourceLocation& update(const FilePos& endPos)
+    {
+        end = endPos;
+        return *this;
+    }
+
+    SourceLocation& update(const SourceLocation& endLocation)
+    {
+        end = endLocation.end;
+        return *this;
+    }
+
+    [[nodiscard]] std::string str() const;
+    [[nodiscard]] std::string text() const;
+
+    bool operator==(const SourceLocation& other) const noexcept
+    {
+        return filename == other.filename && begin == other.begin && end == other.end;
+    }
+
+    bool operator!=(const SourceLocation& other) const noexcept { return !(*this == other); }
+}; // }}}
+
+inline SourceLocation operator-(const SourceLocation& end, const SourceLocation& beg)
+{
+    return SourceLocation(beg.filename, beg.begin, end.end);
+}
 
 // ExecutionEngine
 // VM
@@ -375,9 +434,21 @@ class Runner
     // }}}
 
   public:
-    Runner(const Handler* handler, void* userdata, Globals* globals, TraceLogger logger);
-    Runner(const Handler* handler, void* userdata, Globals* globals, Quota quota, TraceLogger logger);
+    /// Result type for run operations that may fail with a RuntimeError
+    using RunResult = std::expected<bool, RuntimeError>;
+
+    Runner(
+        const Handler* handler, void* userdata, Globals* globals, RuntimeConfig config, TraceLogger logger);
+    Runner(const Handler* handler,
+           void* userdata,
+           Globals* globals,
+           Quota quota,
+           RuntimeConfig config,
+           TraceLogger logger);
     ~Runner() = default;
+
+    /// Access the runtime configuration
+    const RuntimeConfig& config() const noexcept { return _config; }
 
     const Handler* handler() const noexcept { return _handler; }
 
@@ -385,7 +456,14 @@ class Runner
 
     void* userdata() const noexcept { return _userdata; }
 
+    /// Run the handler. Returns true if exit code was non-zero.
+    /// On runtime error, prints error and returns true (non-zero exit).
     bool run();
+
+    /// Run the handler with full error reporting.
+    /// Returns expected with bool (true if exit non-zero) or RuntimeError on failure.
+    RunResult runWithResult();
+
     void suspend();
     bool resume();
     void rewind();
@@ -444,13 +522,17 @@ class Runner
 
     void pushObject(TypedObject* obj) { push(reinterpret_cast<Value>(obj)); }
 
-    bool loop();
+    RunResult loopWithResult();
+
+    /// Create a RuntimeError at the current instruction's source location
+    [[nodiscard]] RuntimeError makeError(std::string message) const;
 
     Runner(Runner&) = delete;
     Runner& operator=(Runner&) = delete;
 
   private:
     Quota _quota;
+    RuntimeConfig _config;
     const Handler* _handler;
     TraceLogger _traceLogger;
 
@@ -612,6 +694,23 @@ class ConstantPool
 
     [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
 
+    /// Location table for each handler (parallel to _handlers).
+    /// Each entry is a sparse list of (instructionOffset, SourceLocation) pairs.
+    using LocationTable = std::vector<std::pair<size_t, SourceLocation>>;
+
+    void setHandlerLocationTable(size_t handlerId, LocationTable table)
+    {
+        if (_handlerLocationTables.size() <= handlerId)
+            _handlerLocationTables.resize(handlerId + 1);
+        _handlerLocationTables[handlerId] = std::move(table);
+    }
+
+    [[nodiscard]] LocationTable const& getHandlerLocationTable(size_t handlerId) const
+    {
+        static LocationTable const empty;
+        return handlerId < _handlerLocationTables.size() ? _handlerLocationTables[handlerId] : empty;
+    }
+
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
 
     [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const
@@ -649,6 +748,7 @@ class ConstantPool
     // code data
     std::vector<std::pair<std::string, std::string>> _modules;
     std::vector<std::pair<std::string, Code>> _handlers;
+    std::vector<LocationTable> _handlerLocationTables;
     std::vector<MatchDef> _matchDefs;
     std::vector<std::string> _nativeHandlerSignatures;
     std::vector<std::string> _nativeFunctionSignatures;
@@ -717,9 +817,9 @@ class Handler
   public:
     Handler(Program* program, std::string name, std::vector<Instruction> instructions);
     Handler() = default;
-    Handler(const Handler& handler) = default;
+    Handler(const Handler& handler) = delete;
     Handler(Handler&& handler) noexcept = default;
-    Handler& operator=(const Handler& handler) = default;
+    Handler& operator=(const Handler& handler) = delete;
     Handler& operator=(Handler&& handler) noexcept = default;
     ~Handler() = default;
 
@@ -746,11 +846,20 @@ class Handler
 
     void disassemble() const noexcept;
 
+    /// Set the sparse location table (only stores locations when they change)
+    /// Each entry is (instructionOffset, SourceLocation)
+    void setLocationTable(std::vector<std::pair<size_t, SourceLocation>> table);
+
+    /// Look up source location for an instruction offset.
+    /// Uses binary search to find the nearest preceding location entry.
+    [[nodiscard]] SourceLocation const& locationOf(size_t offset) const;
+
   private:
     Program* _program {};
     std::string _name;
     size_t _stackSize {};
     std::vector<Instruction> _code;
+    std::unique_ptr<std::vector<std::pair<size_t, SourceLocation>>> _locationTable;
 #if defined(COREVM_DIRECT_THREADED_VM)
     std::vector<uint64_t> _directThreadedCode;
 #endif
@@ -1012,48 +1121,27 @@ class NativeCallback
     void invoke(Params& args) const;
 };
 
-struct SourceLocation // {{{
+/// Runtime error with source location for user-friendly error reporting.
+///
+/// Used when the VM encounters an error during execution (e.g., type mismatch,
+/// null dereference). The source location helps users identify the problematic code.
+struct RuntimeError
 {
-    SourceLocation() = default;
+    std::string message;
+    SourceLocation location;
 
-    SourceLocation(std::string fileName): filename(std::move(fileName)) {}
-
-    SourceLocation(std::string fileName, FilePos beg, FilePos end):
-        filename(std::move(fileName)), begin(beg), end(end)
+    /// Format the error for display to the user
+    [[nodiscard]] std::string format() const
     {
+        if (location.filename.empty())
+            return std::format("runtime error: {}", message);
+        return std::format("{}:{}:{}: runtime error: {}",
+                           location.filename,
+                           location.begin.line,
+                           location.begin.column,
+                           message);
     }
-
-    std::string filename;
-    FilePos begin;
-    FilePos end;
-
-    SourceLocation& update(const FilePos& endPos)
-    {
-        end = endPos;
-        return *this;
-    }
-
-    SourceLocation& update(const SourceLocation& endLocation)
-    {
-        end = endLocation.end;
-        return *this;
-    }
-
-    [[nodiscard]] std::string str() const;
-    [[nodiscard]] std::string text() const;
-
-    bool operator==(const SourceLocation& other) const noexcept
-    {
-        return filename == other.filename && begin == other.begin && end == other.end;
-    }
-
-    bool operator!=(const SourceLocation& other) const noexcept { return !(*this == other); }
-}; // }}}
-
-inline SourceLocation operator-(const SourceLocation& end, const SourceLocation& beg)
-{
-    return SourceLocation(beg.filename, beg.begin, end.end);
-}
+};
 
 //!@}
 
@@ -1322,6 +1410,12 @@ class Instr: public Value
      */
     virtual void accept(InstructionVisitor& v) = 0;
 
+    /// Set the source location for this instruction (for error reporting)
+    void setSourceLocation(SourceLocation loc) { _sourceLocation = std::move(loc); }
+
+    /// Get the source location of this instruction
+    [[nodiscard]] SourceLocation const& sourceLocation() const noexcept { return _sourceLocation; }
+
   protected:
     void dumpOne(const char* mnemonic);
     [[nodiscard]] std::string formatOne(std::string mnemonic) const;
@@ -1333,6 +1427,7 @@ class Instr: public Value
   private:
     BasicBlock* _basicBlock;
     std::vector<Value*> _operands;
+    SourceLocation _sourceLocation;
 };
 
 class NopInstr: public Instr
@@ -1668,12 +1763,16 @@ class ObjRetainInstr: public Instr
 };
 
 /// Decrements the reference count and frees if zero.
+/// Takes an AllocaInstr* (storage location) directly to avoid cross-block value tracking issues.
 class ObjReleaseInstr: public Instr
 {
   public:
-    ObjReleaseInstr(Value* object, const std::string& name): Instr(LiteralType::Void, { object }, name) {}
+    ObjReleaseInstr(AllocaInstr* storage, const std::string& name):
+        Instr(LiteralType::Void, { storage }, name)
+    {
+    }
 
-    [[nodiscard]] Value* object() const { return operand(0); }
+    [[nodiscard]] AllocaInstr* storage() const { return static_cast<AllocaInstr*>(operand(0)); }
 
     [[nodiscard]] std::string to_string() const override;
     [[nodiscard]] std::unique_ptr<Instr> clone() override;
@@ -1780,6 +1879,116 @@ class ObjIsTypeInstr: public Instr
     void accept(InstructionVisitor& v) override;
 };
 
+/// Dynamic value comparison instruction.
+/// Compares two values as numbers regardless of their compile-time type.
+/// Used for pattern matching with dynamically-typed values from OGETSLOT.
+class VCmpEQInstr: public Instr
+{
+  public:
+    VCmpEQInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Dynamic not-equal comparison instruction.
+class VCmpNEInstr: public Instr
+{
+  public:
+    VCmpNEInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Dynamic less-than comparison instruction.
+class VCmpLTInstr: public Instr
+{
+  public:
+    VCmpLTInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Dynamic less-than-or-equal comparison instruction.
+class VCmpLEInstr: public Instr
+{
+  public:
+    VCmpLEInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Dynamic greater-than comparison instruction.
+class VCmpGTInstr: public Instr
+{
+  public:
+    VCmpGTInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Dynamic greater-than-or-equal comparison instruction.
+class VCmpGEInstr: public Instr
+{
+  public:
+    VCmpGEInstr(Value* lhs, Value* rhs, const std::string& name):
+        Instr(LiteralType::Boolean, { lhs, rhs }, name)
+    {
+    }
+
+    [[nodiscard]] Value* lhs() const { return operand(0); }
+
+    [[nodiscard]] Value* rhs() const { return operand(1); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
 class IsSameInstruction: public InstructionVisitor
 {
   public:
@@ -1875,6 +2084,12 @@ class IsSameInstruction: public InstructionVisitor
     void visit(ObjSetSlotInstr& instr) override;
     void visit(ObjTypeIdInstr& instr) override;
     void visit(ObjIsTypeInstr& instr) override;
+    void visit(VCmpEQInstr& instr) override;
+    void visit(VCmpNEInstr& instr) override;
+    void visit(VCmpLTInstr& instr) override;
+    void visit(VCmpLEInstr& instr) override;
+    void visit(VCmpGTInstr& instr) override;
+    void visit(VCmpGEInstr& instr) override;
 };
 
 class IRHandler: public Constant
@@ -2071,29 +2286,31 @@ class IRProgram
 class IRBuilder
 {
   private:
-    IRProgram* _program;
+    std::unique_ptr<IRProgram> _program;
     IRHandler* _handler;
     BasicBlock* _insertPoint;
     std::unordered_map<std::string, unsigned long> _nameStore;
+    SourceLocation _currentLocation;
 
   public:
     IRBuilder();
     ~IRBuilder() = default;
 
+    /// Set the source location for subsequently created instructions
+    void setSourceLocation(SourceLocation loc) { _currentLocation = std::move(loc); }
+
+    /// Get the current source location
+    [[nodiscard]] SourceLocation const& sourceLocation() const noexcept { return _currentLocation; }
+
     std::string makeName(std::string name);
 
     void setProgram(std::unique_ptr<IRProgram> program);
 
-    IRProgram* program() const { return _program; }
+    IRProgram* program() const { return _program.get(); }
 
     /// Takes ownership of the program, returning it as a unique_ptr.
     /// After calling this, program() will return nullptr.
-    std::unique_ptr<IRProgram> takeProgram()
-    {
-        auto result = std::unique_ptr<IRProgram>(_program);
-        _program = nullptr;
-        return result;
-    }
+    std::unique_ptr<IRProgram> takeProgram() { return std::move(_program); }
 
     IRHandler* setHandler(IRHandler* hn);
 
@@ -2245,7 +2462,7 @@ class IRBuilder
     // object operations
     ObjAllocInstr* createObjAlloc(ConstantInt* typeId, const std::string& name = "");
     ObjRetainInstr* createObjRetain(Value* object, const std::string& name = "");
-    ObjReleaseInstr* createObjRelease(Value* object, const std::string& name = "");
+    ObjReleaseInstr* createObjRelease(AllocaInstr* storage, const std::string& name = "");
     ObjGetTagInstr* createObjGetTag(Value* object, const std::string& name = "");
     ObjSetTagInstr* createObjSetTag(Value* object, Value* tag, const std::string& name = "");
     ObjGetSlotInstr* createObjGetSlot(Value* object, ConstantInt* slotIndex, const std::string& name = "");
@@ -2255,6 +2472,14 @@ class IRBuilder
                                       const std::string& name = "");
     ObjTypeIdInstr* createObjTypeId(Value* object, const std::string& name = "");
     ObjIsTypeInstr* createObjIsType(Value* object, ConstantInt* typeId, const std::string& name = "");
+
+    // Dynamic value comparison (for pattern matching with unknown types)
+    VCmpEQInstr* createVCmpEQ(Value* lhs, Value* rhs, const std::string& name = "");
+    VCmpNEInstr* createVCmpNE(Value* lhs, Value* rhs, const std::string& name = "");
+    VCmpLTInstr* createVCmpLT(Value* lhs, Value* rhs, const std::string& name = "");
+    VCmpLEInstr* createVCmpLE(Value* lhs, Value* rhs, const std::string& name = "");
+    VCmpGTInstr* createVCmpGT(Value* lhs, Value* rhs, const std::string& name = "");
+    VCmpGEInstr* createVCmpGE(Value* lhs, Value* rhs, const std::string& name = "");
 };
 
 /**
@@ -2932,6 +3157,12 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(ObjSetSlotInstr& instr) override;
     void visit(ObjTypeIdInstr& instr) override;
     void visit(ObjIsTypeInstr& instr) override;
+    void visit(VCmpEQInstr& instr) override;
+    void visit(VCmpNEInstr& instr) override;
+    void visit(VCmpLTInstr& instr) override;
+    void visit(VCmpLEInstr& instr) override;
+    void visit(VCmpGTInstr& instr) override;
+    void visit(VCmpGEInstr& instr) override;
 
   private:
     struct ConditionalJump
@@ -2955,6 +3186,10 @@ class TargetCodeGenerator: public InstructionVisitor
 
     size_t _handlerId;              //!< current handler's ID
     std::vector<Instruction> _code; //!< current handler's code
+
+    /** Location table for current handler (sparse: only records when location changes) */
+    ConstantPool::LocationTable _locationTable;
+    SourceLocation _lastRecordedLocation;
 
     /** target stack during target code generation */
     std::deque<const Value*> _stack;

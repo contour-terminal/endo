@@ -81,11 +81,13 @@ void IRGenerator::popFSharpScope()
 {
     if (_currentFSharpScope)
     {
-        // Release all object variables in this scope before exiting
+        // Release all object variables in this scope before exiting.
+        // We pass the storage (alloca) directly to ObjReleaseInstr, which allows
+        // the TargetCodeGenerator to emit LOAD from the alloca's fixed index.
+        // This avoids cross-block value tracking issues.
         for (CoreVM::AllocaInstr* storage: _currentFSharpScope->objectVariables)
         {
-            CoreVM::Value* obj = createLoad(storage, "scope.exit.load");
-            createObjRelease(obj, "scope.exit.release");
+            createObjRelease(storage, "scope.exit.release");
         }
 
         FSharpScope* parent = _currentFSharpScope->parent;
@@ -139,6 +141,52 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
     return nullptr;
 }
 
+bool IRGenerator::isBodyResultOrOption(ast::Expr const* body) const
+{
+    if (!body)
+        return false;
+
+    // Direct Result/Option constructors
+    if (dynamic_cast<ast::OptionExpr const*>(body))
+        return true;
+    if (dynamic_cast<ast::ResultExpr const*>(body))
+        return true;
+
+    // Try expressions produce Result/Option
+    if (dynamic_cast<ast::TryExpr const*>(body))
+        return true;
+
+    // Check through parentheses
+    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+        return isBodyResultOrOption(paren->inner.get());
+
+    // Check match expression arms
+    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    {
+        for (auto const& arm: match->arms)
+            if (isBodyResultOrOption(arm.body.get()))
+                return true;
+        return false;
+    }
+
+    // Check pipeline - the result type is the last function's return type
+    if (auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
+    {
+        // The function (right side) determines the result type
+        // For simplicity, check if any part produces Result/Option
+        if (isBodyResultOrOption(pipe->value.get()))
+            return true;
+        if (isBodyResultOrOption(pipe->function.get()))
+            return true;
+        return false;
+    }
+
+    // Function application - would need to look up the function's return type
+    // For now, we don't handle this case (would require more complex analysis)
+
+    return false;
+}
+
 std::string IRGenerator::generateLambdaName()
 {
     return std::format("__lambda_{}", _lambdaCounter++);
@@ -170,9 +218,12 @@ CoreVM::Value* IRGenerator::codegen(ast::Node const* node)
     _result = nullptr;
     if (node)
     {
-        // Track current location for error reporting
+        // Track current location for error reporting and IR instruction annotation
         if (node->location.has_value())
+        {
             _currentLocation = toCoreLoc(node->location.value());
+            setSourceLocation(_currentLocation); // IRBuilder method - sets location for new instructions
+        }
         node->accept(*this);
     }
     return _result;
@@ -1560,7 +1611,7 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 {
     TRACE_SCOPE("generatePrintCall");
 
-    // Evaluate the argument (should be a string)
+    // Evaluate the argument
     CoreVM::Value* argValue = codegen(argument);
     if (!argValue)
     {
@@ -1568,10 +1619,21 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
         return;
     }
 
-    // Verify it's a string type
-    if (argValue->type() != CoreVM::LiteralType::String)
+    // Convert to string if needed
+    if (argValue->type() == CoreVM::LiteralType::Number)
     {
-        reportTypeError("print/println requires a string argument");
+        // Use N2S intrinsic to convert number to string
+        argValue = createN2S(argValue, "print.n2s");
+    }
+    else if (argValue->type() == CoreVM::LiteralType::Void || argValue->type() == CoreVM::LiteralType::Object)
+    {
+        // Dynamically-typed value (e.g., from pattern matching or OGETSLOT)
+        // Assume it's a number at runtime and convert
+        argValue = createN2S(argValue, "print.n2s");
+    }
+    else if (argValue->type() != CoreVM::LiteralType::String)
+    {
+        reportTypeError("print/println requires a string or number argument");
         return;
     }
 
@@ -1650,6 +1712,13 @@ bool IRGenerator::inFunction() const
     return _functionDepth > 0;
 }
 
+bool IRGenerator::needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const
+{
+    // Check if either operand has a dynamic type (from OGETSLOT or similar)
+    return lhs->type() == CoreVM::LiteralType::Void || lhs->type() == CoreVM::LiteralType::Object
+           || rhs->type() == CoreVM::LiteralType::Void || rhs->type() == CoreVM::LiteralType::Object;
+}
+
 // ============================================================================
 // F# Style Expressions and Statements (Stubs)
 // ============================================================================
@@ -1669,6 +1738,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         FSharpFunction func;
         func.parameters = node.parameters;
         func.body = node.value.get(); // Store pointer to body AST for inlining
+        func.returnsResultOrOption = isBodyResultOrOption(func.body);
         registerFSharpFunction(node.name, std::move(func));
 
         _result = nullptr;
@@ -1683,6 +1753,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         FSharpFunction func;
         func.parameters = lambda->parameters;
         func.body = lambda->body.get();
+        func.returnsResultOrOption = isBodyResultOrOption(func.body);
         registerFSharpFunction(node.name, std::move(func));
         _result = nullptr;
         return;
@@ -1767,12 +1838,31 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         case ast::BinaryOp::Pow: _result = createPow(left, right, "pow"); break;
 
         // Comparison operators (return boolean)
-        case ast::BinaryOp::Eq: _result = createNCmpEQ(left, right, "eq"); break;
-        case ast::BinaryOp::Ne: _result = createNCmpNE(left, right, "ne"); break;
-        case ast::BinaryOp::Lt: _result = createNCmpLT(left, right, "lt"); break;
-        case ast::BinaryOp::Le: _result = createNCmpLE(left, right, "le"); break;
-        case ast::BinaryOp::Gt: _result = createNCmpGT(left, right, "gt"); break;
-        case ast::BinaryOp::Ge: _result = createNCmpGE(left, right, "ge"); break;
+        // Use dynamic comparison (VCmpXX) when operands have unknown compile-time types
+        case ast::BinaryOp::Eq:
+            _result = needsDynamicCompare(left, right) ? createVCmpEQ(left, right, "eq")
+                                                       : createNCmpEQ(left, right, "eq");
+            break;
+        case ast::BinaryOp::Ne:
+            _result = needsDynamicCompare(left, right) ? createVCmpNE(left, right, "ne")
+                                                       : createNCmpNE(left, right, "ne");
+            break;
+        case ast::BinaryOp::Lt:
+            _result = needsDynamicCompare(left, right) ? createVCmpLT(left, right, "lt")
+                                                       : createNCmpLT(left, right, "lt");
+            break;
+        case ast::BinaryOp::Le:
+            _result = needsDynamicCompare(left, right) ? createVCmpLE(left, right, "le")
+                                                       : createNCmpLE(left, right, "le");
+            break;
+        case ast::BinaryOp::Gt:
+            _result = needsDynamicCompare(left, right) ? createVCmpGT(left, right, "gt")
+                                                       : createNCmpGT(left, right, "gt");
+            break;
+        case ast::BinaryOp::Ge:
+            _result = needsDynamicCompare(left, right) ? createVCmpGE(left, right, "ge")
+                                                       : createNCmpGE(left, right, "ge");
+            break;
 
         // Logical operators
         case ast::BinaryOp::And: _result = createBAnd(toBool(left), toBool(right), "and"); break;
@@ -1850,6 +1940,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         FSharpFunction lambdaFunc;
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
+        lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -1873,6 +1964,17 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Inline the function body with the piped value as argument
     pushFSharpScope();
 
+    // Only set up return infrastructure for functions that return Result/Option
+    CoreVM::BasicBlock* returnBlock = nullptr;
+    CoreVM::AllocaInstr* returnStorage = nullptr;
+
+    if (func->returnsResultOrOption)
+    {
+        returnBlock = createBlock("pipe.return");
+        returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
+        pushFSharpFunctionContext(returnBlock, returnStorage, true);
+    }
+
     // Bind the piped value to the parameter
     CoreVM::LiteralType storageType = value->type();
     CoreVM::AllocaInstr* storage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[0]);
@@ -1880,7 +1982,28 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     bindFSharpVariable(func->parameters[0], storage);
 
     // Inline the function body
-    _result = codegen(func->body);
+    CoreVM::Value* bodyResult = codegen(func->body);
+
+    if (func->returnsResultOrOption)
+    {
+        // Store result and jump to return block (normal path)
+        if (bodyResult)
+        {
+            createStore(returnStorage, bodyResult, "store.result");
+            createBr(returnBlock);
+        }
+
+        // Continue from return block (merges normal and early return paths)
+        setInsertPoint(returnBlock);
+        _result = createLoad(returnStorage, "load.result");
+
+        popFSharpFunctionContext();
+    }
+    else
+    {
+        // Simple case: no error propagation
+        _result = bodyResult;
+    }
 
     popFSharpScope();
 }
@@ -1961,6 +2084,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         FSharpFunction lambdaFunc;
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
+        lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -1982,11 +2106,25 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     // Inline the function body:
     // 1. Push a new scope for the function call
-    // 2. Bind arguments to parameters
-    // 3. Evaluate the function body
-    // 4. Pop scope and return result
+    // 2. Set up return infrastructure for ? operator (only if function returns Result/Option)
+    // 3. Bind arguments to parameters
+    // 4. Evaluate the function body
+    // 5. Handle normal return path and merge with early returns (if applicable)
+    // 6. Pop scope and return result
 
     pushFSharpScope();
+
+    // Only set up return infrastructure for functions that return Result/Option
+    // This is needed for the ? operator to propagate errors
+    CoreVM::BasicBlock* returnBlock = nullptr;
+    CoreVM::AllocaInstr* returnStorage = nullptr;
+
+    if (func->returnsResultOrOption)
+    {
+        returnBlock = createBlock("func.return");
+        returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "func.result");
+        pushFSharpFunctionContext(returnBlock, returnStorage, true);
+    }
 
     // Bind arguments to parameter names
     for (size_t i = 0; i < func->parameters.size(); ++i)
@@ -1999,7 +2137,28 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     }
 
     // Inline the function body
-    _result = codegen(func->body);
+    CoreVM::Value* bodyResult = codegen(func->body);
+
+    if (func->returnsResultOrOption)
+    {
+        // Store result and jump to return block (normal path)
+        if (bodyResult)
+        {
+            createStore(returnStorage, bodyResult, "store.result");
+            createBr(returnBlock);
+        }
+
+        // Continue from return block (merges normal and early return paths)
+        setInsertPoint(returnBlock);
+        _result = createLoad(returnStorage, "load.result");
+
+        popFSharpFunctionContext();
+    }
+    else
+    {
+        // Simple case: no error propagation, just use the body result directly
+        _result = bodyResult;
+    }
 
     popFSharpScope();
 }
@@ -2058,6 +2217,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     FSharpFunction func;
     func.parameters = node.parameters;
     func.body = node.body.get();
+    func.returnsResultOrOption = isBodyResultOrOption(func.body);
     registerFSharpFunction(lambdaName, std::move(func));
 
     // Store the lambda name in a way that can be retrieved by the calling context.
@@ -2159,8 +2319,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         CoreVM::Value* scrutineeValue = createLoad(scrutineeStorage, "scrutinee.load");
 
         // Compile the pattern (this emits the pattern matching IR)
+        // Pass scrutineeStorage so the pattern can reload when crossing block boundaries
         patternIRGenerator.clearBindings();
-        patternIRGenerator.compile(*arm.pattern, scrutineeValue, armBodyBlocks[i], onFailure);
+        patternIRGenerator.compile(
+            *arm.pattern, scrutineeValue, scrutineeStorage, armBodyBlocks[i], onFailure);
 
         // Emit the arm body
         setInsertPoint(armBodyBlocks[i]);
@@ -2169,11 +2331,23 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Use pre-allocated storage from entry block
         pushFSharpScope();
         auto const& preAllocatedBindings = armBindingStorage[i];
+
+        // For constructor patterns (Error e, Some x), we need to extract the payload
+        // For simple variable patterns, we bind the whole scrutinee
+        CoreVM::Value* bindingSource = createLoad(scrutineeStorage, "scrutinee.reload");
+
+        if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+        {
+            // Extract payload from slot 0 for constructor patterns
+            if (ctorPat->payload.has_value())
+            {
+                bindingSource = createObjGetSlot(bindingSource, get(CoreVM::CoreNumber(0)), "ctor.payload");
+            }
+        }
+
         for (auto const& [name, storage]: preAllocatedBindings)
         {
-            // Reload the scrutinee from storage and store to pre-allocated binding slot
-            CoreVM::Value* bindingValue = createLoad(scrutineeStorage, name + ".load");
-            createStore(storage, bindingValue, name + ".store");
+            createStore(storage, bindingSource, name + ".store");
             bindFSharpVariable(name, storage);
         }
 
@@ -2389,16 +2563,33 @@ void IRGenerator::visit(ast::TryExpr const& node)
         return;
     }
 
+    // IMPORTANT: Copy the context values BEFORE calling codegen() below.
+    // The operand might be a function application (e.g., `(inc x)?`) which pushes
+    // a new FSharpFunctionContext onto _fsharpFunctionContextStack. This can cause
+    // the vector to reallocate, invalidating the funcCtx pointer.
+    CoreVM::BasicBlock* returnBlock = funcCtx->returnBlock;
+    CoreVM::AllocaInstr* returnStorage = funcCtx->returnStorage;
+
     // Evaluate the operand (should be an Option or Result object)
+    // NOTE: This may invalidate funcCtx pointer due to vector reallocation!
     CoreVM::Value* obj = codegen(node.operand.get());
     if (!obj)
         return;
+
+    // Store the object in an alloca so we can reload it in successor blocks.
+    // This is necessary because the stack tracking resets at block boundaries.
+    CoreVM::AllocaInstr* objStorage = createAllocaInEntryBlock(obj->type(), "try.obj");
+    createStore(objStorage, obj, "try.obj.store");
 
     // Extract tag using OGETTAG
     CoreVM::Value* tag = createObjGetTag(obj, "try.tag");
 
     // Check if success (tag == 1 means Some/Ok)
     CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "try.is_success");
+
+    // Pre-allocate result storage in entry block for consistent stack tracking.
+    // Use Object type since the inner value could be another Option/Result (nested case).
+    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "try.result");
 
     // Create blocks
     auto* successBlock = createBlock("try.success");
@@ -2407,21 +2598,23 @@ void IRGenerator::visit(ast::TryExpr const& node)
 
     createCondBr(isSuccess, successBlock, errorBlock);
 
-    // Success path: extract inner value using OGETSLOT
+    // Success path: reload object and extract inner value using OGETSLOT
     setInsertPoint(successBlock);
-    CoreVM::Value* innerValue = createObjGetSlot(obj, get(CoreVM::CoreNumber(0)), "try.inner");
+    CoreVM::Value* objReload1 = createLoad(objStorage, "try.obj.reload");
+    CoreVM::Value* innerValue = createObjGetSlot(objReload1, get(CoreVM::CoreNumber(0)), "try.inner");
 
     // Store result and branch to continue
-    // Note: innerValue type depends on what was stored; using Number as default
-    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "try.result");
     createStore(resultStorage, innerValue, "try.result.store");
     createBr(continueBlock);
 
-    // Error path: propagate the object (early return)
+    // Error path: reload object and propagate (early return)
     setInsertPoint(errorBlock);
+    CoreVM::Value* objReload2 = createLoad(objStorage, "try.obj.reload");
     // Store the error object in the function return storage and jump to return block
-    createStore(funcCtx->returnStorage, obj, "try.error.store");
-    createBr(funcCtx->returnBlock);
+    // NOTE: Using local copies of returnStorage/returnBlock since funcCtx pointer
+    // may have been invalidated by codegen() above.
+    createStore(returnStorage, objReload2, "try.error.store");
+    createBr(returnBlock);
 
     // Continue with extracted value
     setInsertPoint(continueBlock);
@@ -2445,9 +2638,9 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
         return;
     }
 
-    // Create result storage
+    // Create result storage - use Object type since we may return either unwrapped value or error
     CoreVM::AllocaInstr* resultStorage =
-        createAllocaInEntryBlock(CoreVM::LiteralType::Number, "trywith.result");
+        createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.result");
 
     // Create blocks
     auto* successBlock = createBlock("trywith.success");
@@ -2459,16 +2652,22 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
     if (!bodyObj)
         return;
 
+    // Store bodyObj in an alloca for cross-block access
+    // This is required because values don't persist across basic block boundaries
+    CoreVM::AllocaInstr* bodyStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.body");
+    createStore(bodyStorage, bodyObj, "trywith.body.store");
+
     // Extract tag using OGETTAG
     CoreVM::Value* tag = createObjGetTag(bodyObj, "trywith.tag");
     CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "trywith.is_success");
 
     createCondBr(isSuccess, successBlock, errorBlock);
 
-    // Success path: extract inner value using OGETSLOT
+    // Success path: reload object and extract inner value using OGETSLOT
     setInsertPoint(successBlock);
+    CoreVM::Value* bodyReload1 = createLoad(bodyStorage, "trywith.body.reload");
     CoreVM::Value* successValue =
-        createObjGetSlot(bodyObj, get(CoreVM::CoreNumber(0)), "trywith.success_value");
+        createObjGetSlot(bodyReload1, get(CoreVM::CoreNumber(0)), "trywith.success_value");
     createStore(resultStorage, successValue, "trywith.success.store");
     createBr(mergeBlock);
 
@@ -2478,66 +2677,181 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
     if (node.handlers.empty())
     {
         // No handlers - just return the error object as-is
-        createStore(resultStorage, bodyObj, "trywith.error.store");
+        CoreVM::Value* bodyReload2 = createLoad(bodyStorage, "trywith.body.reload");
+        createStore(resultStorage, bodyReload2, "trywith.error.store");
         createBr(mergeBlock);
     }
     else
     {
-        // Process handlers similar to match expression
-        // For simplicity, we'll just evaluate the first handler's body for now
-        // A full implementation would use PatternIRGenerator like MatchExpr does
+        // Reload the body object for error handling
+        CoreVM::Value* bodyReload2 = createLoad(bodyStorage, "trywith.body.reload");
 
-        // Extract error value from slot 0
+        // Extract error value from slot 0 (the payload of Error/None)
         CoreVM::Value* errorValue =
-            createObjGetSlot(bodyObj, get(CoreVM::CoreNumber(0)), "trywith.error_value");
+            createObjGetSlot(bodyReload2, get(CoreVM::CoreNumber(0)), "trywith.error_value");
 
         // Store error value for pattern matching
         CoreVM::AllocaInstr* errorStorage =
-            createAllocaInEntryBlock(CoreVM::LiteralType::Number, "trywith.error");
+            createAllocaInEntryBlock(CoreVM::LiteralType::Object, "trywith.error");
         createStore(errorStorage, errorValue, "trywith.error.bind");
 
-        // For now, just evaluate the first handler (TODO: full pattern matching)
-        auto const& firstArm = node.handlers[0];
-
-        pushFSharpScope();
-
-        // If the pattern is a simple variable, bind it
-        if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(firstArm.pattern.get()))
+        // Pre-create blocks for all handlers
+        std::vector<CoreVM::BasicBlock*> handlerCheckBlocks;
+        std::vector<CoreVM::BasicBlock*> handlerBodyBlocks;
+        for (size_t i = 0; i < node.handlers.size(); ++i)
         {
-            bindFSharpVariable(varPat->name, errorStorage);
+            handlerCheckBlocks.push_back(createBlock("trywith.check." + std::to_string(i)));
+            handlerBodyBlocks.push_back(createBlock("trywith.body." + std::to_string(i)));
         }
 
-        // Check guard if present
-        if (firstArm.guard)
-        {
-            auto* guardPassBlock = createBlock("trywith.guard.pass");
-            auto* guardFailBlock = createBlock("trywith.guard.fail");
+        // Default block - when no handler matches, propagate error as-is
+        auto* defaultBlock = createBlock("trywith.default");
 
-            CoreVM::Value* guardResult = codegen(firstArm.guard.get());
-            if (!guardResult)
+        // Branch to first handler check
+        createBr(handlerCheckBlocks[0]);
+
+        // Process each handler
+        for (size_t i = 0; i < node.handlers.size(); ++i)
+        {
+            auto const& arm = node.handlers[i];
+
+            // Set insert point to this handler's check block
+            setInsertPoint(handlerCheckBlocks[i]);
+
+            // Determine where to jump on pattern/guard failure
+            CoreVM::BasicBlock* onFailure =
+                (i + 1 < node.handlers.size()) ? handlerCheckBlocks[i + 1] : defaultBlock;
+
+            // Reload error value for pattern matching
+            CoreVM::Value* errorReload = createLoad(errorStorage, "trywith.error.reload");
+
+            // Check if pattern matches
+            bool patternAlwaysMatches = false;
+
+            if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
             {
-                popFSharpScope();
-                return;
+                // Variable pattern always matches
+                patternAlwaysMatches = true;
             }
-            CoreVM::Value* guardBool = toBool(guardResult);
-            createCondBr(guardBool, guardPassBlock, guardFailBlock);
+            else if (auto* wildPat = dynamic_cast<pattern::WildcardPattern const*>(arm.pattern.get()))
+            {
+                // Wildcard always matches
+                patternAlwaysMatches = true;
+            }
+            else if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+            {
+                // Constructor pattern - check payload if it's a literal
+                if (ctorPat->payload.has_value())
+                {
+                    if (auto* litPat = dynamic_cast<pattern::LiteralPattern const*>(ctorPat->payload->get()))
+                    {
+                        // Compare error value with literal
+                        if (auto* intVal = std::get_if<int64_t>(&litPat->value))
+                        {
+                            CoreVM::Value* litValue = get(CoreVM::CoreNumber(*intVal));
+                            // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
+                            CoreVM::Value* matches = createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
+                            createCondBr(matches, handlerBodyBlocks[i], onFailure);
+                        }
+                        else
+                        {
+                            // Non-integer literal patterns not yet supported
+                            patternAlwaysMatches = true;
+                        }
+                    }
+                    else if (dynamic_cast<pattern::WildcardPattern const*>(ctorPat->payload->get()))
+                    {
+                        // Wildcard payload - always matches
+                        patternAlwaysMatches = true;
+                    }
+                    else if (dynamic_cast<pattern::VariablePattern const*>(ctorPat->payload->get()))
+                    {
+                        // Variable payload - always matches
+                        patternAlwaysMatches = true;
+                    }
+                }
+                else
+                {
+                    // No payload (e.g., just "None") - always matches for that constructor type
+                    patternAlwaysMatches = true;
+                }
+            }
+            else if (auto* litPat = dynamic_cast<pattern::LiteralPattern const*>(arm.pattern.get()))
+            {
+                // Direct literal pattern - compare error value
+                if (auto* intVal = std::get_if<int64_t>(&litPat->value))
+                {
+                    CoreVM::Value* litValue = get(CoreVM::CoreNumber(*intVal));
+                    // Use VCmpEQ for dynamic value comparison (errorReload is from OGETSLOT)
+                    CoreVM::Value* matches = createVCmpEQ(errorReload, litValue, "trywith.lit.cmp");
+                    createCondBr(matches, handlerBodyBlocks[i], onFailure);
+                }
+                else
+                {
+                    // Non-integer literal patterns - fall through
+                    patternAlwaysMatches = true;
+                }
+            }
 
-            // Guard failed - return error object as-is
-            setInsertPoint(guardFailBlock);
-            createStore(resultStorage, bodyObj, "trywith.guard.fail.store");
+            if (patternAlwaysMatches)
+            {
+                createBr(handlerBodyBlocks[i]);
+            }
+
+            // Now emit the handler body
+            setInsertPoint(handlerBodyBlocks[i]);
+
+            pushFSharpScope();
+
+            // Bind pattern variables
+            if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(arm.pattern.get()))
+            {
+                bindFSharpVariable(varPat->name, errorStorage);
+            }
+            else if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+            {
+                if (ctorPat->payload.has_value())
+                {
+                    if (auto* innerVar =
+                            dynamic_cast<pattern::VariablePattern const*>(ctorPat->payload->get()))
+                    {
+                        bindFSharpVariable(innerVar->name, errorStorage);
+                    }
+                }
+            }
+
+            // Check guard if present
+            if (arm.guard)
+            {
+                auto* guardPassBlock = createBlock("trywith.guard." + std::to_string(i) + ".pass");
+
+                CoreVM::Value* guardResult = codegen(arm.guard.get());
+                if (!guardResult)
+                {
+                    popFSharpScope();
+                    return;
+                }
+                CoreVM::Value* guardBool = toBool(guardResult);
+                createCondBr(guardBool, guardPassBlock, onFailure);
+
+                setInsertPoint(guardPassBlock);
+            }
+
+            // Evaluate handler body
+            CoreVM::Value* handlerResult = codegen(arm.body.get());
+            popFSharpScope();
+
+            if (!handlerResult)
+                return;
+
+            createStore(resultStorage, handlerResult, "trywith.handler." + std::to_string(i) + ".store");
             createBr(mergeBlock);
-
-            setInsertPoint(guardPassBlock);
         }
 
-        // Evaluate handler body
-        CoreVM::Value* handlerResult = codegen(firstArm.body.get());
-        popFSharpScope();
-
-        if (!handlerResult)
-            return;
-
-        createStore(resultStorage, handlerResult, "trywith.handler.store");
+        // Default block: no handler matched - propagate error as-is
+        setInsertPoint(defaultBlock);
+        CoreVM::Value* bodyReload3 = createLoad(bodyStorage, "trywith.body.reload");
+        createStore(resultStorage, bodyReload3, "trywith.default.store");
         createBr(mergeBlock);
     }
 

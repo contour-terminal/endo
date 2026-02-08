@@ -46,8 +46,14 @@ Handler* Program::handler(size_t index) const
 
 void Program::setup()
 {
-    for (const auto& handler: _cp.getHandlers())
-        createHandler(handler.first, handler.second);
+    auto const& handlers = _cp.getHandlers();
+    for (size_t i = 0; i < handlers.size(); ++i)
+    {
+        Handler* h = createHandler(handlers[i].first, handlers[i].second);
+        auto const& locationTable = _cp.getHandlerLocationTable(i);
+        if (!locationTable.empty())
+            h->setLocationTable(locationTable);
+    }
 
     const std::vector<MatchDef>& matches = _cp.getMatchDefs();
     for (size_t i = 0, e = matches.size(); i != e; ++i)

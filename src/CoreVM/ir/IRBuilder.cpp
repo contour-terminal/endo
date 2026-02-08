@@ -38,14 +38,14 @@ std::string IRBuilder::makeName(std::string name)
 // {{{ context management
 void IRBuilder::setProgram(std::unique_ptr<IRProgram> prog)
 {
-    _program = prog.release();
+    _program = std::move(prog);
     _handler = nullptr;
     _insertPoint = nullptr;
 }
 
 IRHandler* IRBuilder::setHandler(IRHandler* hn)
 {
-    assert(hn->getProgram() == _program);
+    assert(hn->getProgram() == _program.get());
 
     _handler = hn;
     _insertPoint = nullptr;
@@ -71,6 +71,9 @@ void IRBuilder::setInsertPoint(BasicBlock* bb)
 Instr* IRBuilder::insert(std::unique_ptr<Instr> instr)
 {
     assert(getInsertPoint() != nullptr);
+
+    // Set source location on the instruction before inserting
+    instr->setSourceLocation(_currentLocation);
 
     return getInsertPoint()->push_back(std::move(instr));
 }
@@ -616,7 +619,10 @@ Value* IRBuilder::createB2S(Value* rhs, const std::string& name)
 
 Value* IRBuilder::createN2S(Value* rhs, const std::string& name)
 {
-    assert(rhs->type() == LiteralType::Number);
+    // Allow Number, Void (unknown), and Object (dynamic) types
+    // Void and Object are treated as numbers at runtime
+    assert(rhs->type() == LiteralType::Number || rhs->type() == LiteralType::Void
+           || rhs->type() == LiteralType::Object);
 
     if (auto* i = dynamic_cast<ConstantInt*>(rhs))
     {
@@ -743,9 +749,9 @@ ObjRetainInstr* IRBuilder::createObjRetain(Value* object, const std::string& nam
     return insert<ObjRetainInstr>(object, makeName(name));
 }
 
-ObjReleaseInstr* IRBuilder::createObjRelease(Value* object, const std::string& name)
+ObjReleaseInstr* IRBuilder::createObjRelease(AllocaInstr* storage, const std::string& name)
 {
-    return insert<ObjReleaseInstr>(object, makeName(name));
+    return insert<ObjReleaseInstr>(storage, makeName(name));
 }
 
 ObjGetTagInstr* IRBuilder::createObjGetTag(Value* object, const std::string& name)
@@ -779,6 +785,68 @@ ObjTypeIdInstr* IRBuilder::createObjTypeId(Value* object, const std::string& nam
 ObjIsTypeInstr* IRBuilder::createObjIsType(Value* object, ConstantInt* typeId, const std::string& name)
 {
     return insert<ObjIsTypeInstr>(object, typeId, makeName(name));
+}
+
+// }}}
+// {{{ dynamic value comparison
+
+VCmpEQInstr* IRBuilder::createVCmpEQ(Value* lhs, Value* rhs, const std::string& name)
+{
+    // For constant folding at compile time when both are ConstantInt
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpEQInstr*>(
+                insert<VCmpEQInstr>(getBoolean(a->get() == b->get()), rhs, name));
+
+    return insert<VCmpEQInstr>(lhs, rhs, makeName(name));
+}
+
+VCmpNEInstr* IRBuilder::createVCmpNE(Value* lhs, Value* rhs, const std::string& name)
+{
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpNEInstr*>(
+                insert<VCmpNEInstr>(getBoolean(a->get() != b->get()), rhs, name));
+
+    return insert<VCmpNEInstr>(lhs, rhs, makeName(name));
+}
+
+VCmpLTInstr* IRBuilder::createVCmpLT(Value* lhs, Value* rhs, const std::string& name)
+{
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpLTInstr*>(insert<VCmpLTInstr>(getBoolean(a->get() < b->get()), rhs, name));
+
+    return insert<VCmpLTInstr>(lhs, rhs, makeName(name));
+}
+
+VCmpLEInstr* IRBuilder::createVCmpLE(Value* lhs, Value* rhs, const std::string& name)
+{
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpLEInstr*>(
+                insert<VCmpLEInstr>(getBoolean(a->get() <= b->get()), rhs, name));
+
+    return insert<VCmpLEInstr>(lhs, rhs, makeName(name));
+}
+
+VCmpGTInstr* IRBuilder::createVCmpGT(Value* lhs, Value* rhs, const std::string& name)
+{
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpGTInstr*>(insert<VCmpGTInstr>(getBoolean(a->get() > b->get()), rhs, name));
+
+    return insert<VCmpGTInstr>(lhs, rhs, makeName(name));
+}
+
+VCmpGEInstr* IRBuilder::createVCmpGE(Value* lhs, Value* rhs, const std::string& name)
+{
+    if (auto* a = dynamic_cast<ConstantInt*>(lhs))
+        if (auto* b = dynamic_cast<ConstantInt*>(rhs))
+            return static_cast<VCmpGEInstr*>(
+                insert<VCmpGEInstr>(getBoolean(a->get() >= b->get()), rhs, name));
+
+    return insert<VCmpGEInstr>(lhs, rhs, makeName(name));
 }
 
 // }}}

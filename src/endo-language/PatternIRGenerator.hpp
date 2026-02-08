@@ -38,10 +38,12 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     ///
     /// @param pattern The pattern to compile
     /// @param scrutinee The value being matched against
+    /// @param scrutineeStorage The alloca where scrutinee is stored (for reloading across blocks)
     /// @param onSuccess Basic block to jump to on successful match
     /// @param onFailure Basic block to jump to on match failure
     void compile(pattern::Pattern const& pattern,
                  CoreVM::Value* scrutinee,
+                 CoreVM::AllocaInstr* scrutineeStorage,
                  CoreVM::BasicBlock* onSuccess,
                  CoreVM::BasicBlock* onFailure);
 
@@ -73,6 +75,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
 
     IRGenerator& _gen;
     CoreVM::Value* _scrutinee = nullptr;
+    CoreVM::AllocaInstr* _scrutineeStorage = nullptr; ///< Storage for reloading scrutinee across blocks
     CoreVM::BasicBlock* _successBlock = nullptr;
     CoreVM::BasicBlock* _failureBlock = nullptr;
     std::vector<Binding> _bindings;

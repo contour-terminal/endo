@@ -666,7 +666,11 @@ int Shell::execute(std::string const& lineBuffer)
 
         CoreVM::Handler* main = _currentProgram->findHandler("@main");
         assert(main != nullptr);
-        auto runner = CoreVM::Runner(main, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+        auto runner = CoreVM::Runner(main,
+                                     nullptr,
+                                     &_globals,
+                                     CoreVM::RuntimeConfig::defaultConfig(),
+                                     std::bind(&Shell::trace, this, _1, _2, _3));
         _runner = &runner;
 
         // Save current exit code before running - $? expansion will see this value
@@ -1067,6 +1071,17 @@ void Shell::registerBuiltinFunctions()
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinWhich, this);
+
+    // F# print builtins
+    _runtime.registerFunction("print")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&Shell::builtinPrint, this);
+
+    _runtime.registerFunction("println")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&Shell::builtinPrintln, this);
 
     // clang-format on
 }
@@ -1572,7 +1587,11 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         for (size_t i = 1; i < args.size(); ++i)
             _positionalParameters.push_back(args.at(i));
 
-        auto runner = CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+        auto runner = CoreVM::Runner(handler,
+                                     nullptr,
+                                     &_globals,
+                                     CoreVM::RuntimeConfig::defaultConfig(),
+                                     std::bind(&Shell::trace, this, _1, _2, _3));
         runner.run();
 
         _positionalParameters = std::move(savedPositionalParams);
@@ -3776,7 +3795,11 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
         return;
     }
 
-    auto runner = CoreVM::Runner(handler, nullptr, &_globals, std::bind(&Shell::trace, this, _1, _2, _3));
+    auto runner = CoreVM::Runner(handler,
+                                 nullptr,
+                                 &_globals,
+                                 CoreVM::RuntimeConfig::defaultConfig(),
+                                 std::bind(&Shell::trace, this, _1, _2, _3));
     runner.run();
     context.setResult(CoreVM::CoreNumber(_exitCode));
 }
@@ -4660,6 +4683,23 @@ std::vector<std::string>& Shell::cmdBuilderArgs()
     if (_cmdBuilderStack.empty())
         _cmdBuilderStack.emplace_back();
     return _cmdBuilderStack.back();
+}
+
+void Shell::builtinPrint(CoreVM::Params& context)
+{
+    std::string const& text = context.getString(1);
+    NativeHandle const outputFd =
+        _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+    [[maybe_unused]] auto written = write(outputFd, text.data(), text.size());
+}
+
+void Shell::builtinPrintln(CoreVM::Params& context)
+{
+    std::string const& text = context.getString(1);
+    NativeHandle const outputFd =
+        _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+    [[maybe_unused]] auto written = write(outputFd, text.data(), text.size());
+    written = write(outputFd, "\n", 1);
 }
 
 } // namespace endo

@@ -55,10 +55,12 @@ void TargetCodeGenerator::generate(IRHandler* handler)
 
     std::unordered_map<BasicBlock*, size_t> basicBlockEntryPoints;
 
-    // Reset stack and alloca tracking for this handler
+    // Reset stack, alloca, and location tracking for this handler
     _stack.clear();
     _allocaIndices.clear();
     _allocaCount = 0;
+    _locationTable.clear();
+    _lastRecordedLocation = {};
 
     // First pass: assign fixed indices to all allocas.
     // This ensures allocas have consistent indices regardless of instruction order.
@@ -85,13 +87,17 @@ void TargetCodeGenerator::generate(IRHandler* handler)
         {
             isFirstBlock = false;
         }
-        else if (_allocaCount > 0)
+        else if (_allocaCount > 0 && _stack.size() > _allocaCount)
         {
             // At block boundaries, reset stack to contain only allocas.
             // Allocas have fixed indices 0..allocaCount-1.
             // Any entries beyond that are temporaries that don't persist across paths.
-            // Only do this when we have allocas - for code without allocas, temporaries
-            // may legitimately flow between blocks.
+            //
+            // Emit DISCARD to pop the physical stack elements AND reset tracking.
+            // This is critical: the physical stack might have leftover values from
+            // predecessor blocks, and we need to clean them up.
+            size_t extraCount = _stack.size() - _allocaCount;
+            emitInstr(Opcode::DISCARD, extraCount);
             while (_stack.size() > _allocaCount)
             {
                 _stack.pop_back();
@@ -101,6 +107,13 @@ void TargetCodeGenerator::generate(IRHandler* handler)
         basicBlockEntryPoints[bb] = getInstructionPointer();
         for (Instr* instr: bb->instructions())
         {
+            // Record source location if it changed (sparse location table)
+            SourceLocation const& loc = instr->sourceLocation();
+            if (!loc.filename.empty() && loc != _lastRecordedLocation)
+            {
+                _locationTable.emplace_back(getInstructionPointer(), loc);
+                _lastRecordedLocation = loc;
+            }
             instr->accept(*this);
         }
     }
@@ -148,6 +161,10 @@ void TargetCodeGenerator::generate(IRHandler* handler)
     _matchHints.clear();
 
     _cp.getHandler(_handlerId).second = std::move(_code);
+
+    // Store the sparse location table for this handler
+    if (!_locationTable.empty())
+        _cp.setHandlerLocationTable(_handlerId, std::move(_locationTable));
 
     // cleanup remaining handler-local work vars
     // COREVM_TRACE("CoreVM: stack depth after handler code generation: {}", _stack.size());
@@ -463,17 +480,23 @@ void TargetCodeGenerator::emitLoad(Value* value)
     COREVM_ASSERT(si != static_cast<size_t>(-1),
                   "BUG: emitLoad: value not yet on the stack but referenced as operand.");
 
-    if (si == getStackPointer() - 1)
+    // If value is at the top of stack AND only used once, we can use it directly
+    if (si == getStackPointer() - 1 && value->useCount() == 1)
         return;
 
     if (value->useCount() == 1)
     {
-        // XXX only used once, so move value to stack top
+        // Only used once, so move value to stack top using STACKROT.
+        // STACKROT moves stack[si] to stack[top] and shifts the rest down.
+        // We must update _stack tracking to match the physical stack order.
         emitInstr(Opcode::STACKROT, si);
+        const Value* v = _stack[si];
+        _stack.erase(_stack.begin() + si);
+        _stack.push_back(v);
         return;
     }
 
-    // XXX duplicate value onto stack top
+    // Value is used multiple times, duplicate it onto stack top
     emitInstr(Opcode::LOAD, si);
     push(value);
 }
@@ -498,19 +521,65 @@ void TargetCodeGenerator::visit(PhiNode& /*phiInstr*/)
 
 void TargetCodeGenerator::visit(CondBrInstr& condBrInstr)
 {
+    // Load condition to top of stack
+    emitLoad(condBrInstr.condition());
+
+    // Now stack is: [allocas...][extras...][condition]
+    // We need to remove extras so successor blocks get: [allocas...]
+    //
+    // Strategy: Move condition down to position _allocaCount, then DISCARD the extras.
+    // STACKROT moves element at given index to top. We need the reverse.
+    // We'll use repeated STACKROTs:
+    // - STACKROT (size-2) moves condition one position down
+    // - Repeat until condition is at _allocaCount
+    // Then DISCARD the extras that are now on top.
+
+    size_t extrasCount = _stack.size() - _allocaCount - 1; // -1 for condition at top
+    if (extrasCount > 0)
+    {
+        // Current: [allocas...][extras...][condition]  (condition at top = index size-1)
+        // Goal:    [allocas...][condition][extras...]  (condition at _allocaCount)
+        //
+        // To move condition from top to _allocaCount:
+        // Repeatedly rotate the second-from-top element to top, which moves condition down.
+        // Each STACKROT (currentCondPos - 1) brings the element below condition to top,
+        // effectively moving condition down by one position.
+
+        size_t conditionPos = _stack.size() - 1;
+        while (conditionPos > _allocaCount)
+        {
+            // STACKROT (conditionPos - 1) brings element at conditionPos-1 to top
+            // shifting condition down by one
+            emitInstr(Opcode::STACKROT, conditionPos - 1);
+            // Update tracking: element at conditionPos-1 moves to top
+            const Value* below = _stack[conditionPos - 1];
+            _stack.erase(_stack.begin() + (conditionPos - 1));
+            _stack.push_back(below);
+            // Condition is now at conditionPos - 1
+            conditionPos--;
+        }
+        // Now: [allocas...][condition][extras...]
+        // Condition is at _allocaCount, extras are at _allocaCount+1 .. size-1
+
+        // Discard extras (they're now on top)
+        emitInstr(Opcode::DISCARD, extrasCount);
+        while (_stack.size() > _allocaCount + 1)
+            _stack.pop_back();
+    }
+
+    // Stack is now: [allocas...][condition]
+    // After JN/JZ pops condition: [allocas...]
+
     if (condBrInstr.getBasicBlock()->isAfter(condBrInstr.trueBlock()))
     {
-        emitLoad(condBrInstr.condition());
         emitCondJump(Opcode::JZ, condBrInstr.falseBlock());
     }
     else if (condBrInstr.getBasicBlock()->isAfter(condBrInstr.falseBlock()))
     {
-        emitLoad(condBrInstr.condition());
         emitCondJump(Opcode::JN, condBrInstr.trueBlock());
     }
     else
     {
-        emitLoad(condBrInstr.condition());
         emitCondJump(Opcode::JN, condBrInstr.trueBlock());
         emitJump(condBrInstr.falseBlock());
     }
@@ -608,6 +677,9 @@ void TargetCodeGenerator::visit(CastInstr& castInstr)
               { LiteralType::IPAddress, Opcode::P2S },
               { LiteralType::Cidr, Opcode::C2S },
               { LiteralType::RegExp, Opcode::R2S },
+              // Dynamic types (Void/Object) are treated as numbers at runtime
+              { LiteralType::Void, Opcode::N2S },
+              { LiteralType::Object, Opcode::N2S },
           } },
         { LiteralType::Number,
           {
@@ -859,7 +931,13 @@ void TargetCodeGenerator::visit(ObjRetainInstr& instr)
 
 void TargetCodeGenerator::visit(ObjReleaseInstr& instr)
 {
-    emitLoad(instr.object());
+    // Load the object from its storage alloca using the fixed alloca index.
+    // This avoids the cross-block value tracking issue where emitLoad() would fail
+    // if the loaded value wasn't in the current block's stack tracking.
+    auto it = _allocaIndices.find(instr.storage());
+    COREVM_ASSERT(it != _allocaIndices.end(), "BUG: ObjReleaseInstr storage not found in alloca indices");
+    emitInstr(Opcode::LOAD, it->second);
+    push(instr.storage()); // Track that we pushed something
     emitInstr(Opcode::ORELEASE);
     changeStack(1, nullptr); // pops the object
 }
@@ -906,6 +984,54 @@ void TargetCodeGenerator::visit(ObjIsTypeInstr& instr)
     emitLoad(instr.object());
     emitInstr(Opcode::OISTYPE, static_cast<Operand>(instr.typeId()->get()));
     changeStack(1, &instr); // replaces object with boolean
+}
+
+void TargetCodeGenerator::visit(VCmpEQInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPEQ);
+    changeStack(2, &instr); // pops two values, pushes boolean result
+}
+
+void TargetCodeGenerator::visit(VCmpNEInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPNE);
+    changeStack(2, &instr);
+}
+
+void TargetCodeGenerator::visit(VCmpLTInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPLT);
+    changeStack(2, &instr);
+}
+
+void TargetCodeGenerator::visit(VCmpLEInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPLE);
+    changeStack(2, &instr);
+}
+
+void TargetCodeGenerator::visit(VCmpGTInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPGT);
+    changeStack(2, &instr);
+}
+
+void TargetCodeGenerator::visit(VCmpGEInstr& instr)
+{
+    emitLoad(instr.lhs());
+    emitLoad(instr.rhs());
+    emitInstr(Opcode::VCMPGE);
+    changeStack(2, &instr);
 }
 
 // }}}

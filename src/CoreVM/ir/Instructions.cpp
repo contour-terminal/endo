@@ -428,7 +428,7 @@ std::string ObjReleaseInstr::to_string() const
 
 std::unique_ptr<Instr> ObjReleaseInstr::clone()
 {
-    return std::make_unique<ObjReleaseInstr>(object(), name());
+    return std::make_unique<ObjReleaseInstr>(storage(), name());
 }
 
 void ObjReleaseInstr::accept(InstructionVisitor& v)
@@ -528,6 +528,102 @@ std::unique_ptr<Instr> ObjIsTypeInstr::clone()
 }
 
 void ObjIsTypeInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpEQInstr
+std::string VCmpEQInstr::to_string() const
+{
+    return formatOne("vcmpeq");
+}
+
+std::unique_ptr<Instr> VCmpEQInstr::clone()
+{
+    return std::make_unique<VCmpEQInstr>(lhs(), rhs(), name());
+}
+
+void VCmpEQInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpNEInstr
+std::string VCmpNEInstr::to_string() const
+{
+    return formatOne("vcmpne");
+}
+
+std::unique_ptr<Instr> VCmpNEInstr::clone()
+{
+    return std::make_unique<VCmpNEInstr>(lhs(), rhs(), name());
+}
+
+void VCmpNEInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpLTInstr
+std::string VCmpLTInstr::to_string() const
+{
+    return formatOne("vcmplt");
+}
+
+std::unique_ptr<Instr> VCmpLTInstr::clone()
+{
+    return std::make_unique<VCmpLTInstr>(lhs(), rhs(), name());
+}
+
+void VCmpLTInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpLEInstr
+std::string VCmpLEInstr::to_string() const
+{
+    return formatOne("vcmple");
+}
+
+std::unique_ptr<Instr> VCmpLEInstr::clone()
+{
+    return std::make_unique<VCmpLEInstr>(lhs(), rhs(), name());
+}
+
+void VCmpLEInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpGTInstr
+std::string VCmpGTInstr::to_string() const
+{
+    return formatOne("vcmpgt");
+}
+
+std::unique_ptr<Instr> VCmpGTInstr::clone()
+{
+    return std::make_unique<VCmpGTInstr>(lhs(), rhs(), name());
+}
+
+void VCmpGTInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// VCmpGEInstr
+std::string VCmpGEInstr::to_string() const
+{
+    return formatOne("vcmpge");
+}
+
+std::unique_ptr<Instr> VCmpGEInstr::clone()
+{
+    return std::make_unique<VCmpGEInstr>(lhs(), rhs(), name());
+}
+
+void VCmpGEInstr::accept(InstructionVisitor& v)
 {
     v.visit(*this);
 }

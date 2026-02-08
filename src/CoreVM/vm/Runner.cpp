@@ -146,14 +146,20 @@ void Runner::Stack::rotate(size_t n)
 // }}}
 static CoreString* t = nullptr;
 
-Runner::Runner(const Handler* handler, void* userdata, Globals* globals, TraceLogger traceLogger):
-    Runner { handler, userdata, globals, NoQuota, traceLogger }
+Runner::Runner(
+    const Handler* handler, void* userdata, Globals* globals, RuntimeConfig config, TraceLogger traceLogger):
+    Runner { handler, userdata, globals, NoQuota, std::move(config), std::move(traceLogger) }
 {
 }
 
-Runner::Runner(
-    const Handler* handler, void* userdata, Globals* globals, Quota quota, TraceLogger traceLogger):
+Runner::Runner(const Handler* handler,
+               void* userdata,
+               Globals* globals,
+               Quota quota,
+               RuntimeConfig config,
+               TraceLogger traceLogger):
     _quota { quota },
+    _config { std::move(config) },
     _handler(handler),
     _traceLogger { traceLogger ? std::move(traceLogger) : [](Instruction, size_t, size_t) {} },
     _program(handler->program()),
@@ -255,7 +261,25 @@ void Runner::freeObject(TypedObject* obj)
 bool Runner::run()
 {
     assert(_state == Inactive);
-    return loop();
+    auto result = runWithResult();
+    if (!result)
+    {
+        // Print error to stderr and return non-zero exit
+        std::println(stderr, "{}", result.error().format());
+        return true;
+    }
+    return result.value();
+}
+
+Runner::RunResult Runner::runWithResult()
+{
+    assert(_state == Inactive);
+    return loopWithResult();
+}
+
+RuntimeError Runner::makeError(std::string message) const
+{
+    return RuntimeError { std::move(message), _handler->locationOf(_ip) };
 }
 
 void Runner::suspend()
@@ -267,7 +291,13 @@ void Runner::suspend()
 bool Runner::resume()
 {
     assert(_state == Suspended);
-    return loop();
+    auto result = loopWithResult();
+    if (!result)
+    {
+        std::println(stderr, "{}", result.error().format());
+        return true;
+    }
+    return result.value();
 }
 
 void Runner::rewind()
@@ -275,7 +305,7 @@ void Runner::rewind()
     _ip = 0;
 }
 
-bool Runner::loop()
+Runner::RunResult Runner::loopWithResult()
 {
 // {{{ jump table
 #if !defined(COREVM_VM_LOOP_SWITCH)
@@ -391,6 +421,14 @@ bool Runner::loop()
         label(OSETSLOT),
         label(OTYPEID),
         label(OISTYPE),
+
+        // dynamic value comparison
+        label(VCMPEQ),
+        label(VCMPNE),
+        label(VCMPLT),
+        label(VCMPLE),
+        label(VCMPGT),
+        label(VCMPGE),
     };
 #endif
 // }}}
@@ -593,14 +631,26 @@ bool Runner::loop()
 
     instr(NDIV)
     {
-        SP(-2) = getNumber(-2) / getNumber(-1);
+        CoreNumber divisor = getNumber(-1);
+        if (_config.typeChecksEnabled && divisor == 0)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("division by zero"));
+        }
+        SP(-2) = getNumber(-2) / divisor;
         pop();
         next;
     }
 
     instr(NREM)
     {
-        SP(-2) = getNumber(-2) % getNumber(-1);
+        CoreNumber divisor = getNumber(-1);
+        if (_config.typeChecksEnabled && divisor == 0)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("division by zero"));
+        }
+        SP(-2) = getNumber(-2) % divisor;
         pop();
         next;
     }
@@ -1014,6 +1064,11 @@ bool Runner::loop()
     instr(OALLOC)
     {
         // A = typeId
+        if (_config.typeChecksEnabled && !typeRegistry().get(A))
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError(std::format("invalid type ID: {}", A)));
+        }
         TypedObject* obj = allocObject(A);
         pushObject(obj);
         next;
@@ -1023,6 +1078,11 @@ bool Runner::loop()
     {
         // Increment refcount of object at top of stack
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in ORETAIN"));
+        }
         retainObject(obj);
         next;
     }
@@ -1032,6 +1092,11 @@ bool Runner::loop()
         // Decrement refcount, free if zero, pop
         TypedObject* obj = getObject(-1);
         pop();
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in ORELEASE"));
+        }
         if (releaseObject(obj))
         {
             freeObject(obj);
@@ -1043,6 +1108,11 @@ bool Runner::loop()
     {
         // Pop object, push its tag
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OGETTAG"));
+        }
         SP(-1) = obj->tag;
         next;
     }
@@ -1053,6 +1123,11 @@ bool Runner::loop()
         CoreNumber tag = getNumber(-1);
         pop();
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OSETTAG"));
+        }
         obj->tag = static_cast<uint8_t>(tag);
         // Object stays on stack
         next;
@@ -1063,6 +1138,17 @@ bool Runner::loop()
         // A = slot index
         // Pop object, push slot[A]
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OGETSLOT"));
+        }
+        if (_config.typeChecksEnabled && A >= obj->type->slotCount)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError(
+                std::format("slot index {} out of bounds (object has {} slots)", A, obj->type->slotCount)));
+        }
         SP(-1) = obj->getSlot(static_cast<uint8_t>(A));
         next;
     }
@@ -1073,6 +1159,17 @@ bool Runner::loop()
         // Pop value, pop object, set slot[A] = value, push object
         Value value = pop();
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OSETSLOT"));
+        }
+        if (_config.typeChecksEnabled && A >= obj->type->slotCount)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError(
+                std::format("slot index {} out of bounds (object has {} slots)", A, obj->type->slotCount)));
+        }
         obj->setSlot(static_cast<uint8_t>(A), value);
         // Object stays on stack
         next;
@@ -1082,6 +1179,11 @@ bool Runner::loop()
     {
         // Pop object, push type ID
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OTYPEID"));
+        }
         SP(-1) = obj->type->id;
         next;
     }
@@ -1091,7 +1193,68 @@ bool Runner::loop()
         // A = typeId to check
         // Pop object, push boolean (obj.typeId == A)
         TypedObject* obj = getObject(-1);
+        if (_config.typeChecksEnabled && !obj)
+        {
+            _ip = get_pc();
+            return std::unexpected(makeError("null object dereference in OISTYPE"));
+        }
         SP(-1) = (obj->type->id == A) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPEQ)
+    {
+        // Dynamic value comparison - compare two values as numbers
+        // Pop B, pop A, push (A == B)
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a == b) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPNE)
+    {
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a != b) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPLT)
+    {
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a < b) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPLE)
+    {
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a <= b) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPGT)
+    {
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a > b) ? 1 : 0;
+        next;
+    }
+
+    instr(VCMPGE)
+    {
+        CoreNumber b = getNumber(-1);
+        CoreNumber a = getNumber(-2);
+        pop();
+        SP(-1) = (a >= b) ? 1 : 0;
         next;
     }
     // }}}
