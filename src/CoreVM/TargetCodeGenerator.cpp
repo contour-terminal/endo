@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/util.hpp>
-
 #include <CoreVM/util/assert.hpp>
 
 #include <array>
@@ -56,9 +55,49 @@ void TargetCodeGenerator::generate(IRHandler* handler)
 
     std::unordered_map<BasicBlock*, size_t> basicBlockEntryPoints;
 
+    // Reset stack and alloca tracking for this handler
+    _stack.clear();
+    _allocaIndices.clear();
+    _allocaCount = 0;
+
+    // First pass: assign fixed indices to all allocas.
+    // This ensures allocas have consistent indices regardless of instruction order.
+    for (BasicBlock* bb: handler->basicBlocks())
+    {
+        for (Instr* instr: bb->instructions())
+        {
+            if (auto* allocaInstr = dynamic_cast<AllocaInstr*>(instr))
+            {
+                if (allocaInstr->getBasicBlock()->getHandler()->name() != GLOBAL_SCOPE_INIT_NAME)
+                {
+                    _allocaIndices[allocaInstr] = _allocaCount++;
+                }
+            }
+        }
+    }
+
+    bool isFirstBlock = true;
+
     // generate code for all basic blocks, sequentially
     for (BasicBlock* bb: handler->basicBlocks())
     {
+        if (isFirstBlock)
+        {
+            isFirstBlock = false;
+        }
+        else if (_allocaCount > 0)
+        {
+            // At block boundaries, reset stack to contain only allocas.
+            // Allocas have fixed indices 0..allocaCount-1.
+            // Any entries beyond that are temporaries that don't persist across paths.
+            // Only do this when we have allocas - for code without allocas, temporaries
+            // may legitimately flow between blocks.
+            while (_stack.size() > _allocaCount)
+            {
+                _stack.pop_back();
+            }
+        }
+
         basicBlockEntryPoints[bb] = getInstructionPointer();
         for (Instr* instr: bb->instructions())
         {
@@ -166,6 +205,12 @@ void TargetCodeGenerator::emitUnary(Instr& unaryInstr, Opcode opcode)
 
 StackPointer TargetCodeGenerator::getStackPointer(const Value* value)
 {
+    // First check if this is an alloca with a pre-assigned index
+    auto it = _allocaIndices.find(value);
+    if (it != _allocaIndices.end())
+        return it->second;
+
+    // Otherwise search in the current stack
     for (size_t i = 0, e = _stack.size(); i != e; ++i)
         if (_stack[i] == value)
             return i;
@@ -188,7 +233,9 @@ void TargetCodeGenerator::pop(size_t count)
     COREVM_ASSERT(count <= _stack.size(), "CoreVM: BUG: stack smaller than amount of elements to pop.");
 
     for (size_t i = 0; i != count; i++)
+    {
         _stack.pop_back();
+    }
 }
 
 void TargetCodeGenerator::push(const Value* alias)
@@ -212,6 +259,7 @@ void TargetCodeGenerator::visit(AllocaInstr& allocaInstr)
     else
     {
         emitInstr(Opcode::ALLOCA, 1);
+        // Push the alloca to the stack. Its index was pre-assigned in the first pass.
         push(&allocaInstr);
     }
 }
@@ -480,7 +528,18 @@ void TargetCodeGenerator::visit(BrInstr& brInstr)
 
 void TargetCodeGenerator::visit(RetInstr& retInstr)
 {
-    emitInstr(Opcode::EXIT, getConstantInt(retInstr.operands()[0]));
+    Value* operand = retInstr.operands()[0];
+    if (auto* constInt = dynamic_cast<ConstantInt*>(operand))
+    {
+        // Constant exit code - use EXIT with immediate value
+        emitInstr(Opcode::EXIT, constInt->get());
+    }
+    else
+    {
+        // Dynamic exit code - load value and use EXITPOP
+        emitLoad(operand);
+        emitInstr(Opcode::EXITPOP);
+    }
 }
 
 void TargetCodeGenerator::visit(MatchInstr& matchInstr)

@@ -134,6 +134,26 @@ Instr* BasicBlock::push_back(std::unique_ptr<Instr> instr)
     return _code.back().get();
 }
 
+Instr* BasicBlock::insertBeforeTerminator(std::unique_ptr<Instr> instr)
+{
+    assert(instr != nullptr);
+    assert(instr->getBasicBlock() == nullptr);
+
+    instr->setParent(this);
+
+    // If there's no terminator or the block is empty, just push_back
+    if (_code.empty() || !dynamic_cast<TerminateInstr*>(_code.back().get()))
+    {
+        _code.push_back(std::move(instr));
+        return _code.back().get();
+    }
+
+    // Insert before the terminator (which is at the back)
+    auto it = _code.end() - 1;
+    auto inserted = _code.insert(it, std::move(instr));
+    return inserted->get();
+}
+
 void BasicBlock::merge_back(BasicBlock* bb)
 {
     assert(getTerminator() == nullptr);

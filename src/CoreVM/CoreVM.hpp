@@ -2105,6 +2105,12 @@ class BasicBlock: public Value
     Instr* push_back(std::unique_ptr<Instr> instr);
 
     /**
+     * Inserts an instruction before the terminator (if present) or at the end.
+     * This is useful for inserting allocas into the entry block after it already has a branch.
+     */
+    Instr* insertBeforeTerminator(std::unique_ptr<Instr> instr);
+
+    /**
      * Removes given instruction from this basic block.
      *
      * The basic block will pass ownership of the given instruction to the caller.
@@ -2724,6 +2730,14 @@ class TargetCodeGenerator: public InstructionVisitor
 
     /** target stack during target code generation */
     std::deque<const Value*> _stack;
+
+    /** Maps alloca instructions to their fixed stack indices.
+     *  Allocas are assigned indices sequentially as they're encountered.
+     */
+    std::unordered_map<const Value*, size_t> _allocaIndices;
+
+    /** Number of allocas seen so far (also the next alloca index) */
+    size_t _allocaCount = 0;
 
     /** global scope mapping */
     std::deque<const Value*> _globals;
