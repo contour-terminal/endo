@@ -187,6 +187,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
         ast::Expr const* body;               ///< Function body expression (for inlining)
         bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
         bool isRecursive = false;            ///< Whether function is declared with `let rec`
+        /// Captured variable bindings from the enclosing scope at function creation time.
+        /// Maps variable names to their storage (entry-block allocas).
+        std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
 
         size_t arity() const { return parameters.size(); }
     };
@@ -196,6 +199,11 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     /// Analyzes a function body to determine if it returns Result or Option type
     [[nodiscard]] bool isBodyResultOrOption(ast::Expr const* body) const;
+
+    /// Collects free variables referenced in @p body that are not in @p boundNames
+    /// and are currently accessible in the F# variable scope chain.
+    [[nodiscard]] std::unordered_map<std::string, CoreVM::Value*> collectFreeVariables(
+        ast::Expr const* body, std::vector<std::string> const& boundNames) const;
 
     // F# function context for error propagation (? operator)
     // Tracks return block and storage for early returns from try expressions

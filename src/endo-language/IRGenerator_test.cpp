@@ -1040,3 +1040,82 @@ TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
         generatesIRSuccessfully("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
                                 "let r = factorial 5"));
 }
+
+// =============================================================================
+// Closure Tests (capturing outer scope variables)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_closure_simple")
+{
+    // Lambda captures outer variable
+    CHECK(executeSourceAndGetOutput("let n = 10; let f = fun x -> x + n; print (f 5)") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_closure_multiplier")
+{
+    // Closure over a multiplier variable
+    CHECK(executeSourceAndGetOutput("let m = 3; let scale = fun x -> x * m; print (scale 7)") == "21");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_closure_nested")
+{
+    // Nested closure: inner lambda captures from outer lambda's scope
+    CHECK(executeSourceAndGetOutput(
+              "let a = 1; let f = fun x -> (fun y -> x + y + a); let g = f 10; print (g 5)")
+          == "16");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_closure_named_function")
+{
+    // Named function (let f x = ...) captures outer variable
+    CHECK(executeSourceAndGetOutput("let offset = 100; let addOffset x = x + offset; print (addOffset 5)")
+          == "105");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_closure_in_pipeline")
+{
+    // Closure used in pipeline
+    CHECK(executeSourceAndGetOutput("let n = 10; let add_n = fun x -> x + n; print (5 |> add_n)") == "15");
+}
+
+// =============================================================================
+// Partial Application Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_simple")
+{
+    // Partial application of a 2-arg function
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; let add5 = add 5; print (add5 10)") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_three_params")
+{
+    // Chained partial application of a 3-arg function
+    CHECK(executeSourceAndGetOutput(
+              "let mul x y z = x * y * z; let mul2 = mul 2; let mul2x3 = mul2 3; print (mul2x3 4)")
+          == "24");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_pipeline")
+{
+    // Partial application in pipeline: value |> func arg
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; print (10 |> add 5)") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_of_partial")
+{
+    // Function alias of a partially applied function
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; let f = add 1; let g = f; print (g 2)") == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_function_alias")
+{
+    // Zero-arg partial application (function aliasing): let f = add
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; let f = add; print (f 3 4)") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_partial_over_application_error")
+{
+    // Over-application should fail
+    CHECK_FALSE(generatesIRSuccessfully("let add x y = x + y; let r = add 1 2 3"));
+}

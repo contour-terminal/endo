@@ -3,11 +3,13 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <functional>
 #include <typeinfo>
 
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
 #include "DiagnosticsAdapter.hpp"
+#include "Pattern.hpp"
 #include "PatternIRGenerator.hpp"
 #include "ScopedLogger.hpp"
 
@@ -190,6 +192,160 @@ bool IRGenerator::isBodyResultOrOption(ast::Expr const* body) const
 std::string IRGenerator::generateLambdaName()
 {
     return std::format("__lambda_{}", _lambdaCounter++);
+}
+
+std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
+    ast::Expr const* body, std::vector<std::string> const& boundNames) const
+{
+    std::unordered_map<std::string, CoreVM::Value*> freeVars;
+
+    // Recursive walker as a lambda (avoids needing a full Visitor subclass)
+    std::function<void(ast::Expr const*, std::vector<std::string> const&)> walk =
+        [&](ast::Expr const* expr, std::vector<std::string> const& bound) {
+            if (!expr)
+                return;
+
+            if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(expr))
+            {
+                // Check if the identifier is already bound (parameter or locally-scoped)
+                if (std::ranges::find(bound, ident->name) != bound.end())
+                    return;
+                // Check if it's a registered function name
+                if (lookupFSharpFunction(ident->name) != nullptr)
+                    return;
+                // Check if it's accessible in the current variable scope
+                if (auto* storage = lookupFSharpVariable(ident->name))
+                    freeVars[ident->name] = storage;
+                return;
+            }
+
+            if (auto const* bin = dynamic_cast<ast::BinaryExpr const*>(expr))
+            {
+                walk(bin->left.get(), bound);
+                walk(bin->right.get(), bound);
+                return;
+            }
+
+            if (auto const* unary = dynamic_cast<ast::UnaryExpr const*>(expr))
+            {
+                walk(unary->operand.get(), bound);
+                return;
+            }
+
+            if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(expr))
+            {
+                walk(paren->inner.get(), bound);
+                return;
+            }
+
+            if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(expr))
+            {
+                walk(app->function.get(), bound);
+                walk(app->argument.get(), bound);
+                return;
+            }
+
+            if (auto const* pipe = dynamic_cast<ast::PipelineExpr const*>(expr))
+            {
+                walk(pipe->value.get(), bound);
+                walk(pipe->function.get(), bound);
+                return;
+            }
+
+            if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(expr))
+            {
+                // Lambda parameters shadow outer bindings within the lambda body
+                auto innerBound = bound;
+                innerBound.insert(innerBound.end(), lambda->parameters.begin(), lambda->parameters.end());
+                walk(lambda->body.get(), innerBound);
+                return;
+            }
+
+            if (auto const* match = dynamic_cast<ast::MatchExpr const*>(expr))
+            {
+                walk(match->scrutinee.get(), bound);
+                for (auto const& arm: match->arms)
+                {
+                    // Pattern bindings shadow outer names within the arm body and guard
+                    auto armBound = bound;
+                    auto bindings = pattern::collectBindings(*arm.pattern);
+                    armBound.insert(armBound.end(), bindings.begin(), bindings.end());
+                    if (arm.guard)
+                        walk(arm.guard.get(), armBound);
+                    walk(arm.body.get(), armBound);
+                }
+                return;
+            }
+
+            if (auto const* opt = dynamic_cast<ast::OptionExpr const*>(expr))
+            {
+                if (opt->value)
+                    walk(opt->value.get(), bound);
+                return;
+            }
+
+            if (auto const* res = dynamic_cast<ast::ResultExpr const*>(expr))
+            {
+                if (res->payload)
+                    walk(res->payload.get(), bound);
+                return;
+            }
+
+            if (auto const* tryExpr = dynamic_cast<ast::TryExpr const*>(expr))
+            {
+                walk(tryExpr->operand.get(), bound);
+                return;
+            }
+
+            if (auto const* tryWith = dynamic_cast<ast::TryWithExpr const*>(expr))
+            {
+                walk(tryWith->body.get(), bound);
+                for (auto const& handler: tryWith->handlers)
+                {
+                    auto handlerBound = bound;
+                    auto bindings = pattern::collectBindings(*handler.pattern);
+                    handlerBound.insert(handlerBound.end(), bindings.begin(), bindings.end());
+                    if (handler.guard)
+                        walk(handler.guard.get(), handlerBound);
+                    walk(handler.body.get(), handlerBound);
+                }
+                return;
+            }
+
+            if (auto const* list = dynamic_cast<ast::ListExpr const*>(expr))
+            {
+                for (auto const& elem: list->elements)
+                    walk(elem.get(), bound);
+                return;
+            }
+
+            if (auto const* range = dynamic_cast<ast::ListRangeExpr const*>(expr))
+            {
+                walk(range->start.get(), bound);
+                if (range->step)
+                    walk(range->step.get(), bound);
+                walk(range->end.get(), bound);
+                return;
+            }
+
+            if (auto const* comp = dynamic_cast<ast::ListComprehensionExpr const*>(expr))
+            {
+                walk(comp->source.get(), bound);
+                // The iteration variable is bound within filter and body
+                auto innerBound = bound;
+                innerBound.push_back(comp->variable);
+                if (comp->filter)
+                    walk(comp->filter.get(), innerBound);
+                walk(comp->body.get(), innerBound);
+                return;
+            }
+
+            // Literal types (IntLiteralExpr, FloatLiteralExpr, BoolLiteralExpr) have no free variables.
+            // ShellCommandExpr has no F# free variables.
+        };
+
+    walk(body, boundNames);
+    return freeVars;
 }
 
 CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
@@ -1740,6 +1896,13 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.body = node.value.get(); // Store pointer to body AST for inlining
         func.returnsResultOrOption = isBodyResultOrOption(func.body);
         func.isRecursive = node.isRecursive;
+
+        // Capture free variables from the enclosing scope
+        auto allBound = node.parameters;
+        if (node.isRecursive)
+            allBound.push_back(node.name);
+        func.capturedBindings = collectFreeVariables(func.body, allBound);
+
         registerFSharpFunction(node.name, std::move(func));
 
         _result = nullptr;
@@ -1755,6 +1918,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.parameters = lambda->parameters;
         func.body = lambda->body.get();
         func.returnsResultOrOption = isBodyResultOrOption(func.body);
+        func.capturedBindings = collectFreeVariables(func.body, func.parameters);
         registerFSharpFunction(node.name, std::move(func));
         _result = nullptr;
         return;
@@ -1772,6 +1936,22 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     {
         reportTypeError("Failed to generate code for let binding value");
         return;
+    }
+
+    // Check if the value is a function reference (string constant naming a function).
+    // This handles: let add5 = add 5  (partial application returns "__lambda_0")
+    //               let g = f          (function-as-value returns "f")
+    if (value->type() == CoreVM::LiteralType::String)
+    {
+        if (auto* strConst = dynamic_cast<CoreVM::ConstantString*>(value))
+        {
+            if (auto const* srcFunc = lookupFSharpFunction(strConst->get()))
+            {
+                registerFSharpFunction(node.name, *srcFunc);
+                _result = nullptr;
+                return;
+            }
+        }
     }
 
     // Determine the type for storage
@@ -1956,14 +2136,117 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
+        lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
+    else if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(funcExpr))
+    {
+        // Partial application in pipeline: value |> func arg
+        // Flatten the application to get base function + explicit args
+        std::vector<ast::Expr const*> explicitArgExprs;
+        ast::Expr const* base = funcExpr;
+        while (auto const* innerApp = dynamic_cast<ast::ApplicationExpr const*>(base))
+        {
+            explicitArgExprs.push_back(innerApp->argument.get());
+            base = innerApp->function.get();
+        }
+        std::reverse(explicitArgExprs.begin(), explicitArgExprs.end());
+
+        // Unwrap parens
+        while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(base))
+            base = paren->inner.get();
+
+        auto const* baseIdent = dynamic_cast<ast::IdentifierExpr const*>(base);
+        if (!baseIdent)
+        {
+            reportTypeError("Pipeline partial application requires a named function");
+            return;
+        }
+
+        auto const* baseFunc = lookupFSharpFunction(baseIdent->name);
+        if (!baseFunc)
+        {
+            reportTypeError("Undefined function in pipeline: {}", std::string_view(baseIdent->name));
+            return;
+        }
+
+        // Total args = explicit args + piped value (last parameter)
+        if (explicitArgExprs.size() + 1 != baseFunc->arity())
+        {
+            reportTypeError("Pipeline function '{}' expects {} arguments, got {} (including piped value)",
+                            std::string_view(baseIdent->name),
+                            baseFunc->arity(),
+                            explicitArgExprs.size() + 1);
+            return;
+        }
+
+        // Evaluate explicit args
+        std::vector<CoreVM::Value*> allArgs;
+        for (auto const* argExpr: explicitArgExprs)
+        {
+            auto* argVal = codegen(argExpr);
+            if (!argVal)
+            {
+                reportTypeError("Failed to evaluate pipeline argument");
+                return;
+            }
+            allArgs.push_back(argVal);
+        }
+        // Piped value is the last argument
+        allArgs.push_back(value);
+
+        // Inline the function body with all arguments
+        funcName = baseIdent->name;
+        func = baseFunc;
+
+        pushFSharpScope();
+
+        // Re-bind captured variables
+        for (auto const& [name, storage]: func->capturedBindings)
+            bindFSharpVariable(name, storage);
+
+        CoreVM::BasicBlock* returnBlock = nullptr;
+        CoreVM::AllocaInstr* returnStorage = nullptr;
+        if (func->returnsResultOrOption)
+        {
+            returnBlock = createBlock("pipe.return");
+            returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
+            pushFSharpFunctionContext(returnBlock, returnStorage, true);
+        }
+
+        for (size_t i = 0; i < func->parameters.size(); ++i)
+        {
+            auto storageType = allArgs[i]->type();
+            auto* paramStorage = createAlloca(storageType, get(CoreVM::CoreNumber(1)), func->parameters[i]);
+            createStore(paramStorage, allArgs[i], func->parameters[i]);
+            bindFSharpVariable(func->parameters[i], paramStorage);
+        }
+
+        auto* bodyResult = codegen(func->body);
+
+        if (func->returnsResultOrOption)
+        {
+            if (bodyResult)
+            {
+                createStore(returnStorage, bodyResult, "store.result");
+                createBr(returnBlock);
+            }
+            setInsertPoint(returnBlock);
+            _result = createLoad(returnStorage, "load.result");
+            popFSharpFunctionContext();
+        }
+        else
+        {
+            _result = bodyResult;
+        }
+
+        popFSharpScope();
+        return;
+    }
     else
     {
-        // Could be a partial application like (add 1) - not yet supported
-        reportTypeError(
-            "Pipeline function must be an identifier or lambda (partial application not yet supported)");
+        reportTypeError("Pipeline function must be an identifier, lambda, or partial application");
         return;
     }
 
@@ -2000,6 +2283,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         setInsertPoint(entryBlock);
 
         pushFSharpScope();
+        for (auto const& [capName, capStorage]: func->capturedBindings)
+            bindFSharpVariable(capName, capStorage);
         bindFSharpVariable(func->parameters[0], paramAlloca);
 
         auto* bodyResult = codegen(func->body);
@@ -2020,6 +2305,10 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Non-recursive: inline the function body with the piped value as argument
     pushFSharpScope();
+
+    // Re-bind captured variables from the closure
+    for (auto const& [capName, capStorage]: func->capturedBindings)
+        bindFSharpVariable(capName, capStorage);
 
     // Only set up return infrastructure for functions that return Result/Option
     CoreVM::BasicBlock* returnBlock = nullptr;
@@ -2142,6 +2431,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
+        lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
@@ -2151,13 +2441,39 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         return;
     }
 
-    // Check arity
-    if (args.size() != func->arity())
+    // Check arity: over-application is an error, under-application creates partial application
+    if (args.size() > func->arity())
     {
         reportTypeError("Function '{}' expects {} arguments, got {}",
                         std::string_view(funcName),
                         func->arity(),
                         args.size());
+        return;
+    }
+
+    if (args.size() < func->arity())
+    {
+        // Partial application: create a new function with remaining parameters
+        std::unordered_map<std::string, CoreVM::Value*> newCaptures = func->capturedBindings;
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            auto const& paramName = func->parameters[i];
+            auto* alloca = createAllocaInEntryBlock(args[i]->type(), "partial." + paramName);
+            createStore(alloca, args[i], "partial.store." + paramName);
+            newCaptures[paramName] = alloca;
+        }
+
+        auto partialName = generateLambdaName();
+        FSharpFunction partialFunc;
+        partialFunc.parameters = { func->parameters.begin() + static_cast<ptrdiff_t>(args.size()),
+                                   func->parameters.end() };
+        partialFunc.body = func->body;
+        partialFunc.returnsResultOrOption = func->returnsResultOrOption;
+        partialFunc.isRecursive = false;
+        partialFunc.capturedBindings = std::move(newCaptures);
+
+        registerFSharpFunction(partialName, std::move(partialFunc));
+        _result = get(partialName);
         return;
     }
 
@@ -2211,8 +2527,10 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         createBr(entryBlock);
         setInsertPoint(entryBlock);
 
-        // Push scope and bind parameters from allocas
+        // Push scope and bind captures and parameters from allocas
         pushFSharpScope();
+        for (auto const& [capName, capStorage]: func->capturedBindings)
+            bindFSharpVariable(capName, capStorage);
         for (size_t i = 0; i < func->parameters.size(); ++i)
             bindFSharpVariable(func->parameters[i], paramAllocas[i]);
 
@@ -2239,13 +2557,18 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     // Non-recursive function: inline the function body
     // 1. Push a new scope for the function call
-    // 2. Set up return infrastructure for ? operator (only if function returns Result/Option)
-    // 3. Bind arguments to parameters
-    // 4. Evaluate the function body
-    // 5. Handle normal return path and merge with early returns (if applicable)
-    // 6. Pop scope and return result
+    // 2. Re-bind captured variables from the closure
+    // 3. Set up return infrastructure for ? operator (only if function returns Result/Option)
+    // 4. Bind arguments to parameters
+    // 5. Evaluate the function body
+    // 6. Handle normal return path and merge with early returns (if applicable)
+    // 7. Pop scope and return result
 
     pushFSharpScope();
+
+    // Re-bind captured variables from the closure
+    for (auto const& [capName, capStorage]: func->capturedBindings)
+        bindFSharpVariable(capName, capStorage);
 
     // Only set up return infrastructure for functions that return Result/Option
     // This is needed for the ? operator to propagate errors
@@ -2304,6 +2627,12 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     CoreVM::Value* storage = lookupFSharpVariable(node.name);
     if (!storage)
     {
+        // Fall back to function name lookup (function-as-value)
+        if (lookupFSharpFunction(node.name))
+        {
+            _result = get(node.name);
+            return;
+        }
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
         return;
     }
@@ -2351,6 +2680,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     func.parameters = node.parameters;
     func.body = node.body.get();
     func.returnsResultOrOption = isBodyResultOrOption(func.body);
+    func.capturedBindings = collectFreeVariables(func.body, func.parameters);
     registerFSharpFunction(lambdaName, std::move(func));
 
     // Store the lambda name in a way that can be retrieved by the calling context.
