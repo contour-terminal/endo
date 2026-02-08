@@ -869,4 +869,14 @@ void ASTPrinter::visit(TryWithExpr const& node)
     }
 }
 
+void ASTPrinter::visit(TryFinallyExpr const& node)
+{
+    _result += "try ";
+    if (node.body)
+        node.body->accept(*this);
+    _result += " finally ";
+    if (node.finallyExpr)
+        node.finallyExpr->accept(*this);
+}
+
 } // namespace endo::ast

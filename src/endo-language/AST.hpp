@@ -1352,6 +1352,24 @@ struct TryWithExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Try-finally expression: `try expr finally cleanup`
+///
+/// Evaluates body, then always evaluates finallyExpr for cleanup.
+/// The expression result is the body's value; finallyExpr result is discarded.
+/// If `?` triggers an early return inside body, finallyExpr still runs before propagation.
+struct TryFinallyExpr final: public Expr
+{
+    std::unique_ptr<Expr> body;        ///< Expression to try
+    std::unique_ptr<Expr> finallyExpr; ///< Cleanup expression (always runs, result discarded)
+
+    TryFinallyExpr(std::unique_ptr<Expr> b, std::unique_ptr<Expr> f):
+        body(std::move(b)), finallyExpr(std::move(f))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // F# Style - Deferred Features (Documented)
 // ============================================================================

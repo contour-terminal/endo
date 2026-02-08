@@ -137,7 +137,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Error propagation: `expr?`
 - [x] Try-with expression: `try expr with | Error e -> handler`
 - [x] Pattern matching on errors
-- [ ] Try-finally: `try ... finally cleanup`
+- [x] Try-finally: `try ... finally cleanup`
 - [ ] Option combinators: `.map()`, `.bind()`, `.defaultValue()`
 
 ## Control Flow

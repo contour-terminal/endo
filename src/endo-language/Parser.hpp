@@ -113,7 +113,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpPostfix();     // postfix ? (error propagation)
     std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ..., & command
     std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
-    std::unique_ptr<ast::Expr> parseTryWith();           // try expr with | pattern -> handler | ...
+    std::unique_ptr<ast::Expr> parseTryWith();           // try expr with ... | try expr finally ...
 
     // Pattern parsing for match expressions
     // Grammar: pattern ::= or_pattern ('when' expr)?

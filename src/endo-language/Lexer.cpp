@@ -54,6 +54,8 @@ namespace
         // F# error handling keywords
         if (literal == "try")
             return Token::Try;
+        if (literal == "finally")
+            return Token::Finally;
 
         return Token::Identifier;
     }

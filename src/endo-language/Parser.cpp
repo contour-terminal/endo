@@ -2853,6 +2853,7 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
     TRACE_SCOPE("parseTryWith");
 
     // try expr with | pattern -> handler | ...
+    // try expr finally cleanup
     _lexer.nextToken(); // consume 'try'
 
     // Parse the body expression
@@ -2860,13 +2861,25 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
     if (!body)
         return nullptr;
 
+    // Branch on 'with' vs 'finally'
+    if (_lexer.currentToken() == Token::Finally)
+    {
+        _lexer.nextToken(); // consume 'finally'
+
+        auto cleanup = parseFSharpExpr();
+        if (!cleanup)
+            return nullptr;
+
+        return std::make_unique<ast::TryFinallyExpr>(std::move(body), std::move(cleanup));
+    }
+
     // Expect 'with' keyword
     if (_lexer.currentToken() != Token::With)
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
-                                           { "Add 'with' followed by pattern match handlers" },
+                                           { "Add 'with' or 'finally' after try body" },
                                            currentContextSnippet(),
-                                           "Expected 'with' after try body, got '{}'",
+                                           "Expected 'with' or 'finally' after try body, got '{}'",
                                            _lexer.currentLiteral());
         return nullptr;
     }

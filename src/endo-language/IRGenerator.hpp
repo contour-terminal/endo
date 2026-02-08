@@ -140,6 +140,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::ResultExpr const& node) override;
     void visit(ast::TryExpr const& node) override;
     void visit(ast::TryWithExpr const& node) override;
+    void visit(ast::TryFinallyExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);

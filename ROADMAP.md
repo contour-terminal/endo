@@ -388,6 +388,12 @@ src/
     - [x] Updated `IRGenerator::visit(BinaryExpr)` to use `VCmpXX` when operands have dynamic types
     - [x] Added `needsDynamicCompare()` helper to detect `Void`/`Object` typed values
     - [x] Fixed match expression variable binding for constructor patterns to extract payload correctly
+- [x] Implement `try-finally` expression IR generation
+  - [x] `TryFinallyExpr` AST node, `Token::Finally` keyword, parser support
+  - [x] IR generation with `?` interception: redirects `returnBlock` to finally cleanup block
+  - [x] Tail call suppression during body codegen to prevent skipping finally
+  - [x] Top-level fallback (simple linear codegen when no function context)
+  - [x] Nested try-finally chains correctly (inner finally → outer finally)
 - [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
 - [x] Implement IR generation for F# function definitions and application (inlining approach)
 - [x] Implement IR generation for F# pipelines (`|>` operator)

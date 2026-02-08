@@ -1349,6 +1349,38 @@ TEST_CASE("Parser.FSharp.ASTPrinter.try_with")
 }
 
 // =============================================================================
+// Try-Finally Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.try_finally_simple")
+{
+    auto ast = parse("let r = try 42 finally print 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "r");
+
+    auto* tryFinallyExpr = dynamic_cast<endo::ast::TryFinallyExpr*>(letStmt->value.get());
+    REQUIRE(tryFinallyExpr != nullptr);
+
+    // Check body is an int literal
+    auto* bodyLit = dynamic_cast<endo::ast::IntLiteralExpr*>(tryFinallyExpr->body.get());
+    REQUIRE(bodyLit != nullptr);
+    CHECK(bodyLit->value == 42);
+
+    // Check finallyExpr is an application (print 0)
+    auto* cleanupApp = dynamic_cast<endo::ast::ApplicationExpr*>(tryFinallyExpr->finallyExpr.get());
+    REQUIRE(cleanupApp != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.try_finally")
+{
+    CHECK(parseAndPrintAST("let r = try 42 finally print 0") == "let r = try 42 finally (print 0)");
+}
+
+// =============================================================================
 // F# Let Rec Tests
 // =============================================================================
 

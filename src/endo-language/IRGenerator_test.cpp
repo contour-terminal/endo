@@ -985,6 +985,114 @@ TEST_CASE("IRGenerator.FSharp.exec_match_guard_complex")
 }
 
 // =============================================================================
+// F# Try-Finally Expression Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_basic")
+{
+    // try-finally: body returns 42, finally runs print, result is 42
+    CHECK(executeSourceAndGetOutput("let f x = try 42 finally print \"cleanup\"; print (f 0)")
+          == "cleanup42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_string")
+{
+    // try-finally: body returns string, finally runs, string result preserved
+    CHECK(executeSourceAndGetOutput("let f x = try \"hello\" finally print \"done\"; print (f 0)")
+          == "donehello");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_error_propagation")
+{
+    // try-finally with ? error propagation: finally runs before error propagates
+    CHECK(executeSourceAndGetOutput("let inner x = Error 99; "
+                                    "let outer x = try (inner x)? finally print \"cleanup\"; "
+                                    "let r = match outer 0 with | Ok v -> v | Error e -> e; "
+                                    "print r")
+          == "cleanup99");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_nested")
+{
+    // Nested try-finally: inner and outer finally blocks both run in correct order
+    CHECK(executeSourceAndGetOutput(
+              "let f x = try (try 1 finally print \"inner\") finally print \"outer\"; print (f 0)")
+          == "innerouter1");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_toplevel")
+{
+    // try-finally at top level (no function context)
+    CHECK(executeSourceAndGetOutput("let r = try 42 finally print \"cleanup\"; print r") == "cleanup42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_finally_value_discarded")
+{
+    // The finally expression's own value is discarded — result is always the body's value
+    CHECK(executeSourceAndGetOutput("let f x = try 10 finally 999; print (f 0)") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_ok_success_path")
+{
+    // ? inside try-finally on Ok value: unwraps successfully, finally still runs.
+    // Note: ? unwraps the Result, so outer returns the raw value (42), not Ok(42).
+    CHECK(executeSourceAndGetOutput("let inner x = Ok 42; "
+                                    "let outer x = try (inner x)? finally print \"fin\"; "
+                                    "print (outer 0)")
+          == "fin42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_some_success_path")
+{
+    // ? inside try-finally on Some value: unwraps successfully, finally still runs
+    CHECK(executeSourceAndGetOutput("let inner x = Some 7; "
+                                    "let outer x = try (inner x)? finally print \"done\"; "
+                                    "print (outer 0)")
+          == "done7");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_body_computes")
+{
+    // Finally with a body that does computation, cleanup just prints
+    CHECK(executeSourceAndGetOutput("let f x = try x * 2 + 1 finally print \"fin\"; print (f 20)")
+          == "fin41");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_body_uses_arg")
+{
+    // Body uses function argument, finally runs, argument-derived result preserved
+    CHECK(executeSourceAndGetOutput("let f x = try x + 10 finally print \"ok\"; print (f 32)") == "ok42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_in_match_arm")
+{
+    // try-finally used inside a match arm body
+    CHECK(executeSourceAndGetOutput("let f x = match x with "
+                                    "| 1 -> try 100 finally print \"arm1\" "
+                                    "| _ -> try 200 finally print \"arm2\"; "
+                                    "print (f 1)")
+          == "arm1100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_error_nested_propagation")
+{
+    // Error propagates through nested try-finally: both finally blocks run
+    CHECK(executeSourceAndGetOutput("let fail x = Error 7; "
+                                    "let inner x = try (fail x)? finally print \"i\"; "
+                                    "let outer x = try (inner x)? finally print \"o\"; "
+                                    "let r = match outer 0 with | Ok v -> v | Error e -> e; "
+                                    "print r")
+          == "io7");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_tryfinally_toplevel_string_body")
+{
+    // Top-level try-finally with string body
+    CHECK(executeSourceAndGetOutput("let r = try \"world\" finally print \"hello \"; print r")
+          == "hello world");
+}
+
+// =============================================================================
 // F# Or Pattern Tests
 // =============================================================================
 

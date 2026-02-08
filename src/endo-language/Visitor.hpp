@@ -73,6 +73,7 @@ struct OptionExpr;
 struct ResultExpr;
 struct TryExpr;
 struct TryWithExpr;
+struct TryFinallyExpr;
 
 struct Visitor
 {
@@ -155,6 +156,7 @@ struct Visitor
     virtual void visit(ResultExpr const&) = 0;
     virtual void visit(TryExpr const&) = 0;
     virtual void visit(TryWithExpr const&) = 0;
+    virtual void visit(TryFinallyExpr const&) = 0;
 };
 
 } // namespace endo::ast

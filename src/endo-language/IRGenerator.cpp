@@ -206,6 +206,10 @@ bool IRGenerator::isBodyResultOrOption(ast::Expr const* body) const
     if (dynamic_cast<ast::TryExpr const*>(body))
         return true;
 
+    // Try-finally: result type is the body's result type
+    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+        return isBodyResultOrOption(tryFinally->body.get());
+
     // Check through parentheses
     if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
         return isBodyResultOrOption(paren->inner.get());
@@ -4052,6 +4056,133 @@ void IRGenerator::visit(ast::TryWithExpr const& node)
     // Merge block: load result
     _builder.setInsertPoint(mergeBlock);
     _result = _builder.createLoad(resultStorage, "trywith.result.load");
+}
+
+void IRGenerator::visit(ast::TryFinallyExpr const& node)
+{
+    TRACE_SCOPE("visit(TryFinallyExpr)");
+
+    // try body finally cleanup
+    //
+    // Evaluates body, then ALWAYS evaluates cleanup (result discarded),
+    // then returns the body's result.
+    //
+    // When `?` inside body triggers early return, the finally block runs
+    // before error propagation continues.
+
+    if (!node.body)
+    {
+        reportTypeError("try-finally expression requires a body");
+        return;
+    }
+
+    if (!node.finallyExpr)
+    {
+        reportTypeError("try-finally expression requires a finally clause");
+        return;
+    }
+
+    auto* funcCtx = currentFSharpFunctionContext();
+
+    if (!funcCtx)
+    {
+        // Top-level: simple linear codegen (no ? interception needed)
+        auto* bodyVal = codegen(node.body.get());
+        if (!bodyVal)
+            return;
+
+        // Store body result so cleanup can't clobber it
+        auto* bodyResultStorage = createAllocaInEntryBlock(bodyVal->type(), "tryfinally.body.result");
+        _builder.createStore(bodyResultStorage, bodyVal, "tryfinally.body.store");
+
+        // Run cleanup (result discarded)
+        codegen(node.finallyExpr.get());
+
+        // Return the body's result
+        _result = _builder.createLoad(bodyResultStorage, "tryfinally.result.load");
+        return;
+    }
+
+    // Inside a function context: intercept ? operator's early return
+
+    // Pre-allocate error flag in entry block
+    auto* errorFlag = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "tryfinally.error_flag");
+
+    // Save the original return block that ? would jump to
+    auto* originalReturnBlock = funcCtx->returnBlock;
+
+    // Create ONLY the error intercept block before body codegen.
+    // The ? operator needs this pointer for its returnBlock redirect.
+    // Other blocks are created AFTER body codegen so that body blocks
+    // (try.success, try.error, try.continue, func.return, etc.)
+    // appear before finally blocks in the handler's block list.
+    // The TargetCodeGenerator processes blocks in list order, so this
+    // ordering ensures the forward pass stack tracking is correct.
+    auto* finallyFromError = _builder.createBlock("tryfinally.from_error");
+
+    // Redirect ? operator's return target to our intercept block
+    funcCtx->returnBlock = finallyFromError;
+
+    // Suppress tail call optimization during body codegen to prevent
+    // skipping the finally block
+    auto savedRecursion = std::move(_activeRecursion);
+    auto savedMutualRecursion = std::move(_activeMutualRecursion);
+    _activeRecursion.reset();
+    _activeMutualRecursion.reset();
+
+    // Evaluate body
+    auto* bodyVal = codegen(node.body.get());
+
+    // Restore tail call contexts
+    _activeRecursion = std::move(savedRecursion);
+    _activeMutualRecursion = std::move(savedMutualRecursion);
+
+    // Restore original return block
+    // Re-fetch funcCtx since codegen may have caused reallocation
+    funcCtx = currentFSharpFunctionContext();
+    funcCtx->returnBlock = originalReturnBlock;
+
+    if (!bodyVal)
+    {
+        // Body codegen failed (could be a compilation error)
+        return;
+    }
+
+    // Create body result storage with actual type (deferred until after body codegen).
+    // Using the actual body type preserves type fidelity through the alloca.
+    auto* bodyResultStorage = createAllocaInEntryBlock(bodyVal->type(), "tryfinally.body.result");
+
+    // Create remaining blocks AFTER body codegen (correct forward order)
+    auto* finallyBlock = _builder.createBlock("tryfinally.block");
+    auto* finallyErrorExit = _builder.createBlock("tryfinally.error_exit");
+    auto* finallyNormal = _builder.createBlock("tryfinally.normal");
+
+    // Normal path: store body result, set error flag to 0, branch to finally
+    _builder.createStore(bodyResultStorage, bodyVal, "tryfinally.body.store");
+    _builder.createStore(errorFlag, _builder.get(CoreVM::CoreNumber(0)), "tryfinally.flag.normal");
+    _builder.createBr(finallyBlock);
+
+    // Error path: ? operator jumped here. Error is already in funcCtx->returnStorage.
+    // Set error flag to 1, branch to finally
+    _builder.setInsertPoint(finallyFromError);
+    _builder.createStore(errorFlag, _builder.get(CoreVM::CoreNumber(1)), "tryfinally.flag.error");
+    _builder.createBr(finallyBlock);
+
+    // Finally block: run cleanup, then check error flag
+    _builder.setInsertPoint(finallyBlock);
+    codegen(node.finallyExpr.get()); // result discarded
+
+    auto* flag = _builder.createLoad(errorFlag, "tryfinally.flag.load");
+    auto* isErr = _builder.createNCmpEQ(flag, _builder.get(CoreVM::CoreNumber(1)), "tryfinally.is_err");
+    _builder.createCondBr(isErr, finallyErrorExit, finallyNormal);
+
+    // Error exit: propagate to original return block (error already in returnStorage)
+    _builder.setInsertPoint(finallyErrorExit);
+    _builder.createBr(originalReturnBlock);
+
+    // Normal exit: load body result
+    _builder.setInsertPoint(finallyNormal);
+    _result = _builder.createLoad(bodyResultStorage, "tryfinally.result.load");
 }
 
 } // namespace endo

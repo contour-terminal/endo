@@ -87,7 +87,8 @@ enum class Token
     ResultError, // 'Error' (Result constructor)
 
     // F# style keywords for error handling
-    Try, // 'try' (try-with expression)
+    Try,     // 'try' (try-with/try-finally expression)
+    Finally, // 'finally' (try-finally expression)
 
     // F# style operators
     Arrow,       // '->'
@@ -427,6 +428,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case ResultOk: name = "Ok"; break;
             case ResultError: name = "Error"; break;
             case Try: name = "try"; break;
+            case Finally: name = "finally"; break;
             // F# style operators
             case Arrow: name = "->"; break;
             case LeftArrow: name = "<-"; break;
