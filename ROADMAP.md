@@ -324,7 +324,7 @@ src/
 - [x] Extend Parser for list literals and ranges
 - [x] Extend Parser for list comprehensions (`[for x in items -> expr]`)
 - [ ] Extend Parser for record literals and type definitions
-- [ ] Implement pattern matching compilation in IR generator
+- [x] Implement pattern matching compilation in IR generator
 - [ ] Implement Result and Option types with built-in support
 - [ ] Implement `?` error propagation operator
 - [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
