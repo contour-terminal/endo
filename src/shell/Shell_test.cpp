@@ -2052,3 +2052,99 @@ TEST_CASE("shell.interpolation.complex_example")
     CHECK(escape(shell("echo \"User: $USER, Count: ${COUNT}, Sum: $((1+1))\"").output())
           == escape("User: alice, Count: 42, Sum: 2\n"));
 }
+
+// ========================================================================
+// F# Match Expression Execution Tests
+// These tests verify that match expressions execute without errors.
+// The IR generation tests verify correct behavior; these tests verify
+// that the generated IR runs through the VM successfully.
+// ========================================================================
+
+TEST_CASE("shell.fsharp.match_literal_executes")
+{
+    // Match with literal patterns executes without error
+    TestShell shell;
+    shell("let r = match 0 with | 0 -> 0 | _ -> 1");
+    // Exit code 0 means no execution errors
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_multiple_arms_executes")
+{
+    // Match with multiple arms executes without error
+    TestShell shell;
+    shell("let r = match 1 with | 0 -> 0 | 1 -> 10 | _ -> 99");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_wildcard_executes")
+{
+    // Wildcard pattern executes without error
+    TestShell shell;
+    shell("let r = match 99 with | _ -> 7");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_variable_binding_executes")
+{
+    // Variable pattern with binding executes without error
+    TestShell shell;
+    shell("let r = match 5 with | n -> n + n");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_guard_executes")
+{
+    // Guard expression executes without error
+    TestShell shell;
+    shell("let r = match 10 with | n when n > 5 -> 1 | _ -> 0");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_multiple_guards_executes")
+{
+    // Multiple guards execute without error
+    TestShell shell;
+    shell("let r = match 50 with | n when n < 0 -> 1 | n when n < 10 -> 2 | n when n < 100 -> 3 | _ -> 4");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_with_function_executes")
+{
+    // Match with function call in body executes without error
+    TestShell shell;
+    shell("let double x = x * 2; let r = match 5 with | n -> double n");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_bool_executes")
+{
+    // Match on boolean executes without error
+    TestShell shell;
+    shell("let r = match true with | true -> 1 | false -> 0");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_chained_let_executes")
+{
+    // Match in let chain executes without error
+    TestShell shell;
+    shell("let x = 7; let y = match x with | 0 -> 0 | n -> n * 2");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.fsharp.match_bool_false")
+{
+    // Match boolean false
+    TestShell shell;
+    shell("let r = match false with | true -> 1 | false -> 2; exit r");
+    CHECK(shell.exitCode == 2);
+}
+
+TEST_CASE("shell.fsharp.match_nested_in_let")
+{
+    // Match expression used in a chain of let bindings
+    TestShell shell;
+    shell("let x = 7; let y = match x with | 0 -> 0 | n -> n * 2; exit y");
+    CHECK(shell.exitCode == 14);
+}
