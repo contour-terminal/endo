@@ -29,7 +29,7 @@ This document tracks the implementation status of F# language features as define
 
 ### Primitive Types
 - [x] `int` — 64-bit signed integer
-- [ ] `float` — 64-bit floating point (parsed, no distinct runtime type)
+- [x] `float` — 64-bit floating point (via `std::bit_cast<uint64_t>(double)` in VM stack)
 - [x] `str` — UTF-8 string
 - [x] `bool` — Boolean
 - [ ] `unit` — No value (void)
@@ -193,7 +193,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `in`, `then`, `else` excluded from `isFSharpPrimary()` to prevent argument consumption
 - [x] Comma tokenization in F# mode for tuples
 - [x] Negative number literals: `-42`
-- [ ] Float literals with decimal: `3.14` (lexer handles, no distinct type)
+- [x] Float literals with decimal: `3.14` (distinct `Float` type with arithmetic, comparisons, and promotion)
 - [ ] Hexadecimal: `0xFF`
 - [ ] Octal: `0o755`
 - [ ] Binary: `0b1010`

@@ -466,6 +466,14 @@ void TargetCodeGenerator::emitLoad(Value* value)
         return;
     }
 
+    // const float
+    if (auto* flt = dynamic_cast<ConstantFloat*>(value))
+    {
+        emitInstr(Opcode::FLOAD, _cp.makeFloat(flt->get()));
+        changeStack(0, value);
+        return;
+    }
+
     // const regex
     if (auto* re = dynamic_cast<ConstantRegExp*>(value))
     {
@@ -677,6 +685,7 @@ void TargetCodeGenerator::visit(CastInstr& castInstr)
               { LiteralType::IPAddress, Opcode::P2S },
               { LiteralType::Cidr, Opcode::C2S },
               { LiteralType::RegExp, Opcode::R2S },
+              { LiteralType::Float, Opcode::F2S },
               // Dynamic types (Void/Object) are treated as numbers at runtime
               { LiteralType::Void, Opcode::N2S },
               { LiteralType::Object, Opcode::N2S },
@@ -684,6 +693,15 @@ void TargetCodeGenerator::visit(CastInstr& castInstr)
         { LiteralType::Number,
           {
               { LiteralType::String, Opcode::S2N },
+              { LiteralType::Float, Opcode::F2N },
+          } },
+        { LiteralType::Float,
+          {
+              { LiteralType::Number, Opcode::N2F },
+              { LiteralType::String, Opcode::S2F },
+              // Dynamic types (Void/Object) are treated as numbers at runtime
+              { LiteralType::Void, Opcode::N2F },
+              { LiteralType::Object, Opcode::N2F },
           } },
     };
 
@@ -1032,6 +1050,73 @@ void TargetCodeGenerator::visit(VCmpGEInstr& instr)
     emitLoad(instr.rhs());
     emitInstr(Opcode::VCMPGE);
     changeStack(2, &instr);
+}
+
+// }}}
+// {{{ float ops
+void TargetCodeGenerator::visit(FNegInstr& instr)
+{
+    emitUnary(instr, Opcode::FNEG);
+}
+
+void TargetCodeGenerator::visit(FAddInstr& instr)
+{
+    emitBinaryAssoc(instr, Opcode::FADD);
+}
+
+void TargetCodeGenerator::visit(FSubInstr& instr)
+{
+    emitBinary(instr, Opcode::FSUB);
+}
+
+void TargetCodeGenerator::visit(FMulInstr& instr)
+{
+    emitBinaryAssoc(instr, Opcode::FMUL);
+}
+
+void TargetCodeGenerator::visit(FDivInstr& instr)
+{
+    emitBinary(instr, Opcode::FDIV);
+}
+
+void TargetCodeGenerator::visit(FRemInstr& instr)
+{
+    emitBinary(instr, Opcode::FREM);
+}
+
+void TargetCodeGenerator::visit(FPowInstr& instr)
+{
+    emitBinary(instr, Opcode::FPOW);
+}
+
+void TargetCodeGenerator::visit(FCmpEQInstr& instr)
+{
+    emitBinaryAssoc(instr, Opcode::FCMPEQ);
+}
+
+void TargetCodeGenerator::visit(FCmpNEInstr& instr)
+{
+    emitBinaryAssoc(instr, Opcode::FCMPNE);
+}
+
+void TargetCodeGenerator::visit(FCmpLEInstr& instr)
+{
+    emitBinary(instr, Opcode::FCMPLE);
+}
+
+void TargetCodeGenerator::visit(FCmpGEInstr& instr)
+{
+    emitBinary(instr, Opcode::FCMPGE);
+}
+
+void TargetCodeGenerator::visit(FCmpLTInstr& instr)
+{
+    emitBinary(instr, Opcode::FCMPLT);
+}
+
+void TargetCodeGenerator::visit(FCmpGTInstr& instr)
+{
+    emitBinary(instr, Opcode::FCMPGT);
 }
 
 // }}}

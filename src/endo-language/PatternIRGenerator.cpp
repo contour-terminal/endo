@@ -54,8 +54,7 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
             }
             else if constexpr (std::is_same_v<T, double>)
             {
-                // CoreVM uses integers; truncate for now
-                return _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(arg)));
+                return _builder.getFloat(arg);
             }
             else if constexpr (std::is_same_v<T, bool>)
             {
@@ -90,6 +89,14 @@ void PatternIRGenerator::visit(pattern::LiteralPattern const& pat)
     {
         // Dynamic value comparison (for values from OGETSLOT with unknown compile-time type)
         cmp = _builder.createVCmpEQ(_scrutinee, literal, "pat.dyn.eq");
+    }
+    else if (literal->type() == CoreVM::LiteralType::Float)
+    {
+        // Float comparison
+        auto* scrutineeFloat = _scrutinee;
+        if (scrutineeFloat->type() != CoreVM::LiteralType::Float)
+            scrutineeFloat = _builder.createN2F(scrutineeFloat, "pat.n2f");
+        cmp = _builder.createFCmpEQ(scrutineeFloat, literal, "pat.float.eq");
     }
     else if (literal->type() == CoreVM::LiteralType::Boolean
              || _scrutinee->type() == CoreVM::LiteralType::Boolean)

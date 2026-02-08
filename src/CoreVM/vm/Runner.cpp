@@ -5,6 +5,7 @@
 #include <CoreVM/util/assert.hpp>
 #include <CoreVM/util/strings.hpp>
 
+#include <bit>
 #include <cinttypes>
 #include <cmath>
 #include <cstdio>
@@ -429,6 +430,28 @@ Runner::RunResult Runner::loopWithResult()
         label(VCMPLE),
         label(VCMPGT),
         label(VCMPGE),
+
+        // float
+        label(FLOAD),
+        label(FNEG),
+        label(FADD),
+        label(FSUB),
+        label(FMUL),
+        label(FDIV),
+        label(FREM),
+        label(FPOW),
+        label(FCMPEQ),
+        label(FCMPNE),
+        label(FCMPLE),
+        label(FCMPGE),
+        label(FCMPLT),
+        label(FCMPGT),
+
+        // float cast
+        label(N2F),
+        label(F2N),
+        label(F2S),
+        label(S2F),
     };
 #endif
 // }}}
@@ -1255,6 +1278,147 @@ Runner::RunResult Runner::loopWithResult()
         CoreNumber a = getNumber(-2);
         pop();
         SP(-1) = (a >= b) ? 1 : 0;
+        next;
+    }
+    // }}}
+    // {{{ float ops
+    instr(FLOAD)
+    {
+        push(std::bit_cast<uint64_t>(program()->constants().getFloat(A)));
+        next;
+    }
+    instr(FNEG)
+    {
+        auto v = std::bit_cast<double>(SP(-1));
+        SP(-1) = std::bit_cast<uint64_t>(-v);
+        next;
+    }
+    instr(FADD)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(a + b);
+        next;
+    }
+    instr(FSUB)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(a - b);
+        next;
+    }
+    instr(FMUL)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(a * b);
+        next;
+    }
+    instr(FDIV)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(a / b);
+        next;
+    }
+    instr(FREM)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(std::fmod(a, b));
+        next;
+    }
+    instr(FPOW)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = std::bit_cast<uint64_t>(std::pow(a, b));
+        next;
+    }
+    instr(FCMPEQ)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a == b) ? 1 : 0;
+        next;
+    }
+    instr(FCMPNE)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a != b) ? 1 : 0;
+        next;
+    }
+    instr(FCMPLE)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a <= b) ? 1 : 0;
+        next;
+    }
+    instr(FCMPGE)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a >= b) ? 1 : 0;
+        next;
+    }
+    instr(FCMPLT)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a < b) ? 1 : 0;
+        next;
+    }
+    instr(FCMPGT)
+    {
+        auto b = std::bit_cast<double>(SP(-1));
+        auto a = std::bit_cast<double>(SP(-2));
+        pop();
+        SP(-1) = (a > b) ? 1 : 0;
+        next;
+    }
+    // float casts
+    instr(N2F)
+    {
+        auto n = static_cast<CoreNumber>(SP(-1));
+        SP(-1) = std::bit_cast<uint64_t>(static_cast<double>(n));
+        next;
+    }
+    instr(F2N)
+    {
+        auto f = std::bit_cast<double>(SP(-1));
+        SP(-1) = static_cast<uint64_t>(static_cast<CoreNumber>(f));
+        next;
+    }
+    instr(F2S)
+    {
+        auto f = std::bit_cast<double>(SP(-1));
+        SP(-1) = reinterpret_cast<Value>(newString(std::format("{:g}", f)));
+        next;
+    }
+    instr(S2F)
+    {
+        double f = 0;
+        try
+        {
+            f = std::stod(getString(-1));
+        }
+        catch (...)
+        {
+        }
+        SP(-1) = std::bit_cast<uint64_t>(f);
         next;
     }
     // }}}

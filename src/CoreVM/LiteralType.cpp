@@ -25,6 +25,7 @@ std::string tos(LiteralType type)
         case LiteralType::Option: return "Option";
         case LiteralType::Result: return "Result";
         case LiteralType::Object: return "Object";
+        case LiteralType::Float: return "float";
         default: COREVM_ASSERT(false, "InvalidArgumentError");
     }
 }
@@ -61,6 +62,7 @@ LiteralType elementTypeOf(LiteralType type)
         case LiteralType::Option: return LiteralType::Void; // Element type depends on inner type
         case LiteralType::Result: return LiteralType::Void; // Element type depends on inner type
         case LiteralType::Object: return LiteralType::Void; // Element type depends on TypeDescriptor
+        case LiteralType::Float: return LiteralType::Float;
         default: COREVM_ASSERT(false, "InvalidArgumentError");
     }
 }

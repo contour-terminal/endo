@@ -1598,3 +1598,82 @@ TEST_CASE("IRGenerator.FSharp.builtin_snd_direct")
 {
     CHECK(executesWithOutput("print (snd (1, 2))", "2"));
 }
+
+// =============================================================================
+// Float Literal and Arithmetic Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.float_literal")
+{
+    CHECK(executesWithOutput("print 3.14", "3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_arithmetic_add")
+{
+    CHECK(executesWithOutput("print (1.5 + 2.5)", "4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_arithmetic_sub")
+{
+    CHECK(executesWithOutput("print (5.0 - 2.5)", "2.5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_arithmetic_mul")
+{
+    CHECK(executesWithOutput("print (3.0 * 2.5)", "7.5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_arithmetic_div")
+{
+    CHECK(executesWithOutput("print (7.0 / 2.0)", "3.5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_negation")
+{
+    CHECK(executesWithOutput("print (-3.14)", "-3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_mixed_int_promotion")
+{
+    CHECK(executesWithOutput("print (1 + 2.5)", "3.5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_mixed_int_promotion_reverse")
+{
+    CHECK(executesWithOutput("print (2.5 + 1)", "3.5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_comparison_lt")
+{
+    CHECK(executesWithOutput("let r = if 2.5 < 3.0 then 1 else 0; print r", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_comparison_gt")
+{
+    CHECK(executesWithOutput("let r = if 3.0 > 2.5 then 1 else 0; print r", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_string_concat")
+{
+    CHECK(executesWithOutput(R"(print ("pi=" + 3.14))", "pi=3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_in_function")
+{
+    CHECK(executesWithOutput("let double x = x * 2.0; print (double 3.5)", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_let_binding")
+{
+    CHECK(executesWithOutput("let pi = 3.14; print pi", "3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_pow")
+{
+    CHECK(executesWithOutput("print (2.0 ** 3.0)", "8"));
+}
+
+TEST_CASE("IRGenerator.FSharp.float_mod")
+{
+    CHECK(executesWithOutput("print (7.5 % 2.0)", "1.5"));
+}

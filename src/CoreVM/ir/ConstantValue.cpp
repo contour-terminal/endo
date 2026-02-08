@@ -3,10 +3,12 @@
 #include <CoreVM/util.hpp>
 
 #include <string>
+
 namespace CoreVM
 {
 
 template class ConstantValue<int64_t, LiteralType::Number>;
+template class ConstantValue<double, LiteralType::Float>;
 template class ConstantValue<bool, LiteralType::Boolean>;
 template class ConstantValue<std::string, LiteralType::String>;
 template class ConstantValue<util::IPAddress, LiteralType::IPAddress>;

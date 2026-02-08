@@ -213,6 +213,21 @@ class InstructionVisitor
     virtual void visit(PCmpNEInstr& instr) = 0;
     virtual void visit(PInCidrInstr& instr) = 0;
 
+    // float
+    virtual void visit(FNegInstr& instr) = 0;
+    virtual void visit(FAddInstr& instr) = 0;
+    virtual void visit(FSubInstr& instr) = 0;
+    virtual void visit(FMulInstr& instr) = 0;
+    virtual void visit(FDivInstr& instr) = 0;
+    virtual void visit(FRemInstr& instr) = 0;
+    virtual void visit(FPowInstr& instr) = 0;
+    virtual void visit(FCmpEQInstr& instr) = 0;
+    virtual void visit(FCmpNEInstr& instr) = 0;
+    virtual void visit(FCmpLEInstr& instr) = 0;
+    virtual void visit(FCmpGEInstr& instr) = 0;
+    virtual void visit(FCmpLTInstr& instr) = 0;
+    virtual void visit(FCmpGTInstr& instr) = 0;
+
     // object operations
     virtual void visit(ObjAllocInstr& instr) = 0;
     virtual void visit(ObjRetainInstr& instr) = 0;
@@ -624,6 +639,7 @@ class ConstantPool
 
     // builder
     size_t makeInteger(CoreNumber value);
+    size_t makeFloat(double value);
     size_t makeString(const std::string& value);
     size_t makeIPAddress(const util::IPAddress& value);
     size_t makeCidr(const util::Cidr& value);
@@ -650,6 +666,8 @@ class ConstantPool
 
     // accessor
     [[nodiscard]] CoreNumber getInteger(size_t id) const { return _numbers[id]; }
+
+    [[nodiscard]] double getFloat(size_t id) const { return _floats[id]; }
 
     [[nodiscard]] const CoreString& getString(size_t id) const { return _strings[id]; }
 
@@ -734,6 +752,7 @@ class ConstantPool
   private:
     // constant primitives
     std::vector<CoreNumber> _numbers;
+    std::vector<double> _floats;
     std::vector<std::string> _strings;
     std::vector<util::IPAddress> _ipaddrs;
     std::vector<util::Cidr> _cidrs;
@@ -1317,6 +1336,7 @@ class ConstantValue: public Constant
 
 using ConstantInt = ConstantValue<int64_t, LiteralType::Number>;
 using ConstantBoolean = ConstantValue<bool, LiteralType::Boolean>;
+using ConstantFloat = ConstantValue<double, LiteralType::Float>;
 using ConstantString = ConstantValue<std::string, LiteralType::String>;
 using ConstantIP = ConstantValue<util::IPAddress, LiteralType::IPAddress>;
 using ConstantCidr = ConstantValue<util::Cidr, LiteralType::Cidr>;
@@ -2090,6 +2110,21 @@ class IsSameInstruction: public InstructionVisitor
     void visit(VCmpLEInstr& instr) override;
     void visit(VCmpGTInstr& instr) override;
     void visit(VCmpGEInstr& instr) override;
+
+    // float
+    void visit(FNegInstr& instr) override;
+    void visit(FAddInstr& instr) override;
+    void visit(FSubInstr& instr) override;
+    void visit(FMulInstr& instr) override;
+    void visit(FDivInstr& instr) override;
+    void visit(FRemInstr& instr) override;
+    void visit(FPowInstr& instr) override;
+    void visit(FCmpEQInstr& instr) override;
+    void visit(FCmpNEInstr& instr) override;
+    void visit(FCmpLEInstr& instr) override;
+    void visit(FCmpGEInstr& instr) override;
+    void visit(FCmpLTInstr& instr) override;
+    void visit(FCmpGTInstr& instr) override;
 };
 
 class IRHandler: public Constant
@@ -2186,6 +2221,8 @@ class IRProgram
 
     ConstantInt* get(int64_t literal) { return get<ConstantInt>(_numbers, literal); }
 
+    ConstantFloat* getFloat(double literal) { return get<ConstantFloat>(_floats, literal); }
+
     ConstantString* get(const std::string& literal) { return get<ConstantString>(_strings, literal); }
 
     ConstantIP* get(const util::IPAddress& literal) { return get<ConstantIP>(_ipaddrs, literal); }
@@ -2272,6 +2309,7 @@ class IRProgram
     ConstantBoolean _falseLiteral;
     std::vector<std::unique_ptr<ConstantArray>> _constantArrays;
     std::vector<std::unique_ptr<ConstantInt>> _numbers;
+    std::vector<std::unique_ptr<ConstantFloat>> _floats;
     std::vector<std::unique_ptr<ConstantString>> _strings;
     std::vector<std::unique_ptr<ConstantIP>> _ipaddrs;
     std::vector<std::unique_ptr<ConstantCidr>> _cidrs;
@@ -2338,6 +2376,8 @@ class IRBuilder
 
     ConstantInt* get(int64_t literal) { return _program->get(literal); }
 
+    ConstantFloat* getFloat(double literal) { return _program->getFloat(literal); }
+
     ConstantString* get(const std::string& literal) { return _program->get(literal); }
 
     ConstantIP* get(const util::IPAddress& literal) { return _program->get(literal); }
@@ -2400,6 +2440,21 @@ class IRBuilder
     Value* createNCmpGT(Value* lhs, Value* rhs,
                         const std::string& name = ""); // >
 
+    // float operations
+    Value* createFNeg(Value* rhs, const std::string& name = "");               // -
+    Value* createFAdd(Value* lhs, Value* rhs, const std::string& name = "");   // +
+    Value* createFSub(Value* lhs, Value* rhs, const std::string& name = "");   // -
+    Value* createFMul(Value* lhs, Value* rhs, const std::string& name = "");   // *
+    Value* createFDiv(Value* lhs, Value* rhs, const std::string& name = "");   // /
+    Value* createFRem(Value* lhs, Value* rhs, const std::string& name = "");   // %
+    Value* createFPow(Value* lhs, Value* rhs, const std::string& name = "");   // **
+    Value* createFCmpEQ(Value* lhs, Value* rhs, const std::string& name = ""); // ==
+    Value* createFCmpNE(Value* lhs, Value* rhs, const std::string& name = ""); // !=
+    Value* createFCmpLE(Value* lhs, Value* rhs, const std::string& name = ""); // <=
+    Value* createFCmpGE(Value* lhs, Value* rhs, const std::string& name = ""); // >=
+    Value* createFCmpLT(Value* lhs, Value* rhs, const std::string& name = ""); // <
+    Value* createFCmpGT(Value* lhs, Value* rhs, const std::string& name = ""); // >
+
     // string ops
     Value* createSAdd(Value* lhs, Value* rhs, const std::string& name = ""); // +
     Value* createSCmpEQ(Value* lhs, Value* rhs,
@@ -2446,6 +2501,10 @@ class IRBuilder
     Value* createC2S(Value* rhs, const std::string& name = "");
     Value* createR2S(Value* rhs, const std::string& name = "");
     Value* createS2N(Value* rhs, const std::string& name = "");
+    Value* createN2F(Value* rhs, const std::string& name = "");
+    Value* createF2N(Value* rhs, const std::string& name = "");
+    Value* createF2S(Value* rhs, const std::string& name = "");
+    Value* createS2F(Value* rhs, const std::string& name = "");
 
     // calls
     Instr* createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name = "");
@@ -3166,6 +3225,21 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(VCmpGTInstr& instr) override;
     void visit(VCmpGEInstr& instr) override;
 
+    // float
+    void visit(FNegInstr& instr) override;
+    void visit(FAddInstr& instr) override;
+    void visit(FSubInstr& instr) override;
+    void visit(FMulInstr& instr) override;
+    void visit(FDivInstr& instr) override;
+    void visit(FRemInstr& instr) override;
+    void visit(FPowInstr& instr) override;
+    void visit(FCmpEQInstr& instr) override;
+    void visit(FCmpNEInstr& instr) override;
+    void visit(FCmpLEInstr& instr) override;
+    void visit(FCmpGEInstr& instr) override;
+    void visit(FCmpLTInstr& instr) override;
+    void visit(FCmpGTInstr& instr) override;
+
   private:
     struct ConditionalJump
     {
@@ -3605,6 +3679,7 @@ struct std::formatter<CoreVM::LiteralType>: std::formatter<std::string_view>
             case CoreVM::LiteralType::Option: name = "Option"; break;
             case CoreVM::LiteralType::Result: name = "Result"; break;
             case CoreVM::LiteralType::Object: name = "Object"; break;
+            case CoreVM::LiteralType::Float: name = "Float"; break;
         }
         return std::formatter<std::string_view>::format(name, ctx);
     }

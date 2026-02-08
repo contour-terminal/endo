@@ -163,6 +163,28 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(VCMPLE, V, -1, Boolean), // pop B, pop A, push (A <= B) as numbers
     IIDEF(VCMPGT, V, -1, Boolean), // pop B, pop A, push (A > B) as numbers
     IIDEF(VCMPGE, V, -1, Boolean), // pop B, pop A, push (A >= B) as numbers
+
+    // float
+    IIDEF(FLOAD, I, 1, Float),
+    IIDEF(FNEG, V, 0, Float),
+    IIDEF(FADD, V, -1, Float),
+    IIDEF(FSUB, V, -1, Float),
+    IIDEF(FMUL, V, -1, Float),
+    IIDEF(FDIV, V, -1, Float),
+    IIDEF(FREM, V, -1, Float),
+    IIDEF(FPOW, V, -1, Float),
+    IIDEF(FCMPEQ, V, -1, Boolean),
+    IIDEF(FCMPNE, V, -1, Boolean),
+    IIDEF(FCMPLE, V, -1, Boolean),
+    IIDEF(FCMPGE, V, -1, Boolean),
+    IIDEF(FCMPLT, V, -1, Boolean),
+    IIDEF(FCMPGT, V, -1, Boolean),
+
+    // float cast
+    IIDEF(N2F, V, 0, Float),
+    IIDEF(F2N, V, 0, Number),
+    IIDEF(F2S, V, 0, String),
+    IIDEF(S2F, V, 0, Float),
 };
 
 // }}}
@@ -357,6 +379,11 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
                 break;
             case Opcode::CLOAD:
                 word = cp->getCidr(A).str();
+                line << word;
+                n += word.size();
+                break;
+            case Opcode::FLOAD:
+                word = std::format("{:g}", cp->getFloat(A));
                 line << word;
                 n += word.size();
                 break;

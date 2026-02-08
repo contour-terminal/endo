@@ -128,6 +128,28 @@ enum Opcode : uint16_t
     VCMPLE, // VCMPLE               ; A = pop() <= pop() (compares as numbers)
     VCMPGT, // VCMPGT               ; A = pop() > pop() (compares as numbers)
     VCMPGE, // VCMPGE               ; A = pop() >= pop() (compares as numbers)
+
+    // float (double) — stored as bit_cast<uint64_t>(double) in stack slots
+    FLOAD,  // FLOAD floatConstants[imm]
+    FNEG,   //                    ; stack[SP] = -getFloat(SP)
+    FADD,   //                    ; fpush(fpop() + fpop())
+    FSUB,   //                    ; fpush(fpop() - fpop())
+    FMUL,   //                    ; fpush(fpop() * fpop())
+    FDIV,   //                    ; fpush(fpop() / fpop())
+    FREM,   //                    ; fpush(fmod(fpop(), fpop()))
+    FPOW,   //                    ; fpush(pow(fpop(), fpop()))
+    FCMPEQ, //                    ; push(fpop() == fpop())
+    FCMPNE, //                    ; push(fpop() != fpop())
+    FCMPLE, //                    ; push(fpop() <= fpop())
+    FCMPGE, //                    ; push(fpop() >= fpop())
+    FCMPLT, //                    ; push(fpop() < fpop())
+    FCMPGT, //                    ; push(fpop() > fpop())
+
+    // float conversion
+    N2F, // push(static_cast<double>(pop()))
+    F2N, // push(static_cast<int64_t>(fpop()))
+    F2S, // push(format("{:g}", fpop()))
+    S2F, // push(stod(pop()))
 };
 
 enum class MatchClass
@@ -145,6 +167,8 @@ enum class UnaryOperator
     // numerical
     INeg,
     INot,
+    // float
+    FNeg,
     // boolean
     BNot,
     // string
@@ -189,6 +213,19 @@ enum class BinaryOperator
     SCmpBeg,
     SCmpEnd,
     SIn,
+    // float
+    FAdd,
+    FSub,
+    FMul,
+    FDiv,
+    FRem,
+    FPow,
+    FCmpEQ,
+    FCmpNE,
+    FCmpLE,
+    FCmpGE,
+    FCmpLT,
+    FCmpGT,
     // ip
     PCmpEQ,
     PCmpNE,
@@ -216,6 +253,7 @@ enum class LiteralType
     Option = 14,      // Option<T>: (tag: 0=None|1=Some, value: T) [deprecated, use Object]
     Result = 15,      // Result<T,E>: (tag: 0=Error|1=Ok, payload: T|E) [deprecated, use Object]
     Object = 16,      // TypedObject*: pointer to heap-allocated typed object
+    Float = 17,       // double (stored as bit_cast<uint64_t>)
 };
 
 template <const UnaryOperator Operator, const LiteralType ResultType>
@@ -272,6 +310,21 @@ using SInInstr = BinaryInstr<BinaryOperator::SIn, LiteralType::Boolean>;
 using PCmpEQInstr = BinaryInstr<BinaryOperator::PCmpEQ, LiteralType::Boolean>;
 using PCmpNEInstr = BinaryInstr<BinaryOperator::PCmpNE, LiteralType::Boolean>;
 using PInCidrInstr = BinaryInstr<BinaryOperator::PInCidr, LiteralType::Boolean>;
+
+// float
+using FNegInstr = UnaryInstr<UnaryOperator::FNeg, LiteralType::Float>;
+using FAddInstr = BinaryInstr<BinaryOperator::FAdd, LiteralType::Float>;
+using FSubInstr = BinaryInstr<BinaryOperator::FSub, LiteralType::Float>;
+using FMulInstr = BinaryInstr<BinaryOperator::FMul, LiteralType::Float>;
+using FDivInstr = BinaryInstr<BinaryOperator::FDiv, LiteralType::Float>;
+using FRemInstr = BinaryInstr<BinaryOperator::FRem, LiteralType::Float>;
+using FPowInstr = BinaryInstr<BinaryOperator::FPow, LiteralType::Float>;
+using FCmpEQInstr = BinaryInstr<BinaryOperator::FCmpEQ, LiteralType::Boolean>;
+using FCmpNEInstr = BinaryInstr<BinaryOperator::FCmpNE, LiteralType::Boolean>;
+using FCmpLEInstr = BinaryInstr<BinaryOperator::FCmpLE, LiteralType::Boolean>;
+using FCmpGEInstr = BinaryInstr<BinaryOperator::FCmpGE, LiteralType::Boolean>;
+using FCmpLTInstr = BinaryInstr<BinaryOperator::FCmpLT, LiteralType::Boolean>;
+using FCmpGTInstr = BinaryInstr<BinaryOperator::FCmpGT, LiteralType::Boolean>;
 
 enum class OperandSig
 {

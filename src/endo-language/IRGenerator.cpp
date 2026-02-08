@@ -1882,6 +1882,10 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     {
         argValue = _builder.createN2S(argValue, "print.n2s");
     }
+    else if (argValue->type() == CoreVM::LiteralType::Float)
+    {
+        argValue = _builder.createF2S(argValue, "print.f2s");
+    }
     else if (argValue->type() == CoreVM::LiteralType::Boolean)
     {
         // Convert boolean to "true"/"false" string via conditional branch
@@ -2448,11 +2452,56 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     if (node.op == ast::BinaryOp::Add
         && (left->type() == CoreVM::LiteralType::String || right->type() == CoreVM::LiteralType::String))
     {
-        if (left->type() != CoreVM::LiteralType::String)
+        if (left->type() == CoreVM::LiteralType::Float)
+            left = _builder.createF2S(left);
+        else if (left->type() != CoreVM::LiteralType::String)
             left = _builder.createN2S(left);
-        if (right->type() != CoreVM::LiteralType::String)
+        if (right->type() == CoreVM::LiteralType::Float)
+            right = _builder.createF2S(right);
+        else if (right->type() != CoreVM::LiteralType::String)
             right = _builder.createN2S(right);
         _result = _builder.createSAdd(left, right, "concat");
+        return;
+    }
+
+    // Float promotion: if either operand is Float, promote the other to Float
+    auto const isFloat = [](CoreVM::Value* v) {
+        return v->type() == CoreVM::LiteralType::Float;
+    };
+    if (isFloat(left) || isFloat(right))
+    {
+        if (!isFloat(left))
+        {
+            if (left->type() == CoreVM::LiteralType::String)
+                left = _builder.createS2F(left);
+            else
+                left = _builder.createN2F(left);
+        }
+        if (!isFloat(right))
+        {
+            if (right->type() == CoreVM::LiteralType::String)
+                right = _builder.createS2F(right);
+            else
+                right = _builder.createN2F(right);
+        }
+
+        switch (node.op)
+        {
+            case ast::BinaryOp::Add: _result = _builder.createFAdd(left, right, "fadd"); break;
+            case ast::BinaryOp::Sub: _result = _builder.createFSub(left, right, "fsub"); break;
+            case ast::BinaryOp::Mul: _result = _builder.createFMul(left, right, "fmul"); break;
+            case ast::BinaryOp::Div: _result = _builder.createFDiv(left, right, "fdiv"); break;
+            case ast::BinaryOp::Mod: _result = _builder.createFRem(left, right, "fmod"); break;
+            case ast::BinaryOp::Pow: _result = _builder.createFPow(left, right, "fpow"); break;
+            case ast::BinaryOp::Eq: _result = _builder.createFCmpEQ(left, right, "feq"); break;
+            case ast::BinaryOp::Ne: _result = _builder.createFCmpNE(left, right, "fne"); break;
+            case ast::BinaryOp::Lt: _result = _builder.createFCmpLT(left, right, "flt"); break;
+            case ast::BinaryOp::Le: _result = _builder.createFCmpLE(left, right, "fle"); break;
+            case ast::BinaryOp::Gt: _result = _builder.createFCmpGT(left, right, "fgt"); break;
+            case ast::BinaryOp::Ge: _result = _builder.createFCmpGE(left, right, "fge"); break;
+            case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
+            case ast::BinaryOp::Or: _result = _builder.createBOr(toBool(left), toBool(right), "or"); break;
+        }
         return;
     }
 
@@ -2516,10 +2565,15 @@ void IRGenerator::visit(ast::UnaryExpr const& node)
     switch (node.op)
     {
         case ast::UnaryOp::Neg:
-            // Ensure operand is a number for negation
-            if (operand->type() == CoreVM::LiteralType::String)
-                operand = _builder.createS2N(operand);
-            _result = _builder.createNeg(operand, "neg");
+            if (operand->type() == CoreVM::LiteralType::Float)
+                _result = _builder.createFNeg(operand, "fneg");
+            else
+            {
+                // Ensure operand is a number for negation
+                if (operand->type() == CoreVM::LiteralType::String)
+                    operand = _builder.createS2N(operand);
+                _result = _builder.createNeg(operand, "neg");
+            }
             break;
 
         case ast::UnaryOp::Not: _result = _builder.createBNot(toBool(operand), "not"); break;
@@ -3281,8 +3335,7 @@ void IRGenerator::visit(ast::IntLiteralExpr const& node)
 
 void IRGenerator::visit(ast::FloatLiteralExpr const& node)
 {
-    // TODO: CoreVM may need float support; for now, truncate to integer
-    _result = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(node.value)));
+    _result = _builder.getFloat(node.value);
 }
 
 void IRGenerator::visit(ast::BoolLiteralExpr const& node)

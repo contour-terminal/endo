@@ -32,6 +32,7 @@ const char* cstr(UnaryOperator op) // {{{
         case UnaryOperator::BNot: return "bnot";
         case UnaryOperator::SLen: return "slen";
         case UnaryOperator::SIsEmpty: return "sisempty";
+        case UnaryOperator::FNeg: return "fneg";
     }
     crispy::unreachable();
 }
@@ -80,6 +81,19 @@ const char* cstr(BinaryOperator op) // {{{
         case BinaryOperator::PCmpEQ: return "pcmpeq";
         case BinaryOperator::PCmpNE: return "pcmpne";
         case BinaryOperator::PInCidr: return "pincidr";
+        // float
+        case BinaryOperator::FAdd: return "fadd";
+        case BinaryOperator::FSub: return "fsub";
+        case BinaryOperator::FMul: return "fmul";
+        case BinaryOperator::FDiv: return "fdiv";
+        case BinaryOperator::FRem: return "frem";
+        case BinaryOperator::FPow: return "fpow";
+        case BinaryOperator::FCmpEQ: return "fcmpeq";
+        case BinaryOperator::FCmpNE: return "fcmpne";
+        case BinaryOperator::FCmpLE: return "fcmple";
+        case BinaryOperator::FCmpGE: return "fcmpge";
+        case BinaryOperator::FCmpLT: return "fcmplt";
+        case BinaryOperator::FCmpGT: return "fcmpgt";
         default: return "?";
     };
 }

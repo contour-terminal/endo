@@ -84,6 +84,11 @@ size_t ConstantPool::makeInteger(CoreNumber value)
     return ensureValue(_numbers, value);
 }
 
+size_t ConstantPool::makeFloat(double value)
+{
+    return ensureValue(_floats, value);
+}
+
 size_t ConstantPool::makeString(const std::string& value)
 {
     return ensureValue(_strings, value);
@@ -256,6 +261,15 @@ std::string ConstantPool::dumpToString() const
         for (size_t i = 0, e = _numbers.size(); i != e; ++i)
         {
             sstr << std::format(".const integer {:5} = {}\n", i, static_cast<CoreNumber>(_numbers[i]));
+        }
+    }
+
+    if (!_floats.empty())
+    {
+        sstr << "\n; Float Constants\n";
+        for (size_t i = 0, e = _floats.size(); i != e; ++i)
+        {
+            sstr << std::format(".const float {:7} = {:g}\n", i, _floats[i]);
         }
     }
 

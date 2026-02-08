@@ -411,6 +411,17 @@ src/
 - [x] Fix `print` for boolean values (conditional branch to `"true"`/`"false"` since no `B2S` opcode exists)
 - [x] Fix lexer `))` merging in F# mode (consecutive `)` no longer merged to `DblRndClose` except in arithmetic contexts)
 - [x] Add `LANGUAGE_STATUS.md` for tracking F# feature implementation status
+- [x] Implement float (double) primitive type with end-to-end support
+  - [x] `LiteralType::Float` in type system, 18 float opcodes (FLOAD, FNEG, FADD..FPOW, FCMPEQ..GT, N2F, F2N, F2S, S2F)
+  - [x] `ConstantFloat`, float constants in ConstantPool/IRProgram/IRBuilder
+  - [x] 13 float IR instruction types (FNegInstr, FAddInstr..FPowInstr, FCmpEQInstr..FCmpGTInstr)
+  - [x] IRBuilder float operations with constant folding (createFAdd..createFPow, createFCmpEQ..createFCmpGT)
+  - [x] Float cast operations (createN2F, createF2N, createF2S, createS2F)
+  - [x] TargetCodeGenerator float visitors, CastInstr map (Float↔Number, Float↔String), FLOAD emitLoad
+  - [x] VM Runner float execution via `std::bit_cast<uint64_t>(double)` for zero-cost stack storage
+  - [x] IRGenerator: FloatLiteralExpr, auto-promotion (int+float→float via N2F), float negation, print F2S
+  - [x] PatternIRGenerator: float literal patterns with FCmpEQ comparison
+  - [x] 17 float test cases (literal, arithmetic, division, mixed promotion, comparisons, negation, concat, functions, pow, mod)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 

@@ -403,6 +403,156 @@ Value* IRBuilder::createNCmpGT(Value* lhs, Value* rhs, const std::string& name)
 }
 
 // }}}
+// {{{ float ops
+
+static bool isFloatCompatible(LiteralType t)
+{
+    return t == LiteralType::Float || t == LiteralType::Void || t == LiteralType::Object;
+}
+
+Value* IRBuilder::createFNeg(Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(rhs))
+        return getFloat(-a->get());
+
+    return insert<FNegInstr>(rhs, makeName(name));
+}
+
+Value* IRBuilder::createFAdd(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(a->get() + b->get());
+
+    return insert<FAddInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFSub(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(a->get() - b->get());
+
+    return insert<FSubInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFMul(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(a->get() * b->get());
+
+    return insert<FMulInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFDiv(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(a->get() / b->get());
+
+    return insert<FDivInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFRem(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(std::fmod(a->get(), b->get()));
+
+    return insert<FRemInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFPow(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getFloat(std::pow(a->get(), b->get()));
+
+    return insert<FPowInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpEQ(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() == b->get());
+
+    return insert<FCmpEQInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpNE(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() != b->get());
+
+    return insert<FCmpNEInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpLE(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() <= b->get());
+
+    return insert<FCmpLEInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpGE(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() >= b->get());
+
+    return insert<FCmpGEInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpLT(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() < b->get());
+
+    return insert<FCmpLTInstr>(lhs, rhs, makeName(name));
+}
+
+Value* IRBuilder::createFCmpGT(Value* lhs, Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(lhs->type()) && isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(lhs))
+        if (auto* b = dynamic_cast<ConstantFloat*>(rhs))
+            return getBoolean(a->get() > b->get());
+
+    return insert<FCmpGTInstr>(lhs, rhs, makeName(name));
+}
+
+// }}}
 // {{{ string ops
 Value* IRBuilder::createSAdd(Value* lhs, Value* rhs, const std::string& name)
 {
@@ -683,6 +833,55 @@ Value* IRBuilder::createS2N(Value* rhs, const std::string& name)
     }
 
     return insert<CastInstr>(LiteralType::Number, rhs, makeName(name));
+}
+
+Value* IRBuilder::createN2F(Value* rhs, const std::string& name)
+{
+    assert(isNumberCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantInt*>(rhs))
+        return getFloat(static_cast<double>(a->get()));
+
+    return insert<CastInstr>(LiteralType::Float, rhs, makeName(name));
+}
+
+Value* IRBuilder::createF2N(Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(rhs))
+        return get(static_cast<int64_t>(a->get()));
+
+    return insert<CastInstr>(LiteralType::Number, rhs, makeName(name));
+}
+
+Value* IRBuilder::createF2S(Value* rhs, const std::string& name)
+{
+    assert(isFloatCompatible(rhs->type()));
+
+    if (auto* a = dynamic_cast<ConstantFloat*>(rhs))
+        return get(std::format("{:g}", a->get()));
+
+    return insert<CastInstr>(LiteralType::String, rhs, makeName(name));
+}
+
+Value* IRBuilder::createS2F(Value* rhs, const std::string& name)
+{
+    assert(rhs->type() == LiteralType::String);
+
+    if (auto* value = dynamic_cast<ConstantString*>(rhs))
+    {
+        try
+        {
+            return getFloat(std::stod(value->get()));
+        }
+        catch (...)
+        {
+            // fall through to default behaviour
+        }
+    }
+
+    return insert<CastInstr>(LiteralType::Float, rhs, makeName(name));
 }
 
 // }}}
