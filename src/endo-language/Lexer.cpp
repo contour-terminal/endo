@@ -48,6 +48,12 @@ namespace
             return Token::OptionNone;
         if (literal == "Ok")
             return Token::ResultOk;
+        if (literal == "Error")
+            return Token::ResultError;
+
+        // F# error handling keywords
+        if (literal == "try")
+            return Token::Try;
 
         return Token::Identifier;
     }

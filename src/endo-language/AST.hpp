@@ -872,6 +872,20 @@ struct LetBindingStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Expression statement: wraps an expression to be used as a statement.
+///
+/// Used for F# expressions that appear at statement level, such as:
+/// - `print "hello"` (function application with side effects)
+/// - `println msg` (print with newline)
+struct ExprStmt final: public Statement
+{
+    std::unique_ptr<Expr> expr;
+
+    explicit ExprStmt(std::unique_ptr<Expr> e): expr(std::move(e)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Binary operators for F# style expressions
 enum class BinaryOp
 {
@@ -1160,6 +1174,92 @@ struct ShellCommandExpr final: public Expr
     std::unique_ptr<Statement> command; ///< The shell command/pipeline to execute
 
     explicit ShellCommandExpr(std::unique_ptr<Statement> cmd): command(std::move(cmd)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+// ============================================================================
+// F# Style - Error Handling Expressions
+// ============================================================================
+
+/// Option constructor expression: `Some expr` or `None`
+///
+/// Creates an Option value:
+/// - `Some 42` creates an Option containing 42
+/// - `None` creates an empty Option
+///
+/// Used with pattern matching and the `?` operator for error handling.
+struct OptionExpr final: public Expr
+{
+    bool isSome;                 ///< true for Some, false for None
+    std::unique_ptr<Expr> value; ///< The wrapped value (nullptr for None)
+
+    explicit OptionExpr(bool some, std::unique_ptr<Expr> val = nullptr): isSome(some), value(std::move(val))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Result constructor expression: `Ok expr` or `Error expr`
+///
+/// Creates a Result value:
+/// - `Ok 42` creates a successful Result containing 42
+/// - `Error "failed"` creates an error Result with the message
+///
+/// Used with pattern matching and the `?` operator for error propagation.
+struct ResultExpr final: public Expr
+{
+    bool isOk;                     ///< true for Ok, false for Error
+    std::unique_ptr<Expr> payload; ///< The success value or error value
+
+    ResultExpr(bool ok, std::unique_ptr<Expr> val): isOk(ok), payload(std::move(val)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Try expression (error propagation): `expr?`
+///
+/// Unwraps a Result or Option value:
+/// - If Ok/Some: returns the inner value
+/// - If Error/None: propagates the error (early return from function)
+///
+/// Examples:
+/// - `let x = getValue()?` - unwrap or propagate error
+/// - `data? |> process` - try-unwrap then process
+///
+/// The `?` operator can only be used inside functions that return Result/Option.
+struct TryExpr final: public Expr
+{
+    std::unique_ptr<Expr> operand; ///< Expression returning Result/Option
+
+    explicit TryExpr(std::unique_ptr<Expr> op): operand(std::move(op)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Try-with expression: `try expr with | pattern -> handler | ...`
+///
+/// Evaluates an expression that may fail and handles errors with pattern matching.
+///
+/// Examples:
+/// ```
+/// try
+///     let data = fetchData()?
+///     processData(data)
+/// with
+/// | { code = 404; _ } -> DefaultData.empty
+/// | { code; message } when code >= 500 -> Error { code; message }
+/// | e -> Error e
+/// ```
+struct TryWithExpr final: public Expr
+{
+    std::unique_ptr<Expr> body;     ///< Expression to try
+    std::vector<MatchArm> handlers; ///< Error handlers (reuse MatchArm from match expressions)
+
+    TryWithExpr(std::unique_ptr<Expr> b, std::vector<MatchArm> h): body(std::move(b)), handlers(std::move(h))
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

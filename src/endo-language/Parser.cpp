@@ -182,6 +182,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return parseContinue();
             else if (isFunctionDefinition())
                 return parseFunctionDef();
+            else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println")
+            {
+                // F# style print/println functions - parse as F# expression wrapped in ExprStmt
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
             else
             {
                 // All other statements (builtins and commands) can participate
@@ -2286,11 +2296,18 @@ bool Parser::isFSharpPrimary() const noexcept
     switch (_lexer.currentToken())
     {
         case Token::Number:
+        case Token::String:        // String literal: 'hello'
+        case Token::DblQuoteStart: // Double-quoted string: "hello"
         case Token::RndOpen:
         case Token::Fun:
         case Token::Match:
         case Token::BracketOpen: // List literal: [1; 2; 3]
         case Token::Ampersand:   // Shell command expression: & git status
+        case Token::OptionSome:  // Some expr
+        case Token::OptionNone:  // None
+        case Token::ResultOk:    // Ok expr
+        case Token::ResultError: // Error expr
+        case Token::Try:         // try expr with ...
             return true;
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
@@ -2605,7 +2622,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
 std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
 {
     TRACE_SCOPE("parseFSharpApplication");
-    auto func = parseFSharpPrimary();
+    auto func = parseFSharpPostfix();
     if (!func)
         return nullptr;
 
@@ -2613,12 +2630,105 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
     // Continue while we see primary expressions (identifiers, numbers, parens)
     while (isFSharpPrimary())
     {
-        auto arg = parseFSharpPrimary();
+        auto arg = parseFSharpPostfix();
         if (!arg)
             break;
         func = std::make_unique<ast::ApplicationExpr>(std::move(func), std::move(arg));
     }
     return func;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
+{
+    TRACE_SCOPE("parseFSharpPostfix");
+    auto expr = parseFSharpPrimary();
+    if (!expr)
+        return nullptr;
+
+    // Handle postfix ? operator for error propagation
+    while (_lexer.currentToken() == Token::Question)
+    {
+        _lexer.nextToken(); // consume '?'
+        expr = std::make_unique<ast::TryExpr>(std::move(expr));
+    }
+    return expr;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseTryWith()
+{
+    TRACE_SCOPE("parseTryWith");
+
+    // try expr with | pattern -> handler | ...
+    _lexer.nextToken(); // consume 'try'
+
+    // Parse the body expression
+    auto body = parseFSharpExpr();
+    if (!body)
+        return nullptr;
+
+    // Expect 'with' keyword
+    if (_lexer.currentToken() != Token::With)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add 'with' followed by pattern match handlers" },
+                                           currentContextSnippet(),
+                                           "Expected 'with' after try body, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'with'
+
+    // Parse handlers: | pattern when guard -> body
+    std::vector<ast::MatchArm> handlers;
+    while (_lexer.currentToken() == Token::Pipe)
+    {
+        _lexer.nextToken(); // consume '|'
+
+        // Parse pattern
+        auto pat = parsePattern();
+        if (!pat)
+            return nullptr;
+
+        // Parse optional guard: when expr
+        std::unique_ptr<ast::Expr> guard = nullptr;
+        if (_lexer.currentToken() == Token::When)
+        {
+            _lexer.nextToken(); // consume 'when'
+            guard = parseFSharpExpr();
+            if (!guard)
+                return nullptr;
+        }
+
+        // Expect '->'
+        if (_lexer.currentToken() != Token::Arrow)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Use '->' to separate pattern from handler body" },
+                                               currentContextSnippet(),
+                                               "Expected '->' in try-with handler, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '->'
+
+        // Parse handler body
+        auto handlerBody = parseFSharpExpr();
+        if (!handlerBody)
+            return nullptr;
+
+        handlers.emplace_back(std::move(pat), std::move(guard), std::move(handlerBody));
+    }
+
+    if (handlers.empty())
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add at least one handler: | pattern -> expr" },
+                                           currentContextSnippet(),
+                                           "Expected at least one handler in try-with expression");
+        return nullptr;
+    }
+
+    return std::make_unique<ast::TryWithExpr>(std::move(body), std::move(handlers));
 }
 
 std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
@@ -2786,6 +2896,77 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         case Token::Ampersand: {
             // Shell command expression: & git status
             return parseShellCommandExpr();
+        }
+
+        case Token::OptionSome: {
+            // Some expr - Option constructor with value
+            _lexer.nextToken(); // consume 'Some'
+            auto value = parseFSharpPrimary();
+            if (!value)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a value after 'Some'" },
+                                                   currentContextSnippet(),
+                                                   "Expected expression after 'Some', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            return std::make_unique<ast::OptionExpr>(true, std::move(value));
+        }
+
+        case Token::OptionNone: {
+            // None - Option constructor without value
+            _lexer.nextToken(); // consume 'None'
+            return std::make_unique<ast::OptionExpr>(false);
+        }
+
+        case Token::ResultOk: {
+            // Ok expr - Result constructor for success
+            _lexer.nextToken(); // consume 'Ok'
+            auto value = parseFSharpPrimary();
+            if (!value)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a value after 'Ok'" },
+                                                   currentContextSnippet(),
+                                                   "Expected expression after 'Ok', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            return std::make_unique<ast::ResultExpr>(true, std::move(value));
+        }
+
+        case Token::ResultError: {
+            // Error expr - Result constructor for error
+            _lexer.nextToken(); // consume 'Error'
+            auto value = parseFSharpPrimary();
+            if (!value)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a value after 'Error'" },
+                                                   currentContextSnippet(),
+                                                   "Expected expression after 'Error', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            return std::make_unique<ast::ResultExpr>(false, std::move(value));
+        }
+
+        case Token::Try: {
+            // try expr with | pattern -> handler | ...
+            return parseTryWith();
+        }
+
+        case Token::String: {
+            // Single-quoted string literal: 'hello'
+            std::string value = consumeLiteral();
+            return std::make_unique<ast::LiteralExpr>(std::move(value));
+        }
+
+        case Token::DblQuoteStart: {
+            // Double-quoted string: "hello" (may contain interpolation)
+            // For F# context, parse as interpolated string and return the expression
+            return parseInterpolatedString();
         }
 
         default:
@@ -3919,6 +4100,7 @@ bool Parser::canStartPattern() const
         case Token::OptionSome:
         case Token::OptionNone:
         case Token::ResultOk:
+        case Token::ResultError:
         case Token::Mut: return true;
         default: return false;
     }
@@ -3932,13 +4114,14 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
     {
         case Token::OptionSome:
         case Token::OptionNone:
-        case Token::ResultOk: {
-            // Constructor pattern: Some, None, Ok
+        case Token::ResultOk:
+        case Token::ResultError: {
+            // Constructor pattern: Some, None, Ok, Error
             std::string name = _lexer.currentLiteral();
             Token constructorToken = _lexer.currentToken();
             _lexer.nextToken();
 
-            // Check for optional payload (Some x, Ok value)
+            // Check for optional payload (Some x, Ok value, Error e)
             std::optional<pattern::PatternPtr> payload = std::nullopt;
             if (constructorToken != Token::OptionNone)
             {
@@ -4007,19 +4190,6 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
             {
                 _lexer.nextToken();
                 return pattern::patterns::literal(false);
-            }
-            if (lit == "Error")
-            {
-                // Error constructor pattern
-                _lexer.nextToken();
-                std::optional<pattern::PatternPtr> payload = std::nullopt;
-                if (canStartPattern())
-                {
-                    payload = parsePrimaryPattern();
-                    if (!payload)
-                        return nullptr;
-                }
-                return pattern::patterns::constructor("Error", std::move(payload));
             }
 
             // In pattern context, the lexer may have consumed more than we want.

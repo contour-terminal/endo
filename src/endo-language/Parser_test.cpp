@@ -1107,3 +1107,243 @@ TEST_CASE("Parser.FSharp.shell_command_with_shell_pipe")
     CHECK(parseAndPrintAST("let lines = & cat file.txt | grep pattern")
           == "let lines = & cat file.txt | grep pattern");
 }
+
+// ============================================================================
+// Option/Result Expression Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.option_some")
+{
+    auto ast = parse("let x = Some 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "x");
+
+    auto* optExpr = dynamic_cast<endo::ast::OptionExpr*>(letStmt->value.get());
+    REQUIRE(optExpr != nullptr);
+    CHECK(optExpr->isSome == true);
+    REQUIRE(optExpr->value != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(optExpr->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 42);
+}
+
+TEST_CASE("Parser.FSharp.option_none")
+{
+    auto ast = parse("let x = None");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "x");
+
+    auto* optExpr = dynamic_cast<endo::ast::OptionExpr*>(letStmt->value.get());
+    REQUIRE(optExpr != nullptr);
+    CHECK(optExpr->isSome == false);
+    CHECK(optExpr->value == nullptr);
+}
+
+TEST_CASE("Parser.FSharp.result_ok")
+{
+    auto ast = parse("let r = Ok 100");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "r");
+
+    auto* resExpr = dynamic_cast<endo::ast::ResultExpr*>(letStmt->value.get());
+    REQUIRE(resExpr != nullptr);
+    CHECK(resExpr->isOk == true);
+    REQUIRE(resExpr->payload != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(resExpr->payload.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 100);
+}
+
+TEST_CASE("Parser.FSharp.result_error")
+{
+    auto ast = parse("let r = Error 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "r");
+
+    auto* resExpr = dynamic_cast<endo::ast::ResultExpr*>(letStmt->value.get());
+    REQUIRE(resExpr != nullptr);
+    CHECK(resExpr->isOk == false);
+    REQUIRE(resExpr->payload != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(resExpr->payload.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 42);
+}
+
+// ============================================================================
+// Try Expression Tests (? postfix operator)
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.try_expr_simple")
+{
+    auto ast = parse("let f x = x?");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "f");
+    REQUIRE(letStmt->parameters.size() == 1);
+    CHECK(letStmt->parameters[0] == "x");
+
+    auto* tryExpr = dynamic_cast<endo::ast::TryExpr*>(letStmt->value.get());
+    REQUIRE(tryExpr != nullptr);
+
+    auto* innerIdent = dynamic_cast<endo::ast::IdentifierExpr*>(tryExpr->operand.get());
+    REQUIRE(innerIdent != nullptr);
+    CHECK(innerIdent->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.try_expr_chained")
+{
+    // x?? should parse as (x?)?
+    auto ast = parse("let f x = x??");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* outerTry = dynamic_cast<endo::ast::TryExpr*>(letStmt->value.get());
+    REQUIRE(outerTry != nullptr);
+
+    auto* innerTry = dynamic_cast<endo::ast::TryExpr*>(outerTry->operand.get());
+    REQUIRE(innerTry != nullptr);
+
+    auto* innerIdent = dynamic_cast<endo::ast::IdentifierExpr*>(innerTry->operand.get());
+    REQUIRE(innerIdent != nullptr);
+    CHECK(innerIdent->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.try_expr_with_function_call")
+{
+    auto ast = parse("let f = (getValue x)?");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* tryExpr = dynamic_cast<endo::ast::TryExpr*>(letStmt->value.get());
+    REQUIRE(tryExpr != nullptr);
+
+    auto* parenExpr = dynamic_cast<endo::ast::ParenExpr*>(tryExpr->operand.get());
+    REQUIRE(parenExpr != nullptr);
+
+    auto* appExpr = dynamic_cast<endo::ast::ApplicationExpr*>(parenExpr->inner.get());
+    REQUIRE(appExpr != nullptr);
+}
+
+// ============================================================================
+// Try-With Expression Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.try_with_simple")
+{
+    auto ast = parse("let r = try getValue x with | Error e -> 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "r");
+
+    auto* tryWithExpr = dynamic_cast<endo::ast::TryWithExpr*>(letStmt->value.get());
+    REQUIRE(tryWithExpr != nullptr);
+
+    // Check body is an application
+    auto* bodyApp = dynamic_cast<endo::ast::ApplicationExpr*>(tryWithExpr->body.get());
+    REQUIRE(bodyApp != nullptr);
+
+    // Check handlers
+    REQUIRE(tryWithExpr->handlers.size() == 1);
+    auto const& handler = tryWithExpr->handlers[0];
+
+    // Handler pattern should be Error e
+    auto* ctorPattern = dynamic_cast<endo::pattern::ConstructorPattern*>(handler.pattern.get());
+    REQUIRE(ctorPattern != nullptr);
+    CHECK(ctorPattern->name == "Error");
+
+    // Handler body should be 0
+    auto* handlerBody = dynamic_cast<endo::ast::IntLiteralExpr*>(handler.body.get());
+    REQUIRE(handlerBody != nullptr);
+    CHECK(handlerBody->value == 0);
+}
+
+TEST_CASE("Parser.FSharp.try_with_multiple_handlers")
+{
+    auto ast = parse("let r = try riskyOp x with | Error 1 -> 10 | Error _ -> 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* tryWithExpr = dynamic_cast<endo::ast::TryWithExpr*>(letStmt->value.get());
+    REQUIRE(tryWithExpr != nullptr);
+
+    REQUIRE(tryWithExpr->handlers.size() == 2);
+
+    // First handler: Error 1 -> 10
+    auto* body1 = dynamic_cast<endo::ast::IntLiteralExpr*>(tryWithExpr->handlers[0].body.get());
+    REQUIRE(body1 != nullptr);
+    CHECK(body1->value == 10);
+
+    // Second handler: Error _ -> 0
+    auto* body2 = dynamic_cast<endo::ast::IntLiteralExpr*>(tryWithExpr->handlers[1].body.get());
+    REQUIRE(body2 != nullptr);
+    CHECK(body2->value == 0);
+}
+
+// ============================================================================
+// Option/Result ASTPrinter Tests
+// ============================================================================
+
+TEST_CASE("Parser.FSharp.ASTPrinter.option_some")
+{
+    CHECK(parseAndPrintAST("let x = Some 42") == "let x = Some 42");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.option_none")
+{
+    CHECK(parseAndPrintAST("let x = None") == "let x = None");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.result_ok")
+{
+    CHECK(parseAndPrintAST("let r = Ok 100") == "let r = Ok 100");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.result_error")
+{
+    CHECK(parseAndPrintAST("let r = Error 42") == "let r = Error 42");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.try_expr")
+{
+    CHECK(parseAndPrintAST("let f x = x?") == "let f x = x?");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.try_with")
+{
+    CHECK(parseAndPrintAST("let r = try getValue x with | Error e -> 0")
+          == "let r = try (getValue x) with | Error e -> 0");
+}

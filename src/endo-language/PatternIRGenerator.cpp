@@ -226,12 +226,75 @@ void PatternIRGenerator::visit(pattern::RecordPattern const&)
     _gen.createBr(_failureBlock);
 }
 
-void PatternIRGenerator::visit(pattern::ConstructorPattern const&)
+void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
 {
-    // Discriminated unions require runtime representation
-    if (_collectOnly)
+    // Discriminated unions are represented as TypedObjects with tags
+    // The pattern matches if the object's tag matches the constructor
+
+    // Determine expected tag based on constructor name
+    // Option: None=0, Some=1
+    // Result: Error=0, Ok=1
+    int expectedTag = -1;
+    if (pat.name == "None")
+        expectedTag = 0;
+    else if (pat.name == "Some")
+        expectedTag = 1;
+    else if (pat.name == "Error")
+        expectedTag = 0;
+    else if (pat.name == "Ok")
+        expectedTag = 1;
+    else
+    {
+        // Unknown constructor - fail match
+        // TODO: Support user-defined ADTs
+        if (_collectOnly)
+            return;
+        _gen.createBr(_failureBlock);
         return;
-    _gen.createBr(_failureBlock);
+    }
+
+    if (_collectOnly)
+    {
+        // Collect bindings from payload pattern if present
+        if (pat.payload)
+        {
+            // For collect mode, we just need to visit the payload
+            // The scrutinee will be set properly during actual compilation
+            pat.payload->get()->accept(*this);
+        }
+        return;
+    }
+
+    // Get the tag from the object using OGETTAG
+    CoreVM::Value* tag = _gen.createObjGetTag(_scrutinee, "ctor.tag");
+
+    // Check if tag matches expected
+    CoreVM::Value* tagMatches =
+        _gen.createNCmpEQ(tag, _gen.get(CoreVM::CoreNumber(expectedTag)), "ctor.tag.eq");
+
+    // If pattern has a payload, we need an intermediate block to extract and match it
+    if (pat.payload)
+    {
+        auto* payloadBlock = _gen.createBlock("ctor.payload");
+        _gen.createCondBr(tagMatches, payloadBlock, _failureBlock);
+
+        _gen.setInsertPoint(payloadBlock);
+
+        // Extract payload from slot 0 using OGETSLOT
+        CoreVM::Value* payloadValue =
+            _gen.createObjGetSlot(_scrutinee, _gen.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+
+        // Recursively match the payload pattern
+        CoreVM::Value* savedScrutinee = _scrutinee;
+        _scrutinee = payloadValue;
+        pat.payload->get()->accept(*this);
+        _scrutinee = savedScrutinee;
+    }
+    else
+    {
+        // No payload pattern - just check the tag
+        _gen.createCondBr(tagMatches, _successBlock, _failureBlock);
+    }
 }
 
 } // namespace endo

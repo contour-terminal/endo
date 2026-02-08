@@ -562,6 +562,12 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         node.value->accept(*this);
 }
 
+void ASTPrinter::visit(ExprStmt const& node)
+{
+    if (node.expr)
+        node.expr->accept(*this);
+}
+
 void ASTPrinter::visit(BinaryExpr const& node)
 {
     _result += '(';
@@ -740,6 +746,63 @@ void ASTPrinter::visit(ShellCommandExpr const& node)
     _result += "& ";
     if (node.command)
         node.command->accept(*this);
+}
+
+void ASTPrinter::visit(OptionExpr const& node)
+{
+    if (node.isSome)
+    {
+        _result += "Some ";
+        if (node.value)
+            node.value->accept(*this);
+    }
+    else
+    {
+        _result += "None";
+    }
+}
+
+void ASTPrinter::visit(ResultExpr const& node)
+{
+    if (node.isOk)
+    {
+        _result += "Ok ";
+    }
+    else
+    {
+        _result += "Error ";
+    }
+    if (node.payload)
+        node.payload->accept(*this);
+}
+
+void ASTPrinter::visit(TryExpr const& node)
+{
+    if (node.operand)
+        node.operand->accept(*this);
+    _result += '?';
+}
+
+void ASTPrinter::visit(TryWithExpr const& node)
+{
+    _result += "try ";
+    if (node.body)
+        node.body->accept(*this);
+    _result += " with";
+    for (auto const& arm: node.handlers)
+    {
+        _result += " | ";
+        if (arm.pattern)
+            _result += pattern::toString(*arm.pattern);
+        if (arm.guard)
+        {
+            _result += " when ";
+            arm.guard->accept(*this);
+        }
+        _result += " -> ";
+        if (arm.body)
+            arm.body->accept(*this);
+    }
 }
 
 } // namespace endo::ast

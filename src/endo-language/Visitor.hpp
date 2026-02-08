@@ -49,6 +49,7 @@ struct WhileStmt;
 
 // F# style expressions and statements
 struct LetBindingStmt;
+struct ExprStmt;
 struct BinaryExpr;
 struct UnaryExpr;
 struct PipelineExpr;
@@ -64,6 +65,10 @@ struct ListExpr;
 struct ListRangeExpr;
 struct ListComprehensionExpr;
 struct ShellCommandExpr;
+struct OptionExpr;
+struct ResultExpr;
+struct TryExpr;
+struct TryWithExpr;
 
 struct Visitor
 {
@@ -122,6 +127,7 @@ struct Visitor
 
     // F# style expressions and statements
     virtual void visit(LetBindingStmt const&) = 0;
+    virtual void visit(ExprStmt const&) = 0;
     virtual void visit(BinaryExpr const&) = 0;
     virtual void visit(UnaryExpr const&) = 0;
     virtual void visit(PipelineExpr const&) = 0;
@@ -137,6 +143,10 @@ struct Visitor
     virtual void visit(ListRangeExpr const&) = 0;
     virtual void visit(ListComprehensionExpr const&) = 0;
     virtual void visit(ShellCommandExpr const&) = 0;
+    virtual void visit(OptionExpr const&) = 0;
+    virtual void visit(ResultExpr const&) = 0;
+    virtual void visit(TryExpr const&) = 0;
+    virtual void visit(TryWithExpr const&) = 0;
 };
 
 } // namespace endo::ast

@@ -81,10 +81,13 @@ enum class Token
     // Note: 'in' is NOT a keyword token - it's recognized contextually by the parser
 
     // F# style constructors
-    OptionSome, // 'Some' (Option constructor)
-    OptionNone, // 'None' (Option constructor)
-    ResultOk,   // 'Ok' (Result constructor)
-    // Note: Error already exists contextually (ResultError)
+    OptionSome,  // 'Some' (Option constructor)
+    OptionNone,  // 'None' (Option constructor)
+    ResultOk,    // 'Ok' (Result constructor)
+    ResultError, // 'Error' (Result constructor)
+
+    // F# style keywords for error handling
+    Try, // 'try' (try-with expression)
 
     // F# style operators
     Arrow,       // '->'
@@ -411,6 +414,8 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case OptionSome: name = "Some"; break;
             case OptionNone: name = "None"; break;
             case ResultOk: name = "Ok"; break;
+            case ResultError: name = "Error"; break;
+            case Try: name = "try"; break;
             // F# style operators
             case Arrow: name = "->"; break;
             case LeftArrow: name = "<-"; break;

@@ -88,6 +88,7 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     // F# style expressions and statements
     void visit(ast::LetBindingStmt const& node) override;
+    void visit(ast::ExprStmt const& node) override;
     void visit(ast::BinaryExpr const& node) override;
     void visit(ast::UnaryExpr const& node) override;
     void visit(ast::PipelineExpr const& node) override;
@@ -103,6 +104,10 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     void visit(ast::ListRangeExpr const& node) override;
     void visit(ast::ListComprehensionExpr const& node) override;
     void visit(ast::ShellCommandExpr const& node) override;
+    void visit(ast::OptionExpr const& node) override;
+    void visit(ast::ResultExpr const& node) override;
+    void visit(ast::TryExpr const& node) override;
+    void visit(ast::TryWithExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -130,6 +135,11 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     CoreVM::Value* execBuiltCommandPipedBackground(std::string const& programName,
                                                    std::vector<std::unique_ptr<ast::Expr>> const& args);
 
+    /// Generates IR for builtin print/println call.
+    /// @param argument The string expression to print
+    /// @param appendNewline If true, appends newline after printing (println)
+    void generatePrintCall(ast::Expr const* argument, bool appendNewline);
+
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,
@@ -155,12 +165,15 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     struct FSharpScope
     {
         std::unordered_map<std::string, CoreVM::Value*> bindings;
+        std::vector<CoreVM::AllocaInstr*>
+            objectVariables; ///< Variables holding objects (for ORELEASE at scope exit)
         FSharpScope* parent = nullptr;
     };
 
     void pushFSharpScope();
     void popFSharpScope();
     void bindFSharpVariable(std::string const& name, CoreVM::Value* value);
+    void bindFSharpObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
 
     // F# function management
@@ -174,6 +187,21 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    // F# function context for error propagation (? operator)
+    // Tracks return block and storage for early returns from try expressions
+    struct FSharpFunctionContext
+    {
+        CoreVM::BasicBlock* returnBlock;    ///< Block to jump to on error propagation
+        CoreVM::AllocaInstr* returnStorage; ///< Storage for the return value
+        bool returnsResultOrOption;         ///< Whether function returns Result/Option
+    };
+
+    void pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
+                                   CoreVM::AllocaInstr* returnStorage,
+                                   bool returnsResultOrOption);
+    void popFSharpFunctionContext();
+    [[nodiscard]] FSharpFunctionContext* currentFSharpFunctionContext();
 
     /// Creates an alloca in the entry block of the current handler.
     /// This ensures allocas are always at the beginning, which is required
@@ -200,6 +228,9 @@ class IRGenerator final: public CoreVM::IRBuilder, public ast::Visitor
     // Lambda counter for generating unique anonymous function names
     size_t _lambdaCounter = 0;
     [[nodiscard]] std::string generateLambdaName();
+
+    // F# function context stack for error propagation
+    std::vector<FSharpFunctionContext> _fsharpFunctionContextStack;
 };
 
 } // namespace endo

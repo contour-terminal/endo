@@ -81,6 +81,13 @@ void IRGenerator::popFSharpScope()
 {
     if (_currentFSharpScope)
     {
+        // Release all object variables in this scope before exiting
+        for (CoreVM::AllocaInstr* storage: _currentFSharpScope->objectVariables)
+        {
+            CoreVM::Value* obj = createLoad(storage, "scope.exit.load");
+            createObjRelease(obj, "scope.exit.release");
+        }
+
         FSharpScope* parent = _currentFSharpScope->parent;
         if (_currentFSharpScope != _rootFSharpScope.get())
         {
@@ -94,6 +101,17 @@ void IRGenerator::bindFSharpVariable(std::string const& name, CoreVM::Value* val
 {
     if (_currentFSharpScope)
         _currentFSharpScope->bindings[name] = value;
+}
+
+void IRGenerator::bindFSharpObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage)
+{
+    if (_currentFSharpScope)
+    {
+        // Track the storage for ORELEASE at scope exit
+        _currentFSharpScope->objectVariables.push_back(storage);
+        // Also bind as a regular variable
+        _currentFSharpScope->bindings[name] = storage;
+    }
 }
 
 CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
@@ -1538,6 +1556,44 @@ CoreVM::Value* IRGenerator::execBuiltCommandPipedBackground(
         getBuiltinFunction(*cmdExecCallback), { get(command) }, "cmd_exec_piped_background");
 }
 
+void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewline)
+{
+    TRACE_SCOPE("generatePrintCall");
+
+    // Evaluate the argument (should be a string)
+    CoreVM::Value* argValue = codegen(argument);
+    if (!argValue)
+    {
+        reportTypeError("Failed to evaluate print argument");
+        return;
+    }
+
+    // Verify it's a string type
+    if (argValue->type() != CoreVM::LiteralType::String)
+    {
+        reportTypeError("print/println requires a string argument");
+        return;
+    }
+
+    // Find the appropriate native callback (using short signature format)
+    std::string signature = appendNewline ? "println(S)V" : "print(S)V";
+
+    auto* callback = findCallback(signature);
+    if (!callback)
+    {
+        if (appendNewline)
+            reportTypeError("println builtin not available");
+        else
+            reportTypeError("print builtin not available");
+        return;
+    }
+
+    // Generate native call
+    std::string funcName = appendNewline ? "println" : "print";
+    createCallFunction(getBuiltinFunction(*callback), { argValue }, funcName);
+    _result = nullptr; // print/println returns void
+}
+
 std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
     std::vector<std::unique_ptr<ast::Expr>> const& args)
 {
@@ -1632,6 +1688,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
+    // Check if the expression produces an object (Option/Result)
+    // These need special tracking for reference counting
+    bool isObjectExpr = dynamic_cast<ast::OptionExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ResultExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::TryExpr const*>(node.value.get()) != nullptr;
+
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
     if (!value)
@@ -1651,10 +1713,26 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Store the value
     createStore(storage, value, node.name);
 
-    // Register in F# scope - store the alloca instruction so we can load from it later
-    bindFSharpVariable(node.name, storage);
+    // Register in F# scope - track objects for ORELEASE at scope exit
+    if (isObjectExpr)
+    {
+        bindFSharpObjectVariable(node.name, storage);
+    }
+    else
+    {
+        bindFSharpVariable(node.name, storage);
+    }
 
     // Let bindings as statements don't produce a result value
+    _result = nullptr;
+}
+
+void IRGenerator::visit(ast::ExprStmt const& node)
+{
+    TRACE_SCOPE("visit(ExprStmt)");
+    // Expression statement: evaluate the expression for its side effects
+    // The result is discarded
+    codegen(node.expr.get());
     _result = nullptr;
 }
 
@@ -1815,28 +1893,49 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     // We need to flatten this to get the function name and all arguments
 
     // Collect arguments in reverse order (innermost first)
-    std::vector<CoreVM::Value*> args;
+    std::vector<ast::Expr const*> argExprs;
     ast::Expr const* current = &node;
 
     while (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(current))
     {
-        // Evaluate the argument
-        CoreVM::Value* argValue = codegen(app->argument.get());
+        argExprs.push_back(app->argument.get());
+        current = app->function.get();
+    }
+
+    // Reverse to get arguments in correct order (first arg first)
+    std::reverse(argExprs.begin(), argExprs.end());
+
+    // Unwrap ParenExpr if present
+    while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(current))
+        current = paren->inner.get();
+
+    // Check for builtin print/println functions
+    if (auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(current))
+    {
+        if (funcIdent->name == "print" || funcIdent->name == "println")
+        {
+            if (argExprs.size() != 1)
+            {
+                reportTypeError("{} requires exactly one string argument", std::string_view(funcIdent->name));
+                return;
+            }
+            generatePrintCall(argExprs[0], funcIdent->name == "println");
+            return;
+        }
+    }
+
+    // Evaluate all arguments
+    std::vector<CoreVM::Value*> args;
+    for (ast::Expr const* argExpr: argExprs)
+    {
+        CoreVM::Value* argValue = codegen(argExpr);
         if (!argValue)
         {
             reportTypeError("Failed to evaluate function argument");
             return;
         }
         args.push_back(argValue);
-        current = app->function.get();
     }
-
-    // Reverse to get arguments in correct order (first arg first)
-    std::reverse(args.begin(), args.end());
-
-    // Unwrap ParenExpr if present
-    while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(current))
-        current = paren->inner.get();
 
     // The base can be:
     // 1. An identifier (named function): double 5
@@ -2181,6 +2280,270 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         return;
     }
     _result = createCallFunction(getBuiltinFunction(*endCb), {}, "subst_end");
+}
+
+// ============================================================================
+// F# Error Handling Expressions
+// ============================================================================
+
+void IRGenerator::pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
+                                            CoreVM::AllocaInstr* returnStorage,
+                                            bool returnsResultOrOption)
+{
+    _fsharpFunctionContextStack.push_back({ returnBlock, returnStorage, returnsResultOrOption });
+}
+
+void IRGenerator::popFSharpFunctionContext()
+{
+    if (!_fsharpFunctionContextStack.empty())
+        _fsharpFunctionContextStack.pop_back();
+}
+
+IRGenerator::FSharpFunctionContext* IRGenerator::currentFSharpFunctionContext()
+{
+    if (_fsharpFunctionContextStack.empty())
+        return nullptr;
+    return &_fsharpFunctionContextStack.back();
+}
+
+void IRGenerator::visit(ast::OptionExpr const& node)
+{
+    TRACE_SCOPE("visit(OptionExpr)");
+
+    // Option values are represented as TypedObjects:
+    // - Tag 0 = None (no payload)
+    // - Tag 1 = Some (1 slot payload)
+
+    // Allocate Option object
+    auto* typeId = get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    CoreVM::Value* obj = createObjAlloc(typeId, "option");
+
+    if (node.isSome)
+    {
+        // Some value - evaluate the inner expression
+        if (!node.value)
+        {
+            reportTypeError("Some constructor requires a value");
+            return;
+        }
+        CoreVM::Value* innerValue = codegen(node.value.get());
+        if (!innerValue)
+            return;
+
+        // Set tag to 1 (Some) and store the value in slot 0
+        obj = createObjSetTag(obj, get(CoreVM::CoreNumber(1)), "option.tag");
+        obj = createObjSetSlot(obj, get(CoreVM::CoreNumber(0)), innerValue, "option.value");
+        _result = obj;
+    }
+    else
+    {
+        // None - just set tag to 0, no payload needed
+        obj = createObjSetTag(obj, get(CoreVM::CoreNumber(0)), "option.tag");
+        _result = obj;
+    }
+}
+
+void IRGenerator::visit(ast::ResultExpr const& node)
+{
+    TRACE_SCOPE("visit(ResultExpr)");
+
+    // Result values are represented as TypedObjects:
+    // - Tag 0 = Error (1 slot payload)
+    // - Tag 1 = Ok (1 slot payload)
+
+    if (!node.payload)
+    {
+        reportTypeError("Result constructor requires a value");
+        return;
+    }
+
+    CoreVM::Value* payloadValue = codegen(node.payload.get());
+    if (!payloadValue)
+        return;
+
+    // Allocate Result object
+    auto* typeId = get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
+    CoreVM::Value* obj = createObjAlloc(typeId, "result");
+
+    // Set tag (0=Error, 1=Ok) and store the payload in slot 0
+    CoreVM::Value* tag = get(CoreVM::CoreNumber(node.isOk ? 1 : 0));
+    obj = createObjSetTag(obj, tag, "result.tag");
+    obj = createObjSetSlot(obj, get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
+    _result = obj;
+}
+
+void IRGenerator::visit(ast::TryExpr const& node)
+{
+    TRACE_SCOPE("visit(TryExpr)");
+
+    // The ? operator unwraps a Result or Option value:
+    // - If the value is Ok/Some (tag=1), extract and return the inner value
+    // - If the value is Error/None (tag=0), propagate the error (early return)
+    //
+    // This requires a function context to know where to jump on error.
+
+    FSharpFunctionContext* funcCtx = currentFSharpFunctionContext();
+    if (!funcCtx)
+    {
+        reportTypeError("Cannot use ? operator outside of a function returning Result/Option");
+        return;
+    }
+
+    // Evaluate the operand (should be an Option or Result object)
+    CoreVM::Value* obj = codegen(node.operand.get());
+    if (!obj)
+        return;
+
+    // Extract tag using OGETTAG
+    CoreVM::Value* tag = createObjGetTag(obj, "try.tag");
+
+    // Check if success (tag == 1 means Some/Ok)
+    CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "try.is_success");
+
+    // Create blocks
+    auto* successBlock = createBlock("try.success");
+    auto* errorBlock = createBlock("try.error");
+    auto* continueBlock = createBlock("try.continue");
+
+    createCondBr(isSuccess, successBlock, errorBlock);
+
+    // Success path: extract inner value using OGETSLOT
+    setInsertPoint(successBlock);
+    CoreVM::Value* innerValue = createObjGetSlot(obj, get(CoreVM::CoreNumber(0)), "try.inner");
+
+    // Store result and branch to continue
+    // Note: innerValue type depends on what was stored; using Number as default
+    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "try.result");
+    createStore(resultStorage, innerValue, "try.result.store");
+    createBr(continueBlock);
+
+    // Error path: propagate the object (early return)
+    setInsertPoint(errorBlock);
+    // Store the error object in the function return storage and jump to return block
+    createStore(funcCtx->returnStorage, obj, "try.error.store");
+    createBr(funcCtx->returnBlock);
+
+    // Continue with extracted value
+    setInsertPoint(continueBlock);
+    _result = createLoad(resultStorage, "try.result.load");
+}
+
+void IRGenerator::visit(ast::TryWithExpr const& node)
+{
+    TRACE_SCOPE("visit(TryWithExpr)");
+
+    // try expr with | pattern -> handler | ...
+    //
+    // 1. Evaluate the body expression (should be an Option or Result object)
+    // 2. Check if it's an error (tag == 0)
+    // 3. If success, return the inner value
+    // 4. If error, match against handlers (similar to match expression)
+
+    if (!node.body)
+    {
+        reportTypeError("try-with expression requires a body");
+        return;
+    }
+
+    // Create result storage
+    CoreVM::AllocaInstr* resultStorage =
+        createAllocaInEntryBlock(CoreVM::LiteralType::Number, "trywith.result");
+
+    // Create blocks
+    auto* successBlock = createBlock("trywith.success");
+    auto* errorBlock = createBlock("trywith.error");
+    auto* mergeBlock = createBlock("trywith.merge");
+
+    // Evaluate body (should be an Option or Result object)
+    CoreVM::Value* bodyObj = codegen(node.body.get());
+    if (!bodyObj)
+        return;
+
+    // Extract tag using OGETTAG
+    CoreVM::Value* tag = createObjGetTag(bodyObj, "trywith.tag");
+    CoreVM::Value* isSuccess = createNCmpEQ(tag, get(CoreVM::CoreNumber(1)), "trywith.is_success");
+
+    createCondBr(isSuccess, successBlock, errorBlock);
+
+    // Success path: extract inner value using OGETSLOT
+    setInsertPoint(successBlock);
+    CoreVM::Value* successValue =
+        createObjGetSlot(bodyObj, get(CoreVM::CoreNumber(0)), "trywith.success_value");
+    createStore(resultStorage, successValue, "trywith.success.store");
+    createBr(mergeBlock);
+
+    // Error path: match against handlers
+    setInsertPoint(errorBlock);
+
+    if (node.handlers.empty())
+    {
+        // No handlers - just return the error object as-is
+        createStore(resultStorage, bodyObj, "trywith.error.store");
+        createBr(mergeBlock);
+    }
+    else
+    {
+        // Process handlers similar to match expression
+        // For simplicity, we'll just evaluate the first handler's body for now
+        // A full implementation would use PatternIRGenerator like MatchExpr does
+
+        // Extract error value from slot 0
+        CoreVM::Value* errorValue =
+            createObjGetSlot(bodyObj, get(CoreVM::CoreNumber(0)), "trywith.error_value");
+
+        // Store error value for pattern matching
+        CoreVM::AllocaInstr* errorStorage =
+            createAllocaInEntryBlock(CoreVM::LiteralType::Number, "trywith.error");
+        createStore(errorStorage, errorValue, "trywith.error.bind");
+
+        // For now, just evaluate the first handler (TODO: full pattern matching)
+        auto const& firstArm = node.handlers[0];
+
+        pushFSharpScope();
+
+        // If the pattern is a simple variable, bind it
+        if (auto* varPat = dynamic_cast<pattern::VariablePattern const*>(firstArm.pattern.get()))
+        {
+            bindFSharpVariable(varPat->name, errorStorage);
+        }
+
+        // Check guard if present
+        if (firstArm.guard)
+        {
+            auto* guardPassBlock = createBlock("trywith.guard.pass");
+            auto* guardFailBlock = createBlock("trywith.guard.fail");
+
+            CoreVM::Value* guardResult = codegen(firstArm.guard.get());
+            if (!guardResult)
+            {
+                popFSharpScope();
+                return;
+            }
+            CoreVM::Value* guardBool = toBool(guardResult);
+            createCondBr(guardBool, guardPassBlock, guardFailBlock);
+
+            // Guard failed - return error object as-is
+            setInsertPoint(guardFailBlock);
+            createStore(resultStorage, bodyObj, "trywith.guard.fail.store");
+            createBr(mergeBlock);
+
+            setInsertPoint(guardPassBlock);
+        }
+
+        // Evaluate handler body
+        CoreVM::Value* handlerResult = codegen(firstArm.body.get());
+        popFSharpScope();
+
+        if (!handlerResult)
+            return;
+
+        createStore(resultStorage, handlerResult, "trywith.handler.store");
+        createBr(mergeBlock);
+    }
+
+    // Merge block: load result
+    setInsertPoint(mergeBlock);
+    _result = createLoad(resultStorage, "trywith.result.load");
 }
 
 } // namespace endo
