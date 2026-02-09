@@ -38,6 +38,27 @@ TestRuntime::TestRuntime()
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&TestRuntime::builtinPrintln, this);
+
+    // Register env.has builtin (returns boolean: true if key exists in mock env)
+    runtime.registerFunction("env.has")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([this](CoreVM::Params& args) {
+            auto const& key = args.getString(1);
+            args.setResult(mockEnv.contains(key));
+        });
+
+    // Register env.get builtin (returns string value, empty if not found)
+    runtime.registerFunction("env.get")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([this](CoreVM::Params& args) {
+            auto const& key = args.getString(1);
+            if (auto const it = mockEnv.find(key); it != mockEnv.end())
+                args.setResult(args.caller()->newString(it->second));
+            else
+                args.setResult(args.caller()->newString(""));
+        });
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params&)
@@ -57,6 +78,16 @@ void TestRuntime::builtinPrintln(CoreVM::Params& params)
 {
     capturedOutput += params.getString(1);
     capturedOutput += '\n';
+}
+
+void TestRuntime::setMockEnvVar(std::string const& key, std::string const& value)
+{
+    mockEnv[key] = value;
+}
+
+void TestRuntime::clearMockEnvVars()
+{
+    mockEnv.clear();
 }
 
 void TestRuntime::clearErrors()

@@ -127,6 +127,9 @@ namespace
               "failure." },
             { "true", "`true` : `bool`\n\nBoolean true value." },
             { "false", "`false` : `bool`\n\nBoolean false value." },
+            { "env",
+              "`env` : `string -> option<string>`\n\nReturns `Some value` if the environment variable is "
+              "set, `None` if not found." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

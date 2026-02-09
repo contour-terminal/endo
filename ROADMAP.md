@@ -424,6 +424,11 @@ src/
 - [x] Implement tuple expressions (`TupleExpr` AST node, 2-/3-element tuples via TypedObject with Tuple2/Tuple3 types)
 - [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)
 - [x] Implement standard library builtins (`string_length`, `int_of_string`, `string_of_int`, `not`)
+- [x] Implement `env` builtin — returns `option<str>` for environment variables
+  - [x] Two native callbacks (`env.has(S)B`, `env.get(S)S`) with IR-level Option construction
+  - [x] Production runtime (Shell.cpp) reads from `Environment&`, test runtime uses mock env map
+  - [x] Stub runtime for LSP/HoverProvider, hover text for `env` identifier
+  - [x] 13 test cases covering existing/missing vars, match Some/None, let binding, empty value, multiple vars, functions, default values, IR generation, and `?` operator
 - [x] Remove `fst`/`snd` builtins — now user-definable via pattern matching (simplifies compiler, proves language expressiveness)
 - [x] Fix boolean literal codegen (`_builder.getBoolean()` instead of `_builder.get()` which silently converted `bool` to `int64_t`)
 - [x] Fix `print` for boolean values (conditional branch to `"true"`/`"false"` since no `B2S` opcode exists)

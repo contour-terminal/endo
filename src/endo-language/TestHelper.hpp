@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace endo::ast
 {
@@ -59,7 +60,8 @@ struct TestRuntime
 {
     CoreVM::Runtime runtime;
     CoreVM::diagnostics::BufferedReport report;
-    std::string capturedOutput; ///< Buffer for captured output from print/println
+    std::string capturedOutput;                           ///< Buffer for captured output from print/println
+    std::unordered_map<std::string, std::string> mockEnv; ///< Mock environment variables for env builtin
 
     TestRuntime();
 
@@ -70,6 +72,12 @@ struct TestRuntime
     // Print builtins for output capture
     void builtinPrint(CoreVM::Params& params);   ///< print without newline
     void builtinPrintln(CoreVM::Params& params); ///< print with newline
+
+    /// Sets a mock environment variable for the env builtin.
+    void setMockEnvVar(std::string const& key, std::string const& value);
+
+    /// Clears all mock environment variables.
+    void clearMockEnvVars();
 
     /// Clears any accumulated errors before a new test.
     void clearErrors();

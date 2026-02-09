@@ -2533,3 +2533,145 @@ TEST_CASE("IRGenerator.FSharp.fstring_pipeline_in_hole")
 {
     CHECK(executeSourceAndGetOutput(R"(print $"len={"hello" |> string_length}")") == "len=5");
 }
+
+// =============================================================================
+// env builtin — returns option<string> for environment variables
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.env_existing_var")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("HOME", "/home/user");
+    // env returns Some when var exists — match Some arm is taken
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "HOME" with | Some v -> "found" | None -> "none"; print r)")
+          == "found");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_missing_var")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    // env returns None when var is missing
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "NONEXISTENT" with | Some v -> "found" | None -> "none"; print r)")
+          == "none");
+}
+
+TEST_CASE("IRGenerator.FSharp.env_match_some")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("PATH", "/usr/bin");
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "PATH" with | Some v -> "present" | None -> "missing"; print r)")
+          == "present");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_match_none")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "MISSING" with | Some v -> "found" | None -> "fallback"; print r)")
+          == "fallback");
+}
+
+TEST_CASE("IRGenerator.FSharp.env_in_let")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("HOME", "/home/user");
+    // Bind env result to a variable, then match
+    CHECK(
+        executeSourceAndGetOutput(
+            R"(let home = env "HOME"; let r = match home with | Some v -> "found" | None -> "none"; print r)")
+        == "found");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_empty_value")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("EMPTY", "");
+    // Empty string value should still be Some (var exists)
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "EMPTY" with | Some v -> "exists" | None -> "none"; print r)")
+          == "exists");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_multiple_vars")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("A", "alpha");
+    rt.setMockEnvVar("B", "beta");
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "A" with | Some v -> "a_found" | None -> "?"; print r)")
+          == "a_found");
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match env "B" with | Some v -> "b_found" | None -> "?"; print r)")
+          == "b_found");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_in_function")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("X", "42");
+    // Use env inside a user-defined function
+    CHECK(
+        executeSourceAndGetOutput(
+            R"(let getEnv key = env key; let r = match getEnv "X" with | Some v -> "found" | None -> "none"; print r)")
+        == "found");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_with_default")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    // Pattern: provide a default value for missing env vars
+    CHECK(executeSourceAndGetOutput(R"(let r = match env "MISSING" with | Some v -> 1 | None -> 0; print r)")
+          == "0");
+    rt.setMockEnvVar("KEY", "val");
+    CHECK(executeSourceAndGetOutput(R"(let r = match env "KEY" with | Some v -> 1 | None -> 0; print r)")
+          == "1");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_ir_generation")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    // Verify env IR generates successfully
+    CHECK(generatesIRSuccessfully(R"(let x = env "HOME")"));
+    CHECK(generatesIRSuccessfully(R"(let x = env "HOME"; let r = match x with | Some v -> 1 | None -> 0)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.env_question_operator")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("HOME", "/home/user");
+    // ? operator on env result: unwraps Some
+    CHECK(executesWithOutput("let unwrap opt = opt?; let r = unwrap (env \"HOME\")", ""));
+    // Verify the function generates IR successfully with env and ?
+    CHECK(generatesIRSuccessfully(R"(let unwrap opt = opt?; let r = unwrap (env "HOME"))"));
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.env_question_operator_none")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    // ? operator on None from env: propagates None
+    CHECK(executesSuccessfully(R"(let unwrap opt = opt?; let r = unwrap (env "MISSING"))"));
+    rt.clearMockEnvVars();
+}

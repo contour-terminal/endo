@@ -162,6 +162,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion
 - [x] `not` — boolean negation
+- [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
 - [ ] `head`, `tail`, `length`, `isEmpty` — list operations
 - [ ] `map`, `filter`, `fold`, `reduce` — higher-order list functions
 - [ ] `sort`, `reverse`, `distinct` — list transformations

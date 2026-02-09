@@ -2370,6 +2370,88 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "env")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("env requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+
+        // Evaluate key argument
+        auto* keyVal = codegen(argExprs[0]);
+        if (!keyVal)
+        {
+            reportTypeError("Failed to evaluate env argument");
+            return true;
+        }
+        if (keyVal->type() != CoreVM::LiteralType::String)
+        {
+            reportTypeError("env requires a string argument");
+            return true;
+        }
+
+        // Store key in alloca (needed twice: for env.has and env.get)
+        auto* keyStorage = createAllocaInEntryBlock(CoreVM::LiteralType::String, "env.key");
+        _builder.createStore(keyStorage, keyVal);
+
+        // Call env.has(key) -> boolean
+        auto* envHasCallback = findCallback("env.has(S)B");
+        if (!envHasCallback)
+        {
+            reportTypeError("env.has builtin not available");
+            return true;
+        }
+        auto* keyReload1 = _builder.createLoad(keyStorage, "env.key.reload1");
+        auto* hasResult = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*envHasCallback), { keyReload1 }, "env.has");
+
+        // Create blocks for branching
+        auto* someBlock = _builder.createBlock("env.some");
+        auto* noneBlock = _builder.createBlock("env.none");
+        auto* mergeBlock = _builder.createBlock("env.merge");
+
+        // Create result alloca for the Option object
+        auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "env.result");
+
+        // Branch on env.has result
+        _builder.createCondBr(hasResult, someBlock, noneBlock);
+
+        // someBlock: call env.get, construct Some
+        _builder.setInsertPoint(someBlock);
+        auto* keyReload2 = _builder.createLoad(keyStorage, "env.key.reload2");
+        auto* envGetCallback = findCallback("env.get(S)S");
+        if (!envGetCallback)
+        {
+            reportTypeError("env.get builtin not available");
+            return true;
+        }
+        auto* getValue = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*envGetCallback), { keyReload2 }, "env.get");
+
+        // Construct Some(value): ObjAlloc Option -> ObjSetTag 1 -> ObjSetSlot 0 value
+        auto* typeIdSome = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+        CoreVM::Value* someObj = _builder.createObjAlloc(typeIdSome, "env.some.option");
+        someObj = _builder.createObjSetTag(someObj, _builder.get(CoreVM::CoreNumber(1)), "env.some.tag");
+        someObj = _builder.createObjSetSlot(
+            someObj, _builder.get(CoreVM::CoreNumber(0)), getValue, "env.some.value");
+        _builder.createStore(resultStorage, someObj);
+        _builder.createBr(mergeBlock);
+
+        // noneBlock: construct None
+        _builder.setInsertPoint(noneBlock);
+        auto* typeIdNone = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+        CoreVM::Value* noneObj = _builder.createObjAlloc(typeIdNone, "env.none.option");
+        noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "env.none.tag");
+        _builder.createStore(resultStorage, noneObj);
+        _builder.createBr(mergeBlock);
+
+        // mergeBlock: load result
+        _builder.setInsertPoint(mergeBlock);
+        _result = _builder.createLoad(resultStorage, "env.result");
+        return true;
+    }
+
     return false;
 }
 

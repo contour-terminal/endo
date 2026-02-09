@@ -35,6 +35,16 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
         .bind(dummyHandler);
+
+    runtime.registerFunction("env.has")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) { args.setResult(false); });
+
+    runtime.registerFunction("env.get")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) { args.setResult(""); });
 }
 
 } // namespace endo

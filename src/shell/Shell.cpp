@@ -768,6 +768,24 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetVar, this);
 
+    // F#-style env builtin: env.has checks existence, env.get retrieves the value
+    _runtime.registerFunction("env.has")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([this](CoreVM::Params& args) {
+            auto const& key = args.getString(1);
+            args.setResult(_env.get(key).has_value());
+        });
+
+    _runtime.registerFunction("env.get")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([this](CoreVM::Params& args) {
+            auto const& key = args.getString(1);
+            auto val = _env.get(key);
+            args.setResult(std::string(val.value_or("")));
+        });
+
     _runtime.registerFunction("getvar.exitstatus")
         .returnType(CoreVM::LiteralType::String)
         .bind(&Shell::builtinGetExitStatus, this);
