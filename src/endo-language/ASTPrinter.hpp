@@ -88,6 +88,7 @@ class ASTPrinter: public Visitor
     void visit(TryExpr const& node) override;
     void visit(TryWithExpr const& node) override;
     void visit(TryFinallyExpr const& node) override;
+    void visit(FStringExpr const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

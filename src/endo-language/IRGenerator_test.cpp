@@ -2444,3 +2444,92 @@ TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_int_vs_float")
 {
     CHECK(!generatesIRSuccessfully("let x: int = 3.14"));
 }
+
+// ============================================================================
+// F#-Style String Interpolation ($"...")
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.fstring_basic")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"Hello, World")") == "Hello, World");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_variable")
+{
+    CHECK(executeSourceAndGetOutput(R"(let name = "User"; print $"Hello, {name}")") == "Hello, User");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_arithmetic")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"Sum is {3 + 4}")") == "Sum is 7");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_multiple_holes")
+{
+    CHECK(executeSourceAndGetOutput(R"(let a = 1; let b = 2; print $"a={a}, b={b}")") == "a=1, b=2");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_conditional")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"val: {if true then 1 else 0}")") == "val: 1");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_number_conversion")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"n={42}")") == "n=42");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_float_conversion")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"pi={3.14}")") == "pi=3.14");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_bool_conversion")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"flag={true}")") == "flag=true");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_escaped_braces")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"{{literal}}")") == "{literal}");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_empty")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"")") == "");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_no_holes")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"just text")") == "just text");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_function_application")
+{
+    CHECK(executeSourceAndGetOutput(R"(let f x = x * 2; print $"result: {f 5}")") == "result: 10");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_adjacent_holes")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"{1}{2}{3}")") == "123");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_as_value")
+{
+    CHECK(executeSourceAndGetOutput(R"(let s = $"hello"; print s)") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_concatenation")
+{
+    CHECK(executeSourceAndGetOutput(R"(let a = $"a"; let b = $"b"; print (a + b))") == "ab");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_nested_string")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"say {"hello"}")") == "say hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.fstring_pipeline_in_hole")
+{
+    CHECK(executeSourceAndGetOutput(R"(print $"len={"hello" |> string_length}")") == "len=5");
+}

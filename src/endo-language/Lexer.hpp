@@ -66,6 +66,12 @@ enum class Token
     DblQuoteEnd,    // " at the end of a double-quoted string
     StringFragment, // Literal text fragment within double-quoted string
 
+    // F#-style interpolated string tokens
+    FStringStart,     // $" at the start of an F# interpolated string
+    FStringEnd,       // " at the end of an F# interpolated string
+    FStringExprStart, // { that opens an expression hole in an F# interpolated string
+    FStringExprEnd,   // } that closes an expression hole in an F# interpolated string
+
     // F# style keywords
     Let,   // 'let'
     Mut,   // 'mut'
@@ -305,6 +311,7 @@ class Lexer
     Token consumeIdentifier(Token token);
     Token consumeSingleQuotedString();
     Token consumeDoubleQuotedContent();
+    Token consumeFStringContent();
     Token consumeBracedVariable();
     Token consumeTilde();
     char32_t nextChar();
@@ -320,6 +327,8 @@ class Lexer
     int _dquoteSubstDepth = 0;     // Nesting depth for $() and backticks inside double quotes
     int _arithDepth = 0;           // Nesting depth for $(()), operators are reserved when > 0
     int _fsharpDepth = 0;          // Nesting depth for F# expressions, operators are tokens when > 0
+    bool _inFString = false;       // State: inside an F#-style interpolated string
+    int _fstringBraceDepth = 0;    // Brace nesting depth inside expression holes (0 = string content)
     std::string _fragmentBuffer;   // Buffer for accumulating string fragments
     bool _pushedBack = false;      // True if a token has been pushed back
     TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
@@ -410,6 +419,10 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case DblQuoteStart: name = "DblQuoteStart"; break;
             case DblQuoteEnd: name = "DblQuoteEnd"; break;
             case StringFragment: name = "StringFragment"; break;
+            case FStringStart: name = "FStringStart"; break;
+            case FStringEnd: name = "FStringEnd"; break;
+            case FStringExprStart: name = "FStringExprStart"; break;
+            case FStringExprEnd: name = "FStringExprEnd"; break;
             // F# style keywords
             case Let: name = "let"; break;
             case Mut: name = "mut"; break;

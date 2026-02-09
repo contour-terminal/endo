@@ -73,6 +73,7 @@ class Parser
     std::unique_ptr<ast::TildeExpr> parseTildeExpansion();
     std::unique_ptr<ast::ArithExpansionExpr> parseArithmeticExpansion();
     std::unique_ptr<ast::Expr> parseInterpolatedString();
+    std::unique_ptr<ast::Expr> parseFStringExpression();
 
     // Arithmetic expression parser (for $((expr)))
     std::unique_ptr<ast::ArithExpr> parseArithOr();

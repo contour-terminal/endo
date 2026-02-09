@@ -75,6 +75,10 @@ Token Lexer::nextToken()
     if (_inDoubleQuote && _dquoteSubstDepth == 0)
         return consumeDoubleQuotedContent();
 
+    // If we're inside an F#-style interpolated string and not inside an expression hole, scan string content
+    if (_inFString && _fstringBraceDepth == 0)
+        return consumeFStringContent();
+
     consumeWhitespace();
     switch (_currentChar)
     {
@@ -204,6 +208,15 @@ Token Lexer::nextToken()
             return consumeIdentifier();
         case '$':
             nextChar();
+            if (_currentChar == '"' && _fsharpDepth > 0)
+            {
+                // F#-style interpolated string: $"..."
+                nextChar(); // consume opening "
+                _inFString = true;
+                _fstringBraceDepth = 0;
+                _fragmentBuffer.clear();
+                return confirmToken(Token::FStringStart);
+            }
             if (_currentChar == '(')
             {
                 nextChar();
@@ -297,10 +310,22 @@ Token Lexer::nextToken()
                 return consumeCharAndConfirmToken(Token::BracketClose);
             return consumeIdentifier();
         case '{':
+            if (_inFString && _fstringBraceDepth > 0)
+            {
+                ++_fstringBraceDepth;
+                return consumeCharAndConfirmToken(Token::BraceOpen);
+            }
             if (_fsharpDepth > 0)
                 return consumeCharAndConfirmToken(Token::BraceOpen);
             return consumeIdentifier();
         case '}':
+            if (_inFString && _fstringBraceDepth > 0)
+            {
+                --_fstringBraceDepth;
+                if (_fstringBraceDepth == 0)
+                    return consumeCharAndConfirmToken(Token::FStringExprEnd);
+                return consumeCharAndConfirmToken(Token::BraceClose);
+            }
             if (_fsharpDepth > 0)
                 return consumeCharAndConfirmToken(Token::BraceClose);
             return consumeIdentifier();
@@ -746,6 +771,118 @@ Token Lexer::consumeDoubleQuotedContent()
         return confirmToken(Token::StringFragment);
     }
     _inDoubleQuote = false;
+    return confirmToken(Token::Invalid);
+}
+
+Token Lexer::consumeFStringContent()
+{
+    // Set up location tracking
+    auto const [line, column, name] = _source->currentSourceLocation();
+    _nextToken.location.name = name;
+    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.end = _nextToken.location.begin;
+    _nextToken.literal.clear();
+
+    while (!eof())
+    {
+        switch (_currentChar)
+        {
+            case '"':
+                // End of F# interpolated string
+                if (!_fragmentBuffer.empty())
+                {
+                    _nextToken.literal = std::move(_fragmentBuffer);
+                    _fragmentBuffer.clear();
+                    return confirmToken(Token::StringFragment);
+                }
+                _inFString = false;
+                return consumeCharAndConfirmToken(Token::FStringEnd);
+
+            case '{':
+                // Check for escaped brace: {{ → literal {
+                if (_source->peekChar() == U'{')
+                {
+                    nextChar(); // consume first {
+                    nextChar(); // consume second {
+                    _fragmentBuffer += '{';
+                    break;
+                }
+                // Expression hole start
+                if (!_fragmentBuffer.empty())
+                {
+                    _nextToken.literal = std::move(_fragmentBuffer);
+                    _fragmentBuffer.clear();
+                    return confirmToken(Token::StringFragment);
+                }
+                _fstringBraceDepth = 1;
+                return consumeCharAndConfirmToken(Token::FStringExprStart);
+
+            case '}':
+                // Check for escaped brace: }} → literal }
+                if (_source->peekChar() == U'}')
+                {
+                    nextChar(); // consume first }
+                    nextChar(); // consume second }
+                    _fragmentBuffer += '}';
+                    break;
+                }
+                // Stray } outside expression hole - treat as literal
+                _fragmentBuffer += '}';
+                nextChar();
+                break;
+
+            case '\\':
+                // Escape sequences (same as double-quoted strings)
+                nextChar();
+                if (eof())
+                {
+                    _inFString = false;
+                    return confirmToken(Token::Invalid);
+                }
+                switch (_currentChar)
+                {
+                    case '"':
+                    case '\\':
+                    case '{':
+                    case '}':
+                        _fragmentBuffer += static_cast<char>(_currentChar);
+                        nextChar();
+                        break;
+                    case 'n':
+                        _fragmentBuffer += '\n';
+                        nextChar();
+                        break;
+                    case 't':
+                        _fragmentBuffer += '\t';
+                        nextChar();
+                        break;
+                    case 'r':
+                        _fragmentBuffer += '\r';
+                        nextChar();
+                        break;
+                    default:
+                        _fragmentBuffer += '\\';
+                        _fragmentBuffer += unicode::to_utf8(_currentChar);
+                        nextChar();
+                        break;
+                }
+                break;
+
+            default:
+                _fragmentBuffer += unicode::to_utf8(_currentChar);
+                nextChar();
+                break;
+        }
+    }
+
+    // EOF while inside F# interpolated string
+    if (!_fragmentBuffer.empty())
+    {
+        _nextToken.literal = std::move(_fragmentBuffer);
+        _fragmentBuffer.clear();
+        return confirmToken(Token::StringFragment);
+    }
+    _inFString = false;
     return confirmToken(Token::Invalid);
 }
 

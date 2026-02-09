@@ -1221,6 +1221,42 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
     _result = result;
 }
 
+void IRGenerator::visit(ast::FStringExpr const& node)
+{
+    // F#-style interpolated string: $"text {expr} text"
+    // Similar to ConcatExpr but uses convertToString() for F# type support
+    if (node.parts.empty())
+    {
+        _result = _builder.get("");
+        return;
+    }
+
+    // Generate first part
+    auto* result = codegen(node.parts[0].get());
+    if (!result)
+        return;
+
+    result = convertToString(result, "fstr");
+    if (!result)
+        return;
+
+    // Concatenate remaining parts
+    for (size_t i = 1; i < node.parts.size(); ++i)
+    {
+        auto* part = codegen(node.parts[i].get());
+        if (!part)
+            return;
+
+        part = convertToString(part, "fstr");
+        if (!part)
+            return;
+
+        result = _builder.createSAdd(result, part, "fstr.concat");
+    }
+
+    _result = result;
+}
+
 void IRGenerator::visit(ast::ArithExpansionExpr const& node)
 {
     // Evaluate the arithmetic expression and return the result as a string

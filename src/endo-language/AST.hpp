@@ -197,6 +197,20 @@ struct ConcatExpr final: Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// F#-style interpolated string expression: `$"text {expr} text"`
+///
+/// Represents a sequence of literal text and embedded expressions that are
+/// converted to strings and concatenated at runtime.
+/// Parts are alternating literal and expression nodes.
+struct FStringExpr final: Expr
+{
+    std::vector<std::unique_ptr<Expr>> parts; ///< Alternating literal and expression parts
+
+    explicit FStringExpr(std::vector<std::unique_ptr<Expr>> p): parts(std::move(p)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 // ============================================================================
 // Arithmetic Expansion $((expr))
 // ============================================================================

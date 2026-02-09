@@ -338,6 +338,25 @@ void ASTPrinter::visit(ConcatExpr const& node)
     _result += '"';
 }
 
+void ASTPrinter::visit(FStringExpr const& node)
+{
+    _result += "$\"";
+    for (auto const& part: node.parts)
+    {
+        if (auto const* lit = dynamic_cast<LiteralExpr const*>(part.get()))
+        {
+            _result += lit->value;
+        }
+        else
+        {
+            _result += '{';
+            part->accept(*this);
+            _result += '}';
+        }
+    }
+    _result += '"';
+}
+
 void ASTPrinter::visit(ArithExpansionExpr const& node)
 {
     _result += "$((";

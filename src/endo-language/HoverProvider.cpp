@@ -432,6 +432,13 @@ std::optional<HoverInfo> computeHover(std::string const& source, SourcePosition 
 
         auto const range = toSourceRange(tokenInfo.location);
 
+        // F# interpolated string hover
+        if (tokenInfo.token == Token::FStringStart)
+            return HoverInfo { .markdownText =
+                                   "`$\"...\"`  \u2014 F#-style interpolated string. Embed expressions with "
+                                   "`{expr}`.\n\n```endo\n$\"Hello, {name}!\"\n$\"Sum is {3 + 4}\"\n```",
+                               .range = range };
+
         // Try keyword hover
         if (auto text = keywordHover(tokenInfo.token))
             return HoverInfo { .markdownText = std::move(*text), .range = range };

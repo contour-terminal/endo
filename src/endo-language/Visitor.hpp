@@ -26,6 +26,7 @@ struct CommandFileSubst;
 struct CompoundStmt;
 struct ConcatExpr;
 struct ContinueStmt;
+struct FStringExpr;
 struct FileDescriptor;
 struct ForCStyleStmt;
 struct ForListStmt;
@@ -157,6 +158,7 @@ struct Visitor
     virtual void visit(TryExpr const&) = 0;
     virtual void visit(TryWithExpr const&) = 0;
     virtual void visit(TryFinallyExpr const&) = 0;
+    virtual void visit(FStringExpr const&) = 0;
 };
 
 } // namespace endo::ast

@@ -128,7 +128,8 @@ bool Parser::isParameterToken() const noexcept
         case Token::LessRndOpen:
         case Token::GreaterRndOpen:
         case Token::Tilde:
-        case Token::DblQuoteStart: return true;
+        case Token::DblQuoteStart:
+        case Token::FStringStart: return true;
         case Token::Backtick:
             // Backtick is a parameter token only at nesting level 0
             return _backtickNestingLevel == 0;
@@ -1357,6 +1358,78 @@ std::unique_ptr<ast::Expr> Parser::parseInterpolatedString()
     return std::make_unique<ast::ConcatExpr>(std::move(parts));
 }
 
+std::unique_ptr<ast::Expr> Parser::parseFStringExpression()
+{
+    TRACE_SCOPE("parseFStringExpression");
+
+    _lexer.nextToken(); // consume FStringStart
+
+    std::vector<std::unique_ptr<ast::Expr>> parts;
+
+    while (_lexer.currentToken() != Token::FStringEnd && _lexer.currentToken() != Token::EndOfInput
+           && _lexer.currentToken() != Token::Invalid)
+    {
+        switch (_lexer.currentToken())
+        {
+            case Token::StringFragment:
+                parts.push_back(std::make_unique<ast::LiteralExpr>(consumeLiteral()));
+                break;
+
+            case Token::FStringExprStart: {
+                _lexer.nextToken(); // consume {
+                auto expr = parseFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                if (_lexer.currentToken() != Token::FStringExprEnd)
+                {
+                    _report.syntaxErrorWithSuggestions(
+                        currentLocation(),
+                        { "Add a closing '}'" },
+                        currentContextSnippet(),
+                        "Expected '}}' after expression in interpolated string, got '{}'",
+                        _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume }
+                parts.push_back(std::move(expr));
+                break;
+            }
+
+            default:
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Unexpected token '{}' in F# interpolated string",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+        }
+    }
+
+    if (_lexer.currentToken() != Token::FStringEnd)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing double quote" },
+                                           currentContextSnippet(),
+                                           "Unterminated F# interpolated string");
+        return nullptr;
+    }
+
+    _lexer.nextToken(); // consume FStringEnd
+
+    // Optimize: single literal → return directly
+    if (parts.size() == 1)
+    {
+        if (dynamic_cast<ast::LiteralExpr*>(parts[0].get()))
+            return std::move(parts[0]);
+    }
+
+    // Empty string
+    if (parts.empty())
+        return std::make_unique<ast::LiteralExpr>("");
+
+    return std::make_unique<ast::FStringExpr>(std::move(parts));
+}
+
 std::unique_ptr<ast::ArithExpansionExpr> Parser::parseArithmeticExpansion()
 {
     TRACE_SCOPE("parseArithmeticExpansion");
@@ -1835,6 +1908,7 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
         case Token::GreaterRndOpen: return parseProcessSubstitution(ast::ProcessSubstMode::Write);
         case Token::Tilde: return parseTildeExpansion();
         case Token::DblQuoteStart: return parseInterpolatedString();
+        case Token::FStringStart: return parseFStringExpression();
         default:
             _report.syntaxErrorWithSuggestions(currentLocation(),
                                                {},
@@ -2348,13 +2422,14 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::RndOpen:
         case Token::Fun:
         case Token::Match:
-        case Token::BracketOpen: // List literal: [1; 2; 3]
-        case Token::Ampersand:   // Shell command expression: & git status
-        case Token::OptionSome:  // Some expr
-        case Token::OptionNone:  // None
-        case Token::ResultOk:    // Ok expr
-        case Token::ResultError: // Error expr
-        case Token::Try:         // try expr with ...
+        case Token::BracketOpen:  // List literal: [1; 2; 3]
+        case Token::Ampersand:    // Shell command expression: & git status
+        case Token::OptionSome:   // Some expr
+        case Token::OptionNone:   // None
+        case Token::ResultOk:     // Ok expr
+        case Token::ResultError:  // Error expr
+        case Token::Try:          // try expr with ...
+        case Token::FStringStart: // F# interpolated string: $"..."
             return true;
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
@@ -3686,6 +3761,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Double-quoted string: "hello" (may contain interpolation)
             // For F# context, parse as interpolated string and return the expression
             return parseInterpolatedString();
+        }
+
+        case Token::FStringStart: {
+            // F#-style interpolated string: $"Hello, {name}"
+            return parseFStringExpression();
         }
 
         default:

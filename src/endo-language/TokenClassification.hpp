@@ -51,7 +51,9 @@ enum class TokenCategory
         case String:
         case DblQuoteStart:
         case DblQuoteEnd:
-        case StringFragment: return TokenCategory::String;
+        case StringFragment:
+        case FStringStart:
+        case FStringEnd: return TokenCategory::String;
 
         // Constructors (enum members)
         case OptionSome:
@@ -106,7 +108,9 @@ enum class TokenCategory
         case BraceClose:
         case Comma:
         case Colon:
-        case Semicolon: return TokenCategory::Punctuation;
+        case Semicolon:
+        case FStringExprStart:
+        case FStringExprEnd: return TokenCategory::Punctuation;
 
         // Everything else (whitespace, EOF, etc.)
         default: return TokenCategory::Default;
