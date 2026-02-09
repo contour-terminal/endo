@@ -493,6 +493,9 @@ class Runner
 
     CoreString* newString(std::string value);
 
+    /// Provides read-only access to the runtime stack (e.g. to inspect alloca values after execution).
+    const Stack& stack() const noexcept { return _stack; }
+
   private:
     //! consumes @p tokens from quota and raises QuotaExceeded if quota is being exceeded.
     void consume(Opcode op);
@@ -501,8 +504,6 @@ class Runner
     const CoreString* emptyString() const { return &*_stringGarbage.begin(); }
 
     CoreString* catString(const CoreString& a, const CoreString& b);
-
-    const Stack& stack() const noexcept { return _stack; }
 
     Value stack(int si) const { return _stack[si]; }
 

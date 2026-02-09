@@ -49,10 +49,15 @@ struct FSharpPersistentState
         ast::Expr const* value; ///< Expression AST to re-evaluate each prompt
         bool isMutable;
         bool isObjectExpr; ///< Whether value is Option/Result/Tuple (for ORELEASE)
+        CoreVM::LiteralType storageType = CoreVM::LiteralType::Void; ///< IR type of the stored value
     };
 
     /// Value bindings persisted across REPL prompts, in definition order.
     std::vector<PersistedValueBinding> valueBindings;
+
+    /// Saved runtime values for mutable bindings after each prompt execution.
+    /// Maps binding name -> raw VM uint64_t value.
+    std::unordered_map<std::string, uint64_t> mutableSnapshots;
 
     /// AST nodes retained to keep PersistedFunction::body pointers valid.
     std::vector<std::unique_ptr<ast::Statement>> retainedASTs;

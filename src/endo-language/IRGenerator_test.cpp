@@ -1648,8 +1648,32 @@ TEST_CASE("IRGenerator.FSharp.session_value_binding_float")
 
 TEST_CASE("IRGenerator.FSharp.session_mutable_value_binding")
 {
-    // Mutable binding persists initial value (mutations don't carry across prompts)
+    // Mutable binding persists across prompts (initial value preserved)
     CHECK(sessionProducesOutput({ "let mut x = 0", "print x" }, "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_mutable_cross_prompt_mutation")
+{
+    // Basic cross-prompt mutation: x <- 5 updates the persisted value
+    CHECK(sessionProducesOutput({ "let mut x = 0", "x <- 5", "print x" }, "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_mutable_self_referential_mutation")
+{
+    // Self-referential mutation: x <- x + 10
+    CHECK(sessionProducesOutput({ "let mut x = 0", "x <- x + 10", "print x" }, "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_mutable_multiple_mutations")
+{
+    // Multiple mutations across prompts: last value wins
+    CHECK(sessionProducesOutput({ "let mut x = 0", "x <- 1", "x <- 2", "print x" }, "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_mutable_other_vars_unaffected")
+{
+    // Mutating one variable does not affect another
+    CHECK(sessionProducesOutput({ "let mut x = 1", "let mut y = 2", "x <- 10", "print y" }, "2"));
 }
 
 // =============================================================================

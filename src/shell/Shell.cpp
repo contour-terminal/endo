@@ -689,6 +689,14 @@ int Shell::execute(std::string const& lineBuffer)
             _exitCode = runnerExitNonZero ? 1 : 0;
         }
 
+        // Save runtime values of mutable bindings for cross-prompt persistence.
+        // Allocas are at the bottom of the stack (positions 0, 1, 2, ...),
+        // matching the order of persisted value bindings.
+        auto const& stack = runner.stack();
+        for (size_t i = 0; i < _fsharpState.valueBindings.size() && i < stack.size(); ++i)
+            if (_fsharpState.valueBindings[i].isMutable)
+                _fsharpState.mutableSnapshots[_fsharpState.valueBindings[i].name] = stack[i];
+
         return _exitCode;
     }
     catch (std::exception const& e)

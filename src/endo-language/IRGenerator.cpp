@@ -3,6 +3,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 
+#include <bit>
 #include <functional>
 #include <typeinfo>
 
@@ -62,7 +63,39 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         // Pre-load persisted value bindings (in order, so dependencies resolve correctly)
         for (auto const& binding: persistentState->valueBindings)
         {
-            auto* val = generator.codegen(binding.value);
+            CoreVM::Value* val = nullptr;
+
+            // For mutable bindings with a saved runtime snapshot, use the snapshot value
+            // instead of re-evaluating the original AST expression (which would discard mutations).
+            if (binding.isMutable)
+            {
+                if (auto it = persistentState->mutableSnapshots.find(binding.name);
+                    it != persistentState->mutableSnapshots.end())
+                {
+                    auto const rawValue = it->second;
+                    switch (binding.storageType)
+                    {
+                        case CoreVM::LiteralType::Number:
+                            val = generator._builder.get(CoreVM::CoreNumber(static_cast<int64_t>(rawValue)));
+                            break;
+                        case CoreVM::LiteralType::Boolean:
+                            val = generator._builder.getBoolean(rawValue != 0);
+                            break;
+                        case CoreVM::LiteralType::Float:
+                            val = generator._builder.getFloat(std::bit_cast<double>(rawValue));
+                            break;
+                        default:
+                            // String/Object types: fall back to re-evaluating the AST
+                            val = generator.codegen(binding.value);
+                            break;
+                    }
+                }
+            }
+
+            // Non-mutable bindings or no snapshot available: evaluate the AST expression
+            if (!val)
+                val = generator.codegen(binding.value);
+
             if (!val)
                 continue;
             auto* storage = generator.createAllocaInEntryBlock(val->type(), binding.name);
@@ -2571,7 +2604,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     }
 
     // Record for REPL persistence (re-evaluated at each subsequent prompt)
-    _newValueBindings.push_back({ node.name, node.value.get(), node.isMutable, isObjectExpr });
+    _newValueBindings.push_back({ node.name, node.value.get(), node.isMutable, isObjectExpr, storageType });
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;

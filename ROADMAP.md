@@ -457,6 +457,7 @@ src/
   - [x] `#` line comments (shell style, after whitespace)
   - [x] `//` line comments (C style)
   - [x] `(* ... *)` nestable block comments (F# style)
+- [x] Fix mutable variable reassignment not persisting across REPL prompts (runtime value snapshots from stack after execution)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
