@@ -1544,6 +1544,58 @@ TEST_CASE("IRGenerator.FSharp.exec_partial_over_application_error")
 }
 
 // =============================================================================
+// Arity Enforcement Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param")
+{
+    // 1-param function called with 2 args must fail
+    CHECK_FALSE(generatesIRSuccessfully("let f x = x + 1; f 3 4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param_annotated")
+{
+    // Annotated 1-param function called with 2 args must fail
+    CHECK_FALSE(generatesIRSuccessfully("let f (x: int): int = x + 1; f 3 4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param_in_print")
+{
+    // Over-application inside print wrapper must fail
+    CHECK_FALSE(generatesIRSuccessfully("let f (x: int): int = x + 1; print (f 3 4)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_2param")
+{
+    // 2-param function called with 3 args must fail
+    CHECK_FALSE(generatesIRSuccessfully("let add x y = x + y; add 1 2 3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_2param_annotated")
+{
+    // Annotated 2-param function called with 3 args must fail
+    CHECK_FALSE(generatesIRSuccessfully("let f (x: int) (y: int): int = x + y; f 1 2 3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.exact_arity_1param")
+{
+    // 1-param function called with exactly 1 arg must succeed
+    CHECK(executeSourceAndGetOutput("let f x = x + 1; print (f 3)") == "4");
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.exact_arity_2param")
+{
+    // 2-param function called with exactly 2 args must succeed
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; print (add 3 4)") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.ArityEnforcement.partial_then_exact")
+{
+    // Partial application followed by exact application must succeed
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; let f = add 3; print (f 4)") == "7");
+}
+
+// =============================================================================
 // REPL Session Persistence Tests (multi-prompt)
 // =============================================================================
 

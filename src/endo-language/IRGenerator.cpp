@@ -3046,9 +3046,10 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Total args = explicit args + piped value (last parameter)
         if (explicitArgExprs.size() + 1 != baseFunc->arity())
         {
-            reportTypeError("Pipeline function '{}' expects {} arguments, got {} (including piped value)",
+            reportTypeError("Pipeline function '{}' expects {} {}, got {} (including piped value)",
                             std::string_view(baseIdent->name),
                             baseFunc->arity(),
+                            baseFunc->arity() == 1 ? "argument" : "arguments",
                             explicitArgExprs.size() + 1);
             return;
         }
@@ -3325,9 +3326,10 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     // Check arity: over-application is an error, under-application creates partial application
     if (args.size() > func->arity())
     {
-        reportTypeError("Function '{}' expects {} arguments, got {}",
+        reportTypeError("Function '{}' expects {} {}, got {}",
                         std::string_view(funcName),
                         func->arity(),
+                        func->arity() == 1 ? "argument" : "arguments",
                         args.size());
         return;
     }

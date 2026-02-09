@@ -475,6 +475,9 @@ src/
   - [x] Type annotations persist across REPL sessions via `FSharpPersistentState`
   - [x] ASTPrinter support for round-trip printing of type annotations
   - [x] 32 test cases covering positive execution, negative type mismatches, parser structure, and ASTPrinter output
+- [x] Improve arity enforcement error messages and test coverage
+  - [x] Fix grammar: "expects 1 argument" (singular) vs "expects 2 arguments" (plural) for both direct calls and pipelines
+  - [x] 8 comprehensive arity enforcement tests: over-application (5 failure cases), exact arity (3 success cases)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
