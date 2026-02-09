@@ -116,6 +116,7 @@ class Parser
     // Precedence (low to high): |> || && comparisons +- */% ** unary application
     std::unique_ptr<ast::Expr> parseFSharpExpr();        // Entry point
     std::unique_ptr<ast::Expr> parseFSharpPipeline();    // |>
+    std::unique_ptr<ast::Expr> parseFSharpComposition(); // >> <<
     std::unique_ptr<ast::Expr> parseFSharpOr();          // ||
     std::unique_ptr<ast::Expr> parseFSharpAnd();         // &&
     std::unique_ptr<ast::Expr> parseFSharpComparison();  // == != < <= > >=
@@ -126,6 +127,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
     std::unique_ptr<ast::Expr> parseFSharpPostfix();     // postfix ? (error propagation)
     std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ..., & command
+    std::unique_ptr<ast::Expr> parseBlockExpr();         // { let x = 1; x + 2 }
     std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseTryWith();           // try expr with ... | try expr finally ...
 

@@ -503,6 +503,12 @@ src/
   - [x] Value descriptions show `"value"` or `"mutable value"`
   - [x] Smart-case prefix matching and fuzzy matching with position highlighting
   - [x] 8 test cases covering function/value completion, descriptions, fuzzy matching, scoring, and context handling
+- [x] Phase 1 Foundation Completions (no new runtime types needed)
+  - [x] Unit type `()` — `UnitExpr` AST node, parser recognition in `parseFSharpPrimary`, codegen as `get(0)`
+  - [x] String repetition `"ha" * 3` — detects `Mul` with string operand in `visit(BinaryExpr)`, calls `string_repeat` native callback
+  - [x] Block scopes `{ let x = 1; x + 2 }` — `BlockExpr` AST node, `parseBlockExpr()`, codegen with `pushFSharpScope`/`popFSharpScope`
+  - [x] Function composition `>>` and `<<` — `parseFSharpComposition()` precedence level between pipeline and or, desugars to lambda at parser level
+  - [x] Tuple destructuring in `let` — `destructurePattern` field on `LetBindingStmt`/`LetInExpr`, uses `PatternIRGenerator` with pre-allocated binding storage
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes

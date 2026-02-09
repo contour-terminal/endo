@@ -914,6 +914,7 @@ struct LetBindingStmt final: public Statement
     std::optional<TypePtr> returnType;      ///< Return type (functions) or binding type (simple bindings)
     std::unique_ptr<Expr> value;            ///< Value expression or function body
     std::vector<AndBinding> andBindings;    ///< Additional mutually recursive bindings (`and` keyword)
+    std::unique_ptr<pattern::Pattern> destructurePattern; ///< Optional pattern for `let (x, y) = expr`
 
     LetBindingStmt(bool mut,
                    bool rec,
@@ -930,8 +931,22 @@ struct LetBindingStmt final: public Statement
     {
     }
 
+    /// Constructor for destructuring let bindings: `let (x, y) = expr`
+    LetBindingStmt(bool mut, std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val):
+        isMutable(mut),
+        isRecursive(false),
+        parameters(),
+        returnType(std::nullopt),
+        value(std::move(val)),
+        destructurePattern(std::move(pat))
+    {
+    }
+
     /// Is this a function definition (has parameters)?
     [[nodiscard]] bool isFunction() const noexcept { return !parameters.empty(); }
+
+    /// Is this a destructuring binding?
+    [[nodiscard]] bool isDestructuring() const noexcept { return destructurePattern != nullptr; }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -962,6 +977,8 @@ struct LetInExpr final: public Expr
     std::optional<TypePtr> returnType;      ///< Optional return type annotation
     std::unique_ptr<Expr> value;            ///< Value expression or function body
     std::unique_ptr<Expr> body;             ///< Body expression evaluated with the binding in scope
+    std::unique_ptr<pattern::Pattern>
+        destructurePattern; ///< Optional pattern for `let (x, y) = expr in body`
 
     LetInExpr(bool rec,
               std::string n,
@@ -978,8 +995,22 @@ struct LetInExpr final: public Expr
     {
     }
 
+    /// Constructor for destructuring let-in: `let (x, y) = expr in body`
+    LetInExpr(std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val, std::unique_ptr<Expr> b):
+        isRecursive(false),
+        parameters(),
+        returnType(std::nullopt),
+        value(std::move(val)),
+        body(std::move(b)),
+        destructurePattern(std::move(pat))
+    {
+    }
+
     /// Is this a function definition (has parameters)?
     [[nodiscard]] bool isFunction() const noexcept { return !parameters.empty(); }
+
+    /// Is this a destructuring binding?
+    [[nodiscard]] bool isDestructuring() const noexcept { return destructurePattern != nullptr; }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1416,6 +1447,32 @@ struct TryFinallyExpr final: public Expr
 
     TryFinallyExpr(std::unique_ptr<Expr> b, std::unique_ptr<Expr> f):
         body(std::move(b)), finallyExpr(std::move(f))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Unit expression: `()`
+///
+/// Represents the unit value (void/nothing). Used as a placeholder when no
+/// meaningful value is needed, analogous to `void` in C++ or `unit` in F#.
+struct UnitExpr final: public Expr
+{
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Block expression: `{ let x = 1; x + 2 }`
+///
+/// A scoped expression delimited by braces. Variables defined inside are
+/// local to the block. The block's value is the last expression.
+struct BlockExpr final: public Expr
+{
+    std::vector<std::unique_ptr<Statement>> statements; ///< Zero or more let bindings/statements
+    std::unique_ptr<Expr> result;                       ///< Final expression (the block's value)
+
+    BlockExpr(std::vector<std::unique_ptr<Statement>> stmts, std::unique_ptr<Expr> res):
+        statements(std::move(stmts)), result(std::move(res))
     {
     }
 

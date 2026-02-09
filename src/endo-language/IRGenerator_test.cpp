@@ -2851,3 +2851,111 @@ TEST_CASE("IRGenerator.FSharp.env_question_operator_none")
     CHECK(executesSuccessfully(R"(let unwrap opt = opt?; let r = unwrap (env "MISSING"))"));
     rt.clearMockEnvVars();
 }
+
+// ============================================================================
+// Phase 1 Foundation: Unit type ()
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.unit_type")
+{
+    CHECK(executesSuccessfully("let x = ()"));
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_print")
+{
+    CHECK(executesWithOutput("print ()", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_let_binding")
+{
+    CHECK(executesWithOutput("let x = (); print x", "0"));
+}
+
+// ============================================================================
+// Phase 1 Foundation: String repetition
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.string_repeat_basic")
+{
+    CHECK(executesWithOutput(R"(print ("ha" * 3))", "hahaha"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_repeat_commutative")
+{
+    CHECK(executesWithOutput(R"(print (3 * "ab"))", "ababab"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_repeat_zero")
+{
+    CHECK(executesWithOutput(R"(print ("x" * 0))", ""));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_repeat_one")
+{
+    CHECK(executesWithOutput(R"(print ("y" * 1))", "y"));
+}
+
+// ============================================================================
+// Phase 1 Foundation: Block scopes
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.block_scope_basic")
+{
+    CHECK(executesWithOutput("let r = { let x = 10; x + 5 }; print r", "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.block_scope_multiple_lets")
+{
+    CHECK(executesWithOutput("let r = { let x = 1; let y = 2; x + y }; print r", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.block_scope_isolation")
+{
+    CHECK(executesWithOutput("let x = 1; let r = { let x = 99; x }; print r; print x", "991"));
+}
+
+// ============================================================================
+// Phase 1 Foundation: Function composition >> and <<
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.compose_forward")
+{
+    CHECK(executesWithOutput("let double x = x * 2; let inc x = x + 1; let f = double >> inc; print (f 5)",
+                             "11"));
+}
+
+TEST_CASE("IRGenerator.FSharp.compose_backward")
+{
+    CHECK(executesWithOutput("let double x = x * 2; let inc x = x + 1; let f = inc << double; print (f 5)",
+                             "11"));
+}
+
+TEST_CASE("IRGenerator.FSharp.compose_chain")
+{
+    CHECK(executesWithOutput(
+        "let a x = x + 1; let b x = x * 2; let c x = x - 3; let f = a >> b >> c; print (f 5)", "9"));
+}
+
+// ============================================================================
+// Phase 1 Foundation: Tuple destructuring in let
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.tuple_destructure_basic")
+{
+    CHECK(executesWithOutput("let (x, y) = (10, 20); print x; print y", "1020"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_destructure_from_binding")
+{
+    CHECK(executesWithOutput("let t = (3, 4); let (a, b) = t; print (a + b)", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_destructure_3_elements")
+{
+    CHECK(executesWithOutput("let (a, b, c) = (1, 2, 3); print (a + b + c)", "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_destructure_let_in")
+{
+    CHECK(executesWithOutput("let r = let (x, y) = (5, 6) in x * y; print r", "30"));
+}

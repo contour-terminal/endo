@@ -2427,6 +2427,7 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::Fun:
         case Token::Match:
         case Token::BracketOpen:  // List literal: [1; 2; 3]
+        case Token::BraceOpen:    // Block expression: { ... }
         case Token::Ampersand:    // Shell command expression: & git status
         case Token::OptionSome:   // Some expr
         case Token::OptionNone:   // None
@@ -2769,6 +2770,41 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume 'rec'
     }
 
+    // Check for destructuring pattern: let (x, y) = expr
+    if (_lexer.currentToken() == Token::RndOpen)
+    {
+        auto pat = parseTuplePattern();
+        if (!pat)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        // Expect '='
+        if (_lexer.currentToken() != Token::Equal)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '=' followed by an expression" },
+                                               currentContextSnippet(),
+                                               "Expected '=' in destructuring let binding, got '{}'",
+                                               _lexer.currentLiteral());
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '='
+        consumeNewlines();
+
+        auto value = parseFSharpExpr();
+        if (!value)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        _lexer.leaveFSharpExpr();
+        return std::make_unique<ast::LetBindingStmt>(isMutable, std::move(pat), std::move(value));
+    }
+
     // Expect identifier (binding name)
     if (_lexer.currentToken() != Token::Identifier)
     {
@@ -2956,6 +2992,51 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     if (isRecursive)
         _lexer.nextToken(); // consume 'rec'
 
+    // Check for destructuring pattern: let (x, y) = expr in body
+    if (!isRecursive && _lexer.currentToken() == Token::RndOpen)
+    {
+        auto pat = parseTuplePattern();
+        if (!pat)
+            return nullptr;
+
+        // Expect '='
+        if (_lexer.currentToken() != Token::Equal)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '=' followed by an expression" },
+                                               currentContextSnippet(),
+                                               "Expected '=' in destructuring let-in binding, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '='
+        consumeNewlines();
+
+        auto value = parseFSharpExpr();
+        if (!value)
+            return nullptr;
+
+        // Expect 'in' keyword
+        consumeNewlines();
+        if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "in")
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add 'in' followed by body expression" },
+                                               currentContextSnippet(),
+                                               "Expected 'in' after destructuring value, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume 'in'
+        consumeNewlines();
+
+        auto body = parseFSharpExpr();
+        if (!body)
+            return nullptr;
+
+        return std::make_unique<ast::LetInExpr>(std::move(pat), std::move(value), std::move(body));
+    }
+
     // Expect identifier (binding name)
     if (_lexer.currentToken() != Token::Identifier)
     {
@@ -3057,17 +3138,67 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
 std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
 {
     TRACE_SCOPE("parseFSharpPipeline");
-    auto left = parseFSharpOr();
+    auto left = parseFSharpComposition();
     if (!left)
         return nullptr;
 
     while (_lexer.currentToken() == Token::ForwardPipe)
     {
         _lexer.nextToken(); // consume '|>'
-        auto right = parseFSharpOr();
+        auto right = parseFSharpComposition();
         if (!right)
             return nullptr;
         left = std::make_unique<ast::PipelineExpr>(std::move(left), std::move(right));
+    }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
+{
+    TRACE_SCOPE("parseFSharpComposition");
+    auto left = parseFSharpOr();
+    if (!left)
+        return nullptr;
+
+    while (_lexer.currentToken() == Token::GreaterGreater || _lexer.currentToken() == Token::LessLess)
+    {
+        auto const isForward = _lexer.currentToken() == Token::GreaterGreater;
+        _lexer.nextToken(); // consume '>>' or '<<'
+        auto right = parseFSharpOr();
+        if (!right)
+            return nullptr;
+
+        // Desugar: f >> g  →  fun __compose_x -> g (f __compose_x)
+        //          g << f  →  fun __compose_x -> g (f __compose_x)
+        auto const paramName = std::string("__compose_x");
+
+        // Build: inner_func(__compose_x)
+        auto* innerFunc = isForward ? left.get() : right.get();
+        auto* outerFunc = isForward ? right.get() : left.get();
+        (void) innerFunc;
+        (void) outerFunc;
+
+        // Clone-free approach: move left and right into the correct positions
+        auto param = std::make_unique<ast::IdentifierExpr>(paramName);
+        std::unique_ptr<ast::Expr> innerApp;
+        std::unique_ptr<ast::Expr> outerApp;
+
+        if (isForward)
+        {
+            // f >> g  →  fun x -> g (f x)
+            innerApp = std::make_unique<ast::ApplicationExpr>(std::move(left), std::move(param));
+            outerApp = std::make_unique<ast::ApplicationExpr>(std::move(right), std::move(innerApp));
+        }
+        else
+        {
+            // g << f  →  fun x -> g (f x)
+            innerApp = std::make_unique<ast::ApplicationExpr>(std::move(right), std::move(param));
+            outerApp = std::make_unique<ast::ApplicationExpr>(std::move(left), std::move(innerApp));
+        }
+
+        std::vector<ast::TypedParameter> params;
+        params.emplace_back(paramName);
+        left = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(outerApp));
     }
     return left;
 }
@@ -3498,6 +3629,65 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
     return std::make_unique<ast::ShellCommandExpr>(std::move(command));
 }
 
+std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
+{
+    TRACE_SCOPE("parseBlockExpr");
+
+    _lexer.nextToken(); // consume '{'
+    consumeNewlines();
+
+    std::vector<std::unique_ptr<ast::Statement>> statements;
+
+    // Parse statements until we find the closing brace or an expression that
+    // isn't followed by a semicolon/newline + more statements
+    while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+    {
+        // Try parsing as a let binding first
+        if (_lexer.currentToken() == Token::Let)
+        {
+            auto let = parseLet();
+            if (!let)
+                return nullptr;
+            statements.push_back(std::move(let));
+            consumeNewlines();
+            continue;
+        }
+
+        // Parse as an expression
+        auto expr = parseFSharpExpr();
+        if (!expr)
+            return nullptr;
+
+        // Check if this is the last item in the block (followed by '}')
+        consumeNewlines();
+        if (_lexer.currentToken() == Token::BraceClose)
+        {
+            // This is the result expression
+            _lexer.nextToken(); // consume '}'
+            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+        }
+
+        // Otherwise, treat as a statement and continue
+        statements.push_back(std::make_unique<ast::ExprStmt>(std::move(expr)));
+        consumeNewlines();
+    }
+
+    if (_lexer.currentToken() != Token::BraceClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing '}'" },
+                                           currentContextSnippet(),
+                                           "Expected '}}' at end of block expression, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    _lexer.nextToken(); // consume '}'
+
+    // Empty block or block with only statements — result is unit (0)
+    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
+}
+
 std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 {
     TRACE_SCOPE("parseFSharpPrimary");
@@ -3646,8 +3836,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         }
 
         case Token::RndOpen: {
-            // Parenthesized expression or tuple: (expr) or (expr, expr, ...)
+            // Unit expression: (), or parenthesized expression, or tuple
             _lexer.nextToken(); // consume '('
+            if (_lexer.currentToken() == Token::RndClose)
+            {
+                _lexer.nextToken(); // consume ')'
+                return std::make_unique<ast::UnitExpr>();
+            }
             auto first = parseFSharpExpr();
             if (!first)
                 return nullptr;
@@ -3689,6 +3884,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             }
             _lexer.nextToken(); // consume ')'
             return std::make_unique<ast::ParenExpr>(std::move(first));
+        }
+
+        case Token::BraceOpen: {
+            // Block expression: { let x = 1; x + 2 }
+            return parseBlockExpr();
         }
 
         case Token::Ampersand: {

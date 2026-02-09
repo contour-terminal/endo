@@ -603,7 +603,10 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         _result += "mut ";
     if (node.isRecursive)
         _result += "rec ";
-    _result += node.name;
+    if (node.destructurePattern)
+        _result += pattern::toString(*node.destructurePattern);
+    else
+        _result += node.name;
     for (auto const& param: node.parameters)
     {
         _result += ' ';
@@ -643,7 +646,10 @@ void ASTPrinter::visit(LetInExpr const& node)
     _result += "let ";
     if (node.isRecursive)
         _result += "rec ";
-    _result += node.name;
+    if (node.destructurePattern)
+        _result += pattern::toString(*node.destructurePattern);
+    else
+        _result += node.name;
     for (auto const& param: node.parameters)
     {
         _result += ' ';
@@ -917,6 +923,24 @@ void ASTPrinter::visit(TryFinallyExpr const& node)
     _result += " finally ";
     if (node.finallyExpr)
         node.finallyExpr->accept(*this);
+}
+
+void ASTPrinter::visit(UnitExpr const& /*node*/)
+{
+    _result += "()";
+}
+
+void ASTPrinter::visit(BlockExpr const& node)
+{
+    _result += "{ ";
+    for (auto const& stmt: node.statements)
+    {
+        stmt->accept(*this);
+        _result += "; ";
+    }
+    if (node.result)
+        node.result->accept(*this);
+    _result += " }";
 }
 
 } // namespace endo::ast

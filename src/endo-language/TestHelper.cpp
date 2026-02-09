@@ -39,6 +39,24 @@ TestRuntime::TestRuntime()
         .returnType(CoreVM::LiteralType::Void)
         .bind(&TestRuntime::builtinPrintln, this);
 
+    // Register string_repeat builtin: "ha" * 3 → "hahaha"
+    runtime.registerFunction("string_repeat")
+        .param<CoreVM::CoreString>("str")
+        .param<CoreVM::CoreNumber>("count")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const& str = args.getString(1);
+            auto const count = args.getInt(2);
+            std::string result;
+            if (count > 0)
+            {
+                result.reserve(static_cast<size_t>(count) * str.size());
+                for (int64_t i = 0; i < count; ++i)
+                    result += str;
+            }
+            args.setResult(args.caller()->newString(result));
+        });
+
     // Register env.has builtin (returns boolean: true if key exists in mock env)
     runtime.registerFunction("env.has")
         .param<CoreVM::CoreString>("key")

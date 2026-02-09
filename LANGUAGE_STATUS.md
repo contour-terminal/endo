@@ -21,9 +21,9 @@ This document tracks the implementation status of F# language features as define
 - [ ] Record expressions: `{ name = "Alice"; age = 30 }`
 - [ ] Record update: `{ alice with age = 31 }`
 - [x] Tuple expressions: `(1, "hello")` (2 and 3 elements)
-- [ ] Tuple destructuring in let: `let (x, y) = tuple`
+- [x] Tuple destructuring in let: `let (x, y) = tuple`
 - [ ] Record destructuring in let: `let { name; age } = person`
-- [ ] Block scopes: `{ let inner = 20; inner + outer }`
+- [x] Block scopes: `{ let inner = 20; inner + outer }`
 
 ## Types
 
@@ -32,7 +32,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `float` — 64-bit floating point (via `std::bit_cast<uint64_t>(double)` in VM stack)
 - [x] `str` — UTF-8 string
 - [x] `bool` — Boolean
-- [ ] `unit` — No value (void)
+- [x] `unit` — No value (void)
 
 ### Compound Types
 - [ ] Lists: `list<int>` (parsed, no runtime representation)
@@ -59,7 +59,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Recursive functions: `let rec gcd a b = ...`
 - [x] Mutual recursion: `let rec isEven n = ... and isOdd n = ...`
 - [x] Tail-call optimization
-- [ ] Function composition: `>>` and `<<` operators
+- [x] Function composition: `>>` and `<<` operators
 - [x] Type-annotated functions
 
 ## Lists & Collections
@@ -112,15 +112,15 @@ This document tracks the implementation status of F# language features as define
 - [x] Concatenation: `"hello" + " world"`
 - [x] Mixed type concatenation: `"count: " + 42`
 - [x] F#-style interpolated strings: `$"Hello, {name}"`
-- [ ] Repetition: `"ha" * 3`
+- [x] Repetition: `"ha" * 3`
 
 ### Pipe Operators
 - [x] Forward pipe: `|>` (data |> func)
 - [x] Shell pipe: `|` (cmd1 | cmd2)
 
 ### Composition
-- [ ] Forward: `>>`
-- [ ] Backward: `<<`
+- [x] Forward: `>>`
+- [x] Backward: `<<`
 
 ### List
 - [ ] Cons: `::`
@@ -209,3 +209,66 @@ This document tracks the implementation status of F# language features as define
 - [x] Persist recursive and mutual-recursive functions
 - [x] Persist simple value bindings (`let x = 42`)
 - [ ] Persist closure captures from previous prompts
+
+---
+
+## Implementation Roadmap
+
+Phased plan for implementing remaining F# language features, ordered by dependencies and value.
+Consult this section to determine what to work on next.
+
+### Phase 1 — Foundation Completions (no new runtime types needed) ✅
+- [x] Unit type `()` — parser recognition + trivial codegen
+- [x] Tuple destructuring in `let`: `let (x, y) = tuple` — wire existing TuplePattern into let-binding LHS
+- [x] Function composition `>>` and `<<` — desugar to lambdas
+- [x] String repetition `"ha" * 3` — new native callback + BinaryExpr detection
+- [x] Block scopes `{ let x = 1; x + 2 }` — parser + scope push/pop in IRGenerator
+
+### Phase 2 — List Runtime (highest value, unlocks most downstream features)
+- [ ] Register `List` type in TypeRegistry as cons-cell sum type (Nil tag=0, Cons tag=1 with 2 slots: head, tail) using `BuiltinTypeId::List = 5`
+- [ ] `ListExpr` codegen: build linked list right-to-left via OALLOC/OSETTAG/OSETSLOT chaining
+- [ ] `ListRangeExpr` codegen: loop building cons cells
+- [ ] `ListPattern` and `ConsPattern` in PatternIRGenerator: tag check + slot extraction
+- [ ] `::` (cons) operator codegen: right-associative binary op creating Cons cells
+- [ ] `@` (list concat) operator: native callback or IR loop
+- [ ] List print support in `convertToString()`
+
+### Phase 3 — List Standard Library (depends on Phase 2)
+- [ ] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
+- [ ] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
+- [ ] Transformations: `sort`, `reverse`, `distinct`
+- [ ] `ListComprehensionExpr` codegen: loop + optional filter + list construction
+- [ ] Utility: `zip`, `flatten`, `groupBy`, `take`, `drop`, `find`, `exists`, `forall`
+
+### Phase 4 — Records (parallel with Phase 2/3)
+- [ ] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type
+- [ ] Record literals: `{ name = "Alice"; age = 30 }` — new AST node + OALLOC/OSETSLOT codegen
+- [ ] Field access: `person.name` — new FieldAccessExpr + OGETSLOT via field-name-to-slot lookup
+- [ ] Record update: `{ person with age = 31 }` — copy slots + overwrite
+- [ ] Record pattern matching: wire existing RecordPattern AST to PatternIRGenerator
+
+### Phase 5 — Custom Discriminated Unions (depends on Phase 4 for type def parsing)
+- [ ] Union type definitions: `type Shape = | Circle of float | Rectangle of float * float | Point`
+- [ ] User-defined constructor expressions: register variant names as constructors in scope
+- [ ] Pattern matching on user-defined constructors: extend ConstructorPattern beyond hardcoded Option/Result
+
+### Phase 6 — Remaining Operators and Small Features
+- [ ] Optional chaining `?.` — desugar to match on Option
+- [ ] Option default `?|` — desugar to match with default value
+- [ ] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` as builtins
+- [ ] For loop destructuring: `for (name, value) in entries do ... done`
+
+### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
+- [ ] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
+- [ ] File: `File.read`, `File.write`, `File.list` returning Result types
+- [ ] Path: `Path.join`, `Path.extension`, `Path.basename`
+
+### Phase 8 — Module System
+- [ ] `import "path"`, `import "path" as alias`, `from "path" import (names)` parsing
+- [ ] Module loading: parse imported file, link IR, namespace scoping
+- [ ] Module-qualified access: `List.map`, `String.split`
+
+### Phase 9 — Generic Types
+- [ ] Type variable introduction in annotations (`'a` syntax)
+- [ ] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
+- [ ] Monomorphization or type erasure at codegen time

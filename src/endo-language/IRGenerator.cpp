@@ -2824,6 +2824,53 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 {
     TRACE_SCOPE("visit(LetBindingStmt)");
 
+    // Destructuring let binding: let (x, y) = expr
+    if (node.isDestructuring())
+    {
+        auto* value = codegen(node.value.get());
+        if (!value)
+        {
+            reportTypeError("Failed to generate code for destructuring let binding value");
+            return;
+        }
+
+        // Store scrutinee in alloca
+        auto* scrutineeStorage = createAllocaInEntryBlock(value->type(), "destructure.scrutinee");
+        _builder.createStore(scrutineeStorage, value, "destructure.store");
+
+        // Collect binding names from the pattern
+        auto bindingNames = pattern::collectBindings(*node.destructurePattern);
+
+        // Pre-allocate storage for each binding
+        std::unordered_map<std::string, CoreVM::AllocaInstr*> bindingStorage;
+        for (auto const& name: bindingNames)
+        {
+            auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Void, name);
+            bindingStorage[name] = alloca;
+        }
+
+        // Use PatternIRGenerator to match and bind
+        PatternIRGenerator patternGen(_builder);
+        patternGen.setBindingStorage(bindingStorage);
+
+        auto* successBlock = _builder.createBlock("destructure.ok");
+        auto* failBlock = _builder.createBlock("destructure.fail");
+
+        patternGen.compile(*node.destructurePattern, value, scrutineeStorage, successBlock, failBlock);
+
+        // Fail block: runtime error (tuple destructure failed)
+        _builder.setInsertPoint(failBlock);
+        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+
+        // Success block: register all bindings in F# scope
+        _builder.setInsertPoint(successBlock);
+        for (auto const& name: bindingNames)
+            bindFSharpVariable(name, bindingStorage[name], node.isMutable);
+
+        _result = nullptr;
+        return;
+    }
+
     if (node.isFunction())
     {
         // Function definition: let add x y = x + y
@@ -2974,6 +3021,49 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
     pushFSharpScope();
 
+    // Destructuring let-in: let (x, y) = expr in body
+    if (node.isDestructuring())
+    {
+        auto* value = codegen(node.value.get());
+        if (!value)
+        {
+            popFSharpScope();
+            reportTypeError("Failed to evaluate destructuring let-in binding value");
+            return;
+        }
+
+        auto* scrutineeStorage = createAllocaInEntryBlock(value->type(), "destructure.scrutinee");
+        _builder.createStore(scrutineeStorage, value, "destructure.store");
+
+        auto bindingNames = pattern::collectBindings(*node.destructurePattern);
+
+        std::unordered_map<std::string, CoreVM::AllocaInstr*> bindingStorage;
+        for (auto const& name: bindingNames)
+        {
+            auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Void, name);
+            bindingStorage[name] = alloca;
+        }
+
+        PatternIRGenerator patternGen(_builder);
+        patternGen.setBindingStorage(bindingStorage);
+
+        auto* successBlock = _builder.createBlock("destructure.ok");
+        auto* failBlock = _builder.createBlock("destructure.fail");
+
+        patternGen.compile(*node.destructurePattern, value, scrutineeStorage, successBlock, failBlock);
+
+        _builder.setInsertPoint(failBlock);
+        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+
+        _builder.setInsertPoint(successBlock);
+        for (auto const& name: bindingNames)
+            bindFSharpVariable(name, bindingStorage[name]);
+
+        _result = codegen(node.body.get());
+        popFSharpScope();
+        return;
+    }
+
     if (node.isFunction())
     {
         // Function binding: let f x = body in expr
@@ -3067,6 +3157,25 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         else if (right->type() != CoreVM::LiteralType::String)
             right = _builder.createN2S(right);
         _result = _builder.createSAdd(left, right, "concat");
+        return;
+    }
+
+    // String repetition: "ha" * 3 or 3 * "ha"
+    if (node.op == ast::BinaryOp::Mul
+        && (left->type() == CoreVM::LiteralType::String || right->type() == CoreVM::LiteralType::String))
+    {
+        auto* strVal = left->type() == CoreVM::LiteralType::String ? left : right;
+        auto* countVal = left->type() == CoreVM::LiteralType::String ? right : left;
+        if (countVal->type() == CoreVM::LiteralType::String)
+            countVal = _builder.createS2N(countVal);
+        auto* cb = findCallback("string_repeat(SI)S");
+        if (!cb)
+        {
+            reportTypeError("Internal error: string_repeat builtin not found");
+            return;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { strVal, countVal }, "srepeat");
         return;
     }
 
@@ -4827,6 +4936,28 @@ void IRGenerator::visit(ast::TryFinallyExpr const& node)
     // Normal exit: load body result
     _builder.setInsertPoint(finallyNormal);
     _result = _builder.createLoad(bodyResultStorage, "tryfinally.result.load");
+}
+
+void IRGenerator::visit(ast::UnitExpr const& /*node*/)
+{
+    // Unit produces integer 0 (void/unit semantics)
+    _result = _builder.get(CoreVM::CoreNumber(0));
+}
+
+void IRGenerator::visit(ast::BlockExpr const& node)
+{
+    TRACE_SCOPE("visit(BlockExpr)");
+
+    pushFSharpScope();
+
+    // Codegen all statements (let bindings, etc.)
+    for (auto const& stmt: node.statements)
+        codegen(stmt.get());
+
+    // Codegen the result expression (the block's value)
+    _result = codegen(node.result.get());
+
+    popFSharpScope();
 }
 
 } // namespace endo

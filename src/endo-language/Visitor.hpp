@@ -75,6 +75,8 @@ struct ResultExpr;
 struct TryExpr;
 struct TryWithExpr;
 struct TryFinallyExpr;
+struct UnitExpr;
+struct BlockExpr;
 
 struct Visitor
 {
@@ -159,6 +161,8 @@ struct Visitor
     virtual void visit(TryWithExpr const&) = 0;
     virtual void visit(TryFinallyExpr const&) = 0;
     virtual void visit(FStringExpr const&) = 0;
+    virtual void visit(UnitExpr const&) = 0;
+    virtual void visit(BlockExpr const&) = 0;
 };
 
 } // namespace endo::ast

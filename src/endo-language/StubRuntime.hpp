@@ -122,6 +122,12 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
+
+    runtime.registerFunction("string_repeat")
+        .param<CoreVM::CoreString>("str")
+        .param<CoreVM::CoreNumber>("count")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
 }
 
 } // namespace endo
