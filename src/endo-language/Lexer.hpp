@@ -134,14 +134,14 @@ enum class BuiltinFunction
 
 struct LineColumn
 {
-    int line;   // 0-based index
-    int column; // 0-based index
+    int line = 0;   // 0-based index
+    int column = 0; // 0-based index
 };
 
 struct SourceLocation
 {
-    int line;              // 0-based index
-    int column;            // 0-based index
+    int line = 0;          // 0-based index
+    int column = 0;        // 0-based index
     std::string_view name; // e.g. stdin, or a filename
 };
 
@@ -263,7 +263,7 @@ class Lexer
 
     [[nodiscard]] std::string const& currentLiteral() const noexcept { return _currentToken.literal; }
 
-    [[nodiscard]] SourceLocationRange currentRange() const noexcept { return _currentRange; }
+    [[nodiscard]] SourceLocationRange currentRange() const noexcept { return _currentToken.location; }
 
     [[nodiscard]] bool isDirective(std::string_view name) const noexcept
     {

@@ -14,6 +14,7 @@
 #include "Shell.hpp"
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
+#include <lsp/LspServer.hpp>
 
 using namespace std::string_view_literals;
 
@@ -33,6 +34,7 @@ Options:
   -h, --help         Show this help message and exit
   -v, --version      Show version information and exit
   -c <COMMAND>       Execute COMMAND and exit
+  --lsp              Launch Language Server Protocol server over stdio
   --log=<PATTERNS>   Enable logging for categories matching PATTERNS
                      (comma-separated, supports wildcards)
   --log-list         List all available log categories and exit
@@ -101,6 +103,7 @@ struct ParsedArgs
     bool showHelp = false;
     bool showVersion = false;
     bool showLogList = false;
+    bool launchLsp = false;
     std::string_view logPatterns;
     std::string_view command;
     std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
@@ -127,6 +130,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg == "--log-list")
         {
             result.showLogList = true;
+        }
+        else if (arg == "--lsp")
+        {
+            result.launchLsp = true;
         }
         else if (arg.starts_with("--log="))
         {
@@ -245,6 +252,10 @@ int main(int argc, char const* argv[])
         printLogCategories();
         return EXIT_SUCCESS;
     }
+
+    // Handle --lsp mode (launch LSP server over stdio)
+    if (parsed.launchLsp)
+        return endo::lsp::LspServer {}.run();
 
     auto shell = endo::Shell {};
 

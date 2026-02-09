@@ -994,22 +994,22 @@ and user muscle memory. Backslashes remain valid in user input but are normalize
 to deliver rich language intelligence outside the interactive shell.
 
 **Tasks:**
-- [ ] Implement LSP server transport (stdio, accessible via `endo --lsp`)
-- [ ] Implement `initialize`/`shutdown`/`exit` lifecycle
-- [ ] Implement `textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose` synchronization
-- [ ] Implement `textDocument/publishDiagnostics` (syntax errors, undefined variables, unknown commands)
+- [x] Implement LSP server transport (stdio, accessible via `endo --lsp`)
+- [x] Implement `initialize`/`shutdown`/`exit` lifecycle
+- [x] Implement `textDocument/didOpen`, `textDocument/didChange`, `textDocument/didClose` synchronization
+- [x] Implement `textDocument/publishDiagnostics` (syntax errors, undefined variables, unknown commands)
 - [ ] Implement `textDocument/completion` (commands, file paths, variables, builtins, options)
-- [ ] Implement `textDocument/hover` (command help via man pages, builtin documentation, variable values)
+- [x] Implement `textDocument/hover` (command help via man pages, builtin documentation, variable values)
 - [ ] Implement `textDocument/definition` (go-to-definition for functions and variable assignments)
 - [ ] Implement `textDocument/references` (find all references to a function or variable)
 - [ ] Implement `textDocument/documentSymbol` (outline of functions, aliases, exported variables)
 - [ ] Implement `textDocument/signatureHelp` (parameter hints for functions)
 - [ ] Implement `textDocument/formatting` and `textDocument/rangeFormatting`
 - [ ] Implement `textDocument/rename` (rename function or variable across script)
-- [ ] Implement `textDocument/semanticTokens` (semantic highlighting: commands, builtins, variables, strings, operators)
+- [x] Implement `textDocument/semanticTokens` (semantic highlighting: commands, builtins, variables, strings, operators)
 - [ ] Implement `textDocument/codeAction` (quick fixes for common errors, e.g. missing quotes, unset variables)
 - [ ] Create VS Code extension with language registration for `.endo` and `.sh` files
-- [ ] Add LSP server tests (protocol conformance and language feature tests)
+- [x] Add LSP server tests (protocol conformance and language feature tests)
 
 **Implementation Notes:**
 - Reuse existing `Lexer` and `Parser` for tokenization and AST construction; run in incremental mode

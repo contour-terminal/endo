@@ -1,0 +1,205 @@
+// SPDX-License-Identifier: Apache-2.0
+#include "SemanticTokens.hpp"
+
+#include <endo-language/Lexer.hpp>
+
+namespace endo::lsp
+{
+
+namespace
+{
+
+    // Semantic token type indices (must match legend order)
+    constexpr int TypeKeyword = 0;
+    constexpr int TypeFunction = 1;
+    constexpr int TypeVariable = 2;
+    constexpr int TypeNumber = 3;
+    constexpr int TypeString = 4;
+    constexpr int TypeOperator = 5;
+    constexpr int TypeEnumMember = 6;
+    constexpr int TypeComment = 7;
+    constexpr int TypeType = 8;
+
+    // Semantic token modifier bit masks (must match legend order)
+    constexpr int ModDeclaration = 1 << 0;
+    constexpr int ModModification = 1 << 1;
+
+    struct TokenClassification
+    {
+        int type = -1;     ///< -1 means skip this token
+        int modifiers = 0; ///< Bitmask of modifier flags
+    };
+
+    /// Classifies an endo Token into an LSP semantic token type/modifier pair.
+    [[nodiscard]] TokenClassification classifyToken(Token token)
+    {
+        using enum Token;
+        switch (token)
+        {
+            // Keywords
+            case Let:
+            case Mut:
+            case Fun:
+            case Match:
+            case With:
+            case When:
+            case Type:
+            case Of:
+            case Rec:
+            case And:
+            case As:
+            case Try:
+            case Finally: return { TypeKeyword, 0 };
+
+            // Numbers
+            case Number: return { TypeNumber, 0 };
+
+            // Strings
+            case String:
+            case DblQuoteStart:
+            case DblQuoteEnd:
+            case StringFragment: return { TypeString, 0 };
+
+            // Constructors (enum members)
+            case OptionSome:
+            case OptionNone:
+            case ResultOk:
+            case ResultError: return { TypeEnumMember, 0 };
+
+            // Operators
+            case Plus:
+            case Minus:
+            case Star:
+            case Slash:
+            case Percent:
+            case StarStar:
+            case Arrow:
+            case ForwardPipe:
+            case Pipe:
+            case EqualEqual:
+            case NotEqual:
+            case Less:
+            case Greater:
+            case LessEqual:
+            case GreaterEqual:
+            case ColonColon:
+            case DotDot:
+            case LeftArrow:
+            case Question:
+            case Caret:
+            case AmpAmp:
+            case PipePipe:
+            case Not:
+            case Equal: return { TypeOperator, 0 };
+
+            // Shell variables
+            case DollarName:
+            case DollarBraceName:
+            case DollarQuestion:
+            case DollarDollar:
+            case DollarNot:
+            case DollarNumber:
+            case DollarBraceParam: return { TypeVariable, ModModification };
+
+            // Identifiers
+            case Identifier: return { TypeVariable, 0 };
+
+            // Skip non-semantic tokens
+            default: return { -1, 0 };
+        }
+    }
+
+} // namespace
+
+SemanticTokensLegend createSemanticTokensLegend()
+{
+    return SemanticTokensLegend {
+        .tokenTypes = { "keyword",
+                        "function",
+                        "variable",
+                        "number",
+                        "string",
+                        "operator",
+                        "enumMember",
+                        "comment",
+                        "type" },
+        .tokenModifiers = { "declaration", "modification" },
+    };
+}
+
+namespace
+{
+
+    /// Tokenizes source with F# mode enabled for proper operator tokenization.
+    [[nodiscard]] std::vector<TokenInfo> tokenizeForLsp(std::string const& source)
+    {
+        auto tokens = std::vector<TokenInfo> {};
+        auto lexer = Lexer { std::make_unique<StringSource>(source) };
+        lexer.enterFSharpExpr(); // Enable F# mode for operator tokenization
+
+        while (lexer.currentToken() != Token::EndOfInput)
+        {
+            tokens.emplace_back(
+                TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
+            lexer.nextToken();
+        }
+
+        return tokens;
+    }
+
+} // namespace
+
+SemanticTokens computeSemanticTokens(std::string const& source)
+{
+    auto tokens = tokenizeForLsp(source);
+
+    SemanticTokens result;
+    int prevLine = 0;
+    int prevChar = 0;
+
+    for (auto const& tokenInfo: tokens)
+    {
+        // Skip non-semantic tokens
+        if (tokenInfo.token == Token::EndOfInput || tokenInfo.token == Token::LineFeed
+            || tokenInfo.token == Token::Semicolon)
+            continue;
+
+        auto const classification = classifyToken(tokenInfo.token);
+        if (classification.type < 0)
+            continue;
+
+        // Convert from lexer's 1-based columns to 0-based for LSP
+        auto const line = tokenInfo.location.begin.line;
+        auto const character = tokenInfo.location.begin.column > 0 ? tokenInfo.location.begin.column - 1 : 0;
+
+        // Compute length from source location range and literal size.
+        // Use the maximum of range-based length and literal length because:
+        // 1. Operator tokens have empty literals (range is correct)
+        // 2. The last token before EOF may have a truncated range
+        auto rangeLength = 0;
+        if (tokenInfo.location.begin.line == tokenInfo.location.end.line)
+            rangeLength = tokenInfo.location.end.column - tokenInfo.location.begin.column;
+
+        auto const literalLength = static_cast<int>(tokenInfo.literal.size());
+        auto const length = std::max(rangeLength, literalLength);
+
+        if (length <= 0)
+            continue;
+
+        auto const deltaLine = line - prevLine;
+        auto const deltaStartChar = (deltaLine == 0) ? (character - prevChar) : character;
+
+        result.data.push_back(deltaLine);
+        result.data.push_back(deltaStartChar);
+        result.data.push_back(length);
+        result.data.push_back(classification.type);
+        result.data.push_back(classification.modifiers);
+
+        prevLine = line;
+        prevChar = character;
+    }
+
+    return result;
+}
+
+} // namespace endo::lsp
