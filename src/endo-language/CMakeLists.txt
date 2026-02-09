@@ -39,6 +39,14 @@ add_library(endo STATIC
     # Diagnostics
     DiagnosticsAdapter.hpp
     DiagnosticsAdapter.cpp
+    DiagnosticsCollector.hpp
+    DiagnosticsCollector.cpp
+
+    # Hover & Stub Runtime
+    HoverInfo.hpp
+    HoverProvider.hpp
+    HoverProvider.cpp
+    StubRuntime.hpp
 
     # Logging (used by parser tracing)
     LogCategories.hpp
@@ -65,6 +73,8 @@ add_executable(test-endo-language
     TestHelper.cpp
     Lexer_test.cpp
     Diagnostics_test.cpp
+    DiagnosticsCollector_test.cpp
+    HoverProvider_test.cpp
     Type_test.cpp
     Pattern_test.cpp
     Parser_test.cpp

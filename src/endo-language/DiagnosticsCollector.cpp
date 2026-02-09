@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: Apache-2.0
+#include "DiagnosticsCollector.hpp"
+
+#include "StubRuntime.hpp"
+#include <endo-language/Lexer.hpp>
+#include <endo-language/Parser.hpp>
+
+namespace endo
+{
+
+std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source)
+{
+    CoreVM::Runtime runtime;
+    registerStubRuntime(runtime);
+
+    CoreVM::diagnostics::BufferedReport report;
+    Parser parser(runtime, report, std::make_unique<StringSource>(source));
+    parser.parse();
+
+    std::vector<DiagnosticMessage> diagnostics;
+    for (auto const& msg: report.messages())
+    {
+        auto severity = DiagnosticSeverity::Error;
+        using Type = CoreVM::diagnostics::Type;
+        switch (msg.type)
+        {
+            case Type::Warning: severity = DiagnosticSeverity::Warning; break;
+            case Type::LinkError: [[fallthrough]];
+            case Type::TypeError: severity = DiagnosticSeverity::Error; break;
+            default: break;
+        }
+
+        // CoreVM FilePos uses 1-based line/column; SourcePosition uses 0-based
+        auto const startLine =
+            msg.sourceLocation.begin.line > 0 ? static_cast<int>(msg.sourceLocation.begin.line) - 1 : 0;
+        auto const startCol =
+            msg.sourceLocation.begin.column > 0 ? static_cast<int>(msg.sourceLocation.begin.column) - 1 : 0;
+        auto const endLine =
+            msg.sourceLocation.end.line > 0 ? static_cast<int>(msg.sourceLocation.end.line) - 1 : startLine;
+        auto const endCol = msg.sourceLocation.end.column > 0
+                                ? static_cast<int>(msg.sourceLocation.end.column) - 1
+                                : startCol + 1;
+
+        diagnostics.push_back(DiagnosticMessage {
+            .range =
+                SourceRange {
+                    .start = SourcePosition { .line = startLine, .character = startCol },
+                    .end = SourcePosition { .line = endLine, .character = endCol },
+                },
+            .severity = severity,
+            .message = msg.text,
+        });
+    }
+
+    return diagnostics;
+}
+
+} // namespace endo
