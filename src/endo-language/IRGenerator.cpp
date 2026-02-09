@@ -58,6 +58,20 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             // IR programs are no longer valid; only pure functions persist correctly.
             generator.registerFSharpFunction(name, std::move(func));
         }
+
+        // Pre-load persisted value bindings (in order, so dependencies resolve correctly)
+        for (auto const& binding: persistentState->valueBindings)
+        {
+            auto* val = generator.codegen(binding.value);
+            if (!val)
+                continue;
+            auto* storage = generator.createAllocaInEntryBlock(val->type(), binding.name);
+            generator._builder.createStore(storage, val, binding.name);
+            if (binding.isObjectExpr)
+                generator.bindFSharpObjectVariable(binding.name, storage, binding.isMutable);
+            else
+                generator.bindFSharpVariable(binding.name, storage, binding.isMutable);
+        }
     }
 
     generator.codegen(&rootNode);
@@ -77,6 +91,17 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.returnKind = func.returnKind;
             persisted.isRecursive = func.isRecursive;
             persistentState->functions[name] = std::move(persisted);
+        }
+
+        // Persist newly created value bindings
+        for (auto const& vb: generator._newValueBindings)
+        {
+            auto it = std::ranges::find_if(persistentState->valueBindings,
+                                           [&](auto const& b) { return b.name == vb.name; });
+            if (it != persistentState->valueBindings.end())
+                *it = vb;
+            else
+                persistentState->valueBindings.push_back(vb);
         }
     }
 
@@ -2562,6 +2587,9 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     {
         bindFSharpVariable(node.name, storage, node.isMutable);
     }
+
+    // Record for REPL persistence (re-evaluated at each subsequent prompt)
+    _newValueBindings.push_back({ node.name, node.value.get(), node.isMutable, isObjectExpr });
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;

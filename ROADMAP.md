@@ -507,7 +507,8 @@ src/
   - `IRGenerator::generate()` accepts optional persistent state: pre-populates function table on entry, stores new definitions on exit
   - `Shell` retains parsed ASTs so that function body pointers remain valid across prompts
   - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
-  - Limitations: closure captures from previous prompts are not preserved (pure functions only); simple value bindings (`let x = 42`) do not persist
+  - Simple value bindings (`let x = 42`) persist via AST re-evaluation: the value expression is re-codegen'd at each prompt so dependencies resolve correctly
+  - Limitations: closure captures from previous prompts are not preserved (pure functions only)
   - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
 - Mutual recursion (`let rec f ... and g ...`):
   - Parser handles `and` keyword after `let rec` to chain function definitions

@@ -42,6 +42,18 @@ struct FSharpPersistentState
     /// Function table persisted across REPL prompts (name -> function metadata).
     std::unordered_map<std::string, PersistedFunction> functions;
 
+    /// A persisted value binding (re-evaluated at each prompt).
+    struct PersistedValueBinding
+    {
+        std::string name;
+        ast::Expr const* value; ///< Expression AST to re-evaluate each prompt
+        bool isMutable;
+        bool isObjectExpr; ///< Whether value is Option/Result/Tuple (for ORELEASE)
+    };
+
+    /// Value bindings persisted across REPL prompts, in definition order.
+    std::vector<PersistedValueBinding> valueBindings;
+
     /// AST nodes retained to keep PersistedFunction::body pointers valid.
     std::vector<std::unique_ptr<ast::Statement>> retainedASTs;
 };
@@ -361,6 +373,9 @@ class IRGenerator final: public ast::Visitor
 
     std::optional<RecursiveCallContext> _activeRecursion;
     std::optional<MutualRecursionContext> _activeMutualRecursion;
+
+    /// Value bindings created during this codegen pass, to be persisted back.
+    std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
 };
 
 } // namespace endo

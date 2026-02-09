@@ -1593,6 +1593,56 @@ TEST_CASE("IRGenerator.FSharp.session_lambda_bound_function")
 }
 
 // =============================================================================
+// REPL Session Persistence Tests — Value Bindings
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.session_simple_value_binding")
+{
+    CHECK(sessionProducesOutput({ "let x = 42", "print x" }, "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_binding_in_expression")
+{
+    CHECK(sessionProducesOutput({ "let x = 10", "print (x + 5)" }, "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_depending_on_value")
+{
+    CHECK(sessionProducesOutput({ "let x = 42", "let y = x + 1", "print y" }, "43"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_function_using_persisted_value")
+{
+    CHECK(sessionProducesOutput({ "let x = 10", "let f y = y + x", "print (f 5)" }, "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_redefinition")
+{
+    CHECK(sessionProducesOutput({ "let x = 42", "let x = 100", "print x" }, "100"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_binding_string")
+{
+    CHECK(sessionProducesOutput({ R"(let name = "world")", R"(print ("hello " + name))" }, "hello world"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_binding_bool")
+{
+    CHECK(sessionProducesOutput({ "let flag = true", "print flag" }, "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_value_binding_float")
+{
+    CHECK(sessionProducesOutput({ "let pi = 3.14", "print pi" }, "3.14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.session_mutable_value_binding")
+{
+    // Mutable binding persists initial value (mutations don't carry across prompts)
+    CHECK(sessionProducesOutput({ "let mut x = 0", "print x" }, "0"));
+}
+
+// =============================================================================
 // Phase 2 — Bug Fixes
 // =============================================================================
 
