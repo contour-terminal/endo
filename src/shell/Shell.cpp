@@ -479,7 +479,7 @@ Shell::Shell(TTY& tty, Environment& env):
     _signalFd = SignalHandler::initialize(this);
 
     // Initialize completion system
-    completer = std::make_unique<Completer>(_env, history);
+    completer = std::make_unique<Completer>(_env, history, _fsharpState);
     prompt.setCompleter(completer.get());
 
     // NB: These lines could go away once we have a proper command line parser and

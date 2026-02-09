@@ -495,7 +495,14 @@ src/
   - [x] HoverProvider: hover text for `$"..."` syntax
   - [x] Escaped braces: `{{` and `}}` produce literal `{` and `}`
   - [x] 17 test cases covering basic, variables, arithmetic, conditionals, type conversions, escaped braces, function application, pipelines, adjacent holes, concatenation, and nested strings
-- [ ] Update completion for F# style (Phase 2.3)
+- [x] Update completion for F# style (Phase 2.3)
+  - [x] `LetBindingCompleter` provider surfaces `let` function and value bindings from `FSharpPersistentState`
+  - [x] Priority 90 (between CommandCompleter=100 and VariableCompleter=80)
+  - [x] Handles `Command` and `Argument` completion contexts
+  - [x] Function descriptions show signature with parameter names, types, and return types (e.g., `rec factorial(n: int) -> int`)
+  - [x] Value descriptions show `"value"` or `"mutable value"`
+  - [x] Smart-case prefix matching and fuzzy matching with position highlighting
+  - [x] 8 test cases covering function/value completion, descriptions, fuzzy matching, scoring, and context handling
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes

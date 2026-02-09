@@ -15,6 +15,7 @@ using crispy::escape;
 
 #include "CompletionContext.hpp"
 #include "CompletionProviders/FileCompleter.hpp"
+#include "CompletionProviders/LetBindingCompleter.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
 
@@ -2147,4 +2148,186 @@ TEST_CASE("shell.fsharp.match_nested_in_let")
     TestShell shell;
     shell("let x = 7; let y = match x with | 0 -> 0 | n -> n * 2; exit y");
     CHECK(shell.exitCode == 14);
+}
+
+// ============================================================================
+// LetBindingCompleter Tests
+// ============================================================================
+
+TEST_CASE("LetBindingCompleter.completes_function_names")
+{
+    endo::FSharpPersistentState state;
+    state.functions["add"] = endo::FSharpPersistentState::PersistedFunction {
+        .parameters = { "x", "y" },
+        .parameterTypes = {},
+        .returnType = std::nullopt,
+        .body = nullptr,
+    };
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "ad",
+        .cursorPosition = 2,
+        .fullInput = "ad",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(!results.empty());
+    CHECK(results[0].text == "add");
+    CHECK(results[0].description == "add(x, y)");
+}
+
+TEST_CASE("LetBindingCompleter.completes_value_bindings")
+{
+    endo::FSharpPersistentState state;
+    state.valueBindings.push_back(endo::FSharpPersistentState::PersistedValueBinding {
+        .name = "myValue",
+        .value = nullptr,
+        .isMutable = false,
+    });
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Argument,
+        .prefix = "my",
+        .cursorPosition = 2,
+        .fullInput = "print my",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(!results.empty());
+    CHECK(results[0].text == "myValue");
+    CHECK(results[0].description == "value");
+}
+
+TEST_CASE("LetBindingCompleter.mutable_value_description")
+{
+    endo::FSharpPersistentState state;
+    state.valueBindings.push_back(endo::FSharpPersistentState::PersistedValueBinding {
+        .name = "counter",
+        .value = nullptr,
+        .isMutable = true,
+    });
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "cou",
+        .cursorPosition = 3,
+        .fullInput = "cou",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(!results.empty());
+    CHECK(results[0].text == "counter");
+    CHECK(results[0].description == "mutable value");
+}
+
+TEST_CASE("LetBindingCompleter.recursive_function_description")
+{
+    endo::FSharpPersistentState state;
+    state.functions["factorial"] = endo::FSharpPersistentState::PersistedFunction {
+        .parameters = { "n" },
+        .parameterTypes = { std::make_shared<endo::Type>(
+            endo::PrimitiveTypeNode { endo::PrimitiveType::Int }) },
+        .returnType = std::make_shared<endo::Type>(endo::PrimitiveTypeNode { endo::PrimitiveType::Int }),
+        .body = nullptr,
+        .returnKind = endo::ReturnKind::Plain,
+        .isRecursive = true,
+    };
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "fact",
+        .cursorPosition = 4,
+        .fullInput = "fact",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(!results.empty());
+    CHECK(results[0].text == "factorial");
+    CHECK(results[0].description == "rec factorial(n: int) -> int");
+}
+
+TEST_CASE("LetBindingCompleter.handles_empty_state")
+{
+    endo::FSharpPersistentState state;
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "foo",
+        .cursorPosition = 3,
+        .fullInput = "foo",
+    };
+
+    auto results = completer.complete(context);
+    CHECK(results.empty());
+}
+
+TEST_CASE("LetBindingCompleter.fuzzy_matching")
+{
+    endo::FSharpPersistentState state;
+    state.functions["calculateSum"] = endo::FSharpPersistentState::PersistedFunction {
+        .parameters = { "a", "b" },
+        .parameterTypes = {},
+        .returnType = std::nullopt,
+        .body = nullptr,
+    };
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "calSum",
+        .cursorPosition = 6,
+        .fullInput = "calSum",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(!results.empty());
+    CHECK(results[0].text == "calculateSum");
+    CHECK(!results[0].matchPositions.empty());
+}
+
+TEST_CASE("LetBindingCompleter.functions_score_higher_than_values")
+{
+    endo::FSharpPersistentState state;
+    state.functions["total"] = endo::FSharpPersistentState::PersistedFunction {
+        .parameters = { "x" },
+        .parameterTypes = {},
+        .returnType = std::nullopt,
+        .body = nullptr,
+    };
+    state.valueBindings.push_back(endo::FSharpPersistentState::PersistedValueBinding {
+        .name = "totalCount",
+        .value = nullptr,
+        .isMutable = false,
+    });
+
+    endo::LetBindingCompleter completer(state);
+    endo::CompletionContext context {
+        .type = endo::CompletionContextType::Command,
+        .prefix = "total",
+        .cursorPosition = 5,
+        .fullInput = "total",
+    };
+
+    auto results = completer.complete(context);
+    REQUIRE(results.size() >= 2);
+    // Function "total" should score higher than value "totalCount"
+    CHECK(results[0].text == "total");
+    CHECK(results[0].score > results[1].score);
+}
+
+TEST_CASE("LetBindingCompleter.does_not_handle_variable_context")
+{
+    endo::LetBindingCompleter completer(endo::FSharpPersistentState {});
+    CHECK(completer.canHandle(endo::CompletionContextType::Command));
+    CHECK(completer.canHandle(endo::CompletionContextType::Argument));
+    CHECK(!completer.canHandle(endo::CompletionContextType::Variable));
+    CHECK(!completer.canHandle(endo::CompletionContextType::VariableBrace));
+    CHECK(!completer.canHandle(endo::CompletionContextType::FilePath));
+    CHECK(!completer.canHandle(endo::CompletionContextType::Option));
+    CHECK(!completer.canHandle(endo::CompletionContextType::Redirect));
 }

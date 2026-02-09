@@ -6,6 +6,7 @@
 #include <shell/CompletionProviders/CommandCompleter.hpp>
 #include <shell/CompletionProviders/FileCompleter.hpp>
 #include <shell/CompletionProviders/HistoryCompleter.hpp>
+#include <shell/CompletionProviders/LetBindingCompleter.hpp>
 #include <shell/CompletionProviders/OptionCompleter.hpp>
 #include <shell/CompletionProviders/VariableCompleter.hpp>
 #include <shell/Environment.hpp>
@@ -37,7 +38,8 @@ class Completer
     /// @brief Constructs a completer with default providers.
     /// @param env The environment for variable and command completion.
     /// @param history The history for history-based suggestions.
-    Completer(Environment const& env, History const& history);
+    /// @param fsharpState The persistent F# state for let binding completion.
+    Completer(Environment const& env, History const& history, FSharpPersistentState const& fsharpState);
 
     /// @brief Registers an additional completion provider.
     /// @param provider The provider to add.

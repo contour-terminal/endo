@@ -6,10 +6,11 @@
 namespace endo
 {
 
-Completer::Completer(Environment const& env, History const& history)
+Completer::Completer(Environment const& env, History const& history, FSharpPersistentState const& fsharpState)
 {
     // Register default providers in priority order
     _providers.push_back(std::make_unique<CommandCompleter>(env));
+    _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
     _providers.push_back(std::make_unique<OptionCompleter>());
     _providers.push_back(std::make_unique<FileCompleter>());

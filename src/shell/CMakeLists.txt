@@ -18,6 +18,8 @@ add_library(endo-shell STATIC
     CompletionProviders/HistoryCompleter.cpp
     CompletionProviders/OptionCompleter.hpp
     CompletionProviders/OptionCompleter.cpp
+    CompletionProviders/LetBindingCompleter.hpp
+    CompletionProviders/LetBindingCompleter.cpp
     CompletionProviders/VariableCompleter.hpp
     CompletionProviders/VariableCompleter.cpp
     Environment.hpp
