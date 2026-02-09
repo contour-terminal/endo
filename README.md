@@ -1,69 +1,172 @@
-# Endo Shell
+<div align="center">
 
-**Companion shell to Contour Terminal.**
+# Endo
 
-**DO NOT FORK JUST YET, AS MASTER BRANCH WILL BE FORCE-PUSHED DURING INITIAL PHASE**
+**A modern, cross-platform shell where functional programming meets everyday productivity.**
 
+[![Linux](https://img.shields.io/badge/Linux-supported-brightgreen?logo=linux&logoColor=white)](#installation)
+[![macOS](https://img.shields.io/badge/macOS-supported-brightgreen?logo=apple&logoColor=white)](#installation)
+[![Windows](https://img.shields.io/badge/Windows-supported-brightgreen?logo=windows&logoColor=white)](#installation)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](#license)
 
-Let's make it clear, we have great shells like `bash` and `zsh` or even `fish` already.
+*The shell you always wanted — F#-inspired, Bash-convenient, everywhere.*
 
-This shell is not meant to compete with `bash`.
-It aims to be primarily used as an interactive shell, similar to `fish` shell,
-however, utilizing the more modern terminal features you might think of,
-while retaining most of the well known good syntax features of Bash.
+---
 
-Endo shell aims to be as close as reasonably possible compatible with bash,
-but explicitly does not attempt to be a bash clone.
+[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Installation](#installation) · [Contributing](#contributing)
 
-## Mission
+</div>
 
-Design modern interactive shell with first-class UX in mind.
+## Why Endo?
 
-- ✅ Core POSIX shell features to satisfy power users (pipes, job management, environment variables, ...)
-- ✅ First class Unicode support with respect to grapheme cluster display (if terminal supports it)
-- ✅ IDE like command prompt, including mouse support using new (passive mouse tracking) VT extension
-- ✅ LSP-like features like tooltips on mouse-hoever and auto-complete like in an IDE
-- ✅ DAP: Debugging Mode via [Debugging Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol//)
-- ✅ Make URIs and paths clickable (OSC-8) in the prompt
-- ✅ Utilize VT420 host writable status line to indicate shell status
-- ✅ Fast working directory traversal as inspired by fish shell
-- ✅ Support input binding customizations
+Shells haven't evolved. You're still gluing strings together, guessing at exit codes, and writing
+brittle pipelines. **Endo changes that.** It brings the expressive power of functional programming
+to your terminal — without sacrificing the quick-and-dirty convenience you rely on every day.
 
-## status: core & language (milestone 1)
+- **Pipelines that carry structured data**, not just text
+- **Pattern matching and algebraic types** right at your prompt
+- **Type inference** that stays out of your way until you need it
+- **One shell, every platform** — no more `#!/bin/bash` on machines that don't have it
 
-There is no timeline, as Contour Terminal still remains the top priority. Endo comes second.
+## Features
 
-- [x] basic process execution
-- [x] shell pipes with processes
-- [ ] shell pipes with builtin commands
-- [ ] file descriptor redirects
-- [ ] job management
-- [x] builtin `read` function (basic version)
-- [x] export variable to inheritable environment
-- [ ] set variable to local(/global) scope
-- [ ] variable substitution
-- [x] bash-like if-statement
-- [x] bash-like while-statement
-- [ ] bash-like functions
-- [ ] bash-like brace expansions
-- [ ] bash-like tilde (~) expansions
-- [ ] bash-like parameter expansions
-- [ ] bash-like arithmetic expansions
-- [ ] bash-like pathname expansions
-- [ ] bash-like command substitution: `$()` and its backtick version
-- [ ] bash-like process substitution: `<(cmd)` and `>(cmd)`
-- [ ] operator && and ||
-- [ ] export and unset variables
+### Functional at Its Core
 
-## status: terminal UX (milestone 2)
+Endo's language is heavily inspired by F#. Pipe operators, pattern matching, immutable-by-default
+bindings, and first-class functions are not bolted on — they're the foundation.
 
-- [ ] rich text editor for the prompt
-- [ ] rich text editor: mouse integration, for cursor positioning and tooltips (via VT extension)
-- [ ] rich text editor: text selection (via VT extension)
-- [ ] rich text editor: LSP like completion and suggestions
-- [ ] customizable prompt
-- [ ] utilize host programmable statusline
+### Bash-Like When You Need It
 
-## Open Questions
+Run commands, redirect output, glob files, chain with `&&` and `||`. If your muscle memory
+speaks Bash, Endo understands.
 
-- Does it make sense to support Windows?
+### Structured Pipelines
+
+Stop parsing `grep | awk | sed` chains. Endo pipelines pass typed records between stages,
+so data stays intact from source to sink.
+
+### Cross-Platform, No Compromises
+
+Native support for Linux, macOS, and Windows. Write scripts once, run them everywhere —
+no compatibility layers, no emulation.
+
+### Intelligent Completions
+
+Context-aware tab completions powered by the type system. Endo knows what a command expects
+before you finish typing it.
+
+### Sane Error Handling
+
+No more silent failures. Endo uses result types inspired by `Result<T, E>`, giving you
+explicit, composable error handling without the ceremony.
+
+## Examples
+
+**Familiar commands, elevated syntax:**
+
+```bash
+# It's still a shell — run anything
+ls -la | where { .size > 1mb } | sort-by modified
+
+# Variables and string interpolation
+let name = "world"
+echo $"Hello, {name}!"
+```
+
+**Pipelines with structure:**
+
+```bash
+# Query processes like data, not text
+ps | where { .cpu > 10.0 } | select name cpu mem | sort-by cpu --desc
+```
+
+**Pattern matching on the prompt:**
+
+```fsharp
+# Handle command results explicitly
+match (fetch "https://api.example.com/status") with
+| Ok response -> echo $"Status: {response.code}"
+| Error e     -> echo $"Failed: {e.message}" >&2
+```
+
+**First-class functions and piping:**
+
+```fsharp
+# Functional transforms feel natural
+let sizes = ls | map { .size } | filter { it > 1kb }
+echo $"Large files: {sizes |> length}"
+```
+
+**Quick one-liners stay quick:**
+
+```bash
+# Rename all .jpeg files to .jpg
+ls *.jpeg | each { mv $it.name ($it.name | str replace ".jpeg" ".jpg") }
+
+# Find the 5 largest files recursively
+glob **/* | where { .is_file } | sort-by size --desc | take 5
+```
+
+**Cross-platform scripting:**
+
+```fsharp
+# Works the same on Linux, macOS, and Windows
+let config_dir = match (env OS) with
+    | Some "Windows_NT" -> $"{env APPDATA}/endo"
+    | _                 -> $"{env HOME}/.config/endo"
+
+mkdir -p $config_dir
+```
+
+## Getting Started
+
+```bash
+# Clone and build
+git clone https://github.com/christianparpart/endo.git
+cd endo
+cmake --preset Release
+cmake --build --preset Release
+
+# Launch
+./build/Release/endo
+```
+
+## Installation
+
+### From Source
+
+```bash
+git clone https://github.com/christianparpart/endo.git
+cd endo
+cmake --preset Release
+cmake --build --preset Release
+sudo cmake --install build/Release
+```
+
+### Package Managers
+
+> Coming soon — Homebrew, Scoop, and distro packages are on the roadmap.
+
+## Contributing
+
+Contributions are welcome. Whether it's a bug report, a feature request, or a pull request —
+every bit helps shape Endo into the shell it should be.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-thing`)
+3. Commit your changes
+4. Open a pull request
+
+Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+## License
+
+Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+
+**Endo** — *Stop parsing. Start piping.*
+
+</div>
