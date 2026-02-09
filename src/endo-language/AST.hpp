@@ -13,6 +13,7 @@
 
 #include "Lexer.hpp"
 #include "Pattern.hpp"
+#include "Type.hpp"
 #include "Visitor.hpp"
 
 namespace endo::ast
@@ -846,6 +847,32 @@ struct ReturnStmt final: public Statement
 // F# Style Expressions and Statements
 // ============================================================================
 
+/// A function parameter with an optional type annotation.
+///
+/// Used in `let`, `let-in`, `lambda`, and `and` bindings:
+/// - `let add (x: int) (y: int) = x + y`
+/// - `fun (x: int) -> x + 1`
+/// - Bare identifiers: `let add x y = x + y` (no annotation)
+struct TypedParameter
+{
+    std::string name;                      ///< Parameter name
+    std::optional<TypePtr> typeAnnotation; ///< Optional type annotation
+
+    explicit TypedParameter(std::string n): name(std::move(n)) {}
+
+    TypedParameter(std::string n, TypePtr t): name(std::move(n)), typeAnnotation(std::move(t)) {}
+};
+
+/// Extracts parameter names from a vector of TypedParameter.
+inline std::vector<std::string> extractParameterNames(std::vector<TypedParameter> const& params)
+{
+    std::vector<std::string> names;
+    names.reserve(params.size());
+    for (auto const& p: params)
+        names.push_back(p.name);
+    return names;
+}
+
 /// F# style let binding: `let x = 42` or `let add x y = x + y`
 ///
 /// Represents both simple bindings and function definitions:
@@ -857,26 +884,33 @@ struct ReturnStmt final: public Statement
 /// Represents a single function binding in a `let rec ... and ...` group.
 struct AndBinding
 {
-    std::string name;                    ///< Function name
-    std::vector<std::string> parameters; ///< Function parameters
-    std::unique_ptr<Expr> value;         ///< Function body
+    std::string name;                       ///< Function name
+    std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
+    std::optional<TypePtr> returnType;      ///< Optional return type annotation
+    std::unique_ptr<Expr> value;            ///< Function body
 };
 
 struct LetBindingStmt final: public Statement
 {
-    bool isMutable;                      ///< True for `let mut`
-    bool isRecursive;                    ///< True for `let rec`
-    std::string name;                    ///< Binding/function name
-    std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
-    std::unique_ptr<Expr> value;         ///< Value expression or function body
-    std::vector<AndBinding> andBindings; ///< Additional mutually recursive bindings (`and` keyword)
+    bool isMutable;                         ///< True for `let mut`
+    bool isRecursive;                       ///< True for `let rec`
+    std::string name;                       ///< Binding/function name
+    std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
+    std::optional<TypePtr> returnType;      ///< Return type (functions) or binding type (simple bindings)
+    std::unique_ptr<Expr> value;            ///< Value expression or function body
+    std::vector<AndBinding> andBindings;    ///< Additional mutually recursive bindings (`and` keyword)
 
-    LetBindingStmt(
-        bool mut, bool rec, std::string n, std::vector<std::string> params, std::unique_ptr<Expr> val):
+    LetBindingStmt(bool mut,
+                   bool rec,
+                   std::string n,
+                   std::vector<TypedParameter> params,
+                   std::optional<TypePtr> retType,
+                   std::unique_ptr<Expr> val):
         isMutable(mut),
         isRecursive(rec),
         name(std::move(n)),
         parameters(std::move(params)),
+        returnType(std::move(retType)),
         value(std::move(val))
     {
     }
@@ -907,20 +941,23 @@ struct ExprStmt final: public Statement
 /// the body expression following `in`.
 struct LetInExpr final: public Expr
 {
-    bool isRecursive;                    ///< True for `let rec`
-    std::string name;                    ///< Binding/function name
-    std::vector<std::string> parameters; ///< Function parameters (empty for simple binding)
-    std::unique_ptr<Expr> value;         ///< Value expression or function body
-    std::unique_ptr<Expr> body;          ///< Body expression evaluated with the binding in scope
+    bool isRecursive;                       ///< True for `let rec`
+    std::string name;                       ///< Binding/function name
+    std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
+    std::optional<TypePtr> returnType;      ///< Optional return type annotation
+    std::unique_ptr<Expr> value;            ///< Value expression or function body
+    std::unique_ptr<Expr> body;             ///< Body expression evaluated with the binding in scope
 
     LetInExpr(bool rec,
               std::string n,
-              std::vector<std::string> params,
+              std::vector<TypedParameter> params,
+              std::optional<TypePtr> retType,
               std::unique_ptr<Expr> val,
               std::unique_ptr<Expr> b):
         isRecursive(rec),
         name(std::move(n)),
         parameters(std::move(params)),
+        returnType(std::move(retType)),
         value(std::move(val)),
         body(std::move(b))
     {
@@ -1130,10 +1167,10 @@ struct ParenExpr final: public Expr
 /// Supports curried parameters: `fun x y -> x + y` is sugar for `fun x -> fun y -> x + y`.
 struct LambdaExpr final: public Expr
 {
-    std::vector<std::string> parameters; ///< Parameter names
-    std::unique_ptr<Expr> body;          ///< Lambda body expression
+    std::vector<TypedParameter> parameters; ///< Parameters with optional type annotations
+    std::unique_ptr<Expr> body;             ///< Lambda body expression
 
-    LambdaExpr(std::vector<std::string> params, std::unique_ptr<Expr> bodyExpr):
+    LambdaExpr(std::vector<TypedParameter> params, std::unique_ptr<Expr> bodyExpr):
         parameters(std::move(params)), body(std::move(bodyExpr))
     {
     }
@@ -1378,7 +1415,6 @@ struct TryFinallyExpr final: public Expr
 //
 // - Tuple literals: (a, b, c)
 // - Record literals: { name = "Alice"; age = 30 }
-// - Type annotations: let x: int = 42
 // - Recursive functions: let rec factorial n = ...
 // - Pattern-based parameters: let add (x, y) = x + y
 //

@@ -33,10 +33,12 @@ struct FSharpPersistentState
     /// A persisted function definition (captures are not preserved across prompts).
     struct PersistedFunction
     {
-        std::vector<std::string> parameters;       ///< Parameter names in order
-        ast::Expr const* body;                     ///< Function body expression (for inlining)
-        ReturnKind returnKind = ReturnKind::Plain; ///< Whether function returns Result/Option type
-        bool isRecursive = false;                  ///< Whether function is declared with `let rec`
+        std::vector<std::string> parameters;                ///< Parameter names in order
+        std::vector<std::optional<TypePtr>> parameterTypes; ///< Type annotations (parallel to parameters)
+        std::optional<TypePtr> returnType;                  ///< Optional return type annotation
+        ast::Expr const* body;                              ///< Function body expression (for inlining)
+        ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
+        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
     };
 
     /// Function table persisted across REPL prompts (name -> function metadata).
@@ -258,10 +260,12 @@ class IRGenerator final: public ast::Visitor
     // F# function management
     struct FSharpFunction
     {
-        std::vector<std::string> parameters;       ///< Parameter names in order
-        ast::Expr const* body;                     ///< Function body expression (for inlining)
-        ReturnKind returnKind = ReturnKind::Plain; ///< Whether function returns Result/Option type
-        bool isRecursive = false;                  ///< Whether function is declared with `let rec`
+        std::vector<std::string> parameters;                ///< Parameter names in order
+        std::vector<std::optional<TypePtr>> parameterTypes; ///< Type annotations (parallel to parameters)
+        std::optional<TypePtr> returnType;                  ///< Optional return type annotation
+        ast::Expr const* body;                              ///< Function body expression (for inlining)
+        ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
+        bool isRecursive = false;                           ///< Whether function is declared with `let rec`
         /// Names of all functions in the mutual recursion group (empty for non-mutual).
         std::vector<std::string> mutualGroup;
         /// Captured variable bindings from the enclosing scope at function creation time.
@@ -273,6 +277,19 @@ class IRGenerator final: public ast::Visitor
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    /// Maps a high-level TypePtr to the corresponding CoreVM::LiteralType for validation.
+    [[nodiscard]] static std::optional<CoreVM::LiteralType> mapTypeToLiteralType(TypePtr const& type);
+
+    /// Validates that a value's IR type matches the given type annotation.
+    /// Reports a type error on mismatch.
+    /// @return true if types match or no annotation given, false on mismatch.
+    bool validateTypeAnnotation(TypePtr const& annotated, CoreVM::Value* value, std::string_view context);
+
+    /// Extracts parameter names and type annotations from TypedParameter vectors
+    /// into the FSharpFunction fields.
+    static void extractTypedParameters(std::vector<ast::TypedParameter> const& typedParams,
+                                       FSharpFunction& func);
 
     /// Analyzes a function body to determine if it returns Result, Option, or plain type.
     [[nodiscard]] ReturnKind determineReturnKind(ast::Expr const* body) const;

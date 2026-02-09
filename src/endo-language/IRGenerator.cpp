@@ -52,6 +52,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         {
             FSharpFunction func;
             func.parameters = persisted.parameters;
+            func.parameterTypes = persisted.parameterTypes;
+            func.returnType = persisted.returnType;
             func.body = persisted.body;
             func.returnKind = persisted.returnKind;
             func.isRecursive = persisted.isRecursive;
@@ -120,6 +122,8 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
 
             FSharpPersistentState::PersistedFunction persisted;
             persisted.parameters = func.parameters;
+            persisted.parameterTypes = func.parameterTypes;
+            persisted.returnType = func.returnType;
             persisted.body = func.body;
             persisted.returnKind = func.returnKind;
             persisted.isRecursive = func.isRecursive;
@@ -247,6 +251,79 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
     if (it != _fsharpFunctions.end())
         return &it->second;
     return nullptr;
+}
+
+std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr const& type)
+{
+    if (auto const* prim = type->asPrimitive())
+    {
+        switch (prim->kind)
+        {
+            case PrimitiveType::Int: return CoreVM::LiteralType::Number;
+            case PrimitiveType::Float: return CoreVM::LiteralType::Float;
+            case PrimitiveType::Str: return CoreVM::LiteralType::String;
+            case PrimitiveType::Bool: return CoreVM::LiteralType::Boolean;
+            case PrimitiveType::Unit: return CoreVM::LiteralType::Void;
+        }
+    }
+    if (type->isOption() || type->isResult() || type->isTuple())
+        return CoreVM::LiteralType::Object;
+    if (type->isFunction())
+        return CoreVM::LiteralType::String; // Function references stored as string names
+    if (type->isList())
+        return CoreVM::LiteralType::Object;
+    return std::nullopt;
+}
+
+bool IRGenerator::validateTypeAnnotation(TypePtr const& annotated,
+                                         CoreVM::Value* value,
+                                         std::string_view context)
+{
+    auto const expected = mapTypeToLiteralType(annotated);
+    if (!expected)
+        return true; // Unknown type annotation — skip validation
+
+    auto const actual = value->type();
+
+    // Accept Object/Void as compatible with any expected type (dynamic values from ObjGetSlot, etc.)
+    if (actual == CoreVM::LiteralType::Object || actual == CoreVM::LiteralType::Void)
+        return true;
+
+    if (actual != *expected)
+    {
+        auto const literalTypeName = [](CoreVM::LiteralType lt) -> std::string_view {
+            switch (lt)
+            {
+                case CoreVM::LiteralType::Number: return "int";
+                case CoreVM::LiteralType::Float: return "float";
+                case CoreVM::LiteralType::String: return "str";
+                case CoreVM::LiteralType::Boolean: return "bool";
+                case CoreVM::LiteralType::Void: return "unit";
+                case CoreVM::LiteralType::Object: return "object";
+                default: return "unknown";
+            }
+        };
+        reportTypeError("Type mismatch for {}: expected '{}', got '{}'",
+                        context,
+                        toString(annotated),
+                        literalTypeName(actual));
+        return false;
+    }
+    return true;
+}
+
+void IRGenerator::extractTypedParameters(std::vector<ast::TypedParameter> const& typedParams,
+                                         FSharpFunction& func)
+{
+    func.parameters.clear();
+    func.parameterTypes.clear();
+    func.parameters.reserve(typedParams.size());
+    func.parameterTypes.reserve(typedParams.size());
+    for (auto const& tp: typedParams)
+    {
+        func.parameters.push_back(tp.name);
+        func.parameterTypes.push_back(tp.typeAnnotation);
+    }
 }
 
 ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
@@ -538,7 +615,8 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
             {
                 // Lambda parameters shadow outer bindings within the lambda body
                 auto innerBound = bound;
-                innerBound.insert(innerBound.end(), lambda->parameters.begin(), lambda->parameters.end());
+                auto const names = ast::extractParameterNames(lambda->parameters);
+                innerBound.insert(innerBound.end(), names.begin(), names.end());
                 walk(lambda->body.get(), innerBound);
                 return;
             }
@@ -684,7 +762,8 @@ CoreVM::Value* IRGenerator::codegen(ast::Node const* node)
 template <typename... Args>
 void IRGenerator::reportTypeError(std::format_string<Args...> f, Args&&... args)
 {
-    _report.typeError(_builder.sourceLocation(), f, std::forward<Args>(args)...);
+    auto const msg = std::format(f, std::forward<Args>(args)...);
+    _report.typeError(_builder.sourceLocation(), "{}", std::string_view(msg));
     _hasErrors = true;
 }
 
@@ -2498,14 +2577,15 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // Register the primary function
         {
             FSharpFunction func;
-            func.parameters = node.parameters;
+            extractTypedParameters(node.parameters, func);
+            func.returnType = node.returnType;
             func.body = node.value.get();
             func.returnKind = determineReturnKind(func.body);
             func.isRecursive = node.isRecursive;
             if (isMutual)
                 func.mutualGroup = allRecNames;
 
-            auto allBound = node.parameters;
+            auto allBound = func.parameters;
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
@@ -2517,14 +2597,15 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         for (auto const& ab: node.andBindings)
         {
             FSharpFunction func;
-            func.parameters = ab.parameters;
+            extractTypedParameters(ab.parameters, func);
+            func.returnType = ab.returnType;
             func.body = ab.value.get();
             func.returnKind = determineReturnKind(func.body);
             func.isRecursive = true;
             if (isMutual)
                 func.mutualGroup = allRecNames;
 
-            auto allBound = ab.parameters;
+            auto allBound = func.parameters;
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
@@ -2542,7 +2623,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(node.value.get()))
     {
         FSharpFunction func;
-        func.parameters = lambda->parameters;
+        extractTypedParameters(lambda->parameters, func);
         func.body = lambda->body.get();
         func.returnKind = determineReturnKind(func.body);
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
@@ -2565,6 +2646,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         reportTypeError("Failed to generate code for let binding value");
         return;
     }
+
+    // Validate type annotation on simple binding (returnType serves as binding type)
+    if (node.returnType)
+        validateTypeAnnotation(*node.returnType, value, std::format("binding '{}'", node.name));
 
     // Check if the value is a function reference (string constant naming a function).
     // This handles: let add5 = add 5  (partial application returns "__lambda_0")
@@ -2620,7 +2705,8 @@ void IRGenerator::visit(ast::LetInExpr const& node)
     {
         // Function binding: let f x = body in expr
         FSharpFunction func;
-        func.parameters = node.parameters;
+        extractTypedParameters(node.parameters, func);
+        func.returnType = node.returnType;
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
         func.isRecursive = node.isRecursive;
@@ -2638,6 +2724,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
             reportTypeError("Failed to evaluate let-in binding value");
             return;
         }
+
+        // Validate type annotation on simple let-in binding
+        if (node.returnType)
+            validateTypeAnnotation(*node.returnType, value, std::format("binding '{}'", node.name));
 
         auto* storage = createAllocaInEntryBlock(value->type(), node.name);
         _builder.createStore(storage, value, node.name + ".store");
@@ -2915,7 +3005,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Lambda expression - register it as an anonymous function
         funcName = generateLambdaName();
         FSharpFunction lambdaFunc;
-        lambdaFunc.parameters = lambda->parameters;
+        extractTypedParameters(lambda->parameters, lambdaFunc);
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
@@ -3219,7 +3309,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         // Lambda expression - register it as an anonymous function
         funcName = generateLambdaName();
         FSharpFunction lambdaFunc;
-        lambdaFunc.parameters = lambda->parameters;
+        extractTypedParameters(lambda->parameters, lambdaFunc);
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
@@ -3244,7 +3334,20 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     if (args.size() < func->arity())
     {
-        // Partial application: create a new function with remaining parameters
+        // Partial application: validate supplied argument types
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            if (i < func->parameterTypes.size() && func->parameterTypes[i])
+            {
+                if (!validateTypeAnnotation(
+                        *func->parameterTypes[i],
+                        args[i],
+                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                    return;
+            }
+        }
+
+        // Create a new function with remaining parameters
         std::unordered_map<std::string, CoreVM::Value*> newCaptures = func->capturedBindings;
         for (size_t i = 0; i < args.size(); ++i)
         {
@@ -3258,6 +3361,10 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         FSharpFunction partialFunc;
         partialFunc.parameters = { func->parameters.begin() + static_cast<ptrdiff_t>(args.size()),
                                    func->parameters.end() };
+        if (func->parameterTypes.size() > args.size())
+            partialFunc.parameterTypes = { func->parameterTypes.begin() + static_cast<ptrdiff_t>(args.size()),
+                                           func->parameterTypes.end() };
+        partialFunc.returnType = func->returnType;
         partialFunc.body = func->body;
         partialFunc.returnKind = func->returnKind;
         partialFunc.isRecursive = false;
@@ -3420,6 +3527,20 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
 
         // Case A: First (external) call to recursive function — set up loop
+
+        // Validate parameter type annotations at entry point
+        for (size_t i = 0; i < func->parameters.size(); ++i)
+        {
+            if (i < func->parameterTypes.size() && func->parameterTypes[i])
+            {
+                if (!validateTypeAnnotation(
+                        *func->parameterTypes[i],
+                        args[i],
+                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                    return;
+            }
+        }
+
         auto* entryBlock = _builder.createBlock("rec.entry");
         auto* exitBlock = _builder.createBlock("rec.exit");
 
@@ -3502,9 +3623,18 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         pushFSharpFunctionContext(returnBlock, returnStorage, func->returnKind);
     }
 
-    // Bind arguments to parameter names
+    // Bind arguments to parameter names (with type annotation validation)
     for (size_t i = 0; i < func->parameters.size(); ++i)
     {
+        // Validate parameter type annotation if present
+        if (i < func->parameterTypes.size() && func->parameterTypes[i])
+        {
+            if (!validateTypeAnnotation(*func->parameterTypes[i],
+                                        args[i],
+                                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                return;
+        }
+
         CoreVM::LiteralType storageType = args[i]->type();
         CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[i]);
         _builder.createStore(storage, args[i], func->parameters[i]);
@@ -3513,6 +3643,10 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     // Inline the function body
     CoreVM::Value* bodyResult = codegen(func->body);
+
+    // Validate return type annotation if present
+    if (bodyResult && func->returnType)
+        validateTypeAnnotation(*func->returnType, bodyResult, std::format("return type of '{}'", funcName));
 
     if (func->returnKind != ReturnKind::Plain)
     {
@@ -3597,7 +3731,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     std::string lambdaName = generateLambdaName();
 
     FSharpFunction func;
-    func.parameters = node.parameters;
+    extractTypedParameters(node.parameters, func);
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);

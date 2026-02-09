@@ -5,6 +5,8 @@
 
 #include <format>
 
+#include "Type.hpp"
+
 namespace endo::ast
 {
 
@@ -586,8 +588,13 @@ void ASTPrinter::visit(LetBindingStmt const& node)
     for (auto const& param: node.parameters)
     {
         _result += ' ';
-        _result += param;
+        if (param.typeAnnotation)
+            _result += "(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")";
+        else
+            _result += param.name;
     }
+    if (node.returnType)
+        _result += ": " + endo::toString(*node.returnType);
     _result += " = ";
     if (node.value)
         node.value->accept(*this);
@@ -599,8 +606,13 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         for (auto const& param: ab.parameters)
         {
             _result += ' ';
-            _result += param;
+            if (param.typeAnnotation)
+                _result += "(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")";
+            else
+                _result += param.name;
         }
+        if (ab.returnType)
+            _result += ": " + endo::toString(*ab.returnType);
         _result += " = ";
         if (ab.value)
             ab.value->accept(*this);
@@ -616,8 +628,13 @@ void ASTPrinter::visit(LetInExpr const& node)
     for (auto const& param: node.parameters)
     {
         _result += ' ';
-        _result += param;
+        if (param.typeAnnotation)
+            _result += "(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")";
+        else
+            _result += param.name;
     }
+    if (node.returnType)
+        _result += ": " + endo::toString(*node.returnType);
     _result += " = ";
     if (node.value)
         node.value->accept(*this);
@@ -729,7 +746,11 @@ void ASTPrinter::visit(LambdaExpr const& node)
     {
         if (i > 0)
             _result += ' ';
-        _result += node.parameters[i];
+        auto const& param = node.parameters[i];
+        if (param.typeAnnotation)
+            _result += "(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")";
+        else
+            _result += param.name;
     }
     _result += " -> ";
     if (node.body)

@@ -3,8 +3,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "AST.hpp"
-#include "ASTPrinter.hpp"
 #include "TestHelper.hpp"
+#include "Type.hpp"
 
 using namespace endo::test;
 
@@ -66,7 +66,7 @@ TEST_CASE("Parser.FSharp.let_function_single_param")
     CHECK(letStmt->name == "double");
     CHECK(letStmt->isMutable == false);
     REQUIRE(letStmt->parameters.size() == 1);
-    CHECK(letStmt->parameters[0] == "x");
+    CHECK(letStmt->parameters[0].name == "x");
     CHECK(letStmt->isFunction() == true);
 
     auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(letStmt->value.get());
@@ -87,8 +87,8 @@ TEST_CASE("Parser.FSharp.let_function_multiple_params")
 
     CHECK(letStmt->name == "add");
     REQUIRE(letStmt->parameters.size() == 2);
-    CHECK(letStmt->parameters[0] == "x");
-    CHECK(letStmt->parameters[1] == "y");
+    CHECK(letStmt->parameters[0].name == "x");
+    CHECK(letStmt->parameters[1].name == "y");
 }
 
 // =============================================================================
@@ -258,7 +258,7 @@ TEST_CASE("Parser.FSharp.lambda_simple")
     REQUIRE(lambda != nullptr);
 
     REQUIRE(lambda->parameters.size() == 1);
-    CHECK(lambda->parameters[0] == "x");
+    CHECK(lambda->parameters[0].name == "x");
 
     auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(lambda->body.get());
     REQUIRE(body != nullptr);
@@ -278,8 +278,8 @@ TEST_CASE("Parser.FSharp.lambda_multiple_params")
     REQUIRE(lambda != nullptr);
 
     REQUIRE(lambda->parameters.size() == 2);
-    CHECK(lambda->parameters[0] == "x");
-    CHECK(lambda->parameters[1] == "y");
+    CHECK(lambda->parameters[0].name == "x");
+    CHECK(lambda->parameters[1].name == "y");
 }
 
 TEST_CASE("Parser.FSharp.lambda_with_binary_expr")
@@ -295,7 +295,7 @@ TEST_CASE("Parser.FSharp.lambda_with_binary_expr")
     REQUIRE(lambda != nullptr);
 
     REQUIRE(lambda->parameters.size() == 1);
-    CHECK(lambda->parameters[0] == "x");
+    CHECK(lambda->parameters[0].name == "x");
 }
 
 TEST_CASE("Parser.FSharp.lambda_nested")
@@ -311,12 +311,12 @@ TEST_CASE("Parser.FSharp.lambda_nested")
     auto* outerLambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
     REQUIRE(outerLambda != nullptr);
     REQUIRE(outerLambda->parameters.size() == 1);
-    CHECK(outerLambda->parameters[0] == "x");
+    CHECK(outerLambda->parameters[0].name == "x");
 
     auto* innerLambda = dynamic_cast<endo::ast::LambdaExpr*>(outerLambda->body.get());
     REQUIRE(innerLambda != nullptr);
     REQUIRE(innerLambda->parameters.size() == 1);
-    CHECK(innerLambda->parameters[0] == "y");
+    CHECK(innerLambda->parameters[0].name == "y");
 
     auto* body = dynamic_cast<endo::ast::IdentifierExpr*>(innerLambda->body.get());
     REQUIRE(body != nullptr);
@@ -343,7 +343,7 @@ TEST_CASE("Parser.FSharp.lambda_in_pipeline")
     auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(pipeline->function.get());
     REQUIRE(lambda != nullptr);
     REQUIRE(lambda->parameters.size() == 1);
-    CHECK(lambda->parameters[0] == "n");
+    CHECK(lambda->parameters[0].name == "n");
 }
 
 TEST_CASE("Parser.FSharp.lambda_parenthesized")
@@ -361,7 +361,7 @@ TEST_CASE("Parser.FSharp.lambda_parenthesized")
     auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(parenExpr->inner.get());
     REQUIRE(lambda != nullptr);
     REQUIRE(lambda->parameters.size() == 1);
-    CHECK(lambda->parameters[0] == "x");
+    CHECK(lambda->parameters[0].name == "x");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.lambda_simple")
@@ -1202,7 +1202,7 @@ TEST_CASE("Parser.FSharp.try_expr_simple")
     REQUIRE(letStmt != nullptr);
     CHECK(letStmt->name == "f");
     REQUIRE(letStmt->parameters.size() == 1);
-    CHECK(letStmt->parameters[0] == "x");
+    CHECK(letStmt->parameters[0].name == "x");
 
     auto* tryExpr = dynamic_cast<endo::ast::TryExpr*>(letStmt->value.get());
     REQUIRE(tryExpr != nullptr);
@@ -1400,7 +1400,7 @@ TEST_CASE("Parser.FSharp.let_rec_basic")
     CHECK(letStmt->isRecursive == true);
     CHECK(letStmt->isFunction() == true);
     REQUIRE(letStmt->parameters.size() == 1);
-    CHECK(letStmt->parameters[0] == "n");
+    CHECK(letStmt->parameters[0].name == "n");
 }
 
 TEST_CASE("Parser.FSharp.let_rec_multiple_params")
@@ -1417,8 +1417,8 @@ TEST_CASE("Parser.FSharp.let_rec_multiple_params")
     CHECK(letStmt->name == "factorial");
     CHECK(letStmt->isRecursive == true);
     REQUIRE(letStmt->parameters.size() == 2);
-    CHECK(letStmt->parameters[0] == "n");
-    CHECK(letStmt->parameters[1] == "acc");
+    CHECK(letStmt->parameters[0].name == "n");
+    CHECK(letStmt->parameters[1].name == "acc");
 }
 
 TEST_CASE("Parser.FSharp.let_rec_no_params_error")
@@ -1530,7 +1530,7 @@ TEST_CASE("Parser.FSharp.lambda_multiline_body")
     auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
     REQUIRE(lambda != nullptr);
     REQUIRE(lambda->parameters.size() == 1);
-    CHECK(lambda->parameters[0] == "x");
+    CHECK(lambda->parameters[0].name == "x");
 }
 
 TEST_CASE("Parser.FSharp.let_in_multiline")
@@ -1636,4 +1636,105 @@ TEST_CASE("Parser.FSharp.scientific_notation")
     auto* floatLit = dynamic_cast<endo::ast::FloatLiteralExpr*>(letStmt->value.get());
     REQUIRE(floatLit != nullptr);
     CHECK(floatLit->value == 1e10);
+}
+
+// =============================================================================
+// F# Type Annotation Parser Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.let_int")
+{
+    auto ast = parse("let x: int = 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "x");
+    CHECK(letStmt->parameters.empty());
+    REQUIRE(letStmt->returnType.has_value());
+    CHECK(endo::toString(*letStmt->returnType) == "int");
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 42);
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.function_params_and_return")
+{
+    auto ast = parse("let add (x: int) (y: int): int = x + y");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "add");
+    REQUIRE(letStmt->parameters.size() == 2);
+
+    CHECK(letStmt->parameters[0].name == "x");
+    REQUIRE(letStmt->parameters[0].typeAnnotation.has_value());
+    CHECK(endo::toString(*letStmt->parameters[0].typeAnnotation) == "int");
+
+    CHECK(letStmt->parameters[1].name == "y");
+    REQUIRE(letStmt->parameters[1].typeAnnotation.has_value());
+    CHECK(endo::toString(*letStmt->parameters[1].typeAnnotation) == "int");
+
+    REQUIRE(letStmt->returnType.has_value());
+    CHECK(endo::toString(*letStmt->returnType) == "int");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_param")
+{
+    auto ast = parse("let f = fun (x: int) -> x + 1");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0].name == "x");
+    REQUIRE(lambda->parameters[0].typeAnnotation.has_value());
+    CHECK(endo::toString(*lambda->parameters[0].typeAnnotation) == "int");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.function_type_annotation")
+{
+    auto ast = parse("let f: int -> int = fun x -> x + 1");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "f");
+    CHECK(letStmt->parameters.empty());
+    REQUIRE(letStmt->returnType.has_value());
+    CHECK(endo::toString(*letStmt->returnType) == "int -> int");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.let_int")
+{
+    CHECK(parseAndPrintAST("let x: int = 42") == "let x: int = 42");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.function_params_and_return")
+{
+    CHECK(parseAndPrintAST("let add (x: int) (y: int): int = x + y")
+          == "let add (x: int) (y: int): int = (x + y)");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.lambda_param")
+{
+    CHECK(parseAndPrintAST("let f = fun (x: int) -> x + 1") == "let f = fun (x: int) -> (x + 1)");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.mixed_params")
+{
+    CHECK(parseAndPrintAST("let f (x: int) y = x + y") == "let f (x: int) y = (x + y)");
 }

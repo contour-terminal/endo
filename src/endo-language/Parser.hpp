@@ -89,6 +89,14 @@ class Parser
     std::unique_ptr<ast::ArithExpr> parseArithUnary();
     std::unique_ptr<ast::ArithExpr> parseArithPrimary();
 
+    // Type annotation parsing
+    TypePtr parseType();     ///< Parses function types: baseType (-> type)*
+    TypePtr parseBaseType(); ///< Parses primitive, generic, paren, tuple types
+
+    /// Parses a typed parameter: bare identifier or `(name: type)`.
+    /// @return The parsed TypedParameter, or std::nullopt if no parameter found.
+    std::optional<ast::TypedParameter> parseTypedParameter();
+
     // F# style let bindings and expressions
     std::unique_ptr<ast::LetBindingStmt> parseLet();
     std::unique_ptr<ast::LetInExpr> parseLetInExpr();

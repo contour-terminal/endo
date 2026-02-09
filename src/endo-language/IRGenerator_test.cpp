@@ -2256,3 +2256,139 @@ TEST_CASE("IRGenerator.FSharp.bare_call_mutual_recursion_bare")
                                     "print (isOdd 3)")
           == "1");
 }
+
+// =============================================================================
+// F# Type Annotation Tests — Positive (correct annotations)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.let_int")
+{
+    CHECK(executeSourceAndGetOutput("let x: int = 42\nprint x") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.let_str")
+{
+    CHECK(executeSourceAndGetOutput("let s: str = \"hello\"\nprint s") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.let_bool")
+{
+    CHECK(executeSourceAndGetOutput("let b: bool = true\nprint b") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.let_float")
+{
+    CHECK(executeSourceAndGetOutput("let f: float = 3.14\nprint f") == "3.14");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.function_params_and_return")
+{
+    CHECK(executeSourceAndGetOutput("let add (x: int) (y: int): int = x + y\nprint (add 3 4)") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.function_single_param")
+{
+    CHECK(executeSourceAndGetOutput("let double (x: int): int = x * 2\nprint (double 5)") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.lambda_param")
+{
+    CHECK(executeSourceAndGetOutput("let f = fun (x: int) -> x + 1\nprint (f 5)") == "6");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mixed_annotated_and_bare")
+{
+    CHECK(executeSourceAndGetOutput("let f (x: int) y = x + y\nprint (f 3 4)") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.return_type_only")
+{
+    CHECK(executeSourceAndGetOutput("let double x: int = x * 2\nprint (double 5)") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.recursive_function")
+{
+    CHECK(executeSourceAndGetOutput("let rec fact (n: int) (acc: int): int =\n"
+                                    "  match n with\n"
+                                    "  | 0 -> acc\n"
+                                    "  | _ -> fact (n - 1) (acc * n)\n"
+                                    "print (fact 5 1)")
+          == "120");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.let_in")
+{
+    CHECK(executeSourceAndGetOutput("let result = let x: int = 10 in x + 5\nprint result") == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.option_type")
+{
+    CHECK(generatesIRSuccessfully("let x: option<int> = Some 42\nprint x"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.result_type")
+{
+    CHECK(generatesIRSuccessfully("let x: result<int, str> = Ok 42\nprint x"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.lambda_multiple_params")
+{
+    CHECK(executeSourceAndGetOutput("let f = fun (x: int) (y: int) -> x + y\nprint (f 3 4)") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.partial_application")
+{
+    CHECK(executeSourceAndGetOutput("let add (x: int) (y: int): int = x + y\n"
+                                    "let add3 = add 3\n"
+                                    "print (add3 4)")
+          == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_persistence")
+{
+    CHECK(sessionProducesOutput({ "let add (x: int) (y: int): int = x + y", "print (add 10 20)" }, "30"));
+}
+
+// =============================================================================
+// F# Type Annotation Tests — Negative (type mismatches)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_int_vs_str")
+{
+    CHECK(!generatesIRSuccessfully("let x: int = \"hello\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_str_vs_int")
+{
+    CHECK(!generatesIRSuccessfully("let x: str = 42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_bool_vs_int")
+{
+    CHECK(!generatesIRSuccessfully("let x: bool = 42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_float_vs_str")
+{
+    CHECK(!generatesIRSuccessfully("let x: float = \"hello\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_param_type")
+{
+    CHECK(!generatesIRSuccessfully("let add (x: int) (y: int) = x + y\nadd \"a\" 1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_return_type")
+{
+    CHECK(!generatesIRSuccessfully("let f (x: int): str = x + 1\nf 1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_int_vs_bool")
+{
+    CHECK(!generatesIRSuccessfully("let x: int = true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.mismatch_int_vs_float")
+{
+    CHECK(!generatesIRSuccessfully("let x: int = 3.14"));
+}

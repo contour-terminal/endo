@@ -2372,13 +2372,301 @@ bool Parser::isFSharpPrimary() const noexcept
     }
 }
 
+TypePtr Parser::parseType()
+{
+    TRACE_SCOPE("parseType");
+    auto left = parseBaseType();
+    if (!left)
+        return nullptr;
+
+    // Right-associative function type: baseType -> type
+    if (_lexer.currentToken() == Token::Arrow)
+    {
+        _lexer.nextToken(); // consume '->'
+        auto right = parseType();
+        if (!right)
+            return nullptr;
+        return types::function(std::move(left), std::move(right));
+    }
+
+    return left;
+}
+
+TypePtr Parser::parseBaseType()
+{
+    TRACE_SCOPE("parseBaseType");
+
+    if (_lexer.currentToken() == Token::RndOpen)
+    {
+        // Parenthesized type or tuple type: (type) or (type, type, ...)
+        _lexer.nextToken(); // consume '('
+
+        if (_lexer.currentToken() == Token::RndClose)
+        {
+            _lexer.nextToken(); // consume ')'
+            return types::unitType();
+        }
+
+        auto first = parseType();
+        if (!first)
+            return nullptr;
+
+        if (_lexer.currentToken() == Token::Comma)
+        {
+            // Tuple type: (T1, T2, ...)
+            std::vector<TypePtr> elements;
+            elements.push_back(std::move(first));
+            while (_lexer.currentToken() == Token::Comma)
+            {
+                _lexer.nextToken(); // consume ','
+                auto elem = parseType();
+                if (!elem)
+                    return nullptr;
+                elements.push_back(std::move(elem));
+            }
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add ')' to close tuple type" },
+                                                   currentContextSnippet(),
+                                                   "Expected ')' in tuple type, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ')'
+            return types::tuple(std::move(elements));
+        }
+
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add ')' to close parenthesized type" },
+                                               currentContextSnippet(),
+                                               "Expected ')' in type expression, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ')'
+        return first;
+    }
+
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a type name like 'int', 'str', 'bool', etc." },
+                                           currentContextSnippet(),
+                                           "Expected type name, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    auto const& typeName = _lexer.currentLiteral();
+
+    // Primitive types
+    if (typeName == "int")
+    {
+        _lexer.nextToken();
+        return types::intType();
+    }
+    if (typeName == "float")
+    {
+        _lexer.nextToken();
+        return types::floatType();
+    }
+    if (typeName == "str")
+    {
+        _lexer.nextToken();
+        return types::strType();
+    }
+    if (typeName == "bool")
+    {
+        _lexer.nextToken();
+        return types::boolType();
+    }
+    if (typeName == "unit")
+    {
+        _lexer.nextToken();
+        return types::unitType();
+    }
+
+    // Generic types: list<T>, option<T>, result<T, E>
+    if (typeName == "list")
+    {
+        _lexer.nextToken(); // consume 'list'
+        if (_lexer.currentToken() != Token::Less)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add type parameter: 'list<int>'" },
+                                               currentContextSnippet(),
+                                               "Expected '<' after 'list', got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '<'
+        auto inner = parseType();
+        if (!inner)
+            return nullptr;
+        if (_lexer.currentToken() != Token::Greater)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '>' to close type parameter" },
+                                               currentContextSnippet(),
+                                               "Expected '>' after list element type, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '>'
+        return types::list(std::move(inner));
+    }
+
+    if (typeName == "option")
+    {
+        _lexer.nextToken(); // consume 'option'
+        if (_lexer.currentToken() != Token::Less)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add type parameter: 'option<int>'" },
+                                               currentContextSnippet(),
+                                               "Expected '<' after 'option', got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '<'
+        auto inner = parseType();
+        if (!inner)
+            return nullptr;
+        if (_lexer.currentToken() != Token::Greater)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '>' to close type parameter" },
+                                               currentContextSnippet(),
+                                               "Expected '>' after option inner type, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '>'
+        return types::option(std::move(inner));
+    }
+
+    if (typeName == "result")
+    {
+        _lexer.nextToken(); // consume 'result'
+        if (_lexer.currentToken() != Token::Less)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add type parameters: 'result<int, str>'" },
+                                               currentContextSnippet(),
+                                               "Expected '<' after 'result', got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '<'
+        auto okType = parseType();
+        if (!okType)
+            return nullptr;
+        if (_lexer.currentToken() != Token::Comma)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide error type: 'result<int, str>'" },
+                                               currentContextSnippet(),
+                                               "Expected ',' in result type, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ','
+        auto errType = parseType();
+        if (!errType)
+            return nullptr;
+        if (_lexer.currentToken() != Token::Greater)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '>' to close type parameters" },
+                                               currentContextSnippet(),
+                                               "Expected '>' after result error type, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '>'
+        return types::result(std::move(okType), std::move(errType));
+    }
+
+    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                       { "Use a valid type: int, float, str, bool, unit, list<T>, option<T>, "
+                                         "result<T, E>" },
+                                       currentContextSnippet(),
+                                       "Unknown type name '{}'",
+                                       typeName);
+    return nullptr;
+}
+
+std::optional<ast::TypedParameter> Parser::parseTypedParameter()
+{
+    TRACE_SCOPE("parseTypedParameter");
+
+    if (_lexer.currentToken() == Token::Identifier)
+    {
+        auto const& lit = _lexer.currentLiteral();
+        // Exclude contextual keywords that end parameter lists
+        if (lit == "in")
+            return std::nullopt;
+        auto name = consumeLiteral();
+        return ast::TypedParameter(std::move(name));
+    }
+
+    if (_lexer.currentToken() == Token::RndOpen)
+    {
+        // Could be (name: type) annotated parameter, or start of value expression
+        // We need to look ahead: ( Identifier : means annotated parameter
+        _lexer.nextToken(); // consume '('
+
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            // Not a parameter — push back '(' and return nullopt
+            _lexer.pushBackToken(Token::RndOpen, "(");
+            return std::nullopt;
+        }
+
+        auto name = std::string(_lexer.currentLiteral());
+        _lexer.nextToken(); // consume identifier
+
+        if (_lexer.currentToken() != Token::Colon)
+        {
+            // Not annotated — push back identifier then '(' (reverse consumption order)
+            _lexer.pushBackToken(Token::Identifier, name);
+            _lexer.pushBackToken(Token::RndOpen, "(");
+            _lexer.nextToken(); // re-read to restore current token to '('
+            return std::nullopt;
+        }
+
+        // Annotated parameter: (name: type)
+        _lexer.nextToken(); // consume ':'
+        auto type = parseType();
+        if (!type)
+            return std::nullopt;
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add ')' to close annotated parameter" },
+                                               currentContextSnippet(),
+                                               "Expected ')' after parameter type annotation, got '{}'",
+                                               _lexer.currentLiteral());
+            return std::nullopt;
+        }
+        _lexer.nextToken(); // consume ')'
+        return ast::TypedParameter(std::move(name), std::move(type));
+    }
+
+    return std::nullopt;
+}
+
 std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 {
     TRACE_SCOPE("parseLet");
-    _lexer.nextToken(); // consume 'let'
 
-    // Enter F# expression mode for proper operator tokenization
+    // Enter F# expression mode BEFORE consuming 'let' so that the next token
+    // (the binding name) is tokenized with F# reserved symbols (including ':')
     _lexer.enterFSharpExpr();
+    _lexer.nextToken(); // consume 'let'
 
     // Check for 'mut' modifier
     bool const isMutable = _lexer.currentToken() == Token::Mut;
@@ -2417,10 +2705,27 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     std::string name = consumeLiteral();
 
     // Collect parameters (for function definitions)
-    std::vector<std::string> parameters;
-    while (_lexer.currentToken() == Token::Identifier)
+    // Parameters can be bare identifiers or annotated: (x: int)
+    std::vector<ast::TypedParameter> parameters;
+    while (true)
     {
-        parameters.push_back(consumeLiteral());
+        auto param = parseTypedParameter();
+        if (!param)
+            break;
+        parameters.push_back(std::move(*param));
+    }
+
+    // Check for return type annotation (or binding type for simple bindings)
+    std::optional<TypePtr> returnType;
+    if (_lexer.currentToken() == Token::Colon)
+    {
+        _lexer.nextToken(); // consume ':'
+        returnType = parseType();
+        if (!returnType)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
     }
 
     // Validate: 'let rec' requires parameters (must be a function definition)
@@ -2457,8 +2762,12 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    auto result = std::make_unique<ast::LetBindingStmt>(
-        isMutable, isRecursive, std::move(name), std::move(parameters), std::move(value));
+    auto result = std::make_unique<ast::LetBindingStmt>(isMutable,
+                                                        isRecursive,
+                                                        std::move(name),
+                                                        std::move(parameters),
+                                                        std::move(returnType),
+                                                        std::move(value));
 
     // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
     while (isRecursive)
@@ -2485,9 +2794,27 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 
         auto andName = consumeLiteral();
 
-        std::vector<std::string> andParams;
-        while (_lexer.currentToken() == Token::Identifier)
-            andParams.push_back(consumeLiteral());
+        std::vector<ast::TypedParameter> andParams;
+        while (true)
+        {
+            auto param = parseTypedParameter();
+            if (!param)
+                break;
+            andParams.push_back(std::move(*param));
+        }
+
+        // Check for return type annotation
+        std::optional<TypePtr> andReturnType;
+        if (_lexer.currentToken() == Token::Colon)
+        {
+            _lexer.nextToken(); // consume ':'
+            andReturnType = parseType();
+            if (!andReturnType)
+            {
+                _lexer.leaveFSharpExpr();
+                return nullptr;
+            }
+        }
 
         if (andParams.empty())
         {
@@ -2520,8 +2847,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
             return nullptr;
         }
 
-        result->andBindings.push_back(
-            ast::AndBinding { std::move(andName), std::move(andParams), std::move(andValue) });
+        result->andBindings.push_back(ast::AndBinding {
+            std::move(andName), std::move(andParams), std::move(andReturnType), std::move(andValue) });
     }
 
     // Register known F# function names for bare top-level call dispatch
@@ -2564,9 +2891,27 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     auto name = consumeLiteral();
 
     // Collect parameters (for function definitions)
-    std::vector<std::string> parameters;
-    while (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() != "in")
-        parameters.push_back(consumeLiteral());
+    std::vector<ast::TypedParameter> parameters;
+    while (true)
+    {
+        // Stop if we see 'in' keyword (not a parameter)
+        if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "in")
+            break;
+        auto param = parseTypedParameter();
+        if (!param)
+            break;
+        parameters.push_back(std::move(*param));
+    }
+
+    // Check for return type annotation
+    std::optional<TypePtr> returnType;
+    if (_lexer.currentToken() == Token::Colon)
+    {
+        _lexer.nextToken(); // consume ':'
+        returnType = parseType();
+        if (!returnType)
+            return nullptr;
+    }
 
     // Validate: 'let rec' requires parameters
     if (isRecursive && parameters.empty())
@@ -2616,8 +2961,12 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     if (!body)
         return nullptr;
 
-    return std::make_unique<ast::LetInExpr>(
-        isRecursive, std::move(name), std::move(parameters), std::move(value), std::move(body));
+    return std::make_unique<ast::LetInExpr>(isRecursive,
+                                            std::move(name),
+                                            std::move(parameters),
+                                            std::move(returnType),
+                                            std::move(value),
+                                            std::move(body));
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
@@ -2997,10 +3346,14 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
     _lexer.nextToken(); // consume 'fun'
 
     // Parse parameters until we see '->'
-    std::vector<std::string> parameters;
-    while (_lexer.currentToken() == Token::Identifier && _lexer.currentToken() != Token::Arrow)
+    // Parameters can be bare identifiers or annotated: (x: int)
+    std::vector<ast::TypedParameter> parameters;
+    while (_lexer.currentToken() != Token::Arrow)
     {
-        parameters.push_back(consumeLiteral());
+        auto param = parseTypedParameter();
+        if (!param)
+            break;
+        parameters.push_back(std::move(*param));
     }
 
     if (parameters.empty())
