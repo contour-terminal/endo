@@ -38,6 +38,8 @@ add_library(endo-shell STATIC
     PromptComponent.cpp
     Shell.hpp
     Shell.cpp
+    SourceOffsetUtils.hpp
+    SourceOffsetUtils.cpp
     SyntaxHighlighter.hpp
     SyntaxHighlighter.cpp
     SignalHandler.hpp
