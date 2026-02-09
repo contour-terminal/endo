@@ -463,6 +463,18 @@ src/
   - [x] Covers `let f x = ...`, `let rec f ... and g ...`, `let f = fun x -> ...`
   - [x] Pre-seeded from persistent state in Shell and test helpers for REPL continuity
   - [x] F# definitions intentionally shadow shell commands of the same name
+- [x] Implement type annotations for variables, function parameters, and return types
+  - [x] `TypedParameter` AST node with optional `TypePtr` annotation
+  - [x] Parser: `parseType()` for function types (`int -> int`), `parseBaseType()` for primitives/generics/tuples, `parseTypedParameter()` for `(x: int)` annotated params
+  - [x] Variable annotations: `let x: int = 42`, `let s: str = "hello"`
+  - [x] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
+  - [x] Lambda annotations: `fun (x: int) -> x + 1`
+  - [x] Return type annotations: `let double x: int = x * 2`
+  - [x] Mixed annotated and bare params: `let f (x: int) y = x + y`
+  - [x] Static type validation at IR generation (parameter types checked at call site, return types checked after body codegen)
+  - [x] Type annotations persist across REPL sessions via `FSharpPersistentState`
+  - [x] ASTPrinter support for round-trip printing of type annotations
+  - [x] 32 test cases covering positive execution, negative type mismatches, parser structure, and ASTPrinter output
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 

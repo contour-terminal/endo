@@ -44,9 +44,9 @@ This document tracks the implementation status of F# language features as define
 - [ ] Generic types
 
 ### Type Annotations
-- [ ] Variable annotations: `let count: int = 42`
-- [ ] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
-- [ ] Lambda annotations: `fun (x: int) -> x + 1`
+- [x] Variable annotations: `let count: int = 42`
+- [x] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
+- [x] Lambda annotations: `fun (x: int) -> x + 1`
 
 ## Functions
 
@@ -60,7 +60,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Mutual recursion: `let rec isEven n = ... and isOdd n = ...`
 - [x] Tail-call optimization
 - [ ] Function composition: `>>` and `<<` operators
-- [ ] Type-annotated functions
+- [x] Type-annotated functions
 
 ## Lists & Collections
 
