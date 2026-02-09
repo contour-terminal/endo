@@ -429,6 +429,7 @@ src/
   - [x] Production runtime (Shell.cpp) reads from `Environment&`, test runtime uses mock env map
   - [x] Stub runtime for LSP/HoverProvider, hover text for `env` identifier
   - [x] 13 test cases covering existing/missing vars, match Some/None, let binding, empty value, multiple vars, functions, default values, IR generation, and `?` operator
+- [x] Support `?` operator at top-level (global) scope — exits handler with code 1 on None/Error instead of requiring a function context
 - [x] Remove `fst`/`snd` builtins — now user-definable via pattern matching (simplifies compiler, proves language expressiveness)
 - [x] Fix boolean literal codegen (`_builder.getBoolean()` instead of `_builder.get()` which silently converted `bool` to `int64_t`)
 - [x] Fix `print` for boolean values (conditional branch to `"true"`/`"false"` since no `B2S` opcode exists)

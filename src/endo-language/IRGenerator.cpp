@@ -2751,10 +2751,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     }
 
     // Check if the expression produces an object (Option/Result/Tuple)
-    // These need special tracking for reference counting
+    // These need special tracking for reference counting.
+    // NOTE: TryExpr (?) is NOT included — it unwraps the inner value, which is a primitive,
+    // not an object that needs ORELEASE.
     bool isObjectExpr = dynamic_cast<ast::OptionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ResultExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::TryExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::TupleExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
@@ -4222,18 +4223,13 @@ void IRGenerator::visit(ast::TryExpr const& node)
     // This requires a function context to know where to jump on error.
 
     FSharpFunctionContext* funcCtx = currentFSharpFunctionContext();
-    if (!funcCtx)
-    {
-        reportTypeError("Cannot use ? operator outside of a function returning Result/Option");
-        return;
-    }
 
     // IMPORTANT: Copy the context values BEFORE calling codegen() below.
     // The operand might be a function application (e.g., `(inc x)?`) which pushes
     // a new FSharpFunctionContext onto _fsharpFunctionContextStack. This can cause
     // the vector to reallocate, invalidating the funcCtx pointer.
-    CoreVM::BasicBlock* returnBlock = funcCtx->returnBlock;
-    CoreVM::AllocaInstr* returnStorage = funcCtx->returnStorage;
+    CoreVM::BasicBlock* returnBlock = funcCtx ? funcCtx->returnBlock : nullptr;
+    CoreVM::AllocaInstr* returnStorage = funcCtx ? funcCtx->returnStorage : nullptr;
 
     // Evaluate the operand (should be an Option or Result object)
     // NOTE: This may invalidate funcCtx pointer due to vector reallocation!
@@ -4274,14 +4270,22 @@ void IRGenerator::visit(ast::TryExpr const& node)
     _builder.createStore(resultStorage, innerValue, "try.result.store");
     _builder.createBr(continueBlock);
 
-    // Error path: reload object and propagate (early return)
+    // Error path: propagate (early return from function or exit handler)
     _builder.setInsertPoint(errorBlock);
-    CoreVM::Value* objReload2 = _builder.createLoad(objStorage, "try.obj.reload");
-    // Store the error object in the function return storage and jump to return block
-    // NOTE: Using local copies of returnStorage/returnBlock since funcCtx pointer
-    // may have been invalidated by codegen() above.
-    _builder.createStore(returnStorage, objReload2, "try.error.store");
-    _builder.createBr(returnBlock);
+    if (funcCtx)
+    {
+        // Function-level: store error object and jump to return block
+        CoreVM::Value* objReload2 = _builder.createLoad(objStorage, "try.obj.reload");
+        // NOTE: Using local copies of returnStorage/returnBlock since funcCtx pointer
+        // may have been invalidated by codegen() above.
+        _builder.createStore(returnStorage, objReload2, "try.error.store");
+        _builder.createBr(returnBlock);
+    }
+    else
+    {
+        // Top-level: exit handler with non-zero exit code
+        _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+    }
 
     // Continue with extracted value
     _builder.setInsertPoint(continueBlock);

@@ -1176,6 +1176,78 @@ TEST_CASE("IRGenerator.FSharp.exec_tryfinally_toplevel_string_body")
 }
 
 // =============================================================================
+// F# Top-Level ? Operator Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.try_toplevel_some_ir")
+{
+    // IR generation succeeds for top-level ? on Some
+    REQUIRE(generatesIRSuccessfully("let x = (Some 42)?"));
+}
+
+TEST_CASE("IRGenerator.FSharp.try_toplevel_none_ir")
+{
+    // IR generation succeeds for top-level ? on None
+    REQUIRE(generatesIRSuccessfully("let x = None?"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_unwrap_some")
+{
+    // Top-level ? unwraps Some value
+    CHECK(executeSourceAndGetOutput("let x = (Some 42)?; print x") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_none_exits")
+{
+    // Top-level ? on None exits with code 1
+    REQUIRE(executesWithExitCode("let x = None?", 1));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_unwrap_ok")
+{
+    // Top-level ? unwraps Ok value
+    CHECK(executeSourceAndGetOutput("let x = (Ok 100)?; print x") == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_error_exits")
+{
+    // Top-level ? on Error exits with code 1
+    REQUIRE(executesWithExitCode("let x = (Error 404)?", 1));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_multiple")
+{
+    // Multiple top-level ? operators in sequence
+    CHECK(executeSourceAndGetOutput("let a = (Some 10)?; let b = (Some 20)?; print (a + b)") == "30");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_inline")
+{
+    // Inline top-level ? (result used directly in function argument)
+    CHECK(executeSourceAndGetOutput("print (Some 42)?") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_env_exists")
+{
+    // Top-level ? with env builtin for existing variable — succeeds (doesn't exit with 1)
+    // NOTE: Printing the unwrapped string value is a known limitation (ObjGetSlot returns Void type)
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("USER", "testuser");
+    REQUIRE(executesWithExitCode(R"(let name = (env "USER")?)", 0));
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_env_missing_exits")
+{
+    // Top-level ? with env builtin for missing variable exits with code 1
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    REQUIRE(executesWithExitCode(R"(let x = (env "NONEXISTENT_VAR_12345")?)", 1));
+    rt.clearMockEnvVars();
+}
+
+// =============================================================================
 // F# Or Pattern Tests
 // =============================================================================
 
