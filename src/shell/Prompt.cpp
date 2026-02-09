@@ -363,6 +363,12 @@ void Prompt::resume()
     }
 }
 
+void Prompt::setKnownFSharpNames(std::set<std::string> names)
+{
+    if (_promptComponent)
+        _promptComponent->setKnownFSharpNames(std::move(names));
+}
+
 void Prompt::setCompleter(Completer* completer)
 {
     _completer = completer;

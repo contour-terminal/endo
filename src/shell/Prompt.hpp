@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 
 #include <tui/KeyBindings.hpp>
@@ -81,6 +82,11 @@ class Prompt
     ///
     /// Re-enables raw mode and terminal protocols.
     void resume();
+
+    /// @brief Sets externally known F# names for diagnostics suppression.
+    ///
+    /// @param names The set of known F# names (persisted from prior REPL prompts).
+    void setKnownFSharpNames(std::set<std::string> names);
 
     /// @brief Sets the completer to use for autocompletion.
     /// @param completer The completer (ownership not transferred).

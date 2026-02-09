@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -95,6 +96,13 @@ class PromptComponent: public tui::Component
         _inputField.setClipboardCallback(std::move(callback));
     }
 
+    /// @brief Sets externally known F# names for diagnostics suppression.
+    ///
+    /// These names (persisted functions/bindings from prior REPL prompts) will be
+    /// forwarded to collectDiagnostics() so they don't trigger "command not found".
+    /// @param names The set of known F# names.
+    void setKnownFSharpNames(std::set<std::string> names);
+
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
 
@@ -159,7 +167,8 @@ class PromptComponent: public tui::Component
 
     // Diagnostics cache for parse error underlines
     std::vector<endo::DiagnosticMessage> _diagnostics;
-    std::string _diagnosticsContent; ///< Input text that _diagnostics corresponds to.
+    std::string _diagnosticsContent;         ///< Input text that _diagnostics corresponds to.
+    std::set<std::string> _knownFSharpNames; ///< Persisted F# names from prior REPL prompts.
 
     /// @brief Recomputes diagnostics if the input text has changed.
     void updateDiagnostics();

@@ -846,7 +846,8 @@ Component (base class)
   - [x] `collectDiagnostics()` walks AST to validate commands against builtins, PATH, and defined functions
   - [x] LSP publishes `command not found` errors for unknown commands in `.endo` files
   - [x] Skips explicit paths (`./script`, `/usr/bin/ls`), builtins, shell/F# function definitions
-  - [x] 11 unit tests + 2 E2E LSP tests
+  - [x] Suppresses false positives for F# names persisted from prior REPL prompts
+  - [x] 14 unit tests + 2 E2E LSP tests
 - [ ] Implement semantic highlighting (valid vs invalid commands)
 - [ ] Implement configurable color schemes
 

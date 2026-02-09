@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -32,7 +33,10 @@ struct DiagnosticMessage
 /// converting them into DiagnosticMessage objects with 0-based positions.
 ///
 /// @param source The full document text to parse
+/// @param knownNames Optional set of externally known names (e.g. persisted F# functions from prior
+///                   REPL prompts) that should not trigger "command not found" diagnostics.
 /// @return A vector of diagnostics (empty if the source parses cleanly)
-[[nodiscard]] std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source);
+[[nodiscard]] std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
+                                                                std::set<std::string> const& knownNames = {});
 
 } // namespace endo

@@ -632,6 +632,15 @@ std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn)
     return std::string(text.substr(pos, cmdEndPos - pos));
 }
 
+void PromptComponent::setKnownFSharpNames(std::set<std::string> names)
+{
+    if (_knownFSharpNames == names)
+        return;
+
+    _knownFSharpNames = std::move(names);
+    _diagnosticsContent.clear(); // Invalidate cache so diagnostics re-run with new names
+}
+
 void PromptComponent::updateDiagnostics()
 {
     auto const text = std::string(_inputField.text());
@@ -639,7 +648,7 @@ void PromptComponent::updateDiagnostics()
         return;
 
     _diagnosticsContent = text;
-    _diagnostics = endo::collectDiagnostics(text);
+    _diagnostics = endo::collectDiagnostics(text, _knownFSharpNames);
 }
 
 std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, int character) const

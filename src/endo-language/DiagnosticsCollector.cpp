@@ -6,6 +6,7 @@
 #include <format>
 #include <set>
 #include <string>
+#include <unordered_set>
 
 #include "StubRuntime.hpp"
 #include <endo-language/AST.hpp>
@@ -197,13 +198,23 @@ namespace
 
 } // namespace
 
-std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source)
+std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
+                                                  std::set<std::string> const& knownNames)
 {
     CoreVM::Runtime runtime;
     registerStubRuntime(runtime);
 
     CoreVM::diagnostics::BufferedReport report;
     Parser parser(runtime, report, std::make_unique<StringSource>(source));
+
+    // Inform the parser about externally known F# names so that calls to them
+    // are parsed as F# applications (ExprStmt) instead of ProgramCall nodes.
+    if (!knownNames.empty())
+    {
+        auto names = std::unordered_set<std::string>(knownNames.begin(), knownNames.end());
+        parser.setKnownFSharpFunctions(std::move(names));
+    }
+
     auto ast = parser.parse();
 
     std::vector<DiagnosticMessage> diagnostics;
@@ -250,6 +261,10 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source)
 
             // Skip if it's a defined function (shell or F#)
             if (collector.functionNames.contains(program))
+                continue;
+
+            // Skip if it's a known external name (persisted F# function/binding from prior prompts)
+            if (knownNames.contains(program))
                 continue;
 
             // Skip if found in PATH

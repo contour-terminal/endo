@@ -573,6 +573,14 @@ int Shell::run()
 
             auto const _ = Prompt::ScopedSuspend(prompt);
             _exitCode = execute(lineBuffer);
+
+            // Update diagnostics with known F# names from persisted state
+            auto names = std::set<std::string>();
+            for (auto const& [name, func]: _fsharpState.functions)
+                names.insert(name);
+            for (auto const& binding: _fsharpState.valueBindings)
+                names.insert(binding.name);
+            prompt.setKnownFSharpNames(std::move(names));
         }
     }
 #else
@@ -591,6 +599,14 @@ int Shell::run()
 
         auto const _ = Prompt::ScopedSuspend(prompt);
         _exitCode = execute(lineBuffer);
+
+        // Update diagnostics with known F# names from persisted state
+        auto names = std::set<std::string>();
+        for (auto const& [name, func]: _fsharpState.functions)
+            names.insert(name);
+        for (auto const& binding: _fsharpState.valueBindings)
+            names.insert(binding.name);
+        prompt.setKnownFSharpNames(std::move(names));
     }
 #endif
 

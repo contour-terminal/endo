@@ -132,3 +132,27 @@ TEST_CASE("DiagnosticsCollector.fsharp_and_binding_no_diagnostic", "[diagnostics
     auto diagnostics = collectDiagnostics("let rec f x = x\nand g x = x\ng hello");
     CHECK(diagnostics.empty());
 }
+
+TEST_CASE("DiagnosticsCollector.persisted_fsharp_name_no_diagnostic", "[diagnostics][command-not-found]")
+{
+    // "f" is not defined in the current source, but is a known persisted F# function
+    auto diagnostics = collectDiagnostics("f 42", { "f" });
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.persisted_fsharp_value_binding_no_diagnostic",
+          "[diagnostics][command-not-found]")
+{
+    // "myval" is a persisted value binding from a prior REPL prompt
+    auto diagnostics = collectDiagnostics("print myval", { "myval" });
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.unknown_command_still_flagged_with_known_names",
+          "[diagnostics][command-not-found]")
+{
+    // "f" is known, but "unknown_cmd_xyz" is not — should still get a diagnostic
+    auto diagnostics = collectDiagnostics("unknown_cmd_xyz", { "f" });
+    REQUIRE(!diagnostics.empty());
+    CHECK(diagnostics[0].message.find("command not found") != std::string::npos);
+}
