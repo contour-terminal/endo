@@ -1229,13 +1229,38 @@ TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_inline")
 
 TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_env_exists")
 {
-    // Top-level ? with env builtin for existing variable — succeeds (doesn't exit with 1)
-    // NOTE: Printing the unwrapped string value is a known limitation (ObjGetSlot returns Void type)
+    // Top-level ? with env builtin for existing variable — prints actual string value
     auto& rt = TestRuntime::instance();
     rt.clearMockEnvVars();
     rt.setMockEnvVar("USER", "testuser");
-    REQUIRE(executesWithExitCode(R"(let name = (env "USER")?)", 0));
+    CHECK(executeSourceAndGetOutput(R"(let name = (env "USER")?; print name)") == "testuser");
     rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_env_println")
+{
+    // Verify println also works correctly with unwrapped env string
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("USER", "testuser");
+    CHECK(executeSourceAndGetOutput(R"(let name = (env "USER")?; println name)") == "testuser\n");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_env_via_let")
+{
+    // Multi-step: bind env result to variable, then unwrap with ?
+    auto& rt = TestRuntime::instance();
+    rt.clearMockEnvVars();
+    rt.setMockEnvVar("HOME", "/home/test");
+    CHECK(executeSourceAndGetOutput(R"(let opt = env "HOME"; let h = opt?; print h)") == "/home/test");
+    rt.clearMockEnvVars();
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_try_some_string")
+{
+    // Unwrapping Some with a string value should print the string, not a raw pointer
+    CHECK(executeSourceAndGetOutput(R"(let x = (Some "hello")?; print x)") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_toplevel_env_missing_exits")

@@ -553,6 +553,19 @@ std::string IRGenerator::generateLambdaName()
     return std::format("__lambda_{}", _lambdaCounter++);
 }
 
+void IRGenerator::annotateInnerType(CoreVM::Value* val, CoreVM::LiteralType type)
+{
+    _innerTypeAnnotations[val] = type;
+}
+
+std::optional<CoreVM::LiteralType> IRGenerator::getInnerType(CoreVM::Value* val) const
+{
+    auto it = _innerTypeAnnotations.find(val);
+    if (it != _innerTypeAnnotations.end())
+        return it->second;
+    return std::nullopt;
+}
+
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
@@ -2449,6 +2462,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         // mergeBlock: load result
         _builder.setInsertPoint(mergeBlock);
         _result = _builder.createLoad(resultStorage, "env.result");
+        annotateInnerType(_result, CoreVM::LiteralType::String);
         return true;
     }
 
@@ -2797,6 +2811,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Store the value
     _builder.createStore(storage, value, node.name);
 
+    // Propagate inner type annotation through the binding
+    if (auto innerType = getInnerType(value))
+        annotateInnerType(storage, *innerType);
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
@@ -2850,6 +2868,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
         auto* storage = createAllocaInEntryBlock(value->type(), node.name);
         _builder.createStore(storage, value, node.name + ".store");
+
+        // Propagate inner type annotation through the binding
+        if (auto innerType = getInnerType(value))
+            annotateInnerType(storage, *innerType);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -3815,6 +3837,10 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
 
     // Load the value from storage
     _result = _builder.createLoad(storage, node.name);
+
+    // Propagate inner type annotation through variable loads
+    if (auto innerType = getInnerType(storage))
+        annotateInnerType(_result, *innerType);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -4174,6 +4200,7 @@ void IRGenerator::visit(ast::OptionExpr const& node)
         obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "option.tag");
         obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), innerValue, "option.value");
         _result = obj;
+        annotateInnerType(_result, innerValue->type());
     }
     else
     {
@@ -4210,6 +4237,8 @@ void IRGenerator::visit(ast::ResultExpr const& node)
     obj = _builder.createObjSetTag(obj, tag, "result.tag");
     obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
     _result = obj;
+    if (node.isOk)
+        annotateInnerType(_result, payloadValue->type());
 }
 
 void IRGenerator::visit(ast::TryExpr const& node)
@@ -4250,8 +4279,11 @@ void IRGenerator::visit(ast::TryExpr const& node)
         _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "try.is_success");
 
     // Pre-allocate result storage in entry block for consistent stack tracking.
-    // Use Object type since the inner value could be another Option/Result (nested case).
-    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "try.result");
+    // Use inner type annotation if available (e.g., String for env "USER"),
+    // otherwise fall back to Object for unknown/nested cases.
+    auto const innerTypeHint = getInnerType(obj);
+    auto const resultType = innerTypeHint.value_or(CoreVM::LiteralType::Object);
+    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(resultType, "try.result");
 
     // Create blocks
     auto* successBlock = _builder.createBlock("try.success");

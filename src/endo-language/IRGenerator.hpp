@@ -399,6 +399,17 @@ class IRGenerator final: public ast::Visitor
 
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
+
+    /// Tracks the "inner type" of Option/Result values for type propagation.
+    /// When an expression produces an Option<T> or Result<T,E>, the inner type T
+    /// is recorded here so that the ? operator can produce correctly-typed extractions.
+    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _innerTypeAnnotations;
+
+    /// Annotates a value with its known inner type (e.g., the T in Option<T>).
+    void annotateInnerType(CoreVM::Value* val, CoreVM::LiteralType type);
+
+    /// Retrieves the inner type annotation for a value, if any.
+    [[nodiscard]] std::optional<CoreVM::LiteralType> getInnerType(CoreVM::Value* val) const;
 };
 
 } // namespace endo
