@@ -2149,25 +2149,6 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
-    if (name == "fst" || name == "snd")
-    {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError(
-                "{} requires exactly 1 argument, got {}", std::string_view(name), argExprs.size());
-            return true;
-        }
-        auto* argVal = codegen(argExprs[0]);
-        if (!argVal)
-        {
-            reportTypeError("Failed to evaluate {} argument", std::string_view(name));
-            return true;
-        }
-        auto slotIndex = (name == "fst") ? 0 : 1;
-        _result = _builder.createObjGetSlot(argVal, _builder.get(CoreVM::CoreNumber(slotIndex)), name);
-        return true;
-    }
-
     if (name == "string_length")
     {
         if (argExprs.size() != 1)
@@ -2410,12 +2391,13 @@ void IRGenerator::visit(ast::TupleExpr const& node)
     }
 
     // Allocate the tuple object
-    auto* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)), "tuple");
+    CoreVM::Value* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)), "tuple");
 
     // Set each slot
     for (size_t i = 0; i < elemValues.size(); ++i)
     {
-        _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemValues[i], "tuple.slot");
+        obj =
+            _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemValues[i], "tuple.slot");
     }
 
     _result = obj;
@@ -2626,6 +2608,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
         auto* storage = createAllocaInEntryBlock(value->type(), node.name);
         _builder.createStore(storage, value, node.name + ".store");
+
         bindFSharpVariable(node.name, storage);
     }
 
@@ -2833,7 +2816,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     if (auto const* funcIdent = dynamic_cast<ast::IdentifierExpr const*>(funcExpr))
     {
-        // Check for builtin functions first (fst, snd, string_length, etc.)
+        // Check for builtin functions first (string_length, etc.)
         // For pipelines, we need to pass the piped value as the single argument
         if (funcIdent->name == "print" || funcIdent->name == "println")
         {
@@ -2859,13 +2842,6 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Build a temporary argument expression list pointing to a synthetic node.
         // Since builtins codegen their args, and we already have the value, we use
         // a different approach: codegen the value manually for builtins.
-        if (funcIdent->name == "fst" || funcIdent->name == "snd")
-        {
-            auto slotIndex = (funcIdent->name == "fst") ? 0 : 1;
-            _result = _builder.createObjGetSlot(
-                value, _builder.get(CoreVM::CoreNumber(slotIndex)), funcIdent->name);
-            return;
-        }
         if (funcIdent->name == "string_length")
         {
             if (value->type() != CoreVM::LiteralType::String)
@@ -3170,7 +3146,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             return;
         }
 
-        // Check for standard library builtins (fst, snd, string_length, etc.)
+        // Check for standard library builtins (string_length, etc.)
         if (tryGenerateBuiltinCall(funcIdent->name, argExprs))
             return;
     }

@@ -1798,12 +1798,12 @@ TEST_CASE("IRGenerator.FSharp.immutable_assignment_error")
 
 TEST_CASE("IRGenerator.FSharp.tuple_fst")
 {
-    CHECK(executesWithOutput("let t = (1, 2); print (fst t)", "1"));
+    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; let t = (1, 2); print (fst t)", "1"));
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_snd")
 {
-    CHECK(executesWithOutput("let t = (1, 2); print (snd t)", "2"));
+    CHECK(executesWithOutput("let snd t = match t with | (_, b) -> b; let t = (1, 2); print (snd t)", "2"));
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_pattern_match")
@@ -1813,7 +1813,41 @@ TEST_CASE("IRGenerator.FSharp.tuple_pattern_match")
 
 TEST_CASE("IRGenerator.FSharp.tuple_3_elements")
 {
-    CHECK(executesWithOutput("let t = (10, 20, 30); print (fst t)", "10"));
+    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; let t = (10, 20, 30); print (fst t)",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_swap")
+{
+    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; "
+                             "let snd t = match t with | (_, b) -> b; "
+                             "let swap t = match t with | (a, b) -> (b, a); "
+                             "let s = swap (1, 2); print (fst s); print (snd s)",
+                             "21"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_sum_pair")
+{
+    CHECK(
+        executesWithOutput("let sum_pair t = match t with | (a, b) -> a + b; print (sum_pair (3, 4))", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_mixed_types")
+{
+    // Extract numeric element from mixed tuple via pattern matching
+    CHECK(executesWithOutput(R"(let t = (42, "hello"); let r = match t with | (a, b) -> a; print r)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_numeric_snd")
+{
+    // Extract second numeric element via pattern matching
+    CHECK(executesWithOutput(R"(let t = ("world", 99); let r = match t with | (_, b) -> b; print r)", "99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_snd_via_function")
+{
+    // Extract numeric second element via user-defined function
+    CHECK(executesWithOutput("let get_snd t = match t with | (_, b) -> b; print (get_snd (1, 42))", "42"));
 }
 
 // =============================================================================
@@ -1850,14 +1884,14 @@ TEST_CASE("IRGenerator.FSharp.builtin_pipeline_string_of_int_length")
     CHECK(executesWithOutput("let r = 42 |> string_of_int |> string_length; print r", "2"));
 }
 
-TEST_CASE("IRGenerator.FSharp.builtin_fst_direct")
+TEST_CASE("IRGenerator.FSharp.tuple_fst_direct")
 {
-    CHECK(executesWithOutput("print (fst (1, 2))", "1"));
+    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; print (fst (1, 2))", "1"));
 }
 
-TEST_CASE("IRGenerator.FSharp.builtin_snd_direct")
+TEST_CASE("IRGenerator.FSharp.tuple_snd_direct")
 {
-    CHECK(executesWithOutput("print (snd (1, 2))", "2"));
+    CHECK(executesWithOutput("let snd t = match t with | (_, b) -> b; print (snd (1, 2))", "2"));
 }
 
 // =============================================================================

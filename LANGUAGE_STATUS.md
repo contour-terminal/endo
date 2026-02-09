@@ -156,8 +156,7 @@ This document tracks the implementation status of F# language features as define
 
 - [x] `print` — print without newline
 - [x] `println` — print with newline
-- [x] `fst` — first element of tuple
-- [x] `snd` — second element of tuple
+- [x] `fst` / `snd` — user-definable via pattern matching (no longer builtins)
 - [x] `string_length` — length of string
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion

@@ -198,7 +198,7 @@ class IRGenerator final: public ast::Visitor
     /// @return String-typed value, or nullptr on unsupported types.
     CoreVM::Value* convertToString(CoreVM::Value* value, std::string_view label);
 
-    /// Tries to generate IR for a builtin function call (fst, snd, string_length, etc.).
+    /// Tries to generate IR for a builtin function call (string_length, etc.).
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
 
