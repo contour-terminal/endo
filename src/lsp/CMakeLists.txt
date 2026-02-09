@@ -32,6 +32,10 @@ add_library(endo-lsp STATIC
     ReferencesProvider.cpp
     SignatureHelpProvider.hpp
     SignatureHelpProvider.cpp
+    DocumentSymbolProvider.hpp
+    DocumentSymbolProvider.cpp
+    RenameProvider.hpp
+    RenameProvider.cpp
 
     # Server core
     LspServer.hpp

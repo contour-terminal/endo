@@ -6,10 +6,12 @@
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentStore.hpp"
+#include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
 #include "JsonRpc.hpp"
 #include "LspServer.hpp"
 #include "ReferencesProvider.hpp"
+#include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "SymbolCollector.hpp"
@@ -1285,4 +1287,229 @@ TEST_CASE("E2E.signatureHelp request returns signature", "[lsp][e2e]")
         }
     }
     CHECK(found);
+}
+
+// =============================================================================
+// DocumentSymbol tests
+// =============================================================================
+
+TEST_CASE("DocumentSymbol.simple_variable", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let x = 42");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "x");
+    CHECK(symbols[0].kind == SymbolKind::Variable);
+    CHECK(symbols[0].children.empty());
+}
+
+TEST_CASE("DocumentSymbol.function_with_params", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let add x y = x + y");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "add");
+    CHECK(symbols[0].kind == SymbolKind::Function);
+    REQUIRE(symbols[0].children.size() == 2);
+    CHECK(symbols[0].children[0].name == "x");
+    CHECK(symbols[0].children[0].kind == SymbolKind::Variable);
+    CHECK(symbols[0].children[1].name == "y");
+    CHECK(symbols[0].children[1].kind == SymbolKind::Variable);
+}
+
+TEST_CASE("DocumentSymbol.multiple_bindings", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let a = 1\nlet b = 2");
+    REQUIRE(symbols.size() == 2);
+    CHECK(symbols[0].name == "a");
+    CHECK(symbols[1].name == "b");
+}
+
+TEST_CASE("DocumentSymbol.nested_let_in_not_top_level", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let result = let inner = 1 in inner");
+    // Only "result" should appear at top level, not "inner"
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "result");
+}
+
+TEST_CASE("DocumentSymbol.recursive_function", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let rec fact n = if n <= 1 then 1 else n * fact (n - 1)");
+    REQUIRE(symbols.size() == 1);
+    CHECK(symbols[0].name == "fact");
+    CHECK(symbols[0].kind == SymbolKind::Function);
+    REQUIRE(symbols[0].children.size() == 1);
+    CHECK(symbols[0].children[0].name == "n");
+}
+
+TEST_CASE("DocumentSymbol.parse_failure_returns_empty", "[lsp][documentsymbol]")
+{
+    auto symbols = computeDocumentSymbols("let = ");
+    CHECK(symbols.empty());
+}
+
+// =============================================================================
+// Rename tests
+// =============================================================================
+
+TEST_CASE("Rename.variable_all_references", "[lsp][rename]")
+{
+    auto edit = computeRename("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, "y");
+    REQUIRE(edit.has_value());
+    auto const& changes = edit->changes;
+    REQUIRE(changes.count("file:///test.endo") == 1);
+    auto const& edits = changes.at("file:///test.endo");
+    // Definition + usage = 2 edits
+    CHECK(edits.size() == 2);
+    for (auto const& e: edits)
+        CHECK(e.newText == "y");
+}
+
+TEST_CASE("Rename.function_all_references", "[lsp][rename]")
+{
+    auto edit = computeRename(
+        "let f x = x + 1\nprintln (f 3)\nprintln (f 5)", "file:///test.endo", Position { 0, 4 }, "g");
+    REQUIRE(edit.has_value());
+    auto const& edits = edit->changes.at("file:///test.endo");
+    // f appears 3 times: definition + 2 calls
+    CHECK(edits.size() == 3);
+}
+
+TEST_CASE("Rename.parameter_renames_in_scope", "[lsp][rename]")
+{
+    auto edit = computeRename("let add x y = x + y", "file:///test.endo", Position { 0, 8 }, "a");
+    REQUIRE(edit.has_value());
+    auto const& edits = edit->changes.at("file:///test.endo");
+    // "x" param definition + "x" usage in body = 2 edits
+    CHECK(edits.size() == 2);
+    for (auto const& e: edits)
+        CHECK(e.newText == "a");
+}
+
+TEST_CASE("Rename.cursor_not_on_identifier", "[lsp][rename]")
+{
+    // Cursor on "let" keyword
+    auto edit = computeRename("let x = 42", "file:///test.endo", Position { 0, 0 }, "y");
+    CHECK_FALSE(edit.has_value());
+}
+
+TEST_CASE("PrepareRename.valid_position", "[lsp][rename]")
+{
+    auto range = prepareRename("let x = 42\nprintln x", Position { 0, 4 });
+    REQUIRE(range.has_value());
+    CHECK(range->start.line == 0);
+    CHECK(range->start.character == 4); // "x" starts at column 4
+}
+
+TEST_CASE("PrepareRename.invalid_position", "[lsp][rename]")
+{
+    // Cursor on "let" keyword
+    auto range = prepareRename("let x = 42", Position { 0, 0 });
+    CHECK_FALSE(range.has_value());
+}
+
+// =============================================================================
+// E2E: DocumentSymbol, Rename
+// =============================================================================
+
+TEST_CASE("E2E.documentSymbol_request_returns_symbols", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let add x y = x + y\nlet z = 42" },
+                               } },
+                         }),
+        sendRequest("textDocument/documentSymbol",
+                    json { { "textDocument", json { { "uri", "file:///test.endo" } } } },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            CHECK(msg["result"].size() == 2); // "add" and "z"
+            CHECK(msg["result"][0]["name"] == "add");
+            CHECK(msg["result"][0]["kind"] == static_cast<int>(SymbolKind::Function));
+            CHECK(msg["result"][0].contains("children"));
+            CHECK(msg["result"][1]["name"] == "z");
+            CHECK(msg["result"][1]["kind"] == static_cast<int>(SymbolKind::Variable));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.rename_request_returns_workspace_edit", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nprintln x" },
+                               } },
+                         }),
+        sendRequest("textDocument/rename",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                        { "newName", "myVar" },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("changes"));
+            auto const& changes = msg["result"]["changes"];
+            CHECK(changes.contains("file:///test.endo"));
+            auto const& edits = changes["file:///test.endo"];
+            CHECK(edits.is_array());
+            CHECK(edits.size() == 2); // definition + usage
+            for (auto const& edit: edits)
+                CHECK(edit["newText"] == "myVar");
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.initialize_advertises_documentSymbol_and_rename", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    REQUIRE(responses.size() >= 1);
+    auto const& caps = responses[0]["result"]["capabilities"];
+    CHECK(caps["documentSymbolProvider"] == true);
+    CHECK(caps.contains("renameProvider"));
+    CHECK(caps["renameProvider"]["prepareProvider"] == true);
 }

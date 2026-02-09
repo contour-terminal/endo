@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -277,6 +278,62 @@ inline void to_json(nlohmann::json& j, SignatureHelp const& h)
         { "activeSignature", h.activeSignature },
         { "activeParameter", h.activeParameter },
     };
+}
+
+/// LSP SymbolKind enumeration (subset relevant to endo).
+enum class SymbolKind : int
+{
+    File = 1,
+    Function = 12,
+    Variable = 13,
+    TypeParameter = 26, ///< For pattern bindings in match arms
+};
+
+/// LSP DocumentSymbol (hierarchical symbol representation).
+struct DocumentSymbol
+{
+    std::string name;
+    SymbolKind kind = SymbolKind::Variable;
+    Range range;          ///< Full span of the symbol (including body)
+    Range selectionRange; ///< Name span (for highlighting)
+    std::vector<DocumentSymbol> children;
+};
+
+inline void to_json(nlohmann::json& j, DocumentSymbol const& s)
+{
+    j = nlohmann::json {
+        { "name", s.name },
+        { "kind", static_cast<int>(s.kind) },
+        { "range", s.range },
+        { "selectionRange", s.selectionRange },
+    };
+    if (!s.children.empty())
+        j["children"] = s.children;
+}
+
+/// LSP TextEdit (a replacement within a document).
+struct TextEdit
+{
+    Range range;
+    std::string newText;
+};
+
+inline void to_json(nlohmann::json& j, TextEdit const& e)
+{
+    j = nlohmann::json { { "range", e.range }, { "newText", e.newText } };
+}
+
+/// LSP WorkspaceEdit (a set of edits across documents).
+struct WorkspaceEdit
+{
+    std::map<std::string, std::vector<TextEdit>> changes; ///< URI -> edits
+};
+
+inline void to_json(nlohmann::json& j, WorkspaceEdit const& w)
+{
+    j = nlohmann::json { { "changes", nlohmann::json::object() } };
+    for (auto const& [uri, edits]: w.changes)
+        j["changes"][uri] = edits;
 }
 
 } // namespace endo::lsp

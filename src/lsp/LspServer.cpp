@@ -6,9 +6,11 @@
 
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
+#include "DocumentSymbolProvider.hpp"
 #include "HoverProvider.hpp"
 #include "JsonRpc.hpp"
 #include "ReferencesProvider.hpp"
+#include "RenameProvider.hpp"
 #include "SemanticTokens.hpp"
 #include "SignatureHelpProvider.hpp"
 #include "StubRuntime.hpp"
@@ -93,6 +95,21 @@ void LspServer::dispatch(nlohmann::json const& message)
             auto const params = message.value("params", nlohmann::json::object());
             writeMessage(_output, makeResponse(id, handleSignatureHelp(params)));
         }
+        else if (method == "textDocument/documentSymbol")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleDocumentSymbol(params)));
+        }
+        else if (method == "textDocument/rename")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleRename(params)));
+        }
+        else if (method == "textDocument/prepareRename")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handlePrepareRename(params)));
+        }
         else
         {
             writeMessage(_output,
@@ -146,6 +163,8 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
                 nlohmann::json {
                     { "triggerCharacters", nlohmann::json::array({ " ", "(" }) },
                 } },
+              { "documentSymbolProvider", true },
+              { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",
                 nlohmann::json {
                     { "legend", legend },
@@ -276,6 +295,52 @@ nlohmann::json LspServer::handleSignatureHelp(nlohmann::json const& params)
         return nullptr;
 
     return *sigHelp;
+}
+
+nlohmann::json LspServer::handleDocumentSymbol(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto symbols = computeDocumentSymbols(*source);
+
+    auto result = nlohmann::json::array();
+    for (auto const& sym: symbols)
+        result.push_back(sym);
+    return result;
+}
+
+nlohmann::json LspServer::handleRename(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const newName = params.at("newName").get<std::string>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nullptr;
+
+    auto edit = computeRename(*source, textDoc.uri, position, newName);
+    if (!edit.has_value())
+        return nullptr;
+
+    return *edit;
+}
+
+nlohmann::json LspServer::handlePrepareRename(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nullptr;
+
+    auto range = prepareRename(*source, position);
+    if (!range.has_value())
+        return nullptr;
+
+    return *range;
 }
 
 void LspServer::publishDiagnostics(std::string const& uri)

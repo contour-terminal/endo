@@ -4,7 +4,6 @@
 #include <unordered_map>
 
 #include "StubRuntime.hpp"
-
 #include <endo-language/AST.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/Parser.hpp>
@@ -39,6 +38,7 @@ namespace
         SymbolWalker(SymbolTable& t, std::vector<SymbolEvent>& e): table(t), events(e) {}
 
         void pushScope() { _scopes.emplace_back(); }
+
         void popScope() { _scopes.pop_back(); }
 
         /// Defines a symbol in the current scope and emits a definition event.
@@ -46,6 +46,7 @@ namespace
         {
             auto const index = static_cast<int>(table.definitions.size());
             def.scopeId = _nextScopeId++;
+            def.nestingDepth = static_cast<int>(_scopes.size()) - 1;
             table.definitions.push_back(std::move(def));
             if (!_scopes.empty())
                 _scopes.back()[name] = index;
@@ -142,7 +143,7 @@ namespace
                 {
                     andDef.parameterNames.push_back(param.name);
                     andDef.parameterTypes.push_back(param.typeAnnotation ? toString(*param.typeAnnotation)
-                                                                        : std::string {});
+                                                                         : std::string {});
                 }
                 if (andBinding.returnType)
                     andDef.returnType = toString(*andBinding.returnType);
@@ -199,7 +200,7 @@ namespace
                 {
                     def.parameterNames.push_back(param.name);
                     def.parameterTypes.push_back(param.typeAnnotation ? toString(*param.typeAnnotation)
-                                                                     : std::string {});
+                                                                      : std::string {});
                 }
                 if (e->returnType)
                     def.returnType = toString(*e->returnType);
@@ -580,6 +581,16 @@ std::vector<SourceLocationRange> findReferences(std::string const& source,
     }
 
     return result;
+}
+
+std::optional<SourceLocationRange> findSymbolRangeAt(std::string const& source, Position position)
+{
+    auto tokens = tokenize(source);
+    auto const* identToken = findIdentifierAt(tokens, position);
+    if (!identToken)
+        return std::nullopt;
+
+    return correctedRange(*identToken);
 }
 
 } // namespace endo::lsp

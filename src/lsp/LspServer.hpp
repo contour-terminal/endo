@@ -49,6 +49,9 @@ class LspServer
     [[nodiscard]] nlohmann::json handleDefinition(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleReferences(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleSignatureHelp(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleDocumentSymbol(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleRename(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handlePrepareRename(nlohmann::json const& params);
 
     // Notifications
     void publishDiagnostics(std::string const& uri);
