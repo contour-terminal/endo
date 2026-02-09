@@ -847,7 +847,9 @@ Component (base class)
   - [x] LSP publishes `command not found` errors for unknown commands in `.endo` files
   - [x] Skips explicit paths (`./script`, `/usr/bin/ls`), builtins, shell/F# function definitions
   - [x] Suppresses false positives for F# names persisted from prior REPL prompts
-  - [x] 14 unit tests + 2 E2E LSP tests
+  - [x] Fix StubRuntime missing shell builtin registrations (crash on `which`/`exit`/`bind` in diagnostics)
+  - [x] Fix `bind` signature mismatch in Parser (`"bind(S+)I"` → `"bind(s)I"`)
+  - [x] 18 unit tests + 2 E2E LSP tests
 - [ ] Implement semantic highlighting (valid vs invalid commands)
 - [ ] Implement configurable color schemes
 

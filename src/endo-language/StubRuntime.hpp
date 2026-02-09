@@ -45,6 +45,83 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreString>("key")
         .returnType(CoreVM::LiteralType::String)
         .bind([](CoreVM::Params& args) { args.setResult(""); });
+
+    // Shell builtins required by Parser::parseBuiltinStatement()
+    runtime.registerFunction("exit")
+        .param<CoreVM::CoreNumber>("code")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("true").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
+
+    runtime.registerFunction("false").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
+
+    runtime.registerFunction("export")
+        .param<std::string>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("set")
+        .param<std::string>("name")
+        .param<std::string>("value")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("cd").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
+
+    runtime.registerFunction("cd")
+        .param<std::string>("path")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("unset")
+        .param<std::string>("name")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("read").returnType(CoreVM::LiteralType::String).bind(dummyHandler);
+
+    runtime.registerFunction("read")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("jobs").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("fg").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("fg")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("bg").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("bg")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("wait").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("wait")
+        .param<CoreVM::CoreNumber>("job_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("bind").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("bind")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("which").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
+    runtime.registerFunction("which")
+        .param<std::vector<std::string>>("args")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
 }
 
 } // namespace endo

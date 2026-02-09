@@ -156,3 +156,31 @@ TEST_CASE("DiagnosticsCollector.unknown_command_still_flagged_with_known_names",
     REQUIRE(!diagnostics.empty());
     CHECK(diagnostics[0].message.find("command not found") != std::string::npos);
 }
+
+// =============================================================================
+// Shell builtin diagnostics (must not crash)
+// =============================================================================
+
+TEST_CASE("DiagnosticsCollector.which_no_args_no_crash", "[diagnostics][builtins]")
+{
+    auto diagnostics = collectDiagnostics("which");
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.which_with_args_no_crash", "[diagnostics][builtins]")
+{
+    auto diagnostics = collectDiagnostics("which ls");
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.bind_no_args_no_crash", "[diagnostics][builtins]")
+{
+    auto diagnostics = collectDiagnostics("bind");
+    CHECK(diagnostics.empty());
+}
+
+TEST_CASE("DiagnosticsCollector.exit_no_crash", "[diagnostics][builtins]")
+{
+    auto diagnostics = collectDiagnostics("exit 0");
+    CHECK(diagnostics.empty());
+}

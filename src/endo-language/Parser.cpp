@@ -2042,7 +2042,7 @@ std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()
                     break;
                 args.push_back(std::move(arg));
             }
-            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind(S+)I"), std::move(args));
+            return std::make_unique<ast::BuiltinBindStmt>(*_runtime.find("bind(s)I"), std::move(args));
         }
     }
     else if (_lexer.isDirective("which"))
