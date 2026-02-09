@@ -5,7 +5,9 @@
 
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
+#include "SourceOffsetUtils.hpp"
 #include "SyntaxHighlighter.hpp"
+#include <endo-language/HoverProvider.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
@@ -64,6 +66,23 @@ void PromptComponent::render(tui::Canvas& canvas)
     auto const fullText = _inputField.text();
     auto const highlightMap = computeHighlightMap(fullText);
 
+    // Compute diagnostics and build per-byte error map
+    updateDiagnostics();
+    auto errorMap = std::vector<bool>(fullText.size(), false);
+    if (!_diagnostics.empty())
+    {
+        auto const lineStarts = buildLineStartOffsets(fullText);
+        for (auto const& diag: _diagnostics)
+        {
+            if (diag.severity != DiagnosticSeverity::Error && diag.severity != DiagnosticSeverity::Warning)
+                continue;
+            auto const startByte = positionToByteOffset(fullText, lineStarts, diag.range.start);
+            auto const endByte = positionToByteOffset(fullText, lineStarts, diag.range.end);
+            for (auto i = startByte; i < endByte && i < errorMap.size(); ++i)
+                errorMap[i] = true;
+        }
+    }
+
     // Render each line
     for (int lineIndex = 0; lineIndex < totalLines && lineIndex < canvas.height(); ++lineIndex)
     {
@@ -109,7 +128,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         auto const lineEndByte = lineStartByte + lineContent.size();
 
-        // Render line content with syntax highlighting and selection
+        // Render line content with syntax highlighting, selection, and error underlines
         {
             // Determine selection range local to this line
             auto const lineSelStart = (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
@@ -119,7 +138,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                                         ? std::min(selEnd, lineEndByte) - lineStartByte
                                         : lineContent.size();
 
-            // Iterate line content, grouping consecutive bytes with same category and selection state
+            // Iterate line content, grouping consecutive bytes with same category, selection, and error state
             std::size_t segStart = 0;
             while (segStart < lineContent.size())
             {
@@ -127,8 +146,9 @@ void PromptComponent::render(tui::Canvas& canvas)
                 auto const cat =
                     (globalByte < highlightMap.size()) ? highlightMap[globalByte] : TokenCategory::Default;
                 auto const selected = segStart >= lineSelStart && segStart < lineSelEnd;
+                auto const hasError = globalByte < errorMap.size() && errorMap[globalByte];
 
-                // Extend segment while category and selection state remain the same
+                // Extend segment while category, selection state, and error state remain the same
                 auto segEnd = segStart + 1;
                 while (segEnd < lineContent.size())
                 {
@@ -136,7 +156,8 @@ void PromptComponent::render(tui::Canvas& canvas)
                     auto const nextCat =
                         (gb < highlightMap.size()) ? highlightMap[gb] : TokenCategory::Default;
                     auto const nextSel = segEnd >= lineSelStart && segEnd < lineSelEnd;
-                    if (nextCat != cat || nextSel != selected)
+                    auto const nextErr = gb < errorMap.size() && errorMap[gb];
+                    if (nextCat != cat || nextSel != selected || nextErr != hasError)
                         break;
                     ++segEnd;
                 }
@@ -146,6 +167,13 @@ void PromptComponent::render(tui::Canvas& canvas)
                 segStyle.fg = categoryColor(cat);
                 segStyle.bg = BackgroundColor;
                 segStyle.inverse = selected;
+
+                // Apply curly red underline for error regions
+                if (hasError)
+                {
+                    segStyle.underlineStyle = tui::UnderlineStyle::Curly;
+                    segStyle.underlineColor = tui::RgbColor { .r = 255, .g = 85, .b = 85 };
+                }
 
                 col += canvas.putString(
                     lineIndex, col, lineContent.substr(segStart, segEnd - segStart), segStyle);
@@ -511,27 +539,49 @@ void PromptComponent::insertCompletion(std::string_view text)
 
 void PromptComponent::onHoverConfirmed(int x, int y)
 {
-    // Only handle hover on line 0 (where the command is)
-    if (y != 0 || !_commandResolver)
+    auto* scr = screen();
+    if (!scr)
         return;
 
-    // Check if hovering over command position
-    auto const cmd = getCommandAtColumn(x);
-    if (!cmd)
-        return;
+    auto const bounds = screenBounds();
 
-    // Resolve the command
-    auto const info = _commandResolver->resolve(*cmd);
+    // Convert screen coordinates to source position
+    auto const sourcePos = screenToSourcePosition(x, y);
 
-    // Show tooltip via screen
-    if (auto* scr = screen())
+    // Priority 1: Check diagnostics at this position
+    if (sourcePos)
     {
-        auto const bounds = screenBounds();
-        auto const [cmdStart, cmdEnd] = getCommandBounds();
+        if (auto diag = diagnosticAt(sourcePos->line, sourcePos->character))
+        {
+            tui::Point tooltipPos { bounds.x + x, bounds.y + y + 1 };
+            scr->showTooltip(diag->message, tooltipPos, tui::TooltipContentType::PlainText);
+            return;
+        }
+    }
 
-        // Position tooltip below the command, at the command's start
-        tui::Point tooltipPos { bounds.x + cmdStart, bounds.y + 1 };
-        scr->showTooltip(info.tooltip, tooltipPos, tui::TooltipContentType::PlainText);
+    // Priority 2: Check language hover info (keywords, constructors, operators, builtins, bindings)
+    if (sourcePos)
+    {
+        auto const text = std::string(_inputField.text());
+        if (auto hover = endo::computeHover(text, *sourcePos))
+        {
+            tui::Point tooltipPos { bounds.x + x, bounds.y + y + 1 };
+            scr->showTooltip(hover->markdownText, tooltipPos, tui::TooltipContentType::Markdown);
+            return;
+        }
+    }
+
+    // Priority 3: Fall through to existing command hover logic (line 0 only)
+    if (y == 0 && _commandResolver)
+    {
+        auto const cmd = getCommandAtColumn(x);
+        if (cmd)
+        {
+            auto const info = _commandResolver->resolve(*cmd);
+            auto const [cmdStart, cmdEnd] = getCommandBounds();
+            tui::Point tooltipPos { bounds.x + cmdStart, bounds.y + 1 };
+            scr->showTooltip(info.tooltip, tooltipPos, tui::TooltipContentType::PlainText);
+        }
     }
 }
 
@@ -580,6 +630,68 @@ std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn)
         return std::nullopt;
 
     return std::string(text.substr(pos, cmdEndPos - pos));
+}
+
+void PromptComponent::updateDiagnostics()
+{
+    auto const text = std::string(_inputField.text());
+    if (text == _diagnosticsContent)
+        return;
+
+    _diagnosticsContent = text;
+    _diagnostics = endo::collectDiagnostics(text);
+}
+
+std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, int character) const
+{
+    for (auto const& diag: _diagnostics)
+    {
+        auto const& r = diag.range;
+        // Check if (line, character) is within this diagnostic's range
+        if (line < r.start.line || line > r.end.line)
+            continue;
+        if (line == r.start.line && character < r.start.character)
+            continue;
+        if (line == r.end.line && character >= r.end.character)
+            continue;
+        return diag;
+    }
+    return std::nullopt;
+}
+
+std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int x, int y) const
+{
+    auto const totalPromptWidth =
+        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+
+    // Screen x must be within the text area
+    if (x < totalPromptWidth)
+        return std::nullopt;
+
+    auto const totalLines = _inputField.lineCount();
+    if (y < 0 || y >= totalLines)
+        return std::nullopt;
+
+    auto const lineContent = _inputField.lineAt(y);
+    if (lineContent.empty())
+        return endo::SourcePosition { .line = y, .character = 0 };
+
+    // Walk grapheme clusters to convert display column to codepoint index
+    auto const targetCol = x - totalPromptWidth;
+    auto segmenter = unicode::utf8_grapheme_segmenter(lineContent);
+    int displayCol = 0;
+    int codepointIndex = 0;
+
+    for (auto const& cluster: segmenter)
+    {
+        auto const w = tui::graphemeClusterWidth(cluster);
+        if (displayCol + w > targetCol)
+            break;
+        displayCol += w;
+        ++codepointIndex;
+    }
+
+    return endo::SourcePosition { .line = y, .character = codepointIndex };
 }
 
 std::pair<int, int> PromptComponent::getCommandBounds() const

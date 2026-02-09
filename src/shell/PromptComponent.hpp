@@ -4,7 +4,10 @@
 #include <chrono>
 #include <optional>
 #include <string>
+#include <vector>
 
+#include <endo-language/DiagnosticsCollector.hpp>
+#include <endo-language/HoverInfo.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
@@ -153,6 +156,25 @@ class PromptComponent: public tui::Component
     /// @brief Gets the bounds (start/end column) of the command token.
     /// @return Pair of (start, end) columns in screen coordinates.
     [[nodiscard]] std::pair<int, int> getCommandBounds() const;
+
+    // Diagnostics cache for parse error underlines
+    std::vector<endo::DiagnosticMessage> _diagnostics;
+    std::string _diagnosticsContent; ///< Input text that _diagnostics corresponds to.
+
+    /// @brief Recomputes diagnostics if the input text has changed.
+    void updateDiagnostics();
+
+    /// @brief Finds a diagnostic at the given 0-based source position.
+    /// @param line The 0-based line number.
+    /// @param character The 0-based character (codepoint) index.
+    /// @return The diagnostic at that position, or std::nullopt.
+    [[nodiscard]] std::optional<endo::DiagnosticMessage> diagnosticAt(int line, int character) const;
+
+    /// @brief Converts screen coordinates to a 0-based source position.
+    /// @param x The screen column (component-relative).
+    /// @param y The screen row (component-relative, = line index).
+    /// @return The corresponding source position, or std::nullopt if outside text.
+    [[nodiscard]] std::optional<endo::SourcePosition> screenToSourcePosition(int x, int y) const;
 
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime {};
