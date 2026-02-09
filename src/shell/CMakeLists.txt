@@ -38,6 +38,8 @@ add_library(endo-shell STATIC
     PromptComponent.cpp
     Shell.hpp
     Shell.cpp
+    SyntaxHighlighter.hpp
+    SyntaxHighlighter.cpp
     SignalHandler.hpp
     SignalHandler.cpp
     Suggestions.hpp
@@ -75,6 +77,7 @@ add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
     Suggestions_test.cpp
+    SyntaxHighlighter_test.cpp
 )
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 

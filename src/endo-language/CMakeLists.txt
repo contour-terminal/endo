@@ -6,6 +6,7 @@ add_library(endo STATIC
     # Lexical Analysis
     Lexer.hpp
     Lexer.cpp
+    TokenClassification.hpp
 
     # AST
     AST.hpp

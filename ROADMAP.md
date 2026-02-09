@@ -478,7 +478,7 @@ src/
 - [x] Improve arity enforcement error messages and test coverage
   - [x] Fix grammar: "expects 1 argument" (singular) vs "expects 2 arguments" (plural) for both direct calls and pipelines
   - [x] 8 comprehensive arity enforcement tests: over-application (5 failure cases), exact arity (3 success cases)
-- [ ] Update syntax highlighting for new constructs (Phase 2.4)
+- [x] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
 **Implementation Notes:**
@@ -791,21 +791,25 @@ Component (base class)
 
 ### Phase 2.4: Syntax Highlighting
 
+**Status:** Partially Complete (lexer-based token highlighting)
+
 **Dependency:** Phase 2.1
 
 **Notes:**
-- Implement syntax highlighting through fully parsing the source (command line prompt), and emitting tokens with associated types (keyword, command, argument, variable, operator, etc.)
-- This infrastructure is then also used for semantic highlighting in Phase 5.3: Language Server Protocol (LSP)
-- Highlighting is applied in real-time as the user types, with efficient incremental updates
-- Semantic highlighting distinguishes valid commands (green) from invalid ones (red)
-- Color schemes are configurable via the Theme system
+- Shared `TokenClassification.hpp` in `endo-language` provides `TokenCategory` enum and `classifyTokenCategory()` — used by both the shell prompt and the LSP
+- `SyntaxHighlighter` in the shell tokenizes input and produces a per-byte `HighlightMap`
+- `PromptComponent::render()` uses the highlight map for segment-based rendering with per-token colors
+- Dark theme palette: keywords (purple), numbers (orange), strings (green), operators (cyan), variables (red), constructors (yellow), punctuation (gray)
+- LSP `SemanticTokens.cpp` refactored to delegate to shared `classifyTokenCategory()`
 
 **Tasks:**
-- [ ] Design syntax highlighting architecture
-- [ ] Implement real-time tokenization
+- [x] Design syntax highlighting architecture (shared TokenClassification, SyntaxHighlighter, PromptComponent integration)
+- [x] Implement real-time tokenization (lexer-based per-byte highlight map)
+- [x] Integrate with prompt rendering (segment-based renderer with selection support)
+- [x] Add highlighting tests (13 test cases covering keywords, numbers, strings, operators, constructors, punctuation)
+- [x] Refactor LSP SemanticTokens to use shared classification
 - [ ] Implement semantic highlighting (valid vs invalid commands)
 - [ ] Implement configurable color schemes
-- [ ] Add highlighting tests
 
 ### Phase 2.5: Tooltips and Help
 

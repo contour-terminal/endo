@@ -5,6 +5,7 @@
 
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
+#include "SyntaxHighlighter.hpp"
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
@@ -49,22 +50,19 @@ void PromptComponent::render(tui::Canvas& canvas)
     promptStyle.fg = PromptTextColor;
     promptStyle.bg = BackgroundColor;
 
-    tui::Style textStyle;
-    textStyle.fg = InputTextColor;
-    textStyle.bg = BackgroundColor;
-
     tui::Style ghostStyle;
     ghostStyle.fg = PromptTextColor;
     ghostStyle.bg = BackgroundColor;
     ghostStyle.dim = true;
 
-    tui::Style selectionStyle = textStyle;
-    selectionStyle.inverse = true;
-
     // Get selection bounds
     auto const hasSelection = _inputField.hasSelection();
     auto const selStart = _inputField.selectionStart();
     auto const selEnd = _inputField.selectionEnd();
+
+    // Compute syntax highlighting for the full input text
+    auto const fullText = _inputField.text();
+    auto const highlightMap = computeHighlightMap(fullText);
 
     // Render each line
     for (int lineIndex = 0; lineIndex < totalLines && lineIndex < canvas.height(); ++lineIndex)
@@ -111,38 +109,48 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         auto const lineEndByte = lineStartByte + lineContent.size();
 
-        // Render line content with selection highlighting
-        if (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
+        // Render line content with syntax highlighting and selection
         {
-            // This line has some selection
-            auto const lineSelStart = std::max(selStart, lineStartByte) - lineStartByte;
-            auto const lineSelEnd = std::min(selEnd, lineEndByte) - lineStartByte;
+            // Determine selection range local to this line
+            auto const lineSelStart = (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
+                                          ? std::max(selStart, lineStartByte) - lineStartByte
+                                          : lineContent.size();
+            auto const lineSelEnd = (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
+                                        ? std::min(selEnd, lineEndByte) - lineStartByte
+                                        : lineContent.size();
 
-            // Text before selection
-            if (lineSelStart > 0)
+            // Iterate line content, grouping consecutive bytes with same category and selection state
+            std::size_t segStart = 0;
+            while (segStart < lineContent.size())
             {
-                col += canvas.putString(lineIndex, col, lineContent.substr(0, lineSelStart), textStyle);
-            }
+                auto const globalByte = lineStartByte + segStart;
+                auto const cat =
+                    (globalByte < highlightMap.size()) ? highlightMap[globalByte] : TokenCategory::Default;
+                auto const selected = segStart >= lineSelStart && segStart < lineSelEnd;
 
-            // Selected text
-            if (lineSelEnd > lineSelStart)
-            {
-                col += canvas.putString(lineIndex,
-                                        col,
-                                        lineContent.substr(lineSelStart, lineSelEnd - lineSelStart),
-                                        selectionStyle);
-            }
+                // Extend segment while category and selection state remain the same
+                auto segEnd = segStart + 1;
+                while (segEnd < lineContent.size())
+                {
+                    auto const gb = lineStartByte + segEnd;
+                    auto const nextCat =
+                        (gb < highlightMap.size()) ? highlightMap[gb] : TokenCategory::Default;
+                    auto const nextSel = segEnd >= lineSelStart && segEnd < lineSelEnd;
+                    if (nextCat != cat || nextSel != selected)
+                        break;
+                    ++segEnd;
+                }
 
-            // Text after selection
-            if (lineSelEnd < lineContent.size())
-            {
-                col += canvas.putString(lineIndex, col, lineContent.substr(lineSelEnd), textStyle);
+                // Build style for this segment
+                tui::Style segStyle;
+                segStyle.fg = categoryColor(cat);
+                segStyle.bg = BackgroundColor;
+                segStyle.inverse = selected;
+
+                col += canvas.putString(
+                    lineIndex, col, lineContent.substr(segStart, segEnd - segStart), segStyle);
+                segStart = segEnd;
             }
-        }
-        else
-        {
-            // No selection on this line
-            col += canvas.putString(lineIndex, col, lineContent, textStyle);
         }
 
         // Ghost text on last line

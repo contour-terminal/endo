@@ -2,6 +2,7 @@
 #include "SemanticTokens.hpp"
 
 #include <endo-language/Lexer.hpp>
+#include <endo-language/TokenClassification.hpp>
 
 namespace endo::lsp
 {
@@ -11,7 +12,7 @@ namespace
 
     // Semantic token type indices (must match legend order)
     constexpr int TypeKeyword = 0;
-    constexpr int TypeFunction = 1;
+    [[maybe_unused]] constexpr int TypeFunction = 1;
     constexpr int TypeVariable = 2;
     constexpr int TypeNumber = 3;
     constexpr int TypeString = 4;
@@ -21,92 +22,51 @@ namespace
     constexpr int TypeType = 8;
 
     // Semantic token modifier bit masks (must match legend order)
-    constexpr int ModDeclaration = 1 << 0;
+    [[maybe_unused]] constexpr int ModDeclaration = 1 << 0;
     constexpr int ModModification = 1 << 1;
 
-    struct TokenClassification
+    /// @brief LSP-specific classification result with type index and modifier bitmask.
+    struct LspTokenClassification
     {
         int type = -1;     ///< -1 means skip this token
         int modifiers = 0; ///< Bitmask of modifier flags
     };
 
-    /// Classifies an endo Token into an LSP semantic token type/modifier pair.
-    [[nodiscard]] TokenClassification classifyToken(Token token)
+    /// @brief Maps a TokenCategory to an LSP semantic token type/modifier pair.
+    /// @param category The shared token category.
+    /// @param token The original token (needed for shell variable modifier detection).
+    /// @return LSP-specific classification.
+    [[nodiscard]] LspTokenClassification toLspClassification(TokenCategory category, Token token)
     {
-        using enum Token;
-        switch (token)
+        using enum TokenCategory;
+        switch (category)
         {
-            // Keywords
-            case Let:
-            case Mut:
-            case Fun:
-            case Match:
-            case With:
-            case When:
-            case Type:
-            case Of:
-            case Rec:
-            case And:
-            case As:
-            case Try:
-            case Finally: return { TypeKeyword, 0 };
-
-            // Numbers
+            case Keyword: return { TypeKeyword, 0 };
             case Number: return { TypeNumber, 0 };
-
-            // Strings
-            case String:
-            case DblQuoteStart:
-            case DblQuoteEnd:
-            case StringFragment: return { TypeString, 0 };
-
-            // Constructors (enum members)
-            case OptionSome:
-            case OptionNone:
-            case ResultOk:
-            case ResultError: return { TypeEnumMember, 0 };
-
-            // Operators
-            case Plus:
-            case Minus:
-            case Star:
-            case Slash:
-            case Percent:
-            case StarStar:
-            case Arrow:
-            case ForwardPipe:
-            case Pipe:
-            case EqualEqual:
-            case NotEqual:
-            case Less:
-            case Greater:
-            case LessEqual:
-            case GreaterEqual:
-            case ColonColon:
-            case DotDot:
-            case LeftArrow:
-            case Question:
-            case Caret:
-            case AmpAmp:
-            case PipePipe:
-            case Not:
-            case Equal: return { TypeOperator, 0 };
-
-            // Shell variables
-            case DollarName:
-            case DollarBraceName:
-            case DollarQuestion:
-            case DollarDollar:
-            case DollarNot:
-            case DollarNumber:
-            case DollarBraceParam: return { TypeVariable, ModModification };
-
-            // Identifiers
-            case Identifier: return { TypeVariable, 0 };
-
-            // Skip non-semantic tokens
-            default: return { -1, 0 };
+            case String: return { TypeString, 0 };
+            case Constructor: return { TypeEnumMember, 0 };
+            case Operator: return { TypeOperator, 0 };
+            case Variable: {
+                // Shell variables get the modification modifier
+                using enum Token;
+                switch (token)
+                {
+                    case DollarName:
+                    case DollarBraceName:
+                    case DollarQuestion:
+                    case DollarDollar:
+                    case DollarNot:
+                    case DollarNumber:
+                    case DollarBraceParam: return { TypeVariable, ModModification };
+                    default: return { TypeVariable, 0 };
+                }
+            }
+            case Comment: return { TypeComment, 0 };
+            case Type: return { TypeType, 0 };
+            case Punctuation:
+            case Default: return { -1, 0 };
         }
+        return { -1, 0 };
     }
 
 } // namespace
@@ -164,7 +124,8 @@ SemanticTokens computeSemanticTokens(std::string const& source)
             || tokenInfo.token == Token::Semicolon)
             continue;
 
-        auto const classification = classifyToken(tokenInfo.token);
+        auto const category = classifyTokenCategory(tokenInfo.token);
+        auto const classification = toLspClassification(category, tokenInfo.token);
         if (classification.type < 0)
             continue;
 
