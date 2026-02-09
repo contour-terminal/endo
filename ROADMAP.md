@@ -439,6 +439,14 @@ src/
   - [x] IRGenerator: FloatLiteralExpr, auto-promotion (int+float→float via N2F), float negation, print F2S
   - [x] PatternIRGenerator: float literal patterns with FCmpEQ comparison
   - [x] 17 float test cases (literal, arithmetic, division, mixed promotion, comparisons, negation, concat, functions, pow, mod)
+- [x] Implement multi-line expression support in parser
+  - [x] `consumeNewlines()` helper skips `LineFeed`/`Semicolon` at continuation points
+  - [x] Match expressions: arms can span multiple lines (newline-skip with pushback pattern)
+  - [x] Try-with expressions: handler arms can span multiple lines
+  - [x] If-then-else: condition, then-branch, and else-branch can be on separate lines
+  - [x] Lambda expressions: body can be on a separate line after `->`
+  - [x] Let-in expressions: value and body can be on separate lines
+  - [x] Top-level let bindings: value expression can be on a separate line after `=`
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
