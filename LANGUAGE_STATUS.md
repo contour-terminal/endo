@@ -111,6 +111,7 @@ This document tracks the implementation status of F# language features as define
 ### String
 - [x] Concatenation: `"hello" + " world"`
 - [x] Mixed type concatenation: `"count: " + 42`
+- [x] F#-style interpolated strings: `$"Hello, {name}"`
 - [ ] Repetition: `"ha" * 3`
 
 ### Pipe Operators

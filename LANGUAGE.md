@@ -115,6 +115,16 @@ of        as        global
 "\\"      # Backslash
 "\$"      # Literal dollar sign
 "\""      # Literal double quote
+
+# F#-style interpolated strings (expression holes with {expr})
+$"Hello, {name}"
+$"Sum is {3 + 4}"
+$"a={a}, b={b}"
+$"result: {f 5}"
+$"val: {if x > 0 then "positive" else "negative"}"
+
+# Escaped braces in F#-style interpolated strings
+$"{{literal braces}}"   # produces: {literal braces}
 ```
 
 ### 2.6 Numeric Literals

@@ -479,6 +479,16 @@ src/
   - [x] Fix grammar: "expects 1 argument" (singular) vs "expects 2 arguments" (plural) for both direct calls and pipelines
   - [x] 8 comprehensive arity enforcement tests: over-application (5 failure cases), exact arity (3 success cases)
 - [x] Update syntax highlighting for new constructs (Phase 2.4)
+- [x] F#-style interpolated strings: `$"Hello, {name}"`
+  - [x] Lexer: 4 new tokens (FStringStart, FStringEnd, FStringExprStart, FStringExprEnd), `consumeFStringContent()` state machine, brace depth tracking for nested expressions
+  - [x] Parser: `parseFStringExpression()` with F# expression parsing inside `{expr}` holes
+  - [x] AST: `FStringExpr` node with alternating literal and expression parts
+  - [x] IRGenerator: `visit(FStringExpr)` using `convertToString()` for Number, Float, Boolean, String support
+  - [x] ASTPrinter: round-trip printing with `$"text {expr} text"` format
+  - [x] TokenClassification: FStringStart/FStringEnd as String, FStringExprStart/FStringExprEnd as Punctuation
+  - [x] HoverProvider: hover text for `$"..."` syntax
+  - [x] Escaped braces: `{{` and `}}` produce literal `{` and `}`
+  - [x] 17 test cases covering basic, variables, arithmetic, conditionals, type conversions, escaped braces, function application, pipelines, adjacent holes, concatenation, and nested strings
 - [ ] Update completion for F# style (Phase 2.3)
 
 **Implementation Notes:**
