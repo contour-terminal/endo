@@ -331,8 +331,58 @@ void Lexer::consumeWhitespace()
 {
     _nextToken.literal = {};
 
-    while (_currentChar == U' ' || _currentChar == U'\t')
-        nextChar();
+    for (;;)
+    {
+        // Consume spaces and tabs
+        while (_currentChar == U' ' || _currentChar == U'\t')
+            nextChar();
+
+        // # line comment (shell style)
+        if (_currentChar == U'#')
+        {
+            while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                nextChar();
+            continue;
+        }
+
+        // // line comment (C style)
+        if (_currentChar == U'/' && _source->peekChar() == U'/')
+        {
+            while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                nextChar();
+            continue;
+        }
+
+        // (* ... *) block comment (F# style, nestable)
+        if (_currentChar == U'(' && _source->peekChar() == U'*')
+        {
+            nextChar(); // consume '('
+            nextChar(); // consume '*'
+            auto depth = 1;
+            while (!eof() && depth > 0)
+            {
+                if (_currentChar == U'(' && _source->peekChar() == U'*')
+                {
+                    nextChar();
+                    nextChar();
+                    ++depth;
+                }
+                else if (_currentChar == U'*' && _source->peekChar() == U')')
+                {
+                    nextChar();
+                    nextChar();
+                    --depth;
+                }
+                else
+                {
+                    nextChar();
+                }
+            }
+            continue;
+        }
+
+        break;
+    }
 
     auto const [line, column, name] = _source->currentSourceLocation();
     _nextToken.location.name = name;
@@ -342,6 +392,50 @@ void Lexer::consumeWhitespace()
 
 Token Lexer::consumeNumber()
 {
+    // Check for base prefix when first digit is '0'
+    if (_currentChar == U'0')
+    {
+        _nextToken.literal += '0';
+        nextChar();
+
+        if (_currentChar == U'x' || _currentChar == U'X')
+        {
+            _nextToken.literal += static_cast<char>(_currentChar);
+            nextChar();
+            while ((_currentChar >= U'0' && _currentChar <= U'9')
+                   || (_currentChar >= U'a' && _currentChar <= U'f')
+                   || (_currentChar >= U'A' && _currentChar <= U'F'))
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+            return confirmToken(Token::Number);
+        }
+        if (_currentChar == U'o' || _currentChar == U'O')
+        {
+            _nextToken.literal += static_cast<char>(_currentChar);
+            nextChar();
+            while (_currentChar >= U'0' && _currentChar <= U'7')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+            return confirmToken(Token::Number);
+        }
+        if (_currentChar == U'b' || _currentChar == U'B')
+        {
+            _nextToken.literal += static_cast<char>(_currentChar);
+            nextChar();
+            while (_currentChar == U'0' || _currentChar == U'1')
+            {
+                _nextToken.literal += unicode::to_utf8(_currentChar);
+                nextChar();
+            }
+            return confirmToken(Token::Number);
+        }
+        // Fall through: plain '0' followed by more decimal digits, '.', 'e', etc.
+    }
+
     // Consume integer part
     while (_currentChar >= U'0' && _currentChar <= U'9')
     {

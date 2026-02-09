@@ -3056,20 +3056,46 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Parse as integer or float
             auto const& lit = _lexer.currentLiteral();
 
-            // Check for float (contains '.' or 'e'/'E')
-            if (lit.find('.') != std::string::npos || lit.find('e') != std::string::npos
-                || lit.find('E') != std::string::npos)
+            // Detect base prefix (skip optional leading '-')
+            auto sv = std::string_view(lit);
+            auto const negative = sv.starts_with("-");
+            auto const digits = negative ? sv.substr(1) : sv;
+            auto const hasBasePrefix = digits.starts_with("0x") || digits.starts_with("0X")
+                                       || digits.starts_with("0o") || digits.starts_with("0O")
+                                       || digits.starts_with("0b") || digits.starts_with("0B");
+
+            // Float detection: only for non-base-prefixed literals
+            // (hex like 0xfe contains 'e' but is NOT a float)
+            if (!hasBasePrefix
+                && (lit.find('.') != std::string::npos || lit.find('e') != std::string::npos
+                    || lit.find('E') != std::string::npos))
             {
-                double value = std::stod(lit);
+                auto const value = std::stod(lit);
                 _lexer.nextToken();
                 return std::make_unique<ast::FloatLiteralExpr>(value);
             }
 
-            // Parse as integer
+            // Integer parsing with base detection
             int64_t value = 0;
-            auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
-            if (ec != std::errc())
-                value = 0;
+            if (hasBasePrefix)
+            {
+                auto const baseDigits = digits.substr(2); // skip "0x"/"0o"/"0b"
+                auto const base = (digits[1] == 'x' || digits[1] == 'X')   ? 16
+                                  : (digits[1] == 'o' || digits[1] == 'O') ? 8
+                                                                           : 2;
+                auto [ptr, ec] =
+                    std::from_chars(baseDigits.data(), baseDigits.data() + baseDigits.size(), value, base);
+                if (ec != std::errc())
+                    value = 0;
+                if (negative)
+                    value = -value;
+            }
+            else
+            {
+                auto [ptr, ec] = std::from_chars(lit.data(), lit.data() + lit.size(), value);
+                if (ec != std::errc())
+                    value = 0;
+            }
             _lexer.nextToken();
             return std::make_unique<ast::IntLiteralExpr>(value);
         }

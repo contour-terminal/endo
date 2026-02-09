@@ -196,11 +196,11 @@ This document tracks the implementation status of F# language features as define
 - [x] Comma tokenization in F# mode for tuples
 - [x] Negative number literals: `-42`
 - [x] Float literals with decimal: `3.14` (distinct `Float` type with arithmetic, comparisons, and promotion)
-- [ ] Hexadecimal: `0xFF`
-- [ ] Octal: `0o755`
-- [ ] Binary: `0b1010`
-- [ ] Scientific notation: `1e10`
-- [ ] Comments: `//`, `(* ... *)`
+- [x] Hexadecimal: `0xFF`
+- [x] Octal: `0o755`
+- [x] Binary: `0b1010`
+- [x] Scientific notation: `1e10`
+- [x] Comments: `#`, `//`, `(* ... *)`
 
 ## REPL
 

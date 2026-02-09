@@ -2031,3 +2031,66 @@ TEST_CASE("IRGenerator.FSharp.exec_multiline_if_then_else.2")
                         "print r\n";
     CHECK(executeSourceAndGetOutput(source) == "42");
 }
+
+// =============================================================================
+// Numeric Base Literal Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.hex_literal")
+{
+    CHECK(executeSourceAndGetOutput("print 0xFF") == "255");
+}
+
+TEST_CASE("IRGenerator.FSharp.octal_literal")
+{
+    CHECK(executeSourceAndGetOutput("print 0o755") == "493");
+}
+
+TEST_CASE("IRGenerator.FSharp.binary_literal")
+{
+    CHECK(executeSourceAndGetOutput("print 0b1010") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.scientific_notation")
+{
+    CHECK(executeSourceAndGetOutput("print 1e10") == "1e+10");
+}
+
+TEST_CASE("IRGenerator.FSharp.scientific_notation_decimal")
+{
+    CHECK(executeSourceAndGetOutput("print 2.5e2") == "250");
+}
+
+TEST_CASE("IRGenerator.FSharp.hex_arithmetic")
+{
+    CHECK(executeSourceAndGetOutput("print (0xFF + 1)") == "256");
+}
+
+TEST_CASE("IRGenerator.FSharp.octal_arithmetic")
+{
+    CHECK(executeSourceAndGetOutput("print (0o10 + 1)") == "9");
+}
+
+TEST_CASE("IRGenerator.FSharp.binary_arithmetic")
+{
+    CHECK(executeSourceAndGetOutput("print (0b1000 - 1)") == "7");
+}
+
+// =============================================================================
+// Comment Execution Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.comment_hash")
+{
+    CHECK(executeSourceAndGetOutput("print 42 # ignored") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.comment_slash")
+{
+    CHECK(executeSourceAndGetOutput("let x = 42 // comment\nprint x") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.comment_block")
+{
+    CHECK(executeSourceAndGetOutput("let x = (* inline *) 42\nprint x") == "42");
+}

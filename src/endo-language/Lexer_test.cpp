@@ -1110,3 +1110,152 @@ TEST_CASE("Lexer.fsharp_type_annotation_lexer_behavior")
     CHECK(lexer.currentToken() == endo::Token::Number);
     CHECK(lexer.currentLiteral() == "42");
 }
+
+// ============================================================================
+// Numeric Base Literals
+// ============================================================================
+
+TEST_CASE("Lexer.hex_literal")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0xFF"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0xFF");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.hex_literal_uppercase")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0XFF"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0XFF");
+}
+
+TEST_CASE("Lexer.octal_literal")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0o755"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0o755");
+}
+
+TEST_CASE("Lexer.binary_literal")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0b1010"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0b1010");
+}
+
+TEST_CASE("Lexer.negative_hex")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("-0xFF"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "-0xFF");
+}
+
+TEST_CASE("Lexer.scientific_notation")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("1e10"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "1e10");
+}
+
+TEST_CASE("Lexer.scientific_notation_with_decimal")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("2.5e-3"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "2.5e-3");
+}
+
+TEST_CASE("Lexer.hex_zero")
+{
+    // Edge case: 0x0
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0x0"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0x0");
+}
+
+TEST_CASE("Lexer.binary_single_bit")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("0b1"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "0b1");
+}
+
+// ============================================================================
+// Comment Tests
+// ============================================================================
+
+TEST_CASE("Lexer.comment_hash")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("42 # comment"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.comment_double_slash")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("42 // comment"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.comment_block")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("(* comment *) 42"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.comment_block_nested")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("(* outer (* inner *) *) 42"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.comment_hash_at_start")
+{
+    // # at the very start is a comment
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("# whole line comment\n42"));
+    CHECK(lexer.currentToken() == endo::Token::LineFeed);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}
+
+TEST_CASE("Lexer.comment_double_slash_multiline")
+{
+    // // comment only spans one line
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("// comment\n42"));
+    CHECK(lexer.currentToken() == endo::Token::LineFeed);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "42");
+}
+
+TEST_CASE("Lexer.comment_block_inline")
+{
+    // Block comment between tokens
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("10 (* add *) 20"));
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "10");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "20");
+}

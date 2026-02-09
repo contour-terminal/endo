@@ -1562,3 +1562,78 @@ TEST_CASE("Parser.FSharp.let_multiline_match_value")
     REQUIRE(matchExpr != nullptr);
     REQUIRE(matchExpr->arms.size() == 2);
 }
+
+// =============================================================================
+// Numeric Base Literal Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.hex_literal")
+{
+    auto ast = parse("let x = 0xFF");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "x");
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 255);
+}
+
+TEST_CASE("Parser.FSharp.octal_literal")
+{
+    auto ast = parse("let x = 0o755");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 493);
+}
+
+TEST_CASE("Parser.FSharp.binary_literal")
+{
+    auto ast = parse("let x = 0b1010");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == 10);
+}
+
+TEST_CASE("Parser.FSharp.negative_hex_literal")
+{
+    auto ast = parse("let x = -0xFF");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* intLit = dynamic_cast<endo::ast::IntLiteralExpr*>(letStmt->value.get());
+    REQUIRE(intLit != nullptr);
+    CHECK(intLit->value == -255);
+}
+
+TEST_CASE("Parser.FSharp.scientific_notation")
+{
+    auto ast = parse("let x = 1e10");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* floatLit = dynamic_cast<endo::ast::FloatLiteralExpr*>(letStmt->value.get());
+    REQUIRE(floatLit != nullptr);
+    CHECK(floatLit->value == 1e10);
+}

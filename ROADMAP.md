@@ -447,6 +447,14 @@ src/
   - [x] Lambda expressions: body can be on a separate line after `->`
   - [x] Let-in expressions: value and body can be on separate lines
   - [x] Top-level let bindings: value expression can be on a separate line after `=`
+- [x] Implement numeric base literals and comments in lexer/parser
+  - [x] Hexadecimal literals: `0xFF`, `0XFF` with base-16 parsing via `std::from_chars`
+  - [x] Octal literals: `0o755`, `0O755` with base-8 parsing
+  - [x] Binary literals: `0b1010`, `0B1010` with base-2 parsing
+  - [x] Scientific notation: `1e10`, `2.5e-3` (already implemented, added tests)
+  - [x] `#` line comments (shell style, after whitespace)
+  - [x] `//` line comments (C style)
+  - [x] `(* ... *)` nestable block comments (F# style)
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
