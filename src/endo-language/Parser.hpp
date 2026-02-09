@@ -5,7 +5,9 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <unordered_set>
 
 #include "AST.hpp"
 #include "DiagnosticsAdapter.hpp"
@@ -25,6 +27,9 @@ class Parser
 
     /// Sets the source text for context snippets in error messages.
     void setSourceText(std::string_view source);
+
+    /// Sets the known F# function names for bare top-level call dispatch.
+    void setKnownFSharpFunctions(std::unordered_set<std::string> names);
 
   private:
     /// Converts the current lexer location to CoreVM SourceLocation format.
@@ -173,6 +178,8 @@ class Parser
     Lexer _lexer;
     std::string_view _sourceText;  ///< Original source text for context snippets
     int _backtickNestingLevel = 0; ///< Nesting level for backtick substitution
+    std::unordered_set<std::string>
+        _knownFSharpFunctions; ///< User-defined F# function names for bare call dispatch
 };
 
 // Template implementations

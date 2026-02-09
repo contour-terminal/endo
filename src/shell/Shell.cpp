@@ -19,6 +19,7 @@
 #include <print>
 #include <set>
 #include <thread>
+#include <unordered_set>
 
 #include "Error.hpp"
 #include "Pipe.hpp"
@@ -605,6 +606,13 @@ int Shell::execute(std::string const& lineBuffer)
     {
         CoreVM::diagnostics::ConsoleReport report;
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
+        if (!_fsharpState.functions.empty())
+        {
+            std::unordered_set<std::string> names;
+            for (auto const& [name, _]: _fsharpState.functions)
+                names.insert(name);
+            parser.setKnownFSharpFunctions(std::move(names));
+        }
         auto rootNode = parser.parse();
 
         // Check for parser errors

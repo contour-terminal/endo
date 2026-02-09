@@ -2212,3 +2212,47 @@ TEST_CASE("IRGenerator.FSharp.comment_block")
 {
     CHECK(executeSourceAndGetOutput("let x = (* inline *) 42\nprint x") == "42");
 }
+
+// =============================================================================
+// Bare top-level F# function calls
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.bare_call_same_prompt")
+{
+    CHECK(executeSourceAndGetOutput("let f x = print x\nf 42") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_call_multi_arg")
+{
+    CHECK(executeSourceAndGetOutput("let add x y = print (x + y)\nadd 3 4") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_call_lambda_binding")
+{
+    CHECK(executeSourceAndGetOutput("let f = fun x -> print x\nf 99") == "99");
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_call_cross_prompt")
+{
+    CHECK(sessionProducesOutput({ "let f x = print x", "f 42" }, "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_call_mutual_recursion")
+{
+    CHECK(executeSourceAndGetOutput("let rec isEven n =\n"
+                                    "  match n with | 0 -> 1 | _ -> isOdd (n - 1)\n"
+                                    "and isOdd n =\n"
+                                    "  match n with | 0 -> 0 | _ -> isEven (n - 1)\n"
+                                    "print (isEven 4)")
+          == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_call_mutual_recursion_bare")
+{
+    CHECK(executeSourceAndGetOutput("let rec isEven n =\n"
+                                    "  match n with | 0 -> 1 | _ -> isOdd (n - 1)\n"
+                                    "and isOdd n =\n"
+                                    "  match n with | 0 -> 0 | _ -> isEven (n - 1)\n"
+                                    "print (isOdd 3)")
+          == "1");
+}

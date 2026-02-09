@@ -56,6 +56,11 @@ void Parser::setSourceText(std::string_view source)
     _sourceText = source;
 }
 
+void Parser::setKnownFSharpFunctions(std::unordered_set<std::string> names)
+{
+    _knownFSharpFunctions = std::move(names);
+}
+
 CoreVM::SourceLocation Parser::currentLocation() const
 {
     return toCoreLoc(_lexer.currentRange());
@@ -185,6 +190,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println")
             {
                 // F# style print/println functions - parse as F# expression wrapped in ExprStmt
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
+            else if (_knownFSharpFunctions.contains(_lexer.currentLiteral()))
+            {
+                // Bare top-level call to a known F# function
                 _lexer.enterFSharpExpr();
                 auto expr = parseFSharpApplication();
                 _lexer.leaveFSharpExpr();
@@ -2507,6 +2522,18 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 
         result->andBindings.push_back(
             ast::AndBinding { std::move(andName), std::move(andParams), std::move(andValue) });
+    }
+
+    // Register known F# function names for bare top-level call dispatch
+    if (result->isFunction())
+    {
+        _knownFSharpFunctions.insert(result->name);
+        for (auto const& ab: result->andBindings)
+            _knownFSharpFunctions.insert(ab.name);
+    }
+    else if (dynamic_cast<ast::LambdaExpr const*>(result->value.get()) != nullptr)
+    {
+        _knownFSharpFunctions.insert(result->name);
     }
 
     _lexer.leaveFSharpExpr();

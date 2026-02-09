@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TestHelper.hpp"
 
+#include <unordered_set>
 #include <vector>
 
 #include "AST.hpp"
@@ -238,6 +239,13 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
 
         // Parse
         Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+        if (!fsharpState.functions.empty())
+        {
+            std::unordered_set<std::string> names;
+            for (auto const& [name, _]: fsharpState.functions)
+                names.insert(name);
+            parser.setKnownFSharpFunctions(std::move(names));
+        }
         auto ast = parser.parse();
         if (!ast || testRuntime.hasErrors())
             return std::unexpected(TestError::ParseFailed);

@@ -458,6 +458,11 @@ src/
   - [x] `//` line comments (C style)
   - [x] `(* ... *)` nestable block comments (F# style)
 - [x] Fix mutable variable reassignment not persisting across REPL prompts (runtime value snapshots from stack after execution)
+- [x] Bare top-level F# function calls (`f 42` dispatches to F# expression parser when `f` is a known function)
+  - [x] Parser tracks `_knownFSharpFunctions` set, populated from `let` definitions and `FSharpPersistentState`
+  - [x] Covers `let f x = ...`, `let rec f ... and g ...`, `let f = fun x -> ...`
+  - [x] Pre-seeded from persistent state in Shell and test helpers for REPL continuity
+  - [x] F# definitions intentionally shadow shell commands of the same name
 - [ ] Update syntax highlighting for new constructs (Phase 2.4)
 - [ ] Update completion for F# style (Phase 2.3)
 
