@@ -808,6 +808,9 @@ Component (base class)
 - [x] Integrate with prompt rendering (segment-based renderer with selection support)
 - [x] Add highlighting tests (13 test cases covering keywords, numbers, strings, operators, constructors, punctuation)
 - [x] Refactor LSP SemanticTokens to use shared classification
+- [x] Extract shared hover logic from LSP into `endo-language` (`HoverProvider.hpp/cpp`, `HoverInfo.hpp`, `StubRuntime.hpp`)
+- [x] Extract shared diagnostics collector from LSP into `endo-language` (`DiagnosticsCollector.hpp/cpp`)
+- [x] Implement parse error underlines in prompt (curly red underlines via extended `UnderlineStyle` enum and SGR 4:3/58;2;r;g;b)
 - [ ] Implement semantic highlighting (valid vs invalid commands)
 - [ ] Implement configurable color schemes
 
@@ -822,12 +825,16 @@ Component (base class)
 - [x] Implement command path tooltips (show full path for executables in $PATH)
 - [x] Implement builtin command tooltips (show "shell builtin" for builtins)
 - [x] Implement "command not found" tooltips
+- [x] Implement symbol hover for any token (keywords, constructors, operators, builtins, user-defined bindings)
+  via shared `endo::computeHover()` — shows LSP-style markdown hover information
+- [x] Implement parse error hover (hovering over error-underlined region shows error message)
+- [x] Implement priority hover chain: diagnostics → language hover → command resolver
+- [x] Consume LSP hover/diagnostics capabilities via in-process API for consistent behavior
+  between the interactive shell and external editors
 - [ ] Implement alias expansion tooltips (placeholder for when aliases are implemented)
 - [ ] Implement inline help for commands
 - [ ] Implement error tooltips with suggestions
 - [ ] Integrate with man pages for command help
-- [ ] Consume LSP hover/diagnostics capabilities via in-process API for consistent behavior
-  between the interactive shell and external editors
 
 **Implementation Notes:**
 - `HoverState` class tracks mouse position with 500ms delay before showing tooltip
