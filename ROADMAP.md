@@ -586,6 +586,7 @@ src/
   - IR codegen: alloca for result storage, condBr on condition, then/else blocks store result, merge block loads
   - Result alloca type is deferred until after branch codegen — uses `thenResult->type()` (or `elseResult->type()` if then is a tail call) instead of hardcoded `Void`
   - `then` and `else` added to `isFSharpPrimary()` exclusion list to prevent argument consumption
+  - Compile-time type mismatch error when then-branch and else-branch produce different types. Walks IR chain (`ObjSetSlot → ObjSetTag → ObjAlloc`) to extract `ObjectTypeInfo` (typeId, tag, slots). Produces parameterized type names: `option<int>`, `result<string>`, `int * string`. Sum types (Option/Result) with different variant tags are compatible (e.g., `Some 42` vs `None`), same-tag variants compare slot types (e.g., `Some 42` vs `Some "hello"` → error).
 - Mutable assignment:
   - `BindingInfo { Value*, bool isMutable }` replaces raw `Value*` in `FSharpScope::bindings`
   - `MutAssignStmt` codegen: lookup binding, verify mutability, store new value via `createStore`

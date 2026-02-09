@@ -31,6 +31,149 @@
 namespace endo
 {
 
+namespace
+{
+
+    /// Collected type information from walking an object's IR instruction chain.
+    struct ObjectTypeInfo
+    {
+        int64_t typeId = -1;                     ///< Builtin type ID from ObjAllocInstr
+        std::optional<int64_t> tag;              ///< Variant tag (for sum types like Option/Result)
+        std::map<int64_t, CoreVM::Value*> slots; ///< Slot index → value stored in that slot
+    };
+
+    /// Walks the IR instruction chain (ObjSetSlot → ObjSetTag → ObjAlloc) to collect object type info.
+    /// Returns std::nullopt if the value doesn't trace back to an ObjAllocInstr.
+    [[nodiscard]] std::optional<ObjectTypeInfo> tryGetObjectInfo(CoreVM::Value* value)
+    {
+        ObjectTypeInfo info;
+        auto* current = value;
+        while (current)
+        {
+            if (auto* alloc = dynamic_cast<CoreVM::ObjAllocInstr*>(current))
+            {
+                info.typeId = alloc->typeId()->get();
+                return info;
+            }
+            if (auto* setSlot = dynamic_cast<CoreVM::ObjSetSlotInstr*>(current))
+            {
+                info.slots[setSlot->slotIndex()->get()] = setSlot->value();
+                current = setSlot->object();
+            }
+            else if (auto* setTag = dynamic_cast<CoreVM::ObjSetTagInstr*>(current))
+            {
+                if (auto* tagConst = dynamic_cast<CoreVM::ConstantInt*>(setTag->tag()))
+                    info.tag = tagConst->get();
+                current = setTag->object();
+            }
+            else
+                break;
+        }
+        return std::nullopt;
+    }
+
+    // Forward declaration for mutual recursion with typesCompatible.
+    [[nodiscard]] std::string typeName(CoreVM::Value* value);
+
+    /// Returns a human-readable type name for an IR value.
+    /// For Object types, traces back through the IR chain to produce parameterized names
+    /// like "option<int>", "result<string>", "int * string", etc.
+    [[nodiscard]] std::string typeName(CoreVM::Value* value)
+    {
+        switch (value->type())
+        {
+            case CoreVM::LiteralType::Number: return "int";
+            case CoreVM::LiteralType::Float: return "float";
+            case CoreVM::LiteralType::String: return "string";
+            case CoreVM::LiteralType::Boolean: return "bool";
+            case CoreVM::LiteralType::Void: return "unit";
+            case CoreVM::LiteralType::Object:
+                if (auto info = tryGetObjectInfo(value))
+                {
+                    if (info->typeId == CoreVM::BuiltinTypeId::Option)
+                    {
+                        if (auto it = info->slots.find(0); it != info->slots.end())
+                            return std::format("option<{}>", typeName(it->second));
+                        return "option"; // None — no inner type known
+                    }
+                    if (info->typeId == CoreVM::BuiltinTypeId::Result)
+                    {
+                        if (auto it = info->slots.find(0); it != info->slots.end())
+                            return std::format("result<{}>", typeName(it->second));
+                        return "result";
+                    }
+                    if (info->typeId == CoreVM::BuiltinTypeId::Tuple2)
+                    {
+                        auto it0 = info->slots.find(0);
+                        auto it1 = info->slots.find(1);
+                        if (it0 != info->slots.end() && it1 != info->slots.end())
+                            return std::format("{} * {}", typeName(it0->second), typeName(it1->second));
+                        return "tuple";
+                    }
+                    if (info->typeId == CoreVM::BuiltinTypeId::Tuple3)
+                    {
+                        auto it0 = info->slots.find(0);
+                        auto it1 = info->slots.find(1);
+                        auto it2 = info->slots.find(2);
+                        if (it0 != info->slots.end() && it1 != info->slots.end() && it2 != info->slots.end())
+                            return std::format("{} * {} * {}",
+                                               typeName(it0->second),
+                                               typeName(it1->second),
+                                               typeName(it2->second));
+                        return "tuple";
+                    }
+                }
+                return "object";
+            default: return "unknown";
+        }
+    }
+
+    /// Checks if two IR values have compatible types.
+    /// For object types, compares base type IDs and slot types where both are known.
+    /// Sum types (Option/Result) with different tags are compatible (e.g., Some(42) vs None).
+    [[nodiscard]] bool typesCompatible(CoreVM::Value* a, CoreVM::Value* b)
+    {
+        // Different base IR types → incompatible
+        if (a->type() != b->type())
+            return false;
+
+        // For non-object types, same LiteralType means compatible
+        if (a->type() != CoreVM::LiteralType::Object)
+            return true;
+
+        // Both are Object — compare detailed object type info
+        auto const infoA = tryGetObjectInfo(a);
+        auto const infoB = tryGetObjectInfo(b);
+
+        // If we can't trace either back to ObjAlloc, assume compatible (can't prove mismatch)
+        if (!infoA || !infoB)
+            return true;
+
+        // Different base type IDs → incompatible (e.g., option vs result)
+        if (infoA->typeId != infoB->typeId)
+            return false;
+
+        // For sum types (Option/Result): different variant tags → compatible
+        // (e.g., Some(42) vs None, Ok(42) vs Error("msg"))
+        auto const isSumType =
+            infoA->typeId == CoreVM::BuiltinTypeId::Option || infoA->typeId == CoreVM::BuiltinTypeId::Result;
+        if (isSumType && infoA->tag.has_value() && infoB->tag.has_value() && *infoA->tag != *infoB->tag)
+            return true;
+
+        // Compare slot types where both have values
+        for (auto const& [slot, valA]: infoA->slots)
+        {
+            if (auto it = infoB->slots.find(slot); it != infoB->slots.end())
+            {
+                if (!typesCompatible(valA, it->second))
+                    return false;
+            }
+        }
+        return true;
+    }
+
+} // namespace
+
 std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& rootNode,
                                                          CoreVM::diagnostics::Report& report,
                                                          CoreVM::Runtime& runtime,
@@ -291,22 +434,8 @@ bool IRGenerator::validateTypeAnnotation(TypePtr const& annotated,
 
     if (actual != *expected)
     {
-        auto const literalTypeName = [](CoreVM::LiteralType lt) -> std::string_view {
-            switch (lt)
-            {
-                case CoreVM::LiteralType::Number: return "int";
-                case CoreVM::LiteralType::Float: return "float";
-                case CoreVM::LiteralType::String: return "str";
-                case CoreVM::LiteralType::Boolean: return "bool";
-                case CoreVM::LiteralType::Void: return "unit";
-                case CoreVM::LiteralType::Object: return "object";
-                default: return "unknown";
-            }
-        };
-        reportTypeError("Type mismatch for {}: expected '{}', got '{}'",
-                        context,
-                        toString(annotated),
-                        literalTypeName(actual));
+        reportTypeError(
+            "Type mismatch for {}: expected '{}', got '{}'", context, toString(annotated), typeName(value));
         return false;
     }
     return true;
@@ -2585,6 +2714,13 @@ void IRGenerator::visit(ast::IfExpr const& node)
     auto* elseResult = codegen(node.elseExpr.get());
     if (elseResult)
     {
+        if (resultStorage && thenResult && !typesCompatible(thenResult, elseResult))
+        {
+            reportTypeError("Type mismatch in if-then-else: 'then' branch is '{}' but 'else' branch is '{}'",
+                            typeName(thenResult),
+                            typeName(elseResult));
+            return;
+        }
         if (!resultStorage)
             resultStorage = createAllocaInEntryBlock(elseResult->type(), "if.result");
         _builder.createStore(resultStorage, elseResult, "if.else.store");

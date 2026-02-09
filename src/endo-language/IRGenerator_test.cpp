@@ -1956,6 +1956,85 @@ TEST_CASE("IRGenerator.FSharp.if_expr_recursive_factorial")
 }
 
 // =============================================================================
+// Phase 2 — If-then-else branch type mismatch
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_int_vs_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then 42 else \"oops\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_bool_vs_int")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then true else 42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_float_vs_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then 3.14 else \"oops\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_same_type_int")
+{
+    CHECK(generatesIRSuccessfully("let x = if true then 42 else 0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_same_type_str")
+{
+    CHECK(generatesIRSuccessfully("let x = if true then \"hello\" else \"world\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_option_vs_result")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Some 1 else Ok 2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_option_vs_tuple")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Some 1 else (1, 2)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_option_vs_int")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Some 1 else 42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_same_type_option")
+{
+    CHECK(generatesIRSuccessfully("let x = if true then Some 1 else None"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_same_type_result")
+{
+    CHECK(generatesIRSuccessfully("let x = if true then Ok 1 else Error \"fail\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_some_int_vs_some_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Some 42 else Some \"hello\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_ok_int_vs_ok_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Ok 42 else Ok \"hello\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_error_int_vs_error_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then Error 1 else Error \"fail\""));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_type_mismatch_tuple_int_int_vs_int_str")
+{
+    CHECK(!generatesIRSuccessfully("let x = if true then (1, 2) else (1, \"two\")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_expr_same_type_tuple")
+{
+    CHECK(generatesIRSuccessfully("let x = if true then (1, 2) else (3, 4)"));
+}
+
+// =============================================================================
 // Phase 2 — Mutable Variable Assignment
 // =============================================================================
 
