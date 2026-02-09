@@ -124,11 +124,11 @@ mkdir -p $config_dir
 # Clone and build
 git clone https://github.com/christianparpart/endo.git
 cd endo
-cmake --preset Release
-cmake --build --preset Release
+cmake --preset clang-release
+cmake --build --preset clang-release
 
 # Launch
-./build/Release/endo
+./build/clang-release/src/shell/endo
 ```
 
 ## Installation
@@ -138,9 +138,9 @@ cmake --build --preset Release
 ```bash
 git clone https://github.com/christianparpart/endo.git
 cd endo
-cmake --preset Release
-cmake --build --preset Release
-sudo cmake --install build/Release
+cmake --preset clang-release
+cmake --build --preset clang-release
+sudo cmake --install build/clang-release
 ```
 
 ### Package Managers
