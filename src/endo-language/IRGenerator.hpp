@@ -14,6 +14,14 @@
 namespace endo
 {
 
+/// Describes the return type category of a function for auto-wrapping support.
+enum class ReturnKind
+{
+    Plain,  ///< Function returns a plain value (no wrapping needed)
+    Result, ///< Function returns a Result type (Ok/Error)
+    Option, ///< Function returns an Option type (Some/None)
+};
+
 /// Persistent state for F# definitions that survives across REPL prompts.
 ///
 /// When running interactively, `let` function definitions (including `let rec`)
@@ -25,10 +33,10 @@ struct FSharpPersistentState
     /// A persisted function definition (captures are not preserved across prompts).
     struct PersistedFunction
     {
-        std::vector<std::string> parameters; ///< Parameter names in order
-        ast::Expr const* body;               ///< Function body expression (for inlining)
-        bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
-        bool isRecursive = false;            ///< Whether function is declared with `let rec`
+        std::vector<std::string> parameters;       ///< Parameter names in order
+        ast::Expr const* body;                     ///< Function body expression (for inlining)
+        ReturnKind returnKind = ReturnKind::Plain; ///< Whether function returns Result/Option type
+        bool isRecursive = false;                  ///< Whether function is declared with `let rec`
     };
 
     /// Function table persisted across REPL prompts (name -> function metadata).
@@ -228,10 +236,10 @@ class IRGenerator final: public ast::Visitor
     // F# function management
     struct FSharpFunction
     {
-        std::vector<std::string> parameters; ///< Parameter names in order
-        ast::Expr const* body;               ///< Function body expression (for inlining)
-        bool returnsResultOrOption = false;  ///< Whether function returns Result/Option type
-        bool isRecursive = false;            ///< Whether function is declared with `let rec`
+        std::vector<std::string> parameters;       ///< Parameter names in order
+        ast::Expr const* body;                     ///< Function body expression (for inlining)
+        ReturnKind returnKind = ReturnKind::Plain; ///< Whether function returns Result/Option type
+        bool isRecursive = false;                  ///< Whether function is declared with `let rec`
         /// Names of all functions in the mutual recursion group (empty for non-mutual).
         std::vector<std::string> mutualGroup;
         /// Captured variable bindings from the enclosing scope at function creation time.
@@ -244,8 +252,18 @@ class IRGenerator final: public ast::Visitor
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
 
-    /// Analyzes a function body to determine if it returns Result or Option type
-    [[nodiscard]] bool isBodyResultOrOption(ast::Expr const* body) const;
+    /// Analyzes a function body to determine if it returns Result, Option, or plain type.
+    [[nodiscard]] ReturnKind determineReturnKind(ast::Expr const* body) const;
+
+    /// Checks if any sub-expression within the given expression is a TryExpr.
+    /// Does NOT recurse into lambda bodies (separate functions).
+    [[nodiscard]] bool containsTryExpr(ast::Expr const* body) const;
+
+    /// Checks if the body's final expression needs auto-wrapping in Result/Option.
+    [[nodiscard]] bool needsAutoWrap(ast::Expr const* body) const;
+
+    /// Emits IR to wrap a raw value in a Result (Ok) or Option (Some) object.
+    CoreVM::Value* wrapInResultOrOption(CoreVM::Value* value, ReturnKind kind);
 
     /// Collects free variables referenced in @p body that are not in @p boundNames
     /// and are currently accessible in the F# variable scope chain.
@@ -258,12 +276,12 @@ class IRGenerator final: public ast::Visitor
     {
         CoreVM::BasicBlock* returnBlock;    ///< Block to jump to on error propagation
         CoreVM::AllocaInstr* returnStorage; ///< Storage for the return value
-        bool returnsResultOrOption;         ///< Whether function returns Result/Option
+        ReturnKind returnKind;              ///< Whether function returns Result/Option
     };
 
     void pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
                                    CoreVM::AllocaInstr* returnStorage,
-                                   bool returnsResultOrOption);
+                                   ReturnKind returnKind);
     void popFSharpFunctionContext();
     [[nodiscard]] FSharpFunctionContext* currentFSharpFunctionContext();
 

@@ -134,7 +134,9 @@ This document tracks the implementation status of F# language features as define
 
 - [x] Result type: `Ok value`, `Error msg`
 - [x] Option type: `Some value`, `None`
-- [x] Error propagation: `expr?`
+- [x] Error propagation: `expr?` (with auto-wrapping for type-consistent returns)
+- [x] Pattern matching on `?`-returning functions: `match (f x) with | Ok n -> n | Error e -> e`
+- [x] `?` inside `let-in` expressions: `let f x = let v = (g x)? in v * 2`
 - [x] Try-with expression: `try expr with | Error e -> handler`
 - [x] Pattern matching on errors
 - [x] Try-finally: `try ... finally cleanup`

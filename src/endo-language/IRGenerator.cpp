@@ -52,7 +52,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             FSharpFunction func;
             func.parameters = persisted.parameters;
             func.body = persisted.body;
-            func.returnsResultOrOption = persisted.returnsResultOrOption;
+            func.returnKind = persisted.returnKind;
             func.isRecursive = persisted.isRecursive;
             // capturedBindings intentionally left empty — captures from previous
             // IR programs are no longer valid; only pure functions persist correctly.
@@ -74,7 +74,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             FSharpPersistentState::PersistedFunction persisted;
             persisted.parameters = func.parameters;
             persisted.body = func.body;
-            persisted.returnsResultOrOption = func.returnsResultOrOption;
+            persisted.returnKind = func.returnKind;
             persisted.isRecursive = func.isRecursive;
             persistentState->functions[name] = std::move(persisted);
         }
@@ -191,54 +191,226 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
     return nullptr;
 }
 
-bool IRGenerator::isBodyResultOrOption(ast::Expr const* body) const
+ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
 {
     if (!body)
-        return false;
+        return ReturnKind::Plain;
 
     // Direct Result/Option constructors
-    if (dynamic_cast<ast::OptionExpr const*>(body))
-        return true;
     if (dynamic_cast<ast::ResultExpr const*>(body))
-        return true;
+        return ReturnKind::Result;
+    if (dynamic_cast<ast::OptionExpr const*>(body))
+        return ReturnKind::Option;
 
-    // Try expressions produce Result/Option
-    if (dynamic_cast<ast::TryExpr const*>(body))
-        return true;
+    // Try expressions: the ? operator unwraps Result/Option, but the function
+    // itself needs to return a Result/Option for the error path. Default to Result.
+    if (auto* tryExpr = dynamic_cast<ast::TryExpr const*>(body))
+    {
+        // Check the operand to determine if it's Option or Result
+        auto operandKind = determineReturnKind(tryExpr->operand.get());
+        if (operandKind != ReturnKind::Plain)
+            return operandKind;
+        return ReturnKind::Result; // default for ? operator
+    }
 
     // Try-finally: result type is the body's result type
     if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
-        return isBodyResultOrOption(tryFinally->body.get());
+        return determineReturnKind(tryFinally->body.get());
 
     // Check through parentheses
     if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
-        return isBodyResultOrOption(paren->inner.get());
+        return determineReturnKind(paren->inner.get());
+
+    // Let-in expression: check both value and body recursively
+    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+    {
+        auto valueKind = determineReturnKind(letIn->value.get());
+        if (valueKind != ReturnKind::Plain)
+            return valueKind;
+        return determineReturnKind(letIn->body.get());
+    }
+
+    // If expression: check both branches
+    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+    {
+        auto thenKind = determineReturnKind(ifExpr->thenExpr.get());
+        if (thenKind != ReturnKind::Plain)
+            return thenKind;
+        return determineReturnKind(ifExpr->elseExpr.get());
+    }
 
     // Check match expression arms
     if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
     {
         for (auto const& arm: match->arms)
-            if (isBodyResultOrOption(arm.body.get()))
-                return true;
-        return false;
+        {
+            auto kind = determineReturnKind(arm.body.get());
+            if (kind != ReturnKind::Plain)
+                return kind;
+        }
+        return ReturnKind::Plain;
     }
 
     // Check pipeline - the result type is the last function's return type
     if (auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
     {
-        // The function (right side) determines the result type
-        // For simplicity, check if any part produces Result/Option
-        if (isBodyResultOrOption(pipe->value.get()))
+        auto valueKind = determineReturnKind(pipe->value.get());
+        if (valueKind != ReturnKind::Plain)
+            return valueKind;
+        return determineReturnKind(pipe->function.get());
+    }
+
+    // Function application - look up the called function's return kind
+    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+    {
+        // Drill down to find the base identifier
+        ast::Expr const* base = app->function.get();
+        while (auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
+            base = inner->function.get();
+        if (auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
+        {
+            auto const* func = lookupFSharpFunction(ident->name);
+            if (func)
+                return func->returnKind;
+        }
+    }
+
+    // Fallback: deep walk looking for any nested TryExpr
+    if (containsTryExpr(body))
+        return ReturnKind::Result; // default to Result when ? is found somewhere
+
+    return ReturnKind::Plain;
+}
+
+bool IRGenerator::containsTryExpr(ast::Expr const* body) const
+{
+    if (!body)
+        return false;
+
+    if (dynamic_cast<ast::TryExpr const*>(body))
+        return true;
+
+    // Do NOT recurse into lambda bodies (they are separate functions)
+    if (dynamic_cast<ast::LambdaExpr const*>(body))
+        return false;
+
+    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+        return containsTryExpr(paren->inner.get());
+
+    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+        return containsTryExpr(letIn->value.get()) || containsTryExpr(letIn->body.get());
+
+    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+        return containsTryExpr(ifExpr->thenExpr.get()) || containsTryExpr(ifExpr->elseExpr.get());
+
+    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    {
+        if (containsTryExpr(match->scrutinee.get()))
             return true;
-        if (isBodyResultOrOption(pipe->function.get()))
-            return true;
+        for (auto const& arm: match->arms)
+            if (containsTryExpr(arm.body.get()))
+                return true;
         return false;
     }
 
-    // Function application - would need to look up the function's return type
-    // For now, we don't handle this case (would require more complex analysis)
+    if (auto* pipe = dynamic_cast<ast::PipelineExpr const*>(body))
+        return containsTryExpr(pipe->value.get()) || containsTryExpr(pipe->function.get());
+
+    if (auto* binary = dynamic_cast<ast::BinaryExpr const*>(body))
+        return containsTryExpr(binary->left.get()) || containsTryExpr(binary->right.get());
+
+    if (auto* unary = dynamic_cast<ast::UnaryExpr const*>(body))
+        return containsTryExpr(unary->operand.get());
+
+    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+        return containsTryExpr(app->function.get()) || containsTryExpr(app->argument.get());
+
+    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+        return containsTryExpr(tryFinally->body.get());
+
+    if (auto* result = dynamic_cast<ast::ResultExpr const*>(body))
+        return containsTryExpr(result->payload.get());
+
+    if (auto* option = dynamic_cast<ast::OptionExpr const*>(body))
+        return option->isSome && containsTryExpr(option->value.get());
 
     return false;
+}
+
+bool IRGenerator::needsAutoWrap(ast::Expr const* body) const
+{
+    if (!body)
+        return true;
+
+    // Already produces a Result/Option object — no wrapping needed
+    if (dynamic_cast<ast::ResultExpr const*>(body))
+        return false;
+    if (dynamic_cast<ast::OptionExpr const*>(body))
+        return false;
+
+    // TryExpr (?) returns a raw unwrapped value — needs wrapping
+    if (dynamic_cast<ast::TryExpr const*>(body))
+        return true;
+
+    // Let-in: wrapping depends on the body (the final expression)
+    if (auto* letIn = dynamic_cast<ast::LetInExpr const*>(body))
+        return needsAutoWrap(letIn->body.get());
+
+    // If expression: needs wrapping if either branch needs it
+    if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
+        return needsAutoWrap(ifExpr->thenExpr.get()) || needsAutoWrap(ifExpr->elseExpr.get());
+
+    // Match expression: needs wrapping if any arm needs it
+    if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
+    {
+        for (auto const& arm: match->arms)
+            if (needsAutoWrap(arm.body.get()))
+                return true;
+        return false;
+    }
+
+    // Parenthesized expression: check inner
+    if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
+        return needsAutoWrap(paren->inner.get());
+
+    // Try-finally: check the body
+    if (auto* tryFinally = dynamic_cast<ast::TryFinallyExpr const*>(body))
+        return needsAutoWrap(tryFinally->body.get());
+
+    // Application of a known function that returns Result/Option — already wrapped
+    if (auto* app = dynamic_cast<ast::ApplicationExpr const*>(body))
+    {
+        ast::Expr const* base = app->function.get();
+        while (auto* inner = dynamic_cast<ast::ApplicationExpr const*>(base))
+            base = inner->function.get();
+        if (auto* ident = dynamic_cast<ast::IdentifierExpr const*>(base))
+        {
+            auto const* func = lookupFSharpFunction(ident->name);
+            if (func && func->returnKind != ReturnKind::Plain)
+                return false;
+        }
+    }
+
+    // Everything else (BinaryExpr, literals, IdentifierExpr, etc.) — needs wrapping
+    return true;
+}
+
+CoreVM::Value* IRGenerator::wrapInResultOrOption(CoreVM::Value* value, ReturnKind kind)
+{
+    if (kind == ReturnKind::Plain)
+        return value; // Should not happen, but safety fallback
+
+    auto typeId =
+        (kind == ReturnKind::Result) ? CoreVM::BuiltinTypeId::Result : CoreVM::BuiltinTypeId::Option;
+    auto const* typeName = (kind == ReturnKind::Result) ? "result" : "option";
+
+    CoreVM::Value* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)),
+                                                 std::format("autowrap.{}", typeName));
+    obj = _builder.createObjSetTag(
+        obj, _builder.get(CoreVM::CoreNumber(1)), std::format("autowrap.{}.tag", typeName)); // Ok=1 or Some=1
+    obj = _builder.createObjSetSlot(
+        obj, _builder.get(CoreVM::CoreNumber(0)), value, std::format("autowrap.{}.value", typeName));
+    return obj;
 }
 
 std::string IRGenerator::generateLambdaName()
@@ -2276,7 +2448,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             FSharpFunction func;
             func.parameters = node.parameters;
             func.body = node.value.get();
-            func.returnsResultOrOption = isBodyResultOrOption(func.body);
+            func.returnKind = determineReturnKind(func.body);
             func.isRecursive = node.isRecursive;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -2295,7 +2467,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             FSharpFunction func;
             func.parameters = ab.parameters;
             func.body = ab.value.get();
-            func.returnsResultOrOption = isBodyResultOrOption(func.body);
+            func.returnKind = determineReturnKind(func.body);
             func.isRecursive = true;
             if (isMutual)
                 func.mutualGroup = allRecNames;
@@ -2320,7 +2492,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         FSharpFunction func;
         func.parameters = lambda->parameters;
         func.body = lambda->body.get();
-        func.returnsResultOrOption = isBodyResultOrOption(func.body);
+        func.returnKind = determineReturnKind(func.body);
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
         registerFSharpFunction(node.name, std::move(func));
         _result = nullptr;
@@ -2395,7 +2567,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         FSharpFunction func;
         func.parameters = node.parameters;
         func.body = node.value.get();
-        func.returnsResultOrOption = isBodyResultOrOption(func.body);
+        func.returnKind = determineReturnKind(func.body);
         func.isRecursive = node.isRecursive;
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
 
@@ -2697,7 +2869,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         FSharpFunction lambdaFunc;
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
-        lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
+        lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
@@ -2770,11 +2942,11 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         CoreVM::BasicBlock* returnBlock = nullptr;
         CoreVM::AllocaInstr* returnStorage = nullptr;
-        if (func->returnsResultOrOption)
+        if (func->returnKind != ReturnKind::Plain)
         {
             returnBlock = _builder.createBlock("pipe.return");
             returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
-            pushFSharpFunctionContext(returnBlock, returnStorage, true);
+            pushFSharpFunctionContext(returnBlock, returnStorage, func->returnKind);
         }
 
         for (size_t i = 0; i < func->parameters.size(); ++i)
@@ -2787,11 +2959,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         auto* bodyResult = codegen(func->body);
 
-        if (func->returnsResultOrOption)
+        if (func->returnKind != ReturnKind::Plain)
         {
             if (bodyResult)
             {
-                _builder.createStore(returnStorage, bodyResult, "store.result");
+                auto* storeValue = needsAutoWrap(func->body)
+                                       ? wrapInResultOrOption(bodyResult, func->returnKind)
+                                       : bodyResult;
+                _builder.createStore(returnStorage, storeValue, "store.result");
                 _builder.createBr(returnBlock);
             }
             _builder.setInsertPoint(returnBlock);
@@ -2876,11 +3051,11 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     CoreVM::BasicBlock* returnBlock = nullptr;
     CoreVM::AllocaInstr* returnStorage = nullptr;
 
-    if (func->returnsResultOrOption)
+    if (func->returnKind != ReturnKind::Plain)
     {
         returnBlock = _builder.createBlock("pipe.return");
         returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "pipe.result");
-        pushFSharpFunctionContext(returnBlock, returnStorage, true);
+        pushFSharpFunctionContext(returnBlock, returnStorage, func->returnKind);
     }
 
     // Bind the piped value to the parameter
@@ -2892,12 +3067,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     // Inline the function body
     CoreVM::Value* bodyResult = codegen(func->body);
 
-    if (func->returnsResultOrOption)
+    if (func->returnKind != ReturnKind::Plain)
     {
         // Store result and jump to return block (normal path)
         if (bodyResult)
         {
-            _builder.createStore(returnStorage, bodyResult, "store.result");
+            auto* storeValue =
+                needsAutoWrap(func->body) ? wrapInResultOrOption(bodyResult, func->returnKind) : bodyResult;
+            _builder.createStore(returnStorage, storeValue, "store.result");
             _builder.createBr(returnBlock);
         }
 
@@ -2996,7 +3173,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         FSharpFunction lambdaFunc;
         lambdaFunc.parameters = lambda->parameters;
         lambdaFunc.body = lambda->body.get();
-        lambdaFunc.returnsResultOrOption = isBodyResultOrOption(lambdaFunc.body);
+        lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
@@ -3034,7 +3211,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         partialFunc.parameters = { func->parameters.begin() + static_cast<ptrdiff_t>(args.size()),
                                    func->parameters.end() };
         partialFunc.body = func->body;
-        partialFunc.returnsResultOrOption = func->returnsResultOrOption;
+        partialFunc.returnKind = func->returnKind;
         partialFunc.isRecursive = false;
         partialFunc.capturedBindings = std::move(newCaptures);
 
@@ -3270,11 +3447,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     CoreVM::BasicBlock* returnBlock = nullptr;
     CoreVM::AllocaInstr* returnStorage = nullptr;
 
-    if (func->returnsResultOrOption)
+    if (func->returnKind != ReturnKind::Plain)
     {
         returnBlock = _builder.createBlock("func.return");
         returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "func.result");
-        pushFSharpFunctionContext(returnBlock, returnStorage, true);
+        pushFSharpFunctionContext(returnBlock, returnStorage, func->returnKind);
     }
 
     // Bind arguments to parameter names
@@ -3289,12 +3466,14 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     // Inline the function body
     CoreVM::Value* bodyResult = codegen(func->body);
 
-    if (func->returnsResultOrOption)
+    if (func->returnKind != ReturnKind::Plain)
     {
         // Store result and jump to return block (normal path)
         if (bodyResult)
         {
-            _builder.createStore(returnStorage, bodyResult, "store.result");
+            auto* storeValue =
+                needsAutoWrap(func->body) ? wrapInResultOrOption(bodyResult, func->returnKind) : bodyResult;
+            _builder.createStore(returnStorage, storeValue, "store.result");
             _builder.createBr(returnBlock);
         }
 
@@ -3372,7 +3551,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     FSharpFunction func;
     func.parameters = node.parameters;
     func.body = node.body.get();
-    func.returnsResultOrOption = isBodyResultOrOption(func.body);
+    func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
     registerFSharpFunction(lambdaName, std::move(func));
 
@@ -3653,9 +3832,9 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
 
 void IRGenerator::pushFSharpFunctionContext(CoreVM::BasicBlock* returnBlock,
                                             CoreVM::AllocaInstr* returnStorage,
-                                            bool returnsResultOrOption)
+                                            ReturnKind returnKind)
 {
-    _fsharpFunctionContextStack.push_back({ returnBlock, returnStorage, returnsResultOrOption });
+    _fsharpFunctionContextStack.push_back({ returnBlock, returnStorage, returnKind });
 }
 
 void IRGenerator::popFSharpFunctionContext()

@@ -376,6 +376,13 @@ src/
   - [x] Fix use-after-free bug when `?` is applied to function call results
     - [x] Copy `returnBlock` and `returnStorage` from context before `codegen(operand)` call
     - [x] Prevents invalidation when nested function calls push new contexts onto vector
+  - [x] Fix `?` operator auto-wrapping for type-consistent return values
+    - [x] `ReturnKind` enum (`Plain`/`Result`/`Option`) replaces `bool returnsResultOrOption` for precise type tracking
+    - [x] `determineReturnKind()` replaces `isBodyResultOrOption()` with support for `LetInExpr`, `IfExpr`, `ApplicationExpr`, and `containsTryExpr()` fallback
+    - [x] `needsAutoWrap()` checks if function body's final expression already produces Result/Option
+    - [x] `wrapInResultOrOption()` emits OALLOC/OSETTAG/OSETSLOT to wrap raw values in Ok/Some at function return
+    - [x] All three function application sites (pipeline-with-args, pipeline-non-recursive, ApplicationExpr) updated to auto-wrap
+    - [x] Enables pattern matching on `?`-returning function results: `match (f x) with | Ok n -> n | Error e -> e`
 - [x] Implement `try-with` expression IR generation
   - [x] Store body object in alloca for cross-block access
   - [x] Handle `ConstructorPattern` (e.g., `Error e`, `None`) for error binding
