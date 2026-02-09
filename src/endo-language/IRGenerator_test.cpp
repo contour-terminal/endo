@@ -536,28 +536,28 @@ TEST_CASE("IRGenerator.FSharp.result_nested_in_option")
 
 TEST_CASE("IRGenerator.FSharp.match_option_some_none")
 {
-    // Match on Option with Some and None patterns (single-line due to newline parsing limitation)
+    // Match on Option with Some and None patterns
     REQUIRE(
         generatesIRSuccessfully("let opt = Some 42; let result = match opt with | Some x -> x | None -> 0"));
 }
 
 TEST_CASE("IRGenerator.FSharp.match_option_none_pattern")
 {
-    // Match with None value (single-line format)
+    // Match with None value
     REQUIRE(
         generatesIRSuccessfully("let opt = None; let result = match opt with | Some x -> x | None -> -1"));
 }
 
 TEST_CASE("IRGenerator.FSharp.match_result_ok_error")
 {
-    // Match on Result with Ok and Error patterns (single-line format)
+    // Match on Result with Ok and Error patterns
     REQUIRE(
         generatesIRSuccessfully("let res = Ok 100; let value = match res with | Ok n -> n | Error e -> 0"));
 }
 
 TEST_CASE("IRGenerator.FSharp.match_result_error_pattern")
 {
-    // Match with Error value (single-line format)
+    // Match with Error value
     REQUIRE(generatesIRSuccessfully(
         "let res = Error 404; let value = match res with | Ok n -> n | Error e -> e"));
 }
@@ -1983,4 +1983,51 @@ TEST_CASE("IRGenerator.FSharp.exec_function_call_inside_match_arm")
         print r
     )";
     CHECK(executeSourceAndGetOutput(source) == "10");
+}
+
+// =============================================================================
+// Multi-line Expression Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_multiline_match")
+{
+    // Multi-line match expression with arms on separate lines
+    auto const source = "let grade score = match score with\n"
+                        "    | s when s >= 90 -> 1\n"
+                        "    | s when s >= 80 -> 2\n"
+                        "    | _ -> 3\n"
+                        "print (grade 95)\n"
+                        "print (grade 85)\n"
+                        "print (grade 60)\n";
+    CHECK(executeSourceAndGetOutput(source) == "123");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_multiline_match_followed_by_statement")
+{
+    // Multi-line match followed by another let binding
+    auto const source = "let classify n = match n with\n"
+                        "    | 0 -> 10\n"
+                        "    | _ -> 20\n"
+                        "print (classify 0)\n"
+                        "print (classify 5)\n";
+    CHECK(executeSourceAndGetOutput(source) == "1020");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_multiline_if_then_else")
+{
+    auto const source = "let r = if true\n"
+                        "    then 42\n"
+                        "    else 0\n"
+                        "print r\n";
+    CHECK(executeSourceAndGetOutput(source) == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_multiline_if_then_else.2")
+{
+    auto const source = "let r = if true then\n"
+                        "            42\n"
+                        "        else\n"
+                        "            0\n"
+                        "print r\n";
+    CHECK(executeSourceAndGetOutput(source) == "42");
 }

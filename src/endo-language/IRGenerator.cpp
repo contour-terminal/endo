@@ -2041,6 +2041,47 @@ CoreVM::Value* IRGenerator::execBuiltCommandPipedBackground(
                                        "cmd_exec_piped_background");
 }
 
+CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_view label)
+{
+    if (value->type() == CoreVM::LiteralType::Number)
+    {
+        return _builder.createN2S(value, std::string(label) + ".n2s");
+    }
+    if (value->type() == CoreVM::LiteralType::Float)
+    {
+        return _builder.createF2S(value, std::string(label) + ".f2s");
+    }
+    if (value->type() == CoreVM::LiteralType::Boolean)
+    {
+        // Convert boolean to "true"/"false" string via conditional branch
+        auto* trueBlock = _builder.createBlock(std::string(label) + ".b2s.true");
+        auto* falseBlock = _builder.createBlock(std::string(label) + ".b2s.false");
+        auto* mergeBlock = _builder.createBlock(std::string(label) + ".b2s.merge");
+        auto* storage =
+            createAllocaInEntryBlock(CoreVM::LiteralType::String, std::string(label) + ".b2s.tmp");
+        _builder.createCondBr(value, trueBlock, falseBlock);
+        _builder.setInsertPoint(trueBlock);
+        _builder.createStore(storage, _builder.get("true"));
+        _builder.createBr(mergeBlock);
+        _builder.setInsertPoint(falseBlock);
+        _builder.createStore(storage, _builder.get("false"));
+        _builder.createBr(mergeBlock);
+        _builder.setInsertPoint(mergeBlock);
+        return _builder.createLoad(storage, std::string(label) + ".b2s");
+    }
+    if (value->type() == CoreVM::LiteralType::Void || value->type() == CoreVM::LiteralType::Object)
+    {
+        // Dynamically-typed value (e.g., from pattern matching or OGETSLOT).
+        // Assume numeric since we cannot distinguish at compile time.
+        return _builder.createN2S(value, std::string(label) + ".n2s");
+    }
+    if (value->type() == CoreVM::LiteralType::String)
+    {
+        return value; // Already a string
+    }
+    return nullptr; // Unsupported type
+}
+
 void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewline)
 {
     TRACE_SCOPE("generatePrintCall");
@@ -2054,37 +2095,8 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     }
 
     // Convert to string if needed
-    if (argValue->type() == CoreVM::LiteralType::Number)
-    {
-        argValue = _builder.createN2S(argValue, "print.n2s");
-    }
-    else if (argValue->type() == CoreVM::LiteralType::Float)
-    {
-        argValue = _builder.createF2S(argValue, "print.f2s");
-    }
-    else if (argValue->type() == CoreVM::LiteralType::Boolean)
-    {
-        // Convert boolean to "true"/"false" string via conditional branch
-        auto* trueBlock = _builder.createBlock("print.b2s.true");
-        auto* falseBlock = _builder.createBlock("print.b2s.false");
-        auto* mergeBlock = _builder.createBlock("print.b2s.merge");
-        auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String, "print.b2s.tmp");
-        _builder.createCondBr(argValue, trueBlock, falseBlock);
-        _builder.setInsertPoint(trueBlock);
-        _builder.createStore(storage, _builder.get("true"));
-        _builder.createBr(mergeBlock);
-        _builder.setInsertPoint(falseBlock);
-        _builder.createStore(storage, _builder.get("false"));
-        _builder.createBr(mergeBlock);
-        _builder.setInsertPoint(mergeBlock);
-        argValue = _builder.createLoad(storage, "print.b2s");
-    }
-    else if (argValue->type() == CoreVM::LiteralType::Void || argValue->type() == CoreVM::LiteralType::Object)
-    {
-        // Dynamically-typed value (e.g., from pattern matching or OGETSLOT)
-        argValue = _builder.createN2S(argValue, "print.n2s");
-    }
-    else if (argValue->type() != CoreVM::LiteralType::String)
+    argValue = convertToString(argValue, "print");
+    if (!argValue)
     {
         reportTypeError("print/println requires a string or number argument");
         return;
@@ -2798,13 +2810,12 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         if (funcIdent->name == "print" || funcIdent->name == "println")
         {
             // Special case: pipe to print/println
-            // Convert value to string if needed
-            CoreVM::Value* argValue = value;
-            if (argValue->type() == CoreVM::LiteralType::Number)
-                argValue = _builder.createN2S(argValue, "pipe.n2s");
-            else if (argValue->type() == CoreVM::LiteralType::Void
-                     || argValue->type() == CoreVM::LiteralType::Object)
-                argValue = _builder.createN2S(argValue, "pipe.n2s");
+            CoreVM::Value* argValue = convertToString(value, "pipe");
+            if (!argValue)
+            {
+                reportTypeError("print/println requires a string or number argument");
+                return;
+            }
 
             auto* callback = findCallback(funcIdent->name == "println" ? "println(S)V" : "print(S)V");
             if (callback)
@@ -3579,23 +3590,9 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
     _builder.createStore(scrutineeStorage, scrutinee, "scrutinee.store");
 
-    // Infer result type from the first arm's body expression
-    // This determines the type of storage we need for the match result
-    CoreVM::LiteralType resultType = CoreVM::LiteralType::Number; // Default to Number
-    if (!node.arms.empty() && node.arms[0].body)
-    {
-        // Evaluate first arm body to determine its type
-        // For now, use a simple heuristic based on AST node types
-        auto* body = node.arms[0].body.get();
-        if (dynamic_cast<ast::IntLiteralExpr const*>(body))
-            resultType = CoreVM::LiteralType::Number;
-        else if (dynamic_cast<ast::BoolLiteralExpr const*>(body))
-            resultType = CoreVM::LiteralType::Boolean;
-        // For other expressions (binary ops, function calls, etc.), default to Number
-    }
-
-    // Use createAllocaInEntryBlock to ensure proper stack tracking
-    CoreVM::AllocaInstr* resultStorage = createAllocaInEntryBlock(resultType, "match.result");
+    // Result storage is created lazily after we know the actual type from the first arm body.
+    // createAllocaInEntryBlock() always inserts into the entry block, so calling it later is safe.
+    CoreVM::AllocaInstr* resultStorage = nullptr;
 
     // Pre-allocate storage for all bindings from all arms in the entry block
     // This is critical: all allocas must be created before any branching to ensure
@@ -3754,6 +3751,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             return;
         }
 
+        // Create result storage lazily from the first arm's actual result type
+        if (!resultStorage)
+            resultStorage = createAllocaInEntryBlock(bodyResult->type(), "match.result");
+
         // Store the result
         _builder.createStore(resultStorage, bodyResult, "match.result.store");
 
@@ -3763,7 +3764,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
     // Set insert point to merge block and load the result
     _builder.setInsertPoint(mergeBlock);
-    _result = _builder.createLoad(resultStorage, "match.result.load");
+    if (resultStorage)
+        _result = _builder.createLoad(resultStorage, "match.result.load");
+    else
+        _result = nullptr; // All arms are tail calls — merge is unreachable
 }
 
 void IRGenerator::visit(ast::ListExpr const& node)

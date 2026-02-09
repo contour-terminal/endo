@@ -181,6 +181,11 @@ class IRGenerator final: public ast::Visitor
     /// @param appendNewline If true, appends newline after printing (println)
     void generatePrintCall(ast::Expr const* argument, bool appendNewline);
 
+    /// Converts a value to string type for printing.
+    /// Handles Number, Float, Boolean, Void/Object, and String types.
+    /// @return String-typed value, or nullptr on unsupported types.
+    CoreVM::Value* convertToString(CoreVM::Value* value, std::string_view label);
+
     /// Tries to generate IR for a builtin function call (fst, snd, string_length, etc.).
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
