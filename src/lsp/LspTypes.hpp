@@ -189,4 +189,94 @@ inline void from_json(nlohmann::json const& j, TextDocumentContentChangeEvent& e
     };
 }
 
+/// Checks if a 0-based LSP position falls within a source location range.
+/// The lexer uses 1-based columns, so we convert during comparison.
+/// @param range The source location range from the endo lexer
+/// @param pos The 0-based LSP position
+/// @return true if the position is within the range
+[[nodiscard]] inline bool containsPosition(SourceLocationRange const& range, Position pos)
+{
+    // Convert lexer 1-based columns to 0-based for comparison
+    auto const beginCol = range.begin.column > 0 ? range.begin.column - 1 : 0;
+    auto const endCol = range.end.column > 0 ? range.end.column - 1 : 0;
+
+    // Check if position is on or after the start
+    if (pos.line < range.begin.line)
+        return false;
+    if (pos.line == range.begin.line && pos.character < beginCol)
+        return false;
+
+    // Check if position is before the end
+    if (pos.line > range.end.line)
+        return false;
+    if (pos.line == range.end.line && pos.character >= endCol)
+        return false;
+
+    return true;
+}
+
+/// LSP Location (URI + range).
+struct Location
+{
+    std::string uri;
+    Range range;
+};
+
+inline void to_json(nlohmann::json& j, Location const& l)
+{
+    j = nlohmann::json { { "uri", l.uri }, { "range", l.range } };
+}
+
+inline void from_json(nlohmann::json const& j, Location& l)
+{
+    j.at("uri").get_to(l.uri);
+    j.at("range").get_to(l.range);
+}
+
+/// LSP ParameterInformation for signature help.
+struct ParameterInformation
+{
+    std::string label;
+    std::optional<std::string> documentation;
+};
+
+inline void to_json(nlohmann::json& j, ParameterInformation const& p)
+{
+    j = nlohmann::json { { "label", p.label } };
+    if (p.documentation.has_value())
+        j["documentation"] = *p.documentation;
+}
+
+/// LSP SignatureInformation for signature help.
+struct SignatureInformation
+{
+    std::string label;
+    std::optional<std::string> documentation;
+    std::vector<ParameterInformation> parameters;
+};
+
+inline void to_json(nlohmann::json& j, SignatureInformation const& s)
+{
+    j = nlohmann::json { { "label", s.label }, { "parameters", s.parameters } };
+    if (s.documentation.has_value())
+        j["documentation"] = *s.documentation;
+}
+
+/// LSP SignatureHelp result.
+struct SignatureHelp
+{
+    std::vector<SignatureInformation> signatures;
+    int activeSignature = 0;
+    int activeParameter = 0;
+};
+
+inline void to_json(nlohmann::json& j, SignatureHelp const& h)
+{
+    j = nlohmann::json {
+        { "signatures", h.signatures },
+        { "activeSignature", h.activeSignature },
+        { "activeParameter", h.activeParameter },
+    };
+}
+
 } // namespace endo::lsp

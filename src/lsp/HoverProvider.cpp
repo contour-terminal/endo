@@ -2,37 +2,20 @@
 #include "HoverProvider.hpp"
 
 #include <unordered_map>
+#include <vector>
 
+#include "StubRuntime.hpp"
+
+#include <endo-language/AST.hpp>
 #include <endo-language/Lexer.hpp>
+#include <endo-language/Parser.hpp>
+#include <endo-language/Type.hpp>
 
 namespace endo::lsp
 {
 
 namespace
 {
-
-    /// Checks if a 0-based LSP position falls within a source location range.
-    /// The lexer uses 1-based columns, so we convert during comparison.
-    [[nodiscard]] bool containsPosition(SourceLocationRange const& range, Position pos)
-    {
-        // Convert lexer 1-based columns to 0-based for comparison
-        auto const beginCol = range.begin.column > 0 ? range.begin.column - 1 : 0;
-        auto const endCol = range.end.column > 0 ? range.end.column - 1 : 0;
-
-        // Check if position is on or after the start
-        if (pos.line < range.begin.line)
-            return false;
-        if (pos.line == range.begin.line && pos.character < beginCol)
-            return false;
-
-        // Check if position is before the end
-        if (pos.line > range.end.line)
-            return false;
-        if (pos.line == range.end.line && pos.character >= endCol)
-            return false;
-
-        return true;
-    }
 
     /// Returns hover markdown for a keyword token.
     [[nodiscard]] std::optional<std::string> keywordHover(Token token)
@@ -152,6 +135,279 @@ namespace
         return std::nullopt;
     }
 
+    /// Renders an AST expression as a concise source string for hover preview.
+    /// Handles common expression types; returns std::nullopt for complex expressions.
+    /// @param expr The expression to render
+    /// @return A preview string, or std::nullopt if the expression is too complex
+    [[nodiscard]] std::optional<std::string> exprToString(ast::Expr const& expr)
+    {
+        if (auto const* e = dynamic_cast<ast::IntLiteralExpr const*>(&expr))
+            return std::to_string(e->value);
+        if (auto const* e = dynamic_cast<ast::FloatLiteralExpr const*>(&expr))
+        {
+            auto s = std::to_string(e->value);
+            // Remove trailing zeros but keep at least one decimal digit
+            if (s.find('.') != std::string::npos)
+            {
+                s.erase(s.find_last_not_of('0') + 1);
+                if (s.back() == '.')
+                    s += '0';
+            }
+            return s;
+        }
+        if (auto const* e = dynamic_cast<ast::BoolLiteralExpr const*>(&expr))
+            return e->value ? std::string("true") : std::string("false");
+        if (auto const* e = dynamic_cast<ast::LiteralExpr const*>(&expr))
+            return "\"" + e->value + "\"";
+        if (auto const* e = dynamic_cast<ast::IdentifierExpr const*>(&expr))
+            return e->name;
+        if (auto const* e = dynamic_cast<ast::ParenExpr const*>(&expr))
+        {
+            if (auto inner = exprToString(*e->inner))
+                return "(" + *inner + ")";
+        }
+        if (auto const* e = dynamic_cast<ast::OptionExpr const*>(&expr))
+        {
+            if (!e->isSome)
+                return std::string("None");
+            if (e->value)
+                if (auto val = exprToString(*e->value))
+                    return "Some " + *val;
+            return std::string("Some ...");
+        }
+        if (auto const* e = dynamic_cast<ast::ResultExpr const*>(&expr))
+        {
+            auto const prefix = e->isOk ? std::string("Ok ") : std::string("Error ");
+            if (e->payload)
+                if (auto val = exprToString(*e->payload))
+                    return prefix + *val;
+            return prefix + "...";
+        }
+        if (auto const* e = dynamic_cast<ast::TupleExpr const*>(&expr))
+        {
+            std::string result = "(";
+            for (size_t i = 0; i < e->elements.size(); ++i)
+            {
+                if (i > 0)
+                    result += ", ";
+                if (auto val = exprToString(*e->elements[i]))
+                    result += *val;
+                else
+                    result += "...";
+            }
+            result += ")";
+            return result;
+        }
+        if (auto const* e = dynamic_cast<ast::UnaryExpr const*>(&expr))
+        {
+            if (auto operand = exprToString(*e->operand))
+            {
+                switch (e->op)
+                {
+                    case ast::UnaryOp::Neg: return "-" + *operand;
+                    case ast::UnaryOp::Not: return "!" + *operand;
+                }
+            }
+        }
+        if (auto const* e = dynamic_cast<ast::BinaryExpr const*>(&expr))
+        {
+            auto lhs = exprToString(*e->left);
+            auto rhs = exprToString(*e->right);
+            if (lhs && rhs)
+            {
+                auto const opStr = [&]() -> std::string {
+                    switch (e->op)
+                    {
+                        case ast::BinaryOp::Add: return " + ";
+                        case ast::BinaryOp::Sub: return " - ";
+                        case ast::BinaryOp::Mul: return " * ";
+                        case ast::BinaryOp::Div: return " / ";
+                        case ast::BinaryOp::Mod: return " % ";
+                        case ast::BinaryOp::Pow: return " ** ";
+                        case ast::BinaryOp::Eq: return " == ";
+                        case ast::BinaryOp::Ne: return " != ";
+                        case ast::BinaryOp::Lt: return " < ";
+                        case ast::BinaryOp::Le: return " <= ";
+                        case ast::BinaryOp::Gt: return " > ";
+                        case ast::BinaryOp::Ge: return " >= ";
+                        case ast::BinaryOp::And: return " && ";
+                        case ast::BinaryOp::Or: return " || ";
+                    }
+                    return " ? ";
+                }();
+                return *lhs + opStr + *rhs;
+            }
+        }
+        if (auto const* e = dynamic_cast<ast::ApplicationExpr const*>(&expr))
+        {
+            auto func = exprToString(*e->function);
+            auto arg = exprToString(*e->argument);
+            if (func && arg)
+                return *func + " " + *arg;
+        }
+        if (auto const* e = dynamic_cast<ast::LambdaExpr const*>(&expr))
+        {
+            std::string result = "fun";
+            for (auto const& param: e->parameters)
+                result += " " + param.name;
+            result += " -> ...";
+            return result;
+        }
+        if (auto const* e = dynamic_cast<ast::PipelineExpr const*>(&expr))
+        {
+            auto val = exprToString(*e->value);
+            auto func = exprToString(*e->function);
+            if (val && func)
+                return *val + " |> " + *func;
+        }
+        return std::nullopt;
+    }
+
+    /// Formats hover markdown for a let binding signature (variable or function).
+    /// @param name The binding name
+    /// @param isMutable Whether the binding is mutable
+    /// @param isRecursive Whether the binding is recursive
+    /// @param parameters Function parameters (empty for simple bindings)
+    /// @param returnType Optional return type annotation
+    /// @param valuePreview Optional preview of the value expression source text
+    /// @return Markdown hover string
+    [[nodiscard]] std::string formatLetBinding(std::string const& name,
+                                               bool isMutable,
+                                               bool isRecursive,
+                                               std::vector<ast::TypedParameter> const& parameters,
+                                               std::optional<TypePtr> const& returnType,
+                                               std::optional<std::string> const& valuePreview = {})
+    {
+        std::string result;
+
+        if (!parameters.empty())
+        {
+            result = "`" + name + "` \u2014 function\n\n```endo\nlet ";
+            if (isRecursive)
+                result += "rec ";
+            result += name;
+            for (auto const& param: parameters)
+            {
+                if (param.typeAnnotation)
+                    result += " (" + param.name + ": " + toString(*param.typeAnnotation) + ")";
+                else
+                    result += " " + param.name;
+            }
+            if (returnType)
+                result += ": " + toString(*returnType);
+            result += "\n```";
+        }
+        else
+        {
+            result = "`" + name + "` \u2014 ";
+            if (isMutable)
+                result += "mutable ";
+            result += "binding\n\n```endo\nlet ";
+            if (isMutable)
+                result += "mut ";
+            result += name;
+            if (returnType)
+                result += ": " + toString(*returnType);
+            if (valuePreview && !valuePreview->empty())
+                result += " = " + *valuePreview;
+            result += "\n```";
+        }
+
+        return result;
+    }
+
+    /// Formats hover markdown for a function parameter.
+    /// @param param The parameter with optional type annotation
+    /// @param functionName The enclosing function name
+    /// @return Markdown hover string
+    [[nodiscard]] std::string formatParameter(ast::TypedParameter const& param,
+                                              std::string const& functionName)
+    {
+        auto result = "`" + param.name + "` \u2014 parameter of `" + functionName + "`";
+        if (param.typeAnnotation)
+            result += "\n\n```endo\n" + param.name + ": " + toString(*param.typeAnnotation) + "\n```";
+        return result;
+    }
+
+    /// Returns hover markdown for a user-defined binding or function parameter.
+    ///
+    /// Parses the source into an AST and searches top-level `let` bindings and their
+    /// parameters for a matching name.
+    ///
+    /// @param source The full document text
+    /// @param name The identifier name to look up
+    /// @return Hover markdown if a matching binding was found, otherwise std::nullopt
+    [[nodiscard]] std::optional<std::string> bindingHover(std::string const& source, std::string const& name)
+    {
+        CoreVM::Runtime runtime;
+        registerStubRuntime(runtime);
+
+        CoreVM::diagnostics::BufferedReport report;
+        Parser parser(runtime, report, std::make_unique<StringSource>(source));
+        auto astRoot = parser.parse();
+        if (!astRoot)
+            return std::nullopt;
+
+        // Collect top-level LetBindingStmt nodes
+        std::vector<ast::LetBindingStmt const*> bindings;
+        if (auto const* compound = dynamic_cast<ast::CompoundStmt const*>(astRoot.get()))
+        {
+            for (auto const& stmt: compound->statements)
+            {
+                if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(stmt.get()))
+                    bindings.push_back(letStmt);
+            }
+        }
+        else if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(astRoot.get()))
+        {
+            bindings.push_back(letStmt);
+        }
+
+        // Check binding names (including and-bindings for mutual recursion)
+        for (auto const* letStmt: bindings)
+        {
+            if (letStmt->name == name)
+            {
+                auto valuePreview = std::optional<std::string> {};
+                if (!letStmt->isFunction() && letStmt->value)
+                    valuePreview = exprToString(*letStmt->value);
+                return formatLetBinding(name,
+                                        letStmt->isMutable,
+                                        letStmt->isRecursive,
+                                        letStmt->parameters,
+                                        letStmt->returnType,
+                                        valuePreview);
+            }
+
+            for (auto const& andBinding: letStmt->andBindings)
+            {
+                if (andBinding.name == name)
+                    return formatLetBinding(name, false, true, andBinding.parameters, andBinding.returnType);
+            }
+        }
+
+        // Check function parameters
+        for (auto const* letStmt: bindings)
+        {
+            for (auto const& param: letStmt->parameters)
+            {
+                if (param.name == name)
+                    return formatParameter(param, letStmt->name);
+            }
+
+            for (auto const& andBinding: letStmt->andBindings)
+            {
+                for (auto const& param: andBinding.parameters)
+                {
+                    if (param.name == name)
+                        return formatParameter(param, andBinding.name);
+                }
+            }
+        }
+
+        return std::nullopt;
+    }
+
 } // namespace
 
 std::optional<Hover> computeHover(std::string const& source, Position position)
@@ -193,6 +449,10 @@ std::optional<Hover> computeHover(std::string const& source, Position position)
         if (tokenInfo.token == Token::Identifier)
         {
             if (auto text = builtinHover(tokenInfo.literal))
+                return Hover { .contents = MarkupContent { .value = std::move(*text) }, .range = range };
+
+            // Try user-defined binding hover (requires AST parsing)
+            if (auto text = bindingHover(source, tokenInfo.literal))
                 return Hover { .contents = MarkupContent { .value = std::move(*text) }, .range = range };
         }
 

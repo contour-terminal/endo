@@ -4,48 +4,17 @@
 #include <iostream>
 #include <string>
 
+#include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "HoverProvider.hpp"
 #include "JsonRpc.hpp"
+#include "ReferencesProvider.hpp"
 #include "SemanticTokens.hpp"
+#include "SignatureHelpProvider.hpp"
+#include "StubRuntime.hpp"
 
 namespace endo::lsp
 {
-
-namespace
-{
-
-    /// Registers the minimal runtime builtins needed for the parser.
-    /// Follows the TestRuntime pattern from TestHelper.cpp.
-    void registerStubRuntime(CoreVM::Runtime& runtime)
-    {
-        // Dummy handler that does nothing
-        auto dummyHandler = [](CoreVM::Params&) {
-        };
-
-        runtime.registerFunction("callproc")
-            .param<std::vector<std::string>>("args")
-            .returnType(CoreVM::LiteralType::Number)
-            .bind(dummyHandler);
-
-        runtime.registerFunction("callproc")
-            .param<bool>("last_in_chain")
-            .param<std::vector<std::string>>("args")
-            .returnType(CoreVM::LiteralType::Number)
-            .bind(dummyHandler);
-
-        runtime.registerFunction("print")
-            .param<CoreVM::CoreString>("text")
-            .returnType(CoreVM::LiteralType::Void)
-            .bind(dummyHandler);
-
-        runtime.registerFunction("println")
-            .param<CoreVM::CoreString>("text")
-            .returnType(CoreVM::LiteralType::Void)
-            .bind(dummyHandler);
-    }
-
-} // namespace
 
 LspServer::LspServer(std::istream& input, std::ostream& output): _input(input), _output(output)
 {
@@ -109,6 +78,21 @@ void LspServer::dispatch(nlohmann::json const& message)
             auto const params = message.value("params", nlohmann::json::object());
             writeMessage(_output, makeResponse(id, handleHover(params)));
         }
+        else if (method == "textDocument/definition")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleDefinition(params)));
+        }
+        else if (method == "textDocument/references")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleReferences(params)));
+        }
+        else if (method == "textDocument/signatureHelp")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleSignatureHelp(params)));
+        }
         else
         {
             writeMessage(_output,
@@ -156,6 +140,12 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
           nlohmann::json {
               { "textDocumentSync", 1 }, // Full sync
               { "hoverProvider", true },
+              { "definitionProvider", true },
+              { "referencesProvider", true },
+              { "signatureHelpProvider",
+                nlohmann::json {
+                    { "triggerCharacters", nlohmann::json::array({ " ", "(" }) },
+                } },
               { "semanticTokensProvider",
                 nlohmann::json {
                     { "legend", legend },
@@ -238,6 +228,54 @@ nlohmann::json LspServer::handleHover(nlohmann::json const& params)
         return nullptr;
 
     return *hover;
+}
+
+nlohmann::json LspServer::handleDefinition(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nullptr;
+
+    auto location = computeDefinition(*source, textDoc.uri, position);
+    if (!location.has_value())
+        return nullptr;
+
+    return *location;
+}
+
+nlohmann::json LspServer::handleReferences(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const includeDeclaration =
+        params.contains("context") && params["context"].value("includeDeclaration", false);
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto locations = computeReferences(*source, textDoc.uri, position, includeDeclaration);
+
+    auto result = nlohmann::json::array();
+    for (auto const& loc: locations)
+        result.push_back(loc);
+    return result;
+}
+
+nlohmann::json LspServer::handleSignatureHelp(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nullptr;
+
+    auto sigHelp = computeSignatureHelp(*source, position);
+    if (!sigHelp.has_value())
+        return nullptr;
+
+    return *sigHelp;
 }
 
 void LspServer::publishDiagnostics(std::string const& uri)

@@ -46,6 +46,9 @@ class LspServer
     // Language features
     [[nodiscard]] nlohmann::json handleSemanticTokensFull(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleHover(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleDefinition(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleReferences(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleSignatureHelp(nlohmann::json const& params);
 
     // Notifications
     void publishDiagnostics(std::string const& uri);

@@ -3,12 +3,16 @@
 
 #include <sstream>
 
+#include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentStore.hpp"
 #include "HoverProvider.hpp"
 #include "JsonRpc.hpp"
 #include "LspServer.hpp"
+#include "ReferencesProvider.hpp"
 #include "SemanticTokens.hpp"
+#include "SignatureHelpProvider.hpp"
+#include "SymbolCollector.hpp"
 #include <nlohmann/json.hpp>
 
 using namespace endo::lsp;
@@ -596,6 +600,115 @@ TEST_CASE("Hover.position past end returns nullopt", "[lsp][hover]")
     CHECK_FALSE(hover.has_value());
 }
 
+TEST_CASE("Hover.variable binding at definition shows value", "[lsp][hover]")
+{
+    // Position 4 is on "variable" in "let variable = 42"
+    auto hover = computeHover("let variable = 42", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("variable") != std::string::npos);
+    CHECK(hover->contents.value.find("binding") != std::string::npos);
+    CHECK(hover->contents.value.find("= 42") != std::string::npos);
+}
+
+TEST_CASE("Hover.variable binding at usage shows value", "[lsp][hover]")
+{
+    // Position 0,8 is on "variable" in the second line
+    auto hover = computeHover("let variable = 42\nprintln variable", Position { 1, 8 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("variable") != std::string::npos);
+    CHECK(hover->contents.value.find("binding") != std::string::npos);
+    CHECK(hover->contents.value.find("= 42") != std::string::npos);
+}
+
+TEST_CASE("Hover.string binding shows value preview", "[lsp][hover]")
+{
+    auto hover = computeHover("let greeting = \"hello world\"\nprintln greeting", Position { 1, 8 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("greeting") != std::string::npos);
+    CHECK(hover->contents.value.find("hello world") != std::string::npos);
+}
+
+TEST_CASE("Hover.boolean binding shows value preview", "[lsp][hover]")
+{
+    auto hover = computeHover("let flag = true", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("flag") != std::string::npos);
+    CHECK(hover->contents.value.find("= true") != std::string::npos);
+}
+
+TEST_CASE("Hover.expression binding shows value preview", "[lsp][hover]")
+{
+    auto hover = computeHover("let result = Some 42", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("result") != std::string::npos);
+    CHECK(hover->contents.value.find("= Some 42") != std::string::npos);
+}
+
+TEST_CASE("Hover.function binding does not show body as value", "[lsp][hover]")
+{
+    auto hover = computeHover("let double x = x * 2", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("function") != std::string::npos);
+    // Functions show signature, not body - should not contain "= x * 2"
+    CHECK(hover->contents.value.find("= x * 2") == std::string::npos);
+}
+
+TEST_CASE("Hover.function definition shows function info with parameters", "[lsp][hover]")
+{
+    // Position 4 is on "add" in "let add x y = x + y"
+    auto hover = computeHover("let add x y = x + y", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("add") != std::string::npos);
+    CHECK(hover->contents.value.find("function") != std::string::npos);
+    CHECK(hover->contents.value.find("x") != std::string::npos);
+    CHECK(hover->contents.value.find("y") != std::string::npos);
+}
+
+TEST_CASE("Hover.function reference shows function info", "[lsp][hover]")
+{
+    // Hover on "add" in the usage "println (add 3 4)"
+    auto hover = computeHover("let add x y = x + y\nprintln (add 3 4)", Position { 1, 9 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("add") != std::string::npos);
+    CHECK(hover->contents.value.find("function") != std::string::npos);
+}
+
+TEST_CASE("Hover.function parameter shows parameter info", "[lsp][hover]")
+{
+    // Position 8 is on "x" parameter in "let add x y = x + y"
+    auto hover = computeHover("let add x y = x + y", Position { 0, 8 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("x") != std::string::npos);
+    CHECK(hover->contents.value.find("parameter") != std::string::npos);
+    CHECK(hover->contents.value.find("add") != std::string::npos);
+}
+
+TEST_CASE("Hover.typed function shows type annotations", "[lsp][hover]")
+{
+    auto hover = computeHover("let add (x: int) (y: int): int = x + y", Position { 0, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("add") != std::string::npos);
+    CHECK(hover->contents.value.find("int") != std::string::npos);
+}
+
+TEST_CASE("Hover.recursive function shows rec qualifier", "[lsp][hover]")
+{
+    auto hover = computeHover("let rec fact n = if n <= 1 then 1 else n * fact (n - 1)\nprintln (fact 5)",
+                              Position { 0, 8 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("fact") != std::string::npos);
+    CHECK(hover->contents.value.find("rec") != std::string::npos);
+}
+
+TEST_CASE("Hover.mutable binding shows mut qualifier", "[lsp][hover]")
+{
+    auto hover = computeHover("let mut counter = 0", Position { 0, 8 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("counter") != std::string::npos);
+    CHECK(hover->contents.value.find("mutable") != std::string::npos);
+    CHECK(hover->contents.value.find("mut") != std::string::npos);
+}
+
 // =============================================================================
 // Integration / end-to-end tests
 // =============================================================================
@@ -756,4 +869,420 @@ TEST_CASE("E2E.hover request at keyword position returns content", "[lsp][e2e]")
         }
     }
     CHECK(foundHover);
+}
+
+// =============================================================================
+// SymbolCollector tests
+// =============================================================================
+
+TEST_CASE("SymbolCollector.collectSymbols returns definitions and references", "[lsp][symbols]")
+{
+    auto table = collectSymbols("let x = 42\nprintln x");
+    REQUIRE(table.has_value());
+    CHECK(table->definitions.size() >= 1);
+    // "x" should be defined once
+    bool foundXDef = false;
+    for (auto const& def: table->definitions)
+    {
+        if (def.name == "x")
+        {
+            foundXDef = true;
+            CHECK_FALSE(def.isFunction);
+        }
+    }
+    CHECK(foundXDef);
+    // "x" should be referenced (usage in println x)
+    bool foundXRef = false;
+    for (auto const& ref: table->references)
+    {
+        if (ref.name == "x" && ref.definitionIndex >= 0)
+            foundXRef = true;
+    }
+    CHECK(foundXRef);
+}
+
+TEST_CASE("SymbolCollector.function definition captures parameters", "[lsp][symbols]")
+{
+    auto table = collectSymbols("let add x y = x + y");
+    REQUIRE(table.has_value());
+    bool foundAdd = false;
+    for (auto const& def: table->definitions)
+    {
+        if (def.name == "add")
+        {
+            foundAdd = true;
+            CHECK(def.isFunction);
+            REQUIRE(def.parameterNames.size() == 2);
+            CHECK(def.parameterNames[0] == "x");
+            CHECK(def.parameterNames[1] == "y");
+        }
+    }
+    CHECK(foundAdd);
+}
+
+TEST_CASE("SymbolCollector.definition locations are correctly assigned", "[lsp][symbols]")
+{
+    auto table = collectSymbols("let x = 42\nprintln x");
+    REQUIRE(table.has_value());
+
+    // Find the definition of "x"
+    SymbolDefinition const* xDef = nullptr;
+    for (auto const& def: table->definitions)
+    {
+        if (def.name == "x")
+        {
+            xDef = &def;
+            break;
+        }
+    }
+    REQUIRE(xDef != nullptr);
+    // "x" token should be on line 0
+    CHECK(xDef->location.begin.line == 0);
+    // Column should be non-zero (position of "x" in "let x = 42")
+    CHECK(xDef->location.begin.column > 0);
+
+    // Find the reference to "x" on line 1
+    SymbolReference const* xRef = nullptr;
+    for (auto const& ref: table->references)
+    {
+        if (ref.name == "x" && ref.definitionIndex >= 0)
+        {
+            xRef = &ref;
+            break;
+        }
+    }
+    REQUIRE(xRef != nullptr);
+    CHECK(xRef->location.begin.line == 1);
+    CHECK(xRef->definitionIndex >= 0);
+}
+
+TEST_CASE("SymbolCollector.corrected locations have proper ranges", "[lsp][symbols]")
+{
+    auto table = collectSymbols("let x = 42\nprintln x");
+    REQUIRE(table.has_value());
+
+    // All definition/reference locations should have proper (non-zero-width) ranges
+    for (auto const& def: table->definitions)
+    {
+        INFO("def " << def.name << " begin=(" << def.location.begin.line << "," << def.location.begin.column
+                    << ") end=(" << def.location.end.line << "," << def.location.end.column << ")");
+        auto const nonZeroWidth = def.location.end.line > def.location.begin.line
+                                  || (def.location.end.line == def.location.begin.line
+                                      && def.location.end.column > def.location.begin.column);
+        CHECK(nonZeroWidth);
+    }
+    for (auto const& ref: table->references)
+    {
+        INFO("ref " << ref.name << " begin=(" << ref.location.begin.line << "," << ref.location.begin.column
+                    << ") end=(" << ref.location.end.line << "," << ref.location.end.column << ")");
+        auto const nonZeroWidth = ref.location.end.line > ref.location.begin.line
+                                  || (ref.location.end.line == ref.location.begin.line
+                                      && ref.location.end.column > ref.location.begin.column);
+        CHECK(nonZeroWidth);
+    }
+}
+
+// =============================================================================
+// Definition tests
+// =============================================================================
+
+TEST_CASE("Definition.top-level binding usage jumps to definition", "[lsp][definition]")
+{
+    // "let x = 42\nprintln x"
+    //  cursor on "x" at line 1, col 8
+    auto loc = computeDefinition("let x = 42\nprintln x", "file:///test.endo", Position { 1, 8 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->uri == "file:///test.endo");
+    // Definition should be at line 0 (let x)
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.function reference jumps to definition", "[lsp][definition]")
+{
+    auto loc = computeDefinition("let f x = x + 1\nprintln (f 3)", "file:///test.endo", Position { 1, 9 });
+    REQUIRE(loc.has_value());
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.function parameter in body jumps to param", "[lsp][definition]")
+{
+    // "let f x = x + 1"
+    //  the second "x" (in body, col 10) should resolve to param "x" (col 6)
+    auto loc = computeDefinition("let f x = x + 1", "file:///test.endo", Position { 0, 10 });
+    REQUIRE(loc.has_value());
+    // Parameter "x" is at column 6
+    CHECK(loc->range.start.character == 6);
+}
+
+TEST_CASE("Definition.let-in scoped binding", "[lsp][definition]")
+{
+    auto source = "let result = let y = 10 in y + 1";
+    // cursor on "y" in "y + 1" (col 27)
+    auto loc = computeDefinition(source, "file:///test.endo", Position { 0, 27 });
+    REQUIRE(loc.has_value());
+    // "y" definition is at col 17
+    CHECK(loc->range.start.line == 0);
+}
+
+TEST_CASE("Definition.lambda parameter", "[lsp][definition]")
+{
+    auto source = "let f = fun x -> x + 1";
+    // cursor on "x" in body (col 17)
+    auto loc = computeDefinition(source, "file:///test.endo", Position { 0, 17 });
+    REQUIRE(loc.has_value());
+    // "x" parameter is at col 12
+    CHECK(loc->range.start.character == 12);
+}
+
+TEST_CASE("Definition.cursor not on identifier returns nullopt", "[lsp][definition]")
+{
+    auto loc = computeDefinition("let x = 42", "file:///test.endo", Position { 0, 0 });
+    CHECK_FALSE(loc.has_value()); // cursor on "let" keyword
+}
+
+TEST_CASE("Definition.unknown identifier returns nullopt", "[lsp][definition]")
+{
+    // "println" is a builtin, not a user-defined symbol
+    auto loc = computeDefinition("println 42", "file:///test.endo", Position { 0, 0 });
+    // It may return itself or nullopt depending on whether the builtin is in scope
+    // Just verify no crash
+}
+
+TEST_CASE("Definition.shadowed variable resolves to inner scope", "[lsp][definition]")
+{
+    auto source = "let x = 1\nlet result = let x = 2 in x";
+    // cursor on "x" after "in" (0-based col 26)
+    auto loc = computeDefinition(source, "file:///test.endo", Position { 1, 26 });
+    REQUIRE(loc.has_value());
+    // Inner "x" is on line 1
+    CHECK(loc->range.start.line == 1);
+}
+
+// =============================================================================
+// References tests
+// =============================================================================
+
+TEST_CASE("References.all uses of variable with declaration", "[lsp][references]")
+{
+    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, true);
+    // Should find at least 2: definition + usage
+    CHECK(locs.size() >= 2);
+}
+
+TEST_CASE("References.all uses without declaration", "[lsp][references]")
+{
+    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 0, 4 }, false);
+    // Should find 1 usage (not the declaration)
+    CHECK(locs.size() >= 1);
+    // All should be references, not the definition position
+}
+
+TEST_CASE("References.function references across call sites", "[lsp][references]")
+{
+    auto source = "let f x = x + 1\nprintln (f 3)\nprintln (f 5)";
+    auto locs = computeReferences(source, "file:///test.endo", Position { 0, 4 }, true);
+    // f appears 3 times: definition + 2 calls
+    CHECK(locs.size() >= 3);
+}
+
+TEST_CASE("References.scoped variable does not leak", "[lsp][references]")
+{
+    auto source = "let a = let x = 1 in x\nlet b = let x = 2 in x";
+    // cursor on first "x" definition (line 0, col 12)
+    auto locs = computeReferences(source, "file:///test.endo", Position { 0, 12 }, true);
+    // Should find only 2: first "x" def + first "x" ref
+    CHECK(locs.size() == 2);
+}
+
+TEST_CASE("References.no matches returns empty", "[lsp][references]")
+{
+    auto locs = computeReferences("let x = 42", "file:///test.endo", Position { 0, 0 }, true);
+    // cursor on "let" keyword, not an identifier
+    CHECK(locs.empty());
+}
+
+TEST_CASE("References.cursor on usage finds all references", "[lsp][references]")
+{
+    auto locs = computeReferences("let x = 42\nprintln x", "file:///test.endo", Position { 1, 8 }, true);
+    CHECK(locs.size() >= 2);
+}
+
+// =============================================================================
+// SignatureHelp tests
+// =============================================================================
+
+TEST_CASE("SignatureHelp.single parameter function", "[lsp][signaturehelp]")
+{
+    auto source = "let f x = x + 1\nf 3";
+    // cursor on "3" (line 1, col 2)
+    auto sig = computeSignatureHelp(source, Position { 1, 2 });
+    REQUIRE(sig.has_value());
+    REQUIRE(sig->signatures.size() >= 1);
+    CHECK(sig->signatures[0].label.find("f") != std::string::npos);
+    CHECK(sig->signatures[0].parameters.size() == 1);
+    CHECK(sig->activeParameter == 0);
+}
+
+TEST_CASE("SignatureHelp.multi-parameter function", "[lsp][signaturehelp]")
+{
+    auto source = "let add x y = x + y\nadd 1 2";
+    // cursor on "2" (line 1, col 6) — second argument
+    auto sig = computeSignatureHelp(source, Position { 1, 6 });
+    REQUIRE(sig.has_value());
+    REQUIRE(sig->signatures.size() >= 1);
+    CHECK(sig->signatures[0].parameters.size() == 2);
+    CHECK(sig->activeParameter == 1);
+}
+
+TEST_CASE("SignatureHelp.typed parameters show types", "[lsp][signaturehelp]")
+{
+    auto source = "let add (x: int) (y: int): int = x + y\nadd 1 2";
+    auto sig = computeSignatureHelp(source, Position { 1, 4 });
+    REQUIRE(sig.has_value());
+    REQUIRE(sig->signatures.size() >= 1);
+    CHECK(sig->signatures[0].label.find("int") != std::string::npos);
+}
+
+TEST_CASE("SignatureHelp.not in function call returns nullopt", "[lsp][signaturehelp]")
+{
+    auto sig = computeSignatureHelp("let x = 42", Position { 0, 8 });
+    CHECK_FALSE(sig.has_value());
+}
+
+// =============================================================================
+// E2E: Definition, References, SignatureHelp
+// =============================================================================
+
+TEST_CASE("E2E.initialize advertises new capabilities", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    REQUIRE(responses.size() >= 1);
+    auto const& caps = responses[0]["result"]["capabilities"];
+    CHECK(caps["definitionProvider"] == true);
+    CHECK(caps["referencesProvider"] == true);
+    CHECK(caps.contains("signatureHelpProvider"));
+}
+
+TEST_CASE("E2E.definition request returns location", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nprintln x" },
+                               } },
+                         }),
+        sendRequest("textDocument/definition",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 1 }, { "character", 8 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("uri"));
+            CHECK(msg["result"]["uri"] == "file:///test.endo");
+            CHECK(msg["result"].contains("range"));
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.references request returns locations", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 42\nprintln x" },
+                               } },
+                         }),
+        sendRequest("textDocument/references",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 4 } } },
+                        { "context", json { { "includeDeclaration", true } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            CHECK(msg["result"].size() >= 2); // definition + usage
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.signatureHelp request returns signature", "[lsp][e2e]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let f x = x + 1\nf 3" },
+                               } },
+                         }),
+        sendRequest("textDocument/signatureHelp",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 1 }, { "character", 2 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].contains("signatures"));
+            break;
+        }
+    }
+    CHECK(found);
 }

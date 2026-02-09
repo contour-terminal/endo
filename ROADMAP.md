@@ -1000,10 +1000,10 @@ to deliver rich language intelligence outside the interactive shell.
 - [x] Implement `textDocument/publishDiagnostics` (syntax errors, undefined variables, unknown commands)
 - [ ] Implement `textDocument/completion` (commands, file paths, variables, builtins, options)
 - [x] Implement `textDocument/hover` (command help via man pages, builtin documentation, variable values)
-- [ ] Implement `textDocument/definition` (go-to-definition for functions and variable assignments)
-- [ ] Implement `textDocument/references` (find all references to a function or variable)
+- [x] Implement `textDocument/definition` (go-to-definition for functions and variable assignments)
+- [x] Implement `textDocument/references` (find all references to a function or variable)
 - [ ] Implement `textDocument/documentSymbol` (outline of functions, aliases, exported variables)
-- [ ] Implement `textDocument/signatureHelp` (parameter hints for functions)
+- [x] Implement `textDocument/signatureHelp` (parameter hints for functions)
 - [ ] Implement `textDocument/formatting` and `textDocument/rangeFormatting`
 - [ ] Implement `textDocument/rename` (rename function or variable across script)
 - [x] Implement `textDocument/semanticTokens` (semantic highlighting: commands, builtins, variables, strings, operators)

@@ -14,13 +14,24 @@ add_library(endo-lsp STATIC
     DocumentStore.hpp
     DocumentStore.cpp
 
+    # Shared utilities
+    StubRuntime.hpp
+
     # Language intelligence providers
+    SymbolCollector.hpp
+    SymbolCollector.cpp
     DiagnosticsProvider.hpp
     DiagnosticsProvider.cpp
     SemanticTokens.hpp
     SemanticTokens.cpp
     HoverProvider.hpp
     HoverProvider.cpp
+    DefinitionProvider.hpp
+    DefinitionProvider.cpp
+    ReferencesProvider.hpp
+    ReferencesProvider.cpp
+    SignatureHelpProvider.hpp
+    SignatureHelpProvider.cpp
 
     # Server core
     LspServer.hpp
