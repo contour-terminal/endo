@@ -1013,10 +1013,10 @@ to deliver rich language intelligence outside the interactive shell.
 - [x] Implement `textDocument/hover` (command help via man pages, builtin documentation, variable values)
 - [x] Implement `textDocument/definition` (go-to-definition for functions and variable assignments)
 - [x] Implement `textDocument/references` (find all references to a function or variable)
-- [ ] Implement `textDocument/documentSymbol` (outline of functions, aliases, exported variables)
 - [x] Implement `textDocument/signatureHelp` (parameter hints for functions)
+- [x] Implement `textDocument/documentSymbol` (outline of functions, aliases, exported variables)
 - [ ] Implement `textDocument/formatting` and `textDocument/rangeFormatting`
-- [ ] Implement `textDocument/rename` (rename function or variable across script)
+- [x] Implement `textDocument/rename` (rename function or variable across script)
 - [x] Implement `textDocument/semanticTokens` (semantic highlighting: commands, builtins, variables, strings, operators)
 - [ ] Implement `textDocument/codeAction` (quick fixes for common errors, e.g. missing quotes, unset variables)
 - [ ] Create VS Code extension with language registration for `.endo` and `.sh` files
