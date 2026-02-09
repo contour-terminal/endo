@@ -341,6 +341,19 @@ void Prompt::resume()
     if (_initialized)
     {
         _terminal.resume();
+
+        // Check if the command left the cursor at a non-column-1 position,
+        // indicating output that didn't end with a newline. Show a reverse-video
+        // indicator (like fish shell) and move to a fresh line.
+        if (auto const [row, col] = _terminal.queryCursorPosition(); col > 1)
+        {
+            auto& out = _terminal.output();
+            out.write("\u23CE", tui::Style { .dim = true });
+            out.clearToEndOfLine();
+            out.writeRaw("\r\n");
+            out.flush();
+        }
+
         if (_screen)
         {
             // Release cursor tracking since external output (shell commands) may have

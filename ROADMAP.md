@@ -603,6 +603,12 @@ src/
 - Arithmetic assertion relaxation:
   - `isNumberCompatible()` helper accepts `Number`, `Void`, and `Object` types for dynamic values from `ObjGetSlot`
   - All arithmetic and numeric comparison assertions updated to use this helper
+- Inner type annotation propagation for `?` operator:
+  - `_innerTypeAnnotations` map tracks the inner type T of Option<T>/Result<T,E> values at compile time
+  - `env` builtin annotates its result as `String`, `Some expr` annotates with inner expression type, `Ok expr` likewise
+  - `TryExpr` uses the annotation to create correctly-typed result storage (e.g., `String` instead of `Object`)
+  - Annotations propagate through `let` bindings and variable loads so `convertToString()` selects the right path
+  - Fixes: `(env "USER")?` and `(Some "hello")?` now print string values instead of raw pointer numbers
 - Feature status tracking:
   - `LANGUAGE_STATUS.md` tracks implementation status of all F# features from `LANGUAGE.md`
 
@@ -639,6 +645,7 @@ The library includes:
 - [x] Add multiline editing support with proper rendering and selection highlighting
 - [x] Add comprehensive editor unit tests (47 tests covering basic editing, cursor movement, selection, undo/redo, multiline, history, kill ring, clipboard, and UTF-8)
 - [x] Implement configurable keybinding framework (`EditAction`, `KeyChord`, `KeyBindings`)
+- [x] Partial-line indicator on command completion (fish-style reverse-video `⏎` when command output doesn't end with newline)
 
 **Implementation Notes:**
 - Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
