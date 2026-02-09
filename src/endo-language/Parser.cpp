@@ -2446,8 +2446,15 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         isMutable, isRecursive, std::move(name), std::move(parameters), std::move(value));
 
     // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
-    while (isRecursive && _lexer.currentToken() == Token::And)
+    while (isRecursive)
     {
+        auto const skippedNewlines = consumeNewlines();
+        if (_lexer.currentToken() != Token::And)
+        {
+            if (skippedNewlines)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
         _lexer.nextToken(); // consume 'and'
 
         if (_lexer.currentToken() != Token::Identifier)
@@ -2489,6 +2496,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
             return nullptr;
         }
         _lexer.nextToken(); // consume '='
+        consumeNewlines();
 
         auto andValue = parseFSharpExpr();
         if (!andValue)

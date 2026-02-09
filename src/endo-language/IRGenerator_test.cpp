@@ -1414,6 +1414,16 @@ TEST_CASE("IRGenerator.FSharp.mutual_rec_parser_test")
                                     "and g n = match n with | 0 -> 1 | _ -> f (n - 1)"));
 }
 
+TEST_CASE("IRGenerator.FSharp.mutual_rec_multiline")
+{
+    CHECK(executesWithOutput("let rec isEven n =\n"
+                             "    match n with | 0 -> 1 | _ -> isOdd (n - 1)\n"
+                             "and isOdd n =\n"
+                             "    match n with | 0 -> 0 | _ -> isEven (n - 1);\n"
+                             "print (isEven 4)",
+                             "1"));
+}
+
 // =============================================================================
 // Let-In Expression Tests
 // =============================================================================
