@@ -1498,6 +1498,74 @@ TEST_CASE("E2E.rename_request_returns_workspace_edit", "[lsp][e2e]")
     CHECK(found);
 }
 
+TEST_CASE("E2E.unknown_command_produces_diagnostic", "[lsp][e2e][command-not-found]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "definitely_not_a_real_command_xyz" },
+                               } },
+                         }),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    bool foundDiagnostics = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("method", "") == "textDocument/publishDiagnostics")
+        {
+            foundDiagnostics = true;
+            CHECK(msg["params"]["uri"] == "file:///test.endo");
+            auto const& diags = msg["params"]["diagnostics"];
+            REQUIRE(!diags.empty());
+            CHECK(diags[0]["message"].get<std::string>().find("command not found") != std::string::npos);
+            CHECK(diags[0]["severity"] == 1); // Error
+            break;
+        }
+    }
+    CHECK(foundDiagnostics);
+}
+
+TEST_CASE("E2E.known_command_no_command_not_found_diagnostic", "[lsp][e2e][command-not-found]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "ls -la" },
+                               } },
+                         }),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    bool foundDiagnostics = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("method", "") == "textDocument/publishDiagnostics")
+        {
+            foundDiagnostics = true;
+            CHECK(msg["params"]["diagnostics"].empty());
+            break;
+        }
+    }
+    CHECK(foundDiagnostics);
+}
+
 TEST_CASE("E2E.initialize_advertises_documentSymbol_and_rename", "[lsp][e2e]")
 {
     auto responses = runSession({

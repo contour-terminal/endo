@@ -300,6 +300,14 @@ class Lexer
         _currentToken = TokenInfo { .token = token, .literal = std::move(literal) };
     }
 
+    /// @brief Pushes back a token with its source location preserved.
+    void pushBackToken(Token token, std::string literal, SourceLocationRange location)
+    {
+        _pushedBack = true;
+        _pushedBackToken = _currentToken;
+        _currentToken = TokenInfo { .token = token, .literal = std::move(literal), .location = location };
+    }
+
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
 

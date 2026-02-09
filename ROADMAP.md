@@ -827,6 +827,12 @@ Component (base class)
 - [x] Extract shared hover logic from LSP into `endo-language` (`HoverProvider.hpp/cpp`, `HoverInfo.hpp`, `StubRuntime.hpp`)
 - [x] Extract shared diagnostics collector from LSP into `endo-language` (`DiagnosticsCollector.hpp/cpp`)
 - [x] Implement parse error underlines in prompt (curly red underlines via extended `UnderlineStyle` enum and SGR 4:3/58;2;r;g;b)
+- [x] Implement command-not-found diagnostic (unknown shell commands underlined with error severity)
+  - [x] `ProgramCall` AST node stores `programLocation` for precise error ranges
+  - [x] `collectDiagnostics()` walks AST to validate commands against builtins, PATH, and defined functions
+  - [x] LSP publishes `command not found` errors for unknown commands in `.endo` files
+  - [x] Skips explicit paths (`./script`, `/usr/bin/ls`), builtins, shell/F# function definitions
+  - [x] 11 unit tests + 2 E2E LSP tests
 - [ ] Implement semantic highlighting (valid vs invalid commands)
 - [ ] Implement configurable color schemes
 

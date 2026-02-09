@@ -218,6 +218,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 {
                     auto savedToken = _lexer.currentToken();
                     auto savedLiteral = ident;
+                    auto savedRange = _lexer.currentRange();
                     _lexer.nextToken(); // consume identifier
                     if (_lexer.currentToken() == Token::LeftArrow)
                     {
@@ -234,7 +235,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     // Instead, we inject it as the command name and continue parsing.
                     // The identifier was consumed; fall through to command parsing by
                     // reconstructing a ProgramCall manually.
-                    _lexer.pushBackToken(savedToken, savedLiteral);
+                    _lexer.pushBackToken(savedToken, savedLiteral, savedRange);
                 }
 
                 // All other statements (builtins and commands) can participate
@@ -837,6 +838,7 @@ bool Parser::parseRedirect(std::vector<std::unique_ptr<ast::InputRedirect>>& inp
 std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
 {
     TRACE_SCOPE("parseCall");
+    auto const programLocation = _lexer.currentRange();
     std::string program = consumeLiteral();
     std::vector<std::unique_ptr<ast::Expr>> arguments;
     std::vector<std::unique_ptr<ast::InputRedirect>> inputRedirects;
@@ -985,13 +987,15 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
                                                            : _runtime.find("callproc(s)I");
     assert(builtinCallProcess != nullptr);
 
-    return std::make_unique<ast::ProgramCall>(*builtinCallProcess,
-                                              std::move(program),
-                                              std::move(arguments),
-                                              std::move(inputRedirects),
-                                              std::move(outputRedirects),
-                                              std::move(hereDocuments),
-                                              std::move(hereStrings));
+    auto result = std::make_unique<ast::ProgramCall>(*builtinCallProcess,
+                                                     std::move(program),
+                                                     std::move(arguments),
+                                                     std::move(inputRedirects),
+                                                     std::move(outputRedirects),
+                                                     std::move(hereDocuments),
+                                                     std::move(hereStrings));
+    result->programLocation = programLocation;
+    return result;
 }
 
 std::vector<std::unique_ptr<ast::Expr>> Parser::parseParameterList()
