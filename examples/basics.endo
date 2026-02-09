@@ -1,0 +1,53 @@
+// Basic arithmetic and variable bindings
+
+let x = 42
+let y = 10
+let sum = x + y
+println sum
+
+// Operator precedence
+let a = 2 + 3 * 4
+println a
+
+let b = (2 + 3) * 4
+println b
+
+let c = 17 % 5
+println c
+
+let d = 2 ** 10
+println d
+
+// String concatenation
+let greeting = "hello" + " world"
+println greeting
+
+// Auto-coercion in string concatenation
+let msg = "count: " + 42
+println msg
+
+// Boolean values and operators
+let flag = true
+println flag
+
+let negated = !true
+println negated
+
+let both = true && false
+println both
+
+let either = true || false
+println either
+
+// Chained let bindings
+let p = 1
+let q = 2
+let r = p + q
+println r
+
+// Mutable variables with <- assignment
+let mut counter = 0
+counter <- counter + 1
+counter <- counter + 1
+counter <- counter + 1
+println counter

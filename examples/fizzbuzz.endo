@@ -1,0 +1,21 @@
+// Classic FizzBuzz using let-in bindings and guarded match arms
+
+let fizzbuzz n =
+    let by3 = n % 3 in
+    let by5 = n % 5 in
+    match 0 with
+    | _ when by3 == 0 && by5 == 0 -> "FizzBuzz"
+    | _ when by3 == 0 -> "Fizz"
+    | _ when by5 == 0 -> "Buzz"
+    | _ -> string_of_int n
+
+println (fizzbuzz 1)
+println (fizzbuzz 2)
+println (fizzbuzz 3)
+println (fizzbuzz 4)
+println (fizzbuzz 5)
+println (fizzbuzz 6)
+println (fizzbuzz 7)
+println (fizzbuzz 10)
+println (fizzbuzz 15)
+println (fizzbuzz 30)

@@ -1,0 +1,44 @@
+// A simple calculator using functions and pattern matching
+
+let add x y = x + y
+let sub x y = x - y
+let mul x y = x * y
+let div x y =
+    if y == 0 then 0
+    else x / y
+
+// Dispatch operations by code using match
+let apply op x y =
+    match op with
+    | 1 -> add x y
+    | 2 -> sub x y
+    | 3 -> mul x y
+    | 4 -> div x y
+    | _ -> 0
+
+print "10 + 5 = "; println (apply 1 10 5)
+print "10 - 5 = "; println (apply 2 10 5)
+print "10 * 5 = "; println (apply 3 10 5)
+print "10 / 5 = "; println (apply 4 10 5)
+print "10 / 0 = "; println (apply 4 10 0)
+
+// Partial application
+let add10 = add 10
+let double = mul 2
+let square x = x * x
+
+print "add10 5 = "; println (add10 5)
+print "double 7 = "; println (double 7)
+print "square 9 = "; println (square 9)
+
+// Pipelines
+print "5 |> double |> add10 = "; println (5 |> double |> add10)
+print "3 |> square |> double = "; println (3 |> square |> double)
+
+// Tail-recursive accumulator for summing 1..n
+let rec accumulate n acc =
+    match n with
+    | 0 -> acc
+    | _ -> accumulate (n - 1) (acc + n)
+
+print "sum 1..10 = "; println (accumulate 10 0)
