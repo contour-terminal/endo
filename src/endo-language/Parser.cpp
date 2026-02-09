@@ -2064,6 +2064,11 @@ std::unique_ptr<ast::Statement> Parser::parseCallPipeline()
     return std::make_unique<ast::CallPipeline>(std::move(calls), background);
 }
 
+bool Parser::consumeNewlines()
+{
+    return consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+}
+
 bool Parser::tryConsumeToken(Token token)
 {
     if (_lexer.currentToken() != token)
@@ -2427,6 +2432,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
     _lexer.nextToken(); // consume '='
+    consumeNewlines();
 
     // Parse the value expression
     auto value = parseFSharpExpr();
@@ -2549,6 +2555,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
     }
     _lexer.nextToken(); // consume '='
+    consumeNewlines();
 
     // Parse the value expression
     auto value = parseFSharpExpr();
@@ -2556,6 +2563,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
 
     // Expect 'in' keyword
+    consumeNewlines();
     if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "in")
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -2566,6 +2574,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         return nullptr;
     }
     _lexer.nextToken(); // consume 'in'
+    consumeNewlines();
 
     // Parse the body expression
     auto body = parseFSharpExpr();
@@ -2886,9 +2895,18 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
     _lexer.nextToken(); // consume 'with'
 
     // Parse handlers: | pattern when guard -> body
+    // Skip newlines between 'with' and first '|', and between handler arms.
     std::vector<ast::MatchArm> handlers;
-    while (_lexer.currentToken() == Token::Pipe)
+    while (true)
     {
+        auto const skippedNewlines = consumeNewlines();
+        if (_lexer.currentToken() != Token::Pipe)
+        {
+            if (skippedNewlines)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
         _lexer.nextToken(); // consume '|'
 
         // Parse pattern
@@ -2971,6 +2989,7 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
         return nullptr;
     }
     _lexer.nextToken(); // consume '->'
+    consumeNewlines();
 
     // Parse the lambda body expression
     auto body = parseFSharpExpr();
@@ -3079,10 +3098,12 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             if (lit == "if")
             {
                 _lexer.nextToken(); // consume 'if'
+                consumeNewlines();
                 auto condition = parseFSharpExpr();
                 if (!condition)
                     return nullptr;
 
+                consumeNewlines();
                 if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "then")
                 {
                     _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -3093,11 +3114,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume 'then'
+                consumeNewlines();
 
                 auto thenExpr = parseFSharpExpr();
                 if (!thenExpr)
                     return nullptr;
 
+                consumeNewlines();
                 if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "else")
                 {
                     _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -3108,6 +3131,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume 'else'
+                consumeNewlines();
 
                 auto elseExpr = parseFSharpExpr();
                 if (!elseExpr)
@@ -4217,10 +4241,21 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
     _lexer.nextToken(); // consume 'with'
 
     // Parse match arms: | pattern -> expr
+    // Skip newlines between 'with' and first '|', and between arms.
     std::vector<ast::MatchArm> arms;
 
-    while (_lexer.currentToken() == Token::Pipe)
+    while (true)
     {
+        auto const skippedNewlines = consumeNewlines();
+        if (_lexer.currentToken() != Token::Pipe)
+        {
+            // Not a continuation arm. Push back a newline if we consumed any,
+            // so the caller's expression parser sees the statement boundary.
+            if (skippedNewlines)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
         _lexer.nextToken(); // consume '|'
 
         // Parse first pattern of this arm

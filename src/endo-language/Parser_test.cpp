@@ -1454,3 +1454,111 @@ TEST_CASE("Parser.FSharp.ASTPrinter.let_rec_multiple_params")
 {
     CHECK(parseAndPrintAST("let rec factorial n acc = n") == "let rec factorial n acc = n");
 }
+
+// =============================================================================
+// Multi-line Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.match_multiline_arms")
+{
+    auto ast = parse("let grade score = match score with\n"
+                     "    | s when s >= 90 -> \"A\"\n"
+                     "    | s when s >= 80 -> \"B\"\n"
+                     "    | _ -> \"F\"");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 3);
+}
+
+TEST_CASE("Parser.FSharp.match_multiline_followed_by_statement")
+{
+    // Multi-line match followed by another statement — ensures pushback works
+    auto ast = parse("let grade score = match score with\n"
+                     "    | s when s >= 90 -> \"A\"\n"
+                     "    | _ -> \"F\"\n"
+                     "let x = 42");
+    REQUIRE(ast != nullptr);
+
+    // Should parse as a compound statement with two let bindings
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    REQUIRE(compound->statements.size() == 2);
+
+    auto* letGrade = dynamic_cast<endo::ast::LetBindingStmt*>(compound->statements[0].get());
+    REQUIRE(letGrade != nullptr);
+    CHECK(letGrade->name == "grade");
+
+    auto* letX = dynamic_cast<endo::ast::LetBindingStmt*>(compound->statements[1].get());
+    REQUIRE(letX != nullptr);
+    CHECK(letX->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.match_singleline_still_works")
+{
+    // Regression guard: single-line match must still work
+    auto ast = parse("let r = match x with | 1 -> \"one\" | _ -> \"other\"");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.if_then_else_multiline")
+{
+    auto ast = parse("let r = if true\n"
+                     "    then 1\n"
+                     "    else 2");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* ifExpr = dynamic_cast<endo::ast::IfExpr*>(letStmt->value.get());
+    REQUIRE(ifExpr != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.lambda_multiline_body")
+{
+    auto ast = parse("let f = fun x ->\n"
+                     "    x");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0] == "x");
+}
+
+TEST_CASE("Parser.FSharp.let_in_multiline")
+{
+    auto ast = parse("let r = let x =\n"
+                     "    5\n"
+                     "    in\n"
+                     "    x");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* letIn = dynamic_cast<endo::ast::LetInExpr*>(letStmt->value.get());
+    REQUIRE(letIn != nullptr);
+    CHECK(letIn->name == "x");
+}
+
+TEST_CASE("Parser.FSharp.let_multiline_match_value")
+{
+    // Top-level let with multi-line match as value
+    auto ast = parse("let grade score =\n"
+                     "    match score with\n"
+                     "    | s when s >= 90 -> \"A\"\n"
+                     "    | _ -> \"F\"");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "grade");
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+}

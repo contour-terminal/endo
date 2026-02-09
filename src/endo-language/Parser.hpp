@@ -145,6 +145,10 @@ class Parser
     std::unique_ptr<ast::Statement> parseLogicalExpr();
     std::unique_ptr<ast::Statement> parseCallPipeline();
 
+    /// Skips LineFeed and Semicolon tokens (newlines between continuation lines).
+    /// Returns true if any were consumed.
+    bool consumeNewlines();
+
     bool tryConsumeToken(Token token);
     bool consumeOneOf(Token token);
 
