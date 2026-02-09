@@ -32,7 +32,8 @@ namespace
     {
         return colorEquals(a.fg, b.fg) && colorEquals(a.bg, b.bg) && a.bold == b.bold && a.italic == b.italic
                && a.underline == b.underline && a.strikethrough == b.strikethrough && a.dim == b.dim
-               && a.inverse == b.inverse;
+               && a.inverse == b.inverse && a.underlineStyle == b.underlineStyle
+               && colorEquals(a.underlineColor, b.underlineColor);
     }
 } // namespace
 

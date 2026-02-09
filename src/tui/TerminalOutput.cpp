@@ -422,11 +422,17 @@ void TerminalOutput::updateDimensions()
 
 void TerminalOutput::appendSgr(Style const& style)
 {
+    // Compute effective underline style
+    auto const effectiveUnderline = style.underlineStyle != UnderlineStyle::None
+                                        ? style.underlineStyle
+                                        : (style.underline ? UnderlineStyle::Single : UnderlineStyle::None);
+    auto const isDefaultUlColor = std::holds_alternative<std::monostate>(style.underlineColor);
+
     // Check if style is default (no attributes set)
     auto const isDefaultFg = std::holds_alternative<std::monostate>(style.fg);
     auto const isDefaultBg = std::holds_alternative<std::monostate>(style.bg);
-    if (isDefaultFg && isDefaultBg && !style.bold && !style.italic && !style.underline && !style.strikethrough
-        && !style.dim && !style.inverse)
+    if (isDefaultFg && isDefaultBg && !style.bold && !style.italic && !style.strikethrough && !style.dim
+        && !style.inverse && effectiveUnderline == UnderlineStyle::None)
         return;
 
     _buffer += "\033[";
@@ -452,10 +458,10 @@ void TerminalOutput::appendSgr(Style const& style)
         appendSep();
         _buffer += '3';
     }
-    if (style.underline)
+    if (effectiveUnderline != UnderlineStyle::None)
     {
         appendSep();
-        _buffer += '4';
+        _buffer += std::format("4:{}", static_cast<int>(effectiveUnderline));
     }
     if (style.inverse)
     {
@@ -490,6 +496,21 @@ void TerminalOutput::appendSgr(Style const& style)
     {
         appendSep();
         _buffer += std::format("48;2;{};{};{}", rgb->r, rgb->g, rgb->b);
+    }
+
+    // Underline color (SGR 58)
+    if (!isDefaultUlColor)
+    {
+        if (auto const* idx = std::get_if<std::uint8_t>(&style.underlineColor))
+        {
+            appendSep();
+            _buffer += std::format("58;5;{}", *idx);
+        }
+        else if (auto const* rgb = std::get_if<RgbColor>(&style.underlineColor))
+        {
+            appendSep();
+            _buffer += std::format("58;2;{};{};{}", rgb->r, rgb->g, rgb->b);
+        }
     }
 
     _buffer += 'm';

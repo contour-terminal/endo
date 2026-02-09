@@ -23,17 +23,30 @@ struct RgbColor
 /// @brief Color representation: default, 256-color index, or true color (RGB).
 using Color = std::variant<std::monostate, std::uint8_t, RgbColor>;
 
+/// @brief Underline style for terminal output (SGR 4:n).
+enum class UnderlineStyle : std::uint8_t
+{
+    None = 0,   ///< No underline.
+    Single = 1, ///< Single underline (SGR 4:1, same as SGR 4).
+    Double = 2, ///< Double underline (SGR 4:2).
+    Curly = 3,  ///< Curly/wavy underline (SGR 4:3).
+    Dotted = 4, ///< Dotted underline (SGR 4:4).
+    Dashed = 5, ///< Dashed underline (SGR 4:5).
+};
+
 /// @brief Text styling attributes for terminal output.
 struct Style
 {
-    Color fg;                   ///< Foreground color.
-    Color bg;                   ///< Background color.
-    bool bold = false;          ///< Bold text.
-    bool italic = false;        ///< Italic text.
-    bool underline = false;     ///< Underlined text.
-    bool strikethrough = false; ///< Strikethrough text.
-    bool dim = false;           ///< Dim/faint text.
-    bool inverse = false;       ///< Inverse/reverse video.
+    Color fg;                                             ///< Foreground color.
+    Color bg;                                             ///< Background color.
+    bool bold = false;                                    ///< Bold text.
+    bool italic = false;                                  ///< Italic text.
+    bool underline = false;                               ///< Underlined text (simple SGR 4).
+    bool strikethrough = false;                           ///< Strikethrough text.
+    bool dim = false;                                     ///< Dim/faint text.
+    bool inverse = false;                                 ///< Inverse/reverse video.
+    UnderlineStyle underlineStyle = UnderlineStyle::None; ///< Extended underline style (SGR 4:n).
+    Color underlineColor;                                 ///< Underline color (SGR 58;2;r;g;b or 58;5;idx).
 };
 
 /// @brief RAII guard for synchronized terminal output.
