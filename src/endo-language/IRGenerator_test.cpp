@@ -247,6 +247,172 @@ TEST_CASE("IRGenerator.FSharp.function_with_complex_body")
 }
 
 // =============================================================================
+// F# Handler-Compiled Function Tests (UCALL/URET)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_identity")
+{
+    // Identity function with type annotation compiles as handler (UCALL/URET)
+    CHECK(executesWithOutput("let id (x: int) = x; print (id 42)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_arithmetic")
+{
+    // Integer arithmetic with typed params compiles as handler
+    CHECK(executesWithOutput("let add (x: int) (y: int) = x + y; print (add 3 4)", "7"));
+    CHECK(executesWithOutput("let sq (x: int) = x * x; print (sq 5)", "25"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_if_then_else")
+{
+    // Branching with typed params in handler
+    CHECK(executesWithOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs (0 - 7))", "7"));
+    CHECK(executesWithOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs 3)", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_string_concat")
+{
+    // String concat with typed string param compiles as handler
+    CHECK(executesWithOutput(R"(let greet (name: str) = "hello " + name; print (greet "world"))",
+                             "hello world"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_multiple_calls")
+{
+    // Multiple calls to the same handler
+    CHECK(executesWithOutput("let inc (x: int) = x + 1; print (inc (inc (inc 0)))", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_float")
+{
+    // Float function with type annotations compiles as handler
+    CHECK(executesWithOutput("let double (x: float) = x * 2.0; print (double 3.5)", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_typed_bool")
+{
+    // Boolean parameter with type annotation
+    CHECK(executesWithOutput(R"(let show (b: bool) = if b then "yes" else "no"; print (show true))", "yes"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_zero_params")
+{
+    // Zero-parameter function compiles as handler
+    CHECK(executesWithOutput("let answer = 42; print answer", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_fallback_untyped")
+{
+    // Functions without type annotations fall back to AST inlining but still work
+    CHECK(executesWithOutput("let id x = x; print (id 42)", "42"));
+    CHECK(executesWithOutput("let add x y = x + y; print (add 3 4)", "7"));
+    CHECK(executesWithOutput("let double x = x * 2.0; print (double 3.5)", "7"));
+    CHECK(executesWithOutput("let make x = x :: []; print (make 99)", "[99]"));
+    CHECK(executesWithOutput(R"(let greet name = "hello " + name; print (greet "world"))", "hello world"));
+}
+
+// =============================================================================
+// F# Closure Tests (Handler-compiled functions with captured variables)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.closure_capture_int")
+{
+    // Closure captures an integer from enclosing scope
+    CHECK(executesWithOutput("let x = 10; let addx (y: int) = x + y; print (addx 5)", "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_capture_multiple")
+{
+    // Closure captures multiple variables
+    CHECK(executesWithOutput("let a = 3; let b = 7; let f (x: int) = a + b + x; print (f 10)", "20"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_capture_string")
+{
+    // Closure captures a string from enclosing scope (type annotation is `str` not `string`)
+    CHECK(executesWithOutput(
+        R"(let prefix = "hello "; let greet (name: str) = prefix + name; print (greet "world"))",
+        "hello world"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_capture_float")
+{
+    // Closure captures a float
+    CHECK(executesWithOutput("let scale = 2.5; let f (x: float) = x * scale; print (f 4.0)", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_multiple_calls")
+{
+    // Same closure called multiple times with different arguments
+    CHECK(executesWithOutput("let offset = 100; let f (x: int) = x + offset; print (f 1); print (f 2)",
+                             "101102"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_nested_lets")
+{
+    // Closure captures from nested let bindings
+    CHECK(executesWithOutput("let x = 5; let y = 10; let z = 20; let f (n: int) = x + y + z + n; print (f 1)",
+                             "36"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_zero_params_with_capture")
+{
+    // Thunk with capture — uses untyped parameter, falls back to AST inlining
+    CHECK(executesWithOutput("let x = 42; let f _dummy = x; print (f 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.closure_capture_untyped_fallback")
+{
+    // Untyped closure falls back to AST inlining but still works
+    CHECK(executesWithOutput("let x = 10; let addx y = x + y; print (addx 5)", "15"));
+}
+
+// =============================================================================
+// F# Recursive Function Tests (UCALL/UTCALL-based with type annotations)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.handler_recursive_countdown")
+{
+    // Tail-recursive countdown using UTCALL
+    CHECK(executesWithOutput(
+        "let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1); print (countdown 10)", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_recursive_factorial_tail")
+{
+    // Tail-recursive factorial with accumulator
+    CHECK(executesWithOutput(
+        "let rec fact (n: int) (acc: int) = if n <= 1 then acc else fact (n - 1) (n * acc);"
+        " print (fact 5 1)",
+        "120"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_recursive_sum")
+{
+    // Tail-recursive sum using match
+    CHECK(executesWithOutput(
+        "let rec sum (n: int) (acc: int) = match n with | 0 -> acc | _ -> sum (n - 1) (acc + n);"
+        " print (sum 10 0)",
+        "55"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_recursive_multiple_calls")
+{
+    // Recursive function called multiple times
+    CHECK(executesWithOutput("let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1);"
+                             " print (countdown 5); print (countdown 3)",
+                             "00"));
+}
+
+TEST_CASE("IRGenerator.FSharp.handler_recursive_with_capture")
+{
+    // Recursive function that captures a variable
+    CHECK(executesWithOutput(
+        "let step = 2; let rec count (n: int) = if n <= 0 then 0 else count (n - step); print (count 10)",
+        "0"));
+}
+
+// =============================================================================
 // F# Pipeline Tests
 // =============================================================================
 
@@ -2576,6 +2742,28 @@ TEST_CASE("IRGenerator.FSharp.TypeAnnotation.partial_application")
 TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_persistence")
 {
     CHECK(sessionProducesOutput({ "let add (x: int) (y: int): int = x + y", "print (add 10 20)" }, "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_recursive")
+{
+    // Typed recursive function defined in one prompt, called in the next (compiled as handler)
+    CHECK(sessionProducesOutput({ "let rec countdown (n: int): int = if n <= 0 then 0 else countdown (n - 1)",
+                                  "print (countdown 5)" },
+                                "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_with_closure")
+{
+    // Typed function capturing a persisted value binding (closure via handler)
+    CHECK(sessionProducesOutput(
+        { "let offset = 10", "let addOffset (x: int): int = x + offset", "print (addOffset 5)" }, "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_multiple_calls")
+{
+    // Typed handler function called across multiple prompts
+    CHECK(sessionProducesOutput(
+        { "let square (x: int): int = x * x", "print (square 4)", "print (square 7)" }, "49"));
 }
 
 // =============================================================================

@@ -276,12 +276,47 @@ class IRGenerator final: public ast::Visitor
         /// Captured variable bindings from the enclosing scope at function creation time.
         /// Maps variable names to their storage (entry-block allocas).
         std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
+        /// Deterministic ordering of captured variable names for handler compilation.
+        /// Populated by compileFunctionAsHandler; used at both definition and call sites.
+        std::vector<std::string> captureOrder;
+        /// Pre-compiled IR handler (set when closure-based compilation is active).
+        /// When non-null, calls emit FunctionCallInstr instead of AST inlining.
+        CoreVM::IRHandler* compiledHandler = nullptr;
+        /// IR return type of the compiled handler body (valid when compiledHandler != nullptr).
+        CoreVM::LiteralType compiledReturnType = CoreVM::LiteralType::Void;
 
         size_t arity() const { return parameters.size(); }
     };
 
     void registerFSharpFunction(std::string const& name, FSharpFunction func);
     [[nodiscard]] FSharpFunction const* lookupFSharpFunction(std::string const& name) const;
+
+    // F# function call dispatch helpers (extracted from visit(ApplicationExpr))
+
+    /// Generates IR for a partial application (under-saturated call).
+    /// Creates a new lambda capturing the supplied arguments.
+    void generatePartialApplication(FSharpFunction const* func,
+                                    std::string const& funcName,
+                                    std::vector<CoreVM::Value*> const& args);
+
+    /// Generates IR for a mutual-recursive function call using dispatch-loop optimization.
+    void generateMutualRecursiveCall(FSharpFunction const* func,
+                                     std::string const& funcName,
+                                     std::vector<CoreVM::Value*> const& args);
+
+    /// Generates IR for a self-recursive function call using loop-based tail-call optimization.
+    void generateRecursiveCall(FSharpFunction const* func,
+                               std::string const& funcName,
+                               std::vector<CoreVM::Value*> const& args);
+
+    /// Generates IR for a non-recursive function call by inlining the function body.
+    void generateFSharpCall(FSharpFunction const* func,
+                            std::string const& funcName,
+                            std::vector<CoreVM::Value*> const& args);
+
+    /// Compiles a function definition as a separate IRHandler for closure-based calls.
+    /// Sets func->compiledHandler to the new handler on success.
+    void compileFunctionAsHandler(std::string const& name, FSharpFunction& func);
 
     /// Maps a high-level TypePtr to the corresponding CoreVM::LiteralType for validation.
     [[nodiscard]] static std::optional<CoreVM::LiteralType> mapTypeToLiteralType(TypePtr const& type);
@@ -400,6 +435,14 @@ class IRGenerator final: public ast::Visitor
 
     std::optional<RecursiveCallContext> _activeRecursion;
     std::optional<MutualRecursionContext> _activeMutualRecursion;
+
+    /// True when the current expression being codegen'd is in tail position
+    /// (i.e., its value is the function's return value). Used to decide UCALL vs UTCALL.
+    bool _inTailPosition = false;
+
+    /// The handler currently being compiled by compileFunctionAsHandler, or nullptr.
+    /// Used to detect that we're inside a function handler compilation (not the main handler).
+    CoreVM::IRHandler* _compilingHandler = nullptr;
 
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;

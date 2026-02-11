@@ -140,6 +140,12 @@ namespace
     /// Sum types (Option/Result) with different tags are compatible (e.g., Some(42) vs None).
     [[nodiscard]] bool typesCompatible(CoreVM::Value* a, CoreVM::Value* b)
     {
+        // Void acts as a wildcard (unknown type) — compatible with anything.
+        // This occurs for function handler parameters whose concrete types aren't
+        // known until call time.
+        if (a->type() == CoreVM::LiteralType::Void || b->type() == CoreVM::LiteralType::Void)
+            return true;
+
         // Different base IR types → incompatible
         if (a->type() != b->type())
             return false;
@@ -257,6 +263,18 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                 generator.bindFSharpObjectVariable(binding.name, storage, binding.isMutable);
             else
                 generator.bindFSharpVariable(binding.name, storage, binding.isMutable);
+        }
+
+        // Re-compute captured bindings and compile persisted functions as handlers.
+        // Value bindings are now in scope, so closures can resolve their captures.
+        for (auto& [name, func]: generator._fsharpFunctions)
+        {
+            if (func.body)
+            {
+                auto boundNames = func.parameters;
+                func.capturedBindings = generator.collectFreeVariables(func.body, boundNames);
+            }
+            generator.compileFunctionAsHandler(name, func);
         }
     }
 
@@ -2751,8 +2769,11 @@ void IRGenerator::visit(ast::IfExpr const& node)
     // createAllocaInEntryBlock() always inserts into the entry block, so calling it later is safe.
     CoreVM::AllocaInstr* resultStorage = nullptr;
 
-    // Codegen condition
+    // Codegen condition (not in tail position)
+    auto savedTailPos = _inTailPosition;
+    _inTailPosition = false;
     auto* condValue = codegen(node.condition.get());
+    _inTailPosition = savedTailPos; // Restore for branches
     if (!condValue)
     {
         reportTypeError("Failed to generate code for if condition");
@@ -2767,7 +2788,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
 
     _builder.createCondBr(condBool, thenBlock, elseBlock);
 
-    // Then branch
+    // Then branch (inherits tail position from parent)
     _builder.setInsertPoint(thenBlock);
     auto* thenResult = codegen(node.thenExpr.get());
     if (thenResult)
@@ -2776,7 +2797,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, thenResult, "if.then.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion)
+    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
     {
         // Tail call in then branch — no merge needed from this path
     }
@@ -2803,7 +2824,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, elseResult, "if.else.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion)
+    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
     {
         // Tail call in else branch — no merge needed from this path
     }
@@ -2983,6 +3004,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.capturedBindings = collectFreeVariables(func.body, allBound);
 
             registerFSharpFunction(node.name, std::move(func));
+
+            // Compile functions as separate IRHandlers (with captures as extra params).
+            // For recursive functions, compiledHandler is set before body codegen so that
+            // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
+            if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+                compileFunctionAsHandler(node.name, *registered);
         }
 
         // Register 'and' bindings (mutual recursion partners)
@@ -3005,6 +3032,16 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             registerFSharpFunction(ab.name, std::move(func));
         }
 
+        // Compile mutual recursion 'and' bindings as handlers (after ALL are registered)
+        if (isMutual)
+        {
+            for (auto const& ab: node.andBindings)
+            {
+                if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(ab.name)))
+                    compileFunctionAsHandler(ab.name, *registered);
+            }
+        }
+
         _result = nullptr;
         return;
     }
@@ -3020,6 +3057,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.returnKind = determineReturnKind(func.body);
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
         registerFSharpFunction(node.name, std::move(func));
+
+        // Compile lambda-as-variable as separate IRHandler (with captures as extra params)
+        if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+            compileFunctionAsHandler(node.name, *registered);
+
         _result = nullptr;
         return;
     }
@@ -3113,7 +3155,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
     // Destructuring let-in: let (x, y) = expr in body
     if (node.isDestructuring())
     {
+        auto savedTailPos = _inTailPosition;
+        _inTailPosition = false; // Binding value is not in tail position
         auto* value = codegen(node.value.get());
+        _inTailPosition = savedTailPos;
         if (!value)
         {
             popFSharpScope();
@@ -3168,8 +3213,11 @@ void IRGenerator::visit(ast::LetInExpr const& node)
     }
     else
     {
-        // Simple binding: let x = expr in body
+        // Simple binding: let x = expr in body (value is not in tail position)
+        auto savedTailPos = _inTailPosition;
+        _inTailPosition = false;
         auto* value = codegen(node.value.get());
+        _inTailPosition = savedTailPos;
         if (!value)
         {
             popFSharpScope();
@@ -3217,6 +3265,10 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 void IRGenerator::visit(ast::BinaryExpr const& node)
 {
     TRACE_SCOPE("visit(BinaryExpr)");
+
+    // Binary operands are not in tail position
+    auto savedTailPos = _inTailPosition;
+    _inTailPosition = false;
 
     // Codegen both operands
     CoreVM::Value* left = codegen(node.left.get());
@@ -3364,6 +3416,8 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
         case ast::BinaryOp::Or: _result = _builder.createBOr(toBool(left), toBool(right), "or"); break;
     }
+
+    _inTailPosition = savedTailPos;
 }
 
 void IRGenerator::visit(ast::UnaryExpr const& node)
@@ -3758,7 +3812,9 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             return;
     }
 
-    // Evaluate all arguments
+    // Evaluate all arguments (arguments are NOT in tail position)
+    auto savedTailPos = _inTailPosition;
+    _inTailPosition = false;
     std::vector<CoreVM::Value*> args;
     for (ast::Expr const* argExpr: argExprs)
     {
@@ -3770,6 +3826,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
         args.push_back(argValue);
     }
+    _inTailPosition = savedTailPos; // Restore: the call itself inherits parent's tail position
 
     // The base can be:
     // 1. An identifier (named function): double 5
@@ -3819,265 +3876,350 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
     if (args.size() < func->arity())
     {
-        // Partial application: validate supplied argument types
-        for (size_t i = 0; i < args.size(); ++i)
-        {
-            if (i < func->parameterTypes.size() && func->parameterTypes[i])
-            {
-                if (!validateTypeAnnotation(
-                        *func->parameterTypes[i],
-                        args[i],
-                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
-                    return;
-            }
-        }
-
-        // Create a new function with remaining parameters
-        std::unordered_map<std::string, CoreVM::Value*> newCaptures = func->capturedBindings;
-        for (size_t i = 0; i < args.size(); ++i)
-        {
-            auto const& paramName = func->parameters[i];
-            auto* alloca = createAllocaInEntryBlock(args[i]->type(), "partial." + paramName);
-            _builder.createStore(alloca, args[i], "partial.store." + paramName);
-            newCaptures[paramName] = alloca;
-        }
-
-        auto partialName = generateLambdaName();
-        FSharpFunction partialFunc;
-        partialFunc.parameters = { func->parameters.begin() + static_cast<ptrdiff_t>(args.size()),
-                                   func->parameters.end() };
-        if (func->parameterTypes.size() > args.size())
-            partialFunc.parameterTypes = { func->parameterTypes.begin() + static_cast<ptrdiff_t>(args.size()),
-                                           func->parameterTypes.end() };
-        partialFunc.returnType = func->returnType;
-        partialFunc.body = func->body;
-        partialFunc.returnKind = func->returnKind;
-        partialFunc.isRecursive = false;
-        partialFunc.capturedBindings = std::move(newCaptures);
-
-        registerFSharpFunction(partialName, std::move(partialFunc));
-        _result = _builder.get(partialName);
+        generatePartialApplication(func, funcName, args);
         return;
     }
 
-    // Handle recursive function calls (let rec)
+    // If the function was compiled as a handler (UCALL/UTCALL), use that path
+    // regardless of whether it's recursive or not.
+    if (func->compiledHandler)
+    {
+        generateFSharpCall(func, funcName, args);
+        return;
+    }
+
+    // Fallback: loop-based recursion for untyped recursive functions
     if (func->isRecursive)
     {
-        // === Mutual recursion: dispatch-loop approach ===
         if (!func->mutualGroup.empty())
+            generateMutualRecursiveCall(func, funcName, args);
+        else
+            generateRecursiveCall(func, funcName, args);
+        return;
+    }
+
+    // Non-recursive function: inline the function body
+    generateFSharpCall(func, funcName, args);
+}
+
+void IRGenerator::generatePartialApplication(FSharpFunction const* func,
+                                             std::string const& funcName,
+                                             std::vector<CoreVM::Value*> const& args)
+{
+    // Partial application: validate supplied argument types
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        if (i < func->parameterTypes.size() && func->parameterTypes[i])
         {
-            // Case B (mutual): Tail-call from within a mutual recursion body
-            if (_activeMutualRecursion)
-            {
-                if (auto const* slot = _activeMutualRecursion->findFunction(funcName))
-                {
-                    // Store new argument values into the target function's param allocas
-                    for (size_t i = 0; i < args.size(); ++i)
-                        _builder.createStore(slot->paramAllocas[i], args[i], "mutual.arg.update");
-
-                    // Set dispatch tag to route to the target function
-                    _builder.createStore(_activeMutualRecursion->dispatchTag,
-                                         _builder.get(CoreVM::CoreNumber(slot->dispatchIndex)),
-                                         "mutual.dispatch.update");
-
-                    // Jump back to dispatch loop entry
-                    _builder.createBr(_activeMutualRecursion->dispatchBlock);
-
-                    // Create unreachable continuation block (code after tail call is dead)
-                    auto* unreachable = _builder.createBlock("mutual.unreachable");
-                    _builder.setInsertPoint(unreachable);
-
-                    _result = nullptr;
-                    return;
-                }
-            }
-
-            // Case A (mutual): First external call — set up dispatch loop
-            auto* dispatchBlock = _builder.createBlock("mutual.dispatch");
-            auto* exitBlock = _builder.createBlock("mutual.exit");
-            auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.result");
-            auto* dispatchTag = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.tag");
-
-            // Build the mutual recursion context with param allocas for every function
-            MutualRecursionContext ctx;
-            ctx.dispatchBlock = dispatchBlock;
-            ctx.exitBlock = exitBlock;
-            ctx.resultStorage = resultStorage;
-            ctx.dispatchTag = dispatchTag;
-
-            int calledIndex = -1;
-            for (size_t i = 0; i < func->mutualGroup.size(); ++i)
-            {
-                auto const& fnName = func->mutualGroup[i];
-                auto const* fn = lookupFSharpFunction(fnName);
-
-                MutualRecursionContext::FunctionSlot slot;
-                slot.name = fnName;
-                slot.dispatchIndex = static_cast<int>(i);
-                for (auto const& param: fn->parameters)
-                {
-                    auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number,
-                                                            "mutual." + fnName + "." + param);
-                    slot.paramAllocas.push_back(alloca);
-                }
-                ctx.functions.push_back(std::move(slot));
-
-                if (fnName == funcName)
-                    calledIndex = static_cast<int>(i);
-            }
-
-            // Store initial dispatch tag and arguments for the called function
-            _builder.createStore(
-                dispatchTag, _builder.get(CoreVM::CoreNumber(calledIndex)), "mutual.tag.init");
-            for (size_t i = 0; i < args.size(); ++i)
-                _builder.createStore(ctx.functions[calledIndex].paramAllocas[i], args[i], "mutual.arg.init");
-
-            _activeMutualRecursion = std::move(ctx);
-
-            // Jump to the dispatch loop
-            _builder.createBr(dispatchBlock);
-            _builder.setInsertPoint(dispatchBlock);
-
-            // Create body blocks for each function
-            std::vector<CoreVM::BasicBlock*> bodyBlocks;
-            for (auto const& fn: func->mutualGroup)
-                bodyBlocks.push_back(_builder.createBlock("mutual.body." + fn));
-
-            // Generate dispatch chain: tag == 0 → body[0], tag == 1 → body[1], ...
-            auto* tagValue = _builder.createLoad(dispatchTag, "mutual.tag.load");
-            for (size_t i = 0; i + 1 < func->mutualGroup.size(); ++i)
-            {
-                auto* nextCheck = _builder.createBlock("mutual.check." + std::to_string(i + 1));
-                auto* cmp =
-                    _builder.createNCmpEQ(tagValue, _builder.get(CoreVM::CoreNumber(static_cast<int>(i))));
-                _builder.createCondBr(cmp, bodyBlocks[i], nextCheck);
-                _builder.setInsertPoint(nextCheck);
-            }
-            // Last function: unconditional branch
-            _builder.createBr(bodyBlocks.back());
-
-            // Generate each function body
-            for (size_t i = 0; i < func->mutualGroup.size(); ++i)
-            {
-                _builder.setInsertPoint(bodyBlocks[i]);
-                auto const& fnName = func->mutualGroup[i];
-                auto const* fn = lookupFSharpFunction(fnName);
-                auto const& slot = _activeMutualRecursion->functions[i];
-
-                pushFSharpScope();
-                for (auto const& [capName, capStorage]: fn->capturedBindings)
-                    bindFSharpVariable(capName, capStorage);
-                for (size_t j = 0; j < fn->parameters.size(); ++j)
-                    bindFSharpVariable(fn->parameters[j], slot.paramAllocas[j]);
-
-                // Codegen body (recursive calls within will hit Case B above)
-                auto* bodyResult = codegen(fn->body);
-
-                if (bodyResult)
-                {
-                    _builder.createStore(resultStorage, bodyResult, "mutual.store.result");
-                    _builder.createBr(exitBlock);
-                }
-
-                popFSharpScope();
-            }
-
-            // Continue from exit block
-            _builder.setInsertPoint(exitBlock);
-            _result = _builder.createLoad(resultStorage, "mutual.load.result");
-
-            _activeMutualRecursion.reset();
-            return;
+            if (!validateTypeAnnotation(*func->parameterTypes[i],
+                                        args[i],
+                                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                return;
         }
+    }
 
-        // === Self-recursion: simple loop approach ===
+    // Create a new function with remaining parameters
+    std::unordered_map<std::string, CoreVM::Value*> newCaptures = func->capturedBindings;
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        auto const& paramName = func->parameters[i];
+        auto* alloca = createAllocaInEntryBlock(args[i]->type(), "partial." + paramName);
+        _builder.createStore(alloca, args[i], "partial.store." + paramName);
+        newCaptures[paramName] = alloca;
+    }
 
-        // Case B: Recursive tail-call from within body — jump back to entry block
-        if (_activeRecursion && _activeRecursion->functionName == funcName)
+    auto partialName = generateLambdaName();
+    FSharpFunction partialFunc;
+    partialFunc.parameters = { func->parameters.begin() + static_cast<ptrdiff_t>(args.size()),
+                               func->parameters.end() };
+    if (func->parameterTypes.size() > args.size())
+        partialFunc.parameterTypes = { func->parameterTypes.begin() + static_cast<ptrdiff_t>(args.size()),
+                                       func->parameterTypes.end() };
+    partialFunc.returnType = func->returnType;
+    partialFunc.body = func->body;
+    partialFunc.returnKind = func->returnKind;
+    partialFunc.isRecursive = false;
+    partialFunc.capturedBindings = std::move(newCaptures);
+
+    registerFSharpFunction(partialName, std::move(partialFunc));
+    _result = _builder.get(partialName);
+}
+
+void IRGenerator::generateMutualRecursiveCall(FSharpFunction const* func,
+                                              std::string const& funcName,
+                                              std::vector<CoreVM::Value*> const& args)
+{
+    // Case B (mutual): Tail-call from within a mutual recursion body
+    if (_activeMutualRecursion)
+    {
+        if (auto const* slot = _activeMutualRecursion->findFunction(funcName))
         {
-            // Store new argument values into parameter allocas
+            // Store new argument values into the target function's param allocas
             for (size_t i = 0; i < args.size(); ++i)
-                _builder.createStore(_activeRecursion->paramAllocas[i], args[i], "rec.arg.update");
+                _builder.createStore(slot->paramAllocas[i], args[i], "mutual.arg.update");
 
-            // Jump back to the entry block (tail-call as loop iteration)
-            _builder.createBr(_activeRecursion->entryBlock);
+            // Set dispatch tag to route to the target function
+            _builder.createStore(_activeMutualRecursion->dispatchTag,
+                                 _builder.get(CoreVM::CoreNumber(slot->dispatchIndex)),
+                                 "mutual.dispatch.update");
+
+            // Jump back to dispatch loop entry
+            _builder.createBr(_activeMutualRecursion->dispatchBlock);
 
             // Create unreachable continuation block (code after tail call is dead)
-            auto* unreachable = _builder.createBlock("rec.unreachable");
+            auto* unreachable = _builder.createBlock("mutual.unreachable");
             _builder.setInsertPoint(unreachable);
 
-            // Signal tail call: result is nullptr (no value produced inline)
             _result = nullptr;
             return;
         }
+    }
 
-        // Case A: First (external) call to recursive function — set up loop
+    // Case A (mutual): First external call — set up dispatch loop
+    auto* dispatchBlock = _builder.createBlock("mutual.dispatch");
+    auto* exitBlock = _builder.createBlock("mutual.exit");
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.result");
+    auto* dispatchTag = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual.tag");
 
-        // Validate parameter type annotations at entry point
-        for (size_t i = 0; i < func->parameters.size(); ++i)
+    // Build the mutual recursion context with param allocas for every function
+    MutualRecursionContext ctx;
+    ctx.dispatchBlock = dispatchBlock;
+    ctx.exitBlock = exitBlock;
+    ctx.resultStorage = resultStorage;
+    ctx.dispatchTag = dispatchTag;
+
+    int calledIndex = -1;
+    for (size_t i = 0; i < func->mutualGroup.size(); ++i)
+    {
+        auto const& fnName = func->mutualGroup[i];
+        auto const* fn = lookupFSharpFunction(fnName);
+
+        MutualRecursionContext::FunctionSlot slot;
+        slot.name = fnName;
+        slot.dispatchIndex = static_cast<int>(i);
+        for (auto const& param: fn->parameters)
         {
-            if (i < func->parameterTypes.size() && func->parameterTypes[i])
-            {
-                if (!validateTypeAnnotation(
-                        *func->parameterTypes[i],
-                        args[i],
-                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
-                    return;
-            }
+            auto* alloca =
+                createAllocaInEntryBlock(CoreVM::LiteralType::Number, "mutual." + fnName + "." + param);
+            slot.paramAllocas.push_back(alloca);
         }
+        ctx.functions.push_back(std::move(slot));
 
-        auto* entryBlock = _builder.createBlock("rec.entry");
-        auto* exitBlock = _builder.createBlock("rec.exit");
+        if (fnName == funcName)
+            calledIndex = static_cast<int>(i);
+    }
 
-        // Create parameter allocas and result storage in the handler entry block
-        std::vector<CoreVM::AllocaInstr*> paramAllocas;
-        for (size_t i = 0; i < func->parameters.size(); ++i)
-        {
-            auto* alloca = createAllocaInEntryBlock(args[i]->type(), "rec.param." + func->parameters[i]);
-            _builder.createStore(alloca, args[i], "rec.param.init");
-            paramAllocas.push_back(alloca);
-        }
+    // Store initial dispatch tag and arguments for the called function
+    _builder.createStore(dispatchTag, _builder.get(CoreVM::CoreNumber(calledIndex)), "mutual.tag.init");
+    for (size_t i = 0; i < args.size(); ++i)
+        _builder.createStore(ctx.functions[calledIndex].paramAllocas[i], args[i], "mutual.arg.init");
 
-        auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+    _activeMutualRecursion = std::move(ctx);
 
-        // Set up the recursion context
-        _activeRecursion = RecursiveCallContext {
-            .functionName = funcName,
-            .entryBlock = entryBlock,
-            .paramAllocas = paramAllocas,
-            .resultStorage = resultStorage,
-            .exitBlock = exitBlock,
-        };
+    // Jump to the dispatch loop
+    _builder.createBr(dispatchBlock);
+    _builder.setInsertPoint(dispatchBlock);
 
-        // Jump to entry block and begin the loop
-        _builder.createBr(entryBlock);
-        _builder.setInsertPoint(entryBlock);
+    // Create body blocks for each function
+    std::vector<CoreVM::BasicBlock*> bodyBlocks;
+    for (auto const& fn: func->mutualGroup)
+        bodyBlocks.push_back(_builder.createBlock("mutual.body." + fn));
 
-        // Push scope and bind captures and parameters from allocas
+    // Generate dispatch chain: tag == 0 → body[0], tag == 1 → body[1], ...
+    auto* tagValue = _builder.createLoad(dispatchTag, "mutual.tag.load");
+    for (size_t i = 0; i + 1 < func->mutualGroup.size(); ++i)
+    {
+        auto* nextCheck = _builder.createBlock("mutual.check." + std::to_string(i + 1));
+        auto* cmp = _builder.createNCmpEQ(tagValue, _builder.get(CoreVM::CoreNumber(static_cast<int>(i))));
+        _builder.createCondBr(cmp, bodyBlocks[i], nextCheck);
+        _builder.setInsertPoint(nextCheck);
+    }
+    // Last function: unconditional branch
+    _builder.createBr(bodyBlocks.back());
+
+    // Generate each function body
+    for (size_t i = 0; i < func->mutualGroup.size(); ++i)
+    {
+        _builder.setInsertPoint(bodyBlocks[i]);
+        auto const& fnName = func->mutualGroup[i];
+        auto const* fn = lookupFSharpFunction(fnName);
+        auto const& slot = _activeMutualRecursion->functions[i];
+
         pushFSharpScope();
-        for (auto const& [capName, capStorage]: func->capturedBindings)
+        for (auto const& [capName, capStorage]: fn->capturedBindings)
             bindFSharpVariable(capName, capStorage);
-        for (size_t i = 0; i < func->parameters.size(); ++i)
-            bindFSharpVariable(func->parameters[i], paramAllocas[i]);
+        for (size_t j = 0; j < fn->parameters.size(); ++j)
+            bindFSharpVariable(fn->parameters[j], slot.paramAllocas[j]);
 
-        // Codegen the function body (recursive calls will hit Case B above)
-        auto* bodyResult = codegen(func->body);
+        // Codegen body (recursive calls within will hit Case B above)
+        auto* bodyResult = codegen(fn->body);
 
-        // If body produced a result (non-tail path), store it and branch to exit
         if (bodyResult)
         {
-            _builder.createStore(resultStorage, bodyResult, "rec.store.result");
+            _builder.createStore(resultStorage, bodyResult, "mutual.store.result");
             _builder.createBr(exitBlock);
         }
 
         popFSharpScope();
+    }
 
-        // Continue from the exit block, load the result
-        _builder.setInsertPoint(exitBlock);
-        _result = _builder.createLoad(resultStorage, "rec.load.result");
+    // Continue from exit block
+    _builder.setInsertPoint(exitBlock);
+    _result = _builder.createLoad(resultStorage, "mutual.load.result");
 
-        // Clear the recursion context
-        _activeRecursion.reset();
+    _activeMutualRecursion.reset();
+}
+
+void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
+                                        std::string const& funcName,
+                                        std::vector<CoreVM::Value*> const& args)
+{
+    // Case B: Recursive tail-call from within body — jump back to entry block
+    if (_activeRecursion && _activeRecursion->functionName == funcName)
+    {
+        // Store new argument values into parameter allocas
+        for (size_t i = 0; i < args.size(); ++i)
+            _builder.createStore(_activeRecursion->paramAllocas[i], args[i], "rec.arg.update");
+
+        // Jump back to the entry block (tail-call as loop iteration)
+        _builder.createBr(_activeRecursion->entryBlock);
+
+        // Create unreachable continuation block (code after tail call is dead)
+        auto* unreachable = _builder.createBlock("rec.unreachable");
+        _builder.setInsertPoint(unreachable);
+
+        // Signal tail call: result is nullptr (no value produced inline)
+        _result = nullptr;
+        return;
+    }
+
+    // Case A: First (external) call to recursive function — set up loop
+
+    // Validate parameter type annotations at entry point
+    for (size_t i = 0; i < func->parameters.size(); ++i)
+    {
+        if (i < func->parameterTypes.size() && func->parameterTypes[i])
+        {
+            if (!validateTypeAnnotation(*func->parameterTypes[i],
+                                        args[i],
+                                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                return;
+        }
+    }
+
+    auto* entryBlock = _builder.createBlock("rec.entry");
+    auto* exitBlock = _builder.createBlock("rec.exit");
+
+    // Create parameter allocas and result storage in the handler entry block
+    std::vector<CoreVM::AllocaInstr*> paramAllocas;
+    for (size_t i = 0; i < func->parameters.size(); ++i)
+    {
+        auto* alloca = createAllocaInEntryBlock(args[i]->type(), "rec.param." + func->parameters[i]);
+        _builder.createStore(alloca, args[i], "rec.param.init");
+        paramAllocas.push_back(alloca);
+    }
+
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+
+    // Set up the recursion context
+    _activeRecursion = RecursiveCallContext {
+        .functionName = funcName,
+        .entryBlock = entryBlock,
+        .paramAllocas = paramAllocas,
+        .resultStorage = resultStorage,
+        .exitBlock = exitBlock,
+    };
+
+    // Jump to entry block and begin the loop
+    _builder.createBr(entryBlock);
+    _builder.setInsertPoint(entryBlock);
+
+    // Push scope and bind captures and parameters from allocas
+    pushFSharpScope();
+    for (auto const& [capName, capStorage]: func->capturedBindings)
+        bindFSharpVariable(capName, capStorage);
+    for (size_t i = 0; i < func->parameters.size(); ++i)
+        bindFSharpVariable(func->parameters[i], paramAllocas[i]);
+
+    // Codegen the function body (recursive calls will hit Case B above)
+    auto* bodyResult = codegen(func->body);
+
+    // If body produced a result (non-tail path), store it and branch to exit
+    if (bodyResult)
+    {
+        _builder.createStore(resultStorage, bodyResult, "rec.store.result");
+        _builder.createBr(exitBlock);
+    }
+
+    popFSharpScope();
+
+    // Continue from the exit block, load the result
+    _builder.setInsertPoint(exitBlock);
+    _result = _builder.createLoad(resultStorage, "rec.load.result");
+
+    // Clear the recursion context
+    _activeRecursion.reset();
+}
+
+void IRGenerator::generateFSharpCall(FSharpFunction const* func,
+                                     std::string const& funcName,
+                                     std::vector<CoreVM::Value*> const& args)
+{
+    // If this function was compiled as a separate IRHandler, emit a function call instruction
+    if (func->compiledHandler)
+    {
+        // Validate parameter type annotations before the call
+        for (size_t i = 0; i < func->parameters.size(); ++i)
+        {
+            if (i < func->parameterTypes.size() && func->parameterTypes[i])
+            {
+                if (!validateTypeAnnotation(
+                        *func->parameterTypes[i],
+                        args[i],
+                        std::format("parameter '{}' of '{}'", func->parameters[i], funcName)))
+                    return;
+            }
+        }
+
+        // Build full argument list: captured variables first, then explicit arguments.
+        // When inside a handler compilation (recursive call), load captures from the
+        // handler's own scope variables (not from the outer scope's capturedBindings).
+        std::vector<CoreVM::Value*> fullArgs;
+        fullArgs.reserve(func->captureOrder.size() + args.size());
+        for (auto const& capName: func->captureOrder)
+        {
+            CoreVM::Value* capStorage = nullptr;
+            if (_compilingHandler)
+            {
+                // Inside a handler: look up capture in the current scope
+                capStorage = lookupFSharpVariable(capName);
+            }
+            if (!capStorage)
+            {
+                // Outside handler or not found in scope: use outer capturedBindings
+                capStorage = func->capturedBindings.at(capName);
+            }
+            fullArgs.push_back(_builder.createLoad(capStorage, "cap." + capName));
+        }
+        fullArgs.insert(fullArgs.end(), args.begin(), args.end());
+
+        // Emit tail call (UTCALL) when in tail position inside a handler compilation,
+        // otherwise emit regular function call (UCALL).
+        if (_inTailPosition && _compilingHandler)
+        {
+            _builder.createTailCall(func->compiledHandler, fullArgs, funcName + ".tailcall");
+
+            // Create unreachable continuation block (code after tail call is dead)
+            auto* unreachable = _builder.createBlock("tailcall.unreachable");
+            _builder.setInsertPoint(unreachable);
+
+            _result = nullptr; // Tail call doesn't produce a value in the current handler
+        }
+        else
+        {
+            _result = _builder.createFunctionCall(
+                func->compiledHandler, fullArgs, funcName + ".call", func->compiledReturnType);
+        }
         return;
     }
 
@@ -4157,6 +4299,154 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
     }
 
     popFSharpScope();
+}
+
+void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFunction& func)
+{
+    // Only compile as handler when ALL explicit parameters have type annotations.
+    // Without annotations, parameters get Void type, causing wrong runtime behavior when
+    // the body does type-sensitive operations (float promotion, string concatenation, etc.).
+    // Future phases will add type inference to relax this restriction.
+    auto const allParamsAnnotated =
+        !func.parameters.empty() && func.parameterTypes.size() == func.parameters.size()
+        && std::ranges::all_of(func.parameterTypes, [](auto const& t) { return t.has_value(); });
+    if (!func.parameters.empty() && !allParamsAnnotated)
+        return;
+
+    // Compute deterministic capture ordering (sorted alphabetically)
+    func.captureOrder.clear();
+    for (auto const& [capName, _]: func.capturedBindings)
+        func.captureOrder.push_back(capName);
+    std::ranges::sort(func.captureOrder);
+
+    // Save current state so we can revert if compilation fails
+    auto* savedHandler = _builder.handler();
+    auto* savedInsertPoint = _builder.getInsertPoint();
+    auto savedHasErrors = _hasErrors;
+    auto* bufferedReport = dynamic_cast<CoreVM::diagnostics::BufferedReport*>(&_report);
+    auto const savedReportSize = bufferedReport ? bufferedReport->size() : size_t { 0 };
+
+    // Create a new IRHandler for this function
+    // Parameter count includes captured variables (prepended) + explicit parameters
+    auto* handler = _builder.program()->createHandler("fsharp." + name);
+    handler->setParameterCount(func.captureOrder.size() + func.parameters.size());
+
+    // Switch builder to the new handler
+    _builder.setHandler(handler);
+    auto* entryBlock = _builder.createBlock("entry");
+    _builder.setInsertPoint(entryBlock);
+
+    // Push a new scope for the function body
+    pushFSharpScope();
+
+    // Create capture parameter allocas first (they occupy the first slots from the caller)
+    for (auto const& capName: func.captureOrder)
+    {
+        auto* sourceStorage = func.capturedBindings.at(capName);
+        auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
+        bindFSharpVariable(capName, storage);
+    }
+
+    // Create explicit parameter allocas, using type annotations
+    for (size_t i = 0; i < func.parameters.size(); ++i)
+    {
+        auto paramType = CoreVM::LiteralType::Void;
+        if (i < func.parameterTypes.size() && func.parameterTypes[i].has_value())
+        {
+            if (auto mapped = mapTypeToLiteralType(*func.parameterTypes[i]))
+                paramType = *mapped;
+        }
+        auto* storage = createAllocaInEntryBlock(paramType, func.parameters[i]);
+        bindFSharpVariable(func.parameters[i], storage);
+    }
+
+    // Set up return infrastructure for ? operator (only if function returns Result/Option)
+    CoreVM::BasicBlock* returnBlock = nullptr;
+    CoreVM::AllocaInstr* returnStorage = nullptr;
+
+    if (func.returnKind != ReturnKind::Plain)
+    {
+        returnBlock = _builder.createBlock("func.return");
+        returnStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "func.result");
+        pushFSharpFunctionContext(returnBlock, returnStorage, func.returnKind);
+    }
+
+    // Pre-set compiledHandler so that recursive references during body codegen
+    // emit FunctionCallInstr/TailCallInstr instead of trying to inline (which would infinite-loop).
+    func.compiledHandler = handler;
+
+    // Track tail position and compiling handler for UCALL/UTCALL decisions
+    auto savedTailPosition = _inTailPosition;
+    auto* savedCompilingHandler = _compilingHandler;
+    _inTailPosition = true;
+    _compilingHandler = handler;
+
+    // Codegen the function body
+    auto* bodyResult = codegen(func.body);
+
+    // Restore tail position and compiling handler
+    _inTailPosition = savedTailPosition;
+    _compilingHandler = savedCompilingHandler;
+
+    // Validate return type annotation if present
+    if (bodyResult && func.returnType)
+        validateTypeAnnotation(*func.returnType, bodyResult, std::format("return type of '{}'", name));
+
+    if (func.returnKind != ReturnKind::Plain)
+    {
+        if (bodyResult)
+        {
+            auto* storeValue =
+                needsAutoWrap(func.body) ? wrapInResultOrOption(bodyResult, func.returnKind) : bodyResult;
+            _builder.createStore(returnStorage, storeValue, "store.result");
+            _builder.createBr(returnBlock);
+        }
+        _builder.setInsertPoint(returnBlock);
+        auto* retVal = _builder.createLoad(returnStorage, "load.result");
+        _builder.createFunctionRet(retVal, "ret");
+        popFSharpFunctionContext();
+    }
+    else
+    {
+        if (bodyResult)
+            _builder.createFunctionRet(bodyResult, "ret");
+    }
+
+    popFSharpScope();
+
+    // Helper to revert compilation state when falling back to AST inlining
+    auto const revertToInlining = [&] {
+        func.compiledHandler = nullptr; // Reset so fallback path (AST inlining) is used
+        _hasErrors = savedHasErrors;
+        if (bufferedReport)
+            bufferedReport->truncate(savedReportSize);
+        _builder.program()->removeHandler(handler);
+        _builder.setHandler(savedHandler);
+        _builder.setInsertPoint(savedInsertPoint);
+    };
+
+    // If compilation produced errors, fall back to AST inlining
+    if (_hasErrors && !savedHasErrors)
+    {
+        revertToInlining();
+        return;
+    }
+
+    // If bodyResult is null and no errors, all code paths end with tail calls (valid).
+    // If bodyResult is null and we're not in a recursive/handler context, it's unexpected.
+    if (!bodyResult && !func.isRecursive)
+    {
+        revertToInlining();
+        return;
+    }
+
+    // Store the return type (if known from a non-tail-call path)
+    if (bodyResult)
+        func.compiledReturnType = bodyResult->type();
+
+    // Restore builder state
+    _builder.setHandler(savedHandler);
+    _builder.setInsertPoint(savedInsertPoint);
 }
 
 void IRGenerator::visit(ast::IdentifierExpr const& node)
@@ -4244,8 +4534,11 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 {
     TRACE_SCOPE("visit(MatchExpr)");
 
-    // Evaluate the scrutinee (expression being matched against)
+    // Evaluate the scrutinee (not in tail position)
+    auto savedTailPos = _inTailPosition;
+    _inTailPosition = false;
     node.scrutinee->accept(*this);
+    _inTailPosition = savedTailPos; // Restore for arm bodies
     CoreVM::Value* scrutinee = _result;
     if (!scrutinee)
     {
@@ -4424,7 +4717,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             // A null result inside an active recursion means a tail call was made.
             // The branch back to the entry block has already been emitted, so skip
             // the store-and-branch-to-merge for this arm.
-            if (_activeRecursion || _activeMutualRecursion)
+            if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
                 continue;
 
             reportTypeError("Failed to evaluate match arm body");
