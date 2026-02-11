@@ -115,6 +115,14 @@ Windows support.
 - [x] Create error type hierarchy for shell errors
 - [x] Add structured error reporting with context (line/column, suggestions)
 
+### 0.4 Code Deduplication ✅
+
+**Status:** Complete
+
+**Tasks:**
+- [x] Deduplicate `findCommonPrefix` between `shell::Completer` and `tui::Completer` (delegate to tui)
+- [x] Remove unused `lsp::containsPosition` (duplicate of `endo::containsPosition` in HoverInfo.hpp)
+
 ---
 
 ## Milestone 1: Core Language Features
