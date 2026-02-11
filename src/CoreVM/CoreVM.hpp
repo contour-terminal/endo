@@ -24,6 +24,7 @@
 #include <regex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -79,6 +80,11 @@ class RetInstr;
 class MatchInstr;
 class RegExpGroupInstr;
 class CastInstr;
+
+// User-defined function call instructions
+class FunctionCallInstr;
+class FunctionRetInstr;
+class TailCallInstr;
 
 // Object operations (for composite types)
 class ObjAllocInstr;
@@ -152,6 +158,11 @@ class InstructionVisitor
     // calls
     virtual void visit(CallInstr& instr) = 0;
     virtual void visit(HandlerCallInstr& instr) = 0;
+
+    // user-defined function calls
+    virtual void visit(FunctionCallInstr& instr) = 0;
+    virtual void visit(FunctionRetInstr& instr) = 0;
+    virtual void visit(TailCallInstr& instr) = 0;
 
     // terminator
     virtual void visit(CondBrInstr& instr) = 0;
@@ -411,6 +422,7 @@ class Runner
         }
 
         void rotate(size_t n);
+        void rotate(size_t fp, size_t n);
 
         size_t size() const { return _stack.size(); }
 
@@ -579,6 +591,25 @@ class Runner
     // Object pool for heap-allocated composite types (Option, Result, etc.)
     std::vector<std::unique_ptr<uint8_t[]>> _objectPool;
     size_t _objectAllocCount = 0; //!< Allocation counter for GC threshold
+
+    // Frame pointer for user-defined function calls (UCALL/URET/UTCALL).
+    // For the main handler, _fp is always 0, so LOAD/STORE remain backward-compatible.
+    size_t _fp = 0;
+
+    /// Saved call frame for returning from UCALL via URET.
+    struct CallFrame
+    {
+        size_t ip;              //!< Saved instruction pointer (resume position in caller)
+        const Handler* handler; //!< Caller's handler
+        size_t fp;              //!< Caller's frame pointer
+        size_t argsBase;        //!< Stack position where callee's args start (for cleanup on return)
+    };
+
+    /// Call stack for UCALL/URET (user-defined function call frames).
+    std::vector<CallFrame> _callStack;
+
+    /// Maximum call depth for user-defined function calls (prevents stack overflow).
+    static constexpr size_t MaxCallDepth = 10000;
 };
 
 struct MatchCaseDef
@@ -1577,6 +1608,71 @@ class HandlerCallInstr: public Instr
     void accept(InstructionVisitor& v) override;
 };
 
+// =============================================================================
+// User-Defined Function Call Instructions (UCALL/URET/UTCALL)
+// =============================================================================
+
+/// Calls a user-defined function compiled as a separate IRHandler.
+/// Operands: [arg0, arg1, ...]. Return type reflects the callee's body result type.
+class FunctionCallInstr: public Instr
+{
+  public:
+    FunctionCallInstr(IRHandler* callee,
+                      std::vector<Value*> args,
+                      const std::string& name,
+                      LiteralType returnType = LiteralType::Void);
+
+    /// The target handler to call.
+    [[nodiscard]] IRHandler* callee() const { return _callee; }
+
+    /// Number of arguments (excluding the handler operand).
+    [[nodiscard]] size_t argc() const { return operands().size(); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+
+  private:
+    IRHandler* _callee;
+};
+
+/// Returns from a user-defined function handler back to the caller.
+/// Not a TerminateInstr because it doesn't branch within the handler's CFG—
+/// the VM handles control transfer.
+class FunctionRetInstr: public Instr
+{
+  public:
+    explicit FunctionRetInstr(Value* result, const std::string& name = "");
+
+    /// The value to return to the caller.
+    [[nodiscard]] Value* result() const { return operands().empty() ? nullptr : operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Tail-calls a user-defined function handler, reusing the current call frame.
+/// Operands: [arg0, arg1, ...]. Must be in tail position.
+class TailCallInstr: public Instr
+{
+  public:
+    TailCallInstr(IRHandler* callee, std::vector<Value*> args, const std::string& name);
+
+    /// The target handler to tail-call.
+    [[nodiscard]] IRHandler* callee() const { return _callee; }
+
+    /// Number of arguments.
+    [[nodiscard]] size_t argc() const { return operands().size(); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+
+  private:
+    IRHandler* _callee;
+};
+
 class CastInstr: public Instr
 {
   public:
@@ -2036,6 +2132,9 @@ class IsSameInstruction: public InstructionVisitor
     // calls
     void visit(CallInstr& instr) override;
     void visit(HandlerCallInstr& instr) override;
+    void visit(FunctionCallInstr& instr) override;
+    void visit(FunctionRetInstr& instr) override;
+    void visit(TailCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;
@@ -2150,6 +2249,12 @@ class IRHandler: public Constant
 
     [[nodiscard]] bool empty() const noexcept { return _blocks.empty(); }
 
+    /// Number of parameters expected by this handler (for UCALL frame setup).
+    /// Zero for the main handler, >0 for compiled F# function handlers.
+    [[nodiscard]] size_t parameterCount() const noexcept { return _parameterCount; }
+
+    void setParameterCount(size_t count) { _parameterCount = count; }
+
     auto basicBlocks() { return util::unbox(_blocks); }
 
     [[nodiscard]] BasicBlock* getEntryBlock() const { return _blocks.front().get(); }
@@ -2191,6 +2296,7 @@ class IRHandler: public Constant
   private:
     IRProgram* _program;
     std::list<std::unique_ptr<BasicBlock>> _blocks;
+    size_t _parameterCount = 0; ///< Number of parameters (0 for main handler)
 
     friend class IRBuilder;
 };
@@ -2291,6 +2397,9 @@ class IRProgram
     }
 
     IRHandler* createHandler(const std::string& name);
+
+    /// Removes the given handler from the program. The pointer becomes invalid after this call.
+    void removeHandler(IRHandler* handler);
 
     /**
      * Performs given transformation on all handlers by given type.
@@ -2512,6 +2621,14 @@ class IRBuilder
     // calls
     Instr* createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name = "");
     Instr* createInvokeHandler(IRBuiltinHandler* callee, const std::vector<Value*>& args);
+
+    // user-defined function calls
+    FunctionCallInstr* createFunctionCall(IRHandler* callee,
+                                          std::vector<Value*> args,
+                                          const std::string& name = "",
+                                          LiteralType returnType = LiteralType::Void);
+    FunctionRetInstr* createFunctionRet(Value* result, const std::string& name = "");
+    TailCallInstr* createTailCall(IRHandler* callee, std::vector<Value*> args, const std::string& name = "");
 
     // termination instructions
     Instr* createRet(Value* result);
@@ -3157,6 +3274,9 @@ class TargetCodeGenerator: public InstructionVisitor
     // calls
     void visit(CallInstr& instr) override;
     void visit(HandlerCallInstr& instr) override;
+    void visit(FunctionCallInstr& instr) override;
+    void visit(FunctionRetInstr& instr) override;
+    void visit(TailCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;
@@ -3287,6 +3407,10 @@ class TargetCodeGenerator: public InstructionVisitor
 
     /** Number of allocas seen so far (also the next alloca index) */
     size_t _allocaCount = 0;
+
+    /** Parameter allocas that are already on the stack from UCALL.
+     *  These must not emit ALLOC opcodes or be pushed to _stack again. */
+    std::unordered_set<const AllocaInstr*> _parameterAllocas;
 
     /** global scope mapping */
     std::deque<const Value*> _globals;
@@ -3510,6 +3634,13 @@ class BufferedReport: public Report
     void clear();
 
     [[nodiscard]] size_t size() const noexcept { return _messages.size(); }
+
+    /// Truncates the message list to the given size, discarding newer messages.
+    void truncate(size_t n)
+    {
+        if (n < _messages.size())
+            _messages.erase(_messages.begin() + static_cast<ptrdiff_t>(n), _messages.end());
+    }
 
     const Message& operator[](size_t i) const { return _messages[i]; }
 

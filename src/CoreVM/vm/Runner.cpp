@@ -64,11 +64,11 @@ namespace CoreVM
             }
     #define instr(NAME) \
         case NAME: tracelog();
-    #define get_pc() (pc - code.data())
-    #define set_pc(offset)               \
-        do                               \
-        {                                \
-            pc = code.data() + (offset); \
+    #define get_pc() (pc - codeBase)
+    #define set_pc(offset)            \
+        do                            \
+        {                             \
+            pc = codeBase + (offset); \
         } while (0)
     #define next  \
         if (true) \
@@ -88,11 +88,11 @@ namespace CoreVM
     #define instr(name) \
         l_##name: ++pc; \
         tracelog();
-    #define get_pc() ((pc - code.data()) / 2)
-    #define set_pc(offset)                   \
-        do                                   \
-        {                                    \
-            pc = code.data() + (offset) * 2; \
+    #define get_pc() ((pc - codeBase) / 2)
+    #define set_pc(offset)                \
+        do                                \
+        {                                 \
+            pc = codeBase + (offset) * 2; \
         } while (0)
     #define next  \
         do        \
@@ -110,11 +110,11 @@ namespace CoreVM
     #define LOOP_BEGIN() jump;
     #define LOOP_END()
     #define instr(name) l_##name: tracelog();
-    #define get_pc()    (pc - code.data())
-    #define set_pc(offset)               \
-        do                               \
-        {                                \
-            pc = code.data() + (offset); \
+    #define get_pc()    (pc - codeBase)
+    #define set_pc(offset)            \
+        do                            \
+        {                             \
+            pc = codeBase + (offset); \
         } while (0)
     #define next  \
         do        \
@@ -142,6 +142,12 @@ void Runner::Stack::rotate(size_t n)
         n++;
     }
     _stack[_stack.size() - 1] = tmp;
+}
+
+void Runner::Stack::rotate(size_t fp, size_t n)
+{
+    // FP-relative rotate: moves stack[fp+n] to stack[top], shifts rest down
+    rotate(fp + n);
 }
 
 // }}}
@@ -452,6 +458,11 @@ Runner::RunResult Runner::loopWithResult()
         label(F2N),
         label(F2S),
         label(S2F),
+
+        // user-defined function calls
+        label(UCALL),
+        label(URET),
+        label(UTCALL),
     };
 #endif
 // }}}
@@ -472,13 +483,14 @@ Runner::RunResult Runner::loopWithResult()
             *pc++ = instr;
         }
     }
+    auto codeBase = code.data();
 #else
-    std::vector<Instruction> const& code = _handler->code();
+    auto codeBase = _handler->code().data();
 #endif
     // }}}
 
     _state = Running;
-    decltype(code.data()) pc {};
+    decltype(codeBase) pc {};
     set_pc(_ip);
 
     LOOP_BEGIN()
@@ -504,7 +516,7 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(STACKROT)
     {
-        _stack.rotate(A);
+        _stack.rotate(_fp, A);
         next;
     }
 
@@ -596,13 +608,13 @@ Runner::RunResult Runner::loopWithResult()
     // {{{ load & store
     instr(LOAD)
     {
-        push(_stack[A]);
+        push(_stack[_fp + A]);
         next;
     }
 
     instr(STORE)
     { // STORE imm
-        _stack[A] = pop();
+        _stack[_fp + A] = pop();
         next;
     }
     // }}}
@@ -1420,6 +1432,119 @@ Runner::RunResult Runner::loopWithResult()
         }
         SP(-1) = std::bit_cast<uint64_t>(f);
         next;
+    }
+    // }}}
+    // {{{ user-defined function calls (UCALL/URET/UTCALL)
+    instr(UCALL)
+    {
+        // A = handler index, B = argc
+        {
+            auto handlerId = A;
+            auto argc = B;
+
+            if (_callStack.size() >= MaxCallDepth)
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+            }
+
+            // Save caller state
+            incr_pc();
+            _ip = get_pc();
+
+            auto argsBase = _stack.size() - argc;
+
+            _callStack.push_back(CallFrame {
+                .ip = _ip,
+                .handler = _handler,
+                .fp = _fp,
+                .argsBase = argsBase,
+            });
+
+            // Set up callee frame: args are already on the stack
+            _fp = argsBase;
+
+            // Switch to the target handler
+            _handler = _program->handler(handlerId);
+        }
+#if defined(COREVM_DIRECT_THREADED_VM)
+        // Re-initialize code reference for new handler
+        // (direct threaded code needs special handling per handler)
+        COREVM_ASSERT(false, "UCALL not yet supported with direct-threaded VM");
+#else
+        {
+            codeBase = _handler->code().data();
+            pc = codeBase;
+        }
+#endif
+        jump;
+    }
+
+    instr(URET)
+    {
+        // Return from a user-defined function call.
+        // Top of stack is the return value.
+        {
+            if (_callStack.empty())
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("URET without matching UCALL"));
+            }
+
+            Value retVal = pop();
+
+            // Restore caller frame
+            auto const& frame = _callStack.back();
+            _ip = frame.ip;
+            _handler = frame.handler;
+            _fp = frame.fp;
+            auto argsBase = frame.argsBase;
+            _callStack.pop_back();
+
+            // Pop callee's entire frame (including args and locals)
+            _stack.discard(_stack.size() - argsBase);
+
+            // Push the return value
+            push(retVal);
+        }
+#if defined(COREVM_DIRECT_THREADED_VM)
+        COREVM_ASSERT(false, "URET not yet supported with direct-threaded VM");
+#else
+        {
+            codeBase = _handler->code().data();
+            pc = codeBase + _ip;
+        }
+#endif
+        jump;
+    }
+
+    instr(UTCALL)
+    {
+        // Tail call: reuse current frame. A = handler index, B = argc
+        {
+            auto handlerId = A;
+            auto argc = B;
+
+            // Copy new args to frame base (overwriting old args/locals)
+            auto newArgsStart = _stack.size() - argc;
+            for (size_t i = 0; i < static_cast<size_t>(argc); ++i)
+                _stack[_fp + i] = _stack[newArgsStart + i];
+
+            // Discard everything above the new args
+            _stack.discard(_stack.size() - _fp - argc);
+
+            // Switch to target handler (could be same handler for self-recursion)
+            _handler = _program->handler(handlerId);
+        }
+#if defined(COREVM_DIRECT_THREADED_VM)
+        COREVM_ASSERT(false, "UTCALL not yet supported with direct-threaded VM");
+#else
+        {
+            codeBase = _handler->code().data();
+            pc = codeBase;
+        }
+#endif
+        jump;
     }
     // }}}
 

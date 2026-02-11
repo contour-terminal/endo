@@ -130,6 +130,11 @@ IS_SAME_INSTR_IMPL(VCmpLTInstr)
 IS_SAME_INSTR_IMPL(VCmpLEInstr)
 IS_SAME_INSTR_IMPL(VCmpGTInstr)
 IS_SAME_INSTR_IMPL(VCmpGEInstr)
+
+// User-defined function calls
+IS_SAME_INSTR_IMPL(FunctionCallInstr)
+IS_SAME_INSTR_IMPL(FunctionRetInstr)
+IS_SAME_INSTR_IMPL(TailCallInstr)
 // }}}
 
 } // namespace CoreVM

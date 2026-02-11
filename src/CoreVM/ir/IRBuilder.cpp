@@ -896,6 +896,27 @@ Instr* IRBuilder::createInvokeHandler(IRBuiltinHandler* callee, const std::vecto
     return insert<HandlerCallInstr>(callee, args);
 }
 
+FunctionCallInstr* IRBuilder::createFunctionCall(IRHandler* callee,
+                                                 std::vector<Value*> args,
+                                                 const std::string& name,
+                                                 LiteralType returnType)
+{
+    return static_cast<FunctionCallInstr*>(insert<FunctionCallInstr>(
+        callee, std::move(args), makeName(name.empty() ? "ucall" : name), returnType));
+}
+
+FunctionRetInstr* IRBuilder::createFunctionRet(Value* result, const std::string& name)
+{
+    return static_cast<FunctionRetInstr*>(
+        insert<FunctionRetInstr>(result, makeName(name.empty() ? "uret" : name)));
+}
+
+TailCallInstr* IRBuilder::createTailCall(IRHandler* callee, std::vector<Value*> args, const std::string& name)
+{
+    return static_cast<TailCallInstr*>(
+        insert<TailCallInstr>(callee, std::move(args), makeName(name.empty() ? "utcall" : name)));
+}
+
 // }}}
 // {{{ exit point creators
 Instr* IRBuilder::createRet(Value* result)

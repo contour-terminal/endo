@@ -65,6 +65,11 @@ IRHandler* IRProgram::createHandler(const std::string& name)
     return _handlers.back().get();
 }
 
+void IRProgram::removeHandler(IRHandler* handler)
+{
+    std::erase_if(_handlers, [handler](auto const& h) { return h.get() == handler; });
+}
+
 // template ConstantInt* IRProgram::get<ConstantInt, int64_t>(std::vector<std::unique_ptr<ConstantInt>>&,
 //                                                            int64_t&&);
 //

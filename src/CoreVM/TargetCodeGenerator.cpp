@@ -59,8 +59,14 @@ void TargetCodeGenerator::generate(IRHandler* handler)
     _stack.clear();
     _allocaIndices.clear();
     _allocaCount = 0;
+    _parameterAllocas.clear();
     _locationTable.clear();
     _lastRecordedLocation = {};
+
+    // Number of parameters for this handler (>0 for compiled F# function handlers).
+    // Parameter allocas are already on the stack from the caller (via UCALL),
+    // so we skip ALLOC emission for them but still track them in _allocaIndices.
+    size_t const paramCount = handler->parameterCount();
 
     // First pass: assign fixed indices to all allocas.
     // This ensures allocas have consistent indices regardless of instruction order.
@@ -75,6 +81,37 @@ void TargetCodeGenerator::generate(IRHandler* handler)
                     _allocaIndices[allocaInstr] = _allocaCount++;
                 }
             }
+        }
+    }
+
+    // For function handlers, pre-populate the stack tracking with parameter slots.
+    // These slots are already on the physical stack from the UCALL instruction,
+    // so we add them to _stack without emitting ALLOC opcodes.
+    if (paramCount > 0)
+    {
+        // The first paramCount allocas map to parameters already on the stack.
+        // We need to find those allocas and push them onto our tracking stack,
+        // and record them so visit(AllocaInstr) skips ALLOC emission.
+        size_t paramsPushed = 0;
+        for (BasicBlock* bb: handler->basicBlocks())
+        {
+            for (Instr* instr: bb->instructions())
+            {
+                if (auto* allocaInstr = dynamic_cast<AllocaInstr*>(instr))
+                {
+                    auto it = _allocaIndices.find(allocaInstr);
+                    if (it != _allocaIndices.end() && it->second < paramCount)
+                    {
+                        _stack.push_back(allocaInstr);
+                        _parameterAllocas.insert(allocaInstr);
+                        ++paramsPushed;
+                    }
+                }
+                if (paramsPushed >= paramCount)
+                    break;
+            }
+            if (paramsPushed >= paramCount)
+                break;
         }
     }
 
@@ -273,6 +310,11 @@ void TargetCodeGenerator::visit(AllocaInstr& allocaInstr)
         emitInstr(Opcode::GALLOCA, 1);
         _globals.push_back(&allocaInstr);
     }
+    else if (_parameterAllocas.contains(&allocaInstr))
+    {
+        // Parameter alloca: already on stack from UCALL, skip ALLOC emission.
+        // The stack tracking was pre-populated in generate().
+    }
     else
     {
         emitInstr(Opcode::ALLOCA, 1);
@@ -374,6 +416,52 @@ void TargetCodeGenerator::visit(HandlerCallInstr& handlerCallInstr)
 
     if (argc)
         pop(argc);
+}
+
+void TargetCodeGenerator::visit(FunctionCallInstr& instr)
+{
+    // Push all arguments onto the stack
+    auto const argc = static_cast<Operand>(instr.argc());
+    for (size_t i = 0; i < instr.argc(); ++i)
+        emitLoad(instr.operand(i));
+
+    // Emit UCALL handler_id, argc
+    auto handlerId = static_cast<Operand>(_cp.makeHandler(instr.callee()));
+    emitInstr(Opcode::UCALL, handlerId, argc);
+
+    // UCALL pops argc args and pushes 1 return value
+    pop(argc);
+    push(&instr);
+
+    // If the result is unused, discard it
+    if (!instr.isUsed())
+    {
+        emitInstr(Opcode::DISCARD, 1);
+        pop(1);
+    }
+}
+
+void TargetCodeGenerator::visit(FunctionRetInstr& instr)
+{
+    // Push the return value onto the stack, then emit URET
+    if (instr.result())
+        emitLoad(instr.result());
+
+    emitInstr(Opcode::URET);
+}
+
+void TargetCodeGenerator::visit(TailCallInstr& instr)
+{
+    // Push all arguments onto the stack
+    auto const argc = static_cast<Operand>(instr.argc());
+    for (size_t i = 0; i < instr.argc(); ++i)
+        emitLoad(instr.operand(i));
+
+    // Emit UTCALL handler_id, argc
+    auto handlerId = static_cast<Operand>(_cp.makeHandler(instr.callee()));
+    emitInstr(Opcode::UTCALL, handlerId, argc);
+
+    // UTCALL transfers control — no stack tracking adjustment needed
 }
 
 Operand TargetCodeGenerator::getConstantInt(Value* value)

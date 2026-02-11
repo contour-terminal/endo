@@ -185,6 +185,11 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(F2N, V, 0, Number),
     IIDEF(F2S, V, 0, String),
     IIDEF(S2F, V, 0, Float),
+
+    // user-defined function calls
+    IIDEF(UCALL, II, 0, Void),  // stack change handled dynamically (pops argc, pushes 1 return value)
+    IIDEF(URET, V, 0, Void),   // stack change handled dynamically (returns to caller frame)
+    IIDEF(UTCALL, II, 0, Void), // stack change handled dynamically (tail call, reuses frame)
 };
 
 // }}}
@@ -201,6 +206,15 @@ int getStackChange(Instruction instr)
             // TODO: handle void/non-void functions properly
             // return 1 - operandB(instr);
             return operandC(instr) - operandB(instr);
+        case Opcode::UCALL:
+            // Pops argc args, pushes 1 return value: net = 1 - argc
+            return 1 - operandB(instr);
+        case Opcode::URET:
+            // Handled dynamically by restoring caller frame; for static analysis treat as 0
+            return 0;
+        case Opcode::UTCALL:
+            // Tail call: handled dynamically (reuses frame). For static analysis treat as 0.
+            return 0;
         default: return instructionInfos[opc].stackChange;
     }
 }

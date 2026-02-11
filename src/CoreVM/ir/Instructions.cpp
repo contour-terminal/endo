@@ -644,4 +644,76 @@ void VCmpGEInstr::accept(InstructionVisitor& v)
 
 // }}}
 
+// {{{ FunctionCallInstr
+FunctionCallInstr::FunctionCallInstr(IRHandler* callee,
+                                     std::vector<Value*> args,
+                                     const std::string& name,
+                                     LiteralType returnType):
+    Instr(returnType, std::move(args), name), _callee(callee)
+{
+}
+
+std::string FunctionCallInstr::to_string() const
+{
+    return formatOne("ucall");
+}
+
+std::unique_ptr<Instr> FunctionCallInstr::clone()
+{
+    std::vector<Value*> args(operands().begin(), operands().end());
+    return std::make_unique<FunctionCallInstr>(_callee, std::move(args), name());
+}
+
+void FunctionCallInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
+// {{{ FunctionRetInstr
+FunctionRetInstr::FunctionRetInstr(Value* result, const std::string& name):
+    Instr(LiteralType::Void, { result }, name)
+{
+}
+
+std::string FunctionRetInstr::to_string() const
+{
+    return formatOne("uret");
+}
+
+std::unique_ptr<Instr> FunctionRetInstr::clone()
+{
+    return std::make_unique<FunctionRetInstr>(result(), name());
+}
+
+void FunctionRetInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
+// {{{ TailCallInstr
+TailCallInstr::TailCallInstr(IRHandler* callee, std::vector<Value*> args, const std::string& name):
+    Instr(LiteralType::Void, std::move(args), name), _callee(callee)
+{
+}
+
+std::string TailCallInstr::to_string() const
+{
+    return formatOne("utcall");
+}
+
+std::unique_ptr<Instr> TailCallInstr::clone()
+{
+    std::vector<Value*> args(operands().begin(), operands().end());
+    return std::make_unique<TailCallInstr>(_callee, std::move(args), name());
+}
+
+void TailCallInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
+
 } // namespace CoreVM

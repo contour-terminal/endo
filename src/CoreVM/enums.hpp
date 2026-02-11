@@ -150,6 +150,11 @@ enum Opcode : uint16_t
     F2N, // push(static_cast<int64_t>(fpop()))
     F2S, // push(format("{:g}", fpop()))
     S2F, // push(stod(pop()))
+
+    // user-defined function calls (frame-pointer based)
+    UCALL,  // UCALL handler_id, argc  ; call user handler with argc args on stack
+    URET,   // URET                    ; return from user handler (top of stack = return value)
+    UTCALL, // UTCALL handler_id, argc ; tail-call user handler (reuse current frame)
 };
 
 enum class MatchClass
@@ -349,7 +354,10 @@ constexpr inline unsigned getPrice(Opcode opcode)
         case Opcode::GSTORE:
         case Opcode::STORE: return 4;
         case Opcode::CALL:
-        case Opcode::HANDLER: return 8;
+        case Opcode::HANDLER:
+        case Opcode::UCALL:
+        case Opcode::UTCALL: return 8;
+        case Opcode::URET: return 1;
         default: return 1;
     }
 }
