@@ -49,16 +49,13 @@ void safeClose(NativeHandle* fd) noexcept
 
 RealTTY::RealTTY()
 {
-    for (NativeHandle fd: { STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO })
+    _hasTTY = isatty(STDIN_FILENO) == 1;
+    if (_hasTTY)
     {
-        if (isatty(fd) && tcgetattr(fd, &_originalTermios) == 0)
-        {
-            _hasTTY = true;
-            return;
-        }
+        // Save original terminal attributes
+        if (tcgetattr(STDIN_FILENO, &_originalTermios) != 0)
+            _hasTTY = false; // Not a real TTY if we can't get attributes
     }
-    // No TTY available - this is fine for non-interactive mode
-    _hasTTY = false;
 }
 
 RealTTY::~RealTTY()

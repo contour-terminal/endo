@@ -521,6 +521,12 @@ void Shell::setPositionalParameters(std::vector<std::string> params)
 
 int Shell::run()
 {
+    if (_interactive && !_tty.isTerminal())
+    {
+        std::cerr << "endo: interactive mode requires a terminal.\n";
+        return EXIT_FAILURE;
+    }
+
 #if !defined(_WIN32)
     pollfd fds[2];
     fds[0].fd = _tty.inputFd();
