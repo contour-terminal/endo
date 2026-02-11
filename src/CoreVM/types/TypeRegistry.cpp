@@ -117,6 +117,21 @@ TypeDescriptor* TypeRegistry::registerProductType(std::string name, std::vector<
     return addType(std::move(type));
 }
 
+TypeDescriptor* TypeRegistry::registerProductType(std::unique_ptr<TypeDescriptor> type)
+{
+    // Ensure the type has the correct kind and consistent offsets
+    assert(type->kind == TypeKind::Product);
+    for (uint8_t i = 0; i < type->fields.size(); ++i)
+        type->fields[i].offset = i;
+    type->slotCount = static_cast<uint16_t>(type->fields.size());
+
+    // Update _nextId to stay ahead of the assigned ID
+    if (type->id >= _nextId)
+        _nextId = type->id + 1;
+
+    return addType(std::move(type));
+}
+
 TypeDescriptor* TypeRegistry::registerFunctionType(std::string name, uint16_t captureCount)
 {
     auto type = std::make_unique<TypeDescriptor>();

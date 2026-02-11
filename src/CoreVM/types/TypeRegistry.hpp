@@ -44,6 +44,12 @@ class TypeRegistry
     /// @return Pointer to the registered type descriptor
     TypeDescriptor* registerProductType(std::string name, std::vector<FieldInfo> fields);
 
+    /// Registers a pre-built product type descriptor with a fixed ID.
+    /// Used for custom record types where the ID was pre-assigned at IR generation time.
+    /// @param type The complete type descriptor to register (takes ownership)
+    /// @return Pointer to the registered type descriptor
+    TypeDescriptor* registerProductType(std::unique_ptr<TypeDescriptor> type);
+
     /// Registers a function/closure type.
     /// @param name The type name (usually auto-generated)
     /// @param captureCount Number of captured variables

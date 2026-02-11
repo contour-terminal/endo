@@ -34,6 +34,18 @@ TargetCodeGenerator::TargetCodeGenerator(): _handlerId(0)
 
 std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
 {
+    // Register custom product types (records) in the TypeRegistry before code generation
+    for (auto const& customType: programIR->customProductTypes())
+    {
+        auto type = std::make_unique<TypeDescriptor>();
+        type->kind = TypeKind::Product;
+        type->id = customType.assignedId;
+        type->name = customType.name;
+        type->fields = customType.fields;
+        type->slotCount = static_cast<uint16_t>(customType.fields.size());
+        _cp.typeRegistry().registerProductType(std::move(type));
+    }
+
     // generate target code for global scope initialization, if any
     IRHandler* init = programIR->findHandler(GLOBAL_SCOPE_INIT_NAME);
     if (init != nullptr)

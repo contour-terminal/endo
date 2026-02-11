@@ -2415,6 +2415,26 @@ class IRProgram
         return count;
     }
 
+    /// Describes a custom product type to be registered at target code generation time.
+    struct CustomProductType
+    {
+        std::string name;
+        std::vector<FieldInfo> fields;
+        uint16_t assignedId; ///< Pre-assigned type ID used in OALLOC instructions
+    };
+
+    /// Registers a custom product type definition to be carried through to the ConstantPool's TypeRegistry.
+    void addCustomProductType(CustomProductType def) { _customProductTypes.push_back(std::move(def)); }
+
+    /// Returns all custom product type definitions.
+    [[nodiscard]] std::vector<CustomProductType> const& customProductTypes() const
+    {
+        return _customProductTypes;
+    }
+
+    /// Allocates the next available custom type ID (starting after builtins).
+    [[nodiscard]] uint16_t allocateCustomTypeId() { return _nextCustomTypeId++; }
+
   private:
     std::vector<std::pair<std::string, std::string>> _modules;
     ConstantBoolean _trueLiteral;
@@ -2429,6 +2449,8 @@ class IRProgram
     std::vector<std::unique_ptr<IRBuiltinFunction>> _builtinFunctions;
     std::vector<std::unique_ptr<IRBuiltinHandler>> _builtinHandlers;
     std::vector<std::unique_ptr<IRHandler>> _handlers;
+    std::vector<CustomProductType> _customProductTypes;
+    uint16_t _nextCustomTypeId = BuiltinTypeId::List + 1; ///< Next type ID for custom types
 
     friend class IRBuilder;
 };

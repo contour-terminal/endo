@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <CoreVM/enums.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -27,8 +29,9 @@ struct VariantInfo
 /// Information about a field in a product type.
 struct FieldInfo
 {
-    std::string name; ///< Field name (empty string for tuple positions)
-    uint8_t offset;   ///< Slot offset within the object's data area
+    std::string name;                       ///< Field name (empty string for tuple positions)
+    uint8_t offset;                         ///< Slot offset within the object's data area
+    LiteralType type = LiteralType::Number; ///< The VM type of this field's value
 };
 
 /// Describes a composite type's structure.
