@@ -17,7 +17,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Match expressions: `match x with | pattern -> result`
 - [x] List expressions: `[1; 2; 3]`
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
-- [ ] List comprehensions: `[for x in items -> expr]` (parsed, no runtime)
+- [x] List comprehensions: `[for x in items -> expr]`, `[for x in items when cond -> expr]`
 - [x] Record expressions: `{ name = "Alice"; age = 30 }`
 - [x] Record update: `{ alice with age = 31 }`
 - [x] Tuple expressions: `(1, "hello")` (2 and 3 elements)
@@ -78,7 +78,7 @@ This document tracks the implementation status of F# language features as define
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
 - [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
 - [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
-- [ ] List comprehensions with `when` filter
+- [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
 - [ ] Standard list operations (`map`, `filter`, `fold`, etc.)
 
 ## Pattern Matching
@@ -248,7 +248,7 @@ Consult this section to determine what to work on next.
 - [ ] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
 - [ ] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
 - [ ] Transformations: `sort`, `reverse`, `distinct`
-- [ ] `ListComprehensionExpr` codegen: loop + optional filter + list construction
+- [x] `ListComprehensionExpr` codegen: forward iteration + optional filter + reverse for correct order
 - [ ] Utility: `zip`, `flatten`, `groupBy`, `take`, `drop`, `find`, `exists`, `forall`
 
 ### Phase 4 — Records (parallel with Phase 2/3) ✅

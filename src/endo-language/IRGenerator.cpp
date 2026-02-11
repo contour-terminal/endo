@@ -3266,7 +3266,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ConsExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ConcatListExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::RecordExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
@@ -5456,9 +5457,163 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
 
 void IRGenerator::visit(ast::ListComprehensionExpr const& node)
 {
-    // TODO: Implement list comprehensions - requires list type and iteration in CoreVM
-    reportTypeError("F# list comprehensions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(ListComprehensionExpr)");
+
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Evaluate the source collection
+    auto* sourceVal = codegen(node.source.get());
+    if (!sourceVal)
+    {
+        reportTypeError("Failed to evaluate list comprehension source");
+        return;
+    }
+
+    // Allocas for phase 1 (forward iteration building reversed accumulator)
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.src");
+    _builder.createStore(srcStorage, sourceVal);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "comp.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "comp.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "comp.elem");
+
+    // Create blocks for phase 1
+    auto* condBlock = _builder.createBlock("comp.cond");
+    auto* bodyEntryBlock = _builder.createBlock("comp.body.entry");
+    auto* filterBlock = node.filter ? _builder.createBlock("comp.filter") : nullptr;
+    auto* consBlock = _builder.createBlock("comp.cons");
+    // Create blocks for phase 2 (reverse)
+    auto* revInitBlock = _builder.createBlock("comp.rev.init");
+    auto* revCondBlock = _builder.createBlock("comp.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("comp.rev.body");
+    auto* endBlock = _builder.createBlock("comp.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Condition block — check if source list is Cons (tag == 1)
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "comp.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "comp.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "comp.is_cons");
+    _builder.createCondBr(isCons, bodyEntryBlock, revInitBlock);
+
+    // Phase 1: Body entry — extract head element and bind iteration variable
+    _builder.setInsertPoint(bodyEntryBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "comp.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "comp.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source cursor to tail (separate load to avoid multi-use of a single load result)
+    auto* srcForTail = _builder.createLoad(srcStorage, "comp.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "comp.tail");
+    _builder.createStore(srcStorage, tail);
+
+    if (filterBlock)
+        _builder.createBr(filterBlock);
+    else
+        _builder.createBr(consBlock);
+
+    // Phase 1: Optional filter block
+    if (filterBlock)
+    {
+        _builder.setInsertPoint(filterBlock);
+        pushFSharpScope();
+        bindFSharpVariable(node.variable, elemAlloca);
+        auto* filterVal = codegen(node.filter.get());
+        popFSharpScope();
+        if (!filterVal)
+        {
+            reportTypeError("Failed to evaluate list comprehension filter");
+            return;
+        }
+        _builder.createCondBr(filterVal, consBlock, condBlock);
+    }
+
+    // Phase 1: Cons block — evaluate body and prepend to accumulator
+    _builder.setInsertPoint(consBlock);
+    pushFSharpScope();
+    bindFSharpVariable(node.variable, elemAlloca);
+    auto* bodyVal = codegen(node.body.get());
+    popFSharpScope();
+    if (!bodyVal)
+    {
+        reportTypeError("Failed to evaluate list comprehension body");
+        return;
+    }
+
+    // Store body result and accumulator in temp allocas to survive ObjAlloc
+    auto* bodyTmp = createAllocaInEntryBlock(bodyVal->type(), "comp.body.tmp");
+    _builder.createStore(bodyTmp, bodyVal);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "comp.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    // Create Cons cell: tag=1, slot[0]=bodyResult, slot[1]=oldAcc
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "comp.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "comp.cons.tag");
+    auto* bodyReload = _builder.createLoad(bodyTmp, "comp.body.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, bodyReload, "comp.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "comp.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "comp.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse — initialize reverse cursor and output accumulator
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "comp.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "comp.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "comp.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    // Phase 2: Condition — check if reversed source is Cons
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "comp.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "comp.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "comp.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    // Phase 2: Body — extract head, advance cursor, cons onto output
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "comp.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "comp.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "comp.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "comp.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    // Store head and accumulator to survive ObjAlloc
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "comp.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "comp.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "comp.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "comp.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "comp.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "comp.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "comp.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "comp.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    // End block: result is the correctly ordered list
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "comp.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 
 void IRGenerator::visit(ast::ShellCommandExpr const& node)
@@ -5609,17 +5764,15 @@ void IRGenerator::visit(ast::TryExpr const& node)
     //
     // This requires a function context to know where to jump on error.
 
-    FSharpFunctionContext* funcCtx = currentFSharpFunctionContext();
-
     // IMPORTANT: Copy the context values BEFORE calling codegen() below.
     // The operand might be a function application (e.g., `(inc x)?`) which pushes
     // a new FSharpFunctionContext onto _fsharpFunctionContextStack. This can cause
-    // the vector to reallocate, invalidating the funcCtx pointer.
+    // the vector to reallocate, invalidating any raw pointer to the context.
+    auto const* funcCtx = currentFSharpFunctionContext();
     CoreVM::BasicBlock* returnBlock = funcCtx ? funcCtx->returnBlock : nullptr;
     CoreVM::AllocaInstr* returnStorage = funcCtx ? funcCtx->returnStorage : nullptr;
 
     // Evaluate the operand (should be an Option or Result object)
-    // NOTE: This may invalidate funcCtx pointer due to vector reallocation!
     CoreVM::Value* obj = codegen(node.operand.get());
     if (!obj)
         return;
@@ -5662,12 +5815,10 @@ void IRGenerator::visit(ast::TryExpr const& node)
 
     // Error path: propagate (early return from function or exit handler)
     _builder.setInsertPoint(errorBlock);
-    if (funcCtx)
+    if (returnBlock)
     {
         // Function-level: store error object and jump to return block
         CoreVM::Value* objReload2 = _builder.createLoad(objStorage, "try.obj.reload");
-        // NOTE: Using local copies of returnStorage/returnBlock since funcCtx pointer
-        // may have been invalidated by codegen() above.
         _builder.createStore(returnStorage, objReload2, "try.error.store");
         _builder.createBr(returnBlock);
     }

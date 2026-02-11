@@ -3564,6 +3564,60 @@ TEST_CASE("IRGenerator.FSharp.list_range_negative_descend_empty")
 }
 
 // =============================================================================
+// List comprehensions
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_basic")
+{
+    CHECK(executesWithOutput("print [for x in [1;2;3] -> x]", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_transform")
+{
+    CHECK(executesWithOutput("print [for x in [1;2;3] -> x * 2]", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_with_filter")
+{
+    CHECK(executesWithOutput("print [for x in [1;2;3;4;5] when x > 2 -> x]", "[3; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_filter_and_transform")
+{
+    CHECK(executesWithOutput("print [for x in [1;2;3;4;5] when x > 2 -> x * 10]", "[30; 40; 50]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_empty_source")
+{
+    CHECK(executesWithOutput("print [for x in [] -> x * 2]", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_all_filtered")
+{
+    CHECK(executesWithOutput("print [for x in [1;2;3] when x > 10 -> x]", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_from_range")
+{
+    CHECK(executesWithOutput("print [for x in [1..5] -> x * x]", "[1; 4; 9; 16; 25]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_let_binding")
+{
+    CHECK(executesWithOutput("let s = [for x in [1;2;3;4] -> x * x]\nprint s", "[1; 4; 9; 16]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_single_element")
+{
+    CHECK(executesWithOutput("print [for x in [42] -> x + 1]", "[43]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_preserves_order")
+{
+    CHECK(executesWithOutput("print [for x in [5;4;3;2;1] -> x]", "[5; 4; 3; 2; 1]"));
+}
+
+// =============================================================================
 // Compile-time error tests (should fail IR generation)
 // =============================================================================
 

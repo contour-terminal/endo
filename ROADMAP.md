@@ -637,8 +637,8 @@ src/
 - Lexer enhanced with `DotDot` token (`..`) for cleaner range parsing
 - Lexer recognizes negative number literals (e.g., `-42` as a single Number token)
 - Parser handles unary negation for identifiers (e.g., `-a` parsed as `UnaryExpr(Neg, IdentifierExpr("a"))`)
-- List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause
-- Comprehension body supports simple expressions and binary operations (e.g., `x * x`, `x + 1`)
+- List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause (parsed and IR codegen complete)
+- Comprehension codegen: two-phase approach (forward iteration building reversed accumulator, then reverse pass for correct order)
 - Lexer F# mode: Context-sensitive tokenization for F# expressions
   - `enterFSharpExpr()`/`leaveFSharpExpr()` manage depth counter for proper nesting
   - F# mode reserves additional symbols: `[]{},:+-*/%^&#` to prevent them from being consumed into identifiers

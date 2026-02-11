@@ -5514,10 +5514,8 @@ std::unique_ptr<pattern::Pattern> Parser::parseOrPattern()
     std::vector<pattern::PatternPtr> alternatives;
     alternatives.push_back(std::move(first));
 
-    // Look ahead for '|' that's followed by a pattern, not '->' or 'when'
-    // This is tricky because '|' is also used to separate match arms
-    // For now, we only handle or-patterns in specific contexts
-    // TODO: Improve or-pattern parsing within match arms
+    // Or-patterns within match arms are handled in parseMatchArm() (see '|' alternative parsing there).
+    // This function handles or-patterns in non-match contexts.
 
     if (alternatives.size() == 1)
         return std::move(alternatives[0]);
