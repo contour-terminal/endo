@@ -1633,10 +1633,12 @@ TEST_CASE("IRGenerator.FSharp.exec_rec_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
 {
-    // Non-tail recursive call (n * f(n-1)) should fail to compile when called
-    CHECK(generatesIRWithError("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
-                               "let r = factorial 5",
-                               "Non-tail recursive call detected"));
+    // Non-tail recursive calls now work via UCALL (handler compilation).
+    // Previously this was an error when using AST inlining.
+    CHECK(
+        executeSourceAndGetOutput("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
+                                  "print (factorial 5)")
+        == "120");
 }
 
 // =============================================================================

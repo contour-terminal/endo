@@ -509,9 +509,10 @@ void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& fu
             func.parameterTypes[i] = inferred.paramTypes[i];
     }
 
-    // Fill in missing return type annotation (only if concrete primitive)
-    if (!func.returnType.has_value() && inferred.returnType && (*inferred.returnType)->isPrimitive())
-        func.returnType = inferred.returnType;
+    // NOTE: We intentionally do NOT apply inferred return types here.
+    // The return type is determined from the actual body result during handler compilation
+    // (compiledReturnType), and applying it here causes false validation errors in the
+    // AST inlining path (e.g., print returns Number(0) but unit maps to Void).
 }
 
 ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
@@ -4348,6 +4349,17 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
         && std::ranges::all_of(func.parameterTypes, [](auto const& t) { return t.has_value(); });
     if (!func.parameters.empty() && !allParamsTyped)
         return;
+
+    // Functions whose body is a lambda cannot be handler-compiled because the inner
+    // lambda's captures reference handler-local allocas that are destroyed after URET.
+    // Unwrap ParenExpr wrappers to detect parenthesized lambdas like `fun x -> (fun y -> ...)`.
+    {
+        auto const* actualBody = func.body;
+        while (auto const* paren = dynamic_cast<ast::ParenExpr const*>(actualBody))
+            actualBody = paren->inner.get();
+        if (dynamic_cast<ast::LambdaExpr const*>(actualBody) != nullptr)
+            return;
+    }
 
     // Compute deterministic capture ordering (sorted alphabetically)
     func.captureOrder.clear();
