@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TestHelper.hpp"
 
+#include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypedObject.hpp>
+
 #include <unordered_set>
 #include <vector>
 
@@ -55,6 +58,88 @@ TestRuntime::TestRuntime()
                     result += str;
             }
             args.setResult(args.caller()->newString(result));
+        });
+
+    // Helper: converts a list TypedObject to string "[1; 2; 3]"
+    auto listToString = [](CoreVM::TypedObject* obj) -> std::string {
+        std::string result = "[";
+        bool first = true;
+        while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
+        {
+            if (!first)
+                result += "; ";
+            first = false;
+            // slot[0] = head (number), slot[1] = tail (object pointer)
+            auto headVal = static_cast<int64_t>(obj->getSlot(0));
+            result += std::to_string(headVal);
+            obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
+        }
+        result += "]";
+        return result;
+    };
+
+    // Register list_to_string builtin: converts list object to "[1; 2; 3]" string
+    runtime.registerFunction("list_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([listToString](CoreVM::Params& args) {
+            auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            args.setResult(args.caller()->newString(listToString(obj)));
+        });
+
+    // Register list_concat builtin: concatenates two lists
+    runtime.registerFunction("list_concat")
+        .param<CoreVM::CoreNumber>("left")
+        .param<CoreVM::CoreNumber>("right")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* left = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            auto* right = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(2)));
+
+            // If left is Nil, return right
+            if (!left || left->tag == 0)
+            {
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(right)));
+                return;
+            }
+
+            // Collect left list elements
+            std::vector<uint64_t> elements;
+            auto* cur = left;
+            while (cur && cur->tag == 1)
+            {
+                elements.push_back(cur->getSlot(0));
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            // Build result list from right-to-left, starting with right list as tail
+            CoreVM::TypedObject* acc = right;
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, *it);
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // Register object_to_string builtin: runtime dispatch for object printing
+    runtime.registerFunction("object_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([listToString](CoreVM::Params& args) {
+            auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (obj && obj->type->id == CoreVM::BuiltinTypeId::List)
+            {
+                args.setResult(args.caller()->newString(listToString(obj)));
+            }
+            else
+            {
+                // Fallback: print as number
+                args.setResult(args.caller()->newString(std::to_string(args.getInt(1))));
+            }
         });
 
     // Register env.has builtin (returns boolean: true if key exists in mock env)
@@ -177,6 +262,20 @@ bool generatesIRSuccessfully(std::string const& source)
 {
     auto ir = generateIR(source);
     return ir != nullptr;
+}
+
+bool generatesIRWithError(std::string const& source, std::string_view expectedErrorSubstring)
+{
+    auto ir = generateIR(source);
+    if (ir)
+        return false; // Expected failure but IR generation succeeded
+
+    auto const& messages = TestRuntime::instance().report.messages();
+    for (auto const& msg: messages)
+        if (msg.text.find(expectedErrorSubstring) != std::string::npos)
+            return true;
+
+    return false;
 }
 
 ast::Statement* getFirstStatement(ast::Statement* stmt)

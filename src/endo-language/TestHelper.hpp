@@ -106,6 +106,10 @@ std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source);
 /// Returns true if IR generation succeeds for the given source code.
 bool generatesIRSuccessfully(std::string const& source);
 
+/// Attempts IR generation and checks that it fails with an error containing the expected substring.
+/// Returns true if IR generation fails AND at least one error message contains expectedErrorSubstring.
+bool generatesIRWithError(std::string const& source, std::string_view expectedErrorSubstring);
+
 /// Helper to get the first statement from a compound statement.
 /// Returns nullptr if the statement is not a compound statement or is empty.
 ast::Statement* getFirstStatement(ast::Statement* stmt);

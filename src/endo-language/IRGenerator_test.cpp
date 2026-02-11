@@ -1468,9 +1468,9 @@ TEST_CASE("IRGenerator.FSharp.exec_rec_pipeline")
 TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
 {
     // Non-tail recursive call (n * f(n-1)) should fail to compile when called
-    CHECK_FALSE(
-        generatesIRSuccessfully("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
-                                "let r = factorial 5"));
+    CHECK(generatesIRWithError("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
+                               "let r = factorial 5",
+                               "Non-tail recursive call detected"));
 }
 
 // =============================================================================
@@ -1637,7 +1637,7 @@ TEST_CASE("IRGenerator.FSharp.exec_partial_function_alias")
 TEST_CASE("IRGenerator.FSharp.exec_partial_over_application_error")
 {
     // Over-application should fail
-    CHECK_FALSE(generatesIRSuccessfully("let add x y = x + y; let r = add 1 2 3"));
+    CHECK(generatesIRWithError("let add x y = x + y; let r = add 1 2 3", "expects 2 arguments, got 3"));
 }
 
 // =============================================================================
@@ -1647,31 +1647,32 @@ TEST_CASE("IRGenerator.FSharp.exec_partial_over_application_error")
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param")
 {
     // 1-param function called with 2 args must fail
-    CHECK_FALSE(generatesIRSuccessfully("let f x = x + 1; f 3 4"));
+    CHECK(generatesIRWithError("let f x = x + 1; f 3 4", "expects 1 argument, got 2"));
 }
 
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param_annotated")
 {
     // Annotated 1-param function called with 2 args must fail
-    CHECK_FALSE(generatesIRSuccessfully("let f (x: int): int = x + 1; f 3 4"));
+    CHECK(generatesIRWithError("let f (x: int): int = x + 1; f 3 4", "expects 1 argument, got 2"));
 }
 
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_1param_in_print")
 {
     // Over-application inside print wrapper must fail
-    CHECK_FALSE(generatesIRSuccessfully("let f (x: int): int = x + 1; print (f 3 4)"));
+    CHECK(generatesIRWithError("let f (x: int): int = x + 1; print (f 3 4)", "expects 1 argument, got 2"));
 }
 
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_2param")
 {
     // 2-param function called with 3 args must fail
-    CHECK_FALSE(generatesIRSuccessfully("let add x y = x + y; add 1 2 3"));
+    CHECK(generatesIRWithError("let add x y = x + y; add 1 2 3", "expects 2 arguments, got 3"));
 }
 
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.over_application_2param_annotated")
 {
     // Annotated 2-param function called with 3 args must fail
-    CHECK_FALSE(generatesIRSuccessfully("let f (x: int) (y: int): int = x + y; f 1 2 3"));
+    CHECK(
+        generatesIRWithError("let f (x: int) (y: int): int = x + y; f 1 2 3", "expects 2 arguments, got 3"));
 }
 
 TEST_CASE("IRGenerator.FSharp.ArityEnforcement.exact_arity_1param")
@@ -2051,7 +2052,7 @@ TEST_CASE("IRGenerator.FSharp.mutable_assignment_increment")
 TEST_CASE("IRGenerator.FSharp.immutable_assignment_error")
 {
     // Assigning to an immutable variable should produce an error
-    CHECK_FALSE(generatesIRSuccessfully("let x = 1; x <- 42"));
+    CHECK(generatesIRWithError("let x = 1; x <- 42", "Cannot assign to immutable variable"));
 }
 
 // =============================================================================
@@ -2958,4 +2959,454 @@ TEST_CASE("IRGenerator.FSharp.tuple_destructure_3_elements")
 TEST_CASE("IRGenerator.FSharp.tuple_destructure_let_in")
 {
     CHECK(executesWithOutput("let r = let (x, y) = (5, 6) in x * y; print r", "30"));
+}
+
+// =============================================================================
+// F# List Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_empty")
+{
+    REQUIRE(executesSuccessfully("let x = []"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_single")
+{
+    REQUIRE(executesSuccessfully("let x = [1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_multiple")
+{
+    REQUIRE(executesSuccessfully("let x = [1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_print_empty")
+{
+    CHECK(executesWithOutput("print []", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_print_single")
+{
+    CHECK(executesWithOutput("print [42]", "[42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_print_multiple")
+{
+    CHECK(executesWithOutput("print [1; 2; 3]", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_print_binding")
+{
+    CHECK(executesWithOutput("let x = [10; 20; 30]; print x", "[10; 20; 30]"));
+}
+
+// =============================================================================
+// F# Cons (::) Operator Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.cons_single")
+{
+    CHECK(executesWithOutput("print (1 :: [])", "[1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.cons_multiple")
+{
+    CHECK(executesWithOutput("print (1 :: 2 :: 3 :: [])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.cons_prepend_to_list")
+{
+    CHECK(executesWithOutput("print (0 :: [1; 2; 3])", "[0; 1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.cons_with_binding")
+{
+    CHECK(executesWithOutput("let xs = [2; 3]; print (1 :: xs)", "[1; 2; 3]"));
+}
+
+// =============================================================================
+// F# List Pattern Matching Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.match_empty_list")
+{
+    CHECK(executesWithOutput("let x = []; let r = match x with | [] -> \"empty\" | _ -> \"not\"; print r",
+                             "empty"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_cons_head")
+{
+    auto src = "let x = [1; 2; 3]; let r = match x with | h :: t -> h | _ -> 0; print r";
+    auto actual = executeSourceAndGetOutput(src);
+    INFO("Actual output: '" << actual << "'");
+    CHECK(actual == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_nonempty_vs_empty")
+{
+    CHECK(executesWithOutput("let x = [1]; let r = match x with | [] -> 0 | h :: _ -> h; print r", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_cons_second_element")
+{
+    CHECK(executesWithOutput(
+        "let x = [1; 2; 3]; let r = match x with | _ :: second :: _ -> second | _ -> 0; print r", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_fixed_length_list")
+{
+    CHECK(executesWithOutput("let x = [10; 20]; let r = match x with | [a; b] -> a + b | _ -> 0; print r",
+                             "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_recursive_simple")
+{
+    // Simple 1-parameter recursive function with list pattern matching
+    CHECK(executesWithOutput("let rec f xs = match xs with | [] -> 0 | h :: t -> f t; "
+                             "print (f [1; 2])",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_recursive_sum")
+{
+    // Use accumulator style since non-tail recursion (h + sum t) is not supported
+    CHECK(executesWithOutput(
+        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t; "
+        "print (sumAcc 0 [1; 2; 3; 4])",
+        "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.match_recursive_length")
+{
+    // Use accumulator style since non-tail recursion (1 + len t) is not supported
+    CHECK(executesWithOutput(
+        "let rec lenAcc acc xs = match xs with | [] -> acc | _ :: t -> lenAcc (acc + 1) t; "
+        "print (lenAcc 0 [10; 20; 30])",
+        "3"));
+}
+
+// =============================================================================
+// List range expressions [start..end] and [start..step..end]
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_range_simple")
+{
+    CHECK(executesWithOutput("print [1..3]", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_single")
+{
+    CHECK(executesWithOutput("print [1..1]", "[1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_empty")
+{
+    CHECK(executesWithOutput("print [5..3]", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_step")
+{
+    CHECK(executesWithOutput("print [1..2..7]", "[1; 3; 5; 7]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_negative_step")
+{
+    CHECK(executesWithOutput("print [10..-1..7]", "[10; 9; 8; 7]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_even_step")
+{
+    CHECK(executesWithOutput("print [0..2..10]", "[0; 2; 4; 6; 8; 10]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_with_pattern_matching")
+{
+    CHECK(executesWithOutput(
+        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+        "print (sumAcc 0 [1..5])",
+        "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_let_binding")
+{
+    CHECK(executesWithOutput("let xs = [1..5]\n"
+                             "print xs",
+                             "[1; 2; 3; 4; 5]"));
+}
+
+// =============================================================================
+// List concatenation operator @
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_concat_basic")
+{
+    CHECK(executesWithOutput("print ([1; 2] @ [3; 4])", "[1; 2; 3; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_empty_left")
+{
+    CHECK(executesWithOutput("print ([] @ [1; 2])", "[1; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_empty_right")
+{
+    CHECK(executesWithOutput("print ([1; 2] @ [])", "[1; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_both_empty")
+{
+    CHECK(executesWithOutput("print ([] @ [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_chained")
+{
+    CHECK(executesWithOutput("print ([1] @ [2] @ [3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_with_cons")
+{
+    CHECK(executesWithOutput("print (0 :: [1; 2] @ [3; 4])", "[0; 1; 2; 3; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_with_range")
+{
+    CHECK(executesWithOutput("print ([1..3] @ [4..6])", "[1; 2; 3; 4; 5; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_bound_variables")
+{
+    CHECK(executesWithOutput("let a = [1; 2]; let b = [3; 4]; print (a @ b)", "[1; 2; 3; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_single_elements")
+{
+    CHECK(executesWithOutput("print ([1] @ [2])", "[1; 2]"));
+}
+
+// =============================================================================
+// Additional list execution edge cases
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_nested_in_option")
+{
+    // List inside Some/None
+    CHECK(executesWithOutput("let x = Some [1; 2; 3]; match x with | Some xs -> print xs | None -> print 0",
+                             "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nested_in_result")
+{
+    // List inside Ok/Error
+    CHECK(executesWithOutput("let x = Ok [10; 20]; match x with | Ok xs -> print xs | Error _ -> print 0",
+                             "[10; 20]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_in_tuple")
+{
+    // Tuple containing a list
+    CHECK(executesSuccessfully("let t = ([1; 2], 42)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_as_function_arg")
+{
+    // Pass list to function and operate on it
+    CHECK(executesWithOutput("let first xs = match xs with | h :: _ -> h | [] -> 0; print (first [5; 6; 7])",
+                             "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_as_function_return")
+{
+    // Return a list from a function
+    CHECK(executesWithOutput("let make x = x :: []; print (make 99)", "[99]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_match_wildcard_tail")
+{
+    // Wildcard in tail position
+    CHECK(
+        executesWithOutput("let x = [1; 2; 3]; let r = match x with | h :: _ -> h | [] -> 0; print r", "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_match_wildcard_head")
+{
+    // Wildcard in head position
+    CHECK(executesWithOutput(
+        "let rec last xs = match xs with | [x] -> x | _ :: t -> last t | [] -> 0; print (last [10; 20; 30])",
+        "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_match_three_elements")
+{
+    // Fixed 3-element list pattern
+    CHECK(executesWithOutput(
+        "let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r", "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_large")
+{
+    // Larger range
+    CHECK(executesWithOutput(
+        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+        "print (sumAcc 0 [1..10])",
+        "55"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_step_not_aligned")
+{
+    // Step doesn't evenly divide range — should stop before overshooting
+    CHECK(executesWithOutput("print [1..3..10]", "[1; 4; 7; 10]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_step_overshoot")
+{
+    // Step overshoots end — should include only start (aligned to valid elements)
+    CHECK(executesWithOutput("print [1..10..5]", "[1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_step_exact_fit")
+{
+    // Step exactly fits the range
+    CHECK(executesWithOutput("print [0..5..10]", "[0; 5; 10]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_cons_right_associative")
+{
+    // Verify :: is right-associative: 1 :: 2 :: 3 :: [] = 1 :: (2 :: (3 :: []))
+    CHECK(executesWithOutput("print (1 :: 2 :: 3 :: [])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_right_associative")
+{
+    // Verify @ is right-associative: [1] @ [2] @ [3] = [1] @ ([2] @ [3])
+    CHECK(executesWithOutput("print ([1] @ [2] @ [3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_cons_precedence_over_concat")
+{
+    // :: has same precedence as @, both right-associative
+    // 0 :: [1; 2] @ [3; 4] should parse as 0 :: ([1; 2] @ [3; 4])
+    CHECK(executesWithOutput("print (0 :: [1; 2] @ [3; 4])", "[0; 1; 2; 3; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_recursive_count_elements")
+{
+    // Count elements greater than a threshold
+    CHECK(executesWithOutput("let rec countAbove threshold acc xs = match xs with\n"
+                             "  | [] -> acc\n"
+                             "  | h :: t -> if h > threshold then countAbove threshold (acc + 1) t else "
+                             "countAbove threshold acc t\n"
+                             "print (countAbove 3 0 [1; 5; 2; 7; 3; 8])",
+                             "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_recursive_find_max")
+{
+    // Find maximum element in a list
+    CHECK(executesWithOutput("let rec maxAcc acc xs = match xs with\n"
+                             "  | [] -> acc\n"
+                             "  | h :: t -> if h > acc then maxAcc h t else maxAcc acc t\n"
+                             "print (maxAcc 0 [3; 7; 2; 9; 1])",
+                             "9"));
+}
+
+// NOTE: Recursive functions that construct new cons cells in tail call arguments
+// (e.g., `revAcc (h :: acc) t`) are a known limitation of the AST inlining approach.
+// ConsExpr in tail call position creates object allocations that aren't properly
+// handled by the recursive tail call optimization. This will be addressed when
+// the compiler moves from AST inlining to proper closure-based function calls.
+
+TEST_CASE("IRGenerator.FSharp.list_match_nested_cons_depth3")
+{
+    // Match on 3-deep nested cons (a :: b :: c :: rest)
+    CHECK(executesWithOutput("let x = [10; 20; 30; 40; 50]\n"
+                             "let r = match x with | a :: b :: c :: _ -> a + b + c | _ -> 0\n"
+                             "print r",
+                             "60"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_match_fallthrough_to_empty")
+{
+    // Non-matching cons pattern falls through to empty pattern
+    CHECK(executesWithOutput("let x = []; let r = match x with | h :: t -> h | [] -> 99; print r", "99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_match_fallthrough_to_wildcard")
+{
+    // Non-matching specific pattern falls through to wildcard
+    CHECK(executesWithOutput("let x = [1; 2; 3]\n"
+                             "let r = match x with | [a] -> a | _ -> 42\n"
+                             "print r",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_concat_preserves_order")
+{
+    // Verify concatenation preserves element order from both sides
+    CHECK(executesWithOutput(
+        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+        "let xs = [1; 2] @ [3; 4] @ [5; 6]\n"
+        "print (sumAcc 0 xs)",
+        "21"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_range_negative_descend_empty")
+{
+    // Negative step but start < end — should be empty
+    CHECK(executesWithOutput("print [1..-1..5]", "[]"));
+}
+
+// =============================================================================
+// Compile-time error tests (should fail IR generation)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_if_type_mismatch_list_vs_int")
+{
+    // if-then-else branches: list vs int
+    CHECK(generatesIRWithError("let x = if true then [1; 2] else 42", "Type mismatch in if-then-else"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_type_mismatch_list_vs_str")
+{
+    // if-then-else branches: list vs string
+    CHECK(
+        generatesIRWithError("let x = if true then [1; 2] else \"hello\"", "Type mismatch in if-then-else"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_type_mismatch_list_vs_option")
+{
+    // if-then-else branches: list vs option
+    CHECK(generatesIRWithError("let x = if true then [1; 2] else Some 42", "Type mismatch in if-then-else"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_type_mismatch_list_vs_tuple")
+{
+    // if-then-else branches: list vs tuple
+    CHECK(generatesIRWithError("let x = if true then [1; 2] else (1, 2)", "Type mismatch in if-then-else"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_same_type_both_lists")
+{
+    // if-then-else branches: both lists — should succeed
+    CHECK(generatesIRSuccessfully("let x = if true then [1; 2] else [3; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_same_type_empty_and_nonempty")
+{
+    // if-then-else branches: empty list and non-empty list — should succeed (both List type)
+    CHECK(generatesIRSuccessfully("let x = if true then [] else [1; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_function_arity_too_many_args")
+{
+    // Function taking one list arg, called with two args
+    CHECK(generatesIRWithError("let f xs = match xs with | [] -> 0 | _ -> 1; f [1] [2]",
+                               "expects 1 argument, got 2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_recursive_non_tail_position")
+{
+    // Non-tail recursive call (h + (sum t)) — should error
+    CHECK(generatesIRWithError(
+        "let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2])",
+        "Non-tail recursive call detected"));
 }
