@@ -571,6 +571,14 @@ src/
     - [x] Complex types (list, option, result, function, tuple) inferred but not applied (handler compilation limitations)
     - [x] Extended `createStandardTypeEnv()` with print, println, string_length, int_of_string, string_of_int, not, ::, @, ~-
     - [x] 20 type inference tests (12 unit + 8 e2e) covering literals, operators, recursion, partial annotations, lambda, option, if-branches, factorial, identity, add, subtract, multiply, comparison, let-in, bool functions, typed-still-works, mixed annotations
+  - [x] Higher-order functions (passing functions as arguments)
+    - [x] `functionRefs` map in `FSharpScope` tracks which variables hold function references
+    - [x] `capturedFunctionRefs` on `FSharpFunction` preserves function reference info through closures and partial application
+    - [x] `lookupFSharpFunctionRef()` walks scope chain for function reference resolution
+    - [x] Fallback in `visit(ApplicationExpr)` and `visit(PipelineExpr)`: when `lookupFSharpFunction` fails, resolves via `lookupFSharpFunctionRef`
+    - [x] Functions with function-typed parameters skip handler compilation (forced to AST inlining for functionRefs tracking)
+    - [x] `IdentifierExpr` returns constant function name for variables with function reference mappings
+    - [x] 11 HOF tests: basic, lambda arg, twice, compose, partial application, closure capture, multiple function args, pipeline, string function, nested partial application, function alias
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes

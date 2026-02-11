@@ -69,6 +69,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Tail-call optimization
 - [x] Function composition: `>>` and `<<` operators
 - [x] Type-annotated functions
+- [x] Higher-order functions: passing functions as arguments (`let apply f x = f x`)
+- [x] HOF with partial application, closures capturing function refs, and pipelines
 
 ## Lists & Collections
 
