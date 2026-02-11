@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
 
+#include <tui/completer/Completer.hpp>
+
 #include <algorithm>
 
 namespace endo
@@ -136,29 +138,7 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
 
 std::string Completer::findCommonPrefix(std::vector<CompletionItem> const& items)
 {
-    if (items.empty())
-        return "";
-
-    if (items.size() == 1)
-        return items[0].text;
-
-    std::string prefix = items[0].text;
-
-    for (size_t i = 1; i < items.size(); ++i)
-    {
-        auto const& text = items[i].text;
-        size_t j = 0;
-
-        while (j < prefix.size() && j < text.size() && prefix[j] == text[j])
-            ++j;
-
-        prefix = prefix.substr(0, j);
-
-        if (prefix.empty())
-            break;
-    }
-
-    return prefix;
+    return tui::Completer::findCommonPrefix(items);
 }
 
 } // namespace endo
