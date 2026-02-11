@@ -3600,3 +3600,82 @@ TEST_CASE("IRGenerator.FSharp.list_recursive_non_tail_position")
         "let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2])",
         "Non-tail recursive call detected"));
 }
+
+// =============================================================================
+// Higher-Order Function (HOF) Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.hof_basic")
+{
+    // Basic HOF: pass a named function as an argument
+    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nprint (apply double 5)", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_lambda_argument")
+{
+    // HOF with lambda argument
+    CHECK(executesWithOutput("let apply f x = f x\nprint (apply (fun x -> x * 2) 5)", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_twice")
+{
+    // Apply function to result of itself
+    CHECK(executesWithOutput("let double x = x * 2\nlet twice f x = f (f x)\nprint (twice double 3)", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_compose")
+{
+    // Function composition
+    CHECK(executesWithOutput("let double x = x * 2\nlet add1 x = x + 1\nlet compose f g x = f (g x)\nprint "
+                             "(compose double add1 5)",
+                             "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_partial_application")
+{
+    // Partial application of HOF
+    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nlet g = apply double\nprint (g 5)",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_returning_closure")
+{
+    // HOF returning closure that captures function ref
+    CHECK(executesWithOutput(
+        "let double x = x * 2\nlet make_caller f = fun x -> f x\nlet g = make_caller double\nprint (g 5)",
+        "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_multiple_function_args")
+{
+    // Multiple function arguments
+    CHECK(executesWithOutput(
+        "let double x = x * 2\nlet add1 x = x + 1\nlet apply2 f g x = g (f x)\nprint (apply2 double add1 3)",
+        "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_pipeline")
+{
+    // HOF in pipeline
+    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nprint (5 |> apply double)", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_string_function")
+{
+    // HOF with string function
+    CHECK(executesWithOutput("let shout s = s + \"!\"\nlet apply f x = f x\nprint (apply shout \"hello\")",
+                             "hello!"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_nested_partial_application")
+{
+    // Nested partial application: (add 1) passed as function arg
+    CHECK(executesWithOutput("let add x y = x + y\nlet apply f x = f x\nlet g = apply (add 1)\nprint (g 5)",
+                             "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.hof_function_alias")
+{
+    // Function alias through HOF (identity returning a function)
+    CHECK(executesWithOutput("let double x = x * 2\nlet id f = f\nlet g = id double\nprint (g 5)", "10"));
+}

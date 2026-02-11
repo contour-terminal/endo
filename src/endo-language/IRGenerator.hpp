@@ -251,6 +251,8 @@ class IRGenerator final: public ast::Visitor
         std::unordered_map<std::string, BindingInfo> bindings;
         std::vector<CoreVM::AllocaInstr*>
             objectVariables; ///< Variables holding objects (for ORELEASE at scope exit)
+        /// Maps variable names to function names they reference (HOF support).
+        std::unordered_map<std::string, std::string> functionRefs;
         FSharpScope* parent = nullptr;
     };
 
@@ -262,6 +264,10 @@ class IRGenerator final: public ast::Visitor
                                   bool isMutable = false);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
     [[nodiscard]] BindingInfo const* lookupFSharpBinding(std::string const& name) const;
+
+    /// Walks the scope chain looking for a function reference mapping for @p name.
+    /// Returns the actual function name if found, or std::nullopt.
+    [[nodiscard]] std::optional<std::string> lookupFSharpFunctionRef(std::string const& name) const;
 
     // F# function management
     struct FSharpFunction
@@ -280,6 +286,9 @@ class IRGenerator final: public ast::Visitor
         /// Deterministic ordering of captured variable names for handler compilation.
         /// Populated by compileFunctionAsHandler; used at both definition and call sites.
         std::vector<std::string> captureOrder;
+        /// Maps captured variable names to source function names (HOF support).
+        /// Preserves function reference info through closures and partial application.
+        std::unordered_map<std::string, std::string> capturedFunctionRefs;
         /// Pre-compiled IR handler (set when closure-based compilation is active).
         /// When non-null, calls emit FunctionCallInstr instead of AST inlining.
         CoreVM::IRHandler* compiledHandler = nullptr;

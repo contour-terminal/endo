@@ -431,6 +431,16 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
     return nullptr;
 }
 
+std::optional<std::string> IRGenerator::lookupFSharpFunctionRef(std::string const& name) const
+{
+    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
+    {
+        if (auto it = scope->functionRefs.find(name); it != scope->functionRefs.end())
+            return it->second;
+    }
+    return std::nullopt;
+}
+
 std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr const& type)
 {
     if (auto const* prim = type->asPrimitive())
@@ -3571,8 +3581,17 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         func = lookupFSharpFunction(funcName);
         if (!func)
         {
-            reportTypeError("Undefined function in pipeline: {}", std::string_view(funcName));
-            return;
+            // Fallback: check if the identifier is a function reference (HOF support)
+            if (auto ref = lookupFSharpFunctionRef(funcName))
+            {
+                funcName = *ref;
+                func = lookupFSharpFunction(funcName);
+            }
+            if (!func)
+            {
+                reportTypeError("Undefined function in pipeline: {}", std::string_view(funcIdent->name));
+                return;
+            }
         }
     }
     else if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(funcExpr))
@@ -3611,11 +3630,21 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
-        auto const* baseFunc = lookupFSharpFunction(baseIdent->name);
+        auto baseFuncName = baseIdent->name;
+        auto const* baseFunc = lookupFSharpFunction(baseFuncName);
         if (!baseFunc)
         {
-            reportTypeError("Undefined function in pipeline: {}", std::string_view(baseIdent->name));
-            return;
+            // Fallback: check if the identifier is a function reference (HOF support)
+            if (auto ref = lookupFSharpFunctionRef(baseFuncName))
+            {
+                baseFuncName = *ref;
+                baseFunc = lookupFSharpFunction(baseFuncName);
+            }
+            if (!baseFunc)
+            {
+                reportTypeError("Undefined function in pipeline: {}", std::string_view(baseIdent->name));
+                return;
+            }
         }
 
         // Total args = explicit args + piped value (last parameter)
@@ -3645,7 +3674,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         allArgs.push_back(value);
 
         // Inline the function body with all arguments
-        funcName = baseIdent->name;
+        funcName = baseFuncName;
         func = baseFunc;
 
         pushFSharpScope();
@@ -3653,6 +3682,10 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         // Re-bind captured variables
         for (auto const& [name, storage]: func->capturedBindings)
             bindFSharpVariable(name, storage);
+
+        // Re-establish function references from captured function refs (HOF support)
+        for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
+            _currentFSharpScope->functionRefs[varName] = targetFunc;
 
         CoreVM::BasicBlock* returnBlock = nullptr;
         CoreVM::AllocaInstr* returnStorage = nullptr;
@@ -3669,6 +3702,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             auto* paramStorage = createAllocaInEntryBlock(storageType, func->parameters[i]);
             _builder.createStore(paramStorage, allArgs[i], func->parameters[i]);
             bindFSharpVariable(func->parameters[i], paramStorage);
+
+            // Track function references passed as arguments (HOF support)
+            if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
+            {
+                if (lookupFSharpFunction(constStr->get()))
+                    _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+            }
         }
 
         auto* bodyResult = codegen(func->body);
@@ -3761,6 +3801,10 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     for (auto const& [capName, capStorage]: func->capturedBindings)
         bindFSharpVariable(capName, capStorage);
 
+    // Re-establish function references from captured function refs (HOF support)
+    for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
+        _currentFSharpScope->functionRefs[varName] = targetFunc;
+
     // Only set up return infrastructure for functions that return Result/Option
     CoreVM::BasicBlock* returnBlock = nullptr;
     CoreVM::AllocaInstr* returnStorage = nullptr;
@@ -3777,6 +3821,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[0]);
     _builder.createStore(storage, value, func->parameters[0]);
     bindFSharpVariable(func->parameters[0], storage);
+
+    // Track function references passed as piped value (HOF support)
+    if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
+    {
+        if (lookupFSharpFunction(constStr->get()))
+            _currentFSharpScope->functionRefs[func->parameters[0]] = constStr->get();
+    }
 
     // Inline the function body
     CoreVM::Value* bodyResult = codegen(func->body);
@@ -3879,8 +3930,17 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         func = lookupFSharpFunction(funcName);
         if (!func)
         {
-            reportTypeError("Undefined function: {}", std::string_view(funcName));
-            return;
+            // Fallback: check if the identifier is a function reference (HOF support)
+            if (auto ref = lookupFSharpFunctionRef(funcName))
+            {
+                funcName = *ref;
+                func = lookupFSharpFunction(funcName);
+            }
+            if (!func)
+            {
+                reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
+                return;
+            }
         }
     }
     else if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(current))
@@ -3978,6 +4038,19 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
     partialFunc.returnKind = func->returnKind;
     partialFunc.isRecursive = false;
     partialFunc.capturedBindings = std::move(newCaptures);
+
+    // Carry over existing captured function refs from the parent function
+    partialFunc.capturedFunctionRefs = func->capturedFunctionRefs;
+
+    // Track function references in supplied arguments (HOF support)
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
+        {
+            if (lookupFSharpFunction(constStr->get()))
+                partialFunc.capturedFunctionRefs[func->parameters[i]] = constStr->get();
+        }
+    }
 
     registerFSharpFunction(partialName, std::move(partialFunc));
     _result = _builder.get(partialName);
@@ -4276,6 +4349,10 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     for (auto const& [capName, capStorage]: func->capturedBindings)
         bindFSharpVariable(capName, capStorage);
 
+    // Re-establish function references from captured function refs (HOF support)
+    for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
+        _currentFSharpScope->functionRefs[varName] = targetFunc;
+
     // Only set up return infrastructure for functions that return Result/Option
     // This is needed for the ? operator to propagate errors
     CoreVM::BasicBlock* returnBlock = nullptr;
@@ -4304,6 +4381,13 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[i]);
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
+
+        // Track function references passed as arguments (HOF support)
+        if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
+        {
+            if (lookupFSharpFunction(constStr->get()))
+                _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+        }
     }
 
     // Inline the function body
@@ -4348,6 +4432,11 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
         !func.parameters.empty() && func.parameterTypes.size() == func.parameters.size()
         && std::ranges::all_of(func.parameterTypes, [](auto const& t) { return t.has_value(); });
     if (!func.parameters.empty() && !allParamsTyped)
+        return;
+
+    // Functions with function-typed parameters must use AST inlining so that
+    // functionRefs tracking can resolve higher-order function calls.
+    if (std::ranges::any_of(func.parameterTypes, [](auto const& t) { return t && (*t)->isFunction(); }))
         return;
 
     // Functions whose body is a lambda cannot be handler-compiled because the inner
@@ -4511,7 +4600,21 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(node.name);
             return;
         }
+        // HOF support: check if identifier maps to a function reference
+        if (auto ref = lookupFSharpFunctionRef(node.name))
+        {
+            _result = _builder.get(*ref);
+            return;
+        }
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
+        return;
+    }
+
+    // HOF support: if this variable holds a function reference, return the constant
+    // function name so that downstream let bindings and argument passing can detect it.
+    if (auto ref = lookupFSharpFunctionRef(node.name))
+    {
+        _result = _builder.get(*ref);
         return;
     }
 
@@ -4570,6 +4673,14 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+
+    // Preserve function reference info through lambda captures (HOF support)
+    for (auto const& [capName, _]: func.capturedBindings)
+    {
+        if (auto ref = lookupFSharpFunctionRef(capName))
+            func.capturedFunctionRefs[capName] = *ref;
+    }
+
     registerFSharpFunction(lambdaName, std::move(func));
 
     // Store the lambda name in a way that can be retrieved by the calling context.
