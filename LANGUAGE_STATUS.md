@@ -208,7 +208,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Persist function definitions across REPL prompts
 - [x] Persist recursive and mutual-recursive functions
 - [x] Persist simple value bindings (`let x = 42`)
-- [ ] Persist closure captures from previous prompts
+- [x] Persist closure captures from previous prompts (for type-annotated functions)
 
 ---
 

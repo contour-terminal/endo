@@ -522,6 +522,43 @@ src/
 - [x] Support standalone `match` expression as a statement
   - [x] Added `Token::Match` handler in `parseStmt()` wrapping match expression in `ExprStmt`
   - [x] `generatePrintCall` returns unit value (0) instead of nullptr, enabling `print` inside match arms
+- [~] Transition from AST inlining to closure-based function calls — In Progress
+  - [x] Phase 0: Extract function call methods from `visit(ApplicationExpr)` into named helpers (`generateFSharpCall`, `generateRecursiveCall`, `generateMutualRecursiveCall`, `generatePartialApplication`)
+  - [x] Phase 1: Add UCALL/URET/UTCALL opcodes and frame pointer to VM Runner
+    - [x] `_fp` (frame pointer), `CallFrame`, `_callStack` for proper function call isolation
+    - [x] LOAD/STORE/STACKROT made FP-relative for handler-local stack access
+    - [x] `_fp=0` initialization maintains backward compatibility with existing shell/main handler code
+  - [x] Phase 2: Add `FunctionCallInstr`/`FunctionRetInstr`/`TailCallInstr` IR instructions
+    - [x] New instruction classes, IRBuilder methods, TargetCodeGenerator visitors
+    - [x] `parameterCount` property on `IRHandler` for parameter alloca skip logic
+  - [x] Phase 3: Compile non-recursive F# functions as separate IRHandlers
+    - [x] `compileFunctionAsHandler()` creates IRHandler, parameter allocas, codegens body, emits FunctionRet
+    - [x] Functions with ALL parameters type-annotated compile as handlers (UCALL/URET)
+    - [x] Functions without annotations fall back to AST inlining (backward compatible)
+    - [x] Error recovery: removes malformed handler and truncates report on compilation failure
+    - [x] Return type propagated through `FunctionCallInstr` for correct `convertToString` dispatch
+    - [x] 15 handler-specific tests (typed arithmetic, float, string, bool, if-then-else, fallback)
+  - [x] Phase 4: Closures (captured variables as extra arguments)
+    - [x] Deterministic capture ordering (sorted alphabetically) stored in `captureOrder`
+    - [x] Captures become extra parameters prepended before explicit params in handler
+    - [x] Call site loads captured values and prepends to args for `FunctionCallInstr`
+    - [x] Capture types derived from source alloca types (no annotation needed for captures)
+    - [x] 8 closure-specific tests (int, multiple captures, string, float, nested lets, thunk, fallback)
+  - [x] Phase 5: Recursive functions (unified tail calls via UTCALL)
+    - [x] `compileFunctionAsHandler` now compiles recursive functions (removed `!isRecursive` guard)
+    - [x] `compiledHandler` pre-set before body codegen so recursive references emit UCALL/UTCALL
+    - [x] Tail position tracking (`_inTailPosition`, `_compilingHandler`) for UCALL vs UTCALL decisions
+    - [x] Tail position propagation: IfExpr (condition=false, branches=inherit), BinaryExpr (operands=false), ApplicationExpr (args=false, call=inherit), MatchExpr (scrutinee=false, arms=inherit), LetInExpr (value=false, body=inherit)
+    - [x] Recursive capture loads use handler scope (not outer scope) to avoid cross-handler alloca references
+    - [x] Null-result handling for tail calls in IfExpr, MatchExpr (check `_compilingHandler`)
+    - [x] Old loop-based TCO and dispatch-loop remain as fallback for untyped recursive functions
+    - [x] 5 recursive handler tests (countdown, factorial, sum, multiple calls, capture)
+  - [x] Phase 6: Cleanup and REPL handler persistence
+    - [x] Removed `_useClosureCalls` feature flag — handler compilation is always attempted
+    - [x] REPL-persisted functions now re-compute captures and compile as handlers at prompt start
+    - [x] Closure captures from previous prompts now work correctly (persisted values in scope)
+    - [x] 3 session handler tests (recursive, closure, multiple calls)
+    - [x] Old AST inlining paths retained as fallback for functions without type annotations (requires type inference to remove)
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
@@ -573,7 +610,7 @@ src/
   - `Shell` retains parsed ASTs so that function body pointers remain valid across prompts
   - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
   - Simple value bindings (`let x = 42`) persist via AST re-evaluation: the value expression is re-codegen'd at each prompt so dependencies resolve correctly
-  - Limitations: closure captures from previous prompts are not preserved (pure functions only)
+  - Closure captures from previous prompts are re-computed and work correctly for type-annotated functions compiled as handlers
   - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
 - Mutual recursion (`let rec f ... and g ...`):
   - Parser handles `and` keyword after `let rec` to chain function definitions
