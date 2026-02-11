@@ -424,7 +424,7 @@ src/
 - [x] Implement or-patterns in match expressions (`| 1 | 2 | 3 -> "small"`)
 - [x] Implement as-patterns in match expressions (`| n as val -> ...`)
 - [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
-- [x] Fix logical OR operator (3 copy-paste bugs: `createBXor` emitted `BAndInstr`, `BOrInstr` visitor emitted `BAND`, `||` codegen used `createBXor` instead of `createBOr`)
+- [x] Fix logical OR operator (3 copy-paste bugs: `createBXor` emitted `BAndInstr`, `BOrInstr` visitor emitted `BAND`, `||` codegen used `createBXor` instead of `createBOr`) — test re-enabled
 - [x] Fix string concatenation with `+` operator (was always converting to numbers; now detects string operands and uses `createSAdd`)
 - [x] Implement if-then-else expressions (`IfExpr` AST node, parser, IR codegen with alloca/branch/merge)
 - [x] Fix if-then-else result type inference (defer alloca creation until branch type is known, fixes string/float results)

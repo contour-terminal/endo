@@ -882,8 +882,12 @@ TEST_CASE("IRGenerator.FSharp.exec_logical_and")
           == "1");
 }
 
-// NOTE: Logical OR (||) in guard expressions has a known issue - tracked separately
-// TEST_CASE("IRGenerator.FSharp.exec_logical_or") { ... }
+TEST_CASE("IRGenerator.FSharp.exec_logical_or")
+{
+    CHECK(executeSourceAndGetOutput("let a = 5; let r = match 0 with | _ when a < 3 || a > 4 -> 1 | _ -> 0; "
+                                    "print r")
+          == "1");
+}
 
 TEST_CASE("IRGenerator.FSharp.exec_option_construction")
 {
