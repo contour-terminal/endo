@@ -113,6 +113,7 @@ enum class Token
     StarStar,     // '**' (exponentiation)
     Caret,        // '^' (bitwise XOR)
     ColonColon,   // '::' (list cons)
+    At,           // '@' (list concatenation)
     Comma,        // ','
     Colon,        // ':'
     BracketOpen,  // '['
@@ -466,6 +467,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case StarStar: name = "**"; break;
             case Caret: name = "^"; break;
             case ColonColon: name = "::"; break;
+            case At: name = "@"; break;
             case Comma: name = ","; break;
             case Colon: name = ":"; break;
             case BracketOpen: name = "["; break;

@@ -817,6 +817,28 @@ void ASTPrinter::visit(ListExpr const& node)
     _result += ']';
 }
 
+void ASTPrinter::visit(ConsExpr const& node)
+{
+    _result += '(';
+    if (node.head)
+        node.head->accept(*this);
+    _result += " :: ";
+    if (node.tail)
+        node.tail->accept(*this);
+    _result += ')';
+}
+
+void ASTPrinter::visit(ConcatListExpr const& node)
+{
+    _result += '(';
+    if (node.left)
+        node.left->accept(*this);
+    _result += " @ ";
+    if (node.right)
+        node.right->accept(*this);
+    _result += ')';
+}
+
 void ASTPrinter::visit(ListRangeExpr const& node)
 {
     _result += '[';

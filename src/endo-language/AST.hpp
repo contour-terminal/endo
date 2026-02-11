@@ -1282,6 +1282,35 @@ struct ListExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Cons expression: `head :: tail`
+///
+/// Prepends an element to a list, creating a new Cons cell.
+/// Right-associative: `1 :: 2 :: []` = `1 :: (2 :: [])`.
+struct ConsExpr final: public Expr
+{
+    std::unique_ptr<Expr> head; ///< Element to prepend
+    std::unique_ptr<Expr> tail; ///< Existing list
+
+    ConsExpr(std::unique_ptr<Expr> h, std::unique_ptr<Expr> t): head(std::move(h)), tail(std::move(t)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// List concatenation expression: `left @ right`
+///
+/// Concatenates two lists, producing a new list.
+struct ConcatListExpr final: public Expr
+{
+    std::unique_ptr<Expr> left;  ///< First list
+    std::unique_ptr<Expr> right; ///< Second list
+
+    ConcatListExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// List range expression: `[1..10]` or `[start..step..end]`
 ///
 /// Creates a list from a range of values.

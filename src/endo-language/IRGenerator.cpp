@@ -122,6 +122,13 @@ namespace
                                                typeName(it2->second));
                         return "tuple";
                     }
+                    if (info->typeId == CoreVM::BuiltinTypeId::List)
+                    {
+                        // Cons: slot[0] = head element
+                        if (auto it = info->slots.find(0); it != info->slots.end())
+                            return std::format("list<{}>", typeName(it->second));
+                        return "list"; // Nil — no element type known
+                    }
                 }
                 return "object";
             default: return "unknown";
@@ -153,10 +160,11 @@ namespace
         if (infoA->typeId != infoB->typeId)
             return false;
 
-        // For sum types (Option/Result): different variant tags → compatible
-        // (e.g., Some(42) vs None, Ok(42) vs Error("msg"))
-        auto const isSumType =
-            infoA->typeId == CoreVM::BuiltinTypeId::Option || infoA->typeId == CoreVM::BuiltinTypeId::Result;
+        // For sum types (Option/Result/List): different variant tags → compatible
+        // (e.g., Some(42) vs None, Ok(42) vs Error("msg"), Cons vs Nil)
+        auto const isSumType = infoA->typeId == CoreVM::BuiltinTypeId::Option
+                               || infoA->typeId == CoreVM::BuiltinTypeId::Result
+                               || infoA->typeId == CoreVM::BuiltinTypeId::List;
         if (isSumType && infoA->tag.has_value() && infoB->tag.has_value() && *infoA->tag != *infoB->tag)
             return true;
 
@@ -695,6 +703,19 @@ std::optional<CoreVM::LiteralType> IRGenerator::getInnerType(CoreVM::Value* val)
     return std::nullopt;
 }
 
+void IRGenerator::annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId)
+{
+    _objectTypeIdAnnotations[val] = typeId;
+}
+
+std::optional<uint16_t> IRGenerator::getObjectTypeId(CoreVM::Value* val) const
+{
+    auto it = _objectTypeIdAnnotations.find(val);
+    if (it != _objectTypeIdAnnotations.end())
+        return it->second;
+    return std::nullopt;
+}
+
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
@@ -874,8 +895,10 @@ CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType t
     auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
         type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
 
-    // Insert before terminator in entry block (handles case where entry block already has a branch)
-    CoreVM::Instr* inserted = entryBlock->insertBeforeTerminator(std::move(allocaInstr));
+    // Insert after existing allocas to maintain the alloca-prefix invariant.
+    // Using insertBeforeTerminator would interleave allocas with non-alloca instructions,
+    // breaking TargetCodeGenerator's assumption that allocas form a contiguous stack prefix.
+    CoreVM::Instr* inserted = entryBlock->insertAfterAllocas(std::move(allocaInstr));
 
     return static_cast<CoreVM::AllocaInstr*>(inserted);
 }
@@ -2360,6 +2383,16 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
 {
     if (value->type() == CoreVM::LiteralType::Number)
     {
+        // Check if this Number is actually a list object pointer (e.g., from list_concat native)
+        if (auto objTypeId = getObjectTypeId(value); objTypeId && *objTypeId == CoreVM::BuiltinTypeId::List)
+        {
+            auto* callback = findCallback("list_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+        }
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::Float)
@@ -2384,7 +2417,28 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
         _builder.setInsertPoint(mergeBlock);
         return _builder.createLoad(storage, std::string(label) + ".b2s");
     }
-    if (value->type() == CoreVM::LiteralType::Void || value->type() == CoreVM::LiteralType::Object)
+    if (value->type() == CoreVM::LiteralType::Object)
+    {
+        // Check if value is a known typed object via annotation or IR chain analysis
+        bool isList = false;
+        if (auto objTypeId = getObjectTypeId(value))
+            isList = (*objTypeId == CoreVM::BuiltinTypeId::List);
+        else if (auto info = tryGetObjectInfo(value))
+            isList = (info->typeId == CoreVM::BuiltinTypeId::List);
+
+        if (isList)
+        {
+            auto* callback = findCallback("list_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+        }
+        // Fallback: assume numeric for unknown object types
+        return _builder.createN2S(value, std::string(label) + ".n2s");
+    }
+    if (value->type() == CoreVM::LiteralType::Void)
     {
         // Dynamically-typed value (e.g., from pattern matching or OGETSLOT).
         // Assume numeric since we cannot distinguish at compile time.
@@ -2953,7 +3007,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // not an object that needs ORELEASE.
     bool isObjectExpr = dynamic_cast<ast::OptionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ResultExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::TupleExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::TupleExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ListExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ListRangeExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ConsExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::ConcatListExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
@@ -2997,6 +3055,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Propagate inner type annotation through the binding
     if (auto innerType = getInnerType(value))
         annotateInnerType(storage, *innerType);
+
+    // Propagate object type ID annotation through the binding
+    if (auto objTypeId = getObjectTypeId(value))
+        annotateObjectTypeId(storage, *objTypeId);
 
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
@@ -3098,6 +3160,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Propagate inner type annotation through the binding
         if (auto innerType = getInnerType(value))
             annotateInnerType(storage, *innerType);
+
+        // Propagate object type ID annotation through the binding
+        if (auto objTypeId = getObjectTypeId(value))
+            annotateObjectTypeId(storage, *objTypeId);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -4086,6 +4152,10 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     // Propagate inner type annotation through variable loads
     if (auto innerType = getInnerType(storage))
         annotateInnerType(_result, *innerType);
+
+    // Propagate object type ID annotation through variable loads
+    if (auto objTypeId = getObjectTypeId(storage))
+        annotateObjectTypeId(_result, *objTypeId);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -4238,10 +4308,12 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         auto const& preAllocatedBindings = armBindingStorage[i];
 
         bool const isTuplePattern = dynamic_cast<pattern::TuplePattern const*>(arm.pattern.get()) != nullptr;
+        bool const isConsPattern = dynamic_cast<pattern::ConsPattern const*>(arm.pattern.get()) != nullptr;
+        bool const isListPattern = dynamic_cast<pattern::ListPattern const*>(arm.pattern.get()) != nullptr;
 
-        if (isTuplePattern)
+        if (isTuplePattern || isConsPattern || isListPattern)
         {
-            // Tuple patterns: values were already stored into allocas by PatternIRGenerator
+            // Tuple/Cons/List patterns: values were already stored into allocas by PatternIRGenerator
             // Just register the allocas as variable bindings
             for (auto const& [name, storage]: preAllocatedBindings)
             {
@@ -4335,16 +4407,271 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
 void IRGenerator::visit(ast::ListExpr const& node)
 {
-    // TODO: Implement list literals - requires list type in CoreVM
-    reportTypeError("F# list literals are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(ListExpr)");
+
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+
+    // Empty list: just allocate a Nil (tag=0)
+    if (node.elements.empty())
+    {
+        CoreVM::Value* obj = _builder.createObjAlloc(typeId, "list.nil");
+        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(0)), "list.nil.tag");
+        _result = obj;
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        return;
+    }
+
+    // Codegen all elements left-to-right (correct evaluation order),
+    // storing results in a vector.
+    std::vector<CoreVM::Value*> elemValues;
+    elemValues.reserve(node.elements.size());
+    for (auto const& elem: node.elements)
+    {
+        auto* val = codegen(elem.get());
+        if (!val)
+        {
+            reportTypeError("Failed to evaluate list element");
+            return;
+        }
+        elemValues.push_back(val);
+    }
+
+    // Store evaluated elements in allocas so they survive across basic blocks
+    // created by ObjAlloc/ObjSetSlot below.
+    std::vector<CoreVM::AllocaInstr*> elemAllocas;
+    elemAllocas.reserve(elemValues.size());
+    for (size_t i = 0; i < elemValues.size(); ++i)
+    {
+        auto* alloca = createAllocaInEntryBlock(elemValues[i]->type(), "list.elem." + std::to_string(i));
+        _builder.createStore(alloca, elemValues[i]);
+        elemAllocas.push_back(alloca);
+    }
+
+    // Build the list right-to-left: start with Nil, then prepend elements
+    CoreVM::Value* acc = _builder.createObjAlloc(typeId, "list.nil");
+    acc = _builder.createObjSetTag(acc, _builder.get(CoreVM::CoreNumber(0)), "list.nil.tag");
+
+    for (int i = static_cast<int>(elemValues.size()) - 1; i >= 0; --i)
+    {
+        // Store accumulator so it's available after ObjAlloc
+        auto* accStorage =
+            createAllocaInEntryBlock(CoreVM::LiteralType::Object, "list.acc." + std::to_string(i));
+        _builder.createStore(accStorage, acc);
+
+        // Create a Cons cell: tag=1, slot[0]=head, slot[1]=tail
+        CoreVM::Value* cons = _builder.createObjAlloc(typeId, "list.cons." + std::to_string(i));
+        cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "list.cons.tag");
+
+        auto* head = _builder.createLoad(elemAllocas[i], "list.head." + std::to_string(i));
+        cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), head, "list.cons.head");
+
+        auto* tail = _builder.createLoad(accStorage, "list.tail." + std::to_string(i));
+        cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), tail, "list.cons.tail");
+
+        acc = cons;
+    }
+
+    _result = acc;
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::visit(ast::ConsExpr const& node)
+{
+    TRACE_SCOPE("visit(ConsExpr)");
+
+    // Evaluate head and tail
+    auto* headVal = codegen(node.head.get());
+    if (!headVal)
+    {
+        reportTypeError("Failed to evaluate cons head expression");
+        return;
+    }
+
+    // Store head so it survives across tail codegen and object allocation
+    auto* headStorage = createAllocaInEntryBlock(headVal->type(), "cons.head.tmp");
+    _builder.createStore(headStorage, headVal);
+
+    auto* tailVal = codegen(node.tail.get());
+    if (!tailVal)
+    {
+        reportTypeError("Failed to evaluate cons tail expression");
+        return;
+    }
+
+    // Store tail so it survives across object allocation
+    auto* tailStorage = createAllocaInEntryBlock(tailVal->type(), "cons.tail.tmp");
+    _builder.createStore(tailStorage, tailVal);
+
+    // Create a Cons cell: OALLOC List, OSETTAG 1, OSETSLOT 0 head, OSETSLOT 1 tail
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "cons");
+    obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "cons.tag");
+
+    auto* head = _builder.createLoad(headStorage, "cons.head");
+    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), head, "cons.head.set");
+
+    auto* tail = _builder.createLoad(tailStorage, "cons.tail");
+    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), tail, "cons.tail.set");
+
+    _result = obj;
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::visit(ast::ConcatListExpr const& node)
+{
+    TRACE_SCOPE("visit(ConcatListExpr)");
+
+    auto* leftVal = codegen(node.left.get());
+    if (!leftVal)
+    {
+        reportTypeError("Failed to evaluate left operand of list concatenation");
+        return;
+    }
+
+    // Store left so it survives across right codegen
+    auto* leftStorage = createAllocaInEntryBlock(leftVal->type(), "concat.left.tmp");
+    _builder.createStore(leftStorage, leftVal);
+
+    auto* rightVal = codegen(node.right.get());
+    if (!rightVal)
+    {
+        reportTypeError("Failed to evaluate right operand of list concatenation");
+        return;
+    }
+
+    auto* leftReload = _builder.createLoad(leftStorage, "concat.left");
+
+    auto* callback = findCallback("list_concat(II)I");
+    if (!callback)
+    {
+        reportTypeError("list_concat builtin not found");
+        return;
+    }
+
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*callback), { leftReload, rightVal }, "concat.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 
 void IRGenerator::visit(ast::ListRangeExpr const& node)
 {
-    // TODO: Implement list range expressions - requires list type in CoreVM
-    reportTypeError("F# list range expressions are not yet implemented in IR generator");
-    (void) node;
+    TRACE_SCOPE("visit(ListRangeExpr)");
+
+    // Evaluate start, step, and end expressions
+    auto* startVal = codegen(node.start.get());
+    if (!startVal)
+    {
+        reportTypeError("Failed to evaluate list range start expression");
+        return;
+    }
+
+    auto* endVal = codegen(node.end.get());
+    if (!endVal)
+    {
+        reportTypeError("Failed to evaluate list range end expression");
+        return;
+    }
+
+    CoreVM::Value* stepVal = nullptr;
+    if (node.step)
+    {
+        stepVal = codegen(node.step.get());
+        if (!stepVal)
+        {
+            reportTypeError("Failed to evaluate list range step expression");
+            return;
+        }
+    }
+    else
+    {
+        stepVal = _builder.get(CoreVM::CoreNumber(1));
+    }
+
+    // Store start, step, end in allocas so they survive across loop blocks
+    auto* startStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "range.start");
+    _builder.createStore(startStorage, startVal);
+
+    auto* stepStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "range.step");
+    _builder.createStore(stepStorage, stepVal);
+
+    auto* endStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "range.end");
+    _builder.createStore(endStorage, endVal);
+
+    // Compute the last valid element: adjusted_end = start + ((end - start) / step) * step
+    // This ensures the loop variable aligns to valid range elements (e.g., [1..10..5] → adjusted=1).
+    auto* iStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "range.i");
+    auto* loadStart = _builder.createLoad(startStorage, "range.start.adj");
+    auto* loadEnd = _builder.createLoad(endStorage, "range.end.adj");
+    auto* loadStep = _builder.createLoad(stepStorage, "range.step.adj");
+    auto* span = _builder.createSub(loadEnd, loadStart, "range.span");
+    auto* count = _builder.createDiv(span, loadStep, "range.count");
+    auto* alignedSpan = _builder.createMul(count, loadStep, "range.aligned.span");
+    auto* adjustedEnd = _builder.createAdd(loadStart, alignedSpan, "range.adjusted.end");
+    _builder.createStore(iStorage, adjustedEnd);
+
+    // Accumulator: starts as Nil
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "range.acc");
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "range.nil");
+    nil = _builder.createObjSetTag(nil, _builder.get(CoreVM::CoreNumber(0)), "range.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    // Create loop blocks
+    auto* condBlock = _builder.createBlock("range.cond");
+    auto* bodyBlock = _builder.createBlock("range.body");
+    auto* endBlock = _builder.createBlock("range.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition block: check (i - start) * step >= 0
+    _builder.setInsertPoint(condBlock);
+    auto* iLoad = _builder.createLoad(iStorage, "range.i.cond");
+    auto* startLoad = _builder.createLoad(startStorage, "range.start.cond");
+    auto* stepLoad = _builder.createLoad(stepStorage, "range.step.cond");
+    auto* diff = _builder.createSub(iLoad, startLoad, "range.diff");
+    auto* product = _builder.createMul(diff, stepLoad, "range.product");
+    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+    auto* cond = _builder.createNCmpGE(product, zero, "range.cond.check");
+    _builder.createCondBr(cond, bodyBlock, endBlock);
+
+    // Body block: acc = Cons(i, acc), i = i - step
+    _builder.setInsertPoint(bodyBlock);
+    auto* iBody = _builder.createLoad(iStorage, "range.i.body");
+    auto* accBody = _builder.createLoad(accStorage, "range.acc.body");
+
+    // Store i and acc so they survive across ObjAlloc
+    auto* iTemp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "range.i.tmp");
+    _builder.createStore(iTemp, iBody);
+    auto* accTemp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "range.acc.tmp");
+    _builder.createStore(accTemp, accBody);
+
+    // Create Cons cell: tag=1, slot[0]=head(i), slot[1]=tail(acc)
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "range.cons");
+    cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "range.cons.tag");
+
+    auto* headReload = _builder.createLoad(iTemp, "range.head.reload");
+    cons =
+        _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), headReload, "range.cons.head");
+
+    auto* tailReload = _builder.createLoad(accTemp, "range.tail.reload");
+    cons =
+        _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), tailReload, "range.cons.tail");
+
+    // Store new acc
+    _builder.createStore(accStorage, cons);
+
+    // i = i - step
+    auto* iForSub = _builder.createLoad(iStorage, "range.i.sub");
+    auto* stepForSub = _builder.createLoad(stepStorage, "range.step.sub");
+    auto* newI = _builder.createSub(iForSub, stepForSub, "range.i.next");
+    _builder.createStore(iStorage, newI);
+
+    _builder.createBr(condBlock);
+
+    // End block: result is the accumulated list
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(accStorage, "range.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 
 void IRGenerator::visit(ast::ListComprehensionExpr const& node)

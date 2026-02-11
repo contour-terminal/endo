@@ -80,6 +80,8 @@ class ASTPrinter: public Visitor
     void visit(LambdaExpr const& node) override;
     void visit(MatchExpr const& node) override;
     void visit(ListExpr const& node) override;
+    void visit(ConsExpr const& node) override;
+    void visit(ConcatListExpr const& node) override;
     void visit(ListRangeExpr const& node) override;
     void visit(ListComprehensionExpr const& node) override;
     void visit(ShellCommandExpr const& node) override;

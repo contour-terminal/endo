@@ -297,6 +297,10 @@ Token Lexer::nextToken()
                 return confirmToken(Token::Colon);
             }
             return consumeIdentifier();
+        case '@':
+            if (_fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::At);
+            return consumeIdentifier();
         case ',':
             if (_fsharpDepth > 0)
                 return consumeCharAndConfirmToken(Token::Comma);

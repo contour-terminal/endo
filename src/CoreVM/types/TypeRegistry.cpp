@@ -63,8 +63,20 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(tuple3Type));
 
+    // List: Nil (tag=0, 0 payload slots) | Cons (tag=1, 2 slots: head + tail)
+    auto listType = std::make_unique<TypeDescriptor>();
+    listType->kind = TypeKind::Sum;
+    listType->id = BuiltinTypeId::List;
+    listType->name = "List";
+    listType->slotCount = 2; // Maximum payload size (Cons has 2 slots: head + tail)
+    listType->variants = {
+        { "Nil", 0 },  // tag 0: empty list
+        { "Cons", 2 }, // tag 1: head (slot 0) + tail (slot 1)
+    };
+    addType(std::move(listType));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::Tuple3 + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::List + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

@@ -119,6 +119,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpComposition(); // >> <<
     std::unique_ptr<ast::Expr> parseFSharpOr();          // ||
     std::unique_ptr<ast::Expr> parseFSharpAnd();         // &&
+    std::unique_ptr<ast::Expr> parseFSharpCons();        // :: (right-associative)
     std::unique_ptr<ast::Expr> parseFSharpComparison();  // == != < <= > >=
     std::unique_ptr<ast::Expr> parseFSharpAddSub();      // + -
     std::unique_ptr<ast::Expr> parseFSharpMulDivMod();   // * / %

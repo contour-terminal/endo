@@ -123,6 +123,22 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
 
+    runtime.registerFunction("list_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("object_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_concat")
+        .param<CoreVM::CoreNumber>("left")
+        .param<CoreVM::CoreNumber>("right")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
     runtime.registerFunction("string_repeat")
         .param<CoreVM::CoreString>("str")
         .param<CoreVM::CoreNumber>("count")

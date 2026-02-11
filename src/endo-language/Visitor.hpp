@@ -67,6 +67,8 @@ struct ParenExpr;
 struct LambdaExpr;
 struct MatchExpr;
 struct ListExpr;
+struct ConsExpr;
+struct ConcatListExpr;
 struct ListRangeExpr;
 struct ListComprehensionExpr;
 struct ShellCommandExpr;
@@ -152,6 +154,8 @@ struct Visitor
     virtual void visit(LambdaExpr const&) = 0;
     virtual void visit(MatchExpr const&) = 0;
     virtual void visit(ListExpr const&) = 0;
+    virtual void visit(ConsExpr const&) = 0;
+    virtual void visit(ConcatListExpr const&) = 0;
     virtual void visit(ListRangeExpr const&) = 0;
     virtual void visit(ListComprehensionExpr const&) = 0;
     virtual void visit(ShellCommandExpr const&) = 0;

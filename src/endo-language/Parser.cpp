@@ -3224,18 +3224,56 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpOr()
 std::unique_ptr<ast::Expr> Parser::parseFSharpAnd()
 {
     TRACE_SCOPE("parseFSharpAnd");
-    auto left = parseFSharpComparison();
+    auto left = parseFSharpCons();
     if (!left)
         return nullptr;
 
     while (_lexer.currentToken() == Token::AmpAmp)
     {
         _lexer.nextToken(); // consume '&&'
-        auto right = parseFSharpComparison();
+        auto right = parseFSharpCons();
         if (!right)
             return nullptr;
         left = std::make_unique<ast::BinaryExpr>(ast::BinaryOp::And, std::move(left), std::move(right));
     }
+    return left;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseFSharpCons()
+{
+    TRACE_SCOPE("parseFSharpCons");
+    auto left = parseFSharpComparison();
+    if (!left)
+        return nullptr;
+
+    // Check for '::' cons operator (right-associative)
+    if (_lexer.currentToken() == Token::ColonColon)
+    {
+        _lexer.nextToken();             // consume '::'
+        auto right = parseFSharpCons(); // Right-associative: recurse
+        if (!right)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected expression after '::'");
+            return nullptr;
+        }
+        return std::make_unique<ast::ConsExpr>(std::move(left), std::move(right));
+    }
+
+    // Check for '@' list concatenation operator (right-associative)
+    if (_lexer.currentToken() == Token::At)
+    {
+        _lexer.nextToken();             // consume '@'
+        auto right = parseFSharpCons(); // Right-associative: recurse
+        if (!right)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected expression after '@'");
+            return nullptr;
+        }
+        return std::make_unique<ast::ConcatListExpr>(std::move(left), std::move(right));
+    }
+
     return left;
 }
 
@@ -5108,8 +5146,9 @@ std::unique_ptr<pattern::Pattern> Parser::parseConsPattern()
     if (!head)
         return nullptr;
 
-    // Check for '::' cons operator (lexed as Identifier "::")
-    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "::")
+    // Check for '::' cons operator (lexed as ColonColon in F# mode, or Identifier "::" in shell mode)
+    if (_lexer.currentToken() == Token::ColonColon
+        || (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "::"))
     {
         _lexer.nextToken(); // consume '::'
 
@@ -5139,7 +5178,8 @@ bool Parser::canStartPattern() const
         case Token::OptionNone:
         case Token::ResultOk:
         case Token::ResultError:
-        case Token::Mut: return true;
+        case Token::Mut:
+        case Token::BracketOpen: return true;
         default: return false;
     }
 }
@@ -5251,6 +5291,10 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
         case Token::RndOpen:
             // Tuple pattern: (a, b, c)
             return parseTuplePattern();
+
+        case Token::BracketOpen:
+            // List pattern: [a; b; c] or []
+            return parseListPattern();
 
         case Token::Mut: {
             // Mutable variable pattern: mut x
@@ -5441,11 +5485,42 @@ std::unique_ptr<pattern::Pattern> Parser::parseTuplePattern()
 std::unique_ptr<pattern::Pattern> Parser::parseListPattern()
 {
     TRACE_SCOPE("parseListPattern");
-    // List pattern parsing requires '[' and ']' tokens which aren't in the lexer
-    // For now, report an error suggesting this feature needs lexer extension
-    _report.syntaxErrorWithSuggestions(
-        currentLocation(), {}, currentContextSnippet(), "List patterns are not yet supported");
-    return nullptr;
+
+    // '[' already current token
+    _lexer.nextToken(); // consume '['
+
+    // Empty list pattern: []
+    if (_lexer.currentToken() == Token::BracketClose)
+    {
+        _lexer.nextToken(); // consume ']'
+        return std::make_unique<pattern::ListPattern>(std::vector<pattern::PatternPtr> {});
+    }
+
+    // Parse elements separated by ';'
+    std::vector<pattern::PatternPtr> elements;
+    auto first = parseConsPattern();
+    if (!first)
+        return nullptr;
+    elements.push_back(std::move(first));
+
+    while (_lexer.currentToken() == Token::Semicolon)
+    {
+        _lexer.nextToken(); // consume ';'
+        auto elem = parseConsPattern();
+        if (!elem)
+            return nullptr;
+        elements.push_back(std::move(elem));
+    }
+
+    if (_lexer.currentToken() != Token::BracketClose)
+    {
+        _report.syntaxErrorWithSuggestions(
+            currentLocation(), {}, currentContextSnippet(), "Expected ']' to close list pattern");
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ']'
+
+    return std::make_unique<pattern::ListPattern>(std::move(elements));
 }
 
 std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()

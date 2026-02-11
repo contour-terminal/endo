@@ -2,6 +2,8 @@
 #include "Shell.hpp"
 
 #include <CoreVM/CoreVM.hpp>
+#include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypedObject.hpp>
 
 #include <crispy/assert.h>
 #include <crispy/utils.h>
@@ -1135,6 +1137,83 @@ void Shell::registerBuiltinFunctions()
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinPrintln, this);
+
+    // Helper: converts a list TypedObject to string "[1; 2; 3]"
+    auto listToString = [](CoreVM::TypedObject* obj) -> std::string {
+        std::string result = "[";
+        bool first = true;
+        while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
+        {
+            if (!first)
+                result += "; ";
+            first = false;
+            auto headVal = static_cast<int64_t>(obj->getSlot(0));
+            result += std::to_string(headVal);
+            obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
+        }
+        result += "]";
+        return result;
+    };
+
+    // F# list_to_string builtin: converts list object to "[1; 2; 3]" string
+    _runtime.registerFunction("list_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([listToString](CoreVM::Params& args) {
+            auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            args.setResult(args.caller()->newString(listToString(obj)));
+        });
+
+    // F# list_concat builtin: concatenates two lists
+    _runtime.registerFunction("list_concat")
+        .param<CoreVM::CoreNumber>("left")
+        .param<CoreVM::CoreNumber>("right")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* left = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            auto* right = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(2)));
+
+            if (!left || left->tag == 0)
+            {
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(right)));
+                return;
+            }
+
+            std::vector<uint64_t> elements;
+            auto* cur = left;
+            while (cur && cur->tag == 1)
+            {
+                elements.push_back(cur->getSlot(0));
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            CoreVM::TypedObject* acc = right;
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, *it);
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // F# object_to_string builtin: runtime dispatch for object printing
+    _runtime.registerFunction("object_to_string")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([listToString](CoreVM::Params& args) {
+            auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (obj && obj->type->id == CoreVM::BuiltinTypeId::List)
+            {
+                args.setResult(args.caller()->newString(listToString(obj)));
+            }
+            else
+            {
+                args.setResult(args.caller()->newString(std::to_string(args.getInt(1))));
+            }
+        });
 
     // F# string_repeat builtin: "ha" * 3 → "hahaha"
     _runtime.registerFunction("string_repeat")

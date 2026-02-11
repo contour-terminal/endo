@@ -496,6 +496,9 @@ class Runner
     /// Provides read-only access to the runtime stack (e.g. to inspect alloca values after execution).
     const Stack& stack() const noexcept { return _stack; }
 
+    /// Allocates a new typed object with the given type ID.
+    TypedObject* allocObject(uint16_t typeId);
+
   private:
     //! consumes @p tokens from quota and raises QuotaExceeded if quota is being exceeded.
     void consume(Opcode op);
@@ -524,7 +527,6 @@ class Runner
     // Object helpers
     TypedObject* getObject(int si) const { return reinterpret_cast<TypedObject*>(_stack[si]); }
 
-    TypedObject* allocObject(uint16_t typeId);
     void freeObject(TypedObject* obj);
     const TypeRegistry& typeRegistry() const;
 
@@ -2613,6 +2615,13 @@ class BasicBlock: public Value
      * This is useful for inserting allocas into the entry block after it already has a branch.
      */
     Instr* insertBeforeTerminator(std::unique_ptr<Instr> instr);
+
+    /**
+     * Inserts an alloca instruction after the last existing alloca in this block.
+     * Maintains the alloca-prefix invariant: all allocas at the start of the block.
+     * This is critical for the TargetCodeGenerator's stack tracking.
+     */
+    Instr* insertAfterAllocas(std::unique_ptr<Instr> instr);
 
     /**
      * Removes given instruction from this basic block.

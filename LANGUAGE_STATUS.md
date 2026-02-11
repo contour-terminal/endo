@@ -15,8 +15,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Let-in expressions: `let x = 5 in x + 1`
 - [x] If-then-else expressions: `if cond then a else b`
 - [x] Match expressions: `match x with | pattern -> result`
-- [ ] List expressions: `[1; 2; 3]` (parsed, no runtime)
-- [ ] List ranges: `[1..10]` (parsed, no runtime)
+- [x] List expressions: `[1; 2; 3]`
+- [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
 - [ ] List comprehensions: `[for x in items -> expr]` (parsed, no runtime)
 - [ ] Record expressions: `{ name = "Alice"; age = 30 }`
 - [ ] Record update: `{ alice with age = 31 }`
@@ -35,7 +35,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `unit` — No value (void)
 
 ### Compound Types
-- [ ] Lists: `list<int>` (parsed, no runtime representation)
+- [x] Lists: `list<int>` (cons-cell linked list via TypedObject)
 - [x] Tuples: `(int, str)` (2 and 3 elements via TypedObject)
 - [x] Options: `option<T>` with `Some` and `None`
 - [x] Results: `result<T, E>` with `Ok` and `Error`
@@ -64,10 +64,10 @@ This document tracks the implementation status of F# language features as define
 
 ## Lists & Collections
 
-- [ ] List literal construction: `[1; 2; 3]` (parsed, no runtime)
-- [ ] List ranges: `[1..10]` (parsed, no runtime)
-- [ ] Cons operator: `::`
-- [ ] List concatenation: `@`
+- [x] List literal construction: `[1; 2; 3]`
+- [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
+- [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
+- [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
 - [ ] List comprehensions with `when` filter
 - [ ] Standard list operations (`map`, `filter`, `fold`, etc.)
 
@@ -81,7 +81,7 @@ This document tracks the implementation status of F# language features as define
 
 ### Compound Patterns
 - [x] Tuple patterns: `| (a, b) -> a + b`
-- [ ] List patterns: `| [] -> ... | [x] -> ... | head :: tail -> ...`
+- [x] List patterns: `| [] -> ... | [x] -> ... | head :: tail -> ...`
 - [ ] Record patterns: `| { name; age } -> ...`
 - [x] Constructor patterns (Option): `| Some x -> ... | None -> ...`
 - [x] Constructor patterns (Result): `| Ok v -> ... | Error e -> ...`
@@ -91,7 +91,7 @@ This document tracks the implementation status of F# language features as define
 - [x] As-patterns: `| n as val -> ...`
 - [x] Guards (when clauses): `| x when x > 0 -> "positive"`
 - [ ] Nested record patterns
-- [ ] Nested list patterns
+- [x] Nested list patterns (recursive cons matching with accumulator-style recursion)
 
 ## Operators
 
@@ -123,8 +123,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Backward: `<<`
 
 ### List
-- [ ] Cons: `::`
-- [ ] Concatenation: `@`
+- [x] Cons: `::` (right-associative)
+- [x] Concatenation: `@`
 
 ### Special
 - [x] Error propagation: `?`
@@ -224,14 +224,15 @@ Consult this section to determine what to work on next.
 - [x] String repetition `"ha" * 3` — new native callback + BinaryExpr detection
 - [x] Block scopes `{ let x = 1; x + 2 }` — parser + scope push/pop in IRGenerator
 
-### Phase 2 — List Runtime (highest value, unlocks most downstream features)
-- [ ] Register `List` type in TypeRegistry as cons-cell sum type (Nil tag=0, Cons tag=1 with 2 slots: head, tail) using `BuiltinTypeId::List = 5`
-- [ ] `ListExpr` codegen: build linked list right-to-left via OALLOC/OSETTAG/OSETSLOT chaining
-- [ ] `ListRangeExpr` codegen: loop building cons cells
-- [ ] `ListPattern` and `ConsPattern` in PatternIRGenerator: tag check + slot extraction
-- [ ] `::` (cons) operator codegen: right-associative binary op creating Cons cells
-- [ ] `@` (list concat) operator: native callback or IR loop
-- [ ] List print support in `convertToString()`
+### Phase 2 — List Runtime (highest value, unlocks most downstream features) ✅
+- [x] Register `List` type in TypeRegistry as cons-cell sum type (Nil tag=0, Cons tag=1 with 2 slots: head, tail) using `BuiltinTypeId::List = 5`
+- [x] `ListExpr` codegen: build linked list right-to-left via OALLOC/OSETTAG/OSETSLOT chaining
+- [x] `ListRangeExpr` codegen: loop building cons cells with `(i - start) * step >= 0` condition
+- [x] `ListPattern` and `ConsPattern` in PatternIRGenerator: tag check + slot extraction
+- [x] `::` (cons) operator codegen: right-associative binary op creating Cons cells (`ConsExpr`)
+- [x] `@` (list concat) operator: `list_concat` native callback with cons-cell copying
+- [x] List print support in `convertToString()` via `list_to_string` / `object_to_string` native callbacks
+- [x] Fix `createAllocaInEntryBlock`: new `insertAfterAllocas()` method maintains alloca-prefix invariant (fixes 2-param recursive functions with object pattern matching)
 
 ### Phase 3 — List Standard Library (depends on Phase 2)
 - [ ] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool

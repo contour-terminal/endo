@@ -278,20 +278,159 @@ void PatternIRGenerator::visit(pattern::TuplePattern const& pat)
     _successBlock = finalSuccess;
 }
 
-void PatternIRGenerator::visit(pattern::ListPattern const&)
+void PatternIRGenerator::visit(pattern::ListPattern const& pat)
 {
-    // Lists require runtime representation
     if (_collectOnly)
+    {
+        // Collect bindings from sub-patterns
+        for (auto const& elem: pat.elements)
+            elem->accept(*this);
         return;
-    _builder.createBr(_failureBlock);
+    }
+
+    // Empty list pattern: match tag == 0 (Nil)
+    if (pat.elements.empty())
+    {
+        auto* tag = _builder.createObjGetTag(_scrutinee, "list.pat.tag");
+        auto* isNil = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "list.pat.isNil");
+        _builder.createCondBr(isNil, _successBlock, _failureBlock);
+        return;
+    }
+
+    // Non-empty list pattern [a; b; c] → desugar to ConsPattern(a, ConsPattern(b, ConsPattern(c, NilCheck)))
+    // Build from right to left: start with a Nil check, then wrap with ConsPatterns.
+    // We implement this by iteratively checking Cons tag and extracting elements.
+    auto* currentScrutinee = _scrutinee;
+    auto* savedStorage = _scrutineeStorage;
+    auto* finalSuccess = _successBlock;
+
+    for (size_t i = 0; i < pat.elements.size(); ++i)
+    {
+        bool isLast = (i + 1 == pat.elements.size());
+
+        // Check that current scrutinee is Cons (tag == 1)
+        auto* scrutineeVal =
+            (i > 0 && savedStorage) ? _builder.createLoad(savedStorage, "list.pat.reload") : currentScrutinee;
+
+        auto* tag = _builder.createObjGetTag(scrutineeVal, "list.pat.tag." + std::to_string(i));
+        auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "list.pat.isCons");
+
+        auto* consBlock = _builder.createBlock("list.pat.cons." + std::to_string(i));
+        _builder.createCondBr(isCons, consBlock, _failureBlock);
+        _builder.setInsertPoint(consBlock);
+
+        // Reload scrutinee and extract head (slot 0)
+        auto* reloaded = _builder.createLoad(savedStorage, "list.pat.head.reload." + std::to_string(i));
+        auto* headVal = _builder.createObjGetSlot(
+            reloaded, _builder.get(CoreVM::CoreNumber(0)), "list.pat.head." + std::to_string(i));
+
+        // For the element sub-pattern: create success block that chains to next element or final check
+        CoreVM::BasicBlock* elemSuccess;
+        if (isLast)
+        {
+            // After last element, verify tail is Nil
+            elemSuccess = _builder.createBlock("list.pat.tail.check");
+        }
+        else
+        {
+            elemSuccess = _builder.createBlock("list.pat.next." + std::to_string(i + 1));
+        }
+
+        // Match head element with sub-pattern
+        _scrutinee = headVal;
+        _scrutineeStorage = nullptr;
+        _successBlock = elemSuccess;
+        pat.elements[i]->accept(*this);
+
+        _builder.setInsertPoint(elemSuccess);
+
+        if (isLast)
+        {
+            // Check that tail is Nil (tag == 0)
+            auto* tailReloaded =
+                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+            auto* tailVal = _builder.createObjGetSlot(
+                tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
+            auto* tailTag = _builder.createObjGetTag(tailVal, "list.pat.tail.tag");
+            auto* tailIsNil =
+                _builder.createNCmpEQ(tailTag, _builder.get(CoreVM::CoreNumber(0)), "list.pat.tail.isNil");
+            _builder.createCondBr(tailIsNil, finalSuccess, _failureBlock);
+        }
+        else
+        {
+            // Move scrutinee to tail (slot 1) for next iteration
+            auto* tailReloaded =
+                _builder.createLoad(savedStorage, "list.pat.tail.reload." + std::to_string(i));
+            auto* tailVal = _builder.createObjGetSlot(
+                tailReloaded, _builder.get(CoreVM::CoreNumber(1)), "list.pat.tail." + std::to_string(i));
+
+            // Store tail as new scrutinee for the next iteration
+            _builder.createStore(savedStorage, tailVal, "list.pat.next.store");
+        }
+    }
+
+    // Restore state
+    _scrutinee = currentScrutinee;
+    _scrutineeStorage = savedStorage;
+    _successBlock = finalSuccess;
 }
 
-void PatternIRGenerator::visit(pattern::ConsPattern const&)
+void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
 {
-    // Cons patterns require runtime list representation
     if (_collectOnly)
+    {
+        // Collect bindings from head and tail sub-patterns
+        pat.head->accept(*this);
+        pat.tail->accept(*this);
         return;
-    _builder.createBr(_failureBlock);
+    }
+
+    // Check tag == 1 (Cons)
+    auto* tag = _builder.createObjGetTag(_scrutinee, "cons.pat.tag");
+    auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.isCons");
+
+    auto* consBlock = _builder.createBlock("cons.pat.match");
+    _builder.createCondBr(isCons, consBlock, _failureBlock);
+    _builder.setInsertPoint(consBlock);
+
+    // Reload scrutinee and extract head (slot 0)
+    auto* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "cons.scrutinee.reload");
+    auto* headVal =
+        _builder.createObjGetSlot(scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "cons.pat.head");
+
+    // Create block for tail matching (after head pattern succeeds)
+    auto* tailBlock = _builder.createBlock("cons.pat.tail");
+    auto* finalSuccess = _successBlock;
+
+    // Match head sub-pattern
+    auto* savedScrutinee = _scrutinee;
+    auto* savedStorage = _scrutineeStorage;
+
+    _scrutinee = headVal;
+    _scrutineeStorage = nullptr;
+    _successBlock = tailBlock;
+    pat.head->accept(*this);
+
+    // In tail block: reload scrutinee, extract tail (slot 1), match tail pattern
+    _builder.setInsertPoint(tailBlock);
+    auto* scrutineeReloaded2 = _builder.createLoad(savedStorage, "cons.scrutinee.reload2");
+    auto* tailVal =
+        _builder.createObjGetSlot(scrutineeReloaded2, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.tail");
+
+    _scrutineeStorage = savedStorage;
+    _successBlock = finalSuccess;
+
+    // Store tail in scrutinee storage for sub-pattern use (needed for nested ConsPatterns).
+    // Then reload to get a fresh IR Value — the store consumes tailVal from the stack,
+    // so the sub-pattern needs a separate load to avoid double-consuming the same value.
+    _builder.createStore(savedStorage, tailVal, "cons.tail.store");
+    _scrutinee = _builder.createLoad(savedStorage, "cons.tail.reload");
+    pat.tail->accept(*this);
+
+    // Restore state
+    _scrutinee = savedScrutinee;
+    _scrutineeStorage = savedStorage;
+    _successBlock = finalSuccess;
 }
 
 void PatternIRGenerator::visit(pattern::RecordPattern const&)

@@ -160,6 +160,8 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::LambdaExpr const& node) override;
     void visit(ast::MatchExpr const& node) override;
     void visit(ast::ListExpr const& node) override;
+    void visit(ast::ConsExpr const& node) override;
+    void visit(ast::ConcatListExpr const& node) override;
     void visit(ast::ListRangeExpr const& node) override;
     void visit(ast::ListComprehensionExpr const& node) override;
     void visit(ast::ShellCommandExpr const& node) override;
@@ -412,6 +414,16 @@ class IRGenerator final: public ast::Visitor
 
     /// Retrieves the inner type annotation for a value, if any.
     [[nodiscard]] std::optional<CoreVM::LiteralType> getInnerType(CoreVM::Value* val) const;
+
+    /// Tracks the builtin object type ID for values known to be typed objects.
+    /// Used for runtime dispatch (e.g., list printing via object_to_string).
+    std::unordered_map<CoreVM::Value*, uint16_t> _objectTypeIdAnnotations;
+
+    /// Annotates a value with its known builtin object type ID.
+    void annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId);
+
+    /// Retrieves the object type ID annotation for a value, if any.
+    [[nodiscard]] std::optional<uint16_t> getObjectTypeId(CoreVM::Value* val) const;
 };
 
 } // namespace endo

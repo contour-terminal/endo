@@ -154,6 +154,22 @@ Instr* BasicBlock::insertBeforeTerminator(std::unique_ptr<Instr> instr)
     return inserted->get();
 }
 
+Instr* BasicBlock::insertAfterAllocas(std::unique_ptr<Instr> instr)
+{
+    assert(instr != nullptr);
+    assert(instr->getBasicBlock() == nullptr);
+
+    instr->setParent(this);
+
+    // Find position after last AllocaInstr to maintain the alloca-prefix invariant.
+    auto it = _code.begin();
+    while (it != _code.end() && dynamic_cast<AllocaInstr*>(it->get()))
+        ++it;
+
+    auto inserted = _code.insert(it, std::move(instr));
+    return inserted->get();
+}
+
 void BasicBlock::merge_back(BasicBlock* bb)
 {
     assert(getTerminator() == nullptr);
