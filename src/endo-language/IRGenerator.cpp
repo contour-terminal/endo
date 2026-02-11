@@ -6239,6 +6239,11 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
             newObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), slotVal, "record.copy.set");
     }
 
+    // Store newObj in an alloca so it survives across basic blocks that codegen() may create
+    // (e.g., inlined untyped functions with match expressions create new blocks).
+    auto* newObjStorage = createAllocaInEntryBlock(newObj->type(), "record.upd.obj");
+    _builder.createStore(newObjStorage, newObj, "record.upd.init");
+
     // Overwrite updated fields
     for (auto const& update: node.updates)
     {
@@ -6250,19 +6255,25 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
             return;
         }
 
+        auto* currentNewObj = _builder.createLoad(newObjStorage, "record.upd.reload");
+
         // Find the slot offset for this field name
         for (auto const& fieldDef: typeInfo->fields)
         {
             if (fieldDef.name == update.name)
             {
-                newObj = _builder.createObjSetSlot(
-                    newObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), val, "record.upd.field");
+                auto* updatedObj =
+                    _builder.createObjSetSlot(currentNewObj,
+                                              _builder.get(CoreVM::CoreNumber(fieldDef.offset)),
+                                              val,
+                                              "record.upd.field");
+                _builder.createStore(newObjStorage, updatedObj, "record.upd.store");
                 break;
             }
         }
     }
 
-    _result = newObj;
+    _result = _builder.createLoad(newObjStorage, "record.upd.result");
     annotateObjectTypeId(_result, typeInfo->typeId);
 }
 

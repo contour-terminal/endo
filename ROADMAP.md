@@ -605,7 +605,7 @@ src/
 - `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
 - Dual semantics: expression context captures output, statement context prints to terminal
 - Records are compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT); unions deferred to Phase 5
-- Known limitation: combining inlined match-expression functions (with record patterns) and record update expressions in the same handler can trigger a pre-existing TargetCodeGenerator stack depth tracking bug. Workaround: use record update and match-expression functions in separate scopes.
+- Record update expressions use alloca-protected storage for the intermediate object, ensuring correctness when update-value codegen creates new basic blocks (e.g., inlined match-expression functions).
 - Pattern matching compiles to decision trees for efficient execution
 - List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
 - Lexer enhanced with `peekChar()` to properly recognize float literals (e.g., `2.5` as single token)

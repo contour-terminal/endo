@@ -3901,7 +3901,24 @@ TEST_CASE("IRGenerator.FSharp.record_destructure_two_types_then_update")
                              "{ x = 4; y = 6 }"));
 }
 
-// Note: Test combining inlined match-expression functions with record update in the same handler
-// is omitted because it triggers a pre-existing TargetCodeGenerator stack management bug where
-// complex block structures from inlined pattern matching cause incorrect stack depth tracking
-// across basic block transitions (see: dead temporaries left on stack at block boundaries).
+TEST_CASE("IRGenerator.FSharp.record_update_with_inlined_match_function")
+{
+    // Inlined untyped function with match creates blocks during record update value codegen.
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let double n = match n with | 0 -> 0 | n -> n * 2\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let p2 = { p1 with x = double (p1.x) }\n"
+                             "print p2",
+                             "{ x = 6; y = 4 }"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_with_multiple_inlined_match_functions")
+{
+    // Multiple update fields each calling inlined match functions.
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let double n = match n with | 0 -> 0 | n -> n * 2\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let p2 = { p1 with x = double (p1.x); y = double (p1.y) }\n"
+                             "print p2",
+                             "{ x = 6; y = 8 }"));
+}
