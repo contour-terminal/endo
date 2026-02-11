@@ -3239,7 +3239,7 @@ TEST_CASE("IRGenerator.FSharp.list_match_three_elements")
 {
     // Fixed 3-element list pattern
     CHECK(executesWithOutput(
-        "let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r", "30"));
+        "let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r", "6"));
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_large")

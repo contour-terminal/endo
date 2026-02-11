@@ -424,6 +424,17 @@ class IRGenerator final: public ast::Visitor
 
     /// Retrieves the object type ID annotation for a value, if any.
     [[nodiscard]] std::optional<uint16_t> getObjectTypeId(CoreVM::Value* val) const;
+
+    /// Tracks the inner object type ID for Option/Result wrappers.
+    /// When a value like `Some [1;2;3]` wraps a typed object, this records
+    /// the inner object's type ID (e.g., List) so pattern extraction can recover it.
+    std::unordered_map<CoreVM::Value*, uint16_t> _innerObjectTypeIdAnnotations;
+
+    /// Annotates a value with the object type ID of its inner/wrapped value.
+    void annotateInnerObjectTypeId(CoreVM::Value* val, uint16_t typeId);
+
+    /// Retrieves the inner object type ID annotation for a value, if any.
+    [[nodiscard]] std::optional<uint16_t> getInnerObjectTypeId(CoreVM::Value* val) const;
 };
 
 } // namespace endo

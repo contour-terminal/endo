@@ -509,6 +509,19 @@ src/
   - [x] Block scopes `{ let x = 1; x + 2 }` — `BlockExpr` AST node, `parseBlockExpr()`, codegen with `pushFSharpScope`/`popFSharpScope`
   - [x] Function composition `>>` and `<<` — `parseFSharpComposition()` precedence level between pipeline and or, desugars to lambda at parser level
   - [x] Tuple destructuring in `let` — `destructurePattern` field on `LetBindingStmt`/`LetInExpr`, uses `PatternIRGenerator` with pre-allocated binding storage
+- [x] Phase 2 list runtime with cons-cell linked lists
+  - [x] IR generation for list literals, cons (`::`) operator, concat (`@`) operator, list ranges, and comprehensions
+  - [x] Runtime callbacks: `list_head`, `list_tail`, `list_length`, `list_concat`, `list_reverse`, `list_to_string`, `list_map`, `list_filter`, `list_fold`
+  - [x] Pattern matching for lists: empty list `[]`, cons pattern `h :: t`, fixed-length patterns `[a; b; c]`
+  - [x] List printing via `list_to_string` with recursive formatting
+  - [x] 89 list test cases covering literals, operations, pattern matching, nested structures, and runtime functions
+- [x] Fix inner object type ID propagation for lists nested in Option/Result
+  - [x] `_innerObjectTypeIdAnnotations` map to track wrapped object type IDs (e.g., List inside `Some [1;2;3]`)
+  - [x] Propagation chain: OptionExpr/ResultExpr → LetBindingStmt/LetInExpr → IdentifierExpr → MatchExpr scrutinee → constructor pattern payload extraction
+  - [x] `convertToString()` Void branch checks `objectTypeId` annotation to dispatch to `list_to_string` instead of N2S fallback
+- [x] Support standalone `match` expression as a statement
+  - [x] Added `Token::Match` handler in `parseStmt()` wrapping match expression in `ExprStmt`
+  - [x] `generatePrintCall` returns unit value (0) instead of nullptr, enabling `print` inside match arms
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes

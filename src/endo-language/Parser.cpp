@@ -168,6 +168,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
         case Token::Let:
             // F# style let binding
             return parseLet();
+        case Token::Match: {
+            // Standalone match expression as a statement
+            _lexer.enterFSharpExpr();
+            auto expr = parseMatch();
+            _lexer.leaveFSharpExpr();
+            if (!expr)
+                return nullptr;
+            return std::make_unique<ast::ExprStmt>(std::move(expr));
+        }
         case Token::String:
         case Token::Identifier:
             if (_lexer.isDirective("if"))

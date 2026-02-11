@@ -716,6 +716,19 @@ std::optional<uint16_t> IRGenerator::getObjectTypeId(CoreVM::Value* val) const
     return std::nullopt;
 }
 
+void IRGenerator::annotateInnerObjectTypeId(CoreVM::Value* val, uint16_t typeId)
+{
+    _innerObjectTypeIdAnnotations[val] = typeId;
+}
+
+std::optional<uint16_t> IRGenerator::getInnerObjectTypeId(CoreVM::Value* val) const
+{
+    auto it = _innerObjectTypeIdAnnotations.find(val);
+    if (it != _innerObjectTypeIdAnnotations.end())
+        return it->second;
+    return std::nullopt;
+}
+
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
@@ -2441,7 +2454,17 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
     if (value->type() == CoreVM::LiteralType::Void)
     {
         // Dynamically-typed value (e.g., from pattern matching or OGETSLOT).
-        // Assume numeric since we cannot distinguish at compile time.
+        // Check if we have a type ID annotation to dispatch correctly.
+        if (auto objTypeId = getObjectTypeId(value); objTypeId && *objTypeId == CoreVM::BuiltinTypeId::List)
+        {
+            auto* callback = findCallback("list_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+        }
+        // Fallback: assume numeric for unknown types
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::String)
@@ -2487,7 +2510,7 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
     // Generate native call
     std::string funcName = appendNewline ? "println" : "print";
     _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argValue }, funcName);
-    _result = nullptr; // print/println returns void
+    _result = _builder.get(CoreVM::CoreNumber(0)); // print/println returns unit
 }
 
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
@@ -3060,6 +3083,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     if (auto objTypeId = getObjectTypeId(value))
         annotateObjectTypeId(storage, *objTypeId);
 
+    // Propagate inner object type ID annotation through the binding
+    if (auto innerObjTypeId = getInnerObjectTypeId(value))
+        annotateInnerObjectTypeId(storage, *innerObjTypeId);
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
@@ -3164,6 +3191,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Propagate object type ID annotation through the binding
         if (auto objTypeId = getObjectTypeId(value))
             annotateObjectTypeId(storage, *objTypeId);
+
+        // Propagate inner object type ID annotation through the binding
+        if (auto innerObjTypeId = getInnerObjectTypeId(value))
+            annotateInnerObjectTypeId(storage, *innerObjTypeId);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -4156,6 +4187,10 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     // Propagate object type ID annotation through variable loads
     if (auto objTypeId = getObjectTypeId(storage))
         annotateObjectTypeId(_result, *objTypeId);
+
+    // Propagate inner object type ID annotation through variable loads
+    if (auto innerObjTypeId = getInnerObjectTypeId(storage))
+        annotateInnerObjectTypeId(_result, *innerObjTypeId);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -4222,6 +4257,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     // Use createAllocaInEntryBlock to ensure proper stack tracking
     CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
     _builder.createStore(scrutineeStorage, scrutinee, "scrutinee.store");
+
+    // Propagate inner object type ID so pattern extraction can annotate bound values
+    if (auto innerObjTypeId = getInnerObjectTypeId(scrutinee))
+        annotateInnerObjectTypeId(scrutineeStorage, *innerObjTypeId);
 
     // Result storage is created lazily after we know the actual type from the first arm body.
     // createAllocaInEntryBlock() always inserts into the entry block, so calling it later is safe.
@@ -4337,12 +4376,18 @@ void IRGenerator::visit(ast::MatchExpr const& node)
                 {
                     bindingSource = _builder.createObjGetSlot(
                         bindingSource, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload");
+                    // Recover the inner object's type ID (e.g., List inside Some/Ok)
+                    if (auto innerObjTypeId = getInnerObjectTypeId(scrutineeStorage))
+                        annotateObjectTypeId(bindingSource, *innerObjTypeId);
                 }
             }
 
             for (auto const& [name, storage]: preAllocatedBindings)
             {
                 _builder.createStore(storage, bindingSource, name + ".store");
+                // Propagate object type ID to binding storage for convertToString
+                if (auto objTypeId = getObjectTypeId(bindingSource))
+                    annotateObjectTypeId(storage, *objTypeId);
                 bindFSharpVariable(name, storage);
             }
         }
@@ -4773,6 +4818,8 @@ void IRGenerator::visit(ast::OptionExpr const& node)
         obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), innerValue, "option.value");
         _result = obj;
         annotateInnerType(_result, innerValue->type());
+        if (auto objTypeId = getObjectTypeId(innerValue))
+            annotateInnerObjectTypeId(_result, *objTypeId);
     }
     else
     {
@@ -4810,7 +4857,11 @@ void IRGenerator::visit(ast::ResultExpr const& node)
     obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
     _result = obj;
     if (node.isOk)
+    {
         annotateInnerType(_result, payloadValue->type());
+        if (auto objTypeId = getObjectTypeId(payloadValue))
+            annotateInnerObjectTypeId(_result, *objTypeId);
+    }
 }
 
 void IRGenerator::visit(ast::TryExpr const& node)
