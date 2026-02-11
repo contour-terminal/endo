@@ -13,6 +13,7 @@
 #include "Pattern.hpp"
 #include "PatternIRGenerator.hpp"
 #include "ScopedLogger.hpp"
+#include "TypeInferencer.hpp"
 
 // {{{ trace macros
 // clang-format off
@@ -278,6 +279,14 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         }
     }
 
+    // Run Hindley-Milner type inference pre-pass.
+    // Inference errors are non-fatal: unresolved types simply remain unannotated
+    // and fall back to AST inlining during codegen.
+    {
+        auto inferencer = TypeInferencer(createStandardTypeEnv());
+        generator._inferenceResult = inferencer.inferProgram(rootNode);
+    }
+
     generator.codegen(&rootNode);
 
     // Persist newly defined functions back to persistent state
@@ -479,6 +488,30 @@ void IRGenerator::extractTypedParameters(std::vector<ast::TypedParameter> const&
         func.parameters.push_back(tp.name);
         func.parameterTypes.push_back(tp.typeAnnotation);
     }
+}
+
+void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& func)
+{
+    auto it = _inferenceResult.functions.find(name);
+    if (it == _inferenceResult.functions.end())
+        return;
+
+    auto const& inferred = it->second;
+
+    // Fill in missing parameter type annotations from inference results.
+    // Only apply types that resolve to concrete primitive types (int, float, bool, str, unit).
+    // Complex types (list, option, result, function, tuple) and unresolved type variables
+    // are not applied — functions using them continue to use AST inlining, which handles
+    // their runtime semantics correctly (recursion patterns, ? operator, object lifecycle).
+    for (size_t i = 0; i < func.parameterTypes.size() && i < inferred.paramTypes.size(); ++i)
+    {
+        if (!func.parameterTypes[i].has_value() && inferred.paramTypes[i]->isPrimitive())
+            func.parameterTypes[i] = inferred.paramTypes[i];
+    }
+
+    // Fill in missing return type annotation (only if concrete primitive)
+    if (!func.returnType.has_value() && inferred.returnType && (*inferred.returnType)->isPrimitive())
+        func.returnType = inferred.returnType;
 }
 
 ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
@@ -2991,6 +3024,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         {
             FSharpFunction func;
             extractTypedParameters(node.parameters, func);
+            applyInferredTypes(node.name, func);
             func.returnType = node.returnType;
             func.body = node.value.get();
             func.returnKind = determineReturnKind(func.body);
@@ -3017,6 +3051,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         {
             FSharpFunction func;
             extractTypedParameters(ab.parameters, func);
+            applyInferredTypes(ab.name, func);
             func.returnType = ab.returnType;
             func.body = ab.value.get();
             func.returnKind = determineReturnKind(func.body);
@@ -3053,6 +3088,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     {
         FSharpFunction func;
         extractTypedParameters(lambda->parameters, func);
+        applyInferredTypes(node.name, func);
         func.body = lambda->body.get();
         func.returnKind = determineReturnKind(func.body);
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
@@ -3203,6 +3239,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Function binding: let f x = body in expr
         FSharpFunction func;
         extractTypedParameters(node.parameters, func);
+        applyInferredTypes(node.name, func);
         func.returnType = node.returnType;
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
@@ -4303,14 +4340,13 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
 void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFunction& func)
 {
-    // Only compile as handler when ALL explicit parameters have type annotations.
-    // Without annotations, parameters get Void type, causing wrong runtime behavior when
-    // the body does type-sensitive operations (float promotion, string concatenation, etc.).
-    // Future phases will add type inference to relax this restriction.
-    auto const allParamsAnnotated =
+    // Check if all parameters have types (either annotated or inferred).
+    // Without types, parameters would get Void type, causing wrong runtime behavior.
+    // Type inference should have filled in missing annotations; fall back to AST inlining if not.
+    auto const allParamsTyped =
         !func.parameters.empty() && func.parameterTypes.size() == func.parameters.size()
         && std::ranges::all_of(func.parameterTypes, [](auto const& t) { return t.has_value(); });
-    if (!func.parameters.empty() && !allParamsAnnotated)
+    if (!func.parameters.empty() && !allParamsTyped)
         return;
 
     // Compute deterministic capture ordering (sorted alphabetically)

@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "AST.hpp"
+#include "TypeInferencer.hpp"
 #include "Visitor.hpp"
 
 namespace endo
@@ -446,6 +447,13 @@ class IRGenerator final: public ast::Visitor
 
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
+
+    /// Type inference results from the pre-pass TypeInferencer.
+    /// Maps function names to their inferred parameter and return types.
+    InferenceResult _inferenceResult;
+
+    /// Applies inferred types from the TypeInferencer to a function's missing annotations.
+    void applyInferredTypes(std::string const& name, FSharpFunction& func);
 
     /// Tracks the "inner type" of Option/Result values for type propagation.
     /// When an expression produces an Option<T> or Result<T,E>, the inner type T

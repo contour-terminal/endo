@@ -29,6 +29,8 @@ add_library(endo STATIC
     Type.cpp
     TypeEnv.hpp
     TypeEnv.cpp
+    TypeInferencer.hpp
+    TypeInferencer.cpp
     Unification.hpp
     Unification.cpp
 
@@ -79,6 +81,7 @@ add_executable(test-endo-language
     Pattern_test.cpp
     Parser_test.cpp
     IRGenerator_test.cpp
+    TypeInferencer_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
 add_test(NAME test-endo-language COMMAND test-endo-language)

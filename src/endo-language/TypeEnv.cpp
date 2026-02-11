@@ -395,6 +395,44 @@ TypeEnvPtr createStandardTypeEnv()
                   { u, v },
                   types::function(types::result(types::typeVar(u), types::typeVar(v)), types::boolType())));
 
+    // print: forall a. a -> unit
+    auto w = env->freshTypeVar();
+    env->bind("print", types::scheme({ w }, types::function(types::typeVar(w), types::unitType())));
+
+    // println: forall a. a -> unit
+    auto x = env->freshTypeVar();
+    env->bind("println", types::scheme({ x }, types::function(types::typeVar(x), types::unitType())));
+
+    // string_length: str -> int
+    env->bindMono("string_length", types::function(types::strType(), types::intType()));
+
+    // int_of_string: str -> int
+    env->bindMono("int_of_string", types::function(types::strType(), types::intType()));
+
+    // string_of_int: int -> str
+    env->bindMono("string_of_int", types::function(types::intType(), types::strType()));
+
+    // not: bool -> bool
+    env->bindMono("not", types::function(types::boolType(), types::boolType()));
+
+    // Cons operator (::): forall a. a -> list<a> -> list<a>
+    auto y = env->freshTypeVar();
+    env->bind("::",
+              types::scheme({ y },
+                            types::function({ types::typeVar(y), types::list(types::typeVar(y)) },
+                                            types::list(types::typeVar(y)))));
+
+    // List concat (@): forall a. list<a> -> list<a> -> list<a>
+    auto z = env->freshTypeVar();
+    env->bind(
+        "@",
+        types::scheme({ z },
+                      types::function({ types::list(types::typeVar(z)), types::list(types::typeVar(z)) },
+                                      types::list(types::typeVar(z)))));
+
+    // Negation (-): int -> int (unary, for consistency)
+    env->bindMono("~-", types::function(types::intType(), types::intType()));
+
     return env;
 }
 
