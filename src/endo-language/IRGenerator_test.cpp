@@ -3499,11 +3499,25 @@ TEST_CASE("IRGenerator.FSharp.list_recursive_find_max")
                              "9"));
 }
 
-// NOTE: Recursive functions that construct new cons cells in tail call arguments
-// (e.g., `revAcc (h :: acc) t`) are a known limitation of the AST inlining approach.
-// ConsExpr in tail call position creates object allocations that aren't properly
-// handled by the recursive tail call optimization. This will be addressed when
-// the compiler moves from AST inlining to proper closure-based function calls.
+TEST_CASE("IRGenerator.FSharp.list_rec_reverse_cons_in_tail_arg")
+{
+    // ConsExpr in tail call arguments — previously a known limitation.
+    CHECK(executesWithOutput("let rec revAcc acc xs = match xs with\n"
+                             "  | [] -> acc\n"
+                             "  | h :: t -> revAcc (h :: acc) t\n"
+                             "print (revAcc [] [1; 2; 3])",
+                             "[3; 2; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_rec_reverse_longer")
+{
+    // Longer list to exercise multiple loop iterations with cons construction.
+    CHECK(executesWithOutput("let rec revAcc acc xs = match xs with\n"
+                             "  | [] -> acc\n"
+                             "  | h :: t -> revAcc (h :: acc) t\n"
+                             "print (revAcc [] [1; 2; 3; 4; 5])",
+                             "[5; 4; 3; 2; 1]"));
+}
 
 TEST_CASE("IRGenerator.FSharp.list_match_nested_cons_depth3")
 {

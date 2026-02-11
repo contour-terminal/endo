@@ -519,6 +519,12 @@ src/
   - [x] `_innerObjectTypeIdAnnotations` map to track wrapped object type IDs (e.g., List inside `Some [1;2;3]`)
   - [x] Propagation chain: OptionExpr/ResultExpr → LetBindingStmt/LetInExpr → IdentifierExpr → MatchExpr scrutinee → constructor pattern payload extraction
   - [x] `convertToString()` Void branch checks `objectTypeId` annotation to dispatch to `list_to_string` instead of N2S fallback
+- [x] Fix recursive functions returning object types (list, option, etc.)
+  - [x] Deferred `resultStorage` alloca creation in `generateRecursiveCall` — uses actual body result type instead of hardcoded `LiteralType::Number`
+  - [x] Annotation propagation (objectTypeId, innerObjectTypeId, innerType) from initial args to param allocas in recursive call setup
+  - [x] ObjectTypeId propagation from body result to final loaded result at exit block
+  - [x] Same fix applied to pipeline recursive call path (`visitPipelineExpr`)
+  - [x] Enables recursive functions with ConsExpr in tail call arguments (e.g., `revAcc (h :: acc) t`)
 - [x] Support standalone `match` expression as a statement
   - [x] Added `Token::Match` handler in `parseStmt()` wrapping match expression in `ExprStmt`
   - [x] `generatePrintCall` returns unit value (0) instead of nullptr, enabling `print` inside match arms

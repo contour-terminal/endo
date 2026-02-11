@@ -3938,13 +3938,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         auto* paramAlloca = createAllocaInEntryBlock(value->type(), "rec.param." + func->parameters[0]);
         _builder.createStore(paramAlloca, value, "rec.param.init");
 
-        auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+        CoreVM::AllocaInstr* resultStorage = nullptr;
 
         _activeRecursion = RecursiveCallContext {
             .functionName = funcName,
             .entryBlock = entryBlock,
             .paramAllocas = { paramAlloca },
-            .resultStorage = resultStorage,
+            .resultStorage = nullptr,
             .exitBlock = exitBlock,
         };
 
@@ -3967,6 +3967,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         auto* bodyResult = codegen(func->body);
         if (bodyResult)
         {
+            resultStorage = createAllocaInEntryBlock(bodyResult->type(), "rec.result");
+            _activeRecursion->resultStorage = resultStorage;
             _builder.createStore(resultStorage, bodyResult, "rec.store.result");
             _builder.createBr(exitBlock);
         }
@@ -3975,6 +3977,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         _builder.setInsertPoint(exitBlock);
         _result = _builder.createLoad(resultStorage, "rec.load.result");
+
+        // Propagate objectTypeId annotation from body result to final result
+        if (bodyResult)
+        {
+            if (auto objTypeId = getObjectTypeId(bodyResult))
+                annotateObjectTypeId(_result, *objTypeId);
+        }
 
         _activeRecursion.reset();
         return;
@@ -4422,16 +4431,24 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
         auto* alloca = createAllocaInEntryBlock(args[i]->type(), "rec.param." + func->parameters[i]);
         _builder.createStore(alloca, args[i], "rec.param.init");
         paramAllocas.push_back(alloca);
+
+        // Propagate type annotations from initial args to param allocas
+        if (auto objTypeId = getObjectTypeId(args[i]))
+            annotateObjectTypeId(alloca, *objTypeId);
+        if (auto innerObjTypeId = getInnerObjectTypeId(args[i]))
+            annotateInnerObjectTypeId(alloca, *innerObjTypeId);
+        if (auto innerType = getInnerType(args[i]))
+            annotateInnerType(alloca, *innerType);
     }
 
-    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "rec.result");
+    CoreVM::AllocaInstr* resultStorage = nullptr;
 
     // Set up the recursion context
     _activeRecursion = RecursiveCallContext {
         .functionName = funcName,
         .entryBlock = entryBlock,
         .paramAllocas = paramAllocas,
-        .resultStorage = resultStorage,
+        .resultStorage = nullptr,
         .exitBlock = exitBlock,
     };
 
@@ -4452,6 +4469,8 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
     // If body produced a result (non-tail path), store it and branch to exit
     if (bodyResult)
     {
+        resultStorage = createAllocaInEntryBlock(bodyResult->type(), "rec.result");
+        _activeRecursion->resultStorage = resultStorage;
         _builder.createStore(resultStorage, bodyResult, "rec.store.result");
         _builder.createBr(exitBlock);
     }
@@ -4461,6 +4480,13 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
     // Continue from the exit block, load the result
     _builder.setInsertPoint(exitBlock);
     _result = _builder.createLoad(resultStorage, "rec.load.result");
+
+    // Propagate objectTypeId annotation from body result to final result
+    if (bodyResult)
+    {
+        if (auto objTypeId = getObjectTypeId(bodyResult))
+            annotateObjectTypeId(_result, *objTypeId);
+    }
 
     // Clear the recursion context
     _activeRecursion.reset();
