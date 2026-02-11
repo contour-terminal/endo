@@ -18,11 +18,11 @@ This document tracks the implementation status of F# language features as define
 - [x] List expressions: `[1; 2; 3]`
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
 - [ ] List comprehensions: `[for x in items -> expr]` (parsed, no runtime)
-- [ ] Record expressions: `{ name = "Alice"; age = 30 }`
-- [ ] Record update: `{ alice with age = 31 }`
+- [x] Record expressions: `{ name = "Alice"; age = 30 }`
+- [x] Record update: `{ alice with age = 31 }`
 - [x] Tuple expressions: `(1, "hello")` (2 and 3 elements)
 - [x] Tuple destructuring in let: `let (x, y) = tuple`
-- [ ] Record destructuring in let: `let { name; age } = person`
+- [x] Record destructuring in let: `let { name; age } = person`
 - [x] Block scopes: `{ let inner = 20; inner + outer }`
 
 ## Types
@@ -39,7 +39,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Tuples: `(int, str)` (2 and 3 elements via TypedObject)
 - [x] Options: `option<T>` with `Some` and `None`
 - [x] Results: `result<T, E>` with `Ok` and `Error`
-- [ ] Records: `type Person = { name: str; age: int }`
+- [x] Records: `type Person = { name: str; age: int }`
 - [ ] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
 - [ ] Generic types
 
@@ -92,7 +92,7 @@ This document tracks the implementation status of F# language features as define
 ### Compound Patterns
 - [x] Tuple patterns: `| (a, b) -> a + b`
 - [x] List patterns: `| [] -> ... | [x] -> ... | head :: tail -> ...`
-- [ ] Record patterns: `| { name; age } -> ...`
+- [x] Record patterns: `| { name; age } -> ...`
 - [x] Constructor patterns (Option): `| Some x -> ... | None -> ...`
 - [x] Constructor patterns (Result): `| Ok v -> ... | Error e -> ...`
 
@@ -100,7 +100,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Or-patterns: `| 1 | 2 | 3 -> "small"`
 - [x] As-patterns: `| n as val -> ...`
 - [x] Guards (when clauses): `| x when x > 0 -> "positive"`
-- [ ] Nested record patterns
+- [x] Nested record patterns
 - [x] Nested list patterns (recursive cons matching with accumulator-style recursion)
 
 ## Operators
@@ -251,12 +251,12 @@ Consult this section to determine what to work on next.
 - [ ] `ListComprehensionExpr` codegen: loop + optional filter + list construction
 - [ ] Utility: `zip`, `flatten`, `groupBy`, `take`, `drop`, `find`, `exists`, `forall`
 
-### Phase 4 — Records (parallel with Phase 2/3)
-- [ ] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type
-- [ ] Record literals: `{ name = "Alice"; age = 30 }` — new AST node + OALLOC/OSETSLOT codegen
-- [ ] Field access: `person.name` — new FieldAccessExpr + OGETSLOT via field-name-to-slot lookup
-- [ ] Record update: `{ person with age = 31 }` — copy slots + overwrite
-- [ ] Record pattern matching: wire existing RecordPattern AST to PatternIRGenerator
+### Phase 4 — Records (parallel with Phase 2/3) ✅
+- [x] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type
+- [x] Record literals: `{ name = "Alice"; age = 30 }` — new AST node + OALLOC/OSETSLOT codegen
+- [x] Field access: `person.name` — new FieldAccessExpr + OGETSLOT via field-name-to-slot lookup
+- [x] Record update: `{ person with age = 31 }` — copy slots + overwrite
+- [x] Record pattern matching: wire existing RecordPattern AST to PatternIRGenerator
 
 ### Phase 5 — Custom Discriminated Unions (depends on Phase 4 for type def parsing)
 - [ ] Union type definitions: `type Shape = | Circle of float | Rectangle of float * float | Point`

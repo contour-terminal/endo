@@ -323,7 +323,7 @@ src/
 - [x] Extend Parser for match expressions with guards
 - [x] Extend Parser for list literals and ranges
 - [x] Extend Parser for list comprehensions (`[for x in items -> expr]`)
-- [ ] Extend Parser for record literals and type definitions
+- [x] Extend Parser for record literals and type definitions
 - [x] Implement pattern matching compilation in IR generator
 - [x] Add AST nodes for Option/Result types (`OptionExpr`, `ResultExpr`) and error propagation (`TryExpr`, `TryWithExpr`)
 - [x] Extend Parser for Option/Result constructors (`Some`, `None`, `Ok`, `Error`)
@@ -579,6 +579,24 @@ src/
     - [x] Functions with function-typed parameters skip handler compilation (forced to AST inlining for functionRefs tracking)
     - [x] `IdentifierExpr` returns constant function name for variables with function reference mappings
     - [x] 11 HOF tests: basic, lambda arg, twice, compose, partial application, closure capture, multiple function args, pipeline, string function, nested partial application, function alias
+  - [x] Record types (Phase 4)
+    - [x] `Token::Dot` and `Token::With` in Lexer for field access and record update syntax
+    - [x] `.` added to `FSharpReservedSymbols` to break identifiers at dots in F# mode
+    - [x] AST nodes: `RecordTypeDefStmt`, `RecordExpr`, `RecordUpdateExpr`, `FieldAccessExpr` with Visitor support
+    - [x] Parser: `parseTypeDefinition()` for `type Name = { field: type; ... }`, record/block disambiguation via lookahead (`Identifier =` → record, `let` → block)
+    - [x] Parser: field access in `parseFSharpPostfix()` via `Token::Dot` loop, record update via `Token::With` keyword
+    - [x] Parser: record pattern matching `{ name; age }` and `{ name = n; _ }` in `parseRecordPattern()`
+    - [x] Parser: record destructuring in `let { name; age } = expr` via `Token::BraceOpen` in `parseLet()`
+    - [x] IR codegen: `RecordTypeDefStmt` registers custom product type in TypeRegistry with field→slot mappings
+    - [x] IR codegen: `RecordExpr` resolves type by name or field names, OALLOC + OSETSLOT per field
+    - [x] IR codegen: `RecordUpdateExpr` copies all slots from base, overwrites updated fields
+    - [x] IR codegen: `FieldAccessExpr` looks up field slot offset from TypeDescriptor, OGETSLOT
+    - [x] IR codegen: type annotation propagation for records through function parameters (`generateFSharpCall`)
+    - [x] `PatternIRGenerator`: `RecordPattern` extracts fields by slot offset from `_recordFieldOffsets` map
+    - [x] Runtime printing: `object_to_string` formats records as `{ field1 = val1; field2 = val2 }`
+    - [x] `LiteralType type` field added to `FieldInfo` in `TypeDescriptor.hpp` for runtime field type dispatch (string, bool, int)
+    - [x] PatternIRGenerator fix: always reload scrutinee from storage in RecordPattern to prevent dead temporaries across block boundaries
+    - [x] 6 parser tests + 22 IR generation tests covering type defs, field access, updates, pattern matching, functions, destructuring, and printing
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
@@ -586,7 +604,8 @@ src/
 - `let` keyword unambiguously starts F# style (bash style uses `VAR=value` without spaces)
 - `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
 - Dual semantics: expression context captures output, statement context prints to terminal
-- Records and unions are compiled to efficient runtime representations
+- Records are compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT); unions deferred to Phase 5
+- Known limitation: combining inlined match-expression functions (with record patterns) and record update expressions in the same handler can trigger a pre-existing TargetCodeGenerator stack depth tracking bug. Workaround: use record update and match-expression functions in separate scopes.
 - Pattern matching compiles to decision trees for efficient execution
 - List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
 - Lexer enhanced with `peekChar()` to properly recognize float literals (e.g., `2.5` as single token)
