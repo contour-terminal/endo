@@ -187,6 +187,9 @@ Token Lexer::nextToken()
             nextChar();
             if (_currentChar == '.')
                 return consumeCharAndConfirmToken(Token::DotDot); // .. (range operator)
+            // In F# mode, single dot is a field access operator
+            if (_fsharpDepth > 0)
+                return confirmToken(Token::Dot);
             // Single dot - treat as identifier (e.g., ./script, file.txt)
             _nextToken.literal = ".";
             return consumeIdentifier();
@@ -584,7 +587,7 @@ Token Lexer::consumeIdentifier(Token token)
     // In arithmetic context, operators are also reserved to allow expressions like 1+2
     auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:"sv;
     // In F# expression context, brackets and operators are reserved
-    auto constexpr FSharpReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:[]{}#"sv;
+    auto constexpr FSharpReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:[]{}#."sv;
     // Arithmetic operators that should be lexed as single-char tokens
     auto constexpr ArithOperators = U"+-*/%^:?,"sv;
 

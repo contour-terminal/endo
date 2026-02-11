@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "AST.hpp"
@@ -128,9 +129,13 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpApplication(); // function application f x
     std::unique_ptr<ast::Expr> parseFSharpPostfix();     // postfix ? (error propagation)
     std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ..., & command
+    std::unique_ptr<ast::Expr> parseBlockExprOrRecord(); // { ... } — block, record literal, or record update
     std::unique_ptr<ast::Expr> parseBlockExpr();         // { let x = 1; x + 2 }
     std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseTryWith();           // try expr with ... | try expr finally ...
+
+    // Record type definitions
+    std::unique_ptr<ast::RecordTypeDefStmt> parseTypeDefinition(); // type Person = { name: str; age: int }
 
     // Pattern parsing for match expressions
     // Grammar: pattern ::= or_pattern ('when' expr)?
@@ -192,6 +197,9 @@ class Parser
     int _backtickNestingLevel = 0; ///< Nesting level for backtick substitution
     std::unordered_set<std::string>
         _knownFSharpFunctions; ///< User-defined F# function names for bare call dispatch
+
+    /// Known record type names → field names (populated by parseTypeDefinition).
+    std::unordered_map<std::string, std::vector<std::string>> _knownRecordTypes;
 };
 
 // Template implementations

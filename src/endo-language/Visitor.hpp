@@ -79,6 +79,10 @@ struct TryWithExpr;
 struct TryFinallyExpr;
 struct UnitExpr;
 struct BlockExpr;
+struct RecordTypeDefStmt;
+struct RecordExpr;
+struct RecordUpdateExpr;
+struct FieldAccessExpr;
 
 struct Visitor
 {
@@ -167,6 +171,12 @@ struct Visitor
     virtual void visit(FStringExpr const&) = 0;
     virtual void visit(UnitExpr const&) = 0;
     virtual void visit(BlockExpr const&) = 0;
+
+    // Record types
+    virtual void visit(RecordTypeDefStmt const&) = 0;
+    virtual void visit(RecordExpr const&) = 0;
+    virtual void visit(RecordUpdateExpr const&) = 0;
+    virtual void visit(FieldAccessExpr const&) = 0;
 };
 
 } // namespace endo::ast

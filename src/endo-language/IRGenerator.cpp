@@ -2494,12 +2494,50 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
     }
     if (value->type() == CoreVM::LiteralType::Object)
     {
+        // Check inner type annotation first (e.g., record field with known primitive type).
+        // This takes priority over object type ID checks because it carries more specific info
+        // (e.g., a string field extracted from a record via pattern matching).
+        if (auto innerType = getInnerType(value))
+        {
+            switch (*innerType)
+            {
+                case CoreVM::LiteralType::String: {
+                    auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String,
+                                                             std::string(label) + ".o2s.tmp");
+                    _builder.createStore(storage, value);
+                    return _builder.createLoad(storage, std::string(label) + ".o2s");
+                }
+                case CoreVM::LiteralType::Number:
+                    return _builder.createN2S(value, std::string(label) + ".n2s");
+                case CoreVM::LiteralType::Float:
+                    return _builder.createF2S(value, std::string(label) + ".f2s");
+                default: break; // Fall through to object type checks
+            }
+        }
+
         // Check if value is a known typed object via annotation or IR chain analysis
         bool isList = false;
+        bool isRecord = false;
         if (auto objTypeId = getObjectTypeId(value))
+        {
             isList = (*objTypeId == CoreVM::BuiltinTypeId::List);
+            if (!isList)
+            {
+                // Check if this is a record type (custom product type)
+                for (auto const& [name, info]: _recordTypes)
+                {
+                    if (info.typeId == *objTypeId)
+                    {
+                        isRecord = true;
+                        break;
+                    }
+                }
+            }
+        }
         else if (auto info = tryGetObjectInfo(value))
+        {
             isList = (info->typeId == CoreVM::BuiltinTypeId::List);
+        }
 
         if (isList)
         {
@@ -2510,20 +2548,83 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                     _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
             }
         }
+        if (isRecord)
+        {
+            auto* callback = findCallback("object_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".rec2s");
+            }
+        }
         // Fallback: assume numeric for unknown object types
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::Void)
     {
         // Dynamically-typed value (e.g., from pattern matching or OGETSLOT).
+        // Check inner type annotation first (e.g., record field with known primitive type).
+        if (auto innerType = getInnerType(value))
+        {
+            switch (*innerType)
+            {
+                case CoreVM::LiteralType::String: {
+                    // Value is a string but IR-typed as Void — cast via typed alloca
+                    auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String,
+                                                             std::string(label) + ".v2s.tmp");
+                    _builder.createStore(storage, value);
+                    return _builder.createLoad(storage, std::string(label) + ".v2s");
+                }
+                case CoreVM::LiteralType::Number:
+                    return _builder.createN2S(value, std::string(label) + ".n2s");
+                case CoreVM::LiteralType::Float:
+                    return _builder.createF2S(value, std::string(label) + ".f2s");
+                case CoreVM::LiteralType::Boolean: {
+                    auto* trueBlock = _builder.createBlock(std::string(label) + ".b2s.true");
+                    auto* falseBlock = _builder.createBlock(std::string(label) + ".b2s.false");
+                    auto* mergeBlock = _builder.createBlock(std::string(label) + ".b2s.merge");
+                    auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String,
+                                                             std::string(label) + ".b2s.tmp");
+                    _builder.createCondBr(value, trueBlock, falseBlock);
+                    _builder.setInsertPoint(trueBlock);
+                    _builder.createStore(storage, _builder.get("true"));
+                    _builder.createBr(mergeBlock);
+                    _builder.setInsertPoint(falseBlock);
+                    _builder.createStore(storage, _builder.get("false"));
+                    _builder.createBr(mergeBlock);
+                    _builder.setInsertPoint(mergeBlock);
+                    return _builder.createLoad(storage, std::string(label) + ".b2s");
+                }
+                default: break; // Fall through to object type checks
+            }
+        }
+
         // Check if we have a type ID annotation to dispatch correctly.
-        if (auto objTypeId = getObjectTypeId(value); objTypeId && *objTypeId == CoreVM::BuiltinTypeId::List)
+        auto objTypeId = getObjectTypeId(value);
+        if (objTypeId && *objTypeId == CoreVM::BuiltinTypeId::List)
         {
             auto* callback = findCallback("list_to_string(I)S");
             if (callback)
             {
                 return _builder.createCallFunction(
                     _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+        }
+        // Check for record types
+        if (objTypeId)
+        {
+            for (auto const& [name, info]: _recordTypes)
+            {
+                if (info.typeId == *objTypeId)
+                {
+                    auto* callback = findCallback("object_to_string(I)S");
+                    if (callback)
+                    {
+                        return _builder.createCallFunction(
+                            _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".rec2s");
+                    }
+                    break;
+                }
             }
         }
         // Fallback: assume numeric for unknown types
@@ -2995,6 +3096,22 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         PatternIRGenerator patternGen(_builder);
         patternGen.setBindingStorage(bindingStorage);
 
+        // Set record field offsets if the value is a known record type
+        if (auto objTypeId = getObjectTypeId(value))
+        {
+            for (auto const& [typeName, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == *objTypeId)
+                {
+                    std::unordered_map<std::string, uint8_t> fieldOffsets;
+                    for (auto const& field: recInfo.fields)
+                        fieldOffsets[field.name] = field.offset;
+                    patternGen.setRecordFieldOffsets(std::move(fieldOffsets));
+                    break;
+                }
+            }
+        }
+
         auto* successBlock = _builder.createBlock("destructure.ok");
         auto* failBlock = _builder.createBlock("destructure.fail");
 
@@ -3006,8 +3123,32 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
         // Success block: register all bindings in F# scope
         _builder.setInsertPoint(successBlock);
+
+        // Look up record type info for field type annotations
+        RecordTypeInfo const* recTypeInfo = nullptr;
+        if (auto objTypeId = getObjectTypeId(value))
+        {
+            for (auto const& [typeName, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == *objTypeId)
+                {
+                    recTypeInfo = &recInfo;
+                    break;
+                }
+            }
+        }
+
         for (auto const& name: bindingNames)
+        {
             bindFSharpVariable(name, bindingStorage[name], node.isMutable);
+
+            // Annotate record field bindings with their field types
+            if (recTypeInfo)
+            {
+                if (auto it = recTypeInfo->fieldTypes.find(name); it != recTypeInfo->fieldTypes.end())
+                    annotateInnerType(bindingStorage[name], it->second);
+            }
+        }
 
         _result = nullptr;
         return;
@@ -3123,7 +3264,9 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ListExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ListRangeExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ConsExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::ConcatListExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::ConcatListExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::RecordExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
@@ -3228,6 +3371,24 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         PatternIRGenerator patternGen(_builder);
         patternGen.setBindingStorage(bindingStorage);
 
+        // Set record field offsets if the value is a known record type
+        RecordTypeInfo const* recTypeInfo = nullptr;
+        if (auto objTypeId = getObjectTypeId(value))
+        {
+            for (auto const& [typeName, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == *objTypeId)
+                {
+                    std::unordered_map<std::string, uint8_t> fieldOffsets;
+                    for (auto const& field: recInfo.fields)
+                        fieldOffsets[field.name] = field.offset;
+                    patternGen.setRecordFieldOffsets(std::move(fieldOffsets));
+                    recTypeInfo = &recInfo;
+                    break;
+                }
+            }
+        }
+
         auto* successBlock = _builder.createBlock("destructure.ok");
         auto* failBlock = _builder.createBlock("destructure.fail");
 
@@ -3238,7 +3399,16 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
         _builder.setInsertPoint(successBlock);
         for (auto const& name: bindingNames)
+        {
             bindFSharpVariable(name, bindingStorage[name]);
+
+            // Annotate record field bindings with their field types
+            if (recTypeInfo)
+            {
+                if (auto it = recTypeInfo->fieldTypes.find(name); it != recTypeInfo->fieldTypes.end())
+                    annotateInnerType(bindingStorage[name], it->second);
+            }
+        }
 
         _result = codegen(node.body.get());
         popFSharpScope();
@@ -3703,6 +3873,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _builder.createStore(paramStorage, allArgs[i], func->parameters[i]);
             bindFSharpVariable(func->parameters[i], paramStorage);
 
+            // Propagate type annotations through pipeline partial application parameters
+            if (auto objTypeId = getObjectTypeId(allArgs[i]))
+                annotateObjectTypeId(paramStorage, *objTypeId);
+            if (auto innerObjTypeId = getInnerObjectTypeId(allArgs[i]))
+                annotateInnerObjectTypeId(paramStorage, *innerObjTypeId);
+            if (auto innerType = getInnerType(allArgs[i]))
+                annotateInnerType(paramStorage, *innerType);
+
             // Track function references passed as arguments (HOF support)
             if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
             {
@@ -3778,6 +3956,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             bindFSharpVariable(capName, capStorage);
         bindFSharpVariable(func->parameters[0], paramAlloca);
 
+        // Propagate type annotations through recursive piped parameter
+        if (auto objTypeId = getObjectTypeId(value))
+            annotateObjectTypeId(paramAlloca, *objTypeId);
+        if (auto innerObjTypeId = getInnerObjectTypeId(value))
+            annotateInnerObjectTypeId(paramAlloca, *innerObjTypeId);
+        if (auto innerType = getInnerType(value))
+            annotateInnerType(paramAlloca, *innerType);
+
         auto* bodyResult = codegen(func->body);
         if (bodyResult)
         {
@@ -3821,6 +4007,14 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     CoreVM::AllocaInstr* storage = createAllocaInEntryBlock(storageType, func->parameters[0]);
     _builder.createStore(storage, value, func->parameters[0]);
     bindFSharpVariable(func->parameters[0], storage);
+
+    // Propagate type annotations through piped parameter binding
+    if (auto objTypeId = getObjectTypeId(value))
+        annotateObjectTypeId(storage, *objTypeId);
+    if (auto innerObjTypeId = getInnerObjectTypeId(value))
+        annotateInnerObjectTypeId(storage, *innerObjTypeId);
+    if (auto innerType = getInnerType(value))
+        annotateInnerType(storage, *innerType);
 
     // Track function references passed as piped value (HOF support)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
@@ -4382,6 +4576,14 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
 
+        // Propagate type annotations through parameter bindings
+        if (auto objTypeId = getObjectTypeId(args[i]))
+            annotateObjectTypeId(storage, *objTypeId);
+        if (auto innerObjTypeId = getInnerObjectTypeId(args[i]))
+            annotateInnerObjectTypeId(storage, *innerObjTypeId);
+        if (auto innerType = getInnerType(args[i]))
+            annotateInnerType(storage, *innerType);
+
         // Track function references passed as arguments (HOF support)
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
         {
@@ -4787,6 +4989,22 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             patternIRGenerator.setBindingStorage(std::move(storageMap));
         }
 
+        // Set record field offsets if the scrutinee is a known record type
+        if (auto objTypeId = getObjectTypeId(scrutinee))
+        {
+            for (auto const& [typeName, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == *objTypeId)
+                {
+                    std::unordered_map<std::string, uint8_t> fieldOffsets;
+                    for (auto const& field: recInfo.fields)
+                        fieldOffsets[field.name] = field.offset;
+                    patternIRGenerator.setRecordFieldOffsets(std::move(fieldOffsets));
+                    break;
+                }
+            }
+        }
+
         patternIRGenerator.compile(
             *arm.pattern, scrutineeValue, scrutineeStorage, armBodyBlocks[i], onFailure);
 
@@ -4801,14 +5019,39 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         bool const isTuplePattern = dynamic_cast<pattern::TuplePattern const*>(arm.pattern.get()) != nullptr;
         bool const isConsPattern = dynamic_cast<pattern::ConsPattern const*>(arm.pattern.get()) != nullptr;
         bool const isListPattern = dynamic_cast<pattern::ListPattern const*>(arm.pattern.get()) != nullptr;
+        bool const isRecordPattern =
+            dynamic_cast<pattern::RecordPattern const*>(arm.pattern.get()) != nullptr;
 
-        if (isTuplePattern || isConsPattern || isListPattern)
+        if (isTuplePattern || isConsPattern || isListPattern || isRecordPattern)
         {
-            // Tuple/Cons/List patterns: values were already stored into allocas by PatternIRGenerator
-            // Just register the allocas as variable bindings
+            // Tuple/Cons/List/Record patterns: values were already stored into allocas by
+            // PatternIRGenerator. Just register the allocas as variable bindings.
+            RecordTypeInfo const* recTypeInfo = nullptr;
+            if (isRecordPattern)
+            {
+                if (auto objTypeId = getObjectTypeId(scrutinee))
+                {
+                    for (auto const& [typeName, recInfo]: _recordTypes)
+                    {
+                        if (recInfo.typeId == *objTypeId)
+                        {
+                            recTypeInfo = &recInfo;
+                            break;
+                        }
+                    }
+                }
+            }
+
             for (auto const& [name, storage]: preAllocatedBindings)
             {
                 bindFSharpVariable(name, storage);
+
+                // For record patterns, annotate bindings with field types
+                if (recTypeInfo)
+                {
+                    if (auto it = recTypeInfo->fieldTypes.find(name); it != recTypeInfo->fieldTypes.end())
+                        annotateInnerType(storage, it->second);
+                }
             }
         }
         // For constructor patterns (Error e, Some x), we need to extract the payload
@@ -4890,6 +5133,12 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Store the result
         _builder.createStore(resultStorage, bodyResult, "match.result.store");
 
+        // Propagate type annotations through match result storage
+        if (auto innerType = getInnerType(bodyResult))
+            annotateInnerType(resultStorage, *innerType);
+        if (auto objTypeId = getObjectTypeId(bodyResult))
+            annotateObjectTypeId(resultStorage, *objTypeId);
+
         // Branch to merge block
         _builder.createBr(mergeBlock);
     }
@@ -4897,7 +5146,15 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     // Set insert point to merge block and load the result
     _builder.setInsertPoint(mergeBlock);
     if (resultStorage)
+    {
         _result = _builder.createLoad(resultStorage, "match.result.load");
+
+        // Propagate type annotations from storage to result
+        if (auto innerType = getInnerType(resultStorage))
+            annotateInnerType(_result, *innerType);
+        if (auto objTypeId = getObjectTypeId(resultStorage))
+            annotateObjectTypeId(_result, *objTypeId);
+    }
     else
         _result = nullptr; // All arms are tail calls — merge is unreachable
 }
@@ -5788,6 +6045,300 @@ void IRGenerator::visit(ast::BlockExpr const& node)
     _result = codegen(node.result.get());
 
     popFSharpScope();
+}
+
+// --- Record type support ---
+
+IRGenerator::RecordTypeInfo const* IRGenerator::lookupRecordType(std::string const& name) const
+{
+    if (auto it = _recordTypes.find(name); it != _recordTypes.end())
+        return &it->second;
+    return nullptr;
+}
+
+IRGenerator::RecordTypeInfo const* IRGenerator::resolveRecordTypeByFields(
+    std::vector<std::string> const& fieldNames) const
+{
+    for (auto const& [name, info]: _recordTypes)
+    {
+        if (info.fields.size() != fieldNames.size())
+            continue;
+        bool match = true;
+        for (size_t i = 0; i < fieldNames.size(); ++i)
+        {
+            if (info.fields[i].name != fieldNames[i])
+            {
+                match = false;
+                break;
+            }
+        }
+        if (match)
+            return &info;
+    }
+    return nullptr;
+}
+
+void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
+{
+    TRACE_SCOPE("visit(RecordTypeDefStmt)");
+
+    // Allocate a custom type ID from the IR program
+    auto typeId = _builder.program()->allocateCustomTypeId();
+
+    // Build field info list with type annotations from the AST
+    std::vector<CoreVM::FieldInfo> fields;
+    std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes;
+    for (uint8_t i = 0; i < node.fields.size(); ++i)
+    {
+        auto vmType = CoreVM::LiteralType::Number; // default for non-primitive or unknown types
+        if (auto const* prim = std::get_if<PrimitiveTypeNode>(&node.fields[i].type->node))
+        {
+            switch (prim->kind)
+            {
+                case PrimitiveType::Int: vmType = CoreVM::LiteralType::Number; break;
+                case PrimitiveType::Float: vmType = CoreVM::LiteralType::Float; break;
+                case PrimitiveType::Str: vmType = CoreVM::LiteralType::String; break;
+                case PrimitiveType::Bool: vmType = CoreVM::LiteralType::Boolean; break;
+                case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
+            }
+        }
+        fields.push_back({ node.fields[i].name, i, vmType });
+        fieldTypes[node.fields[i].name] = vmType;
+    }
+
+    // Store in the IR generator's record type table
+    RecordTypeInfo info;
+    info.typeId = typeId;
+    info.name = node.name;
+    info.fields = fields;
+    info.fieldTypes = std::move(fieldTypes);
+    _recordTypes[node.name] = std::move(info);
+
+    // Register as a custom product type on the IR program so TargetCodeGenerator
+    // can register it in the ConstantPool's TypeRegistry before execution.
+    CoreVM::IRProgram::CustomProductType customType;
+    customType.name = node.name;
+    customType.fields = fields;
+    customType.assignedId = typeId;
+    _builder.program()->addCustomProductType(std::move(customType));
+}
+
+void IRGenerator::visit(ast::RecordExpr const& node)
+{
+    TRACE_SCOPE("visit(RecordExpr)");
+
+    // Resolve the record type — by explicit name or by matching field names
+    RecordTypeInfo const* typeInfo = nullptr;
+    if (!node.typeName.empty())
+        typeInfo = lookupRecordType(node.typeName);
+
+    if (!typeInfo)
+    {
+        // Try to resolve by field names
+        std::vector<std::string> fieldNames;
+        for (auto const& field: node.fields)
+            fieldNames.push_back(field.name);
+        typeInfo = resolveRecordTypeByFields(fieldNames);
+    }
+
+    if (!typeInfo)
+    {
+        reportTypeError("Unknown record type for literal with fields: {}", [&] {
+            std::string s;
+            for (size_t i = 0; i < node.fields.size(); ++i)
+            {
+                if (i > 0)
+                    s += ", ";
+                s += node.fields[i].name;
+            }
+            return s;
+        }());
+        return;
+    }
+
+    // Codegen each field value
+    std::vector<CoreVM::Value*> fieldValues;
+    for (auto const& field: node.fields)
+    {
+        auto* val = codegen(field.value.get());
+        if (!val)
+        {
+            reportTypeError("Failed to generate code for record field '{}'", std::string_view(field.name));
+            return;
+        }
+        fieldValues.push_back(val);
+    }
+
+    // Allocate the record object
+    CoreVM::Value* obj =
+        _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeInfo->typeId)), "record");
+
+    // Set each field slot (fields are in definition order matching the type)
+    for (size_t i = 0; i < node.fields.size(); ++i)
+    {
+        // Find the slot offset for this field name in the type definition
+        uint8_t slotOffset = 0;
+        for (auto const& fieldDef: typeInfo->fields)
+        {
+            if (fieldDef.name == node.fields[i].name)
+            {
+                slotOffset = fieldDef.offset;
+                break;
+            }
+        }
+        obj = _builder.createObjSetSlot(
+            obj, _builder.get(CoreVM::CoreNumber(slotOffset)), fieldValues[i], "record.field");
+    }
+
+    _result = obj;
+    annotateObjectTypeId(_result, typeInfo->typeId);
+}
+
+void IRGenerator::visit(ast::RecordUpdateExpr const& node)
+{
+    TRACE_SCOPE("visit(RecordUpdateExpr)");
+
+    // Codegen the base record expression
+    auto* baseObj = codegen(node.base.get());
+    if (!baseObj)
+    {
+        reportTypeError("Failed to generate code for record update base");
+        return;
+    }
+
+    // Determine the record type from the base object's annotation
+    RecordTypeInfo const* typeInfo = nullptr;
+    if (auto objTypeId = getObjectTypeId(baseObj))
+    {
+        for (auto const& [name, info]: _recordTypes)
+        {
+            if (info.typeId == *objTypeId)
+            {
+                typeInfo = &info;
+                break;
+            }
+        }
+    }
+
+    if (!typeInfo)
+    {
+        reportTypeError("Record update requires a known record type");
+        return;
+    }
+
+    // Allocate a new record object of the same type
+    CoreVM::Value* newObj =
+        _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeInfo->typeId)), "record.upd");
+
+    // Copy all slots from the original record
+    for (auto const& fieldDef: typeInfo->fields)
+    {
+        auto* slotVal = _builder.createObjGetSlot(
+            baseObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "record.copy." + fieldDef.name);
+        newObj = _builder.createObjSetSlot(
+            newObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), slotVal, "record.copy.set");
+    }
+
+    // Overwrite updated fields
+    for (auto const& update: node.updates)
+    {
+        auto* val = codegen(update.value.get());
+        if (!val)
+        {
+            reportTypeError("Failed to generate code for record update field '{}'",
+                            std::string_view(update.name));
+            return;
+        }
+
+        // Find the slot offset for this field name
+        for (auto const& fieldDef: typeInfo->fields)
+        {
+            if (fieldDef.name == update.name)
+            {
+                newObj = _builder.createObjSetSlot(
+                    newObj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), val, "record.upd.field");
+                break;
+            }
+        }
+    }
+
+    _result = newObj;
+    annotateObjectTypeId(_result, typeInfo->typeId);
+}
+
+void IRGenerator::visit(ast::FieldAccessExpr const& node)
+{
+    TRACE_SCOPE("visit(FieldAccessExpr)");
+
+    // Codegen the object expression
+    auto* obj = codegen(node.object.get());
+    if (!obj)
+    {
+        reportTypeError("Failed to generate code for field access object");
+        return;
+    }
+
+    // Look up the record type from the object's type ID annotation
+    RecordTypeInfo const* typeInfo = nullptr;
+    if (auto objTypeId = getObjectTypeId(obj))
+    {
+        for (auto const& [name, info]: _recordTypes)
+        {
+            if (info.typeId == *objTypeId)
+            {
+                typeInfo = &info;
+                break;
+            }
+        }
+    }
+
+    if (!typeInfo)
+    {
+        // Try to resolve via IR chain analysis
+        if (auto info = tryGetObjectInfo(obj))
+        {
+            for (auto const& [name, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == info->typeId)
+                {
+                    typeInfo = &recInfo;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!typeInfo)
+    {
+        reportTypeError("Field access requires a known record type, got unknown object for '.{}'",
+                        std::string_view(node.fieldName));
+        return;
+    }
+
+    // Find the field by name
+    bool found = false;
+    for (auto const& fieldDef: typeInfo->fields)
+    {
+        if (fieldDef.name == node.fieldName)
+        {
+            _result = _builder.createObjGetSlot(
+                obj, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "record." + node.fieldName);
+
+            // Annotate the result with the field's literal type for correct convertToString dispatch
+            if (auto it = typeInfo->fieldTypes.find(node.fieldName); it != typeInfo->fieldTypes.end())
+                annotateInnerType(_result, it->second);
+
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        reportTypeError("Record type '{}' has no field '{}'",
+                        std::string_view(typeInfo->name),
+                        std::string_view(node.fieldName));
+    }
 }
 
 } // namespace endo

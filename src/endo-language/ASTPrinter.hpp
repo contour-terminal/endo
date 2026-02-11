@@ -93,6 +93,10 @@ class ASTPrinter: public Visitor
     void visit(FStringExpr const& node) override;
     void visit(UnitExpr const& node) override;
     void visit(BlockExpr const& node) override;
+    void visit(RecordTypeDefStmt const& node) override;
+    void visit(RecordExpr const& node) override;
+    void visit(RecordUpdateExpr const& node) override;
+    void visit(FieldAccessExpr const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

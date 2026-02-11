@@ -3679,3 +3679,229 @@ TEST_CASE("IRGenerator.FSharp.hof_function_alias")
     // Function alias through HOF (identity returning a function)
     CHECK(executesWithOutput("let double x = x * 2\nlet id f = f\nlet g = id double\nprint (g 5)", "10"));
 }
+
+// =============================================================================
+// Record Types
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.record_type_def_and_field_access")
+{
+    // Basic record type definition, creation, and field access
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 10; y = 20 }\n"
+                             "print p.x",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_field_access_second_field")
+{
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 10; y = 20 }\n"
+                             "print p.y",
+                             "20"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_field_arithmetic")
+{
+    // Use record fields in arithmetic
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 3; y = 4 }\n"
+                             "print (p.x + p.y)",
+                             "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_basic")
+{
+    // Record update creates a new record with one field changed
+    CHECK(executesWithOutput("type Person = { name: int; age: int }\n"
+                             "let p = { name = 1; age = 30 }\n"
+                             "let q = { p with age = 31 }\n"
+                             "print q.age",
+                             "31"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_preserves_unchanged")
+{
+    // Record update preserves fields that aren't overridden
+    CHECK(executesWithOutput("type Person = { name: int; age: int }\n"
+                             "let p = { name = 42; age = 30 }\n"
+                             "let q = { p with age = 31 }\n"
+                             "print q.name",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_pattern_match_punning")
+{
+    // Record pattern matching with field punning
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 5; y = 10 }\n"
+                             "let r = match p with | { x; y } -> x + y\n"
+                             "print r",
+                             "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_pattern_match_explicit_binding")
+{
+    // Record pattern matching with explicit variable binding
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 5; y = 10 }\n"
+                             "let r = match p with | { x = a; y = b } -> a * b\n"
+                             "print r",
+                             "50"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_passed_to_function")
+{
+    // Record passed as function argument
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let sum_point p = p.x + p.y\n"
+                             "let p = { x = 3; y = 7 }\n"
+                             "print (sum_point p)",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_returned_from_function")
+{
+    // Record created and returned from a function
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let make_point a b = { x = a; y = b }\n"
+                             "let p = make_point 100 200\n"
+                             "print p.x",
+                             "100"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_with_expression")
+{
+    // Record update using an expression involving the original record
+    CHECK(executesWithOutput("type Counter = { value: int }\n"
+                             "let c = { value = 10 }\n"
+                             "let c2 = { c with value = c.value + 1 }\n"
+                             "print c2.value",
+                             "11"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_multiple_types")
+{
+    // Multiple record types in the same program
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "type Size = { w: int; h: int }\n"
+                             "let p = { x = 1; y = 2 }\n"
+                             "let s = { w = 10; h = 20 }\n"
+                             "print (p.x + s.w)",
+                             "11"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_let_destructure")
+{
+    // Record destructuring in let binding
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 7; y = 8 }\n"
+                             "let { x; y } = p\n"
+                             "print (x + y)",
+                             "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_string_field_access")
+{
+    // String field access via dot notation
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let p = { name = \"Alice\"; age = 30 }\n"
+                             "print p.name",
+                             "Alice"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_string_field_destructure")
+{
+    // String field via let destructuring
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let p = { name = \"Bob\"; age = 25 }\n"
+                             "let { name; age } = p\n"
+                             "print name",
+                             "Bob"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_string_field_match")
+{
+    // String field via pattern matching
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let p = { name = \"Charlie\"; age = 35 }\n"
+                             "print (match p with | { name; age } -> name)",
+                             "Charlie"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_string_field_fstring")
+{
+    // String field used in f-string interpolation
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let p = { name = \"Diana\"; age = 28 }\n"
+                             "print $\"Hello, {p.name}!\"",
+                             "Hello, Diana!"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_println_whole_record")
+{
+    // Printing a whole record should produce formatted output
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p = { x = 3; y = 4 }\n"
+                             "print p",
+                             "{ x = 3; y = 4 }"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_println")
+{
+    // Print a record created via record update
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                             "print p2",
+                             "{ x = 4; y = 6 }"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_update_field_access_after")
+{
+    // Access fields of a record created via record update
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                             "print p2.x\n"
+                             "print p2.y",
+                             "46"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_println_with_string_fields")
+{
+    // Printing a record with string fields should show string values, not pointers
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let p = { name = \"Alice\"; age = 30 }\n"
+                             "print p",
+                             "{ name = Alice; age = 30 }"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_destructure_then_update")
+{
+    // Let destructuring followed by record update on the same type
+    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let { x; y } = p1\n"
+                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                             "print p2",
+                             "{ x = 4; y = 6 }"));
+}
+
+TEST_CASE("IRGenerator.FSharp.record_destructure_two_types_then_update")
+{
+    // Let destructuring on one record type followed by record update on another type
+    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
+                             "let alice = { name = \"Alice\"; age = 30 }\n"
+                             "let { name; age } = alice\n"
+                             "type Point = { x: int; y: int }\n"
+                             "let p1 = { x = 3; y = 4 }\n"
+                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                             "print p2",
+                             "{ x = 4; y = 6 }"));
+}
+
+// Note: Test combining inlined match-expression functions with record update in the same handler
+// is omitted because it triggers a pre-existing TargetCodeGenerator stack management bug where
+// complex block structures from inlined pattern matching cause incorrect stack depth tracking
+// across basic block transitions (see: dead temporaries left on stack at block boundaries).

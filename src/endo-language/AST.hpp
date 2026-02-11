@@ -1509,17 +1509,83 @@ struct BlockExpr final: public Expr
 };
 
 // ============================================================================
-// F# Style - Deferred Features (Documented)
+// F# Style - Record Types
 // ============================================================================
-//
-// The following features are planned but not yet implemented:
-//
-// - Tuple literals: (a, b, c)
-// - Record literals: { name = "Alice"; age = 30 }
-// - Recursive functions: let rec factorial n = ...
-// - Pattern-based parameters: let add (x, y) = x + y
-//
-// Error reporting will be enhanced with suggestions in a future iteration.
-// ============================================================================
+
+/// A single field definition in a record type: `name: type`
+struct RecordFieldDef
+{
+    std::string name; ///< Field name
+    TypePtr type;     ///< Field type annotation
+};
+
+/// Record type definition statement: `type Person = { name: str; age: int }`
+///
+/// Defines a named record type with typed fields.
+struct RecordTypeDefStmt final: public Statement
+{
+    std::string name;                   ///< Type name (e.g., "Person")
+    std::vector<RecordFieldDef> fields; ///< Field definitions
+
+    RecordTypeDefStmt(std::string n, std::vector<RecordFieldDef> f): name(std::move(n)), fields(std::move(f))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// A single field initialization in a record literal: `name = expr`
+struct RecordFieldInit
+{
+    std::string name;            ///< Field name
+    std::unique_ptr<Expr> value; ///< Field value expression
+};
+
+/// Record literal expression: `{ name = "Alice"; age = 30 }`
+///
+/// Creates a new record value with the given field values.
+struct RecordExpr final: public Expr
+{
+    std::string typeName;                ///< Resolved record type name (empty if anonymous)
+    std::vector<RecordFieldInit> fields; ///< Field initializations
+
+    RecordExpr(std::string tn, std::vector<RecordFieldInit> f): typeName(std::move(tn)), fields(std::move(f))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Record update expression: `{ person with age = 31 }`
+///
+/// Creates a new record that copies the base record but overrides specified fields.
+struct RecordUpdateExpr final: public Expr
+{
+    std::unique_ptr<Expr> base;           ///< The record to copy
+    std::vector<RecordFieldInit> updates; ///< Fields to override
+
+    RecordUpdateExpr(std::unique_ptr<Expr> b, std::vector<RecordFieldInit> u):
+        base(std::move(b)), updates(std::move(u))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Field access expression: `person.name`
+///
+/// Accesses a named field on a record value.
+struct FieldAccessExpr final: public Expr
+{
+    std::unique_ptr<Expr> object; ///< The expression being accessed
+    std::string fieldName;        ///< The field name
+
+    FieldAccessExpr(std::unique_ptr<Expr> obj, std::string field):
+        object(std::move(obj)), fieldName(std::move(field))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
 
 } // namespace endo::ast

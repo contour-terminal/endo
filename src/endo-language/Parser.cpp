@@ -168,6 +168,9 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
         case Token::Let:
             // F# style let binding
             return parseLet();
+        case Token::Type:
+            // Record type definition: type Person = { name: str; age: int }
+            return parseTypeDefinition();
         case Token::Match: {
             // Standalone match expression as a statement
             _lexer.enterFSharpExpr();
@@ -2779,10 +2782,10 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume 'rec'
     }
 
-    // Check for destructuring pattern: let (x, y) = expr
-    if (_lexer.currentToken() == Token::RndOpen)
+    // Check for destructuring pattern: let (x, y) = expr  or  let { x; y } = expr
+    if (_lexer.currentToken() == Token::RndOpen || _lexer.currentToken() == Token::BraceOpen)
     {
-        auto pat = parseTuplePattern();
+        auto pat = (_lexer.currentToken() == Token::BraceOpen) ? parseRecordPattern() : parseTuplePattern();
         if (!pat)
         {
             _lexer.leaveFSharpExpr();
@@ -3489,11 +3492,34 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
     if (!expr)
         return nullptr;
 
-    // Handle postfix ? operator for error propagation
-    while (_lexer.currentToken() == Token::Question)
+    // Handle postfix operators: field access (.) and error propagation (?)
+    for (;;)
     {
-        _lexer.nextToken(); // consume '?'
-        expr = std::make_unique<ast::TryExpr>(std::move(expr));
+        if (_lexer.currentToken() == Token::Dot)
+        {
+            _lexer.nextToken(); // consume '.'
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a field name after '.'" },
+                                                   currentContextSnippet(),
+                                                   "Expected field name after '.', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            auto fieldName = _lexer.currentLiteral();
+            _lexer.nextToken(); // consume field name
+            expr = std::make_unique<ast::FieldAccessExpr>(std::move(expr), std::move(fieldName));
+        }
+        else if (_lexer.currentToken() == Token::Question)
+        {
+            _lexer.nextToken(); // consume '?'
+            expr = std::make_unique<ast::TryExpr>(std::move(expr));
+        }
+        else
+        {
+            break;
+        }
     }
     return expr;
 }
@@ -3674,6 +3700,386 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
     }
 
     return std::make_unique<ast::ShellCommandExpr>(std::move(command));
+}
+
+std::unique_ptr<ast::RecordTypeDefStmt> Parser::parseTypeDefinition()
+{
+    TRACE_SCOPE("parseTypeDefinition");
+
+    _lexer.nextToken(); // consume 'type'
+
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a type name" },
+                                           currentContextSnippet(),
+                                           "Expected type name after 'type', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    auto typeName = _lexer.currentLiteral();
+    _lexer.nextToken(); // consume type name
+
+    if (_lexer.currentToken() != Token::Equal)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '=' after type name" },
+                                           currentContextSnippet(),
+                                           "Expected '=' after type name '{}', got '{}'",
+                                           typeName,
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.enterFSharpExpr();
+    _lexer.nextToken(); // consume '='
+
+    if (_lexer.currentToken() != Token::BraceOpen)
+    {
+        _lexer.leaveFSharpExpr();
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '{' to start record field definitions" },
+                                           currentContextSnippet(),
+                                           "Expected '{{' after '=', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '{'
+    consumeNewlines();
+
+    std::vector<ast::RecordFieldDef> fields;
+
+    while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+    {
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide a field name" },
+                                               currentContextSnippet(),
+                                               "Expected field name, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        auto fieldName = _lexer.currentLiteral();
+        _lexer.nextToken(); // consume field name
+
+        if (_lexer.currentToken() != Token::Colon)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add ':' and type after field name" },
+                                               currentContextSnippet(),
+                                               "Expected ':' after field name '{}', got '{}'",
+                                               fieldName,
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ':'
+
+        auto fieldType = parseType();
+        if (!fieldType)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        fields.push_back(ast::RecordFieldDef { std::move(fieldName), std::move(fieldType) });
+
+        // Consume separator: semicolon or newline
+        if (_lexer.currentToken() == Token::Semicolon)
+            _lexer.nextToken();
+        consumeNewlines();
+    }
+
+    if (_lexer.currentToken() != Token::BraceClose)
+    {
+        _lexer.leaveFSharpExpr();
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing '}'" },
+                                           currentContextSnippet(),
+                                           "Expected '}}' at end of record type definition, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '}'
+    _lexer.leaveFSharpExpr();
+
+    // Register the record type for later use in record literal resolution
+    std::vector<std::string> fieldNames;
+    fieldNames.reserve(fields.size());
+    for (auto const& f: fields)
+        fieldNames.push_back(f.name);
+    _knownRecordTypes[typeName] = std::move(fieldNames);
+
+    return std::make_unique<ast::RecordTypeDefStmt>(std::move(typeName), std::move(fields));
+}
+
+std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
+{
+    TRACE_SCOPE("parseBlockExprOrRecord");
+
+    // We're at '{'. We need to disambiguate:
+    // - Record literal: { name = "Alice"; age = 30 }
+    // - Record update:  { expr with field = val; ... }
+    // - Block expression: { let x = 1; x + 2 } or { expr; expr }
+
+    // Save current position for backtracking
+    auto savedToken = _lexer.currentToken();
+    auto savedLiteral = _lexer.currentLiteral();
+    auto savedRange = _lexer.currentRange();
+
+    _lexer.nextToken(); // consume '{'
+    consumeNewlines();
+
+    // If we see 'let', it's definitely a block expression
+    if (_lexer.currentToken() == Token::Let)
+    {
+        // Push '{' back isn't needed since parseBlockExpr consumed it
+        // But parseBlockExpr expects '{' already consumed, which we did
+        // Continue directly with block expression parsing logic
+        std::vector<std::unique_ptr<ast::Statement>> statements;
+
+        while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+        {
+            if (_lexer.currentToken() == Token::Let)
+            {
+                auto let = parseLet();
+                if (!let)
+                    return nullptr;
+                statements.push_back(std::move(let));
+                consumeNewlines();
+                continue;
+            }
+
+            auto expr = parseFSharpExpr();
+            if (!expr)
+                return nullptr;
+
+            consumeNewlines();
+            if (_lexer.currentToken() == Token::BraceClose)
+            {
+                _lexer.nextToken(); // consume '}'
+                return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+            }
+
+            statements.push_back(std::make_unique<ast::ExprStmt>(std::move(expr)));
+            consumeNewlines();
+        }
+
+        if (_lexer.currentToken() != Token::BraceClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a closing '}'" },
+                                               currentContextSnippet(),
+                                               "Expected '}}' at end of block expression, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '}'
+        return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
+    }
+
+    // Check for record literal: Identifier followed by '='
+    if (_lexer.currentToken() == Token::Identifier)
+    {
+        auto peekIdent = _lexer.currentLiteral();
+        auto peekRange = _lexer.currentRange();
+        _lexer.nextToken(); // consume identifier
+
+        if (_lexer.currentToken() == Token::Equal)
+        {
+            // This is a record literal: { name = expr; ... }
+            _lexer.nextToken(); // consume '='
+            auto firstValue = parseFSharpExpr();
+            if (!firstValue)
+                return nullptr;
+
+            std::vector<ast::RecordFieldInit> fields;
+            fields.push_back(ast::RecordFieldInit { std::move(peekIdent), std::move(firstValue) });
+
+            // Consume separator
+            if (_lexer.currentToken() == Token::Semicolon)
+                _lexer.nextToken();
+            consumeNewlines();
+
+            // Parse remaining fields
+            while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+            {
+                if (_lexer.currentToken() != Token::Identifier)
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Provide a field name" },
+                                                       currentContextSnippet(),
+                                                       "Expected field name in record literal, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return nullptr;
+                }
+                auto fieldName = _lexer.currentLiteral();
+                _lexer.nextToken(); // consume field name
+
+                if (_lexer.currentToken() != Token::Equal)
+                {
+                    _report.syntaxErrorWithSuggestions(
+                        currentLocation(),
+                        { "Add '=' after field name" },
+                        currentContextSnippet(),
+                        "Expected '=' after field name '{}' in record literal, got '{}'",
+                        fieldName,
+                        _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume '='
+
+                auto fieldValue = parseFSharpExpr();
+                if (!fieldValue)
+                    return nullptr;
+
+                fields.push_back(ast::RecordFieldInit { std::move(fieldName), std::move(fieldValue) });
+
+                if (_lexer.currentToken() == Token::Semicolon)
+                    _lexer.nextToken();
+                consumeNewlines();
+            }
+
+            if (_lexer.currentToken() != Token::BraceClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add a closing '}'" },
+                                                   currentContextSnippet(),
+                                                   "Expected '}}' at end of record literal, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume '}'
+
+            // Resolve the record type name by matching field names
+            std::string typeName;
+            std::vector<std::string> fieldNames;
+            for (auto const& f: fields)
+                fieldNames.push_back(f.name);
+
+            for (auto const& [name, registeredFields]: _knownRecordTypes)
+            {
+                if (registeredFields == fieldNames)
+                {
+                    typeName = name;
+                    break;
+                }
+            }
+
+            return std::make_unique<ast::RecordExpr>(std::move(typeName), std::move(fields));
+        }
+
+        if (_lexer.currentToken() == Token::With)
+        {
+            // Record update: { identifier with field = val; ... }
+            // The identifier is a variable name referencing a record
+            auto baseExpr = std::make_unique<ast::IdentifierExpr>(std::move(peekIdent));
+
+            _lexer.nextToken(); // consume 'with'
+            consumeNewlines();
+
+            std::vector<ast::RecordFieldInit> updates;
+
+            while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+            {
+                if (_lexer.currentToken() != Token::Identifier)
+                {
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Provide a field name" },
+                                                       currentContextSnippet(),
+                                                       "Expected field name in record update, got '{}'",
+                                                       _lexer.currentLiteral());
+                    return nullptr;
+                }
+                auto fieldName = _lexer.currentLiteral();
+                _lexer.nextToken(); // consume field name
+
+                if (_lexer.currentToken() != Token::Equal)
+                {
+                    _report.syntaxErrorWithSuggestions(
+                        currentLocation(),
+                        { "Add '=' after field name" },
+                        currentContextSnippet(),
+                        "Expected '=' after field name '{}' in record update, got '{}'",
+                        fieldName,
+                        _lexer.currentLiteral());
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume '='
+
+                auto fieldValue = parseFSharpExpr();
+                if (!fieldValue)
+                    return nullptr;
+
+                updates.push_back(ast::RecordFieldInit { std::move(fieldName), std::move(fieldValue) });
+
+                if (_lexer.currentToken() == Token::Semicolon)
+                    _lexer.nextToken();
+                consumeNewlines();
+            }
+
+            if (_lexer.currentToken() != Token::BraceClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add a closing '}'" },
+                                                   currentContextSnippet(),
+                                                   "Expected '}}' at end of record update, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume '}'
+
+            return std::make_unique<ast::RecordUpdateExpr>(std::move(baseExpr), std::move(updates));
+        }
+
+        // Neither '=' nor 'with' after identifier — this is a block expression.
+        // Push back the consumed identifier and fall through to block parsing.
+        _lexer.pushBackToken(Token::Identifier, std::move(peekIdent), peekRange);
+    }
+
+    // Fall through to block expression parsing.
+    // The '{' was already consumed, so we do inline block parsing.
+    std::vector<std::unique_ptr<ast::Statement>> statements;
+
+    while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+    {
+        if (_lexer.currentToken() == Token::Let)
+        {
+            auto let = parseLet();
+            if (!let)
+                return nullptr;
+            statements.push_back(std::move(let));
+            consumeNewlines();
+            continue;
+        }
+
+        auto expr = parseFSharpExpr();
+        if (!expr)
+            return nullptr;
+
+        consumeNewlines();
+        if (_lexer.currentToken() == Token::BraceClose)
+        {
+            _lexer.nextToken(); // consume '}'
+            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+        }
+
+        statements.push_back(std::make_unique<ast::ExprStmt>(std::move(expr)));
+        consumeNewlines();
+    }
+
+    if (_lexer.currentToken() != Token::BraceClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing '}'" },
+                                           currentContextSnippet(),
+                                           "Expected '}}' at end of block expression, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '}'
+    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
 }
 
 std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
@@ -3934,8 +4340,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         }
 
         case Token::BraceOpen: {
-            // Block expression: { let x = 1; x + 2 }
-            return parseBlockExpr();
+            // Block expression, record literal, or record update
+            return parseBlockExprOrRecord();
         }
 
         case Token::Ampersand: {
@@ -5188,7 +5594,8 @@ bool Parser::canStartPattern() const
         case Token::ResultOk:
         case Token::ResultError:
         case Token::Mut:
-        case Token::BracketOpen: return true;
+        case Token::BracketOpen:
+        case Token::BraceOpen: return true;
         default: return false;
     }
 }
@@ -5304,6 +5711,10 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
         case Token::BracketOpen:
             // List pattern: [a; b; c] or []
             return parseListPattern();
+
+        case Token::BraceOpen:
+            // Record pattern: { name; age } or { name = n; _ }
+            return parseRecordPattern();
 
         case Token::Mut: {
             // Mutable variable pattern: mut x
@@ -5535,11 +5946,69 @@ std::unique_ptr<pattern::Pattern> Parser::parseListPattern()
 std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
 {
     TRACE_SCOPE("parseRecordPattern");
-    // Record pattern parsing requires '{' and '}' tokens which aren't in the lexer
-    // For now, report an error suggesting this feature needs lexer extension
-    _report.syntaxErrorWithSuggestions(
-        currentLocation(), {}, currentContextSnippet(), "Record patterns are not yet supported");
-    return nullptr;
+
+    _lexer.nextToken(); // consume '{'
+    consumeNewlines();
+
+    std::vector<pattern::FieldPattern> fields;
+    auto hasWildcard = false;
+
+    while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+    {
+        // Check for wildcard: _
+        if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "_")
+        {
+            hasWildcard = true;
+            _lexer.nextToken(); // consume '_'
+        }
+        else if (_lexer.currentToken() == Token::Identifier)
+        {
+            auto fieldName = _lexer.currentLiteral();
+            _lexer.nextToken(); // consume field name
+
+            if (_lexer.currentToken() == Token::Equal)
+            {
+                // Explicit binding: name = pattern
+                _lexer.nextToken(); // consume '='
+                auto pat = parsePattern();
+                if (!pat)
+                    return nullptr;
+                fields.push_back(pattern::FieldPattern { std::move(fieldName), std::move(pat) });
+            }
+            else
+            {
+                // Punning: { name } means { name = name }
+                fields.push_back(pattern::FieldPattern { std::move(fieldName), nullptr });
+            }
+        }
+        else
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide a field name or '_'" },
+                                               currentContextSnippet(),
+                                               "Expected field name in record pattern, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+
+        // Consume separator: semicolon or newline
+        if (_lexer.currentToken() == Token::Semicolon)
+            _lexer.nextToken();
+        consumeNewlines();
+    }
+
+    if (_lexer.currentToken() != Token::BraceClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add a closing '}'" },
+                                           currentContextSnippet(),
+                                           "Expected '}}' at end of record pattern, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume '}'
+
+    return std::make_unique<pattern::RecordPattern>(std::move(fields), hasWildcard);
 }
 
 } // namespace endo

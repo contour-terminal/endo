@@ -65,6 +65,13 @@ class PatternIRGenerator final: public pattern::PatternVisitor
         _bindingStorage = std::move(storage);
     }
 
+    /// Sets the field-name-to-slot-offset mapping for record pattern matching.
+    /// Must be called before compiling a pattern that contains a RecordPattern.
+    void setRecordFieldOffsets(std::unordered_map<std::string, uint8_t> offsets)
+    {
+        _recordFieldOffsets = std::move(offsets);
+    }
+
   private:
     // Pattern visitor implementations
     void visit(pattern::LiteralPattern const& pat) override;
@@ -87,6 +94,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     std::vector<Binding> _bindings;
     std::unordered_map<std::string, CoreVM::AllocaInstr*> _bindingStorage; ///< Pre-allocated alloca storage
     bool _collectOnly = false; ///< When true, only collect bindings without emitting IR
+    std::unordered_map<std::string, uint8_t> _recordFieldOffsets; ///< Field name → slot offset for records
 };
 
 } // namespace endo

@@ -965,4 +965,55 @@ void ASTPrinter::visit(BlockExpr const& node)
     _result += " }";
 }
 
+void ASTPrinter::visit(RecordTypeDefStmt const& node)
+{
+    _result += std::format("type {} = {{ ", node.name);
+    for (size_t i = 0; i < node.fields.size(); ++i)
+    {
+        if (i > 0)
+            _result += "; ";
+        _result += node.fields[i].name;
+        _result += ": ";
+        _result += endo::toString(node.fields[i].type);
+    }
+    _result += " }";
+}
+
+void ASTPrinter::visit(RecordExpr const& node)
+{
+    _result += "{ ";
+    for (size_t i = 0; i < node.fields.size(); ++i)
+    {
+        if (i > 0)
+            _result += "; ";
+        _result += node.fields[i].name;
+        _result += " = ";
+        node.fields[i].value->accept(*this);
+    }
+    _result += " }";
+}
+
+void ASTPrinter::visit(RecordUpdateExpr const& node)
+{
+    _result += "{ ";
+    node.base->accept(*this);
+    _result += " with ";
+    for (size_t i = 0; i < node.updates.size(); ++i)
+    {
+        if (i > 0)
+            _result += "; ";
+        _result += node.updates[i].name;
+        _result += " = ";
+        node.updates[i].value->accept(*this);
+    }
+    _result += " }";
+}
+
+void ASTPrinter::visit(FieldAccessExpr const& node)
+{
+    node.object->accept(*this);
+    _result += ".";
+    _result += node.fieldName;
+}
+
 } // namespace endo::ast

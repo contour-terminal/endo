@@ -135,6 +135,34 @@ TestRuntime::TestRuntime()
             {
                 args.setResult(args.caller()->newString(listToString(obj)));
             }
+            else if (obj && obj->type->kind == CoreVM::TypeKind::Product
+                     && obj->type->id != CoreVM::BuiltinTypeId::Tuple2
+                     && obj->type->id != CoreVM::BuiltinTypeId::Tuple3)
+            {
+                // Record type: format as { field1 = val1; field2 = val2 }
+                std::string result = "{ ";
+                for (size_t i = 0; i < obj->type->fields.size(); ++i)
+                {
+                    if (i > 0)
+                        result += "; ";
+                    result += obj->type->fields[i].name;
+                    result += " = ";
+                    auto slotVal = obj->getSlot(static_cast<uint8_t>(i));
+                    switch (obj->type->fields[i].type)
+                    {
+                        case CoreVM::LiteralType::String: {
+                            auto const* str =
+                                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
+                            result += str ? *str : "(null)";
+                            break;
+                        }
+                        case CoreVM::LiteralType::Boolean: result += slotVal ? "true" : "false"; break;
+                        default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
+                    }
+                }
+                result += " }";
+                args.setResult(args.caller()->newString(result));
+            }
             else
             {
                 // Fallback: print as number

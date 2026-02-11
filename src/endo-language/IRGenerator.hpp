@@ -174,6 +174,10 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::FStringExpr const& node) override;
     void visit(ast::UnitExpr const& node) override;
     void visit(ast::BlockExpr const& node) override;
+    void visit(ast::RecordTypeDefStmt const& node) override;
+    void visit(ast::RecordExpr const& node) override;
+    void visit(ast::RecordUpdateExpr const& node) override;
+    void visit(ast::FieldAccessExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -495,6 +499,25 @@ class IRGenerator final: public ast::Visitor
 
     /// Retrieves the inner object type ID annotation for a value, if any.
     [[nodiscard]] std::optional<uint16_t> getInnerObjectTypeId(CoreVM::Value* val) const;
+
+    /// Tracks registered record type definitions.
+    struct RecordTypeInfo
+    {
+        uint16_t typeId;                       ///< Assigned type ID
+        std::string name;                      ///< Type name
+        std::vector<CoreVM::FieldInfo> fields; ///< Field definitions (name + offset)
+        std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes; ///< Field name → VM literal type
+    };
+
+    /// Maps record type names to their metadata.
+    std::unordered_map<std::string, RecordTypeInfo> _recordTypes;
+
+    /// Looks up a record type by name, returning nullptr if not found.
+    [[nodiscard]] RecordTypeInfo const* lookupRecordType(std::string const& name) const;
+
+    /// Resolves a record type from a set of field names (for anonymous record literals).
+    [[nodiscard]] RecordTypeInfo const* resolveRecordTypeByFields(
+        std::vector<std::string> const& fieldNames) const;
 };
 
 } // namespace endo

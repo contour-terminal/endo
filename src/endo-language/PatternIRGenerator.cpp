@@ -433,12 +433,95 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
     _successBlock = finalSuccess;
 }
 
-void PatternIRGenerator::visit(pattern::RecordPattern const&)
+void PatternIRGenerator::visit(pattern::RecordPattern const& pat)
 {
-    // Records require runtime representation
     if (_collectOnly)
+    {
+        // Collect bindings from field sub-patterns
+        for (auto const& field: pat.fields)
+        {
+            if (field.pattern)
+            {
+                // Explicit binding: { name = n } — collect from sub-pattern
+                field.pattern->accept(*this);
+            }
+            else
+            {
+                // Punning: { name } — the field name is the binding name
+                _bindings.push_back({ field.name, _scrutinee });
+            }
+        }
         return;
-    _builder.createBr(_failureBlock);
+    }
+
+    // Record pattern matching: extract each named field by its slot offset,
+    // then recursively match the sub-pattern (or bind directly for punning).
+    // This follows the same chain pattern as TuplePattern.
+    auto* currentScrutinee = _scrutinee;
+    auto* savedStorage = _scrutineeStorage;
+    auto* finalSuccess = _successBlock;
+
+    for (size_t i = 0; i < pat.fields.size(); ++i)
+    {
+        auto const& field = pat.fields[i];
+
+        // Look up the slot offset for this field name
+        auto it = _recordFieldOffsets.find(field.name);
+        if (it == _recordFieldOffsets.end())
+        {
+            // Unknown field — fail match
+            _builder.createBr(_failureBlock);
+            return;
+        }
+        auto slotOffset = it->second;
+
+        // Always reload the scrutinee from storage to avoid leaving dead temporaries on the
+        // stack across block boundaries (which causes stack corruption in the TargetCodeGenerator).
+        auto* recordValue =
+            savedStorage ? _builder.createLoad(savedStorage, "record.reload") : currentScrutinee;
+
+        // Extract the field value from the record object
+        auto* fieldValue = _builder.createObjGetSlot(
+            recordValue, _builder.get(CoreVM::CoreNumber(slotOffset)), "record.field." + field.name);
+
+        // Create a success block for this field's sub-pattern (chains to next field or final success)
+        auto* subSuccess = (i + 1 < pat.fields.size())
+                               ? _builder.createBlock("record.match." + std::to_string(i + 1))
+                               : finalSuccess;
+
+        if (field.pattern)
+        {
+            // Explicit binding: { name = pattern } — recursively match
+            _scrutinee = fieldValue;
+            _scrutineeStorage = nullptr;
+            _successBlock = subSuccess;
+            field.pattern->accept(*this);
+        }
+        else
+        {
+            // Punning: { name } — bind the field value directly to the field name
+            _bindings.push_back({ field.name, fieldValue });
+
+            // Store in pre-allocated storage if available
+            if (auto storageIt = _bindingStorage.find(field.name); storageIt != _bindingStorage.end())
+                _builder.createStore(storageIt->second, fieldValue, field.name + ".pat.store");
+
+            _builder.createBr(subSuccess);
+        }
+
+        // Set insert point for next field's check
+        if (i + 1 < pat.fields.size())
+            _builder.setInsertPoint(subSuccess);
+    }
+
+    // If no fields at all (empty pattern with wildcard), just match
+    if (pat.fields.empty())
+        _builder.createBr(finalSuccess);
+
+    // Restore state
+    _scrutinee = currentScrutinee;
+    _scrutineeStorage = savedStorage;
+    _successBlock = finalSuccess;
 }
 
 void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)

@@ -1738,3 +1738,39 @@ TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.mixed_params")
 {
     CHECK(parseAndPrintAST("let f (x: int) y = x + y") == "let f (x: int) y = (x + y)");
 }
+
+// =============================================================================
+// Record Types
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.record_type_definition")
+{
+    CHECK(parseAndPrintAST("type Person = { name: str; age: int }")
+          == "type Person = { name: str; age: int }");
+}
+
+TEST_CASE("Parser.FSharp.record_literal")
+{
+    CHECK(parseAndPrintAST("let p = { name = 1; age = 30 }") == "let p = { name = 1; age = 30 }");
+}
+
+TEST_CASE("Parser.FSharp.record_field_access")
+{
+    CHECK(parseAndPrintAST("let x = p.name") == "let x = p.name");
+}
+
+TEST_CASE("Parser.FSharp.record_chained_field_access")
+{
+    CHECK(parseAndPrintAST("let x = emp.address.city") == "let x = emp.address.city");
+}
+
+TEST_CASE("Parser.FSharp.record_update")
+{
+    CHECK(parseAndPrintAST("let q = { p with age = 31 }") == "let q = { p with age = 31 }");
+}
+
+TEST_CASE("Parser.FSharp.block_expr_still_works")
+{
+    // Ensure block expression disambiguation still works
+    CHECK(parseAndPrintAST("let r = { let x = 1; x + 2 }") == "let r = { let x = 1; (x + 2) }");
+}
