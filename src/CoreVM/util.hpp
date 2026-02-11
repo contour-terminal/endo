@@ -661,7 +661,15 @@ namespace std
 template <>
 struct hash<::CoreVM::util::IPAddress>
 {
-    size_t operator()(const ::CoreVM::util::IPAddress& v) const { return *(uint32_t*) (v.data()); }
+    size_t operator()(const ::CoreVM::util::IPAddress& v) const
+    {
+        auto const* bytes = static_cast<const uint8_t*>(v.data());
+        auto const len = v.size();
+        size_t h = 0;
+        for (size_t i = 0; i < len; ++i)
+            h = h * 131 + bytes[i];
+        return h;
+    }
 };
 } // namespace std
 

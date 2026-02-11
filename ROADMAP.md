@@ -123,6 +123,17 @@ Windows support.
 - [x] Deduplicate `findCommonPrefix` between `shell::Completer` and `tui::Completer` (delegate to tui)
 - [x] Remove unused `lsp::containsPosition` (duplicate of `endo::containsPosition` in HoverInfo.hpp)
 
+### 0.5 CoreVM TODO Cleanup ✅
+
+**Status:** Complete
+
+**Tasks:**
+- [x] Remove obsolete `// TODO: revive stack/imm opcodes` in TargetCodeGenerator (no such opcodes exist)
+- [x] Remove obsolete `// TODO emitInstr(Opcode::RLOAD, ...)` in TargetCodeGenerator (ILOAD via makeRegExp is the chosen design)
+- [x] Fix `Cidr` and `IPAddress` hash functions to properly hash all bytes (was only hashing first 4 bytes, wrong for IPv6)
+- [x] Replace misleading TODO in `Instruction.cpp` CALL stack impact with explanatory comment
+- [x] Remove obsolete `// TODO _unresolvedSymbols.push_back(...)` in Program.cpp (field doesn't exist)
+
 ---
 
 ## Milestone 1: Core Language Features

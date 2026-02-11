@@ -188,7 +188,7 @@ static InstructionInfo instructionInfos[] = {
 
     // user-defined function calls
     IIDEF(UCALL, II, 0, Void),  // stack change handled dynamically (pops argc, pushes 1 return value)
-    IIDEF(URET, V, 0, Void),   // stack change handled dynamically (returns to caller frame)
+    IIDEF(URET, V, 0, Void),    // stack change handled dynamically (returns to caller frame)
     IIDEF(UTCALL, II, 0, Void), // stack change handled dynamically (tail call, reuses frame)
 };
 
@@ -203,8 +203,7 @@ int getStackChange(Instruction instr)
         case Opcode::DISCARD: return -operandA(instr);
         case Opcode::HANDLER: return -operandB(instr);
         case Opcode::CALL:
-            // TODO: handle void/non-void functions properly
-            // return 1 - operandB(instr);
+            // operandC is 1 for non-void (pushes return value) or 0 for void
             return operandC(instr) - operandB(instr);
         case Opcode::UCALL:
             // Pops argc args, pushes 1 return value: net = 1 - argc

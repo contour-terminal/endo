@@ -258,7 +258,6 @@ void TargetCodeGenerator::emitBinary(Instr& binaryInstr, Opcode opcode)
 void TargetCodeGenerator::emitBinaryAssoc(Instr& binaryInstr, Opcode opcode)
 {
     // TODO: switch lhs and rhs if lhs is const and rhs is not
-    // TODO: revive stack/imm opcodes
     emitBinary(binaryInstr, opcode);
 }
 
@@ -577,7 +576,6 @@ void TargetCodeGenerator::emitLoad(Value* value)
     // const regex
     if (auto* re = dynamic_cast<ConstantRegExp*>(value))
     {
-        // TODO emitInstr(Opcode::RLOAD, re->get());
         emitInstr(Opcode::ILOAD, _cp.makeRegExp(re->get()));
         changeStack(0, value);
         return;

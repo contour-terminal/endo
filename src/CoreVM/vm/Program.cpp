@@ -157,7 +157,6 @@ bool Program::link(Runtime* runtime, diagnostics::Report* report)
         {
             _nativeHandlers[i] = nullptr;
             report->linkError("Unresolved symbol to native handler signature: {}", signature);
-            // TODO _unresolvedSymbols.push_back(signature);
             errors++;
         }
         ++i;

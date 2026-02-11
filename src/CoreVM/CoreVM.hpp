@@ -3747,8 +3747,12 @@ struct hash<CoreVM::util::Cidr>
 {
     size_t operator()(const CoreVM::util::Cidr& v) const noexcept
     {
-        // TODO: let it honor IPv6 better
-        return static_cast<size_t>(*(uint32_t*) (v.address().data()) + v.prefix());
+        auto const* bytes = static_cast<const uint8_t*>(v.address().data());
+        auto const len = v.address().size();
+        size_t h = 0;
+        for (size_t i = 0; i < len; ++i)
+            h = h * 131 + bytes[i];
+        return h ^ static_cast<size_t>(v.prefix());
     }
 };
 
