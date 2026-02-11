@@ -558,11 +558,23 @@ src/
     - [x] REPL-persisted functions now re-compute captures and compile as handlers at prompt start
     - [x] Closure captures from previous prompts now work correctly (persisted values in scope)
     - [x] 3 session handler tests (recursive, closure, multiple calls)
-    - [x] Old AST inlining paths retained as fallback for functions without type annotations (requires type inference to remove)
+    - [x] Old AST inlining paths retained as fallback for functions without type annotations or with non-primitive inferred types
+  - [x] Hindley-Milner type inference (Algorithm W) as separate pre-pass
+    - [x] `TypeInferencer` class runs before IR generation, producing `InferenceResult` map
+    - [x] Full Algorithm W: literals, identifiers, binary/unary ops, if-then-else, lambda, application, pipeline, let-in, match, block, list, cons, concat, range, tuple, option, result, try, try-with, try-finally, list comprehension, shell expressions
+    - [x] Pattern inference: literal, variable, wildcard, tuple, list, cons, constructor, as, or, guarded, record patterns
+    - [x] Statement inference: compound, expr, let binding (function, destructuring, simple), mutable assignment
+    - [x] Ad-hoc overloading: `+` with string/float detection, comparison ops, logical ops
+    - [x] Recursive and mutual recursive function inference
+    - [x] Let-polymorphism via `generalize`/`instantiate`
+    - [x] Integration: primitive types (int, float, bool, str, unit) applied to function parameters, enabling handler compilation without explicit annotations
+    - [x] Complex types (list, option, result, function, tuple) inferred but not applied (handler compilation limitations)
+    - [x] Extended `createStandardTypeEnv()` with print, println, string_length, int_of_string, string_of_int, not, ::, @, ~-
+    - [x] 20 type inference tests (12 unit + 8 e2e) covering literals, operators, recursion, partial annotations, lambda, option, if-branches, factorial, identity, add, subtract, multiply, comparison, let-in, bool functions, typed-still-works, mixed annotations
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
-- Type inference uses Hindley-Milner algorithm with let-polymorphism
+- Type inference uses Hindley-Milner algorithm with let-polymorphism (`TypeInferencer` pre-pass integrated into `IRGenerator::generate()`)
 - `let` keyword unambiguously starts F# style (bash style uses `VAR=value` without spaces)
 - `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
 - Dual semantics: expression context captures output, statement context prints to terminal

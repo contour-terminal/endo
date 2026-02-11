@@ -48,6 +48,14 @@ This document tracks the implementation status of F# language features as define
 - [x] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
 - [x] Lambda annotations: `fun (x: int) -> x + 1`
 
+### Type Inference
+- [x] Hindley-Milner type inference (Algorithm W) as separate pre-pass before IR generation
+- [x] Primitive type inference: `int`, `float`, `bool`, `str`, `unit` inferred from usage context
+- [x] Operator-driven inference: `x + y` infers `int`, `x +. y` infers `float`, `x ++ y` infers `str`
+- [x] Recursive function inference: `let rec fact n = ...` infers `n: int` from body
+- [x] Let-polymorphism: `let id x = x` can be used at multiple types
+- [~] Complex type inference: list, option, result, function types inferred but not yet applied to compilation (requires handler compilation improvements)
+
 ## Functions
 
 - [x] Single-parameter functions: `let double x = x * 2`
