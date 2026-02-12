@@ -142,7 +142,7 @@ This document tracks the implementation status of F# language features as define
 ### Special
 - [x] Error propagation: `?`
 - [ ] Optional chaining: `?.`
-- [ ] Option default: `?|`
+- [x] Option default: `?|`
 
 ## Error Handling
 
@@ -274,7 +274,7 @@ Consult this section to determine what to work on next.
 
 ### Phase 6 — Remaining Operators and Small Features
 - [ ] Optional chaining `?.` — desugar to match on Option
-- [ ] Option default `?|` — desugar to match with default value
+- [x] Option default `?|` — desugar to match with default value
 - [ ] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` as builtins
 - [ ] For loop destructuring: `for (name, value) in entries do ... done`
 
