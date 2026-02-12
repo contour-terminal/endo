@@ -29,9 +29,9 @@
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
-#include "PsCommand.hpp"
 #include "ProcessGroup.hpp"
 #include "Prompt.hpp"
+#include "PsCommand.hpp"
 #include "TTY.hpp"
 #include <endo-language/ASTPrinter.hpp>
 #include <endo-language/IRGenerator.hpp>
@@ -557,6 +557,9 @@ Shell::Shell(TTY& tty, Environment& env):
 
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
+
+    // Seed built-in record type fields for completion support
+    _fsharpState.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
 
     // Initialize completion system
     completer = std::make_unique<Completer>(_env, history, _fsharpState);

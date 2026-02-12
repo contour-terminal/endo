@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
 
-#include <tui/completer/Completer.hpp>
-
 #include <algorithm>
+
+#include <tui/completer/Completer.hpp>
 
 namespace endo
 {
@@ -12,6 +12,7 @@ Completer::Completer(Environment const& env, History const& history, FSharpPersi
 {
     // Register default providers in priority order
     _providers.push_back(std::make_unique<CommandCompleter>(env));
+    _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
     _providers.push_back(std::make_unique<OptionCompleter>());

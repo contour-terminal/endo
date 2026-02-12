@@ -12,6 +12,8 @@ add_library(endo-shell STATIC
     CompletionProvider.hpp
     CompletionProviders/CommandCompleter.hpp
     CompletionProviders/CommandCompleter.cpp
+    CompletionProviders/FSharpCompleter.hpp
+    CompletionProviders/FSharpCompleter.cpp
     CompletionProviders/FileCompleter.hpp
     CompletionProviders/FileCompleter.cpp
     CompletionProviders/HistoryCompleter.hpp
@@ -85,6 +87,7 @@ target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
 
 add_executable(test-endo-shell
     test_main.cpp
+    FSharpCompleter_test.cpp
     Shell_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp

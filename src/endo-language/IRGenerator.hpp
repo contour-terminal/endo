@@ -64,6 +64,9 @@ struct FSharpPersistentState
 
     /// AST nodes retained to keep PersistedFunction::body pointers valid.
     std::vector<std::unique_ptr<ast::Statement>> retainedASTs;
+
+    /// Record type field names for completion (type name -> ordered field names).
+    std::unordered_map<std::string, std::vector<std::string>> recordTypeFields;
 };
 
 /// Generates IR code from an AST.
@@ -560,6 +563,9 @@ class IRGenerator final: public ast::Visitor
 
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;
+
+    /// Optional persistent state pointer for REPL sessions (not owned).
+    FSharpPersistentState* _persistentState = nullptr;
 
     /// Type inference results from the pre-pass TypeInferencer.
     /// Maps function names to their inferred parameter and return types.

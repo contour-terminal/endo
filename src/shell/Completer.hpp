@@ -4,6 +4,7 @@
 #include <shell/CompletionContext.hpp>
 #include <shell/CompletionProvider.hpp>
 #include <shell/CompletionProviders/CommandCompleter.hpp>
+#include <shell/CompletionProviders/FSharpCompleter.hpp>
 #include <shell/CompletionProviders/FileCompleter.hpp>
 #include <shell/CompletionProviders/HistoryCompleter.hpp>
 #include <shell/CompletionProviders/LetBindingCompleter.hpp>

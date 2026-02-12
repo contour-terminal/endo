@@ -195,6 +195,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                                                          FSharpPersistentState* persistentState)
 {
     IRGenerator generator(report, runtime);
+    generator._persistentState = persistentState;
 
     generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
     generator._builder.setHandler(generator._builder.getHandler(GLOBAL_SCOPE_INIT_NAME));
@@ -7385,6 +7386,15 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     info.fields = fields;
     info.fieldTypes = std::move(fieldTypes);
     _recordTypes[node.name] = std::move(info);
+
+    // Persist record field names for completion support in the REPL
+    if (_persistentState)
+    {
+        std::vector<std::string> fieldNames;
+        for (auto const& field: node.fields)
+            fieldNames.push_back(field.name);
+        _persistentState->recordTypeFields[node.name] = std::move(fieldNames);
+    }
 
     // Register as a custom product type on the IR program so TargetCodeGenerator
     // can register it in the ConstantPool's TypeRegistry before execution.

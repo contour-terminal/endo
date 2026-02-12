@@ -609,6 +609,7 @@ The library includes:
 - [x] Design and implement completion popup UI (`CompletionPopup.cpp` - bordered list with scroll indicators)
 - [x] Integrate completion with Prompt (Tab/Ctrl+Space triggers, menu navigation, ghost text rendering)
 - [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
+- [x] Implement F# dot-access completion (`FSharpCompleter.cpp` — Option module methods, `_.field` record fields, `value.method`/`value.field` — 24 tests)
 
 **Implementation Notes:**
 - Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`, `FuzzyMatch`) in `src/tui/completer/` as pure TUI model
@@ -631,6 +632,7 @@ The library includes:
 - Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
 - Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.)
 - 39 completion-related tests covering Completer, CompletionPopup, and updateItems functionality
+- F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
 
 ### Phase 2.3.5: TUI Renderer Architecture
 
