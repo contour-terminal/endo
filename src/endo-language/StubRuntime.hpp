@@ -159,6 +159,26 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(dummyHandler);
 
+    runtime.registerFunction("list_sort")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_distinct")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_sort_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_group_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
     runtime.registerFunction("string_repeat")
         .param<CoreVM::CoreString>("str")
         .param<CoreVM::CoreNumber>("count")

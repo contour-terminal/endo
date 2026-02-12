@@ -227,6 +227,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         registerHOF("drop", { "__n", "__xs" }, "drop");
         registerHOF("zip", { "__xs", "__ys" }, "zip");
         registerHOF("flatten", { "__xss" }, "flatten");
+        registerHOF("sortBy", { "__f", "__xs" }, "sortBy");
+        registerHOF("groupBy", { "__f", "__xs" }, "groupBy");
+        registerHOF("sort", { "__xs" }, "sort");
+        registerHOF("distinct", { "__xs" }, "distinct");
     }
 
     // Pre-populate function table from persistent state (REPL session continuity)
@@ -7890,6 +7894,26 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         auto* listVal = _builder.createLoad(lookupFSharpVariable("__xss"), "flatten.xss");
         generateFlattenIR(listVal);
     }
+    else if (hofName == "sortBy")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "sortBy.xs");
+        generateSortByIR("__f", listVal);
+    }
+    else if (hofName == "groupBy")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "groupBy.xs");
+        generateGroupByIR("__f", listVal);
+    }
+    else if (hofName == "sort")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "sort.xs");
+        generateSortIR(listVal);
+    }
+    else if (hofName == "distinct")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "distinct.xs");
+        generateDistinctIR(listVal);
+    }
     else
     {
         reportTypeError("Unknown builtin HOF: {}", std::string_view(hofName));
@@ -9106,6 +9130,278 @@ void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
 
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "flatten.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateSortIR(CoreVM::Value* listValue)
+{
+    auto* callback = findCallback("list_sort(I)I");
+    if (!callback)
+    {
+        reportTypeError("sort: native callback 'list_sort' not found");
+        return;
+    }
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { listValue }, "sort.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateDistinctIR(CoreVM::Value* listValue)
+{
+    auto* callback = findCallback("list_distinct(I)I");
+    if (!callback)
+    {
+        reportTypeError("distinct: native callback 'list_distinct' not found");
+        return;
+    }
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { listValue }, "distinct.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Value* listValue)
+{
+    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+
+    // Resolve the key function
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+    auto const* func = lookupFSharpFunction(funcName);
+    if (!func)
+    {
+        reportTypeError("sortBy: function argument '{}' not found", std::string_view(funcParamName));
+        return;
+    }
+
+    // Phase 1: Iterate source list, call key function on each element, build reversed list of Tuple2(key,
+    // elem)
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "sortBy.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "sortBy.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem");
+
+    // Temp allocas for values that must survive ObjAlloc
+    auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.key.tmp");
+    auto* elemTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem.tmp2");
+    auto* tupleTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.tuple.tmp");
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc.tmp");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("sortBy.cond");
+    auto* bodyBlock = _builder.createBlock("sortBy.body");
+    auto* callBlock = _builder.createBlock("sortBy.call");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "sortBy.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "sortBy.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "sortBy.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, callBlock);
+
+    // Body: extract head, call key function, build Tuple2(key, elem), cons onto acc
+    _builder.setInsertPoint(bodyBlock);
+
+    // Extract head (elem)
+    auto* srcForHead = _builder.createLoad(srcStorage, "sortBy.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "sortBy.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source to tail
+    auto* srcForTail = _builder.createLoad(srcStorage, "sortBy.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "sortBy.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Call key function on element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "sortBy.elem.load");
+    generateFSharpCall(func, funcName, { elemLoad });
+    auto* keyValue = _result;
+    if (!keyValue)
+    {
+        reportTypeError("sortBy: failed to apply key function to element");
+        return;
+    }
+
+    // Store key and elem in temp allocas (must survive Tuple2 ObjAlloc)
+    _builder.createStore(keyTmp, keyValue);
+    auto* elemReload = _builder.createLoad(elemAlloca, "sortBy.elem.reload");
+    _builder.createStore(elemTmp2, elemReload);
+
+    // Build Tuple2(key, elem)
+    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "sortBy.tuple");
+    auto* keyReload = _builder.createLoad(keyTmp, "sortBy.key.reload");
+    tuple = _builder.createObjSetSlot(tuple, slot0, keyReload, "sortBy.tuple.key");
+    auto* elemFinal = _builder.createLoad(elemTmp2, "sortBy.elem.final");
+    tuple = _builder.createObjSetSlot(tuple, slot1, elemFinal, "sortBy.tuple.elem");
+    _builder.createStore(tupleTmp, tuple);
+
+    // Cons tuple onto accumulator
+    auto* accForCons = _builder.createLoad(accStorage, "sortBy.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    auto* tupleReload = _builder.createLoad(tupleTmp, "sortBy.tuple.reload");
+    auto* tupleStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.tuple.store.tmp");
+    _builder.createStore(tupleStoreTmp, tupleReload);
+    auto* accReloadPre = _builder.createLoad(accTmp, "sortBy.acc.reload.pre");
+    auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc.store.tmp");
+    _builder.createStore(accStoreTmp, accReloadPre);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "sortBy.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "sortBy.cons.tag");
+    auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "sortBy.tuple.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "sortBy.cons.head");
+    auto* accForSlot = _builder.createLoad(accStoreTmp, "sortBy.acc.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "sortBy.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Call native list_sort_pairs to sort by key and extract elements
+    _builder.setInsertPoint(callBlock);
+    auto* callback = findCallback("list_sort_pairs(I)I");
+    if (!callback)
+    {
+        reportTypeError("sortBy: native callback 'list_sort_pairs' not found");
+        return;
+    }
+    auto* accFinal = _builder.createLoad(accStorage, "sortBy.acc.final");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { accFinal }, "sortBy.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue)
+{
+    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+
+    // Resolve the key function
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+    auto const* func = lookupFSharpFunction(funcName);
+    if (!func)
+    {
+        reportTypeError("groupBy: function argument '{}' not found", std::string_view(funcParamName));
+        return;
+    }
+
+    // Phase 1: Iterate source list, call key function on each element, build reversed list of Tuple2(key,
+    // elem)
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "groupBy.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "groupBy.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.elem");
+
+    // Temp allocas for values that must survive ObjAlloc
+    auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.key.tmp");
+    auto* elemTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.elem.tmp2");
+    auto* tupleTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.tuple.tmp");
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc.tmp");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("groupBy.cond");
+    auto* bodyBlock = _builder.createBlock("groupBy.body");
+    auto* callBlock = _builder.createBlock("groupBy.call");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "groupBy.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "groupBy.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "groupBy.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, callBlock);
+
+    // Body: extract head, call key function, build Tuple2(key, elem), cons onto acc
+    _builder.setInsertPoint(bodyBlock);
+
+    // Extract head (elem)
+    auto* srcForHead = _builder.createLoad(srcStorage, "groupBy.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "groupBy.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source to tail
+    auto* srcForTail = _builder.createLoad(srcStorage, "groupBy.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "groupBy.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Call key function on element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "groupBy.elem.load");
+    generateFSharpCall(func, funcName, { elemLoad });
+    auto* keyValue = _result;
+    if (!keyValue)
+    {
+        reportTypeError("groupBy: failed to apply key function to element");
+        return;
+    }
+
+    // Store key and elem in temp allocas (must survive Tuple2 ObjAlloc)
+    _builder.createStore(keyTmp, keyValue);
+    auto* elemReload = _builder.createLoad(elemAlloca, "groupBy.elem.reload");
+    _builder.createStore(elemTmp2, elemReload);
+
+    // Build Tuple2(key, elem)
+    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "groupBy.tuple");
+    auto* keyReload = _builder.createLoad(keyTmp, "groupBy.key.reload");
+    tuple = _builder.createObjSetSlot(tuple, slot0, keyReload, "groupBy.tuple.key");
+    auto* elemFinal = _builder.createLoad(elemTmp2, "groupBy.elem.final");
+    tuple = _builder.createObjSetSlot(tuple, slot1, elemFinal, "groupBy.tuple.elem");
+    _builder.createStore(tupleTmp, tuple);
+
+    // Cons tuple onto accumulator
+    auto* accForCons = _builder.createLoad(accStorage, "groupBy.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    auto* tupleReload = _builder.createLoad(tupleTmp, "groupBy.tuple.reload");
+    auto* tupleStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.tuple.store.tmp");
+    _builder.createStore(tupleStoreTmp, tupleReload);
+    auto* accReloadPre = _builder.createLoad(accTmp, "groupBy.acc.reload.pre");
+    auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc.store.tmp");
+    _builder.createStore(accStoreTmp, accReloadPre);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "groupBy.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "groupBy.cons.tag");
+    auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "groupBy.tuple.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "groupBy.cons.head");
+    auto* accForSlot = _builder.createLoad(accStoreTmp, "groupBy.acc.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "groupBy.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Call native list_group_pairs to group by key
+    _builder.setInsertPoint(callBlock);
+    auto* callback = findCallback("list_group_pairs(I)I");
+    if (!callback)
+    {
+        reportTypeError("groupBy: native callback 'list_group_pairs' not found");
+        return;
+    }
+    auto* accFinal = _builder.createLoad(accStorage, "groupBy.acc.final");
+    _result =
+        _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { accFinal }, "groupBy.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 

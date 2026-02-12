@@ -5268,3 +5268,204 @@ TEST_CASE("IRGenerator.FSharp.optional_chain_with_let")
                              "print result",
                              "30"));
 }
+
+// =============================================================================
+// Higher-Order List Functions: sort
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_sort_basic")
+{
+    CHECK(executesWithOutput("print (sort [3; 1; 2])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_empty")
+{
+    CHECK(executesWithOutput("print (sort [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_single")
+{
+    CHECK(executesWithOutput("print (sort [42])", "[42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_already_sorted")
+{
+    CHECK(executesWithOutput("print (sort [1; 2; 3; 4; 5])", "[1; 2; 3; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_reverse_sorted")
+{
+    CHECK(executesWithOutput("print (sort [5; 4; 3; 2; 1])", "[1; 2; 3; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_duplicates")
+{
+    CHECK(executesWithOutput("print (sort [3; 1; 2; 1; 3])", "[1; 1; 2; 3; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_negative")
+{
+    CHECK(executesWithOutput("print (sort [3; -1; 0; -5; 2])", "[-5; -1; 0; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sort_pipeline")
+{
+    CHECK(executesWithOutput("print ([3; 1; 2] |> sort)", "[1; 2; 3]"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: distinct
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_basic")
+{
+    CHECK(executesWithOutput("print (distinct [1; 2; 3; 2; 1])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_no_dupes")
+{
+    CHECK(executesWithOutput("print (distinct [1; 2; 3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_all_same")
+{
+    CHECK(executesWithOutput("print (distinct [5; 5; 5; 5])", "[5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_empty")
+{
+    CHECK(executesWithOutput("print (distinct [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_single")
+{
+    CHECK(executesWithOutput("print (distinct [42])", "[42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_pipeline")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3; 2; 1] |> distinct)", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_distinct_preserves_order")
+{
+    CHECK(executesWithOutput("print (distinct [3; 1; 4; 1; 5; 9; 2; 6; 5; 3])", "[3; 1; 4; 5; 9; 2; 6]"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: sortBy
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_identity")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> x) [3; 1; 2])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_descending")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> 0 - x) [3; 1; 2])", "[3; 2; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_empty")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> x) [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_single")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> x) [42])", "[42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_already_sorted")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> x) [1; 2; 3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_duplicates")
+{
+    CHECK(executesWithOutput("print (sortBy (fun x -> x) [3; 1; 2; 1; 3])", "[1; 1; 2; 3; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_pipeline")
+{
+    CHECK(executesWithOutput("print ([3; 1; 2] |> sortBy (fun x -> x))", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_named_function")
+{
+    CHECK(executesWithOutput("let negate x = 0 - x\nprint (sortBy negate [3; 1; 2])", "[3; 2; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_stable")
+{
+    // stable_sort preserves relative order for equal keys
+    // x % 3: [5→2, 3→0, 1→1, 4→1, 2→2, 6→0] → group 0:[3,6], group 1:[1,4], group 2:[5,2]
+    CHECK(executesWithOutput("print (sortBy (fun x -> x % 3) [5; 3; 1; 4; 2; 6])", "[3; 6; 1; 4; 5; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_sortBy_partial")
+{
+    CHECK(executesWithOutput("let sortAsc = sortBy (fun x -> x)\nprint (sortAsc [3; 1; 2])", "[1; 2; 3]"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: groupBy
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_basic")
+{
+    CHECK(executesWithOutput("print (groupBy (fun x -> x % 2) [1; 2; 3; 4; 5])",
+                             "[(1, [1; 3; 5]); (0, [2; 4])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_identity")
+{
+    CHECK(executesWithOutput("print (groupBy (fun x -> x) [1; 2; 3])", "[(1, [1]); (2, [2]); (3, [3])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_empty")
+{
+    CHECK(executesWithOutput("print (groupBy (fun x -> x) [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_single")
+{
+    CHECK(executesWithOutput("print (groupBy (fun x -> x) [42])", "[(42, [42])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_all_same_key")
+{
+    CHECK(executesWithOutput("print (groupBy (fun x -> 0) [1; 2; 3])", "[(0, [1; 2; 3])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_pipeline")
+{
+    CHECK(
+        executesWithOutput("print ([1; 2; 3; 4] |> groupBy (fun x -> x % 2))", "[(1, [1; 3]); (0, [2; 4])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_named_function")
+{
+    CHECK(executesWithOutput("let parity x = x % 2\nprint (groupBy parity [1; 2; 3; 4])",
+                             "[(1, [1; 3]); (0, [2; 4])]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_groupBy_partial")
+{
+    CHECK(executesWithOutput("let byParity = groupBy (fun x -> x % 2)\nprint (byParity [1; 2; 3])",
+                             "[(1, [1; 3]); (0, [2])]"));
+}
+
+// =============================================================================
+// Composition tests: sort, distinct, sortBy, groupBy
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_sort_then_distinct")
+{
+    CHECK(executesWithOutput("print ([3; 1; 2; 1; 3] |> sort |> distinct)", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_then_sort")
+{
+    CHECK(executesWithOutput("print ([5; 3; 8; 1; 4] |> filter (fun x -> x > 2) |> sort)", "[3; 4; 5; 8]"));
+}

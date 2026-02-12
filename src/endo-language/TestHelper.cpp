@@ -5,6 +5,7 @@
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <algorithm>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -250,6 +251,173 @@ TestRuntime::TestRuntime()
                 cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(count));
+        });
+
+    // Register list_sort builtin: sorts list elements numerically (ascending)
+    runtime.registerFunction("list_sort")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+
+            // Collect elements
+            std::vector<int64_t> elements;
+            while (cur && cur->tag == 1)
+            {
+                elements.push_back(static_cast<int64_t>(cur->getSlot(0)));
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            // Sort ascending
+            std::ranges::sort(elements);
+
+            // Rebuild list right-to-left
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0; // Nil
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, static_cast<uint64_t>(*it));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // Register list_distinct builtin: removes duplicate elements preserving first-seen order
+    runtime.registerFunction("list_distinct")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+
+            // Collect elements preserving first-seen order
+            std::vector<int64_t> elements;
+            std::unordered_set<int64_t> seen;
+            while (cur && cur->tag == 1)
+            {
+                auto val = static_cast<int64_t>(cur->getSlot(0));
+                if (seen.insert(val).second)
+                    elements.push_back(val);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            // Rebuild list right-to-left
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0; // Nil
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, static_cast<uint64_t>(*it));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // Register list_sort_pairs builtin: sorts list of Tuple2(key, elem) by key, returns list of elements
+    runtime.registerFunction("list_sort_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+
+            // Collect (key, elem) pairs — input is in reversed order from IR loop
+            std::vector<std::pair<int64_t, uint64_t>> pairs;
+            while (cur && cur->tag == 1)
+            {
+                auto* tuple = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(0));
+                auto key = static_cast<int64_t>(tuple->getSlot(0));
+                auto elem = tuple->getSlot(1);
+                pairs.emplace_back(key, elem);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            // Reverse to restore original order, then stable sort by key
+            std::ranges::reverse(pairs);
+            std::ranges::stable_sort(pairs, {}, &std::pair<int64_t, uint64_t>::first);
+
+            // Rebuild list of elements only, right-to-left
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0; // Nil
+            for (auto it = pairs.rbegin(); it != pairs.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, it->second);
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // Register list_group_pairs builtin: groups list of Tuple2(key, elem) by key
+    // Returns List<Tuple2<key, List<elem>>>
+    runtime.registerFunction("list_group_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+
+            // Collect (key, elem) pairs — input is in reversed order from IR loop
+            std::vector<std::pair<int64_t, uint64_t>> pairs;
+            while (cur && cur->tag == 1)
+            {
+                auto* tuple = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(0));
+                auto key = static_cast<int64_t>(tuple->getSlot(0));
+                auto elem = tuple->getSlot(1);
+                pairs.emplace_back(key, elem);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+
+            // Reverse to restore original order
+            std::ranges::reverse(pairs);
+
+            // Group by key preserving first-seen group order
+            std::vector<int64_t> groupOrder;
+            std::unordered_map<int64_t, std::vector<uint64_t>> groups;
+            for (auto const& [key, elem]: pairs)
+            {
+                if (groups.find(key) == groups.end())
+                    groupOrder.push_back(key);
+                groups[key].push_back(elem);
+            }
+
+            // Build outer list right-to-left: List<Tuple2<key, List<elem>>>
+            auto* outerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            outerAcc->tag = 0; // Nil
+            for (auto it = groupOrder.rbegin(); it != groupOrder.rend(); ++it)
+            {
+                auto key = *it;
+                auto const& elems = groups[key];
+
+                // Build inner list right-to-left
+                auto* innerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                innerAcc->tag = 0; // Nil
+                for (auto eit = elems.rbegin(); eit != elems.rend(); ++eit)
+                {
+                    auto* innerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                    innerCons->tag = 1;
+                    innerCons->setSlot(0, *eit);
+                    innerCons->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
+                    innerAcc = innerCons;
+                }
+
+                // Build Tuple2(key, innerList)
+                auto* tuple = args.caller()->allocObject(CoreVM::BuiltinTypeId::Tuple2);
+                tuple->setSlot(0, static_cast<uint64_t>(key));
+                tuple->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
+
+                // Cons tuple onto outer list
+                auto* outerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                outerCons->tag = 1;
+                outerCons->setSlot(0, reinterpret_cast<uintptr_t>(tuple));
+                outerCons->setSlot(1, reinterpret_cast<uintptr_t>(outerAcc));
+                outerAcc = outerCons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(outerAcc)));
         });
 
     // Register list_isEmpty builtin: returns true if list is Nil

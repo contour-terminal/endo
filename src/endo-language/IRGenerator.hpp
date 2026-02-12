@@ -377,6 +377,18 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `flatten xss` — concatenates a list of lists into a single list.
     void generateFlattenIR(CoreVM::Value* listOfLists);
 
+    /// Generates IR for `sortBy f xs` — sorts list by key extracted via function.
+    void generateSortByIR(std::string const& funcParamName, CoreVM::Value* listValue);
+
+    /// Generates IR for `groupBy f xs` — groups list elements by key extracted via function.
+    void generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue);
+
+    /// Generates IR for `sort xs` — sorts a list of comparable elements numerically.
+    void generateSortIR(CoreVM::Value* listValue);
+
+    /// Generates IR for `distinct xs` — removes duplicate elements from list.
+    void generateDistinctIR(CoreVM::Value* listValue);
+
     // Option combinators: Option.map, Option.bind, Option.defaultValue
 
     /// Resolves a function argument expression (identifier or lambda) to a function reference.

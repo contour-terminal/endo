@@ -178,7 +178,8 @@ This document tracks the implementation status of F# language features as define
 - [x] `head`, `tail`, `length`, `isEmpty` — list operations
 - [x] `map`, `filter`, `fold`, `reduce` — higher-order list functions (IR-level codegen)
 - [x] `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten` — list utility functions
-- [~] `sort`, `reverse`, `distinct` — list transformations (`reverse` done; `sort`, `distinct` pending)
+- [x] `sort`, `reverse`, `distinct` — list transformations
+- [x] `sortBy`, `groupBy` — key-based list sorting and grouping (hybrid IR + native)
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
@@ -253,10 +254,10 @@ Consult this section to determine what to work on next.
 ### Phase 3 — List Standard Library (depends on Phase 2)
 - [x] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
 - [x] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
-- [~] Transformations: `sort`, `reverse`, `distinct` (`reverse` done; `sort`, `distinct` pending)
+- [x] Transformations: `sort`, `reverse`, `distinct` — list transformations
 - [x] `ListComprehensionExpr` codegen: forward iteration + optional filter + reverse for correct order
 - [x] Utility: `zip`, `flatten`, `take`, `drop`, `find`, `exists`, `forall`
-- [ ] Remaining: `groupBy`
+- [x] Key-based: `sortBy`, `groupBy` — hybrid IR loop (key extraction) + native callbacks (sort/group)
 
 ### Phase 4 — Records (parallel with Phase 2/3) ✅
 - [x] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type

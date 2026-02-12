@@ -21,6 +21,7 @@
 #include <print>
 #include <set>
 #include <thread>
+#include <unordered_map>
 #include <unordered_set>
 
 #include "Error.hpp"
@@ -1329,6 +1330,142 @@ void Shell::registerBuiltinFunctions()
         .bind([](CoreVM::Params& args) {
             auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
             args.setResult(!list || list->tag == 0);
+        });
+
+    // F# list_sort builtin: sorts list elements numerically (ascending)
+    _runtime.registerFunction("list_sort")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            std::vector<int64_t> elements;
+            while (cur && cur->tag == 1)
+            {
+                elements.push_back(static_cast<int64_t>(cur->getSlot(0)));
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            std::ranges::sort(elements);
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0;
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, static_cast<uint64_t>(*it));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // F# list_distinct builtin: removes duplicate elements preserving first-seen order
+    _runtime.registerFunction("list_distinct")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            std::vector<int64_t> elements;
+            std::unordered_set<int64_t> seen;
+            while (cur && cur->tag == 1)
+            {
+                auto val = static_cast<int64_t>(cur->getSlot(0));
+                if (seen.insert(val).second)
+                    elements.push_back(val);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0;
+            for (auto it = elements.rbegin(); it != elements.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, static_cast<uint64_t>(*it));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // F# list_sort_pairs builtin: sorts Tuple2(key, elem) pairs by key, returns elements
+    _runtime.registerFunction("list_sort_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            std::vector<std::pair<int64_t, uint64_t>> pairs;
+            while (cur && cur->tag == 1)
+            {
+                auto* tuple = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(0));
+                auto key = static_cast<int64_t>(tuple->getSlot(0));
+                auto elem = tuple->getSlot(1);
+                pairs.emplace_back(key, elem);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            std::ranges::reverse(pairs);
+            std::ranges::stable_sort(pairs, {}, &std::pair<int64_t, uint64_t>::first);
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0;
+            for (auto it = pairs.rbegin(); it != pairs.rend(); ++it)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, it->second);
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // F# list_group_pairs builtin: groups Tuple2(key, elem) pairs by key
+    _runtime.registerFunction("list_group_pairs")
+        .param<CoreVM::CoreNumber>("pairs")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            std::vector<std::pair<int64_t, uint64_t>> pairs;
+            while (cur && cur->tag == 1)
+            {
+                auto* tuple = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(0));
+                auto key = static_cast<int64_t>(tuple->getSlot(0));
+                auto elem = tuple->getSlot(1);
+                pairs.emplace_back(key, elem);
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            std::ranges::reverse(pairs);
+            std::vector<int64_t> groupOrder;
+            std::unordered_map<int64_t, std::vector<uint64_t>> groups;
+            for (auto const& [key, elem] : pairs)
+            {
+                if (groups.find(key) == groups.end())
+                    groupOrder.push_back(key);
+                groups[key].push_back(elem);
+            }
+            auto* outerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            outerAcc->tag = 0;
+            for (auto it = groupOrder.rbegin(); it != groupOrder.rend(); ++it)
+            {
+                auto key = *it;
+                auto const& elems = groups[key];
+                auto* innerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                innerAcc->tag = 0;
+                for (auto eit = elems.rbegin(); eit != elems.rend(); ++eit)
+                {
+                    auto* innerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                    innerCons->tag = 1;
+                    innerCons->setSlot(0, *eit);
+                    innerCons->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
+                    innerAcc = innerCons;
+                }
+                auto* tuple = args.caller()->allocObject(CoreVM::BuiltinTypeId::Tuple2);
+                tuple->setSlot(0, static_cast<uint64_t>(key));
+                tuple->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
+                auto* outerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                outerCons->tag = 1;
+                outerCons->setSlot(0, reinterpret_cast<uintptr_t>(tuple));
+                outerCons->setSlot(1, reinterpret_cast<uintptr_t>(outerAcc));
+                outerAcc = outerCons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(outerAcc)));
         });
 
     // F# object_to_string builtin: runtime dispatch for object printing
