@@ -3702,7 +3702,7 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
     return std::make_unique<ast::ShellCommandExpr>(std::move(command));
 }
 
-std::unique_ptr<ast::RecordTypeDefStmt> Parser::parseTypeDefinition()
+std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
 {
     TRACE_SCOPE("parseTypeDefinition");
 
@@ -3732,14 +3732,81 @@ std::unique_ptr<ast::RecordTypeDefStmt> Parser::parseTypeDefinition()
     }
     _lexer.enterFSharpExpr();
     _lexer.nextToken(); // consume '='
+    consumeNewlines();
 
+    // Discriminated union path: starts with '|'
+    if (_lexer.currentToken() == Token::Pipe)
+    {
+        std::vector<ast::UnionVariantDef> variants;
+
+        while (_lexer.currentToken() == Token::Pipe)
+        {
+            _lexer.nextToken(); // consume '|'
+
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _lexer.leaveFSharpExpr();
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a constructor name" },
+                                                   currentContextSnippet(),
+                                                   "Expected constructor name after '|', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            auto ctorName = _lexer.currentLiteral();
+            _lexer.nextToken(); // consume constructor name
+
+            std::vector<TypePtr> payloadTypes;
+
+            // Check for 'of' keyword (payload types)
+            if (_lexer.currentToken() == Token::Of)
+            {
+                _lexer.nextToken(); // consume 'of'
+
+                // Parse payload types separated by '*'
+                auto payloadType = parseBaseType();
+                if (!payloadType)
+                {
+                    _lexer.leaveFSharpExpr();
+                    return nullptr;
+                }
+                payloadTypes.push_back(std::move(payloadType));
+
+                while (_lexer.currentToken() == Token::Star)
+                {
+                    _lexer.nextToken(); // consume '*'
+                    payloadType = parseBaseType();
+                    if (!payloadType)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    payloadTypes.push_back(std::move(payloadType));
+                }
+            }
+
+            // Register constructor for later lookup during expression/pattern parsing
+            _constructorLookup[ctorName] = { typeName, variants.size() };
+            _constructorPayloadSlots[ctorName] = static_cast<uint8_t>(payloadTypes.size());
+
+            variants.push_back(ast::UnionVariantDef { std::move(ctorName), std::move(payloadTypes) });
+
+            // Consume newlines between variants
+            consumeNewlines();
+        }
+
+        _lexer.leaveFSharpExpr();
+        return std::make_unique<ast::UnionTypeDefStmt>(std::move(typeName), std::move(variants));
+    }
+
+    // Record type path: starts with '{'
     if (_lexer.currentToken() != Token::BraceOpen)
     {
         _lexer.leaveFSharpExpr();
         _report.syntaxErrorWithSuggestions(currentLocation(),
-                                           { "Add '{' to start record field definitions" },
+                                           { "Add '{' for record or '|' for union" },
                                            currentContextSnippet(),
-                                           "Expected '{{' after '=', got '{}'",
+                                           "Expected '{{' or '|' after '=', got '{}'",
                                            _lexer.currentLiteral());
         return nullptr;
     }
@@ -4281,6 +4348,43 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             if (!lit.empty() && lit[0] == '[')
             {
                 return parseListLiteral();
+            }
+
+            // User-defined union constructor
+            if (auto ctorIt = _constructorLookup.find(lit); ctorIt != _constructorLookup.end())
+            {
+                auto const& [ctorTypeName, variantIdx] = ctorIt->second;
+                auto payloadSlots = _constructorPayloadSlots[lit];
+                auto ctorName = consumeLiteral();
+
+                std::vector<std::unique_ptr<ast::Expr>> args;
+                if (payloadSlots > 0 && isFSharpPrimary())
+                {
+                    auto arg = parseFSharpPrimary();
+                    if (!arg)
+                        return nullptr;
+
+                    // For multi-slot constructors, if the argument is a tuple, flatten it
+                    if (payloadSlots > 1)
+                    {
+                        if (auto* tuple = dynamic_cast<ast::TupleExpr*>(arg.get()))
+                        {
+                            for (auto& elem: tuple->elements)
+                                args.push_back(std::move(elem));
+                        }
+                        else
+                        {
+                            args.push_back(std::move(arg));
+                        }
+                    }
+                    else
+                    {
+                        args.push_back(std::move(arg));
+                    }
+                }
+
+                return std::make_unique<ast::UnionConstructorExpr>(
+                    ctorTypeName, std::move(ctorName), std::move(args));
             }
 
             // Regular identifier
@@ -5682,6 +5786,31 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
             {
                 _lexer.nextToken();
                 return pattern::patterns::literal(false);
+            }
+
+            // User-defined constructor pattern
+            if (_constructorLookup.contains(lit))
+            {
+                auto payloadSlots = _constructorPayloadSlots[lit];
+                auto ctorName = consumeLiteral();
+
+                std::optional<pattern::PatternPtr> payload = std::nullopt;
+                if (payloadSlots > 0 && canStartPattern())
+                {
+                    if (payloadSlots > 1)
+                    {
+                        // Multi-slot constructors expect a tuple pattern for the payload
+                        payload = parsePrimaryPattern();
+                    }
+                    else
+                    {
+                        payload = parsePrimaryPattern();
+                    }
+                    if (!payload)
+                        return nullptr;
+                }
+
+                return pattern::patterns::constructor(std::move(ctorName), std::move(payload));
             }
 
             // In pattern context, the lexer may have consumed more than we want.

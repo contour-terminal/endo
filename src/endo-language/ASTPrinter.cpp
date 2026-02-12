@@ -1016,4 +1016,34 @@ void ASTPrinter::visit(FieldAccessExpr const& node)
     _result += node.fieldName;
 }
 
+void ASTPrinter::visit(UnionTypeDefStmt const& node)
+{
+    _result += std::format("type {} =", node.name);
+    for (auto const& variant: node.variants)
+    {
+        _result += " | ";
+        _result += variant.name;
+        if (!variant.payloadTypes.empty())
+        {
+            _result += " of ";
+            for (size_t i = 0; i < variant.payloadTypes.size(); ++i)
+            {
+                if (i > 0)
+                    _result += " * ";
+                _result += endo::toString(variant.payloadTypes[i]);
+            }
+        }
+    }
+}
+
+void ASTPrinter::visit(UnionConstructorExpr const& node)
+{
+    _result += node.constructorName;
+    for (auto const& arg: node.arguments)
+    {
+        _result += " ";
+        arg->accept(*this);
+    }
+}
+
 } // namespace endo::ast

@@ -134,8 +134,8 @@ class Parser
     std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseTryWith();           // try expr with ... | try expr finally ...
 
-    // Record type definitions
-    std::unique_ptr<ast::RecordTypeDefStmt> parseTypeDefinition(); // type Person = { name: str; age: int }
+    // Type definitions (records and discriminated unions)
+    std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int
 
     // Pattern parsing for match expressions
     // Grammar: pattern ::= or_pattern ('when' expr)?
@@ -200,6 +200,12 @@ class Parser
 
     /// Known record type names → field names (populated by parseTypeDefinition).
     std::unordered_map<std::string, std::vector<std::string>> _knownRecordTypes;
+
+    /// Maps constructor names to (type name, variant index) for user-defined discriminated unions.
+    std::unordered_map<std::string, std::pair<std::string, size_t>> _constructorLookup;
+
+    /// Maps constructor names to their payload slot count.
+    std::unordered_map<std::string, uint8_t> _constructorPayloadSlots;
 };
 
 // Template implementations

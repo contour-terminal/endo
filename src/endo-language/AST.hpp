@@ -1534,6 +1534,56 @@ struct RecordTypeDefStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+// ============================================================================
+// F# Style - Discriminated Unions (ADTs)
+// ============================================================================
+
+/// A single variant definition in a discriminated union type.
+///
+/// Each variant has a name and an optional list of payload types.
+/// For example, in `type Shape = Circle of float | Rectangle of float * float | Point`,
+/// `Circle` has one payload type (float), `Rectangle` has two (float * float),
+/// and `Point` has none.
+struct UnionVariantDef
+{
+    std::string name;                  ///< Variant constructor name (e.g., "Circle")
+    std::vector<TypePtr> payloadTypes; ///< Payload types (empty for unit constructors)
+};
+
+/// Discriminated union type definition statement: `type Shape = | Circle of float | Rectangle of float *
+/// float | Point`
+///
+/// Defines a named sum type with tagged variants, each optionally carrying payload data.
+struct UnionTypeDefStmt final: public Statement
+{
+    std::string name;                      ///< Type name (e.g., "Shape")
+    std::vector<UnionVariantDef> variants; ///< Variant definitions
+
+    UnionTypeDefStmt(std::string n, std::vector<UnionVariantDef> v):
+        name(std::move(n)), variants(std::move(v))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Union constructor expression: `Circle 5.0` or `Rectangle(10.0, 20.0)` or `Point`
+///
+/// Constructs a value of a discriminated union type using a specific variant constructor.
+struct UnionConstructorExpr final: public Expr
+{
+    std::string typeName;                         ///< The union type name (e.g., "Shape")
+    std::string constructorName;                  ///< The constructor name (e.g., "Circle")
+    std::vector<std::unique_ptr<Expr>> arguments; ///< Constructor arguments (empty for unit constructors)
+
+    UnionConstructorExpr(std::string tn, std::string cn, std::vector<std::unique_ptr<Expr>> args):
+        typeName(std::move(tn)), constructorName(std::move(cn)), arguments(std::move(args))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// A single field initialization in a record literal: `name = expr`
 struct RecordFieldInit
 {

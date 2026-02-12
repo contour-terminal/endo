@@ -178,6 +178,8 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::RecordExpr const& node) override;
     void visit(ast::RecordUpdateExpr const& node) override;
     void visit(ast::FieldAccessExpr const& node) override;
+    void visit(ast::UnionTypeDefStmt const& node) override;
+    void visit(ast::UnionConstructorExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -518,6 +520,32 @@ class IRGenerator final: public ast::Visitor
     /// Resolves a record type from a set of field names (for anonymous record literals).
     [[nodiscard]] RecordTypeInfo const* resolveRecordTypeByFields(
         std::vector<std::string> const& fieldNames) const;
+
+    /// Tracks registered discriminated union type definitions.
+    struct UnionTypeInfo
+    {
+        uint16_t typeId;                           ///< Assigned type ID
+        std::string name;                          ///< Type name (e.g., "Shape")
+        std::vector<CoreVM::VariantInfo> variants; ///< Variant definitions
+    };
+
+    /// Information about a single constructor of a discriminated union.
+    struct ConstructorInfo
+    {
+        std::string typeName; ///< Parent union type name
+        uint16_t typeId;      ///< Assigned type ID of the parent union
+        int tag;              ///< Tag value for this constructor variant
+        uint8_t payloadSlots; ///< Number of payload slots (0 for unit constructors)
+    };
+
+    /// Maps union type names to their metadata.
+    std::unordered_map<std::string, UnionTypeInfo> _unionTypes;
+
+    /// Maps constructor names to their metadata.
+    std::unordered_map<std::string, ConstructorInfo> _constructorRegistry;
+
+    /// Looks up a constructor by name, returning nullptr if not found.
+    [[nodiscard]] ConstructorInfo const* lookupConstructor(std::string const& name) const;
 };
 
 } // namespace endo

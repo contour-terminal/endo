@@ -543,12 +543,23 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
         expectedTag = 1;
     else
     {
-        // Unknown constructor - fail match
-        // TODO: Support user-defined ADTs
-        if (_collectOnly)
+        // User-defined constructor — look up in constructor registry
+        if (auto it = _constructorLookup.find(pat.name); it != _constructorLookup.end())
+            expectedTag = it->second.tag;
+        else
+        {
+            if (_collectOnly)
+            {
+                // During binding collection, still traverse payload for variable names
+                // even if constructor lookup isn't populated yet
+                if (pat.payload)
+                    pat.payload->get()->accept(*this);
+                return;
+            }
+            // Unknown constructor at compile time - fail match
+            _builder.createBr(_failureBlock);
             return;
-        _builder.createBr(_failureBlock);
-        return;
+        }
     }
 
     if (_collectOnly)
@@ -570,6 +581,10 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
     CoreVM::Value* tagMatches =
         _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(expectedTag)), "ctor.tag.eq");
 
+    // Check if this is a user-defined constructor with multi-slot payload
+    auto ctorIt = _constructorLookup.find(pat.name);
+    bool const isMultiSlotCtor = ctorIt != _constructorLookup.end() && ctorIt->second.payloadSlots > 1;
+
     // If pattern has a payload, we need an intermediate block to extract and match it
     if (pat.payload)
     {
@@ -578,20 +593,67 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
 
         _builder.setInsertPoint(payloadBlock);
 
-        // Reload scrutinee from storage since we're in a new basic block.
-        // The stack tracking resets at block boundaries, so we must reload
-        // to ensure the value is available for use.
-        CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+        if (isMultiSlotCtor)
+        {
+            // Multi-slot payload: extract each slot individually into pre-allocated allocas.
+            // This handles patterns like `Rectangle(w, h)` where w=slot0, h=slot1.
+            auto const* tuplePat = dynamic_cast<pattern::TuplePattern const*>(pat.payload->get());
+            if (tuplePat)
+            {
+                // Create intermediate blocks for each element check
+                std::vector<CoreVM::BasicBlock*> slotBlocks;
+                for (size_t slotIdx = 1; slotIdx < tuplePat->elements.size(); ++slotIdx)
+                    slotBlocks.push_back(
+                        _builder.createBlock("ctor.slot." + std::to_string(slotIdx) + ".check"));
 
-        // Extract payload from slot 0 using OGETSLOT
-        CoreVM::Value* payloadValue = _builder.createObjGetSlot(
-            scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+                for (size_t slotIdx = 0; slotIdx < tuplePat->elements.size(); ++slotIdx)
+                {
+                    // Reload scrutinee for each slot (avoid multi-use createLoad in loops)
+                    CoreVM::Value* reloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+                    CoreVM::Value* slotVal =
+                        _builder.createObjGetSlot(reloaded,
+                                                  _builder.get(CoreVM::CoreNumber(slotIdx)),
+                                                  "ctor.slot." + std::to_string(slotIdx));
 
-        // Recursively match the payload pattern
-        CoreVM::Value* savedScrutinee = _scrutinee;
-        _scrutinee = payloadValue;
-        pat.payload->get()->accept(*this);
-        _scrutinee = savedScrutinee;
+                    // Recursively match the element pattern (handles variable bindings)
+                    CoreVM::Value* savedScrutinee = _scrutinee;
+                    CoreVM::BasicBlock* savedSuccess = _successBlock;
+                    if (slotIdx + 1 < tuplePat->elements.size())
+                        _successBlock = slotBlocks[slotIdx]; // next element's check block
+                    _scrutinee = slotVal;
+                    tuplePat->elements[slotIdx]->accept(*this);
+                    _scrutinee = savedScrutinee;
+                    _successBlock = savedSuccess;
+
+                    if (slotIdx + 1 < tuplePat->elements.size())
+                        _builder.setInsertPoint(slotBlocks[slotIdx]);
+                }
+            }
+            else
+            {
+                // Single variable binding for the whole multi-slot payload — bind as the object
+                CoreVM::Value* savedScrutinee = _scrutinee;
+                CoreVM::Value* reloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+                _scrutinee = reloaded;
+                pat.payload->get()->accept(*this);
+                _scrutinee = savedScrutinee;
+            }
+        }
+        else
+        {
+            // Reload scrutinee from storage since we're in a new basic block.
+            CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+
+            // Extract payload from slot 0 using OGETSLOT
+            CoreVM::Value* payloadValue = _builder.createObjGetSlot(
+                scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+
+            // Recursively match the payload pattern
+            CoreVM::Value* savedScrutinee = _scrutinee;
+            _scrutinee = payloadValue;
+            pat.payload->get()->accept(*this);
+            _scrutinee = savedScrutinee;
+        }
     }
     else
     {

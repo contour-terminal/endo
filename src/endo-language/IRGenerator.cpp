@@ -3267,7 +3267,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ConcatListExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::RecordExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr;
 
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
@@ -5032,6 +5033,15 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             }
         }
 
+        // Set constructor lookup for user-defined discriminated union patterns
+        if (!_constructorRegistry.empty())
+        {
+            std::unordered_map<std::string, PatternIRGenerator::ConstructorMeta> ctorLookup;
+            for (auto const& [ctorName, ctorInfo]: _constructorRegistry)
+                ctorLookup[ctorName] = { ctorInfo.typeId, ctorInfo.tag, ctorInfo.payloadSlots };
+            patternIRGenerator.setConstructorLookup(std::move(ctorLookup));
+        }
+
         patternIRGenerator.compile(
             *arm.pattern, scrutineeValue, scrutineeStorage, armBodyBlocks[i], onFailure);
 
@@ -5049,7 +5059,17 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         bool const isRecordPattern =
             dynamic_cast<pattern::RecordPattern const*>(arm.pattern.get()) != nullptr;
 
-        if (isTuplePattern || isConsPattern || isListPattern || isRecordPattern)
+        // User-defined constructor patterns with multi-slot payloads have their bindings
+        // stored into pre-allocated allocas by PatternIRGenerator (same as tuple patterns).
+        bool isUserDefinedCtorWithMultiSlot = false;
+        if (auto const* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+        {
+            if (auto const* ctorInfo = lookupConstructor(ctorPat->name))
+                isUserDefinedCtorWithMultiSlot = ctorInfo->payloadSlots > 1;
+        }
+
+        if (isTuplePattern || isConsPattern || isListPattern || isRecordPattern
+            || isUserDefinedCtorWithMultiSlot)
         {
             // Tuple/Cons/List/Record patterns: values were already stored into allocas by
             // PatternIRGenerator. Just register the allocas as variable bindings.
@@ -6527,6 +6547,94 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                         std::string_view(typeInfo->name),
                         std::string_view(node.fieldName));
     }
+}
+
+// ============================================================================
+// Discriminated Unions (ADTs)
+// ============================================================================
+
+IRGenerator::ConstructorInfo const* IRGenerator::lookupConstructor(std::string const& name) const
+{
+    if (auto it = _constructorRegistry.find(name); it != _constructorRegistry.end())
+        return &it->second;
+    return nullptr;
+}
+
+void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
+{
+    TRACE_SCOPE("visit(UnionTypeDefStmt)");
+
+    // Allocate a custom type ID from the IR program
+    auto typeId = _builder.program()->allocateCustomTypeId();
+
+    // Build variant info list
+    std::vector<CoreVM::VariantInfo> variants;
+    for (size_t i = 0; i < node.variants.size(); ++i)
+    {
+        auto const& variant = node.variants[i];
+        variants.push_back({ variant.name, static_cast<uint8_t>(variant.payloadTypes.size()) });
+
+        // Register each constructor in the constructor registry
+        ConstructorInfo ctorInfo;
+        ctorInfo.typeName = node.name;
+        ctorInfo.typeId = typeId;
+        ctorInfo.tag = static_cast<int>(i);
+        ctorInfo.payloadSlots = static_cast<uint8_t>(variant.payloadTypes.size());
+        _constructorRegistry[variant.name] = ctorInfo;
+    }
+
+    // Store in the IR generator's union type table
+    UnionTypeInfo info;
+    info.typeId = typeId;
+    info.name = node.name;
+    info.variants = variants;
+    _unionTypes[node.name] = std::move(info);
+
+    // Register as a custom sum type on the IR program so TargetCodeGenerator
+    // can register it in the ConstantPool's TypeRegistry before execution.
+    CoreVM::IRProgram::CustomSumType customType;
+    customType.name = node.name;
+    customType.variants = variants;
+    customType.assignedId = typeId;
+    _builder.program()->addCustomSumType(std::move(customType));
+}
+
+void IRGenerator::visit(ast::UnionConstructorExpr const& node)
+{
+    TRACE_SCOPE("visit(UnionConstructorExpr)");
+
+    auto const* ctorInfo = lookupConstructor(node.constructorName);
+    if (!ctorInfo)
+    {
+        reportTypeError("Unknown union constructor '{}'", std::string_view(node.constructorName));
+        return;
+    }
+
+    // Allocate the object with the union's type ID
+    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(ctorInfo->typeId));
+    CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, node.constructorName);
+
+    // Set the tag for this constructor variant
+    obj = _builder.createObjSetTag(
+        obj, _builder.get(CoreVM::CoreNumber(ctorInfo->tag)), node.constructorName + ".tag");
+
+    // Set each payload slot (chained to avoid multi-use ObjAlloc)
+    for (size_t i = 0; i < node.arguments.size(); ++i)
+    {
+        CoreVM::Value* argVal = codegen(node.arguments[i].get());
+        if (!argVal)
+        {
+            reportTypeError("Failed to generate code for constructor argument {}", i);
+            return;
+        }
+        obj = _builder.createObjSetSlot(obj,
+                                        _builder.get(CoreVM::CoreNumber(i)),
+                                        argVal,
+                                        node.constructorName + ".slot" + std::to_string(i));
+    }
+
+    _result = obj;
+    annotateObjectTypeId(_result, ctorInfo->typeId);
 }
 
 } // namespace endo

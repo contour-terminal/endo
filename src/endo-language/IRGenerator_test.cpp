@@ -3994,3 +3994,160 @@ TEST_CASE("IRGenerator.FSharp.record_update_with_multiple_inlined_match_function
                              "print p2",
                              "{ x = 6; y = 8 }"));
 }
+
+// =============================================================================
+// Discriminated Unions (ADTs)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.union_type_basic_enum")
+{
+    // Unit constructors only (enum-like ADT), match all variants
+    CHECK(executesWithOutput("type Color =\n"
+                             "    | Red\n"
+                             "    | Green\n"
+                             "    | Blue\n"
+                             "let c = Green\n"
+                             "let r = match c with\n"
+                             "    | Red -> 1\n"
+                             "    | Green -> 2\n"
+                             "    | Blue -> 3\n"
+                             "print r",
+                             "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_single_payload")
+{
+    // Single-payload constructor, match + extract
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Circle of int\n"
+                             "    | Point\n"
+                             "let s = Circle 42\n"
+                             "let r = match s with\n"
+                             "    | Circle radius -> radius\n"
+                             "    | Point -> 0\n"
+                             "print r",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_tuple_payload")
+{
+    // Multi-slot constructor (Rectangle of int * int), match + extract both slots
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Rectangle of int * int\n"
+                             "    | Point\n"
+                             "let s = Rectangle (10, 20)\n"
+                             "let r = match s with\n"
+                             "    | Rectangle (w, h) -> w + h\n"
+                             "    | Point -> 0\n"
+                             "print r",
+                             "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_with_function")
+{
+    // Pass ADT to function, match inside function
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Circle of int\n"
+                             "    | Point\n"
+                             "let area s = match s with\n"
+                             "    | Circle r -> r * r\n"
+                             "    | Point -> 0\n"
+                             "print (area (Circle 5))",
+                             "25"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_wildcard")
+{
+    // Match with wildcard fallback
+    CHECK(executesWithOutput("type Color =\n"
+                             "    | Red\n"
+                             "    | Green\n"
+                             "    | Blue\n"
+                             "let c = Blue\n"
+                             "let r = match c with\n"
+                             "    | Red -> 1\n"
+                             "    | _ -> 0\n"
+                             "print r",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_mixed_with_option")
+{
+    // Ensure Option/Result still works alongside user ADTs
+    CHECK(executesWithOutput("type Color =\n"
+                             "    | Red\n"
+                             "    | Green\n"
+                             "let c = Red\n"
+                             "let o = Some 42\n"
+                             "let r = match o with\n"
+                             "    | Some x -> x\n"
+                             "    | None -> 0\n"
+                             "print r",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_int_payload")
+{
+    // int payloads
+    CHECK(executesWithOutput("type Expr =\n"
+                             "    | Num of int\n"
+                             "    | Neg of int\n"
+                             "let e = Num 7\n"
+                             "let r = match e with\n"
+                             "    | Num n -> n\n"
+                             "    | Neg n -> 0 - n\n"
+                             "print r",
+                             "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_multiple_arms_with_payloads")
+{
+    // Direct match with different constructor variants — no function inlining
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Circle of int\n"
+                             "    | Rectangle of int * int\n"
+                             "    | Point\n"
+                             "let s = Circle 5\n"
+                             "let r = match s with\n"
+                             "    | Circle r -> r * r\n"
+                             "    | Rectangle (w, h) -> w * h\n"
+                             "    | Point -> 0\n"
+                             "print r",
+                             "25"));
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Circle of int\n"
+                             "    | Rectangle of int * int\n"
+                             "    | Point\n"
+                             "let s = Rectangle (3, 4)\n"
+                             "let r = match s with\n"
+                             "    | Circle r -> r * r\n"
+                             "    | Rectangle (w, h) -> w * h\n"
+                             "    | Point -> 0\n"
+                             "print r",
+                             "12"));
+    CHECK(executesWithOutput("type Shape =\n"
+                             "    | Circle of int\n"
+                             "    | Rectangle of int * int\n"
+                             "    | Point\n"
+                             "let s = Point\n"
+                             "let r = match s with\n"
+                             "    | Circle r -> r * r\n"
+                             "    | Rectangle (w, h) -> w * h\n"
+                             "    | Point -> 0\n"
+                             "print r",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.union_type_unit_constructor_match")
+{
+    // Unit constructor matches correctly, no payload extraction
+    CHECK(executesWithOutput("type Option2 =\n"
+                             "    | Nothing\n"
+                             "    | Just of int\n"
+                             "let x = Nothing\n"
+                             "let r = match x with\n"
+                             "    | Nothing -> 0\n"
+                             "    | Just n -> n\n"
+                             "print r",
+                             "0"));
+}

@@ -72,6 +72,20 @@ class PatternIRGenerator final: public pattern::PatternVisitor
         _recordFieldOffsets = std::move(offsets);
     }
 
+    /// Metadata for a user-defined constructor variant.
+    struct ConstructorMeta
+    {
+        uint16_t typeId;      ///< Type ID of the parent union
+        int tag;              ///< Tag value for this variant
+        uint8_t payloadSlots; ///< Number of payload slots
+    };
+
+    /// Sets the constructor lookup map for user-defined discriminated union patterns.
+    void setConstructorLookup(std::unordered_map<std::string, ConstructorMeta> lookup)
+    {
+        _constructorLookup = std::move(lookup);
+    }
+
   private:
     // Pattern visitor implementations
     void visit(pattern::LiteralPattern const& pat) override;
@@ -95,6 +109,8 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     std::unordered_map<std::string, CoreVM::AllocaInstr*> _bindingStorage; ///< Pre-allocated alloca storage
     bool _collectOnly = false; ///< When true, only collect bindings without emitting IR
     std::unordered_map<std::string, uint8_t> _recordFieldOffsets; ///< Field name → slot offset for records
+    std::unordered_map<std::string, ConstructorMeta>
+        _constructorLookup; ///< User-defined constructor metadata
 };
 
 } // namespace endo

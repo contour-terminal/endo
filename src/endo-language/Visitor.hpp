@@ -83,6 +83,8 @@ struct RecordTypeDefStmt;
 struct RecordExpr;
 struct RecordUpdateExpr;
 struct FieldAccessExpr;
+struct UnionTypeDefStmt;
+struct UnionConstructorExpr;
 
 struct Visitor
 {
@@ -177,6 +179,10 @@ struct Visitor
     virtual void visit(RecordExpr const&) = 0;
     virtual void visit(RecordUpdateExpr const&) = 0;
     virtual void visit(FieldAccessExpr const&) = 0;
+
+    // Discriminated unions
+    virtual void visit(UnionTypeDefStmt const&) = 0;
+    virtual void visit(UnionConstructorExpr const&) = 0;
 };
 
 } // namespace endo::ast

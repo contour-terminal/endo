@@ -1749,6 +1749,24 @@ TEST_CASE("Parser.FSharp.record_type_definition")
           == "type Person = { name: str; age: int }");
 }
 
+TEST_CASE("Parser.FSharp.union_type_definition")
+{
+    CHECK(
+        parseAndPrintAST("type Shape =\n    | Circle of float\n    | Rectangle of float * float\n    | Point")
+        == "type Shape = | Circle of float | Rectangle of float * float | Point");
+}
+
+TEST_CASE("Parser.FSharp.union_type_single_variant")
+{
+    CHECK(parseAndPrintAST("type Wrapper =\n    | Wrap of int") == "type Wrapper = | Wrap of int");
+}
+
+TEST_CASE("Parser.FSharp.union_constructor_expression")
+{
+    CHECK(parseAndPrintAST("type Color =\n    | Red\n    | Green\n    | Blue\nlet c = Red")
+          == "type Color = | Red | Green | Blue; let c = Red");
+}
+
 TEST_CASE("Parser.FSharp.record_literal")
 {
     CHECK(parseAndPrintAST("let p = { name = 1; age = 30 }") == "let p = { name = 1; age = 30 }");
