@@ -4745,6 +4745,53 @@ TEST_CASE("IRGenerator.FSharp.list_forall_partial")
         executesWithOutput("let allPositive = forall (fun x -> x > 0)\nprint (allPositive [1;2;3])", "true"));
 }
 
+// --- each ---
+
+TEST_CASE("IRGenerator.FSharp.list_each_basic")
+{
+    CHECK(executeSourceAndGetOutput("each (fun x -> print x) [1; 2; 3]") == "123");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_pipeline")
+{
+    CHECK(executesWithOutput("let _ = [1; 2; 3] |> each (fun x -> print x)", "123"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_print_ref")
+{
+    CHECK(executeSourceAndGetOutput("let _ = [1; 2; 3] |> each print") == "123");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_println")
+{
+    CHECK(executesWithOutput("let _ = [1; 2; 3] |> each println", "1\n2\n3\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_empty")
+{
+    CHECK(executesWithOutput("each (fun x -> print x) []", ""));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_single")
+{
+    CHECK(executesWithOutput("let _ = [42] |> each print", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_returns_unit")
+{
+    CHECK(executesWithOutput("let r = each (fun x -> print x) [1; 2]\nprint r", "120"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_chained_pipeline")
+{
+    CHECK(executesWithOutput("let _ = [1;2;3;4] |> filter (fun x -> x % 2 == 0) |> each print", "24"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_each_with_lambda_body")
+{
+    CHECK(executesWithOutput("let _ = [10; 20; 30] |> each (fun x -> println (x * 2))", "20\n40\n60\n"));
+}
+
 // --- take ---
 
 TEST_CASE("IRGenerator.FSharp.list_take_basic")
@@ -5835,4 +5882,10 @@ TEST_CASE("IRGenerator.StructuredPipeline.pipeline_to_print")
 {
     CHECK(structuredExecutesWithOutput("docker ps |> map (fun c -> c.names) |> print",
                                        "[web-server; db-main; cache]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each")
+{
+    CHECK(
+        structuredExecutesWithOutput("docker ps |> each (fun c -> print c.names)", "web-serverdb-maincache"));
 }

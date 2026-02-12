@@ -82,7 +82,7 @@ This document tracks the implementation status of F# language features as define
 - [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
 - [x] Standard list operations: `map`, `filter`, `fold`, `reduce`, `reverse`
 - [x] Utility list operations: `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten`
-- [ ] Remaining list operations (`each`, etc.)
+- [x] Remaining list operations (`each`, etc.)
 
 ## Pattern Matching
 

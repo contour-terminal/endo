@@ -224,6 +224,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         registerHOF("find", { "__pred", "__xs" }, "find");
         registerHOF("exists", { "__pred", "__xs" }, "exists");
         registerHOF("forall", { "__pred", "__xs" }, "forall");
+        registerHOF("each", { "__f", "__xs" }, "each");
         registerHOF("take", { "__n", "__xs" }, "take");
         registerHOF("drop", { "__n", "__xs" }, "drop");
         registerHOF("zip", { "__xs", "__ys" }, "zip");
@@ -5670,6 +5671,12 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(*ref);
             return;
         }
+        // Builtin functions used as function references (e.g., each print)
+        if (node.name == "print" || node.name == "println")
+        {
+            _result = _builder.get(node.name);
+            return;
+        }
         // Zero-argument builtins (e.g., ps) invoked as bare identifiers in F# context
         if (node.name == "ps" && tryGenerateBuiltinCall(node.name, {}))
             return;
@@ -8099,7 +8106,8 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         // Track function references passed as arguments
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
         {
-            if (lookupFSharpFunction(constStr->get()))
+            auto const& refName = constStr->get();
+            if (lookupFSharpFunction(refName) || refName == "print" || refName == "println")
                 _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
         }
     }
@@ -8158,6 +8166,11 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     {
         auto* listVal = loadListParam("__xs", "forall.xs");
         generateForallIR("__pred", listVal);
+    }
+    else if (hofName == "each")
+    {
+        auto* listVal = loadListParam("__xs", "each.xs");
+        generateEachIR("__f", listVal);
     }
     else if (hofName == "take")
     {
@@ -9018,6 +9031,93 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     // End
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(resultStorage, "forall.result");
+}
+
+void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value* listValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve function
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+
+    // Check for builtin print/println as function argument
+    bool const isPrintBuiltin = (funcName == "print" || funcName == "println");
+    FSharpFunction const* func = nullptr;
+    if (!isPrintBuiltin)
+    {
+        func = lookupFSharpFunction(funcName);
+        if (!func)
+        {
+            reportTypeError("each: function argument '{}' not found", std::string_view(funcParamName));
+            return;
+        }
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "each.src");
+    _builder.createStore(srcStorage, listValue);
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "each.elem");
+
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("each.cond");
+    auto* bodyBlock = _builder.createBlock("each.body");
+    auto* endBlock = _builder.createBlock("each.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "each.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "each.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "each.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head, apply function, advance tail, loop
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "each.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "each.head");
+    _builder.createStore(elemAlloca, head);
+
+    auto* srcForTail = _builder.createLoad(srcStorage, "each.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "each.tail");
+    _builder.createStore(srcStorage, tail);
+
+    auto* elemLoad = _builder.createLoad(elemAlloca, "each.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
+
+    if (isPrintBuiltin)
+    {
+        // Directly call print/println builtin
+        auto* strVal = convertToString(elemLoad, "each.elem");
+        auto const sig = funcName == "println" ? "println(S)V" : "print(S)V";
+        auto* callback = findCallback(sig);
+        if (callback)
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { strVal }, funcName);
+    }
+    else
+    {
+        generateFSharpCall(func, funcName, { elemLoad });
+        if (!_result)
+        {
+            reportTypeError("each: failed to apply function to element");
+            return;
+        }
+    }
+    // Discard function result (each is for side effects only)
+    _builder.createBr(condBlock);
+
+    // End: return unit
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.get(CoreVM::CoreNumber(0));
 }
 
 void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue)

@@ -390,6 +390,9 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `forall pred xs` — returns true if all elements match predicate.
     void generateForallIR(std::string const& predName, CoreVM::Value* listValue);
 
+    /// Generates IR for `each f xs` — applies function to each element for side effects, returns unit.
+    void generateEachIR(std::string const& funcParamName, CoreVM::Value* listValue);
+
     /// Generates IR for `take n xs` — returns first n elements of list.
     void generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue);
 

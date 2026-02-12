@@ -201,9 +201,10 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return parseContinue();
             else if (isFunctionDefinition())
                 return parseFunctionDef();
-            else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println")
+            else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println"
+                     || _lexer.currentLiteral() == "each")
             {
-                // F# style print/println functions - parse as F# expression wrapped in ExprStmt
+                // F# style print/println/each functions - parse as F# expression wrapped in ExprStmt
                 _lexer.enterFSharpExpr();
                 auto expr = parseFSharpApplication();
                 _lexer.leaveFSharpExpr();
