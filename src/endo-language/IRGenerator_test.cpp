@@ -4518,6 +4518,270 @@ TEST_CASE("IRGenerator.FSharp.list_reverse_preserves_length")
 }
 
 // =============================================================================
+// List Utility Functions: find, exists, forall, take, drop, zip, flatten
+// =============================================================================
+
+// --- find ---
+
+TEST_CASE("IRGenerator.FSharp.list_find_match")
+{
+    CHECK(executesWithOutput(
+        "match find (fun x -> x > 3) [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"", "4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_find_no_match")
+{
+    CHECK(executesWithOutput(
+        "match find (fun x -> x > 10) [1;2;3] with | Some v -> print v | None -> print \"none\"", "none"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_find_empty")
+{
+    CHECK(executesWithOutput(
+        "match find (fun x -> x > 0) [] with | Some v -> print v | None -> print \"none\"", "none"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_find_first_match")
+{
+    CHECK(executesWithOutput(
+        "match find (fun x -> x % 2 == 0) [1;2;4;6] with | Some v -> print v | None -> print \"none\"", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_find_pipeline")
+{
+    CHECK(executesWithOutput(
+        "match ([1;2;3;4;5] |> find (fun x -> x > 3)) with | Some v -> print v | None -> print \"none\"",
+        "4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_find_partial")
+{
+    CHECK(executesWithOutput("let findBig = find (fun x -> x > 3)\n"
+                             "match findBig [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"",
+                             "4"));
+}
+
+// --- exists ---
+
+TEST_CASE("IRGenerator.FSharp.list_exists_true")
+{
+    CHECK(executesWithOutput("print (exists (fun x -> x > 3) [1;2;3;4;5])", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_exists_false")
+{
+    CHECK(executesWithOutput("print (exists (fun x -> x > 10) [1;2;3])", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_exists_empty")
+{
+    CHECK(executesWithOutput("print (exists (fun x -> x > 0) [])", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_exists_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3;4;5] |> exists (fun x -> x > 3))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_exists_partial")
+{
+    CHECK(executesWithOutput("let hasBig = exists (fun x -> x > 10)\nprint (hasBig [1;2;3])", "false"));
+}
+
+// --- forall ---
+
+TEST_CASE("IRGenerator.FSharp.list_forall_true")
+{
+    CHECK(executesWithOutput("print (forall (fun x -> x > 0) [1;2;3])", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_forall_false")
+{
+    CHECK(executesWithOutput("print (forall (fun x -> x > 2) [1;2;3])", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_forall_empty")
+{
+    CHECK(executesWithOutput("print (forall (fun x -> x > 0) [])", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_forall_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3] |> forall (fun x -> x > 0))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_forall_partial")
+{
+    CHECK(
+        executesWithOutput("let allPositive = forall (fun x -> x > 0)\nprint (allPositive [1;2;3])", "true"));
+}
+
+// --- take ---
+
+TEST_CASE("IRGenerator.FSharp.list_take_basic")
+{
+    CHECK(executesWithOutput("print (take 3 [1;2;3;4;5])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_zero")
+{
+    CHECK(executesWithOutput("print (take 0 [1;2;3])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_all")
+{
+    CHECK(executesWithOutput("print (take 5 [1;2;3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_more")
+{
+    CHECK(executesWithOutput("print (take 10 [1;2;3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_empty")
+{
+    CHECK(executesWithOutput("print (take 3 [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3;4;5] |> take 3)", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_take_partial")
+{
+    CHECK(executesWithOutput("let first3 = take 3\nprint (first3 [1;2;3;4;5])", "[1; 2; 3]"));
+}
+
+// --- drop ---
+
+TEST_CASE("IRGenerator.FSharp.list_drop_basic")
+{
+    CHECK(executesWithOutput("print (drop 3 [1;2;3;4;5])", "[4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_zero")
+{
+    CHECK(executesWithOutput("print (drop 0 [1;2;3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_all")
+{
+    CHECK(executesWithOutput("print (drop 3 [1;2;3])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_more")
+{
+    CHECK(executesWithOutput("print (drop 10 [1;2;3])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_empty")
+{
+    CHECK(executesWithOutput("print (drop 3 [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3;4;5] |> drop 2)", "[3; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_drop_partial")
+{
+    CHECK(executesWithOutput("let skipFirst2 = drop 2\nprint (skipFirst2 [1;2;3;4;5])", "[3; 4; 5]"));
+}
+
+// --- zip ---
+
+TEST_CASE("IRGenerator.FSharp.list_zip_basic")
+{
+    CHECK(executesWithOutput("print (zip [1;2;3] [4;5;6])", "[(1, 4); (2, 5); (3, 6)]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_unequal_left")
+{
+    CHECK(executesWithOutput("print (zip [1;2] [4;5;6])", "[(1, 4); (2, 5)]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_unequal_right")
+{
+    CHECK(executesWithOutput("print (zip [1;2;3] [4;5])", "[(1, 4); (2, 5)]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_empty_left")
+{
+    CHECK(executesWithOutput("print (zip [] [1;2;3])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_empty_right")
+{
+    CHECK(executesWithOutput("print (zip [1;2;3] [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_single")
+{
+    CHECK(executesWithOutput("print (zip [1] [2])", "[(1, 2)]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_zip_pipeline")
+{
+    // Pipeline pipes into last param (__ys), so [4;5;6] |> zip [1;2;3] means zip [1;2;3] [4;5;6]
+    CHECK(executesWithOutput("print ([4;5;6] |> zip [1;2;3])", "[(1, 4); (2, 5); (3, 6)]"));
+}
+
+// --- flatten ---
+
+TEST_CASE("IRGenerator.FSharp.list_flatten_basic")
+{
+    CHECK(executesWithOutput("print (flatten [[1;2]; [3;4]; [5;6]])", "[1; 2; 3; 4; 5; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_flatten_empty_outer")
+{
+    CHECK(executesWithOutput("print (flatten [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_flatten_empty_inner")
+{
+    CHECK(executesWithOutput("print (flatten [[]; [1;2]; []])", "[1; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_flatten_single")
+{
+    CHECK(executesWithOutput("print (flatten [[1;2;3]])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_flatten_pipeline")
+{
+    CHECK(executesWithOutput("print ([[1;2]; [3;4]] |> flatten)", "[1; 2; 3; 4]"));
+}
+
+// --- Composition tests ---
+
+TEST_CASE("IRGenerator.FSharp.list_util_take_then_map")
+{
+    CHECK(executesWithOutput("print ([1;2;3;4;5] |> take 3 |> map (fun x -> x * 10))", "[10; 20; 30]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_util_drop_then_fold")
+{
+    CHECK(executesWithOutput("print ([1;2;3;4;5] |> drop 2 |> fold 0 (fun a x -> a + x))", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_util_filter_then_find")
+{
+    CHECK(
+        executesWithOutput("match ([1;2;3;4;5] |> filter (fun x -> x > 2) |> find (fun x -> x % 2 == 0)) with"
+                           " | Some v -> print v | None -> print \"none\"",
+                           "4"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_util_map_flatten")
+{
+    CHECK(
+        executesWithOutput("print (flatten (map (fun x -> [x; x * 10]) [1;2;3]))", "[1; 10; 2; 20; 3; 30]"));
+}
+
+// =============================================================================
 // Higher-Order List Functions: Composition / Integration
 // =============================================================================
 

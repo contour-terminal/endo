@@ -353,6 +353,27 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `reverse xs` — reverses a list.
     void generateReverseIR(CoreVM::Value* listValue);
 
+    /// Generates IR for `find pred xs` — returns first element matching predicate as Option.
+    void generateFindIR(std::string const& predName, CoreVM::Value* listValue);
+
+    /// Generates IR for `exists pred xs` — returns true if any element matches predicate.
+    void generateExistsIR(std::string const& predName, CoreVM::Value* listValue);
+
+    /// Generates IR for `forall pred xs` — returns true if all elements match predicate.
+    void generateForallIR(std::string const& predName, CoreVM::Value* listValue);
+
+    /// Generates IR for `take n xs` — returns first n elements of list.
+    void generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue);
+
+    /// Generates IR for `drop n xs` — skips first n elements, returns rest.
+    void generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listValue);
+
+    /// Generates IR for `zip xs ys` — pairs elements from two lists into tuple list.
+    void generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB);
+
+    /// Generates IR for `flatten xss` — concatenates a list of lists into a single list.
+    void generateFlattenIR(CoreVM::Value* listOfLists);
+
     /// Compiles a function definition as a separate IRHandler for closure-based calls.
     /// Sets func->compiledHandler to the new handler on success.
     void compileFunctionAsHandler(std::string const& name, FSharpFunction& func);

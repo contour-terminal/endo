@@ -220,6 +220,13 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         registerHOF("fold", { "__init", "__f", "__xs" }, "fold");
         registerHOF("reduce", { "__f", "__xs" }, "reduce");
         registerHOF("reverse", { "__xs" }, "reverse");
+        registerHOF("find", { "__pred", "__xs" }, "find");
+        registerHOF("exists", { "__pred", "__xs" }, "exists");
+        registerHOF("forall", { "__pred", "__xs" }, "forall");
+        registerHOF("take", { "__n", "__xs" }, "take");
+        registerHOF("drop", { "__n", "__xs" }, "drop");
+        registerHOF("zip", { "__xs", "__ys" }, "zip");
+        registerHOF("flatten", { "__xss" }, "flatten");
     }
 
     // Pre-populate function table from persistent state (REPL session continuity)
@@ -6891,6 +6898,44 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "reverse.xs");
         generateReverseIR(listVal);
     }
+    else if (hofName == "find")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "find.xs");
+        generateFindIR("__pred", listVal);
+    }
+    else if (hofName == "exists")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "exists.xs");
+        generateExistsIR("__pred", listVal);
+    }
+    else if (hofName == "forall")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "forall.xs");
+        generateForallIR("__pred", listVal);
+    }
+    else if (hofName == "take")
+    {
+        auto* countVal = _builder.createLoad(lookupFSharpVariable("__n"), "take.n");
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "take.xs");
+        generateTakeIR(countVal, listVal);
+    }
+    else if (hofName == "drop")
+    {
+        auto* countVal = _builder.createLoad(lookupFSharpVariable("__n"), "drop.n");
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "drop.xs");
+        generateDropIR(countVal, listVal);
+    }
+    else if (hofName == "zip")
+    {
+        auto* listA = _builder.createLoad(lookupFSharpVariable("__xs"), "zip.xs");
+        auto* listB = _builder.createLoad(lookupFSharpVariable("__ys"), "zip.ys");
+        generateZipIR(listA, listB);
+    }
+    else if (hofName == "flatten")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xss"), "flatten.xss");
+        generateFlattenIR(listVal);
+    }
     else
     {
         reportTypeError("Unknown builtin HOF: {}", std::string_view(hofName));
@@ -7413,6 +7458,700 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
     // End: return reversed list
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(accStorage, "rev.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value* listValue)
+{
+    auto* optionTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil / None
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons / Some
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / payload
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve predicate function
+    auto predName = predParamName;
+    if (auto ref = lookupFSharpFunctionRef(predParamName))
+        predName = *ref;
+    auto const* pred = lookupFSharpFunction(predName);
+    if (!pred)
+    {
+        reportTypeError("find: predicate argument '{}' not found", std::string_view(predParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "find.src");
+    _builder.createStore(srcStorage, listValue);
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "find.elem");
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "find.result");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("find.cond");
+    auto* bodyBlock = _builder.createBlock("find.body");
+    auto* foundBlock = _builder.createBlock("find.found");
+    auto* noneBlock = _builder.createBlock("find.none");
+    auto* endBlock = _builder.createBlock("find.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "find.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "find.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "find.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, noneBlock);
+
+    // Body: extract head, apply predicate
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "find.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "find.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source cursor to tail
+    auto* srcForTail = _builder.createLoad(srcStorage, "find.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "find.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Apply predicate to element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "find.elem.load");
+    generateFSharpCall(pred, predName, { elemLoad });
+    auto* predResult = _result;
+    if (!predResult)
+    {
+        reportTypeError("find: failed to apply predicate to element");
+        return;
+    }
+    _builder.createCondBr(toBool(predResult), foundBlock, condBlock);
+
+    // Found: wrap element in Some
+    _builder.setInsertPoint(foundBlock);
+    auto* foundElem = _builder.createLoad(elemAlloca, "find.found.elem");
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "find.elem.tmp");
+    _builder.createStore(elemTmp, foundElem);
+
+    CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "find.some");
+    someVal = _builder.createObjSetTag(someVal, tag1, "find.some.tag");
+    auto* elemReload = _builder.createLoad(elemTmp, "find.elem.reload");
+    someVal = _builder.createObjSetSlot(someVal, slot0, elemReload, "find.some.val");
+    _builder.createStore(resultStorage, someVal);
+    _builder.createBr(endBlock);
+
+    // None: list exhausted
+    _builder.setInsertPoint(noneBlock);
+    CoreVM::Value* noneVal = _builder.createObjAlloc(optionTypeId, "find.none");
+    noneVal = _builder.createObjSetTag(noneVal, tag0, "find.none.tag");
+    _builder.createStore(resultStorage, noneVal);
+    _builder.createBr(endBlock);
+
+    // End
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(resultStorage, "find.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+}
+
+void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Value* listValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve predicate function
+    auto predName = predParamName;
+    if (auto ref = lookupFSharpFunctionRef(predParamName))
+        predName = *ref;
+    auto const* pred = lookupFSharpFunction(predName);
+    if (!pred)
+    {
+        reportTypeError("exists: predicate argument '{}' not found", std::string_view(predParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "exists.src");
+    _builder.createStore(srcStorage, listValue);
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "exists.elem");
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "exists.result");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("exists.cond");
+    auto* bodyBlock = _builder.createBlock("exists.body");
+    auto* trueBlock = _builder.createBlock("exists.true");
+    auto* falseBlock = _builder.createBlock("exists.false");
+    auto* endBlock = _builder.createBlock("exists.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "exists.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "exists.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "exists.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, falseBlock);
+
+    // Body: extract head, apply predicate
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "exists.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "exists.head");
+    _builder.createStore(elemAlloca, head);
+
+    auto* srcForTail = _builder.createLoad(srcStorage, "exists.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "exists.tail");
+    _builder.createStore(srcStorage, tail);
+
+    auto* elemLoad = _builder.createLoad(elemAlloca, "exists.elem.load");
+    generateFSharpCall(pred, predName, { elemLoad });
+    auto* predResult = _result;
+    if (!predResult)
+    {
+        reportTypeError("exists: failed to apply predicate to element");
+        return;
+    }
+    _builder.createCondBr(toBool(predResult), trueBlock, condBlock);
+
+    // True: predicate matched
+    _builder.setInsertPoint(trueBlock);
+    _builder.createStore(resultStorage, _builder.getBoolean(true));
+    _builder.createBr(endBlock);
+
+    // False: list exhausted
+    _builder.setInsertPoint(falseBlock);
+    _builder.createStore(resultStorage, _builder.getBoolean(false));
+    _builder.createBr(endBlock);
+
+    // End
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(resultStorage, "exists.result");
+}
+
+void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Value* listValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve predicate function
+    auto predName = predParamName;
+    if (auto ref = lookupFSharpFunctionRef(predParamName))
+        predName = *ref;
+    auto const* pred = lookupFSharpFunction(predName);
+    if (!pred)
+    {
+        reportTypeError("forall: predicate argument '{}' not found", std::string_view(predParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "forall.src");
+    _builder.createStore(srcStorage, listValue);
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "forall.elem");
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "forall.result");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("forall.cond");
+    auto* bodyBlock = _builder.createBlock("forall.body");
+    auto* trueBlock = _builder.createBlock("forall.true");
+    auto* falseBlock = _builder.createBlock("forall.false");
+    auto* endBlock = _builder.createBlock("forall.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "forall.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "forall.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "forall.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, trueBlock);
+
+    // Body: extract head, apply predicate
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "forall.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "forall.head");
+    _builder.createStore(elemAlloca, head);
+
+    auto* srcForTail = _builder.createLoad(srcStorage, "forall.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "forall.tail");
+    _builder.createStore(srcStorage, tail);
+
+    auto* elemLoad = _builder.createLoad(elemAlloca, "forall.elem.load");
+    generateFSharpCall(pred, predName, { elemLoad });
+    auto* predResult = _result;
+    if (!predResult)
+    {
+        reportTypeError("forall: failed to apply predicate to element");
+        return;
+    }
+    // If predicate is false, short-circuit to falseBlock
+    _builder.createCondBr(toBool(predResult), condBlock, falseBlock);
+
+    // True: all elements matched
+    _builder.setInsertPoint(trueBlock);
+    _builder.createStore(resultStorage, _builder.getBoolean(true));
+    _builder.createBr(endBlock);
+
+    // False: predicate failed for an element
+    _builder.setInsertPoint(falseBlock);
+    _builder.createStore(resultStorage, _builder.getBoolean(false));
+    _builder.createBr(endBlock);
+
+    // End
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(resultStorage, "forall.result");
+}
+
+void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* one = _builder.get(CoreVM::CoreNumber(1));
+    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* counterStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "take.counter");
+    _builder.createStore(counterStorage, countValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "take.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "take.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("take.cond");
+    auto* bodyBlock = _builder.createBlock("take.body");
+    auto* revInitBlock = _builder.createBlock("take.rev.init");
+    auto* revCondBlock = _builder.createBlock("take.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("take.rev.body");
+    auto* endBlock = _builder.createBlock("take.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Check if counter > 0 AND list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* counterLoad = _builder.createLoad(counterStorage, "take.counter.load");
+    auto* counterGtZero = _builder.createNCmpGT(counterLoad, zero, "take.counter_gt_zero");
+    auto* checkListBlock = _builder.createBlock("take.check_list");
+    _builder.createCondBr(counterGtZero, checkListBlock, revInitBlock);
+
+    _builder.setInsertPoint(checkListBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "take.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "take.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "take.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, revInitBlock);
+
+    // Body: extract head, cons onto reversed accumulator, decrement counter
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "take.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "take.head");
+
+    auto* srcForTail = _builder.createLoad(srcStorage, "take.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "take.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Store head and acc in temp allocas to survive ObjAlloc
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "take.elem.tmp");
+    _builder.createStore(elemTmp, head);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "take.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "take.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "take.cons.tag");
+    auto* elemReload = _builder.createLoad(elemTmp, "take.elem.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "take.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "take.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "take.cons.tail");
+    _builder.createStore(accStorage, cons);
+
+    // Decrement counter
+    auto* counterLoad2 = _builder.createLoad(counterStorage, "take.counter.load2");
+    auto* counterDec = _builder.createSub(counterLoad2, one, "take.counter.dec");
+    _builder.createStore(counterStorage, counterDec);
+
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "take.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "take.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "take.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "take.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "take.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "take.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "take.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "take.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "take.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "take.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "take.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "take.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "take.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "take.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "take.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "take.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "take.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "take.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "take.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* one = _builder.get(CoreVM::CoreNumber(1));
+    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "drop.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* counterStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "drop.counter");
+    _builder.createStore(counterStorage, countValue);
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("drop.cond");
+    auto* bodyBlock = _builder.createBlock("drop.body");
+    auto* endBlock = _builder.createBlock("drop.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check counter > 0 AND list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* counterLoad = _builder.createLoad(counterStorage, "drop.counter.load");
+    auto* counterGtZero = _builder.createNCmpGT(counterLoad, zero, "drop.counter_gt_zero");
+    auto* checkListBlock = _builder.createBlock("drop.check_list");
+    _builder.createCondBr(counterGtZero, checkListBlock, endBlock);
+
+    _builder.setInsertPoint(checkListBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "drop.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "drop.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "drop.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: advance to tail, decrement counter
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForTail = _builder.createLoad(srcStorage, "drop.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "drop.tail");
+    _builder.createStore(srcStorage, tail);
+
+    auto* counterLoad2 = _builder.createLoad(counterStorage, "drop.counter.load2");
+    auto* counterDec = _builder.createSub(counterLoad2, one, "drop.counter.dec");
+    _builder.createStore(counterStorage, counterDec);
+
+    _builder.createBr(condBlock);
+
+    // End: return remaining list
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(srcStorage, "drop.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
+{
+    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
+
+    // Allocas for both source lists
+    auto* srcAStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.srcA");
+    _builder.createStore(srcAStorage, listA);
+    auto* srcBStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.srcB");
+    _builder.createStore(srcBStorage, listB);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "zip.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "zip.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    // Temp allocas for head values (must survive ObjAlloc for tuple + cons)
+    auto* headATmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "zip.headA.tmp");
+    auto* headBTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "zip.headB.tmp");
+    auto* tupleTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.tuple.tmp");
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.acc.tmp");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("zip.cond");
+    auto* bodyBlock = _builder.createBlock("zip.body");
+    auto* revInitBlock = _builder.createBlock("zip.rev.init");
+    auto* revCondBlock = _builder.createBlock("zip.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("zip.rev.body");
+    auto* endBlock = _builder.createBlock("zip.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Check if BOTH lists are Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcALoad = _builder.createLoad(srcAStorage, "zip.srcA.load");
+    auto* srcATag = _builder.createObjGetTag(srcALoad, "zip.srcA.tag");
+    auto* isConsA = _builder.createNCmpEQ(srcATag, tag1, "zip.is_consA");
+    auto* checkBBlock = _builder.createBlock("zip.checkB");
+    _builder.createCondBr(isConsA, checkBBlock, revInitBlock);
+
+    _builder.setInsertPoint(checkBBlock);
+    auto* srcBLoad = _builder.createLoad(srcBStorage, "zip.srcB.load");
+    auto* srcBTag = _builder.createObjGetTag(srcBLoad, "zip.srcB.tag");
+    auto* isConsB = _builder.createNCmpEQ(srcBTag, tag1, "zip.is_consB");
+    _builder.createCondBr(isConsB, bodyBlock, revInitBlock);
+
+    // Body: extract heads from both lists, build tuple, cons onto acc
+    _builder.setInsertPoint(bodyBlock);
+    // Extract head A
+    auto* srcAForHead = _builder.createLoad(srcAStorage, "zip.srcA.for_head");
+    auto* headA = _builder.createObjGetSlot(srcAForHead, slot0, "zip.headA");
+    _builder.createStore(headATmp, headA);
+    // Advance A to tail
+    auto* srcAForTail = _builder.createLoad(srcAStorage, "zip.srcA.for_tail");
+    auto* tailA = _builder.createObjGetSlot(srcAForTail, slot1, "zip.tailA");
+    _builder.createStore(srcAStorage, tailA);
+
+    // Extract head B
+    auto* srcBForHead = _builder.createLoad(srcBStorage, "zip.srcB.for_head");
+    auto* headB = _builder.createObjGetSlot(srcBForHead, slot0, "zip.headB");
+    _builder.createStore(headBTmp, headB);
+    // Advance B to tail
+    auto* srcBForTail = _builder.createLoad(srcBStorage, "zip.srcB.for_tail");
+    auto* tailB = _builder.createObjGetSlot(srcBForTail, slot1, "zip.tailB");
+    _builder.createStore(srcBStorage, tailB);
+
+    // Build Tuple2 object from headA, headB
+    // Reload heads from temp allocas (they must survive ObjAlloc)
+    auto* headAReload = _builder.createLoad(headATmp, "zip.headA.reload");
+    auto* headATmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "zip.headA.tmp2");
+    _builder.createStore(headATmp2, headAReload);
+    auto* headBReload = _builder.createLoad(headBTmp, "zip.headB.reload");
+    auto* headBTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "zip.headB.tmp2");
+    _builder.createStore(headBTmp2, headBReload);
+
+    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "zip.tuple");
+    auto* headAFinal = _builder.createLoad(headATmp2, "zip.headA.final");
+    tuple = _builder.createObjSetSlot(tuple, slot0, headAFinal, "zip.tuple.fst");
+    auto* headBFinal = _builder.createLoad(headBTmp2, "zip.headB.final");
+    tuple = _builder.createObjSetSlot(tuple, slot1, headBFinal, "zip.tuple.snd");
+    _builder.createStore(tupleTmp, tuple);
+
+    // Cons tuple onto reversed accumulator
+    auto* accForCons = _builder.createLoad(accStorage, "zip.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    auto* tupleReload = _builder.createLoad(tupleTmp, "zip.tuple.reload");
+    auto* tupleStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.tuple.store.tmp");
+    _builder.createStore(tupleStoreTmp, tupleReload);
+    auto* accReloadPre = _builder.createLoad(accTmp, "zip.acc.reload.pre");
+    auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.acc.store.tmp");
+    _builder.createStore(accStoreTmp, accReloadPre);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "zip.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "zip.cons.tag");
+    auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "zip.tuple.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "zip.cons.head");
+    auto* accForSlot = _builder.createLoad(accStoreTmp, "zip.acc.for_slot");
+    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "zip.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "zip.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(listTypeId, "zip.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "zip.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "zip.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "zip.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "zip.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "zip.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "zip.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "zip.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "zip.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "zip.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(listTypeId, "zip.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "zip.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "zip.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "zip.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "zip.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "zip.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "zip.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Allocas
+    auto* outerSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.outer.src");
+    _builder.createStore(outerSrcStorage, listOfLists);
+
+    auto* innerSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.inner.src");
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "flatten.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "flatten.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    // Create blocks
+    auto* outerCondBlock = _builder.createBlock("flatten.outer.cond");
+    auto* outerBodyBlock = _builder.createBlock("flatten.outer.body");
+    auto* innerCondBlock = _builder.createBlock("flatten.inner.cond");
+    auto* innerBodyBlock = _builder.createBlock("flatten.inner.body");
+    auto* revInitBlock = _builder.createBlock("flatten.rev.init");
+    auto* revCondBlock = _builder.createBlock("flatten.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("flatten.rev.body");
+    auto* endBlock = _builder.createBlock("flatten.end");
+
+    _builder.createBr(outerCondBlock);
+
+    // Outer loop: iterate list of lists
+    _builder.setInsertPoint(outerCondBlock);
+    auto* outerSrcLoad = _builder.createLoad(outerSrcStorage, "flatten.outer.src.load");
+    auto* outerSrcTag = _builder.createObjGetTag(outerSrcLoad, "flatten.outer.src.tag");
+    auto* outerIsCons = _builder.createNCmpEQ(outerSrcTag, tag1, "flatten.outer.is_cons");
+    _builder.createCondBr(outerIsCons, outerBodyBlock, revInitBlock);
+
+    // Outer body: extract inner list, advance outer
+    _builder.setInsertPoint(outerBodyBlock);
+    auto* outerForHead = _builder.createLoad(outerSrcStorage, "flatten.outer.for_head");
+    auto* innerList = _builder.createObjGetSlot(outerForHead, slot0, "flatten.inner.list");
+    _builder.createStore(innerSrcStorage, innerList);
+
+    auto* outerForTail = _builder.createLoad(outerSrcStorage, "flatten.outer.for_tail");
+    auto* outerTail = _builder.createObjGetSlot(outerForTail, slot1, "flatten.outer.tail");
+    _builder.createStore(outerSrcStorage, outerTail);
+
+    _builder.createBr(innerCondBlock);
+
+    // Inner loop: iterate elements of current inner list
+    _builder.setInsertPoint(innerCondBlock);
+    auto* innerSrcLoad = _builder.createLoad(innerSrcStorage, "flatten.inner.src.load");
+    auto* innerSrcTag = _builder.createObjGetTag(innerSrcLoad, "flatten.inner.src.tag");
+    auto* innerIsCons = _builder.createNCmpEQ(innerSrcTag, tag1, "flatten.inner.is_cons");
+    _builder.createCondBr(innerIsCons, innerBodyBlock, outerCondBlock);
+
+    // Inner body: extract element, cons onto accumulator
+    _builder.setInsertPoint(innerBodyBlock);
+    auto* innerForHead = _builder.createLoad(innerSrcStorage, "flatten.inner.for_head");
+    auto* elem = _builder.createObjGetSlot(innerForHead, slot0, "flatten.elem");
+
+    auto* innerForTail = _builder.createLoad(innerSrcStorage, "flatten.inner.for_tail");
+    auto* innerTail = _builder.createObjGetSlot(innerForTail, slot1, "flatten.inner.tail");
+    _builder.createStore(innerSrcStorage, innerTail);
+
+    // Store elem and acc in temp allocas to survive ObjAlloc
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "flatten.elem.tmp");
+    _builder.createStore(elemTmp, elem);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "flatten.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "flatten.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "flatten.cons.tag");
+    auto* elemReload = _builder.createLoad(elemTmp, "flatten.elem.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "flatten.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "flatten.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "flatten.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(innerCondBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "flatten.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "flatten.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "flatten.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "flatten.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "flatten.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "flatten.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "flatten.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "flatten.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "flatten.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "flatten.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "flatten.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "flatten.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "flatten.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "flatten.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "flatten.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "flatten.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "flatten.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "flatten.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "flatten.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 
