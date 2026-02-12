@@ -203,6 +203,25 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     // Initialize F# root scope
     generator.pushFSharpScope();
 
+    // Register builtin higher-order list functions (map, filter, fold, reduce, reverse).
+    // These are registered as FSharpFunction entries with body=nullptr and builtinHOF set,
+    // which leverages existing partial application and pipeline infrastructure.
+    {
+        auto registerHOF = [&](std::string name, std::vector<std::string> params, std::string hofName) {
+            FSharpFunction func;
+            func.parameters = std::move(params);
+            func.parameterTypes.resize(func.parameters.size()); // all nullopt (untyped)
+            func.body = nullptr;
+            func.builtinHOF = std::move(hofName);
+            generator.registerFSharpFunction(std::move(name), std::move(func));
+        };
+        registerHOF("map", { "__f", "__xs" }, "map");
+        registerHOF("filter", { "__pred", "__xs" }, "filter");
+        registerHOF("fold", { "__init", "__f", "__xs" }, "fold");
+        registerHOF("reduce", { "__f", "__xs" }, "reduce");
+        registerHOF("reverse", { "__xs" }, "reverse");
+    }
+
     // Pre-populate function table from persistent state (REPL session continuity)
     if (persistentState)
     {
@@ -296,6 +315,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         {
             // Skip auto-generated lambda names (partial application intermediates)
             if (name.starts_with("__lambda_"))
+                continue;
+
+            // Skip builtin HOFs — they are re-registered on each codegen
+            if (!func.builtinHOF.empty())
                 continue;
 
             FSharpPersistentState::PersistedFunction persisted;
@@ -3997,6 +4020,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         funcName = baseFuncName;
         func = baseFunc;
 
+        // Builtin HOFs: dispatch to IR generators
+        if (!func->builtinHOF.empty())
+        {
+            generateBuiltinHOFCall(func, funcName, allArgs);
+            return;
+        }
+
         pushFSharpScope();
 
         // Re-bind captured variables
@@ -4136,6 +4166,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         }
 
         _activeRecursion.reset();
+        return;
+    }
+
+    // Builtin HOFs with arity 1 (e.g., reverse): dispatch to IR generators
+    if (!func->builtinHOF.empty())
+    {
+        generateBuiltinHOFCall(func, funcName, { value });
         return;
     }
 
@@ -4349,6 +4386,13 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         return;
     }
 
+    // Builtin higher-order functions: dispatch to IR generators
+    if (!func->builtinHOF.empty())
+    {
+        generateBuiltinHOFCall(func, funcName, args);
+        return;
+    }
+
     // Non-recursive function: inline the function body
     generateFSharpCall(func, funcName, args);
 }
@@ -4390,6 +4434,7 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
     partialFunc.body = func->body;
     partialFunc.returnKind = func->returnKind;
     partialFunc.isRecursive = false;
+    partialFunc.builtinHOF = func->builtinHOF;
     partialFunc.capturedBindings = std::move(newCaptures);
 
     // Carry over existing captured function refs from the parent function
@@ -4803,6 +4848,10 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
 void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFunction& func)
 {
+    // Builtin HOFs have no AST body — they use custom IR generators, not handler compilation.
+    if (!func.builtinHOF.empty())
+        return;
+
     // Check if all parameters have types (either annotated or inferred).
     // Without types, parameters would get Void type, causing wrong runtime behavior.
     // Type inference should have filled in missing annotations; fall back to AST inlining if not.
@@ -6784,5 +6833,589 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
     _result = obj;
     annotateObjectTypeId(_result, ctorInfo->typeId);
 }
+
+// {{{ Builtin Higher-Order Function IR Generators
+
+void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
+                                         std::string const& /*funcName*/,
+                                         std::vector<CoreVM::Value*> const& args)
+{
+    // Set up scope: rebind captured variables (from partial application) and function refs
+    pushFSharpScope();
+    for (auto const& [capName, capStorage]: func->capturedBindings)
+        bindFSharpVariable(capName, capStorage);
+    for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
+        _currentFSharpScope->functionRefs[varName] = targetFunc;
+
+    // Bind explicit arguments to parameter names
+    for (size_t i = 0; i < func->parameters.size(); ++i)
+    {
+        auto* storage = createAllocaInEntryBlock(args[i]->type(), func->parameters[i]);
+        _builder.createStore(storage, args[i], func->parameters[i]);
+        bindFSharpVariable(func->parameters[i], storage);
+
+        // Track function references passed as arguments
+        if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
+        {
+            if (lookupFSharpFunction(constStr->get()))
+                _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+        }
+    }
+
+    // Resolve actual function and list arguments from scope
+    auto const& hofName = func->builtinHOF;
+
+    if (hofName == "map")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "map.xs");
+        generateMapIR("__f", listVal);
+    }
+    else if (hofName == "filter")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "filter.xs");
+        generateFilterIR("__pred", listVal);
+    }
+    else if (hofName == "fold")
+    {
+        auto* initVal = _builder.createLoad(lookupFSharpVariable("__init"), "fold.init");
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "fold.xs");
+        generateFoldIR(initVal, "__f", listVal);
+    }
+    else if (hofName == "reduce")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "reduce.xs");
+        generateReduceIR("__f", listVal);
+    }
+    else if (hofName == "reverse")
+    {
+        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "reverse.xs");
+        generateReverseIR(listVal);
+    }
+    else
+    {
+        reportTypeError("Unknown builtin HOF: {}", std::string_view(hofName));
+    }
+
+    popFSharpScope();
+}
+
+void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value* listValue)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve the function to call
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+    auto const* func = lookupFSharpFunction(funcName);
+    if (!func)
+    {
+        reportTypeError("map: function argument '{}' not found", std::string_view(funcParamName));
+        return;
+    }
+
+    // Allocas for phase 1 (forward iteration building reversed accumulator)
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "map.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "map.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "map.elem");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("map.cond");
+    auto* bodyBlock = _builder.createBlock("map.body");
+    auto* revInitBlock = _builder.createBlock("map.rev.init");
+    auto* revCondBlock = _builder.createBlock("map.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("map.rev.body");
+    auto* endBlock = _builder.createBlock("map.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "map.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "map.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "map.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, revInitBlock);
+
+    // Phase 1: Extract head, apply function, cons onto reversed accumulator
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "map.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "map.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source cursor to tail (separate load)
+    auto* srcForTail = _builder.createLoad(srcStorage, "map.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "map.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Apply function to element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "map.elem.load");
+    generateFSharpCall(func, funcName, { elemLoad });
+    auto* mapped = _result;
+    if (!mapped)
+    {
+        reportTypeError("map: failed to apply function to element");
+        return;
+    }
+
+    // Store mapped value and accumulator in temp allocas to survive ObjAlloc
+    auto* mappedTmp = createAllocaInEntryBlock(mapped->type(), "map.mapped.tmp");
+    _builder.createStore(mappedTmp, mapped);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "map.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    // Create Cons cell: tag=1, slot[0]=mapped, slot[1]=oldAcc
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "map.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "map.cons.tag");
+    auto* mappedReload = _builder.createLoad(mappedTmp, "map.mapped.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, mappedReload, "map.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "map.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "map.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "map.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "map.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "map.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "map.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "map.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "map.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "map.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "map.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "map.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "map.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "map.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "map.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "map.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "map.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "map.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "map.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "map.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "map.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "map.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve the predicate function
+    auto predName = predParamName;
+    if (auto ref = lookupFSharpFunctionRef(predParamName))
+        predName = *ref;
+    auto const* pred = lookupFSharpFunction(predName);
+    if (!pred)
+    {
+        reportTypeError("filter: predicate argument '{}' not found", std::string_view(predParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "filter.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "filter.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "filter.elem");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("filter.cond");
+    auto* bodyBlock = _builder.createBlock("filter.body");
+    auto* consBlock = _builder.createBlock("filter.cons");
+    auto* revInitBlock = _builder.createBlock("filter.rev.init");
+    auto* revCondBlock = _builder.createBlock("filter.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("filter.rev.body");
+    auto* endBlock = _builder.createBlock("filter.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "filter.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "filter.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "filter.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, revInitBlock);
+
+    // Phase 1: Extract head, apply predicate
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "filter.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "filter.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source cursor to tail
+    auto* srcForTail = _builder.createLoad(srcStorage, "filter.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "filter.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Apply predicate to element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "filter.elem.load");
+    generateFSharpCall(pred, predName, { elemLoad });
+    auto* predResult = _result;
+    if (!predResult)
+    {
+        reportTypeError("filter: failed to apply predicate to element");
+        return;
+    }
+    _builder.createCondBr(toBool(predResult), consBlock, condBlock);
+
+    // Phase 1: Cons block — element passed filter, prepend to accumulator
+    _builder.setInsertPoint(consBlock);
+    auto* elemForCons = _builder.createLoad(elemAlloca, "filter.elem.for_cons");
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "filter.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "filter.elem.tmp");
+    _builder.createStore(elemTmp, elemForCons);
+
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "filter.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "filter.cons.tag");
+    auto* elemReload = _builder.createLoad(elemTmp, "filter.elem.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "filter.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "filter.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "filter.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "filter.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "filter.rev.nil");
+    revNil = _builder.createObjSetTag(revNil, tag0, "filter.rev.nil.tag");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "filter.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "filter.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "filter.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "filter.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "filter.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "filter.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "filter.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "filter.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "filter.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "filter.rev.cons");
+    revCons = _builder.createObjSetTag(revCons, tag1, "filter.rev.cons.tag");
+    auto* revElemReload = _builder.createLoad(revElemTmp, "filter.rev.elem.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "filter.rev.cons.head");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "filter.rev.acc.reload");
+    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "filter.rev.cons.tail");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "filter.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
+                                 std::string const& funcParamName,
+                                 CoreVM::Value* listValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve the function to call
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+    auto const* func = lookupFSharpFunction(funcName);
+    if (!func)
+    {
+        reportTypeError("fold: function argument '{}' not found", std::string_view(funcParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "fold.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(initValue->type(), "fold.acc");
+    _builder.createStore(accStorage, initValue);
+
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "fold.elem");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("fold.cond");
+    auto* bodyBlock = _builder.createBlock("fold.body");
+    auto* endBlock = _builder.createBlock("fold.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "fold.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "fold.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "fold.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head, apply function(acc, elem), update acc
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "fold.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "fold.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Advance source cursor
+    auto* srcForTail = _builder.createLoad(srcStorage, "fold.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "fold.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Apply function to (acc, elem)
+    auto* accLoad = _builder.createLoad(accStorage, "fold.acc.load");
+    auto* elemLoad = _builder.createLoad(elemAlloca, "fold.elem.load");
+    generateFSharpCall(func, funcName, { accLoad, elemLoad });
+    auto* newAcc = _result;
+    if (!newAcc)
+    {
+        reportTypeError("fold: failed to apply function");
+        return;
+    }
+    _builder.createStore(accStorage, newAcc);
+    _builder.createBr(condBlock);
+
+    // End: return final accumulator
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(accStorage, "fold.result");
+}
+
+void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Value* listValue)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* optionTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil / None
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons / Some
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / payload
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Resolve the function to call
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+    auto const* func = lookupFSharpFunction(funcName);
+    if (!func)
+    {
+        reportTypeError("reduce: function argument '{}' not found", std::string_view(funcParamName));
+        return;
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "reduce.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.acc");
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "reduce.result");
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.elem");
+
+    // Create blocks
+    auto* checkEmptyBlock = _builder.createBlock("reduce.check_empty");
+    auto* initBlock = _builder.createBlock("reduce.init");
+    auto* condBlock = _builder.createBlock("reduce.cond");
+    auto* bodyBlock = _builder.createBlock("reduce.body");
+    auto* noneBlock = _builder.createBlock("reduce.none");
+    auto* someBlock = _builder.createBlock("reduce.some");
+    auto* endBlock = _builder.createBlock("reduce.end");
+
+    _builder.createBr(checkEmptyBlock);
+
+    // Check if list is empty
+    _builder.setInsertPoint(checkEmptyBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "reduce.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "reduce.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "reduce.is_cons");
+    _builder.createCondBr(isCons, initBlock, noneBlock);
+
+    // Empty list → return None
+    _builder.setInsertPoint(noneBlock);
+    CoreVM::Value* noneVal = _builder.createObjAlloc(optionTypeId, "reduce.none");
+    noneVal = _builder.createObjSetTag(noneVal, tag0, "reduce.none.tag");
+    _builder.createStore(resultStorage, noneVal);
+    _builder.createBr(endBlock);
+
+    // Non-empty: use first element as initial accumulator
+    _builder.setInsertPoint(initBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "reduce.src.for_head");
+    auto* firstElem = _builder.createObjGetSlot(srcForHead, slot0, "reduce.first");
+    _builder.createStore(accStorage, firstElem);
+
+    // Advance to tail
+    auto* srcForTail = _builder.createLoad(srcStorage, "reduce.src.for_tail");
+    auto* tailVal = _builder.createObjGetSlot(srcForTail, slot1, "reduce.tail");
+    _builder.createStore(srcStorage, tailVal);
+    _builder.createBr(condBlock);
+
+    // Fold loop: condition
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad2 = _builder.createLoad(srcStorage, "reduce.src.load2");
+    auto* srcTag2 = _builder.createObjGetTag(srcLoad2, "reduce.src.tag2");
+    auto* isCons2 = _builder.createNCmpEQ(srcTag2, tag1, "reduce.is_cons2");
+    _builder.createCondBr(isCons2, bodyBlock, someBlock);
+
+    // Fold loop: body
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead2 = _builder.createLoad(srcStorage, "reduce.src.for_head2");
+    auto* head = _builder.createObjGetSlot(srcForHead2, slot0, "reduce.head");
+    _builder.createStore(elemAlloca, head);
+
+    auto* srcForTail2 = _builder.createLoad(srcStorage, "reduce.src.for_tail2");
+    auto* tail2 = _builder.createObjGetSlot(srcForTail2, slot1, "reduce.tail2");
+    _builder.createStore(srcStorage, tail2);
+
+    auto* accLoad = _builder.createLoad(accStorage, "reduce.acc.load");
+    auto* elemLoad = _builder.createLoad(elemAlloca, "reduce.elem.load");
+    generateFSharpCall(func, funcName, { accLoad, elemLoad });
+    auto* newAcc = _result;
+    if (!newAcc)
+    {
+        reportTypeError("reduce: failed to apply function");
+        return;
+    }
+    _builder.createStore(accStorage, newAcc);
+    _builder.createBr(condBlock);
+
+    // Wrap result in Some
+    _builder.setInsertPoint(someBlock);
+    auto* finalAcc = _builder.createLoad(accStorage, "reduce.final_acc");
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.acc.tmp");
+    _builder.createStore(accTmp, finalAcc);
+
+    CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "reduce.some");
+    someVal = _builder.createObjSetTag(someVal, tag1, "reduce.some.tag");
+    auto* accReload = _builder.createLoad(accTmp, "reduce.acc.reload");
+    someVal = _builder.createObjSetSlot(someVal, slot0, accReload, "reduce.some.val");
+
+    _builder.createStore(resultStorage, someVal);
+    _builder.createBr(endBlock);
+
+    // End: return result
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(resultStorage, "reduce.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+}
+
+void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "rev.src");
+    _builder.createStore(srcStorage, listValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "rev.acc");
+    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "rev.nil");
+    nil = _builder.createObjSetTag(nil, tag0, "rev.nil.tag");
+    _builder.createStore(accStorage, nil);
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("rev.cond");
+    auto* bodyBlock = _builder.createBlock("rev.body");
+    auto* endBlock = _builder.createBlock("rev.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "rev.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "rev.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "rev.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head, cons onto accumulator (naturally reverses)
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "rev.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "rev.head");
+
+    // Advance source cursor
+    auto* srcForTail = _builder.createLoad(srcStorage, "rev.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "rev.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Store head and acc in temp allocas to survive ObjAlloc
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "rev.elem.tmp");
+    _builder.createStore(elemTmp, head);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "rev.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "rev.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    // Create Cons cell: tag=1, slot[0]=head, slot[1]=oldAcc
+    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "rev.cons");
+    cons = _builder.createObjSetTag(cons, tag1, "rev.cons.tag");
+    auto* elemReload = _builder.createLoad(elemTmp, "rev.elem.reload");
+    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "rev.cons.head");
+    auto* accReload = _builder.createLoad(accTmp, "rev.acc.reload");
+    cons = _builder.createObjSetSlot(cons, slot1, accReload, "rev.cons.tail");
+
+    _builder.createStore(accStorage, cons);
+    _builder.createBr(condBlock);
+
+    // End: return reversed list
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(accStorage, "rev.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+// }}}
 
 } // namespace endo

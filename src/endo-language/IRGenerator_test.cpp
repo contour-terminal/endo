@@ -4243,6 +4243,341 @@ TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
 }
 
 // =============================================================================
+// Higher-Order List Functions: map
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_map_basic")
+{
+    CHECK(executesWithOutput("print (map (fun x -> x * 2) [1; 2; 3])", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_named_function")
+{
+    CHECK(executesWithOutput("let double x = x * 2\nprint (map double [1; 2; 3])", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_empty")
+{
+    CHECK(executesWithOutput("print (map (fun x -> x * 2) [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_single")
+{
+    CHECK(executesWithOutput("print (map (fun x -> x + 10) [5])", "[15]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_identity")
+{
+    CHECK(executesWithOutput("print (map (fun x -> x) [1; 2; 3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_pipeline")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * 2))", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_chained")
+{
+    CHECK(
+        executesWithOutput("print ([1; 2; 3] |> map (fun x -> x + 1) |> map (fun x -> x * 2))", "[4; 6; 8]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_partial")
+{
+    CHECK(
+        executesWithOutput("let doubleAll = map (fun x -> x * 2)\nprint (doubleAll [1; 2; 3])", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_closure")
+{
+    CHECK(executesWithOutput("let offset = 10\nprint (map (fun x -> x + offset) [1; 2; 3])", "[11; 12; 13]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_negate")
+{
+    CHECK(executesWithOutput("print (map (fun x -> 0 - x) [1; 2; 3])", "[-1; -2; -3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_map_placeholder")
+{
+    CHECK(executesWithOutput("print (map (_ * 2) [1; 2; 3])", "[2; 4; 6]"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: filter
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_filter_basic")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x % 2 == 0) [1; 2; 3; 4; 5; 6])", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_all_pass")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [1; 2; 3])", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_none_pass")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x > 10) [1; 2; 3])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_empty")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_single_pass")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [5])", "[5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_single_fail")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x > 10) [5])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_pipeline")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0))", "[2; 4; 6]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_partial")
+{
+    CHECK(executesWithOutput("let getEvens = filter (fun x -> x % 2 == 0)\nprint (getEvens [1; 2; 3; 4])",
+                             "[2; 4]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_preserves_order")
+{
+    CHECK(executesWithOutput("print (filter (fun x -> x != 3) [1; 2; 3; 4; 5])", "[1; 2; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_filter_placeholder")
+{
+    CHECK(executesWithOutput("print (filter (_ > 2) [1; 2; 3; 4; 5])", "[3; 4; 5]"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: fold
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_fold_sum")
+{
+    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + x) [1; 2; 3; 4; 5])", "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_product")
+{
+    CHECK(executesWithOutput("print (fold 1 (fun acc x -> acc * x) [1; 2; 3; 4; 5])", "120"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_empty")
+{
+    CHECK(executesWithOutput("print (fold 42 (fun acc x -> acc + x) [])", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_single")
+{
+    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + x) [7])", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_count")
+{
+    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + 1) [10; 20; 30])", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_max")
+{
+    CHECK(executesWithOutput("print (fold 0 (fun acc x -> if x > acc then x else acc) [3; 1; 4; 1; 5; 9])",
+                             "9"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_pipeline")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5] |> fold 0 (fun acc x -> acc + x))", "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_left_associative")
+{
+    // ((100 - 1) - 2) - 3 = 94
+    CHECK(executesWithOutput("print (fold 100 (fun acc x -> acc - x) [1; 2; 3])", "94"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_partial")
+{
+    CHECK(executesWithOutput("let sum = fold 0 (fun acc x -> acc + x)\nprint (sum [1; 2; 3])", "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_fold_partial_init_only")
+{
+    CHECK(
+        executesWithOutput("let sumFrom0 = fold 0\nprint (sumFrom0 (fun acc x -> acc + x) [1; 2; 3])", "6"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: reduce
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_sum")
+{
+    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) [1; 2; 3; 4]\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_product")
+{
+    CHECK(executesWithOutput("let r = reduce (fun a b -> a * b) [1; 2; 3; 4]\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "24"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_single")
+{
+    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) [42]\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_empty")
+{
+    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) []\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "none"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_max")
+{
+    CHECK(executesWithOutput("let r = reduce (fun a b -> if a > b then a else b) [3; 1; 4; 1; 5; 9]\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "9"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_pipeline")
+{
+    CHECK(executesWithOutput("let r = [1; 2; 3; 4; 5] |> reduce (fun a b -> a + b)\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "15"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reduce_left_associative")
+{
+    // (10 - 3) - 2 = 5
+    CHECK(executesWithOutput("let r = reduce (fun a b -> a - b) [10; 3; 2]\n"
+                             "match r with\n"
+                             "    | Some v -> print v\n"
+                             "    | None -> print \"none\"",
+                             "5"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: reverse
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_basic")
+{
+    CHECK(executesWithOutput("print (reverse [1; 2; 3])", "[3; 2; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_single")
+{
+    CHECK(executesWithOutput("print (reverse [42])", "[42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_empty")
+{
+    CHECK(executesWithOutput("print (reverse [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_pipeline")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3] |> reverse)", "[3; 2; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_double")
+{
+    CHECK(executesWithOutput("print (reverse (reverse [1; 2; 3]))", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_reverse_preserves_length")
+{
+    CHECK(executesWithOutput("print (length (reverse [1; 2; 3; 4; 5]))", "5"));
+}
+
+// =============================================================================
+// Higher-Order List Functions: Composition / Integration
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_hof_filter_then_map")
+{
+    CHECK(executesWithOutput(
+        "print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * 10))",
+        "[20; 40; 60]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_map_then_fold")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * x) |> fold 0 (fun acc x -> acc + x))",
+                             "14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_filter_map_fold")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * "
+                             "x) |> fold 0 (fun acc x -> acc + x))",
+                             "56"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_map_reverse")
+{
+    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * 2) |> reverse)", "[6; 4; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_with_let_binding")
+{
+    CHECK(executesWithOutput("let xs = [1; 2; 3; 4; 5]\n"
+                             "let evens = filter (fun x -> x % 2 == 0) xs\n"
+                             "let doubled = map (fun x -> x * 2) evens\n"
+                             "print doubled",
+                             "[4; 8]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_nested_map")
+{
+    CHECK(executesWithOutput(
+        "let double x = x * 2\nlet add1 x = x + 1\nprint (map add1 (map double [1; 2; 3]))", "[3; 5; 7]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_fold_with_if")
+{
+    CHECK(executesWithOutput("print (fold 0 (fun acc x -> if x > 3 then acc + x else acc) [1; 2; 3; 4; 5])",
+                             "9"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_filter_length")
+{
+    CHECK(executesWithOutput("print (length (filter (fun x -> x > 3) [1; 2; 3; 4; 5]))", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_hof_map_with_range")
+{
+    CHECK(executesWithOutput("print (map (fun x -> x * x) [1..5])", "[1; 4; 9; 16; 25]"));
+}
+
+// =============================================================================
 // Placeholder Lambda Sugar Tests (`_`)
 // =============================================================================
 

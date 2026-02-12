@@ -80,7 +80,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
 - [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
 - [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
-- [ ] Standard list operations (`map`, `filter`, `fold`, `each`, etc.)
+- [x] Standard list operations: `map`, `filter`, `fold`, `reduce`, `reverse`
+- [ ] Remaining list operations (`each`, etc.)
 
 ## Pattern Matching
 
@@ -174,8 +175,8 @@ This document tracks the implementation status of F# language features as define
 - [x] `not` — boolean negation
 - [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
 - [x] `head`, `tail`, `length`, `isEmpty` — list operations
-- [ ] `map`, `filter`, `fold`, `reduce` — higher-order list functions
-- [ ] `sort`, `reverse`, `distinct` — list transformations
+- [x] `map`, `filter`, `fold`, `reduce` — higher-order list functions (IR-level codegen)
+- [~] `sort`, `reverse`, `distinct` — list transformations (`reverse` done; `sort`, `distinct` pending)
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [ ] `String.split`, `String.join`, `String.trim` — string operations

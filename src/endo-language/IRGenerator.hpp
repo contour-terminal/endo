@@ -300,6 +300,9 @@ class IRGenerator final: public ast::Visitor
         CoreVM::IRHandler* compiledHandler = nullptr;
         /// IR return type of the compiled handler body (valid when compiledHandler != nullptr).
         CoreVM::LiteralType compiledReturnType = CoreVM::LiteralType::Void;
+        /// Builtin higher-order function marker. Empty = normal function,
+        /// otherwise "map"/"filter"/"fold"/"reduce"/"reverse".
+        std::string builtinHOF;
 
         size_t arity() const { return parameters.size(); }
     };
@@ -329,6 +332,26 @@ class IRGenerator final: public ast::Visitor
     void generateFSharpCall(FSharpFunction const* func,
                             std::string const& funcName,
                             std::vector<CoreVM::Value*> const& args);
+
+    /// Dispatches a builtin higher-order function call to the appropriate IR generator.
+    void generateBuiltinHOFCall(FSharpFunction const* func,
+                                std::string const& funcName,
+                                std::vector<CoreVM::Value*> const& args);
+
+    /// Generates IR for `map f xs` — applies f to each element, returns new list.
+    void generateMapIR(std::string const& funcName, CoreVM::Value* listValue);
+
+    /// Generates IR for `filter pred xs` — keeps elements where pred returns true.
+    void generateFilterIR(std::string const& predName, CoreVM::Value* listValue);
+
+    /// Generates IR for `fold init f xs` — left fold over list with initial accumulator.
+    void generateFoldIR(CoreVM::Value* initValue, std::string const& funcName, CoreVM::Value* listValue);
+
+    /// Generates IR for `reduce f xs` — fold without initial value, returns Option.
+    void generateReduceIR(std::string const& funcName, CoreVM::Value* listValue);
+
+    /// Generates IR for `reverse xs` — reverses a list.
+    void generateReverseIR(CoreVM::Value* listValue);
 
     /// Compiles a function definition as a separate IRHandler for closure-based calls.
     /// Sets func->compiledHandler to the new handler on success.
