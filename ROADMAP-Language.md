@@ -154,7 +154,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Try-with expression: `try expr with | Error e -> handler`
 - [x] Pattern matching on errors
 - [x] Try-finally: `try ... finally cleanup`
-- [ ] Option combinators: `.map()`, `.bind()`, `.defaultValue()`
+- [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue`
 
 ## Control Flow
 
@@ -276,7 +276,7 @@ Consult this section to determine what to work on next.
 ### Phase 6 — Remaining Operators and Small Features
 - [x] Optional chaining `?.` — desugar to match on Option
 - [x] Option default `?|` — desugar to match with default value
-- [ ] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` as builtins
+- [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` (module-qualified + method-style + pipeline)
 - [x] For loop destructuring: `for (name, value) in entries do ... done`
 - [ ] Numeric literal suffixes: byte sizes (`kb`, `mb`, `gb`, `tb`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time
 

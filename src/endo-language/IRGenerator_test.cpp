@@ -5062,6 +5062,112 @@ TEST_CASE("IRGenerator.FSharp.option_default_find_found")
 }
 
 // ============================================================================
+// Option Combinators: Option.map, Option.bind, Option.defaultValue
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.option_map_some")
+{
+    // Option.map applies function to Some value, wraps result in Some
+    CHECK(executesWithOutput("print (Option.map (fun x -> x * 2) (Some 21) ?| 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_map_none")
+{
+    // Option.map on None returns None
+    CHECK(executesWithOutput("print (Option.map (fun x -> x * 2) None ?| 0)", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_map_named")
+{
+    // Option.map with a named function
+    CHECK(executesWithOutput("let double (x: int) = x * 2\nprint (Option.map double (Some 5) ?| 0)", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_map_method")
+{
+    // Method-style: opt.map f
+    CHECK(executesWithOutput("let r = (Some 21).map (fun x -> x * 2)\nprint (r ?| 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_map_pipeline")
+{
+    // Pipeline: value |> Option.map f |> Option.defaultValue def
+    CHECK(
+        executesWithOutput("print (Some 21 |> Option.map (fun x -> x * 2) |> Option.defaultValue 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_bind_some")
+{
+    // Option.bind applies function that returns Option
+    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                             "print (Option.bind half (Some 10) ?| 0)",
+                             "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_bind_none")
+{
+    // Option.bind on None returns None
+    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                             "print (Option.bind half None ?| 0)",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_bind_returns_none")
+{
+    // Option.bind where f returns None
+    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                             "print (Option.bind half (Some 3) ?| 0)",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_bind_method")
+{
+    // Method-style: opt.bind f
+    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                             "print ((Some 10).bind half ?| 0)",
+                             "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_defaultValue_some")
+{
+    // Option.defaultValue with Some returns inner value
+    CHECK(executesWithOutput("print (Option.defaultValue 0 (Some 42))", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_defaultValue_none")
+{
+    // Option.defaultValue with None returns default
+    CHECK(executesWithOutput("print (Option.defaultValue 0 None)", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_defaultValue_method")
+{
+    // Method-style: opt.defaultValue def
+    CHECK(executesWithOutput("print ((Some 42).defaultValue 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_defaultValue_pipeline")
+{
+    // Pipeline: value |> Option.defaultValue def
+    CHECK(executesWithOutput("print (Some 42 |> Option.defaultValue 0)", "42"));
+    CHECK(executesWithOutput("print (None |> Option.defaultValue 99)", "99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_map_string")
+{
+    // Option.map with strings
+    CHECK(executesWithOutput(R"(print (Option.map (fun s -> s + "!") (Some "hi") ?| ""))", "hi!"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_chained_pipeline")
+{
+    // Chaining multiple Option.map calls in pipeline with Option.defaultValue
+    CHECK(executesWithOutput("print (Some 5 |> Option.map (fun x -> x * 2) |> Option.map (fun x -> x + 1) |> "
+                             "Option.defaultValue 0)",
+                             "11"));
+}
+
+// ============================================================================
 // For-in with pattern destructuring
 
 TEST_CASE("IRGenerator.FSharp.for_in_tuple_destructure")

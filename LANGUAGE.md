@@ -1628,16 +1628,21 @@ match findUser id with
 | Some user -> greet user.name
 | None -> echo "User not found"
 
-# Option combinators
-let email = 
+# Option combinators — module-qualified syntax
+let email =
     findUser id
-    |> map (fun u -> u.email)
-    |> defaultValue "no-email@example.com"
+    |> Option.map (fun u -> u.email)
+    |> Option.defaultValue "no-email@example.com"
 
-let result = 
+let result =
     findUser id
-    |> bind (fun u -> u.manager)     # Returns Option<User>
-    |> map (fun m -> m.email)
+    |> Option.bind (fun u -> u.manager)     # Returns option<User>
+    |> Option.map (fun m -> m.email)
+
+# Option combinators — method-style syntax
+let email = (findUser id).map (fun u -> u.email)
+let name = (findUser id).defaultValue "anonymous"
+let manager = (findUser id).bind (fun u -> u.manager)
 
 # Optional chaining (syntactic sugar)
 let email = user?.profile?.email ?| "default@example.com"

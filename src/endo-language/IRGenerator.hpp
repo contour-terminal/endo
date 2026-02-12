@@ -377,6 +377,45 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `flatten xss` — concatenates a list of lists into a single list.
     void generateFlattenIR(CoreVM::Value* listOfLists);
 
+    // Option combinators: Option.map, Option.bind, Option.defaultValue
+
+    /// Resolves a function argument expression (identifier or lambda) to a function reference.
+    struct ResolvedFunction
+    {
+        FSharpFunction const* func;
+        std::string name;
+    };
+
+    [[nodiscard]] std::optional<ResolvedFunction> resolveFunctionArgument(ast::Expr const* expr);
+
+    /// Dispatches module-qualified Option.{map,bind,defaultValue} calls.
+    /// @return true if the method was recognized and code generated.
+    bool tryGenerateOptionCall(std::string const& methodName, std::vector<ast::Expr const*> const& argExprs);
+
+    /// Dispatches method-style opt.{map,bind,defaultValue} calls.
+    /// @return true if the method was recognized and code generated.
+    bool tryGenerateOptionMethodCall(std::string const& methodName,
+                                     ast::Expr const* objectExpr,
+                                     std::vector<ast::Expr const*> const& argExprs);
+
+    /// Generates IR for `Option.map f opt` from argument expressions.
+    void generateOptionMap(std::vector<ast::Expr const*> const& argExprs);
+
+    /// Generates IR for `Option.map` with a pre-evaluated option value.
+    void generateOptionMapWithValue(ast::Expr const* funcExpr, CoreVM::Value* optionValue);
+
+    /// Generates IR for `Option.bind f opt` from argument expressions.
+    void generateOptionBind(std::vector<ast::Expr const*> const& argExprs);
+
+    /// Generates IR for `Option.bind` with a pre-evaluated option value.
+    void generateOptionBindWithValue(ast::Expr const* funcExpr, CoreVM::Value* optionValue);
+
+    /// Generates IR for `Option.defaultValue def opt` from argument expressions.
+    void generateOptionDefaultValue(std::vector<ast::Expr const*> const& argExprs);
+
+    /// Generates IR for `Option.defaultValue` with a pre-evaluated option value.
+    void generateOptionDefaultValueWithValue(ast::Expr const* defaultExpr, CoreVM::Value* optionValue);
+
     /// Compiles a function definition as a separate IRHandler for closure-based calls.
     /// Sets func->compiledHandler to the new handler on success.
     void compileFunctionAsHandler(std::string const& name, FSharpFunction& func);
