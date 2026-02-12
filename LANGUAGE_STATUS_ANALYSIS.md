@@ -310,7 +310,7 @@ Moderate Gaps
   - String repetition: "ha" * 3 (not tested)
   - String.split, String.join, String.trim (no builtins)
 7. Optional Chaining ✗
-  - Optional chaining operator: ?. (mentioned in LANGUAGE_STATUS.md as [ ])
+  - Optional chaining operator: ?. (mentioned in ROADMAP-Language.md as [ ])
   - Option combinators: .map(), .bind(), .defaultValue()
 8. Function Composition ✗
   - Forward composition: >>

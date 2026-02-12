@@ -214,12 +214,8 @@ Windows support.
 - [x] Add expansion tests
 
 **Implementation Notes:**
-- String interpolation: Double-quoted strings support variable expansion (`"hello $USER"`), braced variables (`"count: ${COUNT}"`), command substitution (`"date: $(date)"`), arithmetic expansion (`"sum: $((1+2))"`), and escape sequences (`"\n"`, `"\""`). The lexer emits `DblQuoteStart`, content tokens (StringFragment, DollarName, etc.), and `DblQuoteEnd`. The parser creates a `ConcatExpr` AST node with all parts concatenated at runtime.
-- Tilde expansion: `~` expands to `$HOME`, `~user` expands to user's home directory
-- Brace expansion: Handled at parse time for efficiency (no runtime overhead)
-- Parameter expansion: Supports length (`${#VAR}`), defaults (`${VAR:-default}`, `${VAR:=default}`, `${VAR:+alt}`, `${VAR:?error}`), prefix/suffix removal (`${VAR#pattern}`, `${VAR##pattern}`, `${VAR%pattern}`, `${VAR%%pattern}`), and replacement (`${VAR/pattern/replacement}`, `${VAR//pattern/replacement}`)
-- Arithmetic expansion: Supports `+`, `-`, `*`, `/`, `%`, `**`, comparisons (`<`, `>`, `<=`, `>=`, `==`, `!=`), logical operators (`&&`, `||`, `!`), and bitwise operators
-- Pathname expansion: Cross-platform implementation using `<filesystem>`, supports `*`, `?`, `[...]` bracket expressions with ranges and `**` recursive globbing
+- Brace expansion handled at parse time; parameter expansion supports length, defaults, prefix/suffix removal, replacement
+- Pathname expansion: cross-platform via `<filesystem>`, supports `*`, `?`, `[...]`, `**` recursive globbing
 
 ### Phase 1.6: Control Flow Completion ✅
 
@@ -238,11 +234,7 @@ Windows support.
 - [x] Add control flow tests
 
 **Implementation Notes:**
-- For-list loops: Full support with break/continue, proper cleanup of nested loop state
-- Case statements: Full glob-style pattern matching with multiple patterns per clause (`|`-separated)
-- Functions: Supports positional parameters ($1, $2, ...) and return values affecting $?
-- Functions are scoped to the current command execution (not persisted across separate execute() calls)
-- C-style for loops and `select` require language features not yet implemented
+- Functions support positional parameters and return values affecting `$?`; C-style for loops and `select` deferred
 
 ### Phase 1.7: Job Management ✅
 
@@ -262,23 +254,12 @@ Windows support.
 - [x] Add job management tests
 
 **Implementation Notes:**
-- Background execution (`&`) spawns commands in a new process group and returns immediately
-- `jobs` lists all background jobs with their state (Running, Stopped, Done)
-- `fg` brings a background job to the foreground and waits for completion
-- `bg` resumes a stopped job in the background
-- `wait` waits for all or specific background jobs to complete
-- `$!` contains the PID of the last background job
-- Uses `signalfd` on Linux for race-free SIGCHLD, SIGTSTP, and SIGCONT handling
-- Falls back to traditional signal handlers on macOS/BSD
-- Process groups are properly managed for job control
-- Foreground job control: When running a foreground command (single or pipeline), the shell creates a new process group, transfers terminal control to it, and waits with `WUNTRACED`. When Ctrl+Z is pressed, the process receives SIGTSTP, the shell detects the stopped state, adds the job to the job table, and returns control to the shell. The user can then use `fg` to resume or `bg` to continue in background.
-- SIGTSTP handling for shell itself: When the shell receives SIGTSTP (e.g., from parent shell via `kill -TSTP`), it restores terminal to cooked mode, re-raises SIGTSTP with default handling to actually stop, and when resumed (SIGCONT), restores raw mode and redraws the prompt
-- Note: Ctrl+Z at the prompt (when no foreground job is running) is used for undo (TUI feature)
-- Job control builtins (`jobs`, `fg`, `bg`, `wait`) are recognized as parser directives with dedicated AST nodes
+- Uses `signalfd` on Linux for race-free SIGCHLD/SIGTSTP/SIGCONT handling; falls back to traditional handlers on macOS
+- Process groups properly managed; Ctrl+Z at prompt is undo (TUI), Ctrl+Z with foreground job suspends it
 
 ### Phase 1.8: F# Style Syntax Extensions
 
-**Status:** Specification Complete, Implementation In Progress
+**Status:** Specification Complete, Implementation ~95% Complete
 
 **Dependency:** Milestone 1 core language features
 
@@ -348,81 +329,27 @@ src/
 - [x] Extend Parser for Option/Result constructors (`Some`, `None`, `Ok`, `Error`)
 - [x] Extend Parser for `?` postfix operator and `try expr with | pattern -> handler` expressions
 - [x] Add IR generation stubs for Option/Result/Try expressions (runtime support requires CoreVM sum types)
-- [~] Complete runtime support for Option/Result types in CoreVM (sum type representation) - In Progress
-  - [x] Type descriptor infrastructure (`TypeDescriptor.hpp`, `TypeRegistry.hpp/cpp`)
-  - [x] Typed object structure with reference counting (`TypedObject.hpp`)
-  - [x] Runtime configuration for error propagation and type checks (`RuntimeConfig.hpp`)
-  - [x] Unit tests for type system (19 tests passing)
+- [x] Complete runtime support for Option/Result types in CoreVM (sum type representation) — Complete (GC deferred)
+  - [x] Type descriptor infrastructure, typed objects with refcounting, runtime config
   - [x] VM opcodes for object operations (OALLOC, ORETAIN, ORELEASE, OGETTAG, OSETTAG, OGETSLOT, OSETSLOT, OTYPEID, OISTYPE)
-  - [x] IR instruction classes for object operations (ObjAllocInstr, ObjRetainInstr, etc.)
-  - [x] TargetCodeGenerator visitor implementations for object instructions
-  - [x] IRBuilder methods for creating object instructions
-  - [x] VM Runner execution of object instructions (OALLOC, ORETAIN, ORELEASE, etc.)
-  - [x] TypeRegistry integrated into ConstantPool for type lookup at runtime
-  - [x] IRGenerator emits object instructions for Option/Result expressions
+  - [x] IR instructions, TargetCodeGenerator visitors, IRBuilder methods, Runner execution
+  - [x] TypeRegistry integrated into ConstantPool; IRGenerator emits object instructions for Option/Result
   - [x] PatternIRGenerator handles constructor patterns (Some/None/Ok/Error)
   - [x] Scope-based reference counting (ORELEASE on scope exit)
-  - [x] Comprehensive IR generation tests for Option/Result
-  - [x] Source location infrastructure for runtime error reporting
-    - [x] `SourceLocation` member on `Instr` class with getter/setter
-    - [x] `IRBuilder::setSourceLocation()` for current location tracking
-    - [x] `IRGenerator` sets location from AST nodes during code generation
-    - [x] Sparse location table in `Handler` for memory-efficient storage
-    - [x] `TargetCodeGenerator` builds location table during code emission
-    - [x] `ConstantPool` stores location tables for handlers
-    - [x] `Handler::locationOf()` binary search lookup for instruction offsets
-    - [x] `RuntimeError` struct with message and location for error reporting
-    - [x] `Runner::runWithResult()` returns `std::expected<bool, RuntimeError>`
-    - [x] Unit tests for location propagation
-  - [x] Runtime checks when `RuntimeConfig::typeChecksEnabled` is true
-    - [x] Division by zero check in `NDIV` and `NREM` instructions
-    - [x] Invalid type ID check in `OALLOC` instruction
-    - [x] Null object dereference checks in all object operations (`ORETAIN`, `ORELEASE`, `OGETTAG`, `OSETTAG`, `OGETSLOT`, `OSETSLOT`, `OTYPEID`, `OISTYPE`)
-    - [x] Slot index out of bounds checks in `OGETSLOT` and `OSETSLOT`
-  - [ ] Mark-and-sweep GC for cycle collection
-  - [x] Fix VM stack tracking bug with pattern matching and `?` operator execution
-    - [x] `CondBrInstr` now properly discards extras before branching to ensure consistent stack state
-    - [x] Uses STACKROT to move condition to correct position, then DISCARD for extras
-    - [x] Block boundary handling emits DISCARD when tracking stack exceeds alloca count
-    - [x] Fix DISCARD underflow: all function parameter allocas now use `createAllocaInEntryBlock()` instead of `_builder.createAlloca()`
-    - [x] Fix dead `scrutinee.reload` in constructor patterns without payload (e.g., `None` arms)
-    - [x] Added underflow guard in CondBrInstr visitor for defense-in-depth
+  - [x] Source location infrastructure for runtime error reporting (sparse location tables, `RuntimeError`, `runWithResult()`)
+  - [x] Runtime checks: division by zero, invalid type ID, null object dereference, slot bounds
+  - [ ] Mark-and-sweep GC for cycle collection — Deferred
+
 - [x] Complete `?` operator runtime implementation (unwrap or propagate)
   - [x] IRGenerator emits tag check and early return for `?` operator
   - [x] Full integration with function context for error propagation
   - [x] `FSharpFunctionContext` pushed only for functions returning Result/Option
   - [x] Early return block and storage created for `?` operator unwrap-or-propagate
-  - [x] Fix use-after-free bug when `?` is applied to function call results
-    - [x] Copy `returnBlock` and `returnStorage` from context before `codegen(operand)` call
-    - [x] Prevents invalidation when nested function calls push new contexts onto vector
-  - [x] Fix `?` operator auto-wrapping for type-consistent return values
-    - [x] `ReturnKind` enum (`Plain`/`Result`/`Option`) replaces `bool returnsResultOrOption` for precise type tracking
-    - [x] `determineReturnKind()` replaces `isBodyResultOrOption()` with support for `LetInExpr`, `IfExpr`, `ApplicationExpr`, and `containsTryExpr()` fallback
-    - [x] `needsAutoWrap()` checks if function body's final expression already produces Result/Option
-    - [x] `wrapInResultOrOption()` emits OALLOC/OSETTAG/OSETSLOT to wrap raw values in Ok/Some at function return
-    - [x] All three function application sites (pipeline-with-args, pipeline-non-recursive, ApplicationExpr) updated to auto-wrap
-    - [x] Enables pattern matching on `?`-returning function results: `match (f x) with | Ok n -> n | Error e -> e`
+  - [x] Auto-wrapping for type-consistent return values (`ReturnKind` enum, `wrapInResultOrOption()`)
 - [x] Implement `try-with` expression IR generation
-  - [x] Store body object in alloca for cross-block access
-  - [x] Handle `ConstructorPattern` (e.g., `Error e`, `None`) for error binding
-  - [x] Extract success value on Ok/Some, run handler on Error/None
-  - [x] Multiple handler support with literal pattern matching
-    - [x] Added `VCMPEQ` opcode for dynamic value comparison (compares values regardless of compile-time type)
-    - [x] Added `VCmpEQInstr` IR instruction and `createVCmpEQ` builder method
-    - [x] Updated `PatternIRGenerator` to use dynamic comparison for `Void`/`Object` typed values
-    - [x] Added cast support for `Void`/`Object` to `String` via `N2S` for print compatibility
-  - [x] Guard expressions in handlers
-    - [x] Added full set of dynamic comparison opcodes (`VCMPNE`, `VCMPLT`, `VCMPLE`, `VCMPGT`, `VCMPGE`)
-    - [x] Added corresponding IR instructions and IRBuilder methods
-    - [x] Updated `IRGenerator::visit(BinaryExpr)` to use `VCmpXX` when operands have dynamic types
-    - [x] Added `needsDynamicCompare()` helper to detect `Void`/`Object` typed values
-    - [x] Fixed match expression variable binding for constructor patterns to extract payload correctly
-- [x] Implement `try-finally` expression IR generation
-  - [x] `TryFinallyExpr` AST node, `Token::Finally` keyword, parser support
-  - [x] IR generation with `?` interception: redirects `returnBlock` to finally cleanup block
-  - [x] Tail call suppression during body codegen to prevent skipping finally
-  - [x] Top-level fallback (simple linear codegen when no function context)
-  - [x] Nested try-finally chains correctly (inner finally → outer finally)
+  - [x] Constructor pattern matching, multiple handlers, guard expressions
+  - [x] Dynamic comparison opcodes (VCMPEQ/NE/LT/LE/GT/GE) for runtime-typed values
+- [x] Implement `try-finally` expression IR generation (redirects `?` operator to cleanup block, supports nesting)
 - [x] Implement IR generation for F# core expressions (literals, identifiers, binary/unary ops, parentheses)
 - [x] Implement IR generation for F# function definitions and application (inlining approach)
 - [x] Implement IR generation for F# pipelines (`|>` operator)
@@ -435,93 +362,29 @@ src/
 - [x] Implement or-patterns in match expressions (`| 1 | 2 | 3 -> "small"`)
 - [x] Implement as-patterns in match expressions (`| n as val -> ...`)
 - [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
-- [x] Fix logical OR operator (3 copy-paste bugs: `createBXor` emitted `BAndInstr`, `BOrInstr` visitor emitted `BAND`, `||` codegen used `createBXor` instead of `createBOr`) — test re-enabled
-- [x] Fix string concatenation with `+` operator (was always converting to numbers; now detects string operands and uses `createSAdd`)
 - [x] Implement if-then-else expressions (`IfExpr` AST node, parser, IR codegen with alloca/branch/merge)
-- [x] Fix if-then-else result type inference (defer alloca creation until branch type is known, fixes string/float results)
 - [x] Implement mutable variable assignment (`MutAssignStmt` AST node, `<-` operator, mutability tracking via `BindingInfo`)
 - [x] Implement tuple expressions (`TupleExpr` AST node, 2-/3-element tuples via TypedObject with Tuple2/Tuple3 types)
 - [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)
 - [x] Implement standard library builtins (`string_length`, `int_of_string`, `string_of_int`, `not`)
-- [x] Implement `env` builtin — returns `option<str>` for environment variables
-  - [x] Two native callbacks (`env.has(S)B`, `env.get(S)S`) with IR-level Option construction
-  - [x] Production runtime (Shell.cpp) reads from `Environment&`, test runtime uses mock env map
-  - [x] Stub runtime for LSP/HoverProvider, hover text for `env` identifier
-  - [x] 13 test cases covering existing/missing vars, match Some/None, let binding, empty value, multiple vars, functions, default values, IR generation, and `?` operator
+- [x] Implement `env` builtin — returns `option<str>` for environment variables (13 test cases)
 - [x] Support `?` operator at top-level (global) scope — exits handler with code 1 on None/Error instead of requiring a function context
 - [x] Remove `fst`/`snd` builtins — now user-definable via pattern matching (simplifies compiler, proves language expressiveness)
-- [x] Fix boolean literal codegen (`_builder.getBoolean()` instead of `_builder.get()` which silently converted `bool` to `int64_t`)
-- [x] Fix `print` for boolean values (conditional branch to `"true"`/`"false"` since no `B2S` opcode exists)
-- [x] Fix lexer `))` merging in F# mode (consecutive `)` no longer merged to `DblRndClose` except in arithmetic contexts)
-- [x] Add `LANGUAGE_STATUS.md` for tracking F# feature implementation status
-- [x] Implement float (double) primitive type with end-to-end support
-  - [x] `LiteralType::Float` in type system, 18 float opcodes (FLOAD, FNEG, FADD..FPOW, FCMPEQ..GT, N2F, F2N, F2S, S2F)
-  - [x] `ConstantFloat`, float constants in ConstantPool/IRProgram/IRBuilder
-  - [x] 13 float IR instruction types (FNegInstr, FAddInstr..FPowInstr, FCmpEQInstr..FCmpGTInstr)
-  - [x] IRBuilder float operations with constant folding (createFAdd..createFPow, createFCmpEQ..createFCmpGT)
-  - [x] Float cast operations (createN2F, createF2N, createF2S, createS2F)
-  - [x] TargetCodeGenerator float visitors, CastInstr map (Float↔Number, Float↔String), FLOAD emitLoad
-  - [x] VM Runner float execution via `std::bit_cast<uint64_t>(double)` for zero-cost stack storage
-  - [x] IRGenerator: FloatLiteralExpr, auto-promotion (int+float→float via N2F), float negation, print F2S
-  - [x] PatternIRGenerator: float literal patterns with FCmpEQ comparison
-  - [x] 17 float test cases (literal, arithmetic, division, mixed promotion, comparisons, negation, concat, functions, pow, mod)
-- [x] Implement multi-line expression support in parser
-  - [x] `consumeNewlines()` helper skips `LineFeed`/`Semicolon` at continuation points
-  - [x] Match expressions: arms can span multiple lines (newline-skip with pushback pattern)
-  - [x] Try-with expressions: handler arms can span multiple lines
-  - [x] If-then-else: condition, then-branch, and else-branch can be on separate lines
-  - [x] Lambda expressions: body can be on a separate line after `->`
-  - [x] Let-in expressions: value and body can be on separate lines
-  - [x] Top-level let bindings: value expression can be on a separate line after `=`
-  - [x] Mutual recursion `and` keyword: can appear on a new line after preceding function body
-- [x] Implement numeric base literals and comments in lexer/parser
-  - [x] Hexadecimal literals: `0xFF`, `0XFF` with base-16 parsing via `std::from_chars`
-  - [x] Octal literals: `0o755`, `0O755` with base-8 parsing
-  - [x] Binary literals: `0b1010`, `0B1010` with base-2 parsing
-  - [x] Scientific notation: `1e10`, `2.5e-3` (already implemented, added tests)
-  - [x] `#` line comments (shell style, after whitespace)
-  - [x] `//` line comments (C style)
-  - [x] `(* ... *)` nestable block comments (F# style)
-- [x] Fix mutable variable reassignment not persisting across REPL prompts (runtime value snapshots from stack after execution)
-- [x] Bare top-level F# function calls (`f 42` dispatches to F# expression parser when `f` is a known function)
-  - [x] Parser tracks `_knownFSharpFunctions` set, populated from `let` definitions and `FSharpPersistentState`
-  - [x] Covers `let f x = ...`, `let rec f ... and g ...`, `let f = fun x -> ...`
-  - [x] Pre-seeded from persistent state in Shell and test helpers for REPL continuity
-  - [x] F# definitions intentionally shadow shell commands of the same name
+- [x] Add `ROADMAP-Language.md` for tracking F# feature implementation status
+- [x] Implement float (double) primitive type — 18 opcodes, constant folding, auto-promotion, pattern matching, 17 test cases
+- [x] Implement multi-line expression support in parser (match arms, try-with, if-then-else, lambda, let-in, mutual recursion)
+- [x] Implement numeric base literals (hex `0xFF`, octal `0o755`, binary `0b1010`, scientific `1e10`) and comments (`#`, `//`, `(* ... *)`)
+- [x] Bare top-level F# function calls (`f 42` dispatches to F# parser when `f` is a known function; F# definitions shadow shell commands)
 - [x] Implement type annotations for variables, function parameters, and return types
-  - [x] `TypedParameter` AST node with optional `TypePtr` annotation
-  - [x] Parser: `parseType()` for function types (`int -> int`), `parseBaseType()` for primitives/generics/tuples, `parseTypedParameter()` for `(x: int)` annotated params
-  - [x] Variable annotations: `let x: int = 42`, `let s: str = "hello"`
-  - [x] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
-  - [x] Lambda annotations: `fun (x: int) -> x + 1`
-  - [x] Return type annotations: `let double x: int = x * 2`
-  - [x] Mixed annotated and bare params: `let f (x: int) y = x + y`
-  - [x] Static type validation at IR generation (parameter types checked at call site, return types checked after body codegen)
-  - [x] Type annotations persist across REPL sessions via `FSharpPersistentState`
-  - [x] ASTPrinter support for round-trip printing of type annotations
-  - [x] 32 test cases covering positive execution, negative type mismatches, parser structure, and ASTPrinter output
+  - [x] Variable, parameter, lambda, and return type annotations with mixed annotated/bare params
+  - [x] Static type validation at IR generation; annotations persist across REPL sessions
+  - [x] 32 test cases covering execution, type mismatches, parser structure, and ASTPrinter output
 - [x] Improve arity enforcement error messages and test coverage
   - [x] Fix grammar: "expects 1 argument" (singular) vs "expects 2 arguments" (plural) for both direct calls and pipelines
   - [x] 8 comprehensive arity enforcement tests: over-application (5 failure cases), exact arity (3 success cases)
 - [x] Update syntax highlighting for new constructs (Phase 2.4)
-- [x] F#-style interpolated strings: `$"Hello, {name}"`
-  - [x] Lexer: 4 new tokens (FStringStart, FStringEnd, FStringExprStart, FStringExprEnd), `consumeFStringContent()` state machine, brace depth tracking for nested expressions
-  - [x] Parser: `parseFStringExpression()` with F# expression parsing inside `{expr}` holes
-  - [x] AST: `FStringExpr` node with alternating literal and expression parts
-  - [x] IRGenerator: `visit(FStringExpr)` using `convertToString()` for Number, Float, Boolean, String support
-  - [x] ASTPrinter: round-trip printing with `$"text {expr} text"` format
-  - [x] TokenClassification: FStringStart/FStringEnd as String, FStringExprStart/FStringExprEnd as Punctuation
-  - [x] HoverProvider: hover text for `$"..."` syntax
-  - [x] Escaped braces: `{{` and `}}` produce literal `{` and `}`
-  - [x] 17 test cases covering basic, variables, arithmetic, conditionals, type conversions, escaped braces, function application, pipelines, adjacent holes, concatenation, and nested strings
-- [x] Update completion for F# style (Phase 2.3)
-  - [x] `LetBindingCompleter` provider surfaces `let` function and value bindings from `FSharpPersistentState`
-  - [x] Priority 90 (between CommandCompleter=100 and VariableCompleter=80)
-  - [x] Handles `Command` and `Argument` completion contexts
-  - [x] Function descriptions show signature with parameter names, types, and return types (e.g., `rec factorial(n: int) -> int`)
-  - [x] Value descriptions show `"value"` or `"mutable value"`
-  - [x] Smart-case prefix matching and fuzzy matching with position highlighting
-  - [x] 8 test cases covering function/value completion, descriptions, fuzzy matching, scoring, and context handling
+- [x] F#-style interpolated strings: `$"Hello, {name}"` — lexer/parser/AST/IRGenerator/ASTPrinter, escaped braces, 17 test cases
+- [x] Update completion for F# style (Phase 2.3) — `LetBindingCompleter` with signature display, smart-case/fuzzy matching, 8 test cases
 - [x] Phase 1 Foundation Completions (no new runtime types needed)
   - [x] Unit type `()` — `UnitExpr` AST node, parser recognition in `parseFSharpPrimary`, codegen as `get(0)`
   - [x] String repetition `"ha" * 3` — detects `Mul` with string operand in `visit(BinaryExpr)`, calls `string_repeat` native callback
@@ -534,20 +397,8 @@ src/
   - [x] Pattern matching for lists: empty list `[]`, cons pattern `h :: t`, fixed-length patterns `[a; b; c]`
   - [x] List printing via `list_to_string` with recursive formatting
   - [x] 89 list test cases covering literals, operations, pattern matching, nested structures, and runtime functions
-- [x] Fix inner object type ID propagation for lists nested in Option/Result
-  - [x] `_innerObjectTypeIdAnnotations` map to track wrapped object type IDs (e.g., List inside `Some [1;2;3]`)
-  - [x] Propagation chain: OptionExpr/ResultExpr → LetBindingStmt/LetInExpr → IdentifierExpr → MatchExpr scrutinee → constructor pattern payload extraction
-  - [x] `convertToString()` Void branch checks `objectTypeId` annotation to dispatch to `list_to_string` instead of N2S fallback
-- [x] Fix recursive functions returning object types (list, option, etc.)
-  - [x] Deferred `resultStorage` alloca creation in `generateRecursiveCall` — uses actual body result type instead of hardcoded `LiteralType::Number`
-  - [x] Annotation propagation (objectTypeId, innerObjectTypeId, innerType) from initial args to param allocas in recursive call setup
-  - [x] ObjectTypeId propagation from body result to final loaded result at exit block
-  - [x] Same fix applied to pipeline recursive call path (`visitPipelineExpr`)
-  - [x] Enables recursive functions with ConsExpr in tail call arguments (e.g., `revAcc (h :: acc) t`)
 - [x] Support standalone `match` expression as a statement
-  - [x] Added `Token::Match` handler in `parseStmt()` wrapping match expression in `ExprStmt`
-  - [x] `generatePrintCall` returns unit value (0) instead of nullptr, enabling `print` inside match arms
-- [~] Transition from AST inlining to closure-based function calls — In Progress
+- [x] Transition from AST inlining to closure-based function calls — Complete
   - [x] Phase 0: Extract function call methods from `visit(ApplicationExpr)` into named helpers (`generateFSharpCall`, `generateRecursiveCall`, `generateMutualRecursiveCall`, `generatePartialApplication`)
   - [x] Phase 1: Add UCALL/URET/UTCALL opcodes and frame pointer to VM Runner
     - [x] `_fp` (frame pointer), `CallFrame`, `_callStack` for proper function call isolation
@@ -640,121 +491,19 @@ src/
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
-- Type inference uses Hindley-Milner algorithm with let-polymorphism (`TypeInferencer` pre-pass integrated into `IRGenerator::generate()`)
-- `let` keyword unambiguously starts F# style (bash style uses `VAR=value` without spaces)
-- `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
-- Dual semantics: expression context captures output, statement context prints to terminal
-- Records are compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT)
-- User-defined discriminated unions compile to TypedObject sum types (OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT)
-- Record update expressions use alloca-protected storage for the intermediate object, ensuring correctness when update-value codegen creates new basic blocks (e.g., inlined match-expression functions).
-- Pattern matching compiles to decision trees for efficient execution
-- List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
-- Lexer enhanced with `peekChar()` to properly recognize float literals (e.g., `2.5` as single token)
-- Lexer enhanced with `DotDot` token (`..`) for cleaner range parsing
-- Lexer recognizes negative number literals (e.g., `-42` as a single Number token)
-- Parser handles unary negation for identifiers (e.g., `-a` parsed as `UnaryExpr(Neg, IdentifierExpr("a"))`)
-- List comprehensions: `[for x in 1..10 -> x * x]` with optional `when` filter clause (parsed and IR codegen complete)
-- Comprehension codegen: two-phase approach (forward iteration building reversed accumulator, then reverse pass for correct order)
-- Lexer F# mode: Context-sensitive tokenization for F# expressions
-  - `enterFSharpExpr()`/`leaveFSharpExpr()` manage depth counter for proper nesting
-  - F# mode reserves additional symbols: `[]{},:+-*/%^&#` to prevent them from being consumed into identifiers
-  - Operators tokenized separately: `+`, `-`, `*`, `/`, `%`, `**`, `^`, `::`, `,`, `:`, `[`, `]`, `{`, `}`, `?`
-  - `-` followed by digit returns `Token::Number` (negative literal); otherwise `Token::Minus`
-  - Parser calls `enterFSharpExpr()` at start of `let` bindings, ensuring proper tokenization of list literals like `[x;y;z]`
-- Option/Result type system: Parser and AST support for F#-style error handling
-  - `Some expr`, `None`, `Ok expr`, `Error expr` parsed as constructor expressions
-  - `expr?` postfix operator for error propagation (TryExpr)
-  - `try expr with | pattern -> handler` for structured error handling (TryWithExpr)
-  - Pattern matching supports `Some x`, `None`, `Ok n`, `Error e` constructor patterns
-  - IR generation creates tagged values using TypedObjects with OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT
-  - Full runtime semantics implemented via CoreVM's TypeRegistry (Sum types with VariantInfo)
-- Tuple patterns in match expressions: `,` is now tokenized as `Token::Comma` in F# mode, allowing proper parsing of `(a, b)` patterns
-- Test infrastructure improvements:
-  - `ExecutionResult` refactored to `std::expected<TestExecutionSuccess, TestError>` for proper error handling
-  - `TestExecutionSuccess` includes both `exitCode` and `output` for comprehensive test verification
-  - `print`/`println` builtins registered in TestRuntime for output capture during test execution
-  - `ExprStmt` AST node added to wrap F# expressions as statements (used for `print`/`println` at top level)
-  - Parser handles `print`/`println` at statement level by entering F# expression mode
-  - `Token::DblQuoteStart` properly recognized as F# primary expression for double-quoted strings
-  - `Program::link()` call added to `executeSource()` to enable native function calls in tests
-  - `print`/`println` now auto-convert numbers and dynamic values (from pattern matching) to strings via `N2S`
-- Shell command expressions: `& command` syntax for embedding shell commands in F# expressions
-  - `let output = & git status` captures command output to variable
-  - `let diff = & git diff HEAD..master` - special characters like `..` parsed as shell tokens, not F# operators
-  - `let lines = & cat file.txt | grep pattern` - shell pipes work within the `&` expression
-  - Parser temporarily leaves F# mode when parsing the command after `&`, then re-enters
-  - IR generation reuses `SubstitutionExpr` logic: `subst_start()` → execute → `subst_end()` to capture output
-- REPL session persistence for F# definitions:
-  - `FSharpPersistentState` struct holds function definitions and retained ASTs across REPL prompts
-  - `IRGenerator::generate()` accepts optional persistent state: pre-populates function table on entry, stores new definitions on exit
-  - `Shell` retains parsed ASTs so that function body pointers remain valid across prompts
-  - Supports: function definitions (`let f x = ...`), recursive functions (`let rec`), lambda-bound variables (`let f = fun x -> ...`)
-  - Simple value bindings (`let x = 42`) persist via AST re-evaluation: the value expression is re-codegen'd at each prompt so dependencies resolve correctly
-  - Closure captures from previous prompts are re-computed and work correctly for type-annotated functions compiled as handlers
-  - Auto-generated lambda names (from partial application intermediates) are excluded from persistence
-- Mutual recursion (`let rec f ... and g ...`):
-  - Parser handles `and` keyword after `let rec` to chain function definitions
-  - `AndBinding` AST node stores name, parameters, and body for each `and`-binding
-  - IR generation uses dispatch-loop optimization: integer tag selects function body, tail calls update tag and jump back
-  - `MutualRecursionContext` tracks per-function param allocas, dispatch tag, and shared result storage
-  - Separate from self-recursion path which uses simpler single-function loop
-- `let...in` expressions for scoped bindings:
-  - `LetInExpr` AST node: binding (name, optional params, value) + body expression
-  - Parsed in `parseFSharpPrimary()` when `Token::Let` appears in expression context
-  - `in` keyword treated as contextual: excluded from `isFSharpPrimary()` to prevent application parser from consuming it
-  - Supports both simple bindings (`let x = 5 in x + 1`) and function bindings (`let f x = x * 2 in f 5`)
-  - Nested `let...in` supported naturally via recursive parsing
-- Or-patterns and as-patterns in match expressions:
-  - Or-patterns (`| 1 | 2 | 3 -> expr`) parsed at match arm level, accumulated into `OrPattern`
-  - PatternIRGenerator reloads scrutinee from storage for each alternative (stack resets at block boundaries)
-  - As-patterns (`| n as val -> expr`) bind matched value to additional name
-- IRGenerator refactored from inheritance to composition with IRBuilder:
-  - `IRGenerator` no longer inherits from `CoreVM::IRBuilder`; uses `_builder` member instead
-  - `PatternIRGenerator` takes `CoreVM::IRBuilder&` directly, eliminating its dependency on `IRGenerator`
-  - Cleaner separation of concerns: IR generation logic vs. IR building API
-- Boolean value handling:
-  - `BoolLiteralExpr` must use `_builder.getBoolean()` not `_builder.get()` — `bool` implicitly converts to `int64_t`, producing `ConstantInt` with `Number` type instead of `ConstantBoolean` with `Boolean` type
-  - `toBool()` uses shell semantics (0=true, non-zero=false), so `Number`-typed booleans get inverted logic
-  - `print` handles `Boolean` type via conditional branch IR (`if bool then "true" else "false"`) since no `B2S` VM opcode exists
-  - `PatternIRGenerator` also uses `getBoolean()` for bool literals and BXor+BNot for boolean comparison
-- If-then-else expressions:
-  - `IfExpr` AST node with condition, thenExpr, elseExpr (separate from `IfStmt` for bash-style)
-  - IR codegen: alloca for result storage, condBr on condition, then/else blocks store result, merge block loads
-  - Result alloca type is deferred until after branch codegen — uses `thenResult->type()` (or `elseResult->type()` if then is a tail call) instead of hardcoded `Void`
-  - `then` and `else` added to `isFSharpPrimary()` exclusion list to prevent argument consumption
-  - Compile-time type mismatch error when then-branch and else-branch produce different types. Walks IR chain (`ObjSetSlot → ObjSetTag → ObjAlloc`) to extract `ObjectTypeInfo` (typeId, tag, slots). Produces parameterized type names: `option<int>`, `result<string>`, `int * string`. Sum types (Option/Result) with different variant tags are compatible (e.g., `Some 42` vs `None`), same-tag variants compare slot types (e.g., `Some 42` vs `Some "hello"` → error).
-- Mutable assignment:
-  - `BindingInfo { Value*, bool isMutable }` replaces raw `Value*` in `FSharpScope::bindings`
-  - `MutAssignStmt` codegen: lookup binding, verify mutability, store new value via `createStore`
-- Tuple expressions and patterns:
-  - `TupleExpr`: codegen allocates TypedObject (Tuple2/Tuple3), sets slots for each element with chained `ObjSetSlot` (each call updates the `obj` pointer, keeping `ObjAlloc` use-count at 1 for efficient `STACKROT` codegen)
-  - `TuplePattern` in PatternIRGenerator: extracts slots via `createObjGetSlot`, chains sub-pattern matches
-  - Pre-allocated binding storage (`setBindingStorage()`) allows PatternIRGenerator to store values during pattern matching, avoiding cross-block references
-  - Tuple scrutinee reloaded from storage for subsequent slot extractions after block boundaries
-  - `fst`/`snd` removed as builtins — user-definable via `let fst t = match t with | (a, _) -> a` (generates equivalent `ObjGetSlot` IR through pattern matching)
-- String concatenation:
-  - `visit(BinaryExpr)` checks if either operand is `LiteralType::String` for `Add` operator
-  - Converts non-string operands via `createN2S()`, then uses `createSAdd()` for concatenation
-  - All other operators continue with existing numeric coercion path
-- Standard library builtins:
-  - `tryGenerateBuiltinCall()` helper consolidates dispatch, following existing `print`/`println` pattern
-  - `string_length` uses `createSLen()`, `int_of_string` uses `createS2N()`, `string_of_int` uses `createN2S()`
-  - `not` uses `createBNot(toBool(v))`
-- Lexer fix for nested parentheses:
-  - In F# mode, consecutive `)` characters were merged into `DblRndClose` (shell arithmetic `))`)
-  - Fix: only merge `))` when `_arithDepth > 0` or in `$((…))` context
-  - Similarly, `((` only produces `DblRndOpen` when `_fsharpDepth == 0`
-- Arithmetic assertion relaxation:
-  - `isNumberCompatible()` helper accepts `Number`, `Void`, and `Object` types for dynamic values from `ObjGetSlot`
-  - All arithmetic and numeric comparison assertions updated to use this helper
-- Inner type annotation propagation for `?` operator:
-  - `_innerTypeAnnotations` map tracks the inner type T of Option<T>/Result<T,E> values at compile time
-  - `env` builtin annotates its result as `String`, `Some expr` annotates with inner expression type, `Ok expr` likewise
-  - `TryExpr` uses the annotation to create correctly-typed result storage (e.g., `String` instead of `Object`)
-  - Annotations propagate through `let` bindings and variable loads so `convertToString()` selects the right path
-  - Fixes: `(env "USER")?` and `(Some "hello")?` now print string values instead of raw pointer numbers
-- Feature status tracking:
-  - `LANGUAGE_STATUS.md` tracks implementation status of all F# features from `LANGUAGE.md`
+- See `ROADMAP-Language.md` for F# feature implementation status
+- **Dual semantics**: `let` unambiguously starts F# style; `|>` (function pipe) and `|` (shell pipe) are distinct tokens; expression context captures output, statement context prints to terminal
+- **Type inference**: Hindley-Milner Algorithm W pre-pass (`TypeInferencer`) integrated into `IRGenerator::generate()`, enabling handler compilation without explicit annotations for primitive types
+- **Handler compilation**: Functions with all typed parameters compile as separate IRHandlers (UCALL/URET/UTCALL); untyped functions fall back to AST inlining
+- **Records**: Compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT); update expressions use alloca-protected storage
+- **Discriminated unions**: Compiled to TypedObject sum types (OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT)
+- **Closures**: Captures sorted alphabetically, prepended as extra handler parameters; REPL-persisted functions re-compute captures at prompt start
+- **Mutual recursion**: Dispatch-loop optimization with integer tag selecting function body; separate from self-recursion's single-function loop
+- **Lists**: Cons-cell linked list via TypedObject; comprehension codegen uses two-phase approach (forward iteration + reverse pass)
+- **Shell command expressions**: `& command` temporarily leaves F# mode, reuses `SubstitutionExpr` logic for output capture
+
+**See also:** `ROADMAP-StructuredData.md` for planned Milestone 6 covering structured data
+and system interaction (object pipelines, structured commands, data manipulation verbs).
 
 ---
 
