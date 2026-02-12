@@ -25,9 +25,11 @@
 #include <unordered_set>
 
 #include "Error.hpp"
+#include "LinuxProcessProvider.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
+#include "PsCommand.hpp"
 #include "ProcessGroup.hpp"
 #include "Prompt.hpp"
 #include "TTY.hpp"
@@ -1644,6 +1646,16 @@ void Shell::registerBuiltinFunctions()
                 first = false;
             }
             args.setResult(args.caller()->newString(result));
+        });
+
+    // F# structured_ps builtin: returns list<ProcessInfo> from platform process provider
+    _runtime.registerFunction("structured_ps")
+        .returnType(CoreVM::LiteralType::Number)  // Returns list object pointer
+        .bind([this](CoreVM::Params& args) {
+            LinuxProcessProvider provider;
+            PsCommand cmd(provider);
+            auto* result = cmd.execute(*_runner);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });
 
     // clang-format on

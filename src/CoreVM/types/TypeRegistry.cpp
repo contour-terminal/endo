@@ -75,8 +75,24 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(listType));
 
+    // ProcessInfo: Product type with 6 fields for process information
+    auto processInfoType = std::make_unique<TypeDescriptor>();
+    processInfoType->kind = TypeKind::Product;
+    processInfoType->id = BuiltinTypeId::ProcessInfo;
+    processInfoType->name = "ProcessInfo";
+    processInfoType->slotCount = 6;
+    processInfoType->fields = {
+        { "pid", 0, LiteralType::Number },
+        { "ppid", 1, LiteralType::Number },
+        { "user", 2, LiteralType::String },
+        { "cpu", 3, LiteralType::Number },  // stored as bit_cast<uint64_t>(double)
+        { "mem", 4, LiteralType::Number },
+        { "command", 5, LiteralType::String },
+    };
+    addType(std::move(processInfoType));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::List + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::ProcessInfo + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

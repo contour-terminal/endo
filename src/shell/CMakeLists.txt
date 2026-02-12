@@ -50,6 +50,12 @@ add_library(endo-shell STATIC
     Suggestions.cpp
     TTY.hpp
     TTY.cpp
+    ProcessProvider.hpp
+    LinuxProcessProvider.hpp
+    LinuxProcessProvider.cpp
+    StructuredCommand.hpp
+    PsCommand.hpp
+    PsCommand.cpp
 )
 
 # Platform-specific implementations

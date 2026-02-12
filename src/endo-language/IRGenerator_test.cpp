@@ -5469,3 +5469,222 @@ TEST_CASE("IRGenerator.FSharp.list_filter_then_sort")
 {
     CHECK(executesWithOutput("print ([5; 3; 8; 1; 4] |> filter (fun x -> x > 2) |> sort)", "[3; 4; 5; 8]"));
 }
+
+// =============================================================================
+// Structured commands: ps (built-in process listing)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.ps.basic_call")
+{
+    // ps returns a list — check length
+    CHECK(executesWithOutput("let procs = ps\nprint (length procs)", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.field_access_pid")
+{
+    // Extract pid from first element via head + match
+    CHECK(executesWithOutput("match head ps with\n"
+                             "| Some p -> print p.pid\n"
+                             "| None -> print \"empty\"",
+                             "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.field_access_command")
+{
+    // Extract command from first element
+    CHECK(executesWithOutput("match head ps with\n"
+                             "| Some p -> print p.command\n"
+                             "| None -> print \"empty\"",
+                             "/sbin/init"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.filter_by_pid")
+{
+    // Filter processes with pid > 10 — should get 2 (pid=42, pid=100)
+    CHECK(executesWithOutput("let filtered = ps |> filter (fun p -> p.pid > 10)\n"
+                             "print (length filtered)",
+                             "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.map_pid")
+{
+    // Map to extract pids from all processes
+    CHECK(executesWithOutput("let pids = ps |> map (fun p -> p.pid)\n"
+                             "print pids",
+                             "[1; 42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.map_command")
+{
+    // Map to extract commands
+    CHECK(executesWithOutput("let cmds = ps |> map (fun p -> p.command)\n"
+                             "print cmds",
+                             "[/sbin/init; firefox; vim]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.filter_and_map")
+{
+    // Pipeline composition: filter by pid then map to command
+    CHECK(executesWithOutput("let cmds = ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)\n"
+                             "print cmds",
+                             "[firefox; vim]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.field_access_user")
+{
+    // Access user field from second element
+    CHECK(executesWithOutput("match head (tail ps) with\n"
+                             "| Some p -> print p.user\n"
+                             "| None -> print \"empty\"",
+                             "alice"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.field_access_mem")
+{
+    // Map to extract memory values
+    CHECK(executesWithOutput("let mems = ps |> map (fun p -> p.mem)\n"
+                             "print mems",
+                             "[1024; 4096; 2048]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.exists_high_cpu")
+{
+    // Check if any process has cpu > 10
+    CHECK(executesWithOutput("let r = ps |> exists (fun p -> p.pid > 50)\n"
+                             "print r",
+                             "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.pipeline_with_let")
+{
+    // Store ps result, then pipeline
+    CHECK(executesWithOutput("let procs = ps\n"
+                             "let highPid = procs |> filter (fun p -> p.pid > 1) |> map (fun p -> p.pid)\n"
+                             "print highPid",
+                             "[42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.fold_mem_sum")
+{
+    // fold to sum all memory values: 1024 + 4096 + 2048 = 7168
+    CHECK(executesWithOutput("print (ps |> fold 0 (fun acc p -> acc + p.mem))", "7168"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.fold_pid_sum")
+{
+    // fold to sum all pids: 1 + 42 + 100 = 143
+    CHECK(executesWithOutput("print (ps |> fold 0 (fun acc p -> acc + p.pid))", "143"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.reduce_pid_sum")
+{
+    // reduce via mapped pids: 1 + 42 + 100 = 143
+    CHECK(executesWithOutput("match ps |> map (fun p -> p.pid) |> reduce (fun a b -> a + b) with\n"
+                             "| Some v -> print v\n"
+                             "| None -> print \"none\"",
+                             "143"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.find_by_pid")
+{
+    // find the process with pid 42, print its command
+    CHECK(executesWithOutput("match ps |> find (fun p -> p.pid == 42) with\n"
+                             "| Some p -> print p.command\n"
+                             "| None -> print \"none\"",
+                             "firefox"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.find_none")
+{
+    // find a process with pid > 1000 — should be None
+    CHECK(executesWithOutput("match ps |> find (fun p -> p.pid > 1000) with\n"
+                             "| Some p -> print p.pid\n"
+                             "| None -> print \"none\"",
+                             "none"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.forall_positive_pid")
+{
+    // all pids are > 0
+    CHECK(executesWithOutput("print (ps |> forall (fun p -> p.pid > 0))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.forall_high_mem")
+{
+    // not all memory values are > 2000 (init has 1024)
+    CHECK(executesWithOutput("print (ps |> forall (fun p -> p.mem > 2000))", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.sortBy_mem")
+{
+    // sortBy memory ascending: 1024(pid=1), 2048(pid=100), 4096(pid=42)
+    CHECK(
+        executesWithOutput("print (ps |> sortBy (fun p -> p.mem) |> map (fun p -> p.pid))", "[1; 100; 42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.reverse_pids")
+{
+    // reverse the list and map to pids
+    CHECK(executesWithOutput("print (ps |> reverse |> map (fun p -> p.pid))", "[100; 42; 1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.take_2")
+{
+    // take first 2 processes, map to pids
+    CHECK(executesWithOutput("print (ps |> take 2 |> map (fun p -> p.pid))", "[1; 42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.drop_1")
+{
+    // drop first process, map to pids
+    CHECK(executesWithOutput("print (ps |> drop 1 |> map (fun p -> p.pid))", "[42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.filter_sortBy_map")
+{
+    // 3-stage pipeline: filter pid > 1, sortBy mem, map to command
+    // pid=42(mem=4096,"firefox"), pid=100(mem=2048,"vim") → sorted: vim, firefox
+    CHECK(executesWithOutput(
+        "print (ps |> filter (fun p -> p.pid > 1) |> sortBy (fun p -> p.mem) |> map (fun p -> p.command))",
+        "[vim; firefox]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.filter_reverse_map")
+{
+    // filter ppid == 1 (alice, bob), reverse, map to user
+    CHECK(executesWithOutput(
+        "print (ps |> filter (fun p -> p.ppid == 1) |> reverse |> map (fun p -> p.user))", "[bob; alice]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.isEmpty_after_filter_true")
+{
+    // no process has pid > 1000
+    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.pid > 1000) |> isEmpty)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.isEmpty_after_filter_false")
+{
+    // all processes have pid > 0
+    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.pid > 0) |> isEmpty)", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.length_after_filter")
+{
+    // 2 processes with mem > 1024 (alice=4096, bob=2048)
+    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.mem > 1024) |> length)", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.map_users")
+{
+    // map to extract user names
+    CHECK(executesWithOutput("print (ps |> map (fun p -> p.user))", "[root; alice; bob]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ps.head_after_filter")
+{
+    // head of filtered list (pid > 10) — first match is firefox (pid=42)
+    CHECK(executesWithOutput("match ps |> filter (fun p -> p.pid > 10) |> head with\n"
+                             "| Some p -> print p.command\n"
+                             "| None -> print \"none\"",
+                             "firefox"));
+}

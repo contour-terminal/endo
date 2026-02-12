@@ -5,6 +5,8 @@
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <algorithm>
+#include <bit>
+#include <format>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -23,6 +25,13 @@ namespace
     /// Recursively converts a runtime value (number, tuple, list, option, etc.) to a printable string.
     std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
     {
+        // Check if the value is a string pointer (e.g. from record field extraction in mapped lists)
+        if (runner && runner->isKnownString(rawVal))
+        {
+            auto const* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal));
+            return *str;
+        }
+
         // Check if the value is a known TypedObject pointer
         if (runner && runner->isKnownObject(rawVal))
         {
@@ -68,6 +77,9 @@ namespace
             }
             if (obj->type->kind == CoreVM::TypeKind::Product)
             {
+                // Check if this is a ProcessInfo record (has "cpu" float field)
+                bool const isProcessInfo = obj->type->id == CoreVM::BuiltinTypeId::ProcessInfo;
+
                 // Record type: { field1 = val1; field2 = val2 }
                 std::string result = "{ ";
                 for (size_t i = 0; i < obj->type->fields.size(); ++i)
@@ -77,16 +89,26 @@ namespace
                     result += obj->type->fields[i].name;
                     result += " = ";
                     auto slotVal = obj->getSlot(static_cast<uint8_t>(i));
-                    switch (obj->type->fields[i].type)
+
+                    // ProcessInfo "cpu" field stores a double as bit_cast<uint64_t>
+                    if (isProcessInfo && obj->type->fields[i].name == "cpu")
                     {
-                        case CoreVM::LiteralType::String: {
-                            auto const* str =
-                                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
-                            result += str ? *str : "(null)";
-                            break;
+                        auto const cpuVal = std::bit_cast<double>(slotVal);
+                        result += std::format("{:.1f}", cpuVal);
+                    }
+                    else
+                    {
+                        switch (obj->type->fields[i].type)
+                        {
+                            case CoreVM::LiteralType::String: {
+                                auto const* str = reinterpret_cast<CoreVM::CoreString const*>(
+                                    static_cast<uintptr_t>(slotVal));
+                                result += str ? *str : "(null)";
+                                break;
+                            }
+                            case CoreVM::LiteralType::Boolean: result += slotVal ? "true" : "false"; break;
+                            default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
                         }
-                        case CoreVM::LiteralType::Boolean: result += slotVal ? "true" : "false"; break;
-                        default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
                     }
                 }
                 result += " }";
@@ -436,6 +458,53 @@ TestRuntime::TestRuntime()
         .bind([](CoreVM::Params& args) {
             auto rawVal = static_cast<uint64_t>(args.getInt(1));
             args.setResult(args.caller()->newString(valueToString(rawVal, args.caller())));
+        });
+
+    // Register structured_ps mock: returns deterministic test data (3 fixed processes)
+    runtime.registerFunction("structured_ps")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+
+            // Mock process data for deterministic testing
+            struct MockProc
+            {
+                int64_t pid;
+                int64_t ppid;
+                char const* user;
+                double cpu;
+                int64_t mem;
+                char const* command;
+            };
+            constexpr MockProc procs[] = {
+                { 1, 0, "root", 0.1, 1024, "/sbin/init" },
+                { 42, 1, "alice", 15.5, 4096, "firefox" },
+                { 100, 1, "bob", 2.3, 2048, "vim" },
+            };
+
+            // Build cons-cell list right-to-left
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0; // Nil
+
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& p = procs[i];
+                auto* record = runner->allocObject(CoreVM::BuiltinTypeId::ProcessInfo);
+                record->setSlot(0, static_cast<uint64_t>(p.pid));
+                record->setSlot(1, static_cast<uint64_t>(p.ppid));
+                record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(p.user)));
+                record->setSlot(3, std::bit_cast<uint64_t>(p.cpu));
+                record->setSlot(4, static_cast<uint64_t>(p.mem));
+                record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(p.command)));
+
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1; // Cons
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
 
     // Register env.has builtin (returns boolean: true if key exists in mock env)

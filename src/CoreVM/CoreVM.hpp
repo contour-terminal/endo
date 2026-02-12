@@ -514,6 +514,9 @@ class Runner
     /// Checks if a raw value is a pointer to a known TypedObject allocated by this Runner.
     [[nodiscard]] bool isKnownObject(uint64_t rawValue) const noexcept;
 
+    /// Checks if a raw value is a pointer to a known CoreString managed by this Runner.
+    [[nodiscard]] bool isKnownString(uint64_t rawValue) const noexcept;
+
   private:
     //! consumes @p tokens from quota and raises QuotaExceeded if quota is being exceeded.
     void consume(Opcode op);
@@ -2468,7 +2471,7 @@ class IRProgram
     std::vector<std::unique_ptr<IRHandler>> _handlers;
     std::vector<CustomProductType> _customProductTypes;
     std::vector<CustomSumType> _customSumTypes;
-    uint16_t _nextCustomTypeId = BuiltinTypeId::List + 1; ///< Next type ID for custom types
+    uint16_t _nextCustomTypeId = BuiltinTypeId::ProcessInfo + 1; ///< Next type ID for custom types
 
     friend class IRBuilder;
 };

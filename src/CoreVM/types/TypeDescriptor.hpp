@@ -107,6 +107,7 @@ namespace BuiltinTypeId
     constexpr uint16_t Tuple2 = 3;
     constexpr uint16_t Tuple3 = 4;
     constexpr uint16_t List = 5;
+    constexpr uint16_t ProcessInfo = 6;
 } // namespace BuiltinTypeId
 
 } // namespace CoreVM

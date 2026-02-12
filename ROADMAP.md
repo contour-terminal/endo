@@ -502,8 +502,10 @@ src/
 - **Lists**: Cons-cell linked list via TypedObject; comprehension codegen uses two-phase approach (forward iteration + reverse pass)
 - **Shell command expressions**: `& command` temporarily leaves F# mode, reuses `SubstitutionExpr` logic for output capture
 
-**See also:** `ROADMAP-StructuredData.md` for planned Milestone 6 covering structured data
+**See also:** `ROADMAP-StructuredData.md` for Milestone 6 covering structured data
 and system interaction (object pipelines, structured commands, data manipulation verbs).
+Phase 6.1 (StructuredCommand interface, platform abstraction) and Phase 6.2 (`ps` builtin) are implemented.
+HOF list element type annotation propagation fixed for `find`, `reverse`, `take`, `drop`, `sortBy` — enables chained record pipelines.
 
 ---
 

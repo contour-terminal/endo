@@ -309,6 +309,22 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         }
     }
 
+    // Pre-register well-known structured command record types so that
+    // field access (.pid, .command) and pattern matching work without user declarations.
+    {
+        RecordTypeInfo processInfoType;
+        processInfoType.typeId = CoreVM::BuiltinTypeId::ProcessInfo;
+        processInfoType.name = "ProcessInfo";
+        processInfoType.fields = {
+            { "pid", 0, CoreVM::LiteralType::Number },  { "ppid", 1, CoreVM::LiteralType::Number },
+            { "user", 2, CoreVM::LiteralType::String }, { "cpu", 3, CoreVM::LiteralType::Number },
+            { "mem", 4, CoreVM::LiteralType::Number },  { "command", 5, CoreVM::LiteralType::String },
+        };
+        for (auto const& f: processInfoType.fields)
+            processInfoType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["ProcessInfo"] = std::move(processInfoType);
+    }
+
     // Run Hindley-Milner type inference pre-pass.
     // Inference errors are non-fatal: unresolved types simply remain unannotated
     // and fall back to AST inlining during codegen.
@@ -824,6 +840,19 @@ std::optional<uint16_t> IRGenerator::getInnerObjectTypeId(CoreVM::Value* val) co
 {
     auto it = _innerObjectTypeIdAnnotations.find(val);
     if (it != _innerObjectTypeIdAnnotations.end())
+        return it->second;
+    return std::nullopt;
+}
+
+void IRGenerator::annotateListElementTypeId(CoreVM::Value* val, uint16_t typeId)
+{
+    _listElementTypeAnnotations[val] = typeId;
+}
+
+std::optional<uint16_t> IRGenerator::getListElementTypeId(CoreVM::Value* val) const
+{
+    auto it = _listElementTypeAnnotations.find(val);
+    if (it != _listElementTypeAnnotations.end())
         return it->second;
     return std::nullopt;
 }
@@ -3025,6 +3054,9 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _result =
             _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_head");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+        // Propagate list element type as inner object type of the Option (Some wraps the element)
+        if (auto elemTypeId = getListElementTypeId(argVal))
+            annotateInnerObjectTypeId(_result, *elemTypeId);
         return true;
     }
 
@@ -3050,6 +3082,9 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _result =
             _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_tail");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        // Propagate list element type through tail (same element type as input list)
+        if (auto elemTypeId = getListElementTypeId(argVal))
+            annotateListElementTypeId(_result, *elemTypeId);
         return true;
     }
 
@@ -3257,6 +3292,26 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         }
         _result = _builder.createCallFunction(
             _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_join");
+        return true;
+    }
+
+    // ps: zero-arg builtin returning list<ProcessInfo>
+    if (name == "ps")
+    {
+        if (!argExprs.empty())
+        {
+            reportTypeError("ps takes no arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* callback = findCallback("structured_ps()I");
+        if (!callback)
+        {
+            reportTypeError("structured_ps builtin not registered");
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "ps");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::ProcessInfo);
         return true;
     }
 
@@ -3746,6 +3801,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     if (auto innerObjTypeId = getInnerObjectTypeId(value))
         annotateInnerObjectTypeId(storage, *innerObjTypeId);
 
+    // Propagate list element type annotation through the binding
+    if (auto elemTypeId = getListElementTypeId(value))
+        annotateListElementTypeId(storage, *elemTypeId);
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
@@ -3888,6 +3947,10 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Propagate inner object type ID annotation through the binding
         if (auto innerObjTypeId = getInnerObjectTypeId(value))
             annotateInnerObjectTypeId(storage, *innerObjTypeId);
+
+        // Propagate list element type annotation through the binding
+        if (auto elemTypeId = getListElementTypeId(value))
+            annotateListElementTypeId(storage, *elemTypeId);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -4183,6 +4246,9 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _result =
                 _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_head");
             annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            // Propagate list element type as inner object type of the Option
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
             return;
         }
         if (funcIdent->name == "tail")
@@ -4196,6 +4262,9 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _result =
                 _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_tail");
             annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            // Propagate list element type through tail
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateListElementTypeId(_result, *elemTypeId);
             return;
         }
         if (funcIdent->name == "length")
@@ -4422,6 +4491,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 annotateInnerObjectTypeId(paramStorage, *innerObjTypeId);
             if (auto innerType = getInnerType(allArgs[i]))
                 annotateInnerType(paramStorage, *innerType);
+            if (auto elemTypeId = getListElementTypeId(allArgs[i]))
+                annotateListElementTypeId(paramStorage, *elemTypeId);
 
             // Track function references passed as arguments (HOF support)
             if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
@@ -4505,6 +4576,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             annotateInnerObjectTypeId(paramAlloca, *innerObjTypeId);
         if (auto innerType = getInnerType(value))
             annotateInnerType(paramAlloca, *innerType);
+        if (auto elemTypeId = getListElementTypeId(value))
+            annotateListElementTypeId(paramAlloca, *elemTypeId);
 
         auto* bodyResult = codegen(func->body);
         if (bodyResult)
@@ -4573,6 +4646,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         annotateInnerObjectTypeId(storage, *innerObjTypeId);
     if (auto innerType = getInnerType(value))
         annotateInnerType(storage, *innerType);
+    if (auto elemTypeId = getListElementTypeId(value))
+        annotateListElementTypeId(storage, *elemTypeId);
 
     // Track function references passed as piped value (HOF support)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
@@ -5016,6 +5091,8 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
             annotateInnerObjectTypeId(alloca, *innerObjTypeId);
         if (auto innerType = getInnerType(args[i]))
             annotateInnerType(alloca, *innerType);
+        if (auto elemTypeId = getListElementTypeId(args[i]))
+            annotateListElementTypeId(alloca, *elemTypeId);
     }
 
     CoreVM::AllocaInstr* resultStorage = nullptr;
@@ -5186,6 +5263,8 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
             annotateInnerObjectTypeId(storage, *innerObjTypeId);
         if (auto innerType = getInnerType(args[i]))
             annotateInnerType(storage, *innerType);
+        if (auto elemTypeId = getListElementTypeId(args[i]))
+            annotateListElementTypeId(storage, *elemTypeId);
 
         // Track function references passed as arguments (HOF support)
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
@@ -5415,6 +5494,9 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(*ref);
             return;
         }
+        // Zero-argument builtins (e.g., ps) invoked as bare identifiers in F# context
+        if (node.name == "ps" && tryGenerateBuiltinCall(node.name, {}))
+            return;
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
         return;
     }
@@ -5441,6 +5523,10 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     // Propagate inner object type ID annotation through variable loads
     if (auto innerObjTypeId = getInnerObjectTypeId(storage))
         annotateInnerObjectTypeId(_result, *innerObjTypeId);
+
+    // Propagate list element type annotation through variable loads
+    if (auto elemTypeId = getListElementTypeId(storage))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -7819,6 +7905,12 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
 
+        // Propagate type annotations through HOF parameter bindings
+        if (auto objTypeId = getObjectTypeId(args[i]))
+            annotateObjectTypeId(storage, *objTypeId);
+        if (auto elemTypeId = getListElementTypeId(args[i]))
+            annotateListElementTypeId(storage, *elemTypeId);
+
         // Track function references passed as arguments
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
         {
@@ -7830,88 +7922,99 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     // Resolve actual function and list arguments from scope
     auto const& hofName = func->builtinHOF;
 
+    // Helper: load a list parameter and propagate list element type annotations
+    auto loadListParam = [&](std::string_view paramName, std::string_view label) -> CoreVM::Value* {
+        auto* storage = lookupFSharpVariable(std::string(paramName));
+        auto* loaded = _builder.createLoad(storage, std::string(label));
+        if (auto elemTypeId = getListElementTypeId(storage))
+            annotateListElementTypeId(loaded, *elemTypeId);
+        if (auto objTypeId = getObjectTypeId(storage))
+            annotateObjectTypeId(loaded, *objTypeId);
+        return loaded;
+    };
+
     if (hofName == "map")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "map.xs");
+        auto* listVal = loadListParam("__xs", "map.xs");
         generateMapIR("__f", listVal);
     }
     else if (hofName == "filter")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "filter.xs");
+        auto* listVal = loadListParam("__xs", "filter.xs");
         generateFilterIR("__pred", listVal);
     }
     else if (hofName == "fold")
     {
         auto* initVal = _builder.createLoad(lookupFSharpVariable("__init"), "fold.init");
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "fold.xs");
+        auto* listVal = loadListParam("__xs", "fold.xs");
         generateFoldIR(initVal, "__f", listVal);
     }
     else if (hofName == "reduce")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "reduce.xs");
+        auto* listVal = loadListParam("__xs", "reduce.xs");
         generateReduceIR("__f", listVal);
     }
     else if (hofName == "reverse")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "reverse.xs");
+        auto* listVal = loadListParam("__xs", "reverse.xs");
         generateReverseIR(listVal);
     }
     else if (hofName == "find")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "find.xs");
+        auto* listVal = loadListParam("__xs", "find.xs");
         generateFindIR("__pred", listVal);
     }
     else if (hofName == "exists")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "exists.xs");
+        auto* listVal = loadListParam("__xs", "exists.xs");
         generateExistsIR("__pred", listVal);
     }
     else if (hofName == "forall")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "forall.xs");
+        auto* listVal = loadListParam("__xs", "forall.xs");
         generateForallIR("__pred", listVal);
     }
     else if (hofName == "take")
     {
         auto* countVal = _builder.createLoad(lookupFSharpVariable("__n"), "take.n");
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "take.xs");
+        auto* listVal = loadListParam("__xs", "take.xs");
         generateTakeIR(countVal, listVal);
     }
     else if (hofName == "drop")
     {
         auto* countVal = _builder.createLoad(lookupFSharpVariable("__n"), "drop.n");
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "drop.xs");
+        auto* listVal = loadListParam("__xs", "drop.xs");
         generateDropIR(countVal, listVal);
     }
     else if (hofName == "zip")
     {
-        auto* listA = _builder.createLoad(lookupFSharpVariable("__xs"), "zip.xs");
-        auto* listB = _builder.createLoad(lookupFSharpVariable("__ys"), "zip.ys");
+        auto* listA = loadListParam("__xs", "zip.xs");
+        auto* listB = loadListParam("__ys", "zip.ys");
         generateZipIR(listA, listB);
     }
     else if (hofName == "flatten")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xss"), "flatten.xss");
+        auto* listVal = loadListParam("__xss", "flatten.xss");
         generateFlattenIR(listVal);
     }
     else if (hofName == "sortBy")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "sortBy.xs");
+        auto* listVal = loadListParam("__xs", "sortBy.xs");
         generateSortByIR("__f", listVal);
     }
     else if (hofName == "groupBy")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "groupBy.xs");
+        auto* listVal = loadListParam("__xs", "groupBy.xs");
         generateGroupByIR("__f", listVal);
     }
     else if (hofName == "sort")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "sort.xs");
+        auto* listVal = loadListParam("__xs", "sort.xs");
         generateSortIR(listVal);
     }
     else if (hofName == "distinct")
     {
-        auto* listVal = _builder.createLoad(lookupFSharpVariable("__xs"), "distinct.xs");
+        auto* listVal = loadListParam("__xs", "distinct.xs");
         generateDistinctIR(listVal);
     }
     else
@@ -7952,6 +8055,10 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
 
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "map.elem");
 
+    // Propagate list element type to extracted elements (e.g., ProcessInfo for ps)
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+
     // Create blocks
     auto* condBlock = _builder.createBlock("map.cond");
     auto* bodyBlock = _builder.createBlock("map.body");
@@ -7982,6 +8089,9 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
 
     // Apply function to element
     auto* elemLoad = _builder.createLoad(elemAlloca, "map.elem.load");
+    // Propagate element type annotation through load (for field access in lambda body)
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(func, funcName, { elemLoad });
     auto* mapped = _result;
     if (!mapped)
@@ -8084,6 +8194,14 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
 
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "filter.elem");
 
+    // Propagate list element type to extracted elements (e.g., ProcessInfo for ps)
+    if (auto elemTypeId = getListElementTypeId(listValue))
+    {
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+        // Also annotate srcStorage so the result list inherits element type
+        annotateListElementTypeId(srcStorage, *elemTypeId);
+    }
+
     // Create blocks
     auto* condBlock = _builder.createBlock("filter.cond");
     auto* bodyBlock = _builder.createBlock("filter.body");
@@ -8115,6 +8233,9 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
 
     // Apply predicate to element
     auto* elemLoad = _builder.createLoad(elemAlloca, "filter.elem.load");
+    // Propagate element type annotation through load (for field access in lambda body)
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(pred, predName, { elemLoad });
     auto* predResult = _result;
     if (!predResult)
@@ -8187,6 +8308,9 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "filter.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    // Propagate list element type through filter (same element type as input)
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
@@ -8217,6 +8341,10 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
 
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "fold.elem");
 
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+
     // Create blocks
     auto* condBlock = _builder.createBlock("fold.cond");
     auto* bodyBlock = _builder.createBlock("fold.body");
@@ -8245,6 +8373,8 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
     // Apply function to (acc, elem)
     auto* accLoad = _builder.createLoad(accStorage, "fold.acc.load");
     auto* elemLoad = _builder.createLoad(elemAlloca, "fold.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(func, funcName, { accLoad, elemLoad });
     auto* newAcc = _result;
     if (!newAcc)
@@ -8287,6 +8417,10 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.acc");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "reduce.result");
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.elem");
+
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
 
     // Create blocks
     auto* checkEmptyBlock = _builder.createBlock("reduce.check_empty");
@@ -8344,6 +8478,8 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
 
     auto* accLoad = _builder.createLoad(accStorage, "reduce.acc.load");
     auto* elemLoad = _builder.createLoad(elemAlloca, "reduce.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(func, funcName, { accLoad, elemLoad });
     auto* newAcc = _result;
     if (!newAcc)
@@ -8437,6 +8573,8 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(accStorage, "rev.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value* listValue)
@@ -8463,6 +8601,10 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
     _builder.createStore(srcStorage, listValue);
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "find.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "find.result");
+
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
 
     // Create blocks
     auto* condBlock = _builder.createBlock("find.cond");
@@ -8493,6 +8635,8 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
 
     // Apply predicate to element
     auto* elemLoad = _builder.createLoad(elemAlloca, "find.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(pred, predName, { elemLoad });
     auto* predResult = _result;
     if (!predResult)
@@ -8526,6 +8670,8 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(resultStorage, "find.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateInnerObjectTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Value* listValue)
@@ -8550,6 +8696,10 @@ void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Val
     _builder.createStore(srcStorage, listValue);
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "exists.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "exists.result");
+
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
 
     // Create blocks
     auto* condBlock = _builder.createBlock("exists.cond");
@@ -8578,6 +8728,8 @@ void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Val
     _builder.createStore(srcStorage, tail);
 
     auto* elemLoad = _builder.createLoad(elemAlloca, "exists.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(pred, predName, { elemLoad });
     auto* predResult = _result;
     if (!predResult)
@@ -8625,6 +8777,10 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "forall.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "forall.result");
 
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+
     // Create blocks
     auto* condBlock = _builder.createBlock("forall.cond");
     auto* bodyBlock = _builder.createBlock("forall.body");
@@ -8652,6 +8808,8 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     _builder.createStore(srcStorage, tail);
 
     auto* elemLoad = _builder.createLoad(elemAlloca, "forall.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(pred, predName, { elemLoad });
     auto* predResult = _result;
     if (!predResult)
@@ -8797,6 +8955,8 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "take.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
@@ -8849,6 +9009,8 @@ void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listV
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(srcStorage, "drop.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
@@ -9191,6 +9353,10 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
 
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem");
 
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
+
     // Temp allocas for values that must survive ObjAlloc
     auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.key.tmp");
     auto* elemTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem.tmp2");
@@ -9226,6 +9392,8 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
 
     // Call key function on element
     auto* elemLoad = _builder.createLoad(elemAlloca, "sortBy.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(func, funcName, { elemLoad });
     auto* keyValue = _result;
     if (!keyValue)
@@ -9280,6 +9448,8 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     _result =
         _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { accFinal }, "sortBy.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateListElementTypeId(_result, *elemTypeId);
 }
 
 void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue)
@@ -9313,6 +9483,10 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     _builder.createStore(accStorage, nil);
 
     auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.elem");
+
+    // Propagate list element type to extracted elements
+    if (auto elemTypeId = getListElementTypeId(listValue))
+        annotateObjectTypeId(elemAlloca, *elemTypeId);
 
     // Temp allocas for values that must survive ObjAlloc
     auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.key.tmp");
@@ -9349,6 +9523,8 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
 
     // Call key function on element
     auto* elemLoad = _builder.createLoad(elemAlloca, "groupBy.elem.load");
+    if (auto elemTypeId = getObjectTypeId(elemAlloca))
+        annotateObjectTypeId(elemLoad, *elemTypeId);
     generateFSharpCall(func, funcName, { elemLoad });
     auto* keyValue = _result;
     if (!keyValue)

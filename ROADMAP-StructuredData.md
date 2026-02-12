@@ -23,13 +23,14 @@ This new milestone will focus on building the infrastructure and features requir
 
 **Tasks:**
 
-1.  **Complete CoreVM Support for Records and Unions:**
+1.  **Complete CoreVM Support for Records and Unions:** ✅
     *   Finalize the implementation of discriminated unions and record types in the CoreVM, as started in Phase 1.8.
     *   Ensure the VM can efficiently create, manipulate, and garbage-collect these structured types.
 
-2.  **Define the Structured Command Interface:**
-    *   Create an internal C++ interface that commands (both built-in and external) can implement to declare that they produce structured data.
-    *   This interface should allow a command to advertise the `Type` of the objects it will output (e.g., `list<ProcessInfoRecord>`).
+2.  **Define the Structured Command Interface:** ✅
+    *   Create an internal C++ interface (`StructuredCommand`) that commands (both built-in and external) can implement to declare that they produce structured data.
+    *   This interface allows a command to advertise the `Type` of the objects it will output (e.g., `list<ProcessInfoRecord>`).
+    *   Platform-abstracted via `ProcessProvider` interface for cross-platform support.
 
 3.  **Implement a Structured Data Wrapper:**
     *   Create a built-in command or a mechanism to wrap existing CLI tools that produce structured text formats like JSON, CSV, or YAML.
@@ -47,9 +48,12 @@ This new milestone will focus on building the infrastructure and features requir
     *   Create a new `ls` built-in that outputs a stream of `FileInfo` records.
     *   `FileInfo` record fields: `name: string`, `size: int`, `mode: int`, `mtime: datetime`, `isDir: bool`.
 
-2.  **`ps`:**
+2.  **`ps`:** ✅
     *   Create a `ps` built-in that outputs a stream of `ProcessInfo` records.
     *   `ProcessInfo` record fields: `pid: int`, `ppid: int`, `user: string`, `cpu: float`, `mem: int`, `command: string`.
+    *   Fully integrated with pipeline operations: `ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)`.
+    *   `ProcessInfo` registered as well-known type (`BuiltinTypeId::ProcessInfo = 6`) with field access support.
+    *   Platform-abstracted via `LinuxProcessProvider` (reads `/proc`); `WindowsProcessProvider` to follow.
 
 3.  **`jobs`:**
     *   Rewrite the existing `jobs` built-in to output a stream of `JobInfo` records.
@@ -133,9 +137,11 @@ F# higher-order function:
 
 **Tasks:**
 
-1.  **Record-Aware List Operations** (depends on Phase 3):
-    *   Ensure `filter`, `map`, `sortBy`, `groupBy` work with record-typed lists.
+1.  **Record-Aware List Operations** (depends on Phase 3): ✅
+    *   `filter`, `map`, `sortBy`, `groupBy`, `find`, `reverse`, `take`, `drop` work with record-typed lists.
+    *   List element type annotation propagation fixed for `find`, `reverse`, `take`, `drop`, `sortBy`.
     *   Field access via `.` already works on records.
+    *   30 pipeline tests covering all HOFs with mock `ps` records.
 
 2.  **Placeholder Lambda Sugar (`_`)**:
     *   Parser sugar: `_` in expression position creates an implicit lambda.

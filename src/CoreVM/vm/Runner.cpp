@@ -261,6 +261,20 @@ bool Runner::isKnownObject(uint64_t rawValue) const noexcept
     return false;
 }
 
+bool Runner::isKnownString(uint64_t rawValue) const noexcept
+{
+    if (rawValue == 0)
+        return false;
+
+    auto const* ptr = reinterpret_cast<CoreString const*>(static_cast<uintptr_t>(rawValue));
+    for (auto const& str: _stringGarbage)
+    {
+        if (&str == ptr)
+            return true;
+    }
+    return false;
+}
+
 void Runner::freeObject(TypedObject* obj)
 {
     if (!obj)

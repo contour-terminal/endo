@@ -600,6 +600,18 @@ class IRGenerator final: public ast::Visitor
     /// Retrieves the inner object type ID annotation for a value, if any.
     [[nodiscard]] std::optional<uint16_t> getInnerObjectTypeId(CoreVM::Value* val) const;
 
+    /// Tracks the element type ID for list values.
+    /// When a list is known to contain elements of a specific record type (e.g., ProcessInfo),
+    /// this annotation propagates through let bindings and pipelines so that field access
+    /// on extracted elements resolves correctly.
+    std::unordered_map<CoreVM::Value*, uint16_t> _listElementTypeAnnotations;
+
+    /// Annotates a list value with the type ID of its elements.
+    void annotateListElementTypeId(CoreVM::Value* val, uint16_t typeId);
+
+    /// Retrieves the list element type ID annotation for a value, if any.
+    [[nodiscard]] std::optional<uint16_t> getListElementTypeId(CoreVM::Value* val) const;
+
     /// Tracks registered record type definitions.
     struct RecordTypeInfo
     {
