@@ -4241,3 +4241,55 @@ TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
     // [1;2;3] |> tail |> length → 2
     CHECK(executesWithOutput("print ([1;2;3] |> tail |> length)", "2"));
 }
+
+// =============================================================================
+// Placeholder Lambda Sugar Tests (`_`)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.placeholder_increment")
+{
+    // (_ + 1) desugars to fun __x -> __x + 1
+    CHECK(executesWithOutput("let inc = (_ + 1); print (inc 5)", "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_multiply")
+{
+    // (_ * 2) desugars to fun __x -> __x * 2
+    CHECK(executesWithOutput("let double = (_ * 2); print (double 7)", "14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_same_param_twice")
+{
+    // (_ + _) desugars to fun __x -> __x + __x — same parameter used twice
+    CHECK(executesWithOutput("let f = (_ + _); print (f 7)", "14"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_complex_expr")
+{
+    // (_ * _ + _) desugars to fun __x -> __x * __x + __x
+    CHECK(executesWithOutput("let f = (_ * _ + _); print (f 3)", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_pipeline")
+{
+    // Pipeline with placeholder lambda
+    CHECK(executesWithOutput("print (5 |> (_ + 1))", "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_composition")
+{
+    // Two independent placeholder lambdas
+    CHECK(executesWithOutput("let f = (_ * 2); let g = (_ + 1); print (g (f 3))", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_pipeline_chained")
+{
+    // Chained pipelines with placeholder lambdas
+    CHECK(executesWithOutput("print (10 |> (_ * 2) |> (_ + 1))", "21"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
+{
+    // (_ - 3)
+    CHECK(executesWithOutput("let f = (_ - 3); print (f 10)", "7"));
+}

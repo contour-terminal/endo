@@ -12,7 +12,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Mutable bindings: `let mut x = 0`
 - [x] Mutation operator: `x <- x + 1`
 - [x] Lambda expressions: `fun x -> x * 2`
-- [ ] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc
+- [x] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc
 - [x] Let-in expressions: `let x = 5 in x + 1`
 - [x] If-then-else expressions: `if cond then a else b`
 - [x] Match expressions: `match x with | pattern -> result`

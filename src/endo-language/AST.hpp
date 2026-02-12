@@ -67,11 +67,22 @@ struct InputRedirect final: public Node
 // This is a literal parameter.
 // It is a string.
 // It may be quoted.
+/// Quoting style for literal expressions (for round-trip AST printing).
+enum class LiteralQuoting : uint8_t
+{
+    Unquoted, ///< Bare word (shell context)
+    Quoted,   ///< Quoted string literal (e.g., 'hello' or "hello")
+};
+
 struct LiteralExpr final: Expr
 {
     std::string value;
+    LiteralQuoting quoting = LiteralQuoting::Unquoted;
 
-    explicit LiteralExpr(std::string value): value(std::move(value)) {}
+    explicit LiteralExpr(std::string value, LiteralQuoting quoting = LiteralQuoting::Unquoted):
+        value(std::move(value)), quoting(quoting)
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

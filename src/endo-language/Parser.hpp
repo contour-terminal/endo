@@ -206,6 +206,9 @@ class Parser
 
     /// Maps constructor names to their payload slot count.
     std::unordered_map<std::string, uint8_t> _constructorPayloadSlots;
+
+    int _placeholderCount = 0;            ///< Number of `_` placeholders in current scope
+    bool _placeholderScopeActive = false; ///< Suppresses postfix wrapping inside parens
 };
 
 // Template implementations

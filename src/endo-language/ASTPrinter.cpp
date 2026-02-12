@@ -299,7 +299,10 @@ void ASTPrinter::visit(LogicalOrStmt const& node)
 
 void ASTPrinter::visit(LiteralExpr const& node)
 {
-    _result += std::format("{}", node.value);
+    if (node.quoting == LiteralQuoting::Quoted)
+        _result += std::format("\"{}\"", node.value);
+    else
+        _result += std::format("{}", node.value);
 }
 
 void ASTPrinter::visit(SubstitutionExpr const& node)

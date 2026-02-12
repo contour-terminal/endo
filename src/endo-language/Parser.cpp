@@ -1362,13 +1362,16 @@ std::unique_ptr<ast::Expr> Parser::parseInterpolatedString()
     // Optimize: if only one part and it's a literal, return it directly
     if (parts.size() == 1)
     {
-        if (dynamic_cast<ast::LiteralExpr*>(parts[0].get()))
+        if (auto* lit = dynamic_cast<ast::LiteralExpr*>(parts[0].get()))
+        {
+            lit->quoting = ast::LiteralQuoting::Quoted;
             return std::move(parts[0]);
+        }
     }
 
     // If empty string, return empty literal
     if (parts.empty())
-        return std::make_unique<ast::LiteralExpr>("");
+        return std::make_unique<ast::LiteralExpr>("", ast::LiteralQuoting::Quoted);
 
     // Otherwise create a ConcatExpr
     return std::make_unique<ast::ConcatExpr>(std::move(parts));
@@ -3488,11 +3491,14 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
 std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
 {
     TRACE_SCOPE("parseFSharpPostfix");
+
+    auto const savedPlaceholderCount = _placeholderCount;
     auto expr = parseFSharpPrimary();
     if (!expr)
         return nullptr;
 
     // Handle postfix operators: field access (.) and error propagation (?)
+    auto hasPostfixOps = false;
     for (;;)
     {
         if (_lexer.currentToken() == Token::Dot)
@@ -3510,17 +3516,30 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
             auto fieldName = _lexer.currentLiteral();
             _lexer.nextToken(); // consume field name
             expr = std::make_unique<ast::FieldAccessExpr>(std::move(expr), std::move(fieldName));
+            hasPostfixOps = true;
         }
         else if (_lexer.currentToken() == Token::Question)
         {
             _lexer.nextToken(); // consume '?'
             expr = std::make_unique<ast::TryExpr>(std::move(expr));
+            hasPostfixOps = true;
         }
         else
         {
             break;
         }
     }
+
+    // Bare postfix placeholder wrapping: _.field → fun __x -> __x.field
+    auto const newPlaceholders = _placeholderCount - savedPlaceholderCount;
+    if (newPlaceholders > 0 && hasPostfixOps && !_placeholderScopeActive)
+    {
+        _placeholderCount = savedPlaceholderCount;
+        std::vector<ast::TypedParameter> params;
+        params.emplace_back("__x");
+        return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(expr));
+    }
+
     return expr;
 }
 
@@ -4350,6 +4369,14 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return parseListLiteral();
             }
 
+            // Placeholder lambda sugar: _ → IdentifierExpr("__x")
+            if (lit == "_")
+            {
+                _lexer.nextToken();
+                ++_placeholderCount;
+                return std::make_unique<ast::IdentifierExpr>("__x");
+            }
+
             // User-defined union constructor
             if (auto ctorIt = _constructorLookup.find(lit); ctorIt != _constructorLookup.end())
             {
@@ -4400,6 +4427,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 _lexer.nextToken(); // consume ')'
                 return std::make_unique<ast::UnitExpr>();
             }
+
+            // Save and reset placeholder state for this parenthesized scope
+            auto const savedPlaceholderCount = _placeholderCount;
+            auto const savedPlaceholderScope = _placeholderScopeActive;
+            _placeholderCount = 0;
+            _placeholderScopeActive = true;
+
             auto first = parseFSharpExpr();
             if (!first)
                 return nullptr;
@@ -4427,6 +4461,19 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume ')'
+
+                auto const localPlaceholders = _placeholderCount;
+                _placeholderCount = savedPlaceholderCount;
+                _placeholderScopeActive = savedPlaceholderScope;
+
+                if (localPlaceholders > 0)
+                {
+                    // Wrap tuple in lambda: (_.a, _.b) → fun __x -> (__x.a, __x.b)
+                    std::vector<ast::TypedParameter> params;
+                    params.emplace_back("__x");
+                    return std::make_unique<ast::LambdaExpr>(
+                        std::move(params), std::make_unique<ast::TupleExpr>(std::move(elements)));
+                }
                 return std::make_unique<ast::TupleExpr>(std::move(elements));
             }
 
@@ -4440,6 +4487,18 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return nullptr;
             }
             _lexer.nextToken(); // consume ')'
+
+            auto const localPlaceholders = _placeholderCount;
+            _placeholderCount = savedPlaceholderCount;
+            _placeholderScopeActive = savedPlaceholderScope;
+
+            if (localPlaceholders > 0)
+            {
+                // Wrap expression in lambda: (_ + 1) → fun __x -> __x + 1
+                std::vector<ast::TypedParameter> params;
+                params.emplace_back("__x");
+                return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(first));
+            }
             return std::make_unique<ast::ParenExpr>(std::move(first));
         }
 
@@ -4515,7 +4574,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         case Token::String: {
             // Single-quoted string literal: 'hello'
             std::string value = consumeLiteral();
-            return std::make_unique<ast::LiteralExpr>(std::move(value));
+            return std::make_unique<ast::LiteralExpr>(std::move(value), ast::LiteralQuoting::Quoted);
         }
 
         case Token::DblQuoteStart: {

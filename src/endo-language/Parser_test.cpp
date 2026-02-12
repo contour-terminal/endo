@@ -1792,3 +1792,61 @@ TEST_CASE("Parser.FSharp.block_expr_still_works")
     // Ensure block expression disambiguation still works
     CHECK(parseAndPrintAST("let r = { let x = 1; x + 2 }") == "let r = { let x = 1; (x + 2) }");
 }
+
+// =============================================================================
+// Placeholder Lambda Sugar Tests (`_`)
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.placeholder_field_access")
+{
+    // _.name → fun __x -> __x.name (bare postfix wrapping)
+    CHECK(parseAndPrintAST("let f = _.name") == "let f = fun __x -> __x.name");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_chained_field_access")
+{
+    // _.a.b → fun __x -> __x.a.b
+    CHECK(parseAndPrintAST("let f = _.a.b") == "let f = fun __x -> __x.a.b");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_parenthesized_add")
+{
+    // (_ + 1) → fun __x -> (__x + 1)
+    CHECK(parseAndPrintAST("let f = (_ + 1)") == "let f = fun __x -> (__x + 1)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_parenthesized_mul")
+{
+    // (_ * 2) → fun __x -> (__x * 2)
+    CHECK(parseAndPrintAST("let f = (_ * 2)") == "let f = fun __x -> (__x * 2)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_same_param_twice")
+{
+    // (_ + _) → fun __x -> (__x + __x)  (same parameter used twice)
+    CHECK(parseAndPrintAST("let f = (_ + _)") == "let f = fun __x -> (__x + __x)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_field_comparison")
+{
+    // (_.name == "endo") → fun __x -> (__x.name == "endo")
+    CHECK(parseAndPrintAST(R"(let f = (_.name == "endo"))") == R"(let f = fun __x -> (__x.name == "endo"))");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_tuple")
+{
+    // (_.name, _.age) → fun __x -> (__x.name, __x.age)
+    CHECK(parseAndPrintAST("let f = (_.name, _.age)") == "let f = fun __x -> (__x.name, __x.age)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_in_application")
+{
+    // sortBy _.cpu → application of sortBy with lambda
+    CHECK(parseAndPrintAST("let f = sortBy _.cpu") == "let f = (sortBy fun __x -> __x.cpu)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_no_parens_no_postfix")
+{
+    // Bare _ without postfix or parens is just IdentifierExpr("__x") — no lambda wrapping
+    CHECK(parseAndPrintAST("let f = _") == "let f = __x");
+}
