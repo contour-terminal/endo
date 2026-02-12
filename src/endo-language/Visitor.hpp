@@ -75,6 +75,7 @@ struct ShellCommandExpr;
 struct OptionExpr;
 struct ResultExpr;
 struct TryExpr;
+struct OptionDefaultExpr;
 struct TryWithExpr;
 struct TryFinallyExpr;
 struct UnitExpr;
@@ -168,6 +169,7 @@ struct Visitor
     virtual void visit(OptionExpr const&) = 0;
     virtual void visit(ResultExpr const&) = 0;
     virtual void visit(TryExpr const&) = 0;
+    virtual void visit(OptionDefaultExpr const&) = 0;
     virtual void visit(TryWithExpr const&) = 0;
     virtual void visit(TryFinallyExpr const&) = 0;
     virtual void visit(FStringExpr const&) = 0;

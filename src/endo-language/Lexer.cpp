@@ -338,7 +338,12 @@ Token Lexer::nextToken()
             return consumeIdentifier();
         case '?':
             if (_fsharpDepth > 0)
-                return consumeCharAndConfirmToken(Token::Question);
+            {
+                nextChar();
+                if (_currentChar == '|')
+                    return consumeCharAndConfirmToken(Token::QuestionPipe);
+                return confirmToken(Token::Question);
+            }
             return consumeIdentifier();
         default: return consumeIdentifier();
     }

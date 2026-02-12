@@ -88,6 +88,7 @@ class ASTPrinter: public Visitor
     void visit(OptionExpr const& node) override;
     void visit(ResultExpr const& node) override;
     void visit(TryExpr const& node) override;
+    void visit(OptionDefaultExpr const& node) override;
     void visit(TryWithExpr const& node) override;
     void visit(TryFinallyExpr const& node) override;
     void visit(FStringExpr const& node) override;

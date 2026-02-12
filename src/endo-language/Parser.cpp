@@ -3485,6 +3485,18 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
             break;
         func = std::make_unique<ast::ApplicationExpr>(std::move(func), std::move(arg));
     }
+
+    // Option default operator: expr ?| default
+    // Handled after application so `find pred list ?| default` parses as `(find pred list) ?| default`
+    if (_lexer.currentToken() == Token::QuestionPipe)
+    {
+        _lexer.nextToken(); // consume '?|'
+        auto defaultExpr = parseFSharpExpr();
+        if (!defaultExpr)
+            return nullptr;
+        func = std::make_unique<ast::OptionDefaultExpr>(std::move(func), std::move(defaultExpr));
+    }
+
     return func;
 }
 

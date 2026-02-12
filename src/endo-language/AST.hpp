@@ -1449,6 +1449,24 @@ struct TryExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Option default expression: `expr ?| default`
+///
+/// Unwraps an Option value, returning the default if None:
+/// - `Some v ?| d` evaluates to `v`
+/// - `None ?| d` evaluates to `d`
+struct OptionDefaultExpr final: public Expr
+{
+    std::unique_ptr<Expr> option;       ///< Expression returning Option
+    std::unique_ptr<Expr> defaultValue; ///< Expression to evaluate if None
+
+    OptionDefaultExpr(std::unique_ptr<Expr> opt, std::unique_ptr<Expr> def):
+        option(std::move(opt)), defaultValue(std::move(def))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Try-with expression: `try expr with | pattern -> handler | ...`
 ///
 /// Evaluates an expression that may fail and handles errors with pattern matching.

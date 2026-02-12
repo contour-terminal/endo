@@ -918,6 +918,15 @@ void ASTPrinter::visit(TryExpr const& node)
     _result += '?';
 }
 
+void ASTPrinter::visit(OptionDefaultExpr const& node)
+{
+    if (node.option)
+        node.option->accept(*this);
+    _result += " ?| ";
+    if (node.defaultValue)
+        node.defaultValue->accept(*this);
+}
+
 void ASTPrinter::visit(TryWithExpr const& node)
 {
     _result += "try ";

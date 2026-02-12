@@ -121,6 +121,7 @@ enum class Token
     BraceOpen,    // '{'
     BraceClose,   // '}'
     Question,     // '?'
+    QuestionPipe, // '?|'
     Dot,          // '.' (field access, F# mode only)
     // Note: >> uses GreaterGreater token (context determines compose vs redirect)
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
@@ -476,6 +477,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case BraceOpen: name = "{"; break;
             case BraceClose: name = "}"; break;
             case Question: name = "?"; break;
+            case QuestionPipe: name = "?|"; break;
             case Dot:
                 name = ".";
                 break;

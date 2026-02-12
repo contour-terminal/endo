@@ -564,6 +564,33 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         }
     }
 
+    // --- Option default expression (?|) ---
+    if (auto const* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(&expr))
+    {
+        auto optResult = inferExpr(*optDefault->option, env, subst);
+        if (!optResult)
+            return optResult;
+        auto [optType, s1] = *optResult;
+
+        // Option operand should be option<T>, extract T
+        auto innerVar = env->freshTypeVarType();
+        auto s2 = unifyAndCompose(optType, types::option(innerVar), s1);
+        if (!s2)
+            return std::unexpected(s2.error());
+
+        auto defResult = inferExpr(*optDefault->defaultValue, env, *s2);
+        if (!defResult)
+            return defResult;
+        auto [defType, s3] = *defResult;
+
+        // Default value type must match inner type T
+        auto s4 = unifyAndCompose(s3.apply(innerVar), defType, s3);
+        if (!s4)
+            return std::unexpected(s4.error());
+
+        return std::pair { s4->apply(innerVar), *s4 };
+    }
+
     // --- Try expression (?) ---
     if (auto const* tryExpr = dynamic_cast<ast::TryExpr const*>(&expr))
     {

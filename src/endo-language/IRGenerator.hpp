@@ -169,6 +169,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::OptionExpr const& node) override;
     void visit(ast::ResultExpr const& node) override;
     void visit(ast::TryExpr const& node) override;
+    void visit(ast::OptionDefaultExpr const& node) override;
     void visit(ast::TryWithExpr const& node) override;
     void visit(ast::TryFinallyExpr const& node) override;
     void visit(ast::FStringExpr const& node) override;

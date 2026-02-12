@@ -4892,3 +4892,67 @@ TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
     // (_ - 3)
     CHECK(executesWithOutput("let f = (_ - 3); print (f 10)", "7"));
 }
+
+// ============================================================================
+// Option Default Operator (?|)
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.option_default_some")
+{
+    // Some value ?| default → unwraps to the Some value
+    CHECK(executesWithOutput("print (Some 42 ?| 0)", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_none")
+{
+    // None ?| default → evaluates to the default
+    CHECK(executesWithOutput("print (None ?| 99)", "99"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_string_some")
+{
+    // String Some unwraps correctly
+    CHECK(executesWithOutput("print (Some \"hello\" ?| \"world\")", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_string_none")
+{
+    // Typed None with string default
+    CHECK(executesWithOutput("let x: option<str> = None; print (x ?| \"default\")", "default"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_nested")
+{
+    // Nested ?| — inner None falls back, then result used as default for outer
+    CHECK(executesWithOutput("print (None ?| (Some 5 ?| 0))", "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_with_expr")
+{
+    // Default is an expression, not just a literal
+    CHECK(executesWithOutput("print (Some 10 ?| (3 + 4))", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_in_let")
+{
+    // ?| in a let binding
+    CHECK(executesWithOutput("let x = Some 7 ?| 0; print x", "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_none_in_let")
+{
+    // ?| with None in a let binding
+    CHECK(executesWithOutput("let x = None ?| 42; print x", "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_find")
+{
+    // find returns Option — ?| provides fallback
+    CHECK(executesWithOutput("print (find (fun x -> x > 10) [1;2;3] ?| -1)", "-1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_default_find_found")
+{
+    // find returns Some when element found — ?| unwraps
+    CHECK(executesWithOutput("print (find (fun x -> x > 1) [1;2;3] ?| -1)", "2"));
+}
