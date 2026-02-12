@@ -40,7 +40,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Options: `option<T>` with `Some` and `None`
 - [x] Results: `result<T, E>` with `Ok` and `Error`
 - [x] Records: `type Person = { name: str; age: int }`
-- [ ] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
+- [x] Discriminated Unions: `type Shape = | Circle of float | Rectangle of float * float`
 - [ ] Generic types
 
 ### Type Annotations
@@ -259,9 +259,12 @@ Consult this section to determine what to work on next.
 - [x] Record pattern matching: wire existing RecordPattern AST to PatternIRGenerator
 
 ### Phase 5 — Custom Discriminated Unions (depends on Phase 4 for type def parsing)
-- [ ] Union type definitions: `type Shape = | Circle of float | Rectangle of float * float | Point`
-- [ ] User-defined constructor expressions: register variant names as constructors in scope
-- [ ] Pattern matching on user-defined constructors: extend ConstructorPattern beyond hardcoded Option/Result
+- [x] Union type definitions: `type Shape = | Circle of float | Rectangle of float * float | Point`
+- [x] User-defined constructor expressions: register variant names as constructors in scope
+- [x] Pattern matching on user-defined constructors: extend ConstructorPattern beyond hardcoded Option/Result
+- [x] Multi-slot payloads: `Rectangle of int * int` stores each field in separate object slots
+- [x] Unit constructors: `Point` with no payload (tag-only matching)
+- [x] CustomSumType on IRProgram + TypeRegistry::registerSumType(unique_ptr) for pre-assigned IDs
 
 ### Phase 6 — Remaining Operators and Small Features
 - [ ] Optional chaining `?.` — desugar to match on Option

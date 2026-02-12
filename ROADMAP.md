@@ -622,6 +622,21 @@ src/
     - [x] `LiteralType type` field added to `FieldInfo` in `TypeDescriptor.hpp` for runtime field type dispatch (string, bool, int)
     - [x] PatternIRGenerator fix: always reload scrutinee from storage in RecordPattern to prevent dead temporaries across block boundaries
     - [x] 6 parser tests + 22 IR generation tests covering type defs, field access, updates, pattern matching, functions, destructuring, and printing
+  - [x] Discriminated unions / ADTs (Phase 5)
+    - [x] AST nodes: `UnionVariantDef`, `UnionTypeDefStmt`, `UnionConstructorExpr` with Visitor support
+    - [x] Parser: `parseTypeDefinition()` extended for `type Shape = | Circle of float | Rectangle of float * float | Point` syntax
+    - [x] Parser: union constructor expressions in `parseFSharpPrimary()` via `_constructorLookup` map
+    - [x] Parser: union constructor patterns in `parsePrimaryPattern()` for match expressions
+    - [x] Parser: multi-slot payloads (`of int * int`) parsed with `*` separator, flattened from tuple arguments
+    - [x] `CustomSumType` struct on `IRProgram` (parallel to `CustomProductType` for records)
+    - [x] `TypeRegistry::registerSumType(unique_ptr)` overload for pre-assigned type IDs
+    - [x] `TargetCodeGenerator`: registers custom sum types before code generation
+    - [x] IR codegen: `UnionTypeDefStmt` allocates type ID, builds `VariantInfo`, registers constructors
+    - [x] IR codegen: `UnionConstructorExpr` emits OALLOC + OSETTAG + OSETSLOT per payload slot (chained)
+    - [x] `PatternIRGenerator`: `ConstructorPattern` extended with `_constructorLookup` for user-defined tag matching
+    - [x] `PatternIRGenerator`: multi-slot payload extraction with separate `createLoad` per slot (loop-safe)
+    - [x] `PatternIRGenerator`: `collectBindings` traverses payload even for unknown constructors (pre-lookup phase)
+    - [x] 3 parser tests + 10 IR generation tests covering enums, single/multi-slot payloads, wildcards, functions, and coexistence with Option/Result
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
@@ -629,7 +644,8 @@ src/
 - `let` keyword unambiguously starts F# style (bash style uses `VAR=value` without spaces)
 - `|>` and `|` are distinct tokens: function pipeline vs shell pipeline
 - Dual semantics: expression context captures output, statement context prints to terminal
-- Records are compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT); unions deferred to Phase 5
+- Records are compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT)
+- User-defined discriminated unions compile to TypedObject sum types (OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT)
 - Record update expressions use alloca-protected storage for the intermediate object, ensuring correctness when update-value codegen creates new basic blocks (e.g., inlined match-expression functions).
 - Pattern matching compiles to decision trees for efficient execution
 - List literals: `[1; 2; 3]` parsed as `ListExpr`, `[1..10]` as `ListRangeExpr`
@@ -650,8 +666,8 @@ src/
   - `expr?` postfix operator for error propagation (TryExpr)
   - `try expr with | pattern -> handler` for structured error handling (TryWithExpr)
   - Pattern matching supports `Some x`, `None`, `Ok n`, `Error e` constructor patterns
-  - IR generation creates tagged values (temporary encoding until CoreVM has native sum types)
-  - Full runtime semantics deferred until CoreVM supports discriminated unions
+  - IR generation creates tagged values using TypedObjects with OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT
+  - Full runtime semantics implemented via CoreVM's TypeRegistry (Sum types with VariantInfo)
 - Tuple patterns in match expressions: `,` is now tokenized as `Token::Comma` in F# mode, allowing proper parsing of `(a, b)` patterns
 - Test infrastructure improvements:
   - `ExecutionResult` refactored to `std::expected<TestExecutionSuccess, TestError>` for proper error handling
