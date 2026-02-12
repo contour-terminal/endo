@@ -1205,6 +1205,69 @@ void Shell::registerBuiltinFunctions()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
+    // F# list_head builtin: returns Option (Some head | None)
+    _runtime.registerFunction("list_head")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (!list || list->tag == 0)
+            {
+                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                none->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+            else
+            {
+                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                some->tag = 1;
+                some->setSlot(0, list->getSlot(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+        });
+
+    // F# list_tail builtin: returns tail of list (or [] for empty)
+    _runtime.registerFunction("list_tail")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (!list || list->tag == 0)
+            {
+                auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                nil->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
+            }
+            else
+            {
+                args.setResult(static_cast<CoreVM::CoreNumber>(list->getSlot(1)));
+            }
+        });
+
+    // F# list_length builtin: returns number of elements
+    _runtime.registerFunction("list_length")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            int64_t count = 0;
+            while (cur && cur->tag == 1)
+            {
+                ++count;
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(count));
+        });
+
+    // F# list_isEmpty builtin: returns true if list is Nil
+    _runtime.registerFunction("list_isEmpty")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            args.setResult(!list || list->tag == 0);
+        });
+
     // F# object_to_string builtin: runtime dispatch for object printing
     _runtime.registerFunction("object_to_string")
         .param<CoreVM::CoreNumber>("obj")

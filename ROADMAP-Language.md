@@ -173,7 +173,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `string_of_int` — integer to string conversion
 - [x] `not` — boolean negation
 - [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
-- [ ] `head`, `tail`, `length`, `isEmpty` — list operations
+- [x] `head`, `tail`, `length`, `isEmpty` — list operations
 - [ ] `map`, `filter`, `fold`, `reduce` — higher-order list functions
 - [ ] `sort`, `reverse`, `distinct` — list transformations
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
@@ -247,7 +247,7 @@ Consult this section to determine what to work on next.
 - [x] Fix `createAllocaInEntryBlock`: new `insertAfterAllocas()` method maintains alloca-prefix invariant (fixes 2-param recursive functions with object pattern matching)
 
 ### Phase 3 — List Standard Library (depends on Phase 2)
-- [ ] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
+- [x] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
 - [ ] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
 - [ ] Transformations: `sort`, `reverse`, `distinct`
 - [x] `ListComprehensionExpr` codegen: forward iteration + optional filter + reverse for correct order

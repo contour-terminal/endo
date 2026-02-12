@@ -2835,6 +2835,104 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "head")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("head requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate head argument");
+            return true;
+        }
+        auto* callback = findCallback("list_head(I)I");
+        if (!callback)
+        {
+            reportTypeError("list_head builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_head");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+        return true;
+    }
+
+    if (name == "tail")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("tail requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate tail argument");
+            return true;
+        }
+        auto* callback = findCallback("list_tail(I)I");
+        if (!callback)
+        {
+            reportTypeError("list_tail builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_tail");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        return true;
+    }
+
+    if (name == "length")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("length requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate length argument");
+            return true;
+        }
+        auto* callback = findCallback("list_length(I)I");
+        if (!callback)
+        {
+            reportTypeError("list_length builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_length");
+        return true;
+    }
+
+    if (name == "isEmpty")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("isEmpty requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate isEmpty argument");
+            return true;
+        }
+        auto* callback = findCallback("list_isEmpty(I)B");
+        if (!callback)
+        {
+            reportTypeError("list_isEmpty builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_isEmpty");
+        return true;
+    }
+
     return false;
 }
 
@@ -3745,6 +3843,56 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         if (funcIdent->name == "not")
         {
             _result = _builder.createBNot(toBool(value), "not");
+            return;
+        }
+        if (funcIdent->name == "head")
+        {
+            auto* callback = findCallback("list_head(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_head builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_head");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            return;
+        }
+        if (funcIdent->name == "tail")
+        {
+            auto* callback = findCallback("list_tail(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_tail builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_tail");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            return;
+        }
+        if (funcIdent->name == "length")
+        {
+            auto* callback = findCallback("list_length(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_length builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_length");
+            return;
+        }
+        if (funcIdent->name == "isEmpty")
+        {
+            auto* callback = findCallback("list_isEmpty(I)B");
+            if (!callback)
+            {
+                reportTypeError("list_isEmpty builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, "list_isEmpty");
             return;
         }
 

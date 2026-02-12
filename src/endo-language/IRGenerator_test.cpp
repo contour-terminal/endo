@@ -4151,3 +4151,93 @@ TEST_CASE("IRGenerator.FSharp.union_type_unit_constructor_match")
                              "print r",
                              "0"));
 }
+
+// =============================================================================
+// List standard library: head, tail, length, isEmpty
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_head_cons")
+{
+    // head [1;2;3] → Some 1
+    CHECK(executesWithOutput("let r = match head [1;2;3] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> 0\n"
+                             "print r",
+                             "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_head_empty")
+{
+    // head [] → None
+    CHECK(executesWithOutput("let r = match head [] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> 0\n"
+                             "print r",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_head_pipeline")
+{
+    // [42] |> head → Some 42
+    CHECK(executesWithOutput("let r = match [42] |> head with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> 0\n"
+                             "print r",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_tail_basic")
+{
+    CHECK(executesWithOutput("print (tail [1;2;3])", "[2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_tail_empty")
+{
+    CHECK(executesWithOutput("print (tail [])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_tail_single")
+{
+    CHECK(executesWithOutput("print (tail [1])", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_tail_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3] |> tail)", "[2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_length_basic")
+{
+    CHECK(executesWithOutput("print (length [1;2;3])", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_length_empty")
+{
+    CHECK(executesWithOutput("print (length [])", "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_length_pipeline")
+{
+    CHECK(executesWithOutput("print ([1;2;3] |> length)", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_isEmpty_true")
+{
+    CHECK(executesWithOutput("print (isEmpty [])", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_isEmpty_false")
+{
+    CHECK(executesWithOutput("print (isEmpty [1;2])", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_isEmpty_pipeline")
+{
+    CHECK(executesWithOutput("print ([] |> isEmpty)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
+{
+    // [1;2;3] |> tail |> length → 2
+    CHECK(executesWithOutput("print ([1;2;3] |> tail |> length)", "2"));
+}

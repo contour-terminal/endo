@@ -125,6 +125,73 @@ TestRuntime::TestRuntime()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
+    // Register list_head builtin: returns Option (Some head | None)
+    runtime.registerFunction("list_head")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (!list || list->tag == 0)
+            {
+                // Nil → None
+                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                none->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+            else
+            {
+                // Cons → Some(head)
+                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                some->tag = 1;
+                some->setSlot(0, list->getSlot(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+        });
+
+    // Register list_tail builtin: returns tail of list (or [] for empty)
+    runtime.registerFunction("list_tail")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (!list || list->tag == 0)
+            {
+                // Nil → return new Nil
+                auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                nil->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
+            }
+            else
+            {
+                // Cons → return tail pointer
+                args.setResult(static_cast<CoreVM::CoreNumber>(list->getSlot(1)));
+            }
+        });
+
+    // Register list_length builtin: returns number of elements
+    runtime.registerFunction("list_length")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            int64_t count = 0;
+            while (cur && cur->tag == 1)
+            {
+                ++count;
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(count));
+        });
+
+    // Register list_isEmpty builtin: returns true if list is Nil
+    runtime.registerFunction("list_isEmpty")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            args.setResult(!list || list->tag == 0);
+        });
+
     // Register object_to_string builtin: runtime dispatch for object printing
     runtime.registerFunction("object_to_string")
         .param<CoreVM::CoreNumber>("obj")
