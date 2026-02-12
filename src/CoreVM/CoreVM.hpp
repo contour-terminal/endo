@@ -511,6 +511,9 @@ class Runner
     /// Allocates a new typed object with the given type ID.
     TypedObject* allocObject(uint16_t typeId);
 
+    /// Checks if a raw value is a pointer to a known TypedObject allocated by this Runner.
+    [[nodiscard]] bool isKnownObject(uint64_t rawValue) const noexcept;
+
   private:
     //! consumes @p tokens from quota and raises QuotaExceeded if quota is being exceeded.
     void consume(Opcode op);

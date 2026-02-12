@@ -169,6 +169,81 @@ std::string processEscapeSequences(std::string_view input)
     return result;
 }
 
+/// Recursively converts a runtime value (number, tuple, list, option, etc.) to a printable string.
+std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
+{
+    if (runner && runner->isKnownObject(rawVal))
+    {
+        auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawVal));
+        auto const typeId = obj->type->id;
+        if (typeId == CoreVM::BuiltinTypeId::List)
+        {
+            std::string result = "[";
+            bool first = true;
+            while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
+            {
+                if (!first)
+                    result += "; ";
+                first = false;
+                result += valueToString(obj->getSlot(0), runner);
+                obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
+            }
+            result += "]";
+            return result;
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Tuple2)
+        {
+            return "(" + valueToString(obj->getSlot(0), runner) + ", "
+                   + valueToString(obj->getSlot(1), runner) + ")";
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Tuple3)
+        {
+            return "(" + valueToString(obj->getSlot(0), runner) + ", "
+                   + valueToString(obj->getSlot(1), runner) + ", " + valueToString(obj->getSlot(2), runner)
+                   + ")";
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Option)
+        {
+            if (obj->tag == 0)
+                return "None";
+            return "Some " + valueToString(obj->getSlot(0), runner);
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Result)
+        {
+            if (obj->tag == 0)
+                return "Error " + valueToString(obj->getSlot(0), runner);
+            return "Ok " + valueToString(obj->getSlot(0), runner);
+        }
+        if (obj->type->kind == CoreVM::TypeKind::Product)
+        {
+            std::string result = "{ ";
+            for (size_t i = 0; i < obj->type->fields.size(); ++i)
+            {
+                if (i > 0)
+                    result += "; ";
+                result += obj->type->fields[i].name;
+                result += " = ";
+                auto slotVal = obj->getSlot(static_cast<uint8_t>(i));
+                switch (obj->type->fields[i].type)
+                {
+                    case CoreVM::LiteralType::String: {
+                        auto const* str =
+                            reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
+                        result += str ? *str : "(null)";
+                        break;
+                    }
+                    case CoreVM::LiteralType::Boolean: result += slotVal ? "true" : "false"; break;
+                    default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
+                }
+            }
+            result += " }";
+            return result;
+        }
+        return std::to_string(static_cast<int64_t>(rawVal));
+    }
+    return std::to_string(static_cast<int64_t>(rawVal));
+}
+
 } // namespace
 
 namespace endo
@@ -1144,21 +1219,9 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinPrintln, this);
 
-    // Helper: converts a list TypedObject to string "[1; 2; 3]"
-    auto listToString = [](CoreVM::TypedObject* obj) -> std::string {
-        std::string result = "[";
-        bool first = true;
-        while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
-        {
-            if (!first)
-                result += "; ";
-            first = false;
-            auto headVal = static_cast<int64_t>(obj->getSlot(0));
-            result += std::to_string(headVal);
-            obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
-        }
-        result += "]";
-        return result;
+    // Helper: converts a list TypedObject to string "[1; 2; 3]" (delegates to valueToString)
+    auto listToString = [](CoreVM::TypedObject* obj, CoreVM::Runner* runner) -> std::string {
+        return valueToString(reinterpret_cast<uintptr_t>(obj), runner);
     };
 
     // F# list_to_string builtin: converts list object to "[1; 2; 3]" string
@@ -1167,7 +1230,7 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::String)
         .bind([listToString](CoreVM::Params& args) {
             auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
-            args.setResult(args.caller()->newString(listToString(obj)));
+            args.setResult(args.caller()->newString(listToString(obj, args.caller())));
         });
 
     // F# list_concat builtin: concatenates two lists
@@ -1272,46 +1335,9 @@ void Shell::registerBuiltinFunctions()
     _runtime.registerFunction("object_to_string")
         .param<CoreVM::CoreNumber>("obj")
         .returnType(CoreVM::LiteralType::String)
-        .bind([listToString](CoreVM::Params& args) {
-            auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
-            if (obj && obj->type->id == CoreVM::BuiltinTypeId::List)
-            {
-                args.setResult(args.caller()->newString(listToString(obj)));
-            }
-            else if (obj && obj->type->kind == CoreVM::TypeKind::Product
-                     && obj->type->id != CoreVM::BuiltinTypeId::Tuple2
-                     && obj->type->id != CoreVM::BuiltinTypeId::Tuple3)
-            {
-                // Record type: format as { field1 = val1; field2 = val2 }
-                std::string result = "{ ";
-                for (size_t i = 0; i < obj->type->fields.size(); ++i)
-                {
-                    if (i > 0)
-                        result += "; ";
-                    result += obj->type->fields[i].name;
-                    result += " = ";
-                    auto slotVal = obj->getSlot(static_cast<uint8_t>(i));
-                    switch (obj->type->fields[i].type)
-                    {
-                        case CoreVM::LiteralType::String: {
-                            auto const* str =
-                                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
-                            result += str ? *str : "(null)";
-                            break;
-                        }
-                        case CoreVM::LiteralType::Boolean:
-                            result += slotVal ? "true" : "false";
-                            break;
-                        default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
-                    }
-                }
-                result += " }";
-                args.setResult(args.caller()->newString(result));
-            }
-            else
-            {
-                args.setResult(args.caller()->newString(std::to_string(args.getInt(1))));
-            }
+        .bind([](CoreVM::Params& args) {
+            auto rawVal = static_cast<uint64_t>(args.getInt(1));
+            args.setResult(args.caller()->newString(valueToString(rawVal, args.caller())));
         });
 
     // F# string_repeat builtin: "ha" * 3 → "hahaha"

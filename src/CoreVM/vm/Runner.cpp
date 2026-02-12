@@ -247,6 +247,20 @@ TypedObject* Runner::allocObject(uint16_t typeId)
     return obj;
 }
 
+bool Runner::isKnownObject(uint64_t rawValue) const noexcept
+{
+    if (rawValue == 0)
+        return false;
+
+    auto* ptr = reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(rawValue));
+    for (auto const& storage: _objectPool)
+    {
+        if (reinterpret_cast<TypedObject*>(storage.get()) == ptr)
+            return true;
+    }
+    return false;
+}
+
 void Runner::freeObject(TypedObject* obj)
 {
     if (!obj)
