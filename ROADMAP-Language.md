@@ -81,6 +81,7 @@ This document tracks the implementation status of F# language features as define
 - [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
 - [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
 - [x] Standard list operations: `map`, `filter`, `fold`, `reduce`, `reverse`
+- [x] Utility list operations: `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten`
 - [ ] Remaining list operations (`each`, etc.)
 
 ## Pattern Matching
@@ -176,6 +177,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
 - [x] `head`, `tail`, `length`, `isEmpty` — list operations
 - [x] `map`, `filter`, `fold`, `reduce` — higher-order list functions (IR-level codegen)
+- [x] `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten` — list utility functions
 - [~] `sort`, `reverse`, `distinct` — list transformations (`reverse` done; `sort`, `distinct` pending)
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
@@ -249,10 +251,11 @@ Consult this section to determine what to work on next.
 
 ### Phase 3 — List Standard Library (depends on Phase 2)
 - [x] Basic: `head`, `tail`, `length`, `isEmpty` — native callbacks returning Option/List/int/bool
-- [ ] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
-- [ ] Transformations: `sort`, `reverse`, `distinct`
+- [x] Higher-order: `map`, `filter`, `fold`, `reduce` — IR-level codegen loops invoking function arguments
+- [~] Transformations: `sort`, `reverse`, `distinct` (`reverse` done; `sort`, `distinct` pending)
 - [x] `ListComprehensionExpr` codegen: forward iteration + optional filter + reverse for correct order
-- [ ] Utility: `zip`, `flatten`, `groupBy`, `take`, `drop`, `find`, `exists`, `forall`
+- [x] Utility: `zip`, `flatten`, `take`, `drop`, `find`, `exists`, `forall`
+- [ ] Remaining: `groupBy`
 
 ### Phase 4 — Records (parallel with Phase 2/3) ✅
 - [x] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type
