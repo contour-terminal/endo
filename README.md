@@ -66,54 +66,85 @@ explicit, composable error handling without the ceremony.
 
 ```bash
 # It's still a shell — run anything
-ls -la | where { .size > 1mb } | sort-by modified
+ls -la
+git status && echo "All clean"
 
-# Variables and string interpolation
+# F#-style bindings and string interpolation
 let name = "world"
 echo $"Hello, {name}!"
 ```
 
-**Pipelines with structure:**
-
-```bash
-# Query processes like data, not text
-ps | where { .cpu > 10.0 } | select name cpu mem | sort-by cpu --desc
-```
-
-**Pattern matching on the prompt:**
+**Shell output meets functional pipelines:**
 
 ```fsharp
-# Handle command results explicitly
-match (fetch "https://api.example.com/status") with
-| Ok response -> echo $"Status: {response.code}"
-| Error e     -> echo $"Failed: {e.message}" >&2
+# Pipe shell command output straight into F# transforms — it's still a shell
+ps aux | lines |> filter (contains _ "nginx") |> length
+|> fun n -> echo $"Found {n} nginx processes"
+
+# Process git history with functional pipelines
+git log --oneline | lines |> take 5 |> each println
 ```
 
-**First-class functions and piping:**
+**Functional data processing:**
 
 ```fsharp
-# Functional transforms feel natural
-let sizes = ls | map { .size } | filter { it > 1kb }
-echo $"Large files: {sizes |> length}"
+# Placeholder lambdas keep pipelines concise
+[10; 25; 3; 42; 7] |> filter (_ > 10) |> map (_ * 2)   # [50; 6; 84]
+
+# Curried functions and partial application
+let add x y = x + y
+let add10 = add 10
+[1; 2; 3] |> map add10              # [11; 12; 13]
+
+# Function composition
+let double = _ * 2
+let inc = _ + 1
+let doubleThenInc = double >> inc
+print (doubleThenInc 5)              # 11
 ```
 
-**Quick one-liners stay quick:**
+**Pattern matching at your prompt:**
 
-```bash
-# Rename all .jpeg files to .jpg
-ls *.jpeg | each { mv $it.name ($it.name | str replace ".jpeg" ".jpg") }
+```fsharp
+# Option types for safe value handling
+match (env "EDITOR") with
+| Some editor -> print $"Using {editor}"
+| None        -> print "No editor set"
 
-# Find the 5 largest files recursively
-glob **/* | where { .is_file } | sort-by size --desc | take 5
+# Result types for explicit error handling
+let safeDiv x y =
+    if y == 0 then Error "division by zero"
+    else Ok (x / y)
+
+match safeDiv 10 0 with
+| Ok n    -> print $"Result: {n}"
+| Error e -> print $"Failed: {e}"
+```
+
+**Lists, ranges, and comprehensions:**
+
+```fsharp
+# Ranges and comprehensions
+let squares = [for x in [1..10] -> x * x]
+let evens = [for x in [1..20] when x % 2 == 0 -> x]
+
+# Recursive processing with pattern matching
+let rec sum lst =
+    match lst with
+    | [] -> 0
+    | head :: tail -> head + sum tail
+
+print (sum [1; 2; 3; 4; 5])         # 15
 ```
 
 **Cross-platform scripting:**
 
 ```fsharp
 # Works the same on Linux, macOS, and Windows
-let config_dir = match (env OS) with
-    | Some "Windows_NT" -> $"{env APPDATA}/endo"
-    | _                 -> $"{env HOME}/.config/endo"
+let config_dir =
+    match (env "OS") with
+    | Some "Windows_NT" -> "C:/Users/endo/config"
+    | _                 -> $"{env "HOME" ?| "/tmp"}/.config/endo"
 
 mkdir -p $config_dir
 ```

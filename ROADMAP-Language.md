@@ -181,7 +181,7 @@ This document tracks the implementation status of F# language features as define
 - [~] `sort`, `reverse`, `distinct` — list transformations (`reverse` done; `sort`, `distinct` pending)
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
-- [ ] `String.split`, `String.join`, `String.trim` — string operations
+- [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
 - [ ] `File.read`, `File.write`, `File.list` — file operations
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
 
@@ -216,6 +216,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Octal: `0o755`
 - [x] Binary: `0b1010`
 - [x] Scientific notation: `1e10`
+- [ ] Numeric literal suffixes: `1kb`, `1mb`, `1gb`, `1tb` (byte sizes); `1ms`, `1s`, `1min`, `1h` (durations)
 - [x] Comments: `#`, `//`, `(* ... *)`
 
 ## REPL
@@ -277,9 +278,10 @@ Consult this section to determine what to work on next.
 - [x] Option default `?|` — desugar to match with default value
 - [ ] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` as builtins
 - [x] For loop destructuring: `for (name, value) in entries do ... done`
+- [ ] Numeric literal suffixes: byte sizes (`kb`, `mb`, `gb`, `tb`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
-- [ ] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
+- [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
 - [ ] File: `File.read`, `File.write`, `File.list` returning Result types
 - [ ] Path: `Path.join`, `Path.extension`, `Path.basename`
 
