@@ -50,6 +50,15 @@ add_library(endo STATIC
     HoverProvider.cpp
     StubRuntime.hpp
 
+    # Completion (shared between shell and LSP)
+    CompletionItem.hpp
+    CompletionContext.hpp
+    CompletionContext.cpp
+    CompletionCandidates.hpp
+    CompletionCandidates.cpp
+    Completer.hpp
+    Completer.cpp
+
     # Logging (used by parser tracing)
     LogCategories.hpp
     LogCategories.cpp
@@ -82,6 +91,8 @@ add_executable(test-endo-language
     Parser_test.cpp
     IRGenerator_test.cpp
     TypeInferencer_test.cpp
+    CompletionCandidates_test.cpp
+    Completer_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
 add_test(NAME test-endo-language COMMAND test-endo-language)

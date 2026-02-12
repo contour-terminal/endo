@@ -36,6 +36,8 @@ add_library(endo-lsp STATIC
     DocumentSymbolProvider.cpp
     RenameProvider.hpp
     RenameProvider.cpp
+    CompletionProvider.hpp
+    CompletionProvider.cpp
 
     # Server core
     LspServer.hpp

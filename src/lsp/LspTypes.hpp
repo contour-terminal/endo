@@ -310,4 +310,41 @@ inline void to_json(nlohmann::json& j, WorkspaceEdit const& w)
         j["changes"][uri] = edits;
 }
 
+/// LSP CompletionItemKind enumeration (subset relevant to endo).
+enum class CompletionItemKind : int
+{
+    Text = 1,
+    Function = 3,
+    Constructor = 4,
+    Field = 5,
+    Variable = 6,
+    Module = 9,
+    Keyword = 14,
+    Snippet = 15,
+};
+
+/// LSP CompletionItem for textDocument/completion.
+struct LspCompletionItem
+{
+    std::string label;
+    CompletionItemKind kind = CompletionItemKind::Text;
+    std::string detail;
+    std::string documentation;
+    std::string insertText;
+};
+
+inline void to_json(nlohmann::json& j, LspCompletionItem const& c)
+{
+    j = nlohmann::json {
+        { "label", c.label },
+        { "kind", static_cast<int>(c.kind) },
+    };
+    if (!c.detail.empty())
+        j["detail"] = c.detail;
+    if (!c.documentation.empty())
+        j["documentation"] = c.documentation;
+    if (!c.insertText.empty())
+        j["insertText"] = c.insertText;
+}
+
 } // namespace endo::lsp

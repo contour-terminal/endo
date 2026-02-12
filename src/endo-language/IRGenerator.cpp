@@ -7387,13 +7387,13 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     info.fieldTypes = std::move(fieldTypes);
     _recordTypes[node.name] = std::move(info);
 
-    // Persist record field names for completion support in the REPL
+    // Persist record field info for completion support in the REPL
     if (_persistentState)
     {
-        std::vector<std::string> fieldNames;
+        std::vector<RecordFieldInfo> fieldInfos;
         for (auto const& field: node.fields)
-            fieldNames.push_back(field.name);
-        _persistentState->recordTypeFields[node.name] = std::move(fieldNames);
+            fieldInfos.push_back(RecordFieldInfo { .name = field.name, .typeName = toString(field.type) });
+        _persistentState->recordTypeFields[node.name] = std::move(fieldInfos);
     }
 
     // Register as a custom product type on the IR program so TargetCodeGenerator

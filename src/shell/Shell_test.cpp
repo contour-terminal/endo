@@ -13,11 +13,11 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
-#include "CompletionContext.hpp"
 #include "CompletionProviders/FileCompleter.hpp"
 #include "CompletionProviders/LetBindingCompleter.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
+#include <endo-language/CompletionContext.hpp>
 
 namespace
 {

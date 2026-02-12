@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/CompletionContext.hpp>
 #include <shell/CompletionProvider.hpp>
 #include <shell/CompletionProviders/CommandCompleter.hpp>
 #include <shell/CompletionProviders/FSharpCompleter.hpp>
@@ -18,6 +17,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <endo-language/CompletionContext.hpp>
 
 namespace endo
 {

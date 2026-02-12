@@ -559,7 +559,10 @@ Shell::Shell(TTY& tty, Environment& env):
     _signalFd = SignalHandler::initialize(this);
 
     // Seed built-in record type fields for completion support
-    _fsharpState.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    _fsharpState.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
 
     // Initialize completion system
     completer = std::make_unique<Completer>(_env, history, _fsharpState);

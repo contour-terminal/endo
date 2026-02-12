@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <optional>
 #include <string>
-#include <string_view>
 #include <vector>
 
+#include <endo-language/CompletionContext.hpp>
 #include <tui/completer/CompletionItem.hpp>
 
 namespace endo
@@ -13,30 +12,6 @@ namespace endo
 
 // Use tui::CompletionItem for completion items
 using tui::CompletionItem;
-
-/// @brief Type of completion context.
-enum class CompletionContextType
-{
-    Command,       ///< First token position - complete executables/builtins.
-    Argument,      ///< General argument position.
-    FilePath,      ///< Path argument (starts with /, ./, ~).
-    Variable,      ///< After $ (variable expansion).
-    VariableBrace, ///< Inside ${...} (brace variable expansion).
-    Redirect,      ///< After < or > (file target).
-    Option,        ///< After - or -- (command option).
-    Unknown        ///< Unable to determine context.
-};
-
-/// @brief Context information for completion.
-struct CompletionContext
-{
-    CompletionContextType type = CompletionContextType::Unknown;
-    std::string prefix;                 ///< Word being completed (may be empty).
-    size_t prefixStart = 0;             ///< Byte offset of prefix in input.
-    size_t cursorPosition = 0;          ///< Cursor byte offset in input.
-    std::optional<std::string> command; ///< Current command (for option context).
-    std::string fullInput;              ///< Complete input line.
-};
 
 /// @brief Abstract base for completion providers.
 ///

@@ -2,29 +2,13 @@
 #include "FSharpCompleter.hpp"
 
 #include <algorithm>
-#include <set>
 
+#include <endo-language/CompletionCandidates.hpp>
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
 {
-
-namespace
-{
-    /// @brief Static table of Option module methods with descriptions.
-    struct OptionMethod
-    {
-        std::string_view name;
-        std::string_view description;
-    };
-
-    constexpr std::array optionMethods = {
-        OptionMethod { "map", "Option.map f opt -> option" },
-        OptionMethod { "bind", "Option.bind f opt -> option" },
-        OptionMethod { "defaultValue", "Option.defaultValue d opt -> value" },
-    };
-} // namespace
 
 FSharpCompleter::FSharpCompleter(FSharpPersistentState const& state): _state(state)
 {
@@ -52,20 +36,25 @@ bool FSharpCompleter::canHandle(CompletionContextType type) const
 
 std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const& objectPart,
                                                                std::string const& memberPrefix,
-                                                               std::string const& fullPrefix) const
+                                                               std::string const& /*fullPrefix*/) const
 {
-    std::vector<CompletionItem> results;
+    // Delegate to shared completion engine for candidate generation (already prefix-filtered)
+    auto candidates = dotAccessCandidates(objectPart, memberPrefix, _state.recordTypeFields);
 
+    // Convert to tui::CompletionItem with fuzzy scoring on the member name (not full text)
+    std::vector<CompletionItem> results;
     tui::FuzzyConfig fuzzyConfig;
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
-    // Helper: add a candidate if it matches the member prefix
-    auto addCandidate = [&](std::string const& completionText,
-                            std::string const& memberName,
-                            std::string const& description,
-                            int baseScore) {
-        // Check both prefix and fuzzy matches against the member name
-        auto isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(memberName, memberPrefix);
+    for (auto const& candidate: candidates)
+    {
+        // Extract member name from "object.member" for scoring
+        auto const candidateDotPos = candidate.text.rfind('.');
+        auto const memberName = candidateDotPos != std::string::npos
+                                    ? candidate.text.substr(candidateDotPos + 1)
+                                    : candidate.text;
+
+        auto const isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(memberName, memberPrefix);
         tui::FuzzyMatchResult fuzzyResult;
         auto isFuzzyMatch = false;
 
@@ -76,12 +65,12 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
             isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
         }
 
-        // Empty member prefix matches everything (user typed "Option." or "_.")
         if (!memberPrefix.empty() && !isPrefixMatch && !isFuzzyMatch)
-            return;
+            continue;
 
         int score;
         std::vector<size_t> matchPositions;
+        int const baseScore = (objectPart == "Option") ? 90 : (objectPart == "_") ? 85 : 80;
 
         if (isPrefixMatch || memberPrefix.empty())
         {
@@ -96,58 +85,11 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
             matchPositions = std::move(fuzzyResult.positions);
         }
 
-        // Avoid duplicates
-        for (auto const& existing: results)
-            if (existing.text == completionText)
-                return;
-
-        results.push_back(CompletionItem { .text = completionText,
-                                           .displayText = completionText,
-                                           .description = description,
+        results.push_back(CompletionItem { .text = candidate.text,
+                                           .displayText = candidate.text,
+                                           .description = candidate.description,
                                            .score = score,
                                            .matchPositions = std::move(matchPositions) });
-    };
-
-    if (objectPart == "Option")
-    {
-        // Static Option module methods
-        for (auto const& method: optionMethods)
-            addCandidate("Option." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         90);
-    }
-    else if (objectPart == "_")
-    {
-        // Underscore field access: offer all record fields with deduplication
-        std::set<std::string> seen;
-        for (auto const& [typeName, fields]: _state.recordTypeFields)
-        {
-            for (auto const& fieldName: fields)
-            {
-                if (seen.insert(fieldName).second)
-                    addCandidate("_." + fieldName, fieldName, typeName + " field", 85);
-            }
-        }
-    }
-    else
-    {
-        // Generic value: offer both Option methods and record fields
-        for (auto const& method: optionMethods)
-            addCandidate(objectPart + "." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         80);
-
-        std::set<std::string> seen;
-        for (auto const& [typeName, fields]: _state.recordTypeFields)
-        {
-            for (auto const& fieldName: fields)
-            {
-                if (seen.insert(fieldName).second)
-                    addCandidate(objectPart + "." + fieldName, fieldName, typeName + " field", 75);
-            }
-        }
     }
 
     // Sort by score (descending), then alphabetically

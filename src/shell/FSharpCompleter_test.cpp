@@ -113,7 +113,10 @@ TEST_CASE("FSharpCompleter.Option.description")
 TEST_CASE("FSharpCompleter.underscore.all_fields")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_."));
@@ -129,7 +132,10 @@ TEST_CASE("FSharpCompleter.underscore.all_fields")
 TEST_CASE("FSharpCompleter.underscore.prefix_pp")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.pp"));
@@ -140,7 +146,10 @@ TEST_CASE("FSharpCompleter.underscore.prefix_pp")
 TEST_CASE("FSharpCompleter.underscore.prefix_us")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.us"));
@@ -151,7 +160,10 @@ TEST_CASE("FSharpCompleter.underscore.prefix_us")
 TEST_CASE("FSharpCompleter.underscore.no_match")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.z"));
@@ -161,8 +173,11 @@ TEST_CASE("FSharpCompleter.underscore.no_match")
 TEST_CASE("FSharpCompleter.underscore.multiple_types")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
-    state.recordTypeFields["Person"] = { "name", "age" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
+    state.recordTypeFields["Person"] = { { "name", "str" }, { "age", "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_."));
@@ -174,8 +189,11 @@ TEST_CASE("FSharpCompleter.underscore.multiple_types")
 TEST_CASE("FSharpCompleter.underscore.multiple_types_filter")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
-    state.recordTypeFields["Person"] = { "name", "age" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
+    state.recordTypeFields["Person"] = { { "name", "str" }, { "age", "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.n"));
@@ -186,12 +204,12 @@ TEST_CASE("FSharpCompleter.underscore.multiple_types_filter")
 TEST_CASE("FSharpCompleter.underscore.description_shows_type")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid" };
+    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" } };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("_.p"));
     REQUIRE(results.size() == 1);
-    CHECK(results[0].description == "ProcessInfo field");
+    CHECK(results[0].description == "field: int");
 }
 
 // ============================================================================
@@ -201,7 +219,10 @@ TEST_CASE("FSharpCompleter.underscore.description_shows_type")
 TEST_CASE("FSharpCompleter.value.offers_methods_and_fields")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("myVar."));
@@ -217,7 +238,10 @@ TEST_CASE("FSharpCompleter.value.offers_methods_and_fields")
 TEST_CASE("FSharpCompleter.value.filter_m")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("myVar.m"));
@@ -229,7 +253,10 @@ TEST_CASE("FSharpCompleter.value.filter_m")
 TEST_CASE("FSharpCompleter.value.filter_bi")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "pid", "ppid", "user", "cpu", "mem", "command" };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("myVar.bi"));
@@ -294,7 +321,7 @@ TEST_CASE("FSharpCompleter.edge.just_dot")
 TEST_CASE("FSharpCompleter.edge.nested_dot")
 {
     endo::FSharpPersistentState state;
-    state.recordTypeFields["ProcessInfo"] = { "cpu" };
+    state.recordTypeFields["ProcessInfo"] = { { "cpu", "float" } };
     endo::FSharpCompleter completer(state);
 
     // "a.b.c" should split on last dot: objectPart="a.b", memberPrefix="c"

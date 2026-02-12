@@ -1,12 +1,36 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/CompletionProvider.hpp>
-
+#include <optional>
+#include <string>
 #include <string_view>
 
 namespace endo
 {
+
+/// @brief Type of completion context.
+enum class CompletionContextType
+{
+    Command,       ///< First token position - complete executables/builtins.
+    Argument,      ///< General argument position.
+    FilePath,      ///< Path argument (starts with /, ./, ~).
+    Variable,      ///< After $ (variable expansion).
+    VariableBrace, ///< Inside ${...} (brace variable expansion).
+    Redirect,      ///< After < or > (file target).
+    Option,        ///< After - or -- (command option).
+    Unknown        ///< Unable to determine context.
+};
+
+/// @brief Context information for completion.
+struct CompletionContext
+{
+    CompletionContextType type = CompletionContextType::Unknown;
+    std::string prefix;                 ///< Word being completed (may be empty).
+    size_t prefixStart = 0;             ///< Byte offset of prefix in input.
+    size_t cursorPosition = 0;          ///< Cursor byte offset in input.
+    std::optional<std::string> command; ///< Current command (for option context).
+    std::string fullInput;              ///< Complete input line.
+};
 
 /// @brief Analyzes input to determine completion context.
 ///

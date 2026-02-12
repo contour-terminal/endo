@@ -78,7 +78,8 @@ This new milestone will focus on building the infrastructure and features requir
 2.  **Definition File Search Paths:**
     *   User-specific: `~/.config/endo/definitions/`
     *   System-wide: `/usr/share/endo/definitions/` (or platform equivalent)
-    *   Bundled defaults: shipped with Endo for common commands (`docker`, `git`, `ps`, etc.)
+    *   Bundled defaults: shipped with Endo for common commands (`docker`, `git`)
+    *   Builtin commands (e.g. `ps`, `ls`, `du`, `df`, `ifconfig`, `netstat`) to have hardcoded definitions for their structured output, eliminating the need for external files as well as enabling these commands to always work on every platform (including Windows).
 
 3.  **Pipeline Integration:**
     *   When a command appears in a pipeline and a matching definition file exists, automatically parse the output into a stream of structured records.

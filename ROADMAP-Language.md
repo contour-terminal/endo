@@ -197,6 +197,19 @@ This document tracks the implementation status of F# language features as define
 - [x] Here-strings: `<<<`
 - [x] Job management: `&`, `jobs`, `fg`, `bg`
 
+## Completion System
+
+- [x] Shared completion infrastructure in `endo-language` (context analysis, candidate generators, orchestrator)
+- [x] `CompletionContextAnalyzer`: lexer-based cursor context detection (command, argument, variable, filepath, dot-access, etc.)
+- [x] Candidate generators: keywords, builtins, shell keywords, constructors, dot-access (Option methods + record fields), symbols
+- [x] `computeCompletions()` shared orchestrator callable by both shell and LSP
+- [x] Shell completion adapter with fuzzy scoring (`applyFuzzyScoring()`)
+- [x] LSP `textDocument/completion` support with trigger characters `.` and `$`
+- [x] Record-aware dot-access completion: `RecordFieldInfo` carries field name + type, descriptions show `"field: typeName"`
+- [x] Variable-specific record field completion: `alice.` completes only `Person` fields when variable type is known
+- [x] `collectRecordInfo()` extracts record types and variable-type associations from source for LSP
+- [x] Record-aware hover: hovering over record variable shows detected type name (e.g., `Person`) and type definition
+
 ## Modules & Imports
 
 - [ ] `import` statements

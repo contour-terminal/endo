@@ -1,14 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LetBindingCompleter.hpp"
+#include <shell/CompletionAdapter.hpp>
 
 #include <algorithm>
 
+#include <endo-language/CompletionCandidates.hpp>
+#include <endo-language/CompletionItem.hpp>
 #include <endo-language/Type.hpp>
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
 {
+
+namespace
+{
+    /// @brief Converts FSharpPersistentState to SymbolDefinitionInfo for the shared engine.
+    [[nodiscard]] std::vector<SymbolDefinitionInfo> convertToSymbolInfo(FSharpPersistentState const& state)
+    {
+        std::vector<SymbolDefinitionInfo> symbols;
+
+        for (auto const& [name, func]: state.functions)
+        {
+            SymbolDefinitionInfo info;
+            info.name = name;
+            info.isFunction = true;
+            info.parameterNames = func.parameters;
+            info.isRecursive = func.isRecursive;
+            for (auto const& pt: func.parameterTypes)
+                info.parameterTypes.push_back(pt.has_value() ? std::optional(toString(*pt)) : std::nullopt);
+            if (func.returnType.has_value())
+                info.returnType = toString(*func.returnType);
+            symbols.push_back(std::move(info));
+        }
+
+        for (auto const& binding: state.valueBindings)
+        {
+            SymbolDefinitionInfo info;
+            info.name = binding.name;
+            info.isFunction = false;
+            info.isMutable = binding.isMutable;
+            symbols.push_back(std::move(info));
+        }
+
+        return symbols;
+    }
+} // namespace
 
 LetBindingCompleter::LetBindingCompleter(FSharpPersistentState const& state): _state(state)
 {
@@ -16,65 +51,16 @@ LetBindingCompleter::LetBindingCompleter(FSharpPersistentState const& state): _s
 
 std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext const& context)
 {
-    std::vector<CompletionItem> results;
     auto const& prefix = context.prefix;
 
-    // Configuration for fuzzy matching
-    tui::FuzzyConfig fuzzyConfig;
-    auto const minThreshold = fuzzyConfig.minMatchThreshold;
+    // Convert persisted state to shared symbol format
+    auto const symbols = convertToSymbolInfo(_state);
 
-    // Helper lambda for adding a match
-    auto addMatch = [&](std::string const& name, std::string const& description, int baseScore) {
-        // Check if already added (avoid duplicates)
-        for (auto const& existing: results)
-        {
-            if (existing.text == name)
-                return;
-        }
+    // Generate candidates using shared engine
+    auto candidates = symbolCandidates(symbols);
 
-        // Check both prefix and fuzzy matches
-        auto isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
-        auto isFuzzyMatch = false;
-
-        if (!isPrefixMatch && !prefix.empty())
-        {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
-            auto const textLen = tui::FuzzyMatch::countGraphemes(name);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
-        }
-
-        if (!isPrefixMatch && !isFuzzyMatch)
-            return;
-
-        int score;
-        std::vector<size_t> matchPositions;
-
-        if (isPrefixMatch)
-        {
-            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
-            score += fuzzyConfig.prefixMatchBonus;
-        }
-        else
-        {
-            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
-            matchPositions = std::move(fuzzyResult.positions);
-        }
-
-        results.push_back(CompletionItem { .text = name,
-                                           .displayText = name,
-                                           .description = description,
-                                           .score = score,
-                                           .matchPositions = std::move(matchPositions) });
-    };
-
-    // Add persisted functions (higher base score)
-    for (auto const& [name, func]: _state.functions)
-        addMatch(name, formatFunctionDescription(name, func), 85);
-
-    // Add persisted value bindings (lower base score)
-    for (auto const& binding: _state.valueBindings)
-        addMatch(binding.name, formatValueDescription(binding), 75);
+    // Apply fuzzy scoring
+    auto results = applyFuzzyScoring(candidates, prefix, 80);
 
     // Sort by score (descending), then alphabetically
     std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {

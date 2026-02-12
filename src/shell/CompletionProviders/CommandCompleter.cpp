@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CommandCompleter.hpp"
+#include <shell/CompletionAdapter.hpp>
 #include <shell/Shell.hpp>
 
 #include <crispy/utils.h>
@@ -8,8 +9,7 @@
 #include <filesystem>
 #include <set>
 
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
+#include <endo-language/CompletionCandidates.hpp>
 
 namespace endo
 {
@@ -22,65 +22,40 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
 {
     refreshCacheIfNeeded();
 
-    std::vector<CompletionItem> results;
     auto const& prefix = context.prefix;
 
-    // Configuration for fuzzy matching
-    tui::FuzzyConfig fuzzyConfig;
-    double const minThreshold = fuzzyConfig.minMatchThreshold;
+    // Get builtin candidates from shared engine
+    auto builtins = builtinCandidates();
 
-    // Helper lambda for adding a command match
-    auto addMatch = [&](std::string const& name, std::string_view description, int baseScore) {
-        // Check if already added (avoid duplicates)
+    // Build PATH command candidates
+    std::vector<CompletionCandidate> pathCandidates;
+    pathCandidates.reserve(_cachedCommands.size());
+    for (auto const& cmd: _cachedCommands)
+        pathCandidates.push_back(CompletionCandidate { .text = cmd,
+                                                       .displayText = cmd,
+                                                       .description = "",
+                                                       .detail = {},
+                                                       .kind = CompletionKind::Command });
+
+    // Apply fuzzy scoring: builtins at higher base score
+    auto results = applyFuzzyScoring(builtins, prefix, 100);
+
+    // Apply fuzzy scoring: PATH commands at lower base score, merge in
+    auto pathResults = applyFuzzyScoring(pathCandidates, prefix, 50);
+    for (auto& item: pathResults)
+    {
+        auto isDuplicate = false;
         for (auto const& existing: results)
         {
-            if (existing.text == name)
-                return;
+            if (existing.text == item.text)
+            {
+                isDuplicate = true;
+                break;
+            }
         }
-
-        // Option C: Check both prefix and fuzzy matches
-        bool isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(name, prefix);
-        tui::FuzzyMatchResult fuzzyResult;
-        bool isFuzzyMatch = false;
-
-        if (!isPrefixMatch && !prefix.empty())
-        {
-            fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
-            size_t textLen = tui::FuzzyMatch::countGraphemes(name);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
-        }
-
-        if (!isPrefixMatch && !isFuzzyMatch)
-            return;
-
-        int score;
-        std::vector<size_t> matchPositions;
-
-        if (isPrefixMatch)
-        {
-            score = tui::SmartCaseMatch::adjustScore(baseScore, name, prefix);
-            score += fuzzyConfig.prefixMatchBonus;
-        }
-        else
-        {
-            score = tui::FuzzyMatch::calculateScore(baseScore, name, prefix, fuzzyResult, fuzzyConfig);
-            matchPositions = std::move(fuzzyResult.positions);
-        }
-
-        results.push_back(CompletionItem { .text = name,
-                                           .displayText = name,
-                                           .description = std::string(description),
-                                           .score = score,
-                                           .matchPositions = std::move(matchPositions) });
-    };
-
-    // Add builtins first (higher priority)
-    for (auto const& builtin: builtinNames())
-        addMatch(builtin, "builtin", 100);
-
-    // Add commands from PATH
-    for (auto const& cmd: _cachedCommands)
-        addMatch(cmd, "", 50);
+        if (!isDuplicate)
+            results.push_back(std::move(item));
+    }
 
     // Sort by score (descending), then alphabetically
     std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {

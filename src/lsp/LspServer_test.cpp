@@ -1581,3 +1581,286 @@ TEST_CASE("E2E.initialize_advertises_documentSymbol_and_rename", "[lsp][e2e]")
     CHECK(caps.contains("renameProvider"));
     CHECK(caps["renameProvider"]["prepareProvider"] == true);
 }
+
+// =============================================================================
+// Completion tests
+// =============================================================================
+
+TEST_CASE("Completion.initialize_advertises_completion", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendRequest("shutdown", json::object(), 2),
+        sendNotification("exit", json::object()),
+    });
+
+    REQUIRE(responses.size() >= 1);
+    auto const& caps = responses[0]["result"]["capabilities"];
+    CHECK(caps.contains("completionProvider"));
+    CHECK(caps["completionProvider"]["triggerCharacters"].is_array());
+}
+
+TEST_CASE("Completion.basic_request_returns_json_array", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "le" },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 2 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            // "le" should match "let"
+            bool hasLet = false;
+            for (auto const& item: msg["result"])
+            {
+                if (item["label"] == "let")
+                    hasLet = true;
+            }
+            CHECK(hasLet);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Completion.document_symbols_included", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let add x y = x + y\nad" },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 1 }, { "character", 2 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            bool hasAdd = false;
+            for (auto const& item: msg["result"])
+            {
+                if (item["label"] == "add")
+                    hasAdd = true;
+            }
+            CHECK(hasAdd);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Completion.dot_access_returns_option_methods", "[lsp][completion]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "Option." },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 7 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            bool hasMap = false;
+            bool hasBind = false;
+            bool hasDefaultValue = false;
+            for (auto const& item: msg["result"])
+            {
+                if (item["label"] == "Option.map")
+                    hasMap = true;
+                if (item["label"] == "Option.bind")
+                    hasBind = true;
+                if (item["label"] == "Option.defaultValue")
+                    hasDefaultValue = true;
+            }
+            CHECK(hasMap);
+            CHECK(hasBind);
+            CHECK(hasDefaultValue);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Hover.record_variable_shows_type_name", "[lsp][hover]")
+{
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    auto hover = computeHover(source, Position { 1, 4 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("Person") != std::string::npos);
+    CHECK(hover->contents.value.find("alice") != std::string::npos);
+}
+
+TEST_CASE("Completion.record_field_dot_access", "[lsp][completion]")
+{
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }\nalice.";
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", source },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 2 }, { "character", 6 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            bool hasName = false;
+            bool hasAge = false;
+            for (auto const& item: msg["result"])
+            {
+                if (item["label"] == "alice.name")
+                    hasName = true;
+                if (item["label"] == "alice.age")
+                    hasAge = true;
+            }
+            CHECK(hasName);
+            CHECK(hasAge);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("Completion.record_variable_specific_fields", "[lsp][completion]")
+{
+    auto source =
+        "type Person = { name: str; age: int }\ntype ProcessInfo = { pid: int; cpu: float }\nlet alice = { "
+        "name = \"Alice\"; age = 30 }\nalice.";
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", source },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 3 }, { "character", 6 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            // Should have only Person fields, not ProcessInfo fields
+            bool hasName = false;
+            bool hasAge = false;
+            bool hasPid = false;
+            bool hasCpu = false;
+            for (auto const& item: msg["result"])
+            {
+                if (item["label"] == "alice.name")
+                    hasName = true;
+                if (item["label"] == "alice.age")
+                    hasAge = true;
+                if (item["label"] == "alice.pid")
+                    hasPid = true;
+                if (item["label"] == "alice.cpu")
+                    hasCpu = true;
+            }
+            CHECK(hasName);
+            CHECK(hasAge);
+            CHECK_FALSE(hasPid);
+            CHECK_FALSE(hasCpu);
+            break;
+        }
+    }
+    CHECK(found);
+}

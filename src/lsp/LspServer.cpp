@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 
+#include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
@@ -110,6 +111,11 @@ void LspServer::dispatch(nlohmann::json const& message)
             auto const params = message.value("params", nlohmann::json::object());
             writeMessage(_output, makeResponse(id, handlePrepareRename(params)));
         }
+        else if (method == "textDocument/completion")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleCompletion(params)));
+        }
         else
         {
             writeMessage(_output,
@@ -164,6 +170,10 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
                     { "triggerCharacters", nlohmann::json::array({ " ", "(" }) },
                 } },
               { "documentSymbolProvider", true },
+              { "completionProvider",
+                nlohmann::json {
+                    { "triggerCharacters", nlohmann::json::array({ ".", "$" }) },
+                } },
               { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",
                 nlohmann::json {
@@ -341,6 +351,17 @@ nlohmann::json LspServer::handlePrepareRename(nlohmann::json const& params)
         return nullptr;
 
     return *range;
+}
+
+nlohmann::json LspServer::handleCompletion(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const position = params.at("position").get<Position>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    return computeCompletion(*source, position);
 }
 
 void LspServer::publishDiagnostics(std::string const& uri)

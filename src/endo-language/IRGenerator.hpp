@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "AST.hpp"
+#include "CompletionItem.hpp"
 #include "TypeInferencer.hpp"
 #include "Visitor.hpp"
 
@@ -65,8 +66,8 @@ struct FSharpPersistentState
     /// AST nodes retained to keep PersistedFunction::body pointers valid.
     std::vector<std::unique_ptr<ast::Statement>> retainedASTs;
 
-    /// Record type field names for completion (type name -> ordered field names).
-    std::unordered_map<std::string, std::vector<std::string>> recordTypeFields;
+    /// Record type field info for completion (type name -> field info with types).
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> recordTypeFields;
 };
 
 /// Generates IR code from an AST.

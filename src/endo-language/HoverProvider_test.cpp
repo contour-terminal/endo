@@ -152,3 +152,61 @@ TEST_CASE("HoverProvider.empty_source", "[hover]")
     auto result = computeHover("", SourcePosition { .line = 0, .character = 0 });
     CHECK(!result.has_value());
 }
+
+// =============================================================================
+// Record type hover tests
+// =============================================================================
+
+TEST_CASE("HoverProvider.binding_record_variable_shows_type", "[hover]")
+{
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    // Hover on "alice" (line 1, character 4)
+    auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("`alice`") != std::string::npos);
+    CHECK(result->markdownText.find("Person") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.binding_record_variable_shows_fields", "[hover]")
+{
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
+    REQUIRE(result.has_value());
+    // Should show the type definition with field names and types
+    CHECK(result->markdownText.find("name: str") != std::string::npos);
+    CHECK(result->markdownText.find("age: int") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.binding_record_type_in_code_block", "[hover]")
+{
+    // The type detection works via RecordExpr typeName resolved by the parser
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
+    REQUIRE(result.has_value());
+    // Should show the type in the code block as well
+    CHECK(result->markdownText.find("Person") != std::string::npos);
+    CHECK(result->markdownText.find("let alice") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.binding_record_literal_preview", "[hover]")
+{
+    auto source = "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }";
+    auto result = computeHover(source, SourcePosition { .line = 1, .character = 4 });
+    REQUIRE(result.has_value());
+    // Should show the record literal value preview
+    CHECK(result->markdownText.find("\"Alice\"") != std::string::npos);
+    CHECK(result->markdownText.find("30") != std::string::npos);
+}
+
+TEST_CASE("HoverProvider.binding_anonymous_record", "[hover]")
+{
+    auto source = "let r = { x = 1 }";
+    auto result = computeHover(source, SourcePosition { .line = 0, .character = 4 });
+    REQUIRE(result.has_value());
+    CHECK(result->markdownText.find("`r`") != std::string::npos);
+    CHECK(result->markdownText.find("binding") != std::string::npos);
+    // No type name should be shown for anonymous records — check it doesn't say ": `"
+    // (The binding header should just say "binding" without a type annotation)
+    auto const typePos = result->markdownText.find("binding : `");
+    CHECK(typePos == std::string::npos);
+}

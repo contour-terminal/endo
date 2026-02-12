@@ -1,0 +1,239 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <catch2/catch_test_macros.hpp>
+
+#include <algorithm>
+
+#include <endo-language/Completer.hpp>
+#include <endo-language/CompletionContext.hpp>
+
+using namespace endo;
+
+namespace
+{
+
+/// @brief Helper to check if a specific text is in the candidates.
+bool hasCandidate(std::vector<CompletionCandidate> const& items, std::string const& text)
+{
+    return std::ranges::any_of(items, [&](auto const& c) { return c.text == text; });
+}
+
+} // namespace
+
+// =============================================================================
+// CompletionContextAnalyzer tests
+// =============================================================================
+
+TEST_CASE("CompletionContext.empty_input_is_command", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("", 0);
+    CHECK(ctx.type == CompletionContextType::Command);
+    CHECK(ctx.prefix.empty());
+}
+
+TEST_CASE("CompletionContext.first_word_is_command", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("le", 2);
+    CHECK(ctx.type == CompletionContextType::Command);
+    CHECK(ctx.prefix == "le");
+}
+
+TEST_CASE("CompletionContext.after_command_is_argument", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("echo he", 7);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix == "he");
+}
+
+TEST_CASE("CompletionContext.dollar_is_variable", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("$HO", 3);
+    CHECK(ctx.type == CompletionContextType::Variable);
+    CHECK(ctx.prefix == "HO");
+}
+
+TEST_CASE("CompletionContext.dollar_brace_is_variable_brace", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("${HO", 4);
+    CHECK(ctx.type == CompletionContextType::VariableBrace);
+    CHECK(ctx.prefix == "HO");
+}
+
+TEST_CASE("CompletionContext.path_prefix_is_filepath", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("./src", 5);
+    CHECK(ctx.type == CompletionContextType::FilePath);
+    CHECK(ctx.prefix == "./src");
+}
+
+TEST_CASE("CompletionContext.dash_is_option", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("ls -l", 5);
+    CHECK(ctx.type == CompletionContextType::Option);
+}
+
+TEST_CASE("CompletionContext.after_pipe_is_command", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("ls | gr", 7);
+    CHECK(ctx.type == CompletionContextType::Command);
+    CHECK(ctx.prefix == "gr");
+}
+
+TEST_CASE("CompletionContext.after_redirect_is_redirect", "[completion][context]")
+{
+    auto ctx = CompletionContextAnalyzer::analyze("echo > ", 7);
+    CHECK(ctx.type == CompletionContextType::Redirect);
+}
+
+// =============================================================================
+// computeCompletions integration tests
+// =============================================================================
+
+TEST_CASE("Completer.empty_input_returns_keywords_and_builtins", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("", 0, dataSource);
+    CHECK(!results.empty());
+    CHECK(hasCandidate(results, "let"));
+    CHECK(hasCandidate(results, "cd"));
+    CHECK(hasCandidate(results, "Some"));
+}
+
+TEST_CASE("Completer.le_prefix_returns_let", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("le", 2, dataSource);
+    CHECK(hasCandidate(results, "let"));
+    // Should not contain unrelated items
+    CHECK(!hasCandidate(results, "cd"));
+}
+
+TEST_CASE("Completer.Option_dot_returns_methods", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("Option.", 7, dataSource);
+    CHECK(hasCandidate(results, "Option.map"));
+    CHECK(hasCandidate(results, "Option.bind"));
+    CHECK(hasCandidate(results, "Option.defaultValue"));
+}
+
+TEST_CASE("Completer.dollar_returns_additional_candidates", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.additionalCandidates = {
+        { "HOME", "HOME", "/home/user", "", CompletionKind::Other },
+        { "PATH", "PATH", "/usr/bin", "", CompletionKind::Other },
+    };
+    auto results = computeCompletions("$", 1, dataSource);
+    CHECK(hasCandidate(results, "HOME"));
+    CHECK(hasCandidate(results, "PATH"));
+}
+
+TEST_CASE("Completer.symbols_appear_in_command_position", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.symbols = { {
+        .name = "myFunc",
+        .isFunction = true,
+        .parameterNames = { "x" },
+    } };
+    auto results = computeCompletions("my", 2, dataSource);
+    CHECK(hasCandidate(results, "myFunc"));
+}
+
+TEST_CASE("Completer.symbols_appear_in_argument_position", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.symbols = { {
+        .name = "myVal",
+        .isFunction = false,
+    } };
+    auto results = computeCompletions("echo my", 7, dataSource);
+    CHECK(hasCandidate(results, "myVal"));
+}
+
+TEST_CASE("Completer.constructors_in_argument_position", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("echo So", 7, dataSource);
+    CHECK(hasCandidate(results, "Some"));
+}
+
+TEST_CASE("Completer.filepath_context_uses_additional", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.additionalCandidates = {
+        { "./src", "./src", "directory", "", CompletionKind::Other },
+    };
+    auto results = computeCompletions("./s", 3, dataSource);
+    CHECK(hasCandidate(results, "./src"));
+}
+
+TEST_CASE("Completer.prefix_filtering_works", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("mat", 3, dataSource);
+    CHECK(hasCandidate(results, "match"));
+    CHECK(!hasCandidate(results, "let"));
+    CHECK(!hasCandidate(results, "fun"));
+}
+
+TEST_CASE("Completer.dot_access_with_record_fields", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.recordFields["ProcessInfo"] = { { "pid", "int" }, { "user", "str" }, { "cpu", "float" } };
+    auto results = computeCompletions("_.p", 3, dataSource);
+    CHECK(hasCandidate(results, "_.pid"));
+    CHECK(!hasCandidate(results, "_.user"));
+}
+
+TEST_CASE("Completer.record_field_completion", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.recordFields["Person"] = { { "name", "str" }, { "age", "int" } };
+    auto results = computeCompletions("_.", 2, dataSource);
+    CHECK(hasCandidate(results, "_.name"));
+    CHECK(hasCandidate(results, "_.age"));
+}
+
+TEST_CASE("Completer.variable_specific_completion", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    dataSource.recordFields["Person"] = { { "name", "str" }, { "age", "int" } };
+    dataSource.recordFields["ProcessInfo"] = { { "pid", "int" } };
+    dataSource.variableTypes["alice"] = "Person";
+    auto results = computeCompletions("alice.", 6, dataSource);
+    CHECK(hasCandidate(results, "alice.name"));
+    CHECK(hasCandidate(results, "alice.age"));
+    CHECK(!hasCandidate(results, "alice.pid"));
+    CHECK(!hasCandidate(results, "alice.map")); // No Option methods for known type
+}
+
+// =============================================================================
+// collectRecordInfo tests
+// =============================================================================
+
+TEST_CASE("Completer.collectRecordInfo.extracts_record_fields", "[completion][completer]")
+{
+    auto info = collectRecordInfo("type Person = { name: str; age: int }");
+    REQUIRE(info.recordFields.count("Person") == 1);
+    auto const& fields = info.recordFields.at("Person");
+    REQUIRE(fields.size() == 2);
+    CHECK(fields[0].name == "name");
+    CHECK(fields[0].typeName == "str");
+    CHECK(fields[1].name == "age");
+    CHECK(fields[1].typeName == "int");
+}
+
+TEST_CASE("Completer.collectRecordInfo.extracts_variable_types", "[completion][completer]")
+{
+    auto info = collectRecordInfo(
+        "type Person = { name: str; age: int }\nlet alice = { name = \"Alice\"; age = 30 }");
+    CHECK(info.variableTypes.count("alice") == 1);
+    CHECK(info.variableTypes.at("alice") == "Person");
+}
+
+TEST_CASE("Completer.collectRecordInfo.no_type_for_anonymous_record", "[completion][completer]")
+{
+    auto info = collectRecordInfo("let r = { x = 1 }");
+    CHECK(info.variableTypes.count("r") == 0);
+}

@@ -262,6 +262,22 @@ namespace
             if (val && func)
                 return *val + " |> " + *func;
         }
+        if (auto const* e = dynamic_cast<ast::RecordExpr const*>(&expr))
+        {
+            std::string result = "{ ";
+            for (size_t i = 0; i < e->fields.size(); ++i)
+            {
+                if (i > 0)
+                    result += "; ";
+                result += e->fields[i].name + " = ";
+                if (auto val = exprToString(*e->fields[i].value))
+                    result += *val;
+                else
+                    result += "...";
+            }
+            result += " }";
+            return result;
+        }
         return std::nullopt;
     }
 
@@ -272,13 +288,17 @@ namespace
     /// @param parameters Function parameters (empty for simple bindings)
     /// @param returnType Optional return type annotation
     /// @param valuePreview Optional preview of the value expression source text
+    /// @param detectedType Optional detected type name (e.g., record type from value)
+    /// @param typeDefinition Optional type definition source text for supplementary info
     /// @return Markdown hover string
     [[nodiscard]] std::string formatLetBinding(std::string const& name,
                                                bool isMutable,
                                                bool isRecursive,
                                                std::vector<ast::TypedParameter> const& parameters,
                                                std::optional<TypePtr> const& returnType,
-                                               std::optional<std::string> const& valuePreview = {})
+                                               std::optional<std::string> const& valuePreview = {},
+                                               std::optional<std::string> const& detectedType = {},
+                                               std::optional<std::string> const& typeDefinition = {})
     {
         std::string result;
 
@@ -301,18 +321,30 @@ namespace
         }
         else
         {
+            // Determine the display type: explicit returnType takes precedence, then detectedType
+            auto const displayType = returnType     ? std::optional<std::string>(toString(*returnType))
+                                     : detectedType ? detectedType
+                                                    : std::nullopt;
+
             result = "`" + name + "` \u2014 ";
             if (isMutable)
                 result += "mutable ";
-            result += "binding\n\n```endo\nlet ";
+            result += "binding";
+            if (displayType)
+                result += " : `" + *displayType + "`";
+            result += "\n\n```endo\nlet ";
             if (isMutable)
                 result += "mut ";
             result += name;
-            if (returnType)
-                result += ": " + toString(*returnType);
+            if (displayType)
+                result += ": " + *displayType;
             if (valuePreview && !valuePreview->empty())
                 result += " = " + *valuePreview;
             result += "\n```";
+
+            // Append type definition if available
+            if (typeDefinition)
+                result += "\n\n```endo\n" + *typeDefinition + "\n```";
         }
 
         return result;
@@ -331,10 +363,27 @@ namespace
         return result;
     }
 
+    /// Formats a record type definition as a source string for hover preview.
+    /// @param recordDef The record type definition statement
+    /// @return Source text like "type Person = { name: str; age: int }"
+    [[nodiscard]] std::string formatRecordTypeDef(ast::RecordTypeDefStmt const& recordDef)
+    {
+        std::string result = "type " + recordDef.name + " = { ";
+        for (size_t i = 0; i < recordDef.fields.size(); ++i)
+        {
+            if (i > 0)
+                result += "; ";
+            result += recordDef.fields[i].name + ": " + toString(recordDef.fields[i].type);
+        }
+        result += " }";
+        return result;
+    }
+
     /// Returns hover markdown for a user-defined binding or function parameter.
     ///
     /// Parses the source into an AST and searches top-level `let` bindings and their
-    /// parameters for a matching name.
+    /// parameters for a matching name. For record bindings, detects the record type name
+    /// and includes the type definition.
     ///
     /// @param source The full document text
     /// @param name The identifier name to look up
@@ -350,14 +399,17 @@ namespace
         if (!astRoot)
             return std::nullopt;
 
-        // Collect top-level LetBindingStmt nodes
+        // Collect top-level LetBindingStmt and RecordTypeDefStmt nodes
         std::vector<ast::LetBindingStmt const*> bindings;
+        std::unordered_map<std::string, ast::RecordTypeDefStmt const*> recordTypeDefs;
         if (auto const* compound = dynamic_cast<ast::CompoundStmt const*>(astRoot.get()))
         {
             for (auto const& stmt: compound->statements)
             {
                 if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(stmt.get()))
                     bindings.push_back(letStmt);
+                else if (auto const* recordDef = dynamic_cast<ast::RecordTypeDefStmt const*>(stmt.get()))
+                    recordTypeDefs[recordDef->name] = recordDef;
             }
         }
         else if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(astRoot.get()))
@@ -371,14 +423,46 @@ namespace
             if (letStmt->name == name)
             {
                 auto valuePreview = std::optional<std::string> {};
+                auto detectedType = std::optional<std::string> {};
+                auto typeDefinition = std::optional<std::string> {};
+
                 if (!letStmt->isFunction() && letStmt->value)
+                {
                     valuePreview = exprToString(*letStmt->value);
+
+                    // Detect record type from RecordExpr value (only if no explicit returnType)
+                    if (!letStmt->returnType)
+                    {
+                        if (auto const* recordExpr =
+                                dynamic_cast<ast::RecordExpr const*>(letStmt->value.get()))
+                        {
+                            if (!recordExpr->typeName.empty())
+                            {
+                                detectedType = recordExpr->typeName;
+                                // Look up the type definition for supplementary info
+                                if (auto const it = recordTypeDefs.find(recordExpr->typeName);
+                                    it != recordTypeDefs.end())
+                                    typeDefinition = formatRecordTypeDef(*it->second);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Explicit annotation — check if it's a known record type for the definition
+                        auto const typeStr = toString(*letStmt->returnType);
+                        if (auto const it = recordTypeDefs.find(typeStr); it != recordTypeDefs.end())
+                            typeDefinition = formatRecordTypeDef(*it->second);
+                    }
+                }
+
                 return formatLetBinding(name,
                                         letStmt->isMutable,
                                         letStmt->isRecursive,
                                         letStmt->parameters,
                                         letStmt->returnType,
-                                        valuePreview);
+                                        valuePreview,
+                                        detectedType,
+                                        typeDefinition);
             }
 
             for (auto const& andBinding: letStmt->andBindings)

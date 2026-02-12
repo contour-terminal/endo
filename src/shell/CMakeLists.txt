@@ -7,8 +7,8 @@ add_library(endo-shell STATIC
     CommandResolver.cpp
     Completer.hpp
     Completer.cpp
-    CompletionContext.hpp
-    CompletionContext.cpp
+    CompletionAdapter.hpp
+    CompletionAdapter.cpp
     CompletionProvider.hpp
     CompletionProviders/CommandCompleter.hpp
     CompletionProviders/CommandCompleter.cpp

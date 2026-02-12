@@ -42,22 +42,6 @@ namespace
         }
     }
 
-    // Tokens that represent variable references
-    bool isVariableToken(Token token)
-    {
-        switch (token)
-        {
-            case Token::DollarName:
-            case Token::DollarBraceName:
-            case Token::DollarBraceParam:
-            case Token::DollarNumber:
-            case Token::DollarDollar:
-            case Token::DollarQuestion:
-            case Token::DollarNot: return true;
-            default: return false;
-        }
-    }
-
 } // namespace
 
 CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, size_t cursorPosition)
