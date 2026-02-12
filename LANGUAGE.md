@@ -522,7 +522,34 @@ let curriedAdd = fun x -> fun y -> x + y
 let add5 = curriedAdd 5
 ```
 
-### 5.4 Recursive Functions
+### 5.4 Placeholder Lambda Sugar (`_`)
+
+The `_` token in expression position (not pattern position) creates an implicit single-parameter lambda. This is purely a parser-level desugaring — no changes to IR or runtime.
+
+```fsharp
+# Field accessor
+_.pid                         # → fun __x -> __x.pid
+
+# Predicate
+_.name == "endo"              # → fun __x -> __x.name == "endo"
+
+# Comparison
+_.cpu > 50.0                  # → fun __x -> __x.cpu > 50.0
+
+# Arithmetic
+_ + 1                         # → fun __x -> __x + 1
+
+# In pipelines (most common use)
+ps |> filter (_.name == "endo") |> map _.pid
+ps |> sortBy _.cpu |> groupBy _.user
+
+# Only one _ per expression (multiple would be ambiguous)
+# BAD: _ + _                  # Error: ambiguous placeholder lambda
+```
+
+**Rule:** Any expression containing `_` in expression position (outside of pattern context such as `match` arms or `let` destructuring) creates an implicit lambda. The `_` becomes the single parameter. This sugar works anywhere a function value is expected.
+
+### 5.5 Recursive Functions
 
 ```fsharp
 # The 'rec' keyword enables recursion
@@ -566,7 +593,7 @@ let rec sumTree tree =
     | Node (left, right) -> sumTree left + sumTree right
 ```
 
-### 5.5 Function Composition
+### 5.6 Function Composition
 
 ```fsharp
 # Forward composition operator >>
@@ -2362,6 +2389,7 @@ application     = primary { primary } ;
 
 primary         = literal
                 | identifier
+                | "_"
                 | "(" expression ")"
                 | "(" expression "," expression { "," expression } ")"
                 | list_expression
@@ -2503,6 +2531,7 @@ comment         = "#" { any_char } newline
 ║ FUNCTIONS                                                            ║
 ║   let f x y = x + y             Named function (curried)             ║
 ║   let f = fun x -> x * 2        Lambda                               ║
+║   _.field, _ + 1                Placeholder lambda sugar              ║
 ║   let add5 = add 5              Partial application                  ║
 ║   f >> g                        Forward composition                  ║
 ╠══════════════════════════════════════════════════════════════════════╣

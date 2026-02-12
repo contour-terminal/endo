@@ -10,7 +10,7 @@ Instead of parsing text with `awk`, `sed`, and `grep`, users will be able to wor
 
 ```fsharp
 # Instead of: ps aux | grep 'endo' | awk '{print $2}'
-ps | where { name == "endo" } | select pid
+ps |> filter (_.name == "endo") |> map _.pid
 ```
 
 ## Proposed Milestone: Milestone 6 - Structured System Interaction
@@ -99,7 +99,7 @@ variants:
       format: "lines"
 ```
 
-With this definition, `docker ps | where { status =~ "Up" } | select names` works seamlessly — Endo intercepts the command, runs `docker ps --format json`, and parses the JSON stream into records.
+With this definition, `docker ps |> filter (_.status |> contains "Up") |> map _.names` works seamlessly — Endo intercepts the command, runs `docker ps --format json`, and parses the JSON stream into records.
 
 > See [`docs/Structured-Output-Recognition.md`](docs/Structured-Output-Recognition.md) for the full specification, including all parser types and additional examples.
 
@@ -117,21 +117,39 @@ With this definition, `docker ps | where { status =~ "Up" } | select names` work
     *   Provide libraries (e.g., in C++, Rust, Go, Python) that make it easy for developers to write structured commands for Endo.
     *   These libraries would handle the communication protocol with the shell, data serialization, and type definitions.
 
-### Phase 6.4: Structured Data Manipulation Language
+### Phase 6.4: Structured Data Pipeline Integration
 
-**Rationale:** Equip the shell language with a rich set of operators and commands to work with streams of records.
+**Rationale:** With Phase 3 list operations and record types already in place,
+structured data manipulation uses the same F# functions as any other data.
+No special-purpose verbs needed — every proposed verb maps directly to a standard
+F# higher-order function:
+
+| Verb Equivalent | F# Function | Example |
+|---|---|---|
+| `where` | `filter` | `filter (_.name == "endo")` |
+| `select` | `map` | `map _.pid` |
+| `sort-by` | `sortBy` | `sortBy _.cpu` |
+| `group-by` | `groupBy` | `groupBy _.user` |
 
 **Tasks:**
 
-1.  **Implement Core Data Verbs:**
-    *   `where { ... }`: Filter a stream of records based on a predicate.
-    *   `select { ... }`: Transform each record in a stream (e.g., pick, rename, or compute new fields).
-    *   `sort-by { ... }`: Sort a stream of records by one or more fields.
-    *   `group-by { ... }`: Group records by a common key.
+1.  **Record-Aware List Operations** (depends on Phase 3):
+    *   Ensure `filter`, `map`, `sortBy`, `groupBy` work with record-typed lists.
+    *   Field access via `.` already works on records.
 
-2.  **Table Rendering:**
-    *   A default renderer that takes a stream of records and displays them in a user-friendly table format in the terminal.
-    *   The renderer should automatically adjust column widths and handle wide data.
+2.  **Placeholder Lambda Sugar (`_`)**:
+    *   Parser sugar: `_` in expression position creates an implicit lambda.
+    *   `_.field` → `fun __x -> __x.field`
+    *   `_.field == value` → `fun __x -> __x.field == value`
+    *   `_ + 1` → `fun __x -> __x + 1`
+    *   Works anywhere a function is expected: `filter (_.name == "endo")`, `sortBy _.cpu`
+    *   Only one `_` per expression (multiple would be ambiguous).
+    *   This is a parser-only transformation — no changes to IR, CoreVM, or runtime.
+
+3.  **Table Rendering:**
+    *   Default renderer for `list<Record>` results — auto-format as table.
+    *   Auto-detect column widths, handle wide data.
+    *   Explicit opt-out via `|> toText` or `|> println`.
 
 ## Suggested System Commands for Structured Output
 
