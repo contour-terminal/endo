@@ -132,6 +132,23 @@ TypeDescriptor* TypeRegistry::registerProductType(std::unique_ptr<TypeDescriptor
     return addType(std::move(type));
 }
 
+TypeDescriptor* TypeRegistry::registerSumType(std::unique_ptr<TypeDescriptor> type)
+{
+    assert(type->kind == TypeKind::Sum);
+
+    // Calculate slotCount as max of variant payload sizes
+    uint16_t maxSlots = 0;
+    for (auto const& v: type->variants)
+        maxSlots = std::max(maxSlots, static_cast<uint16_t>(v.payloadSlots));
+    type->slotCount = maxSlots;
+
+    // Update _nextId to stay ahead of the assigned ID
+    if (type->id >= _nextId)
+        _nextId = type->id + 1;
+
+    return addType(std::move(type));
+}
+
 TypeDescriptor* TypeRegistry::registerFunctionType(std::string name, uint16_t captureCount)
 {
     auto type = std::make_unique<TypeDescriptor>();

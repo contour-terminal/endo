@@ -2432,6 +2432,20 @@ class IRProgram
         return _customProductTypes;
     }
 
+    /// Describes a custom sum type (discriminated union) to be registered at target code generation time.
+    struct CustomSumType
+    {
+        std::string name;
+        std::vector<VariantInfo> variants;
+        uint16_t assignedId; ///< Pre-assigned type ID used in OALLOC instructions
+    };
+
+    /// Registers a custom sum type definition to be carried through to the ConstantPool's TypeRegistry.
+    void addCustomSumType(CustomSumType def) { _customSumTypes.push_back(std::move(def)); }
+
+    /// Returns all custom sum type definitions.
+    [[nodiscard]] std::vector<CustomSumType> const& customSumTypes() const { return _customSumTypes; }
+
     /// Allocates the next available custom type ID (starting after builtins).
     [[nodiscard]] uint16_t allocateCustomTypeId() { return _nextCustomTypeId++; }
 
@@ -2450,6 +2464,7 @@ class IRProgram
     std::vector<std::unique_ptr<IRBuiltinHandler>> _builtinHandlers;
     std::vector<std::unique_ptr<IRHandler>> _handlers;
     std::vector<CustomProductType> _customProductTypes;
+    std::vector<CustomSumType> _customSumTypes;
     uint16_t _nextCustomTypeId = BuiltinTypeId::List + 1; ///< Next type ID for custom types
 
     friend class IRBuilder;

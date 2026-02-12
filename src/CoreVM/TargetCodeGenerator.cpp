@@ -46,6 +46,17 @@ std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
         _cp.typeRegistry().registerProductType(std::move(type));
     }
 
+    // Register custom sum types (discriminated unions) in the TypeRegistry before code generation
+    for (auto const& customType: programIR->customSumTypes())
+    {
+        auto type = std::make_unique<TypeDescriptor>();
+        type->kind = TypeKind::Sum;
+        type->id = customType.assignedId;
+        type->name = customType.name;
+        type->variants = customType.variants;
+        _cp.typeRegistry().registerSumType(std::move(type));
+    }
+
     // generate target code for global scope initialization, if any
     IRHandler* init = programIR->findHandler(GLOBAL_SCOPE_INIT_NAME);
     if (init != nullptr)
