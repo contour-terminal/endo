@@ -362,6 +362,12 @@ std::unique_ptr<ast::Statement> Parser::parseFor()
         return parseForCStyle();
     }
 
+    // Check for F#-style for-in with pattern destructuring: for (x, y) in expr do body done
+    if (_lexer.currentToken() == Token::RndOpen || _lexer.currentToken() == Token::BraceOpen)
+    {
+        return parseForIn();
+    }
+
     // List-based: for var in list; do ...; done
     return parseForList();
 }
@@ -412,6 +418,63 @@ std::unique_ptr<ast::ForListStmt> Parser::parseForList()
     consumeDirective("done");
 
     return std::make_unique<ast::ForListStmt>(std::move(variable), std::move(items), std::move(body));
+}
+
+std::unique_ptr<ast::ForInStmt> Parser::parseForIn()
+{
+    TRACE_SCOPE("parseForIn");
+
+    // Enter F# mode for pattern and source expression parsing
+    _lexer.enterFSharpExpr();
+
+    // Parse the destructuring pattern (tuple or record)
+    auto pat = parsePrimaryPattern();
+    if (!pat)
+    {
+        _lexer.leaveFSharpExpr();
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a pattern for the for-in loop" },
+                                           currentContextSnippet(),
+                                           "Expected pattern after 'for', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    // Expect 'in' keyword
+    if (!_lexer.isDirective("in"))
+    {
+        _lexer.leaveFSharpExpr();
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Use 'in' to specify the list to iterate over" },
+                                           currentContextSnippet(),
+                                           "Expected 'in' after pattern, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume 'in'
+
+    // Parse source expression (already in F# mode)
+    auto source = parseFSharpExpr();
+    _lexer.leaveFSharpExpr();
+
+    if (!source)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide an expression to iterate over" },
+                                           currentContextSnippet(),
+                                           "Expected expression after 'in'");
+        return nullptr;
+    }
+
+    // Optional separator before 'do' — F# style allows `for pat in expr do` without semicolon
+    if (_lexer.currentToken() == Token::Semicolon || _lexer.currentToken() == Token::LineFeed)
+        _lexer.nextToken();
+    consumeDirective("do");
+
+    auto body = parseBlock("forInBody");
+    consumeDirective("done");
+
+    return std::make_unique<ast::ForInStmt>(std::move(pat), std::move(source), std::move(body));
 }
 
 std::unique_ptr<ast::ForCStyleStmt> Parser::parseForCStyle()
@@ -2456,7 +2519,7 @@ bool Parser::isFSharpPrimary() const noexcept
             if (lit.empty())
                 return false;
             // Contextual keywords that should not be treated as primary expressions
-            if (lit == "in" || lit == "then" || lit == "else")
+            if (lit == "in" || lit == "then" || lit == "else" || lit == "do")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols

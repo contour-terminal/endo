@@ -4956,3 +4956,59 @@ TEST_CASE("IRGenerator.FSharp.option_default_find_found")
     // find returns Some when element found — ?| unwraps
     CHECK(executesWithOutput("print (find (fun x -> x > 1) [1;2;3] ?| -1)", "2"));
 }
+
+// ============================================================================
+// For-in with pattern destructuring
+
+TEST_CASE("IRGenerator.FSharp.for_in_tuple_destructure")
+{
+    CHECK(executesWithOutput("for (x, y) in [(1, 2); (3, 4)] do\nprint x\ndone", "13"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_tuple_both")
+{
+    CHECK(executesWithOutput(
+        "let mut r = 0\nfor (x, y) in [(1, 2); (3, 4)] do\nr <- r + x + y\ndone\nprint r", "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_wildcard")
+{
+    CHECK(executesWithOutput("for (x, _) in [(1, 2); (3, 4)] do\nprint x\ndone", "13"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_empty_list")
+{
+    // Empty list — body never executes
+    CHECK(executesWithOutput("for (x, y) in [] do\nprint x\ndone", ""));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_accumulator")
+{
+    CHECK(executesWithOutput(
+        "let mut sum = 0\nfor (x, _) in [(1, 10); (2, 20); (3, 30)] do\nsum <- sum + x\ndone\nprint sum",
+        "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_three_elements")
+{
+    // Iterates through all 3 elements
+    CHECK(executesWithOutput(
+        "let mut sum = 0\nfor (x, _) in [(10, 0); (20, 0); (30, 0)] do\nsum <- sum + x\ndone\nprint sum",
+        "60"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_second_element")
+{
+    // Access second tuple element
+    CHECK(executesWithOutput("for (_, y) in [(1, 2); (3, 4)] do\nprint y\ndone", "24"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_single_element")
+{
+    CHECK(executesWithOutput("for (x, y) in [(42, 7)] do\nprint x\nprint y\ndone", "427"));
+}
+
+TEST_CASE("IRGenerator.FSharp.for_in_simple_variable")
+{
+    CHECK(executesWithOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\ndone", "102030"));
+}

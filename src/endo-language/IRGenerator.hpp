@@ -134,6 +134,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::ProgramCall const& node) override;
     void visit(ast::SubstitutionExpr const& node) override;
     void visit(ast::WhileStmt const& node) override;
+    void visit(ast::ForInStmt const& node) override;
     void visit(ast::ForListStmt const& node) override;
     void visit(ast::ForCStyleStmt const& node) override;
     void visit(ast::CaseStmt const& node) override;

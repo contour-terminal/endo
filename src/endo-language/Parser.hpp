@@ -50,6 +50,7 @@ class Parser
     std::unique_ptr<ast::WhileStmt> parseWhile();
     std::unique_ptr<ast::Statement> parseFor();
     std::unique_ptr<ast::ForListStmt> parseForList();
+    std::unique_ptr<ast::ForInStmt> parseForIn();
     std::unique_ptr<ast::ForCStyleStmt> parseForCStyle();
     std::unique_ptr<ast::CaseStmt> parseCase();
     [[nodiscard]] bool isFunctionDefinition() const noexcept;

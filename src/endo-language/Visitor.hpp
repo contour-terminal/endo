@@ -29,6 +29,7 @@ struct ContinueStmt;
 struct FStringExpr;
 struct FileDescriptor;
 struct ForCStyleStmt;
+struct ForInStmt;
 struct ForListStmt;
 struct FunctionDefStmt;
 struct GlobExpr;
@@ -107,6 +108,7 @@ struct Visitor
     virtual void visit(CompoundStmt const&) = 0;
     virtual void visit(ContinueStmt const&) = 0;
     virtual void visit(ForCStyleStmt const&) = 0;
+    virtual void visit(ForInStmt const&) = 0;
     virtual void visit(ForListStmt const&) = 0;
     virtual void visit(FunctionDefStmt const&) = 0;
     virtual void visit(IfStmt const&) = 0;

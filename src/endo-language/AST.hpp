@@ -773,6 +773,29 @@ struct ForListStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// For-in statement with pattern destructuring: `for pattern in expr do body done`
+///
+/// Iterates over a typed list, destructuring each element with a pattern.
+/// Examples:
+/// - `for x in [1; 2; 3] do print x done`
+/// - `for (name, value) in entries do print name done`
+/// - `for { host; port } in servers do ping host done`
+struct ForInStmt final: public Statement
+{
+    std::unique_ptr<pattern::Pattern> pattern; ///< Binding pattern
+    std::unique_ptr<Expr> source;              ///< Source list expression
+    std::unique_ptr<Statement> body;           ///< Loop body
+
+    ForInStmt(std::unique_ptr<pattern::Pattern> pat,
+              std::unique_ptr<Expr> src,
+              std::unique_ptr<Statement> bodyStmt):
+        pattern(std::move(pat)), source(std::move(src)), body(std::move(bodyStmt))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// C-style for statement: `for ((init; cond; step)); do ...; done`
 ///
 /// Traditional C-style for loop with arithmetic expressions.

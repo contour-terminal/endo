@@ -1380,8 +1380,8 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
         || dynamic_cast<ast::ForListStmt const*>(&stmt) || dynamic_cast<ast::ForCStyleStmt const*>(&stmt)
         || dynamic_cast<ast::CaseStmt const*>(&stmt) || dynamic_cast<ast::FunctionDefStmt const*>(&stmt)
         || dynamic_cast<ast::LogicalAndStmt const*>(&stmt) || dynamic_cast<ast::LogicalOrStmt const*>(&stmt)
-        || dynamic_cast<ast::BreakStmt const*>(&stmt) || dynamic_cast<ast::ContinueStmt const*>(&stmt)
-        || dynamic_cast<ast::ReturnStmt const*>(&stmt))
+        || dynamic_cast<ast::ForInStmt const*>(&stmt) || dynamic_cast<ast::BreakStmt const*>(&stmt)
+        || dynamic_cast<ast::ContinueStmt const*>(&stmt) || dynamic_cast<ast::ReturnStmt const*>(&stmt))
     {
         return subst;
     }

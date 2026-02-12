@@ -196,6 +196,17 @@ void ASTPrinter::visit(WhileStmt const& node)
     _result += "done";
 }
 
+void ASTPrinter::visit(ForInStmt const& node)
+{
+    _result += "for ";
+    _result += pattern::toString(*node.pattern);
+    _result += " in ";
+    node.source->accept(*this);
+    _result += " do ";
+    _result += print(*node.body);
+    _result += " done";
+}
+
 void ASTPrinter::visit(ForListStmt const& node)
 {
     _result += "for ";

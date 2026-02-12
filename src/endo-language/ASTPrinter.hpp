@@ -35,6 +35,7 @@ class ASTPrinter: public Visitor
     void visit(CompoundStmt const& node) override;
     void visit(IfStmt const& node) override;
     void visit(WhileStmt const& node) override;
+    void visit(ForInStmt const& node) override;
     void visit(ForListStmt const& node) override;
     void visit(ForCStyleStmt const& node) override;
     void visit(CaseStmt const& node) override;

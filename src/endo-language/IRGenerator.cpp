@@ -2031,6 +2031,130 @@ void IRGenerator::visit(ast::WhileStmt const& node)
     _builder.setInsertPoint(end);
 }
 
+void IRGenerator::visit(ast::ForInStmt const& node)
+{
+    TRACE_SCOPE("visit(ForInStmt)");
+
+    // for pattern in source_list do body done
+    //
+    // IR pattern:
+    //   forin.init: srcStorage = codegen(source)
+    //   forin.cond: if OGETTAG(srcStorage) == 1 (Cons) goto forin.body else goto forin.end
+    //   forin.body: head = OGETSLOT(srcStorage, 0)
+    //              tail = OGETSLOT(srcStorage, 1)
+    //              srcStorage = tail
+    //              destructure head via PatternIRGenerator
+    //              execute body
+    //              goto forin.cond
+    //   forin.end:  (continue after loop)
+
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
+    // Evaluate source expression
+    auto* sourceVal = codegen(node.source.get());
+    if (!sourceVal)
+    {
+        reportTypeError("Failed to evaluate for-in source expression");
+        return;
+    }
+
+    // Store source in alloca for iteration
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "forin.src");
+    _builder.createStore(srcStorage, sourceVal);
+
+    // Pre-allocate binding allocas for all pattern variables
+    auto bindingNames = pattern::collectBindings(*node.pattern);
+    std::unordered_map<std::string, CoreVM::AllocaInstr*> bindingStorage;
+    for (auto const& name: bindingNames)
+    {
+        auto* alloca = createAllocaInEntryBlock(CoreVM::LiteralType::Void, name);
+        bindingStorage[name] = alloca;
+    }
+
+    // Alloca for head element storage (used by PatternIRGenerator)
+    auto* headStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "forin.head");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("forin.cond");
+    auto* bodyBlock = _builder.createBlock("forin.body");
+    auto* destructureOk = _builder.createBlock("forin.destructure.ok");
+    auto* destructureFail = _builder.createBlock("forin.destructure.fail");
+    auto* endBlock = _builder.createBlock("forin.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if source list is Cons (tag == 1)
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "forin.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "forin.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "forin.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head and tail, destructure head, execute body
+    _builder.setInsertPoint(bodyBlock);
+
+    // Extract head (separate load to avoid multi-use)
+    auto* srcForHead = _builder.createLoad(srcStorage, "forin.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "forin.head");
+    _builder.createStore(headStorage, head);
+
+    // Advance cursor: extract tail and store back (separate load)
+    auto* srcForTail = _builder.createLoad(srcStorage, "forin.src.for_tail");
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "forin.tail");
+    _builder.createStore(srcStorage, tail);
+
+    // Reload head from storage for PatternIRGenerator (avoid multi-use of raw ObjGetSlot result)
+    auto* headReloaded = _builder.createLoad(headStorage, "forin.head.reload");
+
+    // Destructure head using PatternIRGenerator
+    PatternIRGenerator patternGen(_builder);
+    patternGen.setBindingStorage(bindingStorage);
+
+    // Set record field offsets if the head is a known record type
+    if (auto objTypeId = getObjectTypeId(head))
+    {
+        for (auto const& [typeName, recInfo]: _recordTypes)
+        {
+            if (recInfo.typeId == *objTypeId)
+            {
+                std::unordered_map<std::string, uint8_t> fieldOffsets;
+                for (auto const& field: recInfo.fields)
+                    fieldOffsets[field.name] = field.offset;
+                patternGen.setRecordFieldOffsets(std::move(fieldOffsets));
+                break;
+            }
+        }
+    }
+
+    patternGen.compile(*node.pattern, headReloaded, headStorage, destructureOk, destructureFail);
+
+    // Fail block: runtime pattern match failure
+    _builder.setInsertPoint(destructureFail);
+    _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
+
+    // Success block: bind variables, execute body
+    _builder.setInsertPoint(destructureOk);
+
+    pushFSharpScope();
+    for (auto const& name: bindingNames)
+        bindFSharpVariable(name, bindingStorage[name]);
+
+    pushLoopContext(condBlock, endBlock);
+    codegen(node.body.get());
+    popLoopContext();
+    popFSharpScope();
+
+    // Only branch back to condition if body wasn't terminated (by break/continue/return)
+    if (_builder.getInsertPoint() && !_builder.getInsertPoint()->getTerminator())
+        _builder.createBr(condBlock);
+
+    // End block: continue after loop
+    _builder.setInsertPoint(endBlock);
+    _result = nullptr;
+}
+
 void IRGenerator::visit(ast::ForListStmt const& node)
 {
     // for var in item1 item2 ...; do body; done

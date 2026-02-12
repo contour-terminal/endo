@@ -164,7 +164,7 @@ This document tracks the implementation status of F# language features as define
 - [x] While loops
 - [x] For-in loops
 - [x] Break and continue
-- [ ] For loops with destructuring: `for (name, value) in entries do ... done`
+- [x] For loops with destructuring: `for (name, value) in entries do ... done`
 
 ## Standard Library Builtins
 
@@ -276,7 +276,7 @@ Consult this section to determine what to work on next.
 - [ ] Optional chaining `?.` — desugar to match on Option
 - [x] Option default `?|` — desugar to match with default value
 - [ ] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` as builtins
-- [ ] For loop destructuring: `for (name, value) in entries do ... done`
+- [x] For loop destructuring: `for (name, value) in entries do ... done`
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [ ] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
