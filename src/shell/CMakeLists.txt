@@ -58,6 +58,11 @@ add_library(endo-shell STATIC
     StructuredCommand.hpp
     PsCommand.hpp
     PsCommand.cpp
+    OutputDefinition.hpp
+    OutputDefinitionRegistry.hpp
+    OutputDefinitionRegistry.cpp
+    OutputParser.hpp
+    OutputParser.cpp
 )
 
 # Platform-specific implementations
@@ -75,6 +80,12 @@ else()
     target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
 endif()
 
+target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json)
+
+target_compile_definitions(endo-shell PRIVATE
+    ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+)
+
 if(ENDO_TRACE_VM)
   target_compile_definitions(endo-shell PUBLIC ENDO_TRACE_VM)
 endif()
@@ -88,11 +99,16 @@ target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
 add_executable(test-endo-shell
     test_main.cpp
     FSharpCompleter_test.cpp
+    OutputDefinitionRegistry_test.cpp
+    OutputParser_test.cpp
     Shell_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp
 )
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
+target_compile_definitions(test-endo-shell PRIVATE
+    ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+)
 
 add_test(NAME test-endo-shell COMMAND test-endo-shell)
 

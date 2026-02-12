@@ -582,10 +582,17 @@ Value* IRBuilder::createSAdd(Value* lhs, Value* rhs, const std::string& name)
     return insert<SAddInstr>(lhs, rhs, makeName(name));
 }
 
+// String comparison assertions: at least one operand must be String.
+// Void/Object types are allowed because ObjGetSlot returns Void for string-typed record fields
+// at the IR level, even though the runtime value is a CoreString* pointer.
+static bool isStringCompatible(LiteralType t)
+{
+    return t == LiteralType::String || t == LiteralType::Void || t == LiteralType::Object;
+}
+
 Value* IRBuilder::createSCmpEQ(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))
@@ -596,8 +603,7 @@ Value* IRBuilder::createSCmpEQ(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSCmpNE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))
@@ -608,8 +614,7 @@ Value* IRBuilder::createSCmpNE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSCmpLE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))
@@ -620,8 +625,7 @@ Value* IRBuilder::createSCmpLE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSCmpGE(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))
@@ -632,8 +636,7 @@ Value* IRBuilder::createSCmpGE(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSCmpLT(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))
@@ -644,8 +647,7 @@ Value* IRBuilder::createSCmpLT(Value* lhs, Value* rhs, const std::string& name)
 
 Value* IRBuilder::createSCmpGT(Value* lhs, Value* rhs, const std::string& name)
 {
-    assert(lhs->type() == rhs->type());
-    assert(lhs->type() == LiteralType::String);
+    assert(isStringCompatible(lhs->type()) && isStringCompatible(rhs->type()));
 
     if (auto* a = dynamic_cast<ConstantString*>(lhs))
         if (auto* b = dynamic_cast<ConstantString*>(rhs))

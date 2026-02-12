@@ -68,6 +68,26 @@ struct FSharpPersistentState
 
     /// Record type field info for completion (type name -> field info with types).
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> recordTypeFields;
+
+    /// Output definition record type metadata (type name -> fields + ID).
+    struct OutputDefRecordType
+    {
+        uint16_t typeId;
+        std::vector<CoreVM::FieldInfo> fields;
+    };
+
+    std::unordered_map<std::string, OutputDefRecordType> outputDefinitionTypes;
+
+    /// Structured command name -> metadata (for IRGenerator lookup).
+    struct StructuredCommandInfo
+    {
+        std::string builtinCallbackName; ///< e.g., "structured_docker_ps"
+        uint16_t recordTypeId;           ///< List element type ID
+        std::string recordTypeName;      ///< For _recordTypes lookup
+    };
+
+    /// Key format: "docker\0ps" (command + NUL + args joined by NUL)
+    std::unordered_map<std::string, StructuredCommandInfo> structuredCommands;
 };
 
 /// Generates IR code from an AST.
@@ -136,6 +156,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::BuiltinWhichStmt const& node) override;
     void visit(ast::OutputRedirect const& node) override;
     void visit(ast::ProgramCall const& node) override;
+    void visit(ast::StructuredPipelineSourceExpr const& node) override;
     void visit(ast::SubstitutionExpr const& node) override;
     void visit(ast::WhileStmt const& node) override;
     void visit(ast::ForInStmt const& node) override;

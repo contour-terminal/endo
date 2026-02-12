@@ -640,6 +640,20 @@ struct SubstitutionExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Shell command whose output feeds a structured F# pipeline.
+///
+/// Created when a shell command is followed by the |> operator.
+/// The IRGenerator checks output definitions and either generates a
+/// structured command callback or falls back to command substitution.
+struct StructuredPipelineSourceExpr final: public Expr
+{
+    std::unique_ptr<Statement> command; ///< The shell command to execute
+
+    explicit StructuredPipelineSourceExpr(std::unique_ptr<Statement> cmd): command(std::move(cmd)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Process substitution: `<(command)` or `>(command)`
 ///
 /// This is a bashism, but it's useful for endo.

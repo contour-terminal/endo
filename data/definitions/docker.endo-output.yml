@@ -1,0 +1,34 @@
+command: "docker"
+variants:
+  - name: "ps"
+    matches:
+      - ["ps"]
+      - ["ps", "-a"]
+    priority: 10
+    command_to_run: "docker ps --format json"
+    parser:
+      type: "json"
+      format: "lines"
+    schema:
+      - { name: "id", source_key: "ID", type: "string" }
+      - { name: "image", source_key: "Image", type: "string" }
+      - { name: "command", source_key: "Command", type: "string" }
+      - { name: "created", source_key: "CreatedAt", type: "string" }
+      - { name: "status", source_key: "Status", type: "string" }
+      - { name: "ports", source_key: "Ports", type: "string" }
+      - { name: "names", source_key: "Names", type: "string" }
+
+  - name: "images"
+    matches:
+      - ["images"]
+    priority: 10
+    command_to_run: "docker images --format json"
+    parser:
+      type: "json"
+      format: "lines"
+    schema:
+      - { name: "id", source_key: "ID", type: "string" }
+      - { name: "repository", source_key: "Repository", type: "string" }
+      - { name: "tag", source_key: "Tag", type: "string" }
+      - { name: "created", source_key: "CreatedAt", type: "string" }
+      - { name: "size", source_key: "Size", type: "string" }

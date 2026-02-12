@@ -15,6 +15,11 @@ namespace endo::ast
 class Statement;
 }
 
+namespace endo
+{
+struct FSharpPersistentState;
+}
+
 namespace endo::test
 {
 
@@ -169,5 +174,20 @@ std::string executeSessionAndGetOutput(std::vector<std::string> const& prompts);
 
 /// Returns true if the last prompt in a session produces the expected output.
 bool sessionProducesOutput(std::vector<std::string> const& prompts, std::string_view expectedOutput);
+
+// =============================================================================
+// Structured pipeline test helpers (Output Recognition Files)
+// =============================================================================
+
+/// Creates a FSharpPersistentState pre-populated with mock structured command metadata.
+/// Includes: DockerPsRecord, DockerImagesRecord, GitLogRecord, GitStatusRecord.
+FSharpPersistentState createMockStructuredState();
+
+/// Executes source code with pre-populated structured command state.
+/// Uses the same parse->IR->codegen->run pipeline but passes structured command persistent state.
+ExecutionResult executeSourceWithStructuredState(std::string const& source);
+
+/// Returns true if source with structured state produces expected output.
+bool structuredExecutesWithOutput(std::string const& source, std::string_view expectedOutput);
 
 } // namespace endo::test

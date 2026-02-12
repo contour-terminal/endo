@@ -69,21 +69,23 @@ This new milestone will focus on building the infrastructure and features requir
 
 **Tasks:**
 
-1.  **YAML Definition File Format:**
+1.  **YAML Definition File Format:** *(done)*
     *   Define the `command.endo-output.yml` format for declaring how to parse command output.
-    *   Support three parser types: `json` (preferred for reliability), `table` (column-oriented), and `regex` (fallback for complex formats).
+    *   Support two parser types: `json` (NDJSON/array) and `fields` (delimited fields). `table` and `regex` deferred to future work.
     *   Support variant matching by command arguments with a priority system for selecting the best parser when multiple variants match.
     *   Support `command_to_run` override to redirect commands to structured-output flags (e.g., running `docker ps --format json` when the user types `docker ps`).
 
-2.  **Definition File Search Paths:**
+2.  **Definition File Search Paths:** *(done)*
     *   User-specific: `~/.config/endo/definitions/`
     *   System-wide: `/usr/share/endo/definitions/` (or platform equivalent)
     *   Bundled defaults: shipped with Endo for common commands (`docker`, `git`)
     *   Builtin commands (e.g. `ps`, `ls`, `du`, `df`, `ifconfig`, `netstat`) to have hardcoded definitions for their structured output, eliminating the need for external files as well as enabling these commands to always work on every platform (including Windows).
 
-3.  **Pipeline Integration:**
-    *   When a command appears in a pipeline and a matching definition file exists, automatically parse the output into a stream of structured records.
+3.  **Pipeline Integration:** *(done)*
+    *   When a command appears in a pipeline (`|>`) and a matching definition file exists, automatically parse the output into a stream of structured records.
     *   Select the best-matching variant based on the user's arguments and variant priority.
+    *   New AST node `StructuredPipelineSourceExpr` bridges shell commands to F# pipelines.
+    *   Supports `filter`, `map`, `take`, `exists`, `find`, `contains`, `startsWith`, `endsWith` in pipelines.
 
 4.  **Community Definition Library:**
     *   Establish a shareable repository of definition files that users can contribute to and install from.

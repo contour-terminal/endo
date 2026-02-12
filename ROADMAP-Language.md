@@ -130,6 +130,7 @@ This document tracks the implementation status of F# language features as define
 ### Pipe Operators
 - [x] Forward pipe: `|>` (data |> func)
 - [x] Shell pipe: `|` (cmd1 | cmd2)
+- [x] Structured pipeline: shell command `|>` F# pipeline with output recognition files
 
 ### Composition
 - [x] Forward: `>>`
@@ -293,6 +294,17 @@ Consult this section to determine what to work on next.
 - [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` (module-qualified + method-style + pipeline)
 - [x] For loop destructuring: `for (name, value) in entries do ... done`
 - [ ] Numeric literal suffixes: byte sizes (`kb`, `mb`, `gb`, `tb`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time
+
+### Phase 6.3a — Output Recognition Files
+- [x] YAML definition file format (`command.endo-output.yml`) with JSON and fields parser types
+- [x] Output definition registry with variant matching by command arguments and priority
+- [x] JSON output parser (NDJSON lines and JSON array formats)
+- [x] Delimited-fields output parser (e.g., NUL-separated, space-separated with max_fields)
+- [x] `StructuredPipelineSourceExpr` AST node bridging shell commands to F# pipelines
+- [x] Pipeline partial application for `contains`, `startsWith`, `endsWith`
+- [x] String comparison in F# expressions via SCmpXX instructions
+- [x] Shell integration: load definitions, register callbacks, spawn commands
+- [x] Bundled definitions for `docker ps`, `docker images`, `git log`, `git status`
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`

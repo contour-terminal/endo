@@ -184,6 +184,22 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreNumber>("count")
         .returnType(CoreVM::LiteralType::String)
         .bind(dummyHandler);
+
+    // Output definition structured command stubs
+    runtime.registerFunction("structured_docker_ps")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("structured_docker_images")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("structured_git_log").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("structured_git_status")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    // Command substitution builtins (needed for structured pipeline fallback)
+    runtime.registerFunction("internal.subst_start").returnType(CoreVM::LiteralType::Void).bind(dummyHandler);
+    runtime.registerFunction("internal.subst_end").returnType(CoreVM::LiteralType::String).bind(dummyHandler);
 }
 
 } // namespace endo

@@ -26,6 +26,7 @@
 
 #include "Error.hpp"
 #include "LinuxProcessProvider.hpp"
+#include "OutputParser.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
@@ -563,6 +564,66 @@ Shell::Shell(TTY& tty, Environment& env):
         { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
     };
+
+    // Load output definition files for structured pipelines
+#if defined(ENDO_DEFINITIONS_DIR)
+    _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR);
+#endif
+    if (auto const* home = std::getenv("HOME"))
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(home) / ".config" / "endo"
+                                             / "definitions");
+
+    // Register output definition types and structured commands in persistent state
+    {
+        uint16_t nextTypeId = CoreVM::BuiltinTypeId::OutputDefBase;
+        for (auto& def: const_cast<std::vector<OutputDefinition>&>(_outputDefinitions.definitions()))
+        {
+            for (auto& variant: def.variants)
+            {
+                variant.assignedTypeId = nextTypeId;
+
+                // Register record type in persistent state
+                FSharpPersistentState::OutputDefRecordType defType;
+                defType.typeId = nextTypeId;
+                for (size_t i = 0; i < variant.schema.size(); ++i)
+                {
+                    defType.fields.push_back(CoreVM::FieldInfo {
+                        variant.schema[i].name,
+                        static_cast<uint8_t>(i),
+                        variant.schema[i].type,
+                    });
+                }
+                _fsharpState.outputDefinitionTypes[variant.recordTypeName] = std::move(defType);
+
+                // Register structured command lookup
+                for (auto const& matchPattern: variant.matches)
+                {
+                    std::string key = def.command;
+                    for (auto const& arg: matchPattern)
+                    {
+                        key += '\0';
+                        key += arg;
+                    }
+                    _fsharpState.structuredCommands[key] = {
+                        .builtinCallbackName = "structured_" + variant.fsharpName,
+                        .recordTypeId = nextTypeId,
+                        .recordTypeName = variant.recordTypeName,
+                    };
+                }
+
+                // Register record type fields for completion
+                std::vector<RecordFieldInfo> fieldInfos;
+                for (auto const& field: variant.schema)
+                    fieldInfos.push_back({ field.name,
+                                           field.type == CoreVM::LiteralType::Number    ? "int"
+                                           : field.type == CoreVM::LiteralType::Boolean ? "bool"
+                                                                                        : "string" });
+                _fsharpState.recordTypeFields[variant.recordTypeName] = std::move(fieldInfos);
+
+                ++nextTypeId;
+            }
+        }
+    }
 
     // Initialize completion system
     completer = std::make_unique<Completer>(_env, history, _fsharpState);
@@ -1663,6 +1724,71 @@ void Shell::registerBuiltinFunctions()
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });
+
+    // Register structured command callbacks for output definitions
+    for (auto const& def: _outputDefinitions.definitions())
+    {
+        for (auto const& variant: def.variants)
+        {
+            auto const callbackName = "structured_" + variant.fsharpName;
+            auto const* variantPtr = &variant;
+            auto const command = def.command;
+
+            _runtime.registerFunction(callbackName)
+                .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+                .bind([this, variantPtr, command](CoreVM::Params& args) {
+                    // Build the command to run
+                    auto const& cmd = variantPtr->commandToRun.value_or(command);
+
+                    // Execute the command and capture stdout via pipe
+                    auto pipeResult = createPipe();
+                    if (!pipeResult.has_value())
+                    {
+                        auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                        nil->tag = 0;
+                        args.setResult(
+                            static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
+                        return;
+                    }
+                    auto& pipe = pipeResult.value();
+
+                    SpawnConfig config;
+                    config.program = "/bin/sh";
+                    config.arguments = { "sh", "-c", cmd };
+                    config.stdinFd = _tty.inputFd();
+                    config.stdoutFd = pipe->writer();
+                    config.stderrFd = 2; // Keep stderr
+
+                    auto pidResult = _processManager.spawn(config);
+                    pipe->closeWriter();
+
+                    // Read all output
+                    std::string output;
+                    char buf[4096];
+                    while (true)
+                    {
+                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        if (n <= 0)
+                            break;
+                        output.append(buf, static_cast<size_t>(n));
+                    }
+                    pipe->closeReader();
+
+                    if (pidResult.has_value())
+                        (void) _processManager.wait(*pidResult);
+
+                    // Parse the output into structured records
+                    CoreVM::TypedObject* result = nullptr;
+                    if (variantPtr->parser.type == ParserConfig::Type::Json)
+                        result = OutputParser::parseJson(*args.caller(), output, *variantPtr);
+                    else
+                        result = OutputParser::parseFields(*args.caller(), output, *variantPtr);
+
+                    args.setResult(
+                        static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+                });
+        }
+    }
 
     // clang-format on
 }

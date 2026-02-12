@@ -1,0 +1,289 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <CoreVM/CoreVM.hpp>
+#include <CoreVM/types/TypeDescriptor.hpp>
+#include <CoreVM/types/TypedObject.hpp>
+
+#include <catch2/catch_test_macros.hpp>
+
+#include "OutputParser.hpp"
+
+using namespace endo;
+
+namespace
+{
+/// Helper to create a minimal OutputVariant for testing.
+OutputVariant makeJsonVariant(std::vector<OutputFieldSchema> schema, uint16_t typeId = 100)
+{
+    OutputVariant v;
+    v.assignedTypeId = typeId;
+    v.parser.type = ParserConfig::Type::Json;
+    v.parser.format = ParserConfig::Format::Lines;
+    v.schema = std::move(schema);
+    return v;
+}
+
+OutputVariant makeFieldsVariant(std::vector<OutputFieldSchema> schema,
+                                std::string separator,
+                                std::optional<int> maxFields = {},
+                                uint16_t typeId = 100)
+{
+    OutputVariant v;
+    v.assignedTypeId = typeId;
+    v.parser.type = ParserConfig::Type::Fields;
+    v.parser.format = ParserConfig::Format::Lines;
+    v.parser.fieldSeparator = std::move(separator);
+    v.parser.maxFields = maxFields;
+    v.schema = std::move(schema);
+    return v;
+}
+
+/// Helper: counts elements in a cons-cell list.
+size_t listLength(CoreVM::TypedObject* list)
+{
+    size_t count = 0;
+    while (list && list->tag == 1)
+    {
+        ++count;
+        list = reinterpret_cast<CoreVM::TypedObject*>(list->getSlot(1));
+    }
+    return count;
+}
+
+/// Helper: gets the Nth element from a cons-cell list.
+CoreVM::TypedObject* listAt(CoreVM::TypedObject* list, size_t index)
+{
+    size_t i = 0;
+    while (list && list->tag == 1)
+    {
+        if (i == index)
+            return reinterpret_cast<CoreVM::TypedObject*>(list->getSlot(0));
+        ++i;
+        list = reinterpret_cast<CoreVM::TypedObject*>(list->getSlot(1));
+    }
+    return nullptr;
+}
+
+/// Helper: gets a string from a record slot.
+std::string getStringSlot(CoreVM::TypedObject* record, uint8_t slot)
+{
+    auto* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(record->getSlot(slot)));
+    return str ? std::string(*str) : "";
+}
+
+/// Minimal runtime setup for OutputParser tests.
+struct TestParserRuntime
+{
+    CoreVM::Runtime runtime;
+    CoreVM::diagnostics::BufferedReport report;
+    std::unique_ptr<CoreVM::IRProgram> irProgram;
+    std::unique_ptr<CoreVM::Program> compiledProgram;
+
+    /// Constructs a minimal program with custom product types registered.
+    /// @param typeRegistrations Map of typeId → (name, slotCount) for types used by tests.
+    explicit TestParserRuntime(std::vector<std::tuple<uint16_t, std::string, uint8_t>> typeRegistrations = {})
+    {
+        // Create a minimal program with a handler so we can create a Runner
+        runtime.registerFunction("noop").returnType(CoreVM::LiteralType::Void).bind([](CoreVM::Params&) {});
+
+        CoreVM::IRBuilder builder;
+        builder.setProgram(std::make_unique<CoreVM::IRProgram>());
+
+        // Register custom product types so TargetCodeGenerator adds them to the type registry
+        for (auto const& [typeId, name, slotCount]: typeRegistrations)
+        {
+            CoreVM::IRProgram::CustomProductType customType;
+            customType.name = name;
+            customType.assignedId = typeId;
+            for (uint8_t i = 0; i < slotCount; ++i)
+                customType.fields.push_back({ "field" + std::to_string(i), i, CoreVM::LiteralType::String });
+            builder.program()->addCustomProductType(std::move(customType));
+        }
+
+        auto* handler = builder.program()->createHandler("@test");
+        builder.setHandler(handler);
+        builder.setInsertPoint(handler->createBlock("entry"));
+        builder.createRet(builder.get(CoreVM::CoreNumber(0)));
+
+        irProgram = builder.takeProgram();
+
+        CoreVM::TargetCodeGenerator codegen;
+        compiledProgram = codegen.generate(irProgram.get());
+        compiledProgram->link(&runtime, &report);
+    }
+
+    CoreVM::Runner createRunner()
+    {
+        auto* handler = compiledProgram->findHandler("@test");
+        CoreVM::Runner::Globals globals;
+        return CoreVM::Runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+    }
+};
+} // namespace
+
+TEST_CASE("OutputParser.json_lines")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 2 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "name", "Name", CoreVM::LiteralType::String },
+        { "value", "Value", CoreVM::LiteralType::String },
+    });
+
+    auto const input = R"({"Name":"foo","Value":"bar"}
+{"Name":"baz","Value":"qux"})";
+
+    auto* result = OutputParser::parseJson(runner, input, variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 2);
+
+    auto* first = listAt(result, 0);
+    REQUIRE(first != nullptr);
+    CHECK(getStringSlot(first, 0) == "foo");
+    CHECK(getStringSlot(first, 1) == "bar");
+
+    auto* second = listAt(result, 1);
+    REQUIRE(second != nullptr);
+    CHECK(getStringSlot(second, 0) == "baz");
+    CHECK(getStringSlot(second, 1) == "qux");
+}
+
+TEST_CASE("OutputParser.json_array")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 1 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "id", "ID", CoreVM::LiteralType::String },
+    });
+    variant.parser.format = ParserConfig::Format::Array;
+
+    auto const input = R"([{"ID":"abc"},{"ID":"def"}])";
+
+    auto* result = OutputParser::parseJson(runner, input, variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 2);
+}
+
+TEST_CASE("OutputParser.json_empty_input")
+{
+    TestParserRuntime rt;
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "name", "Name", CoreVM::LiteralType::String },
+    });
+
+    auto* result = OutputParser::parseJson(runner, "", variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 0); // Empty list
+    CHECK(result->tag == 0);        // Nil
+}
+
+TEST_CASE("OutputParser.json_malformed_lines_skipped")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 1 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "name", "Name", CoreVM::LiteralType::String },
+    });
+
+    auto const input = R"(not json
+{"Name":"good"}
+{bad json
+{"Name":"also good"})";
+
+    auto* result = OutputParser::parseJson(runner, input, variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 2); // Only the 2 valid lines
+}
+
+TEST_CASE("OutputParser.json_missing_fields_default")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 2 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "name", "Name", CoreVM::LiteralType::String },
+        { "value", "Value", CoreVM::LiteralType::String },
+    });
+
+    auto const input = R"({"Name":"only_name"})";
+
+    auto* result = OutputParser::parseJson(runner, input, variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 1);
+
+    auto* record = listAt(result, 0);
+    REQUIRE(record != nullptr);
+    CHECK(getStringSlot(record, 0) == "only_name");
+    CHECK(getStringSlot(record, 1) == ""); // Default empty string
+}
+
+TEST_CASE("OutputParser.json_int_field_parsing")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 2 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeJsonVariant({
+        { "count", "Count", CoreVM::LiteralType::Number },
+        { "name", "Name", CoreVM::LiteralType::String },
+    });
+
+    auto const input = R"({"Count":42,"Name":"test"})";
+
+    auto* result = OutputParser::parseJson(runner, input, variant);
+    REQUIRE(result != nullptr);
+    auto* record = listAt(result, 0);
+    REQUIRE(record != nullptr);
+    CHECK(static_cast<int64_t>(record->getSlot(0)) == 42);
+    CHECK(getStringSlot(record, 1) == "test");
+}
+
+TEST_CASE("OutputParser.fields_space_separated_max2")
+{
+    TestParserRuntime rt({ { 100, "TestRecord", 2 } });
+    auto runner = rt.createRunner();
+
+    auto variant = makeFieldsVariant(
+        {
+            { "status", "", CoreVM::LiteralType::String },
+            { "path", "", CoreVM::LiteralType::String },
+        },
+        " ",
+        2);
+
+    auto const input = "M src/main.cpp\n?? path with spaces\nA .gitignore\n";
+
+    auto* result = OutputParser::parseFields(runner, input, variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 3);
+
+    auto* first = listAt(result, 0);
+    REQUIRE(first != nullptr);
+    CHECK(getStringSlot(first, 0) == "M");
+    CHECK(getStringSlot(first, 1) == "src/main.cpp");
+
+    auto* second = listAt(result, 1);
+    REQUIRE(second != nullptr);
+    CHECK(getStringSlot(second, 0) == "??");
+    CHECK(getStringSlot(second, 1) == "path with spaces");
+}
+
+TEST_CASE("OutputParser.fields_empty_input")
+{
+    TestParserRuntime rt;
+    auto runner = rt.createRunner();
+
+    auto variant = makeFieldsVariant(
+        {
+            { "a", "", CoreVM::LiteralType::String },
+        },
+        "\t");
+
+    auto* result = OutputParser::parseFields(runner, "", variant);
+    REQUIRE(result != nullptr);
+    CHECK(listLength(result) == 0);
+    CHECK(result->tag == 0); // Nil
+}

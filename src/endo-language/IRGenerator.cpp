@@ -326,6 +326,27 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["ProcessInfo"] = std::move(processInfoType);
     }
 
+    // Pre-register output definition record types from persistent state.
+    if (persistentState)
+    {
+        for (auto const& [typeName, defType]: persistentState->outputDefinitionTypes)
+        {
+            RecordTypeInfo info;
+            info.typeId = defType.typeId;
+            info.name = typeName;
+            info.fields = defType.fields;
+            for (auto const& f: info.fields)
+                info.fieldTypes[f.name] = f.type;
+            generator._recordTypes[typeName] = std::move(info);
+
+            CoreVM::IRProgram::CustomProductType customType;
+            customType.name = typeName;
+            customType.fields = defType.fields;
+            customType.assignedId = defType.typeId;
+            generator._builder.program()->addCustomProductType(std::move(customType));
+        }
+    }
+
     // Run Hindley-Milner type inference pre-pass.
     // Inference errors are non-fatal: unresolved types simply remain unannotated
     // and fall back to AST inlining during codegen.
@@ -2016,6 +2037,97 @@ void IRGenerator::visit(ast::ProgramCall const& node)
         if (endCallback)
             _builder.createCallFunction(_builder.getBuiltinFunction(*endCallback), {}, "redirect_end");
     }
+}
+
+namespace
+{
+    /// Builds a structured command lookup key from command name and arguments.
+    /// Format: "docker\0ps" (command + NUL + args joined by NUL).
+    std::string makeStructuredCommandKey(std::string const& command, std::vector<std::string> const& args)
+    {
+        std::string key = command;
+        for (auto const& arg: args)
+        {
+            key += '\0';
+            key += arg;
+        }
+        return key;
+    }
+} // namespace
+
+void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
+{
+    // Try to match against output definitions from persistent state
+    if (_persistentState && node.command)
+    {
+        if (auto const* call = dynamic_cast<ast::ProgramCall const*>(node.command.get()))
+        {
+            // Extract literal string args
+            std::vector<std::string> args;
+            for (auto const& param: call->parameters)
+                if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(param.get()))
+                    args.push_back(lit->value);
+
+            auto const key = makeStructuredCommandKey(call->program, args);
+            if (auto it = _persistentState->structuredCommands.find(key);
+                it != _persistentState->structuredCommands.end())
+            {
+                auto const& info = it->second;
+                auto const sig = info.builtinCallbackName + "()I";
+                if (auto* cb = findCallback(sig))
+                {
+                    _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, key);
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                    annotateListElementTypeId(_result, info.recordTypeId);
+                    return;
+                }
+            }
+        }
+        else if (auto const* pipeline = dynamic_cast<ast::CallPipeline const*>(node.command.get()))
+        {
+            // Handle CallPipeline: extract the first call's program and args
+            if (!pipeline->calls.empty())
+            {
+                auto const& firstCall = *pipeline->calls[0];
+                std::vector<std::string> args;
+                for (auto const& param: firstCall.parameters)
+                    if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(param.get()))
+                        args.push_back(lit->value);
+
+                auto const key = makeStructuredCommandKey(firstCall.program, args);
+                if (auto it = _persistentState->structuredCommands.find(key);
+                    it != _persistentState->structuredCommands.end())
+                {
+                    auto const& info = it->second;
+                    auto const sig = info.builtinCallbackName + "()I";
+                    if (auto* cb = findCallback(sig))
+                    {
+                        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, key);
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                        annotateListElementTypeId(_result, info.recordTypeId);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: command substitution (capture stdout as string)
+    auto* startCb = findCallback("internal.subst_start()V");
+    if (startCb)
+    {
+        _builder.createCallFunction(_builder.getBuiltinFunction(*startCb), {}, "subst_start");
+        codegen(node.command.get());
+        auto* endCb = findCallback("internal.subst_end()S");
+        if (endCb)
+        {
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*endCb), {}, "subst_end");
+            return;
+        }
+    }
+
+    // If no subst builtins available, execute the command and result is void
+    codegen(node.command.get());
 }
 
 void IRGenerator::visit(ast::SubstitutionExpr const& node)
@@ -4078,52 +4190,86 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         return;
     }
 
-    // For arithmetic and comparison, ensure operands are numbers
-    if (left->type() == CoreVM::LiteralType::String)
-        left = _builder.createS2N(left);
-    if (right->type() == CoreVM::LiteralType::String)
-        right = _builder.createS2N(right);
+    // Check if this is a comparison operation
+    bool const isComparison = node.op == ast::BinaryOp::Eq || node.op == ast::BinaryOp::Ne
+                              || node.op == ast::BinaryOp::Lt || node.op == ast::BinaryOp::Le
+                              || node.op == ast::BinaryOp::Gt || node.op == ast::BinaryOp::Ge;
 
-    switch (node.op)
+    // When either operand is a String and we're doing comparison, use string comparison
+    // instead of converting to numbers (S2N would crash on non-numeric strings like "db-main")
+    bool const hasStringOperand =
+        left->type() == CoreVM::LiteralType::String || right->type() == CoreVM::LiteralType::String;
+
+    if (isComparison && hasStringOperand)
     {
-        // Arithmetic operators
-        case ast::BinaryOp::Add: _result = _builder.createAdd(left, right, "add"); break;
-        case ast::BinaryOp::Sub: _result = _builder.createSub(left, right, "sub"); break;
-        case ast::BinaryOp::Mul: _result = _builder.createMul(left, right, "mul"); break;
-        case ast::BinaryOp::Div: _result = _builder.createDiv(left, right, "div"); break;
-        case ast::BinaryOp::Mod: _result = _builder.createRem(left, right, "mod"); break;
-        case ast::BinaryOp::Pow: _result = _builder.createPow(left, right, "pow"); break;
+        // Convert non-string operands to string for string comparison
+        if (left->type() == CoreVM::LiteralType::Number)
+            left = _builder.createN2S(left);
+        if (right->type() == CoreVM::LiteralType::Number)
+            right = _builder.createN2S(right);
 
-        // Comparison operators (return boolean)
-        // Use dynamic comparison (VCmpXX) when operands have unknown compile-time types
-        case ast::BinaryOp::Eq:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpEQ(left, right, "eq")
-                                                       : _builder.createNCmpEQ(left, right, "eq");
-            break;
-        case ast::BinaryOp::Ne:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpNE(left, right, "ne")
-                                                       : _builder.createNCmpNE(left, right, "ne");
-            break;
-        case ast::BinaryOp::Lt:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpLT(left, right, "lt")
-                                                       : _builder.createNCmpLT(left, right, "lt");
-            break;
-        case ast::BinaryOp::Le:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpLE(left, right, "le")
-                                                       : _builder.createNCmpLE(left, right, "le");
-            break;
-        case ast::BinaryOp::Gt:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpGT(left, right, "gt")
-                                                       : _builder.createNCmpGT(left, right, "gt");
-            break;
-        case ast::BinaryOp::Ge:
-            _result = needsDynamicCompare(left, right) ? _builder.createVCmpGE(left, right, "ge")
-                                                       : _builder.createNCmpGE(left, right, "ge");
-            break;
+        // For Void/Object types (e.g., from ObjGetSlot), the runtime value is already a string pointer,
+        // so we can compare directly with SCmpXX which handles Void/Object operands.
+        switch (node.op)
+        {
+            case ast::BinaryOp::Eq: _result = _builder.createSCmpEQ(left, right, "seq"); break;
+            case ast::BinaryOp::Ne: _result = _builder.createSCmpNE(left, right, "sne"); break;
+            case ast::BinaryOp::Lt: _result = _builder.createSCmpLT(left, right, "slt"); break;
+            case ast::BinaryOp::Le: _result = _builder.createSCmpLE(left, right, "sle"); break;
+            case ast::BinaryOp::Gt: _result = _builder.createSCmpGT(left, right, "sgt"); break;
+            case ast::BinaryOp::Ge: _result = _builder.createSCmpGE(left, right, "sge"); break;
+            default: break; // Logical ops not reached here
+        }
+    }
+    else
+    {
+        // For arithmetic and numeric comparison, ensure operands are numbers
+        if (left->type() == CoreVM::LiteralType::String)
+            left = _builder.createS2N(left);
+        if (right->type() == CoreVM::LiteralType::String)
+            right = _builder.createS2N(right);
 
-        // Logical operators
-        case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
-        case ast::BinaryOp::Or: _result = _builder.createBOr(toBool(left), toBool(right), "or"); break;
+        switch (node.op)
+        {
+            // Arithmetic operators
+            case ast::BinaryOp::Add: _result = _builder.createAdd(left, right, "add"); break;
+            case ast::BinaryOp::Sub: _result = _builder.createSub(left, right, "sub"); break;
+            case ast::BinaryOp::Mul: _result = _builder.createMul(left, right, "mul"); break;
+            case ast::BinaryOp::Div: _result = _builder.createDiv(left, right, "div"); break;
+            case ast::BinaryOp::Mod: _result = _builder.createRem(left, right, "mod"); break;
+            case ast::BinaryOp::Pow: _result = _builder.createPow(left, right, "pow"); break;
+
+            // Comparison operators (return boolean)
+            // Use dynamic comparison (VCmpXX) when operands have unknown compile-time types
+            case ast::BinaryOp::Eq:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpEQ(left, right, "eq")
+                                                           : _builder.createNCmpEQ(left, right, "eq");
+                break;
+            case ast::BinaryOp::Ne:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpNE(left, right, "ne")
+                                                           : _builder.createNCmpNE(left, right, "ne");
+                break;
+            case ast::BinaryOp::Lt:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpLT(left, right, "lt")
+                                                           : _builder.createNCmpLT(left, right, "lt");
+                break;
+            case ast::BinaryOp::Le:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpLE(left, right, "le")
+                                                           : _builder.createNCmpLE(left, right, "le");
+                break;
+            case ast::BinaryOp::Gt:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpGT(left, right, "gt")
+                                                           : _builder.createNCmpGT(left, right, "gt");
+                break;
+            case ast::BinaryOp::Ge:
+                _result = needsDynamicCompare(left, right) ? _builder.createVCmpGE(left, right, "ge")
+                                                           : _builder.createNCmpGE(left, right, "ge");
+                break;
+
+            // Logical operators
+            case ast::BinaryOp::And: _result = _builder.createBAnd(toBool(left), toBool(right), "and"); break;
+            case ast::BinaryOp::Or: _result = _builder.createBOr(toBool(left), toBool(right), "or"); break;
+        }
     }
 
     _inTailPosition = savedTailPos;
@@ -4402,6 +4548,35 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 }
             }
             reportTypeError("Pipeline partial application requires a named function");
+            return;
+        }
+
+        // Handle builtin string functions as partial applications in pipelines:
+        // value |> contains "pattern"  →  string_contains(value, pattern)
+        // value |> startsWith "prefix" →  string_startsWith(value, prefix)
+        // value |> endsWith "suffix"   →  string_endsWith(value, suffix)
+        if (baseIdent->name == "contains" || baseIdent->name == "startsWith" || baseIdent->name == "endsWith")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("{} in pipeline requires exactly 1 argument", baseIdent->name);
+                return;
+            }
+            auto* patternArg = codegen(explicitArgExprs[0]);
+            if (!patternArg)
+            {
+                reportTypeError("Failed to evaluate {} argument", baseIdent->name);
+                return;
+            }
+            auto const sigName = "string_" + std::string(baseIdent->name);
+            auto* callback = findCallback(sigName + "(SS)B");
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sigName);
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value, patternArg }, sigName);
             return;
         }
 

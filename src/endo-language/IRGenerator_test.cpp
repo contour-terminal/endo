@@ -435,6 +435,31 @@ TEST_CASE("IRGenerator.FSharp.pipeline_chain")
         generatesIRSuccessfully("let double x = x * 2; let inc x = x + 1; let result = 5 |> double |> inc"));
 }
 
+TEST_CASE("IRGenerator.FSharp.pipeline_chain_execution_order")
+{
+    // Verify left-to-right execution order: 5 |> f |> g |> h
+    // f(x) = x * 2, g(x) = x + 10, h(x) = x * 3
+    // Correct (left-to-right): ((5 * 2) + 10) * 3 = (10 + 10) * 3 = 60
+    // Wrong (right-to-left): would attempt to compose functions, not apply sequentially
+    CHECK(executesWithOutput("let f (x: int) = x * 2\n"
+                             "let g (x: int) = x + 10\n"
+                             "let h (x: int) = x * 3\n"
+                             "print (5 |> f |> g |> h)",
+                             "60"));
+
+    // Also verify with string-producing functions to make order unambiguous:
+    // f appends "-f", g appends "-g", h appends "-h"
+    // "start" |> f |> g |> h → "start-f-g-h"
+    CHECK(executesWithOutput(R"(let f (s: str) = s + "-f")"
+                             "\n"
+                             R"(let g (s: str) = s + "-g")"
+                             "\n"
+                             R"(let h (s: str) = s + "-h")"
+                             "\n"
+                             R"(print ("start" |> f |> g |> h))",
+                             "start-f-g-h"));
+}
+
 TEST_CASE("IRGenerator.FSharp.pipeline_with_expression")
 {
     // Pipeline with expression on left side
@@ -5687,4 +5712,127 @@ TEST_CASE("IRGenerator.FSharp.ps.head_after_filter")
                              "| Some p -> print p.command\n"
                              "| None -> print \"none\"",
                              "firefox"));
+}
+
+// =============================================================================
+// Structured Pipeline Tests (Output Recognition Files)
+// =============================================================================
+
+// --- docker ps tests ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.basic")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> map (fun c -> c.names) |> print",
+                                       "[web-server; db-main; cache]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.filter_status")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> filter (fun c -> c.status |> contains \"Up\") |> map (fun c -> c.names) |> print",
+        "[web-server; db-main]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.field_access_image")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> map (fun c -> c.image) |> print",
+                                       "[nginx:latest; postgres:16; redis:7]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.pipeline_chain")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> filter (fun c -> c.status |> contains \"Up\") |> map "
+                                       "(fun c -> c.id) |> take 1 |> print",
+                                       "[abc123def]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.count_with_length")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> filter (fun c -> c.ports |> contains \"tcp\") |> length |> fun n -> print n", "2"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.exists")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> exists (fun c -> c.names == \"db-main\") |> fun r -> print r", "true"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.find")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> find (fun c -> c.names == \"cache\") |> fun x -> match x with\n"
+        "| Some c -> print c.image\n"
+        "| None -> print \"not found\"",
+        "redis:7"));
+}
+
+// --- docker images tests ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_images.basic")
+{
+    CHECK(structuredExecutesWithOutput("docker images |> map (fun i -> i.repository) |> print",
+                                       "[nginx; postgres; redis]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_images.filter_by_tag")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker images |> filter (fun i -> i.tag == \"latest\") |> map (fun i -> i.repository) |> print",
+        "[nginx]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_images.field_access")
+{
+    CHECK(structuredExecutesWithOutput("docker images |> map (fun i -> i.tag) |> print", "[latest; 16; 7]"));
+}
+
+// --- git log tests ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.git_log.basic")
+{
+    CHECK(structuredExecutesWithOutput("git log |> map (fun c -> c.message) |> print",
+                                       "[feat: add login; fix: null check; docs: update README]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.git_log.filter_by_author")
+{
+    CHECK(structuredExecutesWithOutput(
+        "git log |> filter (fun c -> c.author == \"Alice\") |> map (fun c -> c.sha) |> print",
+        "[abc123; ghi789]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.git_log.take")
+{
+    CHECK(structuredExecutesWithOutput("git log |> take 2 |> map (fun c -> c.author) |> print",
+                                       "[Alice; Bob]"));
+}
+
+// --- git status tests ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.git_status.basic")
+{
+    CHECK(structuredExecutesWithOutput("git status |> map (fun e -> e.path) |> print",
+                                       "[src/main.cpp; README.md; .gitignore]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.git_status.filter_modified")
+{
+    CHECK(structuredExecutesWithOutput(
+        "git status |> filter (fun e -> e.status |> contains \"M\") |> map (fun e -> e.path) |> print",
+        "[src/main.cpp]"));
+}
+
+// --- Edge cases ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.no_definition_fallback")
+{
+    // Unknown command with |> should still parse and generate IR successfully
+    CHECK(generatesIRSuccessfully("echo hello |> print"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.pipeline_to_print")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> map (fun c -> c.names) |> print",
+                                       "[web-server; db-main; cache]"));
 }

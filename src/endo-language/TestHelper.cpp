@@ -507,6 +507,185 @@ TestRuntime::TestRuntime()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
 
+    // Register command substitution builtins (needed for structured pipeline fallback)
+    runtime.registerFunction("internal.subst_start")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([](CoreVM::Params&) {});
+    runtime.registerFunction("internal.subst_end")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) { args.setResult(std::string {}); });
+
+    // Register structured_docker_ps mock: returns 3 container records
+    runtime.registerFunction("structured_docker_ps")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+            struct MockContainer
+            {
+                char const* id;
+                char const* image;
+                char const* command;
+                char const* created;
+                char const* status;
+                char const* ports;
+                char const* names;
+            };
+            constexpr MockContainer containers[] = {
+                { "abc123def",
+                  "nginx:latest",
+                  "/docker-entrypoint…",
+                  "2024-01-15 10:00:00",
+                  "Up 3 hours",
+                  "80/tcp",
+                  "web-server" },
+                { "def456ghi",
+                  "postgres:16",
+                  "docker-entrypoint.s…",
+                  "2024-01-14 08:00:00",
+                  "Up 2 days",
+                  "5432/tcp",
+                  "db-main" },
+                { "ghi789jkl",
+                  "redis:7",
+                  "docker-entrypoint.s…",
+                  "2024-01-13 12:00:00",
+                  "Exited (0) 1 hour ago",
+                  "",
+                  "cache" },
+            };
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0; // Nil
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& c = containers[i];
+                auto* record = runner->allocObject(CoreVM::BuiltinTypeId::OutputDefBase);
+                record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(c.id)));
+                record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(c.image)));
+                record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(c.command)));
+                record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(c.created)));
+                record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.status)));
+                record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(c.ports)));
+                record->setSlot(6, reinterpret_cast<uintptr_t>(runner->newString(c.names)));
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
+    // Register structured_docker_images mock: returns 3 image records
+    runtime.registerFunction("structured_docker_images")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+            struct MockImage
+            {
+                char const* id;
+                char const* repository;
+                char const* tag;
+                char const* created;
+                char const* size;
+            };
+            constexpr MockImage images[] = {
+                { "sha256:abc", "nginx", "latest", "2024-01-10", "187MB" },
+                { "sha256:def", "postgres", "16", "2024-01-08", "412MB" },
+                { "sha256:ghi", "redis", "7", "2024-01-05", "130MB" },
+            };
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0;
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& img = images[i];
+                constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
+                auto* record = runner->allocObject(typeId);
+                record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(img.id)));
+                record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(img.repository)));
+                record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(img.tag)));
+                record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(img.created)));
+                record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(img.size)));
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
+    // Register structured_git_log mock: returns 3 commit records
+    runtime.registerFunction("structured_git_log")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+            struct MockCommit
+            {
+                char const* sha;
+                char const* author;
+                char const* email;
+                char const* date;
+                char const* message;
+            };
+            constexpr MockCommit commits[] = {
+                { "abc123", "Alice", "alice@example.com", "2024-01-15", "feat: add login" },
+                { "def456", "Bob", "bob@example.com", "2024-01-14", "fix: null check" },
+                { "ghi789", "Alice", "alice@example.com", "2024-01-13", "docs: update README" },
+            };
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0;
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& c = commits[i];
+                constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
+                auto* record = runner->allocObject(typeId);
+                record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(c.sha)));
+                record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(c.author)));
+                record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(c.email)));
+                record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(c.date)));
+                record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.message)));
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
+    // Register structured_git_status mock: returns 3 status entries
+    runtime.registerFunction("structured_git_status")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+            struct MockStatusEntry
+            {
+                char const* status;
+                char const* path;
+            };
+            constexpr MockStatusEntry entries[] = {
+                { "M", "src/main.cpp" },
+                { "??", "README.md" },
+                { "A", ".gitignore" },
+            };
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0;
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& e = entries[i];
+                constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
+                auto* record = runner->allocObject(typeId);
+                record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(e.status)));
+                record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(e.path)));
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
     // Register env.has builtin (returns boolean: true if key exists in mock env)
     runtime.registerFunction("env.has")
         .param<CoreVM::CoreString>("key")
@@ -966,6 +1145,156 @@ std::string executeSessionAndGetOutput(std::vector<std::string> const& prompts)
 bool sessionProducesOutput(std::vector<std::string> const& prompts, std::string_view expectedOutput)
 {
     auto result = executeSession(prompts);
+    return result.has_value() && result->output == expectedOutput;
+}
+
+// =============================================================================
+// Structured pipeline test helpers
+// =============================================================================
+
+FSharpPersistentState createMockStructuredState()
+{
+    using CoreVM::LiteralType;
+
+    FSharpPersistentState state;
+
+    // DockerPsRecord (typeId = OutputDefBase = 100)
+    {
+        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase;
+        state.outputDefinitionTypes["DockerPsRecord"] = {
+            .typeId = typeId,
+            .fields = {
+                { "id", 0, LiteralType::String },
+                { "image", 1, LiteralType::String },
+                { "command", 2, LiteralType::String },
+                { "created", 3, LiteralType::String },
+                { "status", 4, LiteralType::String },
+                { "ports", 5, LiteralType::String },
+                { "names", 6, LiteralType::String },
+            },
+        };
+        state.structuredCommands[std::string("docker\0ps", 9)] = {
+            .builtinCallbackName = "structured_docker_ps",
+            .recordTypeId = typeId,
+            .recordTypeName = "DockerPsRecord",
+        };
+        state.recordTypeFields["DockerPsRecord"] = {
+            { "id", "string" },     { "image", "string" }, { "command", "string" }, { "created", "string" },
+            { "status", "string" }, { "ports", "string" }, { "names", "string" },
+        };
+    }
+
+    // DockerImagesRecord (typeId = OutputDefBase + 1 = 101)
+    {
+        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 1;
+        state.outputDefinitionTypes["DockerImagesRecord"] = {
+            .typeId = typeId,
+            .fields = {
+                { "id", 0, LiteralType::String },
+                { "repository", 1, LiteralType::String },
+                { "tag", 2, LiteralType::String },
+                { "created", 3, LiteralType::String },
+                { "size", 4, LiteralType::String },
+            },
+        };
+        state.structuredCommands[std::string("docker\0images", 13)] = {
+            .builtinCallbackName = "structured_docker_images",
+            .recordTypeId = typeId,
+            .recordTypeName = "DockerImagesRecord",
+        };
+        state.recordTypeFields["DockerImagesRecord"] = {
+            { "id", "string" },      { "repository", "string" }, { "tag", "string" },
+            { "created", "string" }, { "size", "string" },
+        };
+    }
+
+    // GitLogRecord (typeId = OutputDefBase + 2 = 102)
+    {
+        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 2;
+        state.outputDefinitionTypes["GitLogRecord"] = {
+            .typeId = typeId,
+            .fields = {
+                { "sha", 0, LiteralType::String },
+                { "author", 1, LiteralType::String },
+                { "email", 2, LiteralType::String },
+                { "date", 3, LiteralType::String },
+                { "message", 4, LiteralType::String },
+            },
+        };
+        state.structuredCommands[std::string("git\0log", 7)] = {
+            .builtinCallbackName = "structured_git_log",
+            .recordTypeId = typeId,
+            .recordTypeName = "GitLogRecord",
+        };
+        state.recordTypeFields["GitLogRecord"] = {
+            { "sha", "string" },  { "author", "string" },  { "email", "string" },
+            { "date", "string" }, { "message", "string" },
+        };
+    }
+
+    // GitStatusRecord (typeId = OutputDefBase + 3 = 103)
+    {
+        constexpr uint16_t typeId = CoreVM::BuiltinTypeId::OutputDefBase + 3;
+        state.outputDefinitionTypes["GitStatusRecord"] = {
+            .typeId = typeId,
+            .fields = {
+                { "status", 0, LiteralType::String },
+                { "path", 1, LiteralType::String },
+            },
+        };
+        state.structuredCommands[std::string("git\0status", 10)] = {
+            .builtinCallbackName = "structured_git_status",
+            .recordTypeId = typeId,
+            .recordTypeName = "GitStatusRecord",
+        };
+        state.recordTypeFields["GitStatusRecord"] = {
+            { "status", "string" },
+            { "path", "string" },
+        };
+    }
+
+    return state;
+}
+
+ExecutionResult executeSourceWithStructuredState(std::string const& source)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    auto state = createMockStructuredState();
+
+    Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+    auto ast = parser.parse();
+    if (!ast || testRuntime.hasErrors())
+        return std::unexpected(TestError::ParseFailed);
+
+    auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime, &state);
+    if (!ir || testRuntime.hasErrors())
+        return std::unexpected(TestError::IRGenerationFailed);
+
+    CoreVM::TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(ir.get());
+    if (!targetProgram)
+        return std::unexpected(TestError::CodeGenerationFailed);
+
+    if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+        return std::unexpected(TestError::LinkFailed);
+
+    CoreVM::Handler const* handler = targetProgram->findHandler("@main");
+    if (!handler)
+        return std::unexpected(TestError::HandlerNotFound);
+
+    CoreVM::Runner::Globals globals;
+    CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+    bool exitNonZero = runner.run();
+
+    return TestExecutionSuccess { .exitCode = exitNonZero ? 1 : 0, .output = testRuntime.output() };
+}
+
+bool structuredExecutesWithOutput(std::string const& source, std::string_view expectedOutput)
+{
+    auto result = executeSourceWithStructuredState(source);
     return result.has_value() && result->output == expectedOutput;
 }
 

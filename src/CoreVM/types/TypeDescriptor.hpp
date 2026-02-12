@@ -108,6 +108,7 @@ namespace BuiltinTypeId
     constexpr uint16_t Tuple3 = 4;
     constexpr uint16_t List = 5;
     constexpr uint16_t ProcessInfo = 6;
+    constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 
 } // namespace CoreVM

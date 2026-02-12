@@ -316,6 +316,14 @@ void ASTPrinter::visit(LiteralExpr const& node)
         _result += std::format("{}", node.value);
 }
 
+void ASTPrinter::visit(StructuredPipelineSourceExpr const& node)
+{
+    _result += "$(";
+    if (node.command)
+        node.command->accept(*this);
+    _result += " |>)";
+}
+
 void ASTPrinter::visit(SubstitutionExpr const& node)
 {
     _result += node.backtick ? "`" : "$(";

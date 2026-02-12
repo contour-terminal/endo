@@ -94,6 +94,7 @@ bool Parser::isEndOfStmt() const noexcept
     if (_lexer.currentToken() == Token::EndOfInput
         || _lexer.currentToken() == Token::LineFeed
         || _lexer.currentToken() == Token::Pipe
+        || _lexer.currentToken() == Token::ForwardPipe
         || _lexer.currentToken() == Token::Semicolon
         || _lexer.currentToken() == Token::DblSemicolon
         || _lexer.currentToken() == Token::AmpAmp
@@ -252,7 +253,47 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
 
                 // All other statements (builtins and commands) can participate
                 // in logical expressions (&&, ||)
-                return parseLogicalExpr();
+                auto stmt = parseLogicalExpr();
+                if (!stmt)
+                    return nullptr;
+
+                // Shell command followed by |> → structured F# pipeline
+                // Build left-associative pipeline chain: source |> step1 |> step2 |> ...
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    auto source = std::make_unique<ast::StructuredPipelineSourceExpr>(std::move(stmt));
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+
+                    // Parse first pipeline step (single composition, not full pipeline)
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+
+                    // Build left-associative chain: PipelineExpr(source, step1)
+                    std::unique_ptr<ast::Expr> pipeline =
+                        std::make_unique<ast::PipelineExpr>(std::move(source), std::move(step));
+
+                    // Parse remaining |> steps left-associatively
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken(); // consume |>
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                }
+                return stmt;
             }
         case Token::EndOfInput:
             _report.syntaxErrorWithSuggestions(

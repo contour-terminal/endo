@@ -95,6 +95,9 @@ add_executable(test-endo-language
     Completer_test.cpp
 )
 target_link_libraries(test-endo-language endo Catch2::Catch2)
+target_compile_definitions(test-endo-language PRIVATE
+    ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+)
 add_test(NAME test-endo-language COMMAND test-endo-language)
 
 enable_sanitizers(endo)

@@ -19,6 +19,7 @@
 #include "Completer.hpp"
 #include "History.hpp"
 #include "Job.hpp"
+#include "OutputDefinitionRegistry.hpp"
 #include "Pipe.hpp"
 #include "Process.hpp"
 #include "Prompt.hpp"
@@ -228,7 +229,8 @@ class Shell final
     CoreVM::Runtime _runtime;
     Environment& _env;
     TTY& _tty;
-    FSharpPersistentState _fsharpState; ///< F# function definitions persisted across REPL prompts
+    FSharpPersistentState _fsharpState;          ///< F# function definitions persisted across REPL prompts
+    OutputDefinitionRegistry _outputDefinitions; ///< Output definition registry for structured pipelines
 
     ProcessManager& _processManager;
 

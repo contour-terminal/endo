@@ -1,0 +1,29 @@
+command: "git"
+variants:
+  - name: "log"
+    matches:
+      - ["log"]
+    priority: 10
+    command_to_run: "git log -n 100 --format=%H%x00%aN%x00%aE%x00%aI%x00%s"
+    parser:
+      type: "fields"
+      field_separator: "\x00"
+    schema:
+      - { name: "sha", type: "string" }
+      - { name: "author", type: "string" }
+      - { name: "email", type: "string" }
+      - { name: "date", type: "string" }
+      - { name: "message", type: "string" }
+
+  - name: "status"
+    matches:
+      - ["status"]
+    priority: 10
+    command_to_run: "git -c color.status=never status --short"
+    parser:
+      type: "fields"
+      field_separator: " "
+      max_fields: 2
+    schema:
+      - { name: "status", type: "string" }
+      - { name: "path", type: "string" }
