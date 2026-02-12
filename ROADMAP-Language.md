@@ -12,6 +12,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Mutable bindings: `let mut x = 0`
 - [x] Mutation operator: `x <- x + 1`
 - [x] Lambda expressions: `fun x -> x * 2`
+- [ ] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc
 - [x] Let-in expressions: `let x = 5 in x + 1`
 - [x] If-then-else expressions: `if cond then a else b`
 - [x] Match expressions: `match x with | pattern -> result`
@@ -79,7 +80,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
 - [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
 - [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
-- [ ] Standard list operations (`map`, `filter`, `fold`, etc.)
+- [ ] Standard list operations (`map`, `filter`, `fold`, `each`, etc.)
 
 ## Pattern Matching
 
@@ -167,7 +168,6 @@ This document tracks the implementation status of F# language features as define
 
 - [x] `print` — print without newline
 - [x] `println` — print with newline
-- [x] `fst` / `snd` — user-definable via pattern matching (no longer builtins)
 - [x] `string_length` — length of string
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion
@@ -176,6 +176,8 @@ This document tracks the implementation status of F# language features as define
 - [ ] `head`, `tail`, `length`, `isEmpty` — list operations
 - [ ] `map`, `filter`, `fold`, `reduce` — higher-order list functions
 - [ ] `sort`, `reverse`, `distinct` — list transformations
+- [ ] `fetch` — HTTP GET request, returns `result<str, str>`
+- [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [ ] `String.split`, `String.join`, `String.trim` — string operations
 - [ ] `File.read`, `File.write`, `File.list` — file operations
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
