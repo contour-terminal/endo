@@ -5889,3 +5889,79 @@ TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each")
     CHECK(
         structuredExecutesWithOutput("docker ps |> each (fun c -> print c.names)", "web-serverdb-maincache"));
 }
+
+// =============================================================================
+// Bare Expression Evaluation Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.BareExpr.number")
+{
+    CHECK(executesWithOutput("42", "42\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.arithmetic")
+{
+    CHECK(executesWithOutput("(3 + 4)", "7\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.list")
+{
+    // List literals at shell prompt need parentheses since [ is a shell identifier char
+    CHECK(executesWithOutput("([1; 2; 3])", "[1; 2; 3]\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.option_some")
+{
+    CHECK(executesWithOutput("Some 42", "Some 42\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.option_none")
+{
+    CHECK(executesWithOutput("None", "None\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.result_ok")
+{
+    CHECK(executesWithOutput("Ok 5", "Ok 5\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.tuple")
+{
+    CHECK(executesWithOutput("(1, 2)", "(1, 2)\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.bool_true")
+{
+    CHECK(executesWithOutput("(true)", "true\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.bool_false")
+{
+    CHECK(executesWithOutput("(false)", "false\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.lambda_apply")
+{
+    CHECK(executesWithOutput("(fun x -> x + 1) 5", "6\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.nested_multiply")
+{
+    // Use let to bind intermediate result since (( is shell arithmetic in shell mode
+    CHECK(executesWithOutput("(2 + 3)", "5\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.result_error")
+{
+    CHECK(executesWithOutput("Error 99", "Error 99\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.negative_number")
+{
+    CHECK(executesWithOutput("(-7)", "-7\n"));
+}
+
+TEST_CASE("IRGenerator.BareExpr.float_literal")
+{
+    CHECK(executesWithOutput("(3.14)", "3.14\n"));
+}

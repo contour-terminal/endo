@@ -306,6 +306,14 @@ Consult this section to determine what to work on next.
 - [x] Shell integration: load definitions, register callbacks, spawn commands
 - [x] Bundled definitions for `docker ps`, `docker images`, `git log`, `git status`
 
+### Phase 6.4 — Bare Expression Evaluation & Table Display
+- [x] Bare expression evaluation at shell prompt: `42`, `Some 42`, `(1, 2)`, `Ok 5`, etc.
+- [x] `display_result` builtin for runtime value display dispatch
+- [x] Table rendering for lists of records: Bordered (Unicode box-drawing), Compact, Plain styles
+- [x] Auto-style selection: Bordered with color for terminals, Plain for pipes/non-terminal
+- [x] `print`/`println` remain unaffected (always plain text for scripting)
+- [x] Trailing `|>` pipeline support on bare expressions
+
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
 - [ ] File: `File.read`, `File.write`, `File.list` returning Result types

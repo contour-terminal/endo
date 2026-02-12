@@ -63,6 +63,8 @@ add_library(endo-shell STATIC
     OutputDefinitionRegistry.cpp
     OutputParser.hpp
     OutputParser.cpp
+    TableFormatter.hpp
+    TableFormatter.cpp
 )
 
 # Platform-specific implementations

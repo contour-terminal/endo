@@ -17,6 +17,7 @@ using crispy::escape;
 #include "CompletionProviders/LetBindingCompleter.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
+#include "TableFormatter.hpp"
 #include <endo-language/CompletionContext.hpp>
 
 namespace
@@ -2330,4 +2331,67 @@ TEST_CASE("LetBindingCompleter.does_not_handle_variable_context")
     CHECK(!completer.canHandle(endo::CompletionContextType::FilePath));
     CHECK(!completer.canHandle(endo::CompletionContextType::Option));
     CHECK(!completer.canHandle(endo::CompletionContextType::Redirect));
+}
+
+// ============================================================================
+// Bare Expression Display Tests (via Shell)
+// ============================================================================
+
+TEST_CASE("shell.bare_expr.number")
+{
+    TestShell shell;
+    shell("42");
+    CHECK(escape(shell.output()) == escape("42\n"));
+}
+
+TEST_CASE("shell.bare_expr.arithmetic")
+{
+    TestShell shell;
+    shell("(3 + 4)");
+    CHECK(escape(shell.output()) == escape("7\n"));
+}
+
+TEST_CASE("shell.bare_expr.list")
+{
+    // List literals at shell prompt need parentheses since [ is a shell identifier char
+    TestShell shell;
+    shell("([1; 2; 3])");
+    CHECK(escape(shell.output()) == escape("[1; 2; 3]\n"));
+}
+
+TEST_CASE("shell.bare_expr.option_some")
+{
+    TestShell shell;
+    shell("Some 42");
+    CHECK(escape(shell.output()) == escape("Some 42\n"));
+}
+
+TEST_CASE("shell.bare_expr.option_none")
+{
+    TestShell shell;
+    shell("None");
+    CHECK(escape(shell.output()) == escape("None\n"));
+}
+
+TEST_CASE("shell.bare_expr.tuple")
+{
+    TestShell shell;
+    shell("(1, 2)");
+    CHECK(escape(shell.output()) == escape("(1, 2)\n"));
+}
+
+// ============================================================================
+// Table Formatter Tests
+// ============================================================================
+
+TEST_CASE("table.plain.no_borders_no_escapes")
+{
+    // Verify Plain style produces no special characters
+    auto table = endo::formatRecordTable(nullptr, nullptr, { .style = endo::TableStyle::Plain });
+    CHECK(table == "[]\n"); // nullptr → empty
+}
+
+TEST_CASE("table.isListOfRecords.nullptr_returns_false")
+{
+    CHECK(!endo::isListOfRecords(nullptr, nullptr));
 }

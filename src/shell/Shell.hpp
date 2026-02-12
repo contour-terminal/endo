@@ -169,6 +169,7 @@ class Shell final
     void builtinWhich(CoreVM::Params& context);
     void builtinPrint(CoreVM::Params& context);
     void builtinPrintln(CoreVM::Params& context);
+    void builtinDisplayResult(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();

@@ -296,6 +296,49 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return stmt;
             }
+        // Bare F# expression evaluation: tokens that unambiguously start F# expressions
+        case Token::Number:
+        case Token::RndOpen:
+        case Token::Fun:
+        case Token::OptionSome:
+        case Token::OptionNone:
+        case Token::ResultOk:
+        case Token::ResultError:
+        case Token::Try: {
+            _lexer.enterFSharpExpr();
+            auto expr = parseFSharpExpr();
+            _lexer.leaveFSharpExpr();
+            if (!expr)
+                return nullptr;
+            // Check for trailing |> pipeline
+            if (_lexer.currentToken() == Token::ForwardPipe)
+            {
+                _lexer.enterFSharpExpr();
+                _lexer.nextToken(); // consume first |>
+                auto step = parseFSharpComposition();
+                if (!step)
+                {
+                    _lexer.leaveFSharpExpr();
+                    return nullptr;
+                }
+                std::unique_ptr<ast::Expr> pipeline =
+                    std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                while (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.nextToken();
+                    auto right = parseFSharpComposition();
+                    if (!right)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                }
+                _lexer.leaveFSharpExpr();
+                return std::make_unique<ast::ExprStmt>(std::move(pipeline), /*displayResult=*/true);
+            }
+            return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/true);
+        }
         case Token::EndOfInput:
             _report.syntaxErrorWithSuggestions(
                 currentLocation(),

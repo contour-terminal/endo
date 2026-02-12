@@ -4078,9 +4078,43 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 void IRGenerator::visit(ast::ExprStmt const& node)
 {
     TRACE_SCOPE("visit(ExprStmt)");
-    // Expression statement: evaluate the expression for its side effects
-    // The result is discarded
-    codegen(node.expr.get());
+
+    auto* value = codegen(node.expr.get());
+
+    if (node.displayResult && value)
+    {
+        // Bare expression evaluation: auto-display the result
+        auto const type = value->type();
+        if (type == CoreVM::LiteralType::String)
+        {
+            // String: display directly via println
+            auto* callback = findCallback("println(S)V");
+            if (callback)
+                _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, "display.println");
+        }
+        else if (type == CoreVM::LiteralType::Boolean || type == CoreVM::LiteralType::Float)
+        {
+            // Convert to string, then println
+            auto* strVal = convertToString(value, "display");
+            if (strVal)
+            {
+                auto* callback = findCallback("println(S)V");
+                if (callback)
+                    _builder.createCallFunction(
+                        _builder.getBuiltinFunction(*callback), { strVal }, "display.println");
+            }
+        }
+        else
+        {
+            // Number/Object/Void: use display_result for runtime dispatch (table rendering etc.)
+            auto* callback = findCallback("display_result(I)V");
+            if (callback)
+                _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, "display.result");
+        }
+    }
+
     _result = nullptr;
 }
 

@@ -34,6 +34,7 @@
 #include "Prompt.hpp"
 #include "PsCommand.hpp"
 #include "TTY.hpp"
+#include "TableFormatter.hpp"
 #include <endo-language/ASTPrinter.hpp>
 #include <endo-language/IRGenerator.hpp>
 #include <endo-language/Lexer.hpp>
@@ -1288,6 +1289,12 @@ void Shell::registerBuiltinFunctions()
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinPrintln, this);
+
+    // Bare expression display: auto-display a value with table rendering for lists of records
+    _runtime.registerFunction("display_result")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&Shell::builtinDisplayResult, this);
 
     // Helper: converts a list TypedObject to string "[1; 2; 3]" (delegates to valueToString)
     auto listToString = [](CoreVM::TypedObject* obj, CoreVM::Runner* runner) -> std::string {
@@ -5407,6 +5414,36 @@ void Shell::builtinPrintln(CoreVM::Params& context)
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
     [[maybe_unused]] auto written = write(outputFd, text.data(), text.size());
     written = write(outputFd, "\n", 1);
+}
+
+void Shell::builtinDisplayResult(CoreVM::Params& context)
+{
+    auto rawVal = static_cast<uint64_t>(context.getInt(1));
+    auto* runner = context.caller();
+    NativeHandle const outputFd =
+        _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+    bool const useColor = isatty(outputFd) != 0;
+
+    // Check if this is a list of records — if so, render as table
+    if (runner->isKnownObject(rawVal))
+    {
+        auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawVal));
+        if (obj->type->id == CoreVM::BuiltinTypeId::List && isListOfRecords(obj, runner))
+        {
+            TableConfig config;
+            config.style = useColor ? TableStyle::Bordered : TableStyle::Plain;
+            config.useColor = useColor;
+            auto table = formatRecordTable(obj, runner, config);
+            [[maybe_unused]] auto written = write(outputFd, table.data(), table.size());
+            return;
+        }
+    }
+
+    // Fallback: convert to string and print with newline
+    auto str = valueToString(rawVal, runner);
+    str += '\n';
+    [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
 }
 
 } // namespace endo

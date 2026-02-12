@@ -460,6 +460,17 @@ TestRuntime::TestRuntime()
             args.setResult(args.caller()->newString(valueToString(rawVal, args.caller())));
         });
 
+    // Register display_result builtin: auto-display a value (for bare expression evaluation)
+    runtime.registerFunction("display_result")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto rawVal = static_cast<uint64_t>(args.getInt(1));
+            auto str = valueToString(rawVal, args.caller());
+            capturedOutput += str;
+            capturedOutput += '\n';
+        });
+
     // Register structured_ps mock: returns deterministic test data (3 fixed processes)
     runtime.registerFunction("structured_ps")
         .returnType(CoreVM::LiteralType::Number) // Returns list object pointer

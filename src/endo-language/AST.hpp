@@ -1007,8 +1007,12 @@ struct LetBindingStmt final: public Statement
 struct ExprStmt final: public Statement
 {
     std::unique_ptr<Expr> expr;
+    bool displayResult = false; ///< When true, auto-display the result (for bare expressions at shell prompt)
 
-    explicit ExprStmt(std::unique_ptr<Expr> e): expr(std::move(e)) {}
+    explicit ExprStmt(std::unique_ptr<Expr> e, bool display = false):
+        expr(std::move(e)), displayResult(display)
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
