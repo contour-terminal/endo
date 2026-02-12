@@ -99,6 +99,7 @@ class ASTPrinter: public Visitor
     void visit(RecordExpr const& node) override;
     void visit(RecordUpdateExpr const& node) override;
     void visit(FieldAccessExpr const& node) override;
+    void visit(OptionalChainExpr const& node) override;
     void visit(UnionTypeDefStmt const& node) override;
     void visit(UnionConstructorExpr const& node) override;
 

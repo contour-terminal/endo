@@ -85,6 +85,7 @@ struct RecordTypeDefStmt;
 struct RecordExpr;
 struct RecordUpdateExpr;
 struct FieldAccessExpr;
+struct OptionalChainExpr;
 struct UnionTypeDefStmt;
 struct UnionConstructorExpr;
 
@@ -183,6 +184,7 @@ struct Visitor
     virtual void visit(RecordExpr const&) = 0;
     virtual void visit(RecordUpdateExpr const&) = 0;
     virtual void visit(FieldAccessExpr const&) = 0;
+    virtual void visit(OptionalChainExpr const&) = 0;
 
     // Discriminated unions
     virtual void visit(UnionTypeDefStmt const&) = 0;

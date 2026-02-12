@@ -340,6 +340,8 @@ Token Lexer::nextToken()
             if (_fsharpDepth > 0)
             {
                 nextChar();
+                if (_currentChar == '.')
+                    return consumeCharAndConfirmToken(Token::QuestionDot);
                 if (_currentChar == '|')
                     return consumeCharAndConfirmToken(Token::QuestionPipe);
                 return confirmToken(Token::Question);

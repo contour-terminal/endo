@@ -1690,4 +1690,21 @@ struct FieldAccessExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Optional chaining expression: `expr?.field`
+///
+/// If expr is Some(v), returns Some(v.field). If None, returns None.
+/// The result is always option<T>, enabling chaining: `a?.b?.c`.
+struct OptionalChainExpr final: public Expr
+{
+    std::unique_ptr<Expr> object; ///< The option expression
+    std::string fieldName;        ///< The field to access on the inner value
+
+    OptionalChainExpr(std::unique_ptr<Expr> obj, std::string field):
+        object(std::move(obj)), fieldName(std::move(field))
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 } // namespace endo::ast

@@ -180,6 +180,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::RecordExpr const& node) override;
     void visit(ast::RecordUpdateExpr const& node) override;
     void visit(ast::FieldAccessExpr const& node) override;
+    void visit(ast::OptionalChainExpr const& node) override;
     void visit(ast::UnionTypeDefStmt const& node) override;
     void visit(ast::UnionConstructorExpr const& node) override;
 

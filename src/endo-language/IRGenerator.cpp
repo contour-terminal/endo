@@ -6941,6 +6941,179 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     }
 }
 
+void IRGenerator::visit(ast::OptionalChainExpr const& node)
+{
+    TRACE_SCOPE("visit(OptionalChainExpr)");
+
+    // The ?. operator accesses a field on an Option-wrapped record:
+    // - If the value is Some (tag=1), extract inner value, access field, wrap in Some
+    // - If the value is None (tag=0), return None
+    //
+    // Result is always option<T>, enabling chaining: a?.b?.c
+
+    // Evaluate the option operand
+    auto* obj = codegen(node.object.get());
+    if (!obj)
+        return;
+
+    // Store the object in an alloca so we can reload it in successor blocks
+    auto* objStorage = createAllocaInEntryBlock(obj->type(), "optchain.obj");
+    _builder.createStore(objStorage, obj, "optchain.obj.store");
+
+    // Extract tag using OGETTAG
+    auto* tag = _builder.createObjGetTag(obj, "optchain.tag");
+
+    // Check if Some (tag == 1)
+    auto* isSome = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "optchain.is_some");
+
+    // Pre-allocate result storage (always Object type since result is an Option)
+    auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "optchain.result");
+
+    // Create blocks
+    auto* someBlock = _builder.createBlock("optchain.some");
+    auto* noneBlock = _builder.createBlock("optchain.none");
+    auto* continueBlock = _builder.createBlock("optchain.continue");
+
+    _builder.createCondBr(isSome, someBlock, noneBlock);
+
+    // None path: build a None object
+    _builder.setInsertPoint(noneBlock);
+    auto* noneTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    CoreVM::Value* noneObj = _builder.createObjAlloc(noneTypeId, "optchain.none.obj");
+    noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "optchain.none.tag");
+    _builder.createStore(resultStorage, noneObj, "optchain.none.store");
+    _builder.createBr(continueBlock);
+
+    // Some path: extract inner value, access field, wrap in Some
+    _builder.setInsertPoint(someBlock);
+    auto* objReload = _builder.createLoad(objStorage, "optchain.obj.reload");
+    auto* innerVal =
+        _builder.createObjGetSlot(objReload, _builder.get(CoreVM::CoreNumber(0)), "optchain.inner");
+
+    // Resolve the record type from the inner value to find the field offset.
+    // Try multiple strategies: inner object type ID annotation, direct type ID, IR chain,
+    // and finally fall back to searching all record types by field name.
+    RecordTypeInfo const* typeInfo = nullptr;
+
+    // Strategy 1: Inner object type ID propagated from OptionExpr (e.g., Some { name = "Alice" })
+    if (auto innerObjTypeId = getInnerObjectTypeId(obj))
+    {
+        for (auto const& [name, info]: _recordTypes)
+        {
+            if (info.typeId == *innerObjTypeId)
+            {
+                typeInfo = &info;
+                break;
+            }
+        }
+    }
+
+    // Strategy 2: Inner value's own type ID annotation
+    if (!typeInfo)
+    {
+        if (auto innerTypeId = getObjectTypeId(innerVal))
+        {
+            for (auto const& [name, info]: _recordTypes)
+            {
+                if (info.typeId == *innerTypeId)
+                {
+                    typeInfo = &info;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Strategy 3: IR chain analysis
+    if (!typeInfo)
+    {
+        if (auto info = tryGetObjectInfo(innerVal))
+        {
+            for (auto const& [name, recInfo]: _recordTypes)
+            {
+                if (recInfo.typeId == info->typeId)
+                {
+                    typeInfo = &recInfo;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Strategy 4: Search all record types by field name (needed when option is None
+    // and no type annotation propagates, e.g., `let x = None; x?.name`)
+    if (!typeInfo)
+    {
+        for (auto const& [name, info]: _recordTypes)
+        {
+            for (auto const& field: info.fields)
+            {
+                if (field.name == node.fieldName)
+                {
+                    typeInfo = &info;
+                    break;
+                }
+            }
+            if (typeInfo)
+                break;
+        }
+    }
+
+    if (!typeInfo)
+    {
+        reportTypeError("Optional chaining requires a known record type inside the option for '.{}'",
+                        std::string_view(node.fieldName));
+        return;
+    }
+
+    // Find the field by name and extract its value
+    bool found = false;
+    for (auto const& fieldDef: typeInfo->fields)
+    {
+        if (fieldDef.name == node.fieldName)
+        {
+            auto* fieldValue = _builder.createObjGetSlot(
+                innerVal, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "optchain." + node.fieldName);
+
+            // Wrap the field value in Some
+            auto* someTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+            CoreVM::Value* someObj = _builder.createObjAlloc(someTypeId, "optchain.some.obj");
+            someObj =
+                _builder.createObjSetTag(someObj, _builder.get(CoreVM::CoreNumber(1)), "optchain.some.tag");
+            someObj = _builder.createObjSetSlot(
+                someObj, _builder.get(CoreVM::CoreNumber(0)), fieldValue, "optchain.some.value");
+
+            // Annotate inner type for downstream use (e.g., ?| default value, or further ?. chaining)
+            if (auto it = typeInfo->fieldTypes.find(node.fieldName); it != typeInfo->fieldTypes.end())
+                annotateInnerType(someObj, it->second);
+
+            // If the field is itself an option-wrapped record, propagate inner object type ID
+            // to enable further ?. chaining
+            if (auto fieldObjTypeId = getObjectTypeId(fieldValue))
+                annotateInnerObjectTypeId(someObj, *fieldObjTypeId);
+
+            _builder.createStore(resultStorage, someObj, "optchain.some.store");
+            _builder.createBr(continueBlock);
+
+            found = true;
+            break;
+        }
+    }
+
+    if (!found)
+    {
+        reportTypeError("Record type '{}' has no field '{}' (in optional chaining)",
+                        std::string_view(typeInfo->name),
+                        std::string_view(node.fieldName));
+        return;
+    }
+
+    // Continue with result
+    _builder.setInsertPoint(continueBlock);
+    _result = _builder.createLoad(resultStorage, "optchain.result.load");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+}
+
 // ============================================================================
 // Discriminated Unions (ADTs)
 // ============================================================================

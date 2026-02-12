@@ -591,6 +591,26 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
         return std::pair { s4->apply(innerVar), *s4 };
     }
 
+    // --- Optional chaining expression (?.) ---
+    if (auto const* optChain = dynamic_cast<ast::OptionalChainExpr const*>(&expr))
+    {
+        auto objResult = inferExpr(*optChain->object, env, subst);
+        if (!objResult)
+            return objResult;
+        auto [objType, s1] = *objResult;
+
+        // Object should be option<T>, extract T
+        auto innerVar = env->freshTypeVarType();
+        auto s2 = unifyAndCompose(objType, types::option(innerVar), s1);
+        if (!s2)
+            return std::unexpected(s2.error());
+
+        // Field access on the inner type yields some result type;
+        // wrap it back in option since ?. always returns option<U>
+        auto fieldVar = env->freshTypeVarType();
+        return std::pair { types::option(fieldVar), *s2 };
+    }
+
     // --- Try expression (?) ---
     if (auto const* tryExpr = dynamic_cast<ast::TryExpr const*>(&expr))
     {

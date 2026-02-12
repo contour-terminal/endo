@@ -3593,6 +3593,23 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
             expr = std::make_unique<ast::FieldAccessExpr>(std::move(expr), std::move(fieldName));
             hasPostfixOps = true;
         }
+        else if (_lexer.currentToken() == Token::QuestionDot)
+        {
+            _lexer.nextToken(); // consume '?.'
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a field name after '?.'" },
+                                                   currentContextSnippet(),
+                                                   "Expected field name after '?.', got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            auto fieldName = _lexer.currentLiteral();
+            _lexer.nextToken(); // consume field name
+            expr = std::make_unique<ast::OptionalChainExpr>(std::move(expr), std::move(fieldName));
+            hasPostfixOps = true;
+        }
         else if (_lexer.currentToken() == Token::Question)
         {
             _lexer.nextToken(); // consume '?'

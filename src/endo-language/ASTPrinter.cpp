@@ -1039,6 +1039,13 @@ void ASTPrinter::visit(FieldAccessExpr const& node)
     _result += node.fieldName;
 }
 
+void ASTPrinter::visit(OptionalChainExpr const& node)
+{
+    node.object->accept(*this);
+    _result += "?.";
+    _result += node.fieldName;
+}
+
 void ASTPrinter::visit(UnionTypeDefStmt const& node)
 {
     _result += std::format("type {} =", node.name);

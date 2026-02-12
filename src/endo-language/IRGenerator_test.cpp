@@ -5012,3 +5012,49 @@ TEST_CASE("IRGenerator.FSharp.for_in_simple_variable")
 {
     CHECK(executesWithOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\ndone", "102030"));
 }
+
+// ============================================================================
+// Optional chaining (?.)
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.optional_chain_some")
+{
+    CHECK(executesWithOutput("type P = { name: str; age: int }\n"
+                             "let x = Some { name = \"Alice\"; age = 30 }\n"
+                             "print (x?.name ?| \"none\")",
+                             "Alice"));
+}
+
+TEST_CASE("IRGenerator.FSharp.optional_chain_none")
+{
+    auto output = executeSourceAndGetOutput("type P = { name: str; age: int }\n"
+                                            "let x = None\n"
+                                            "print (x?.name ?| \"none\")");
+    CAPTURE(output);
+    CHECK(output == "none");
+}
+
+TEST_CASE("IRGenerator.FSharp.optional_chain_int_field")
+{
+    CHECK(executesWithOutput("type P = { age: int }\n"
+                             "let x = Some { age = 30 }\n"
+                             "print (x?.age ?| 0)",
+                             "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.optional_chain_none_int")
+{
+    CHECK(executesWithOutput("type P = { age: int }\n"
+                             "let x = None\n"
+                             "print (x?.age ?| 0)",
+                             "0"));
+}
+
+TEST_CASE("IRGenerator.FSharp.optional_chain_with_let")
+{
+    CHECK(executesWithOutput("type P = { age: int }\n"
+                             "let x = Some { age = 30 }\n"
+                             "let result = x?.age ?| 0\n"
+                             "print result",
+                             "30"));
+}
