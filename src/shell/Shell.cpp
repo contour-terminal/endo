@@ -1358,6 +1358,157 @@ void Shell::registerBuiltinFunctions()
             args.setResult(args.caller()->newString(result));
         });
 
+    // F# string_trim builtin: removes leading/trailing whitespace
+    _runtime.registerFunction("string_trim")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto str = std::string(args.getString(1));
+            auto const start = str.find_first_not_of(" \t\n\r");
+            if (start == std::string::npos)
+                args.setResult(args.caller()->newString(""));
+            else
+            {
+                auto const end = str.find_last_not_of(" \t\n\r");
+                args.setResult(args.caller()->newString(str.substr(start, end - start + 1)));
+            }
+        });
+
+    // F# string_toLower builtin: converts string to lowercase
+    _runtime.registerFunction("string_toLower")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto str = std::string(args.getString(1));
+            std::ranges::transform(str, str.begin(), ::tolower);
+            args.setResult(args.caller()->newString(str));
+        });
+
+    // F# string_toUpper builtin: converts string to uppercase
+    _runtime.registerFunction("string_toUpper")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto str = std::string(args.getString(1));
+            std::ranges::transform(str, str.begin(), ::toupper);
+            args.setResult(args.caller()->newString(str));
+        });
+
+    // F# string_contains builtin: checks if haystack contains needle
+    _runtime.registerFunction("string_contains")
+        .param<CoreVM::CoreString>("haystack")
+        .param<CoreVM::CoreString>("needle")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            args.setResult(args.getString(1).find(args.getString(2)) != std::string_view::npos);
+        });
+
+    // F# string_startsWith builtin: checks if text starts with prefix
+    _runtime.registerFunction("string_startsWith")
+        .param<CoreVM::CoreString>("text")
+        .param<CoreVM::CoreString>("prefix")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            args.setResult(args.getString(1).starts_with(args.getString(2)));
+        });
+
+    // F# string_endsWith builtin: checks if text ends with suffix
+    _runtime.registerFunction("string_endsWith")
+        .param<CoreVM::CoreString>("text")
+        .param<CoreVM::CoreString>("suffix")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            args.setResult(args.getString(1).ends_with(args.getString(2)));
+        });
+
+    // F# string_replace builtin: replaces all occurrences of old with new in text
+    _runtime.registerFunction("string_replace")
+        .param<CoreVM::CoreString>("old_str")
+        .param<CoreVM::CoreString>("new_str")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto text = std::string(args.getString(3));
+            auto const old_s = args.getString(1);
+            auto const new_s = args.getString(2);
+            if (!old_s.empty())
+            {
+                size_t pos = 0;
+                while ((pos = text.find(old_s, pos)) != std::string::npos)
+                {
+                    text.replace(pos, old_s.size(), new_s);
+                    pos += new_s.size();
+                }
+            }
+            args.setResult(args.caller()->newString(text));
+        });
+
+    // F# string_split builtin: splits text by delimiter into list<str>
+    _runtime.registerFunction("string_split")
+        .param<CoreVM::CoreString>("delimiter")
+        .param<CoreVM::CoreString>("text")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([](CoreVM::Params& args) {
+            auto const text = std::string(args.getString(2));
+            auto const delim = std::string(args.getString(1));
+            auto* runner = args.caller();
+
+            std::vector<std::string> parts;
+            if (delim.empty())
+            {
+                for (auto c : text)
+                    parts.emplace_back(1, c);
+            }
+            else
+            {
+                size_t pos = 0;
+                size_t found = 0;
+                while ((found = text.find(delim, pos)) != std::string::npos)
+                {
+                    parts.push_back(text.substr(pos, found - pos));
+                    pos = found + delim.size();
+                }
+                parts.push_back(text.substr(pos));
+            }
+
+            // Build cons-cell list right-to-left
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0; // Nil
+            for (auto it = parts.rbegin(); it != parts.rend(); ++it)
+            {
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1; // Cons
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(*it)));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
+    // F# string_join builtin: joins list<str> with separator
+    _runtime.registerFunction("string_join")
+        .param<CoreVM::CoreString>("separator")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const sep = std::string(args.getString(1));
+            auto* list = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(2)));
+
+            std::string result;
+            bool first = true;
+            while (list && list->tag == 1)
+            {
+                if (!first)
+                    result += sep;
+                auto* str = reinterpret_cast<CoreVM::CoreString*>(list->getSlot(0));
+                if (str)
+                    result += *str;
+                list = reinterpret_cast<CoreVM::TypedObject*>(list->getSlot(1));
+                first = false;
+            }
+            args.setResult(args.caller()->newString(result));
+        });
+
     // clang-format on
 }
 

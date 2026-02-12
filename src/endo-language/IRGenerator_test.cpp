@@ -4243,6 +4243,110 @@ TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
 }
 
 // =============================================================================
+// String Standard Library
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.string_trim_basic")
+{
+    CHECK(executesWithOutput(R"(print (trim "  hello  "))", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_trim_empty")
+{
+    CHECK(executesWithOutput(R"(print (trim "   "))", ""));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_trim_pipeline")
+{
+    CHECK(executesWithOutput(R"(print ("  hello  " |> trim))", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_toLower_basic")
+{
+    CHECK(executesWithOutput(R"(print (toLower "HELLO"))", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_toLower_pipeline")
+{
+    CHECK(executesWithOutput(R"(print ("HELLO" |> toLower))", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_toUpper_basic")
+{
+    CHECK(executesWithOutput(R"(print (toUpper "hello"))", "HELLO"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_toUpper_pipeline")
+{
+    CHECK(executesWithOutput(R"(print ("hello" |> toUpper))", "HELLO"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_contains_true")
+{
+    CHECK(executesWithOutput(R"(print (contains "hello world" "world"))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_contains_false")
+{
+    CHECK(executesWithOutput(R"(print (contains "hello" "xyz"))", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_startsWith_true")
+{
+    CHECK(executesWithOutput(R"(print (startsWith "hello" "hel"))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_startsWith_false")
+{
+    CHECK(executesWithOutput(R"(print (startsWith "hello" "xyz"))", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_endsWith_true")
+{
+    CHECK(executesWithOutput(R"(print (endsWith "hello" "llo"))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_endsWith_false")
+{
+    CHECK(executesWithOutput(R"(print (endsWith "hello" "xyz"))", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_replace_basic")
+{
+    CHECK(executesWithOutput(R"(print (replace "l" "r" "hello"))", "herro"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_replace_multi")
+{
+    CHECK(executesWithOutput(R"(print (replace "," "" "a,b,c"))", "abc"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_replace_no_match")
+{
+    CHECK(executesWithOutput(R"(print (replace "x" "y" "hello"))", "hello"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_split_basic")
+{
+    CHECK(executesWithOutput(R"(let parts = split "," "a,b,c"; print (length parts))", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_split_head")
+{
+    CHECK(executesWithOutput(R"(let parts = split "," "a,b,c"; print (head parts ?| ""))", "a"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_join_basic")
+{
+    CHECK(executesWithOutput(R"(print (join "-" (split "," "a,b,c")))", "a-b-c"));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_join_empty")
+{
+    CHECK(executesWithOutput(R"(print (join "," []))", ""));
+}
+
+// =============================================================================
 // Higher-Order List Functions: map
 // =============================================================================
 

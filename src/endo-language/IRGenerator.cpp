@@ -3097,6 +3097,165 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // --- String builtins ---
+
+    // Unary string functions: trim, toLower, toUpper
+    if (name == "trim" || name == "toLower" || name == "toUpper")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("{} requires exactly 1 argument, got {}", name, argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate {} argument", name);
+            return true;
+        }
+        auto const sigName = "string_" + std::string(name);
+        auto* callback = findCallback(sigName + "(S)S");
+        if (!callback)
+        {
+            reportTypeError("{} builtin not found", sigName);
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, sigName);
+        return true;
+    }
+
+    // Binary predicate string functions: contains, startsWith, endsWith
+    if (name == "contains" || name == "startsWith" || name == "endsWith")
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("{} requires exactly 2 arguments, got {}", name, argExprs.size());
+            return true;
+        }
+        auto* arg1 = codegen(argExprs[0]);
+        if (!arg1)
+        {
+            reportTypeError("Failed to evaluate {} first argument", name);
+            return true;
+        }
+        auto* arg2 = codegen(argExprs[1]);
+        if (!arg2)
+        {
+            reportTypeError("Failed to evaluate {} second argument", name);
+            return true;
+        }
+        auto const sigName = "string_" + std::string(name);
+        auto* callback = findCallback(sigName + "(SS)B");
+        if (!callback)
+        {
+            reportTypeError("{} builtin not found", sigName);
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg1, arg2 }, sigName);
+        return true;
+    }
+
+    // replace: 3 args (old, new, text) → string
+    if (name == "replace")
+    {
+        if (argExprs.size() != 3)
+        {
+            reportTypeError("replace requires exactly 3 arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg1 = codegen(argExprs[0]);
+        if (!arg1)
+        {
+            reportTypeError("Failed to evaluate replace first argument");
+            return true;
+        }
+        auto* arg2 = codegen(argExprs[1]);
+        if (!arg2)
+        {
+            reportTypeError("Failed to evaluate replace second argument");
+            return true;
+        }
+        auto* arg3 = codegen(argExprs[2]);
+        if (!arg3)
+        {
+            reportTypeError("Failed to evaluate replace third argument");
+            return true;
+        }
+        auto* callback = findCallback("string_replace(SSS)S");
+        if (!callback)
+        {
+            reportTypeError("string_replace builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { arg1, arg2, arg3 }, "string_replace");
+        return true;
+    }
+
+    // split: 2 args (delimiter, text) → list<str>
+    if (name == "split")
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("split requires exactly 2 arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg1 = codegen(argExprs[0]);
+        if (!arg1)
+        {
+            reportTypeError("Failed to evaluate split first argument");
+            return true;
+        }
+        auto* arg2 = codegen(argExprs[1]);
+        if (!arg2)
+        {
+            reportTypeError("Failed to evaluate split second argument");
+            return true;
+        }
+        auto* callback = findCallback("string_split(SS)I");
+        if (!callback)
+        {
+            reportTypeError("string_split builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_split");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        return true;
+    }
+
+    // join: 2 args (separator, list) → str
+    if (name == "join")
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("join requires exactly 2 arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg1 = codegen(argExprs[0]);
+        if (!arg1)
+        {
+            reportTypeError("Failed to evaluate join first argument");
+            return true;
+        }
+        auto* arg2 = codegen(argExprs[1]);
+        if (!arg2)
+        {
+            reportTypeError("Failed to evaluate join second argument");
+            return true;
+        }
+        auto* callback = findCallback("string_join(SI)S");
+        if (!callback)
+        {
+            reportTypeError("string_join builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_join");
+        return true;
+    }
+
     return false;
 }
 
@@ -4057,6 +4216,19 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             }
             _result = _builder.createCallFunction(
                 _builder.getBuiltinFunction(*callback), { value }, "list_isEmpty");
+            return;
+        }
+        // Unary string builtins in pipeline
+        if (funcIdent->name == "trim" || funcIdent->name == "toLower" || funcIdent->name == "toUpper")
+        {
+            auto const sigName = "string_" + std::string(funcIdent->name);
+            auto* callback = findCallback(sigName + "(S)S");
+            if (!callback)
+            {
+                reportTypeError("{} builtin not found", sigName);
+                return;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, sigName);
             return;
         }
 
