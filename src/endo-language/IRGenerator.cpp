@@ -3485,6 +3485,47 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
     return false;
 }
 
+bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<CoreVM::Value*> const& args)
+{
+    // Search runtime builtins for a function matching by name and argument count.
+    for (auto const* builtin: _runtime.builtins())
+    {
+        if (!builtin->isFunction())
+            continue;
+        if (builtin->signature().name() != name)
+            continue;
+
+        auto const& sig = builtin->signature();
+        // Function signatures list only user-visible parameters (no hidden handler context).
+        if (sig.args().size() != args.size())
+            continue;
+
+        // Convert arguments to match expected types
+        auto convertedArgs = std::vector<CoreVM::Value*> {};
+        convertedArgs.reserve(args.size());
+        for (std::size_t i = 0; i < args.size(); ++i)
+        {
+            auto* arg = args[i];
+            auto const expectedType = sig.args()[i];
+            if (arg->type() != expectedType)
+            {
+                // Try basic type conversions
+                if (expectedType == CoreVM::LiteralType::String && arg->type() == CoreVM::LiteralType::Number)
+                    arg = _builder.createN2S(arg, "n2s");
+                else if (expectedType == CoreVM::LiteralType::Number
+                         && arg->type() == CoreVM::LiteralType::String)
+                    arg = _builder.createS2N(arg, "s2n");
+            }
+            convertedArgs.push_back(arg);
+        }
+
+        _builder.createCallFunction(_builder.getBuiltinFunction(*builtin), convertedArgs, name);
+        _result = _builder.get(CoreVM::CoreNumber(0)); // Native functions return unit
+        return true;
+    }
+    return false;
+}
+
 std::vector<CoreVM::Constant*> IRGenerator::createCallArgs(
     std::vector<std::unique_ptr<ast::Expr>> const& args)
 {
@@ -5077,6 +5118,9 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             }
             if (!func)
             {
+                // Fallback: try native runtime function (e.g., set_prompt_preset)
+                if (tryGenerateNativeCall(funcIdent->name, args))
+                    return;
                 reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
                 return;
             }

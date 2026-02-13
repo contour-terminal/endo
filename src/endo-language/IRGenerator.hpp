@@ -244,6 +244,12 @@ class IRGenerator final: public ast::Visitor
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
 
+    /// @brief Tries to generate a call to a native runtime function by name.
+    /// @param name The function name to look up in the runtime.
+    /// @param args Already-codegen'd argument values.
+    /// @return true if a matching native function was found and the call was generated.
+    bool tryGenerateNativeCall(std::string const& name, std::vector<CoreVM::Value*> const& args);
+
     std::vector<CoreVM::Constant*> createCallArgs(std::vector<std::unique_ptr<ast::Expr>> const& args);
 
     std::vector<CoreVM::Constant*> createCallArgs(std::string const& programName,

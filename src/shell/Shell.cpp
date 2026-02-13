@@ -41,13 +41,13 @@
 #include "commands/PsCommand.hpp"
 #include "platform/LinuxFileInfoProvider.hpp"
 #include "platform/LinuxProcessProvider.hpp"
-#include <tui/Theme.hpp>
 #include <endo-language/ASTPrinter.hpp>
 #include <endo-language/IRGenerator.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/Parser.hpp>
+#include <tui/Theme.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -909,13 +909,18 @@ int Shell::execute(std::string const& lineBuffer)
     {
         CoreVM::diagnostics::ConsoleReport report;
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
-        if (!_fsharpState.functions.empty() || !_fsharpState.valueBindings.empty())
         {
-            std::unordered_set<std::string> names;
+            auto names = std::unordered_set<std::string> {};
             for (auto const& [name, _]: _fsharpState.functions)
                 names.insert(name);
             for (auto const& binding: _fsharpState.valueBindings)
                 names.insert(binding.name);
+            // Include runtime builtin functions whose names contain underscores,
+            // so the parser routes them as F# calls (e.g., set_prompt_preset).
+            // Names without underscores (exit, cd, fg, export, ...) are shell commands.
+            for (auto const* builtin: _runtime.builtins())
+                if (builtin->isFunction() && builtin->name().find('_') != std::string::npos)
+                    names.insert(builtin->name());
             parser.setKnownFSharpFunctions(std::move(names));
         }
         auto rootNode = parser.parse();
