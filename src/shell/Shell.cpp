@@ -642,6 +642,10 @@ Shell::Shell(TTY& tty, Environment& env):
         }
     }
 
+    // Load persistent history and auto-import from other shells on first run
+    history.load();
+    history.autoImportIfEmpty();
+
     // Initialize completion system
     completer = std::make_unique<Completer>(_env, history, _fsharpState);
     prompt.setCompleter(completer.get());
@@ -856,6 +860,9 @@ int Shell::run()
                 std::chrono::steady_clock::now() - cmdStart);
             emitCommandFinished(_exitCode);
 
+            if (!lineBuffer.empty())
+                history.markLastResult(_exitCode);
+
             // Update diagnostics with known F# names from persisted state
             auto names = std::set<std::string>();
             for (auto const& [name, func]: _fsharpState.functions)
@@ -886,6 +893,9 @@ int Shell::run()
         emitCommandStart();
         _exitCode = execute(lineBuffer);
         emitCommandFinished(_exitCode);
+
+        if (!lineBuffer.empty())
+            history.markLastResult(_exitCode);
 
         // Update diagnostics with known F# names from persisted state
         auto names = std::set<std::string>();

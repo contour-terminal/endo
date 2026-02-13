@@ -603,6 +603,7 @@ The library includes:
 - [x] Implement option/flag completion stub (`OptionCompleter.cpp` - placeholder for future --help parsing)
 - [x] Implement history-based suggestions (`HistoryCompleter.cpp` - prefix matching with recency scoring)
 - [x] Implement history abstraction (`History` interface, `InMemoryHistory` implementation)
+- [x] Implement persistent shell history (`PersistentHistory` - YAML-based disk persistence with frequency tracking, auto-import from fish/zsh/bash, atomic flush, failed command filtering — 16 tests)
 - [x] Implement completer orchestrator (`Completer.cpp` - coordinates providers, generates suggestions)
 - [x] Add ghost text support to InputField (`setGhostText()`, `acceptGhostText()`, auto-clear on modification)
 - [x] Add completion styles to Theme (`ghostText`, `completionItem`, `completionSelected`, `completionDesc`)

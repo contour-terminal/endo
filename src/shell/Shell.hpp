@@ -20,6 +20,7 @@
 #include "History.hpp"
 #include "Job.hpp"
 #include "OutputDefinitionRegistry.hpp"
+#include "PersistentHistory.hpp"
 #include "Pipe.hpp"
 #include "Process.hpp"
 #include "Prompt.hpp"
@@ -93,7 +94,7 @@ class Shell final
     Prompt prompt;
     std::vector<ProcessGroup> processGroups;
     JobTable jobTable;                    ///< Table of background jobs
-    InMemoryHistory history;              ///< Command history for completion
+    PersistentHistory history;            ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
 
   private:
@@ -272,7 +273,7 @@ class Shell final
 
     int _exitCode = -1;
     std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
-    bool _interactive = true; ///< Whether running in interactive mode
+    bool _interactive = true;                             ///< Whether running in interactive mode
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID
     int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise

@@ -34,6 +34,14 @@ class History
     /// @brief Clears all history entries.
     virtual void clear() = 0;
 
+    /// @brief Reports the exit code of the last added command.
+    ///
+    /// This allows persistent history implementations to decide whether
+    /// to save a command based on whether it succeeded. The default
+    /// implementation is a no-op for in-memory history.
+    /// @param exitCode The exit code of the last command (0 = success).
+    virtual void markLastResult(int /*exitCode*/) {}
+
     /// @brief Searches for entries matching a prefix.
     /// @param prefix The prefix to search for.
     /// @param maxResults Maximum number of results to return.

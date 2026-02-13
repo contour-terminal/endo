@@ -30,6 +30,8 @@ add_library(endo-shell STATIC
     Gradient.cpp
     History.hpp
     History.cpp
+    PersistentHistory.hpp
+    PersistentHistory.cpp
     Job.hpp
     Job.cpp
     Pipe.hpp
@@ -144,6 +146,7 @@ add_executable(test-endo-shell
     FSharpCompleter_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
+    PersistentHistory_test.cpp
     Shell_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp
