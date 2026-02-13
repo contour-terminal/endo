@@ -55,6 +55,7 @@ struct FSharpPersistentState
         bool isMutable;
         bool isObjectExpr; ///< Whether value is Option/Result/Tuple (for ORELEASE)
         CoreVM::LiteralType storageType = CoreVM::LiteralType::Void; ///< IR type of the stored value
+        bool isExported = false; ///< Whether binding is exported as environment variable
     };
 
     /// Value bindings persisted across REPL prompts, in definition order.

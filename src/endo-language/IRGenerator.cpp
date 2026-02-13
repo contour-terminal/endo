@@ -297,6 +297,19 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                 generator.bindFSharpObjectVariable(binding.name, storage, binding.isMutable);
             else
                 generator.bindFSharpVariable(binding.name, storage, binding.isMutable);
+
+            // Re-export persisted exported bindings
+            if (binding.isExported)
+            {
+                auto* loadedVal = generator._builder.createLoad(storage, binding.name + ".export.load");
+                auto* strVal = generator.convertToString(loadedVal, binding.name + ".export");
+                if (auto* exportCb = generator.findCallback("export(SS)V"))
+                {
+                    generator._builder.createCallFunction(generator._builder.getBuiltinFunction(*exportCb),
+                                                          { generator._builder.get(binding.name), strVal },
+                                                          "export");
+                }
+            }
         }
 
         // Re-compute captured bindings and compile persisted functions as handlers.
@@ -3949,6 +3962,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         return;
     }
 
+    if (node.isExported && node.isFunction())
+    {
+        reportTypeError("'let export' cannot be used with function definitions");
+        return;
+    }
+
     if (node.isFunction())
     {
         // Function definition: let add x y = x + y
@@ -4033,6 +4052,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // We register the lambda as a function under the variable name
     if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(node.value.get()))
     {
+        if (node.isExported)
+        {
+            reportTypeError("'let export' cannot be used with lambda expressions");
+            return;
+        }
+
         FSharpFunction func;
         extractTypedParameters(lambda->parameters, func);
         applyInferredTypes(node.name, func);
@@ -4130,8 +4155,21 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         bindFSharpVariable(node.name, storage, node.isMutable);
     }
 
+    // Export the binding as an environment variable if requested
+    if (node.isExported)
+    {
+        auto* loadedVal = _builder.createLoad(storage, node.name + ".export.load");
+        auto* strVal = convertToString(loadedVal, node.name + ".export");
+        if (auto* exportCb = findCallback("export(SS)V"))
+        {
+            _builder.createCallFunction(
+                _builder.getBuiltinFunction(*exportCb), { _builder.get(node.name), strVal }, "export");
+        }
+    }
+
     // Record for REPL persistence (re-evaluated at each subsequent prompt)
-    _newValueBindings.push_back({ node.name, node.value.get(), node.isMutable, isObjectExpr, storageType });
+    _newValueBindings.push_back(
+        { node.name, node.value.get(), node.isMutable, isObjectExpr, storageType, node.isExported });
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;

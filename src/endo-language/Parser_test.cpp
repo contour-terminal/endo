@@ -52,6 +52,40 @@ TEST_CASE("Parser.FSharp.let_mutable")
     CHECK(intLit->value == 0);
 }
 
+TEST_CASE("Parser.FSharp.let_export")
+{
+    auto ast = parse("let export X = 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "X");
+    CHECK(letStmt->isExported == true);
+    CHECK(letStmt->isMutable == false);
+    CHECK(letStmt->isRecursive == false);
+    CHECK(letStmt->parameters.empty());
+}
+
+TEST_CASE("Parser.FSharp.let_export_mut")
+{
+    auto ast = parse("let export mut X = 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "X");
+    CHECK(letStmt->isExported == true);
+    CHECK(letStmt->isMutable == true);
+}
+
 TEST_CASE("Parser.FSharp.let_function_single_param")
 {
     auto ast = parse("let double x = x");
@@ -224,6 +258,16 @@ TEST_CASE("Parser.FSharp.ASTPrinter.let_simple")
 TEST_CASE("Parser.FSharp.ASTPrinter.let_mutable")
 {
     CHECK(parseAndPrintAST("let mut x = 0") == "let mut x = 0");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.let_export")
+{
+    CHECK(parseAndPrintAST("let export X = 42") == "let export X = 42");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.let_export_mut")
+{
+    CHECK(parseAndPrintAST("let export mut X = 0") == "let export mut X = 0");
 }
 
 TEST_CASE("Parser.FSharp.ASTPrinter.let_function")

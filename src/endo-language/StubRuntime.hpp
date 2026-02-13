@@ -57,6 +57,12 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Void)
         .bind(dummyHandler);
 
+    runtime.registerFunction("export")
+        .param<std::string>("name")
+        .param<std::string>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
     runtime.registerFunction("set")
         .param<std::string>("name")
         .param<std::string>("value")

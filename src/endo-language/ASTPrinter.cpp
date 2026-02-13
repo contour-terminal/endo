@@ -573,6 +573,8 @@ void ASTPrinter::visit(MutAssignStmt const& node)
 void ASTPrinter::visit(LetBindingStmt const& node)
 {
     _result += "let ";
+    if (node.isExported)
+        _result += "export ";
     if (node.isMutable)
         _result += "mut ";
     if (node.isRecursive)

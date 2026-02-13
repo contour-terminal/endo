@@ -2740,6 +2740,11 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     _lexer.enterFSharpExpr();
     _lexer.nextToken(); // consume 'let'
 
+    // Check for 'export' modifier
+    bool const isExported = _lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "export";
+    if (isExported)
+        _lexer.nextToken(); // consume 'export'
+
     // Check for 'mut' modifier
     bool const isMutable = _lexer.currentToken() == Token::Mut;
     if (isMutable)
@@ -2756,6 +2761,16 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                 { "Use 'let rec' without 'mut'" },
                 currentContextSnippet(),
                 "'let mut rec' is not allowed; 'mut' and 'rec' are mutually exclusive");
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+        if (isExported)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { "Use 'let export' without 'rec'" },
+                currentContextSnippet(),
+                "'let export rec' is not allowed; functions cannot be exported");
             _lexer.leaveFSharpExpr();
             return nullptr;
         }
@@ -2869,7 +2884,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         return nullptr;
     }
 
-    auto result = std::make_unique<ast::LetBindingStmt>(isMutable,
+    auto result = std::make_unique<ast::LetBindingStmt>(isExported,
+                                                        isMutable,
                                                         isRecursive,
                                                         std::move(name),
                                                         std::move(parameters),

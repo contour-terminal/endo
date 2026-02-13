@@ -857,6 +857,7 @@ struct AndBinding
 
 struct LetBindingStmt final: public Statement
 {
+    bool isExported;                        ///< True for `let export`
     bool isMutable;                         ///< True for `let mut`
     bool isRecursive;                       ///< True for `let rec`
     std::string name;                       ///< Binding/function name
@@ -866,12 +867,14 @@ struct LetBindingStmt final: public Statement
     std::vector<AndBinding> andBindings;    ///< Additional mutually recursive bindings (`and` keyword)
     std::unique_ptr<pattern::Pattern> destructurePattern; ///< Optional pattern for `let (x, y) = expr`
 
-    LetBindingStmt(bool mut,
+    LetBindingStmt(bool exported,
+                   bool mut,
                    bool rec,
                    std::string n,
                    std::vector<TypedParameter> params,
                    std::optional<TypePtr> retType,
                    std::unique_ptr<Expr> val):
+        isExported(exported),
         isMutable(mut),
         isRecursive(rec),
         name(std::move(n)),
@@ -883,6 +886,7 @@ struct LetBindingStmt final: public Statement
 
     /// Constructor for destructuring let bindings: `let (x, y) = expr`
     LetBindingStmt(bool mut, std::unique_ptr<pattern::Pattern> pat, std::unique_ptr<Expr> val):
+        isExported(false),
         isMutable(mut),
         isRecursive(false),
         parameters(),

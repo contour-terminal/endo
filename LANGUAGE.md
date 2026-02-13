@@ -350,7 +350,32 @@ for line in $(cat file.txt) | lines do
 done
 ```
 
-### 4.3 Destructuring
+### 4.3 Export Bindings
+
+Use `let export` to bind a value and simultaneously export it as an environment variable.
+The expression is evaluated, bound as a normal F# variable, and its string representation
+is exported to the environment.
+
+```fsharp
+# Export a number — binds X = 42 and exports X="42"
+let export X = 42
+
+# Export a computed value
+let export PATH_COUNT = length (split PATH ":")
+
+# Export with mutable binding
+let export mut LEVEL = 1
+LEVEL <- LEVEL + 1            # Note: mutation does not re-export
+
+# String and boolean exports
+let export GREETING = "hello"
+let export VERBOSE = true     # exports as "true"
+```
+
+> **Note:** `let export rec` is not allowed — functions cannot be exported.
+> Export happens at binding time only; subsequent mutations are not re-exported.
+
+### 4.4 Destructuring
 
 Extract values from compound types directly in bindings.
 
@@ -380,7 +405,7 @@ let addPair (a, b) = a + b
 let sumFirst [x; y; _...] = x + y
 ```
 
-### 4.4 Scope and Visibility
+### 4.5 Scope and Visibility
 
 ```fsharp
 # Block scope with braces
@@ -2304,7 +2329,7 @@ statement       = let_statement
                 | expression_statement
                 ;
 
-let_statement   = "let" [ "rec" ] [ "mut" ] let_binding { "and" let_binding } ;
+let_statement   = "let" [ "export" ] [ "rec" ] [ "mut" ] let_binding { "and" let_binding } ;
 let_binding     = pattern [ type_annotation ] "=" expression
                 | identifier { pattern } [ type_annotation ] "=" expression
                 ;
@@ -2530,6 +2555,7 @@ comment         = "#" { any_char } newline
 ║ BINDINGS                                                             ║
 ║   let x = 42                    Immutable binding                    ║
 ║   let mut x = 42                Mutable binding                      ║
+║   let export X = 42             Bind and export as env var           ║
 ║   x <- x + 1                    Mutation                             ║
 ║   let (a, b) = tuple            Destructuring                        ║
 ╠══════════════════════════════════════════════════════════════════════╣

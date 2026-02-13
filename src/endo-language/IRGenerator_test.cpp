@@ -33,6 +33,64 @@ TEST_CASE("IRGenerator.FSharp.let_multiple_bindings")
 }
 
 // =============================================================================
+// F# Let Export Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.let_export_number")
+{
+    // let export binds value and exports as environment variable
+    CHECK(executeSourceAndGetOutput("let export X = 42; print X") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_string")
+{
+    CHECK(executeSourceAndGetOutput("let export X = \"hello\"; print X") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_expression")
+{
+    CHECK(executeSourceAndGetOutput("let export X = 1 + 2; print X") == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_bool")
+{
+    CHECK(executeSourceAndGetOutput("let export X = true; print X") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_mut")
+{
+    // let export mut should work
+    CHECK(executeSourceAndGetOutput("let export mut X = 10; print X") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_rec_error")
+{
+    // let export rec is disallowed
+    CHECK(generatesIRWithError("let export rec f x = x + 1; f 1", "functions cannot be exported"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_function_error")
+{
+    // let export with function parameters is disallowed
+    CHECK(generatesIRWithError("let export f x = x + 1; f 1",
+                               "'let export' cannot be used with function definitions"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_lambda_error")
+{
+    // let export with lambda is disallowed
+    CHECK(generatesIRWithError("let export f = fun x -> x + 1; f 1",
+                               "'let export' cannot be used with lambda expressions"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_ir_generation")
+{
+    // Basic IR generation succeeds
+    REQUIRE(generatesIRSuccessfully("let export X = 42"));
+    REQUIRE(generatesIRSuccessfully("let export mut Y = \"test\""));
+}
+
+// =============================================================================
 // F# Identifier Expression IR Generation Tests
 // =============================================================================
 
