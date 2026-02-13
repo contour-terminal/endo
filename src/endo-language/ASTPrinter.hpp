@@ -82,6 +82,7 @@ class ASTPrinter: public Visitor
     void visit(ListRangeExpr const& node) override;
     void visit(ListComprehensionExpr const& node) override;
     void visit(ShellCommandExpr const& node) override;
+    void visit(SplatExpr const& node) override;
     void visit(OptionExpr const& node) override;
     void visit(ResultExpr const& node) override;
     void visit(TryExpr const& node) override;

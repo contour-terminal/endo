@@ -819,10 +819,13 @@ struct TypedParameter
 {
     std::string name;                      ///< Parameter name
     std::optional<TypePtr> typeAnnotation; ///< Optional type annotation
+    bool isVariadic = false;               ///< True for variadic parameter: `...args`
 
     explicit TypedParameter(std::string n): name(std::move(n)) {}
 
     TypedParameter(std::string n, TypePtr t): name(std::move(n)), typeAnnotation(std::move(t)) {}
+
+    TypedParameter(std::string n, bool variadic): name(std::move(n)), isVariadic(variadic) {}
 };
 
 /// Extracts parameter names from a vector of TypedParameter.
@@ -1337,6 +1340,20 @@ struct ShellCommandExpr final: public Expr
     std::unique_ptr<Statement> command; ///< The shell command/pipeline to execute
 
     explicit ShellCommandExpr(std::unique_ptr<Statement> cmd): command(std::move(cmd)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Splat expression: `...args` inside a shell command body
+///
+/// Expands a list variable into individual shell command arguments.
+/// Used in alias-style function definitions:
+/// - `let ll ...args = & exa -l ...args` — splats args into the shell command
+struct SplatExpr final: public Expr
+{
+    std::string name; ///< Variable name to splat
+
+    explicit SplatExpr(std::string n): name(std::move(n)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

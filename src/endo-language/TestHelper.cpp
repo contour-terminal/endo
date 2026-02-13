@@ -667,13 +667,60 @@ TestRuntime::TestRuntime()
             args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0111) != 0 ? 1 : 0));
         });
 
-    // Register command substitution builtins (needed for structured pipeline fallback)
+    // Register command substitution builtins (needed for structured pipeline fallback and & shell commands)
     runtime.registerFunction("internal.subst_start")
         .returnType(CoreVM::LiteralType::Void)
-        .bind([](CoreVM::Params&) {});
+        .bind([this](CoreVM::Params&) {
+            mockSubstActive = true;
+            mockSubstBuffer.clear();
+        });
     runtime.registerFunction("internal.subst_end")
         .returnType(CoreVM::LiteralType::String)
-        .bind([](CoreVM::Params& args) { args.setResult(std::string {}); });
+        .bind([this](CoreVM::Params& args) {
+            mockSubstActive = false;
+            // Trim trailing newline like real shell subst
+            auto result = std::move(mockSubstBuffer);
+            while (!result.empty() && result.back() == '\n')
+                result.pop_back();
+            args.setResult(std::move(result));
+        });
+
+    // Register shell command building builtins (needed for & shell commands)
+    runtime.registerFunction("internal.cmd_start")
+        .param<CoreVM::CoreString>("cmd")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            mockCmdName = args.getString(1);
+            mockCmdArgs.clear();
+        });
+    runtime.registerFunction("internal.cmd_arg")
+        .param<CoreVM::CoreString>("arg")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) { mockCmdArgs.emplace_back(args.getString(1)); });
+    runtime.registerFunction("internal.cmd_exec")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            // Mock shell: simulate "echo" by writing args to output buffer
+            if (mockCmdName == "echo")
+            {
+                std::string output;
+                for (size_t i = 0; i < mockCmdArgs.size(); ++i)
+                {
+                    if (i > 0)
+                        output += ' ';
+                    output += mockCmdArgs[i];
+                }
+                output += '\n';
+                if (mockSubstActive)
+                    mockSubstBuffer += output;
+                else
+                    capturedOutput += output;
+            }
+            args.setResult(CoreVM::CoreNumber(0));
+        });
+    runtime.registerFunction("getvar.exitstatus")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); });
 
     // Register structured_docker_ps mock: returns 3 container records
     runtime.registerFunction("structured_docker_ps")

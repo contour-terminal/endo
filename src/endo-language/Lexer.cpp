@@ -192,7 +192,12 @@ Token Lexer::nextToken()
         case '.':
             nextChar();
             if (_currentChar == '.')
-                return consumeCharAndConfirmToken(Token::DotDot); // .. (range operator)
+            {
+                nextChar();
+                if (_currentChar == '.')
+                    return consumeCharAndConfirmToken(Token::Ellipsis); // ... (variadic/splat)
+                return confirmToken(Token::DotDot);                     // .. (range operator)
+            }
             // In F# mode, single dot is a field access operator
             if (_fsharpDepth > 0)
                 return confirmToken(Token::Dot);

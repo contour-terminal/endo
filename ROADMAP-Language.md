@@ -72,6 +72,9 @@ This document tracks the implementation status of F# language features as define
 - [x] Type-annotated functions
 - [x] Higher-order functions: passing functions as arguments (`let apply f x = f x`)
 - [x] HOF with partial application, closures capturing function refs, and pipelines
+- [x] Variadic parameters: `let f ...args = ...` — collects extra arguments into a list
+- [x] Splat expression: `...args` in shell commands — expands list into individual command arguments
+- [x] Shell aliases via let bindings: `let ll ...args = & exa -l ...args`
 
 ## Lists & Collections
 
@@ -198,6 +201,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Redirections: `>`, `>>`, `<`, `2>&1`
 - [x] Here-strings: `<<<`
 - [x] Job management: `&`, `jobs`, `fg`, `bg`
+- [x] Statement-level `& cmd`: shell-first execution bypassing F# bindings
+- [x] Context-aware shell commands: capture mode in expression context, normal I/O at statement level
 
 ## Completion System
 

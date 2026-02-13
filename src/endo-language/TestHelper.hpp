@@ -67,6 +67,10 @@ struct TestRuntime
     CoreVM::diagnostics::BufferedReport report;
     std::string capturedOutput;                           ///< Buffer for captured output from print/println
     std::unordered_map<std::string, std::string> mockEnv; ///< Mock environment variables for env builtin
+    std::string mockCmdName;                              ///< Current shell command being built
+    std::vector<std::string> mockCmdArgs;                 ///< Arguments for the current shell command
+    bool mockSubstActive = false;                         ///< True when in subst_start/subst_end capture mode
+    std::string mockSubstBuffer;                          ///< Buffer for captured output during subst mode
 
     TestRuntime();
 

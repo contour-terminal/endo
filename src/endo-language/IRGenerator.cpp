@@ -247,6 +247,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             func.body = persisted.body;
             func.returnKind = persisted.returnKind;
             func.isRecursive = persisted.isRecursive;
+            func.hasVariadicParam = persisted.hasVariadicParam;
             // capturedBindings intentionally left empty — captures from previous
             // IR programs are no longer valid; only pure functions persist correctly.
             generator.registerFSharpFunction(name, std::move(func));
@@ -409,6 +410,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             persisted.body = func.body;
             persisted.returnKind = func.returnKind;
             persisted.isRecursive = func.isRecursive;
+            persisted.hasVariadicParam = func.hasVariadicParam;
             persistentState->functions[name] = std::move(persisted);
         }
 
@@ -595,12 +597,15 @@ void IRGenerator::extractTypedParameters(std::vector<ast::TypedParameter> const&
 {
     func.parameters.clear();
     func.parameterTypes.clear();
+    func.hasVariadicParam = false;
     func.parameters.reserve(typedParams.size());
     func.parameterTypes.reserve(typedParams.size());
     for (auto const& tp: typedParams)
     {
         func.parameters.push_back(tp.name);
         func.parameterTypes.push_back(tp.typeAnnotation);
+        if (tp.isVariadic)
+            func.hasVariadicParam = true;
     }
 }
 
@@ -2549,6 +2554,8 @@ bool IRGenerator::containsRuntimeExpr(std::vector<std::unique_ptr<ast::Expr>> co
             return true;
         if (dynamic_cast<ast::ConcatExpr const*>(expr.get()) != nullptr)
             return true;
+        if (dynamic_cast<ast::SplatExpr const*>(expr.get()) != nullptr)
+            return true;
     }
     return false;
 }
@@ -2601,6 +2608,13 @@ void IRGenerator::buildCommandArgs(std::string const& programName,
 
     for (auto const& arg: args)
     {
+        // SplatExpr emits cmd_arg calls internally (in a loop), so skip the explicit cmd_arg here
+        if (dynamic_cast<ast::SplatExpr const*>(arg.get()))
+        {
+            codegen(arg.get());
+            continue;
+        }
+
         auto* value = codegen(arg.get());
         if (!value)
             continue; // Error already reported
@@ -4175,7 +4189,11 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 {
     TRACE_SCOPE("visit(ExprStmt)");
 
+    // At statement level, shell commands should run with normal I/O (not capture mode)
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    _shellCommandCaptureMode = false;
     auto* value = codegen(node.expr.get());
+    _shellCommandCaptureMode = savedCaptureMode;
 
     // When a boolean literal is used as a statement (e.g., bare `true` or `false`),
     // set the shell exit code accordingly (true→0, false→1) to match shell semantics.
@@ -5052,7 +5070,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 reportTypeError("{} requires exactly one string argument", std::string_view(funcIdent->name));
                 return;
             }
+            // Print argument is an expression context → restore capture mode
+            auto const savedCapture = _shellCommandCaptureMode;
+            _shellCommandCaptureMode = true;
             generatePrintCall(argExprs[0], funcIdent->name == "println");
+            _shellCommandCaptureMode = savedCapture;
             return;
         }
 
@@ -5081,9 +5103,12 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
     }
 
-    // Evaluate all arguments (arguments are NOT in tail position)
+    // Evaluate all arguments (arguments are NOT in tail position).
+    // Arguments are expression contexts, so restore capture mode for shell commands.
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    _shellCommandCaptureMode = true; // Arguments are expression contexts → capture mode
     std::vector<CoreVM::Value*> args;
     for (ast::Expr const* argExpr: argExprs)
     {
@@ -5095,7 +5120,8 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
         args.push_back(argValue);
     }
-    _inTailPosition = savedTailPos; // Restore: the call itself inherits parent's tail position
+    _shellCommandCaptureMode = savedCaptureMode; // Restore for function body inlining
+    _inTailPosition = savedTailPos;              // Restore: the call itself inherits parent's tail position
 
     // The base can be:
     // 1. An identifier (named function): double 5
@@ -5144,21 +5170,57 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         return;
     }
 
-    // Check arity: over-application is an error, under-application creates partial application
-    if (args.size() > func->arity())
+    // For variadic functions, collect extra arguments into a list for the variadic parameter
+    if (func->hasVariadicParam && func->arity() > 0)
     {
-        reportTypeError("Function '{}' expects {} {}, got {}",
-                        std::string_view(funcName),
-                        func->arity(),
-                        func->arity() == 1 ? "argument" : "arguments",
-                        args.size());
-        return;
-    }
+        auto const fixedCount = func->arity() - 1; // Non-variadic params
+        if (args.size() < fixedCount)
+        {
+            generatePartialApplication(func, funcName, args);
+            return;
+        }
 
-    if (args.size() < func->arity())
+        // Build a list from the variadic arguments (args[fixedCount..])
+        // Start with Nil (empty list)
+        auto* nilTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+        CoreVM::Value* list = _builder.createObjAlloc(nilTypeId, "varargs.nil");
+        list = _builder.createObjSetTag(list, _builder.get(CoreVM::CoreNumber(0)), "varargs.nil.tag"); // Nil
+
+        // Build Cons cells in reverse order so first extra arg is at the head
+        for (auto i = static_cast<int>(args.size()) - 1; i >= static_cast<int>(fixedCount); --i)
+        {
+            auto* consTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+            CoreVM::Value* cons = _builder.createObjAlloc(consTypeId, "varargs.cons");
+            cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "varargs.cons.tag");
+            cons =
+                _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), args[i], "varargs.head");
+            cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), list, "varargs.tail");
+            list = cons;
+        }
+
+        // Replace variadic args with the built list
+        std::vector<CoreVM::Value*> finalArgs(args.begin(), args.begin() + fixedCount);
+        finalArgs.push_back(list);
+        args = std::move(finalArgs);
+    }
+    else
     {
-        generatePartialApplication(func, funcName, args);
-        return;
+        // Check arity: over-application is an error, under-application creates partial application
+        if (args.size() > func->arity())
+        {
+            reportTypeError("Function '{}' expects {} {}, got {}",
+                            std::string_view(funcName),
+                            func->arity(),
+                            func->arity() == 1 ? "argument" : "arguments",
+                            args.size());
+            return;
+        }
+
+        if (args.size() < func->arity())
+        {
+            generatePartialApplication(func, funcName, args);
+            return;
+        }
     }
 
     // If the function was compiled as a handler (UCALL/UTCALL), use that path
@@ -6646,20 +6708,33 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
 
 void IRGenerator::visit(ast::ShellCommandExpr const& node)
 {
-    // Shell command expression: & git status
-    // Captures command output as a string (like command substitution).
-    //
-    // IR pattern (same as SubstitutionExpr):
-    //   1. Start capture - redirects stdout to a pipe
-    //   2. Execute the command pipeline
-    //   3. End capture - reads captured output and returns as string
-
     if (!node.command)
     {
         // Empty command - result is empty string
         _result = _builder.get("");
         return;
     }
+
+    if (!_shellCommandCaptureMode)
+    {
+        // Statement-level: run command with normal I/O (no capture)
+        codegen(node.command.get());
+
+        // Set result to exit code
+        auto* exitCb = findCallback("getvar.exitstatus()I");
+        if (exitCb)
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*exitCb), {}, "exit_status");
+        else
+            _result = _builder.get(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Expression-level: capture command output as a string (like command substitution).
+    //
+    // IR pattern (same as SubstitutionExpr):
+    //   1. Start capture - redirects stdout to a pipe
+    //   2. Execute the command pipeline
+    //   3. End capture - reads captured output and returns as string
 
     // 1. Start capture - redirects stdout to a pipe
     auto* startCb = findCallback("internal.subst_start()V");
@@ -6681,6 +6756,65 @@ void IRGenerator::visit(ast::ShellCommandExpr const& node)
         return;
     }
     _result = _builder.createCallFunction(_builder.getBuiltinFunction(*endCb), {}, "subst_end");
+}
+
+void IRGenerator::visit(ast::SplatExpr const& node)
+{
+    // Splat expression: ...args inside a shell command
+    // Iterates a list variable and emits each element as a cmd_arg
+
+    auto* listValue = lookupFSharpVariable(node.name);
+    if (!listValue)
+    {
+        reportTypeError("Undefined variable '{}' in splat expression", std::string_view(node.name));
+        return;
+    }
+
+    // Load the list value (it's stored in an alloca)
+    if (auto* alloca = dynamic_cast<CoreVM::AllocaInstr*>(listValue))
+        listValue = _builder.createLoad(alloca, "splat.list");
+
+    auto* cmdArgCb = findCallback("internal.cmd_arg(S)V");
+    if (!cmdArgCb)
+    {
+        reportTypeError("Internal error: internal.cmd_arg builtin not found");
+        return;
+    }
+
+    // Build a while loop: while list tag == 1 (Cons), extract head, call cmd_arg, advance to tail
+    auto* handler = _builder.handler();
+    auto* condBlock = handler->createBlock("splat.cond");
+    auto* bodyBlock = handler->createBlock("splat.body");
+    auto* endBlock = handler->createBlock("splat.end");
+
+    // Store list pointer in an alloca for the loop
+    auto* cursorStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "splat.cursor");
+    _builder.createStore(cursorStorage, listValue);
+    _builder.createBr(condBlock);
+
+    // Condition: check tag == 1 (Cons)
+    _builder.setInsertPoint(condBlock);
+    auto* cursorLoad = _builder.createLoad(cursorStorage, "splat.cursor.load");
+    auto* tag = _builder.createObjGetTag(cursorLoad, "splat.tag");
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* isCons = _builder.createNCmpEQ(tag, tag1, "splat.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head, pass directly to cmd_arg (list elements are already string pointers), advance to
+    // tail
+    _builder.setInsertPoint(bodyBlock);
+    auto* cursorForHead = _builder.createLoad(cursorStorage, "splat.for_head");
+    auto* head = _builder.createObjGetSlot(cursorForHead, _builder.get(CoreVM::CoreNumber(0)), "splat.head");
+    _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCb), { head }, "splat.cmd_arg");
+
+    auto* cursorForTail = _builder.createLoad(cursorStorage, "splat.for_tail");
+    auto* tail = _builder.createObjGetSlot(cursorForTail, _builder.get(CoreVM::CoreNumber(1)), "splat.tail");
+    _builder.createStore(cursorStorage, tail);
+    _builder.createBr(condBlock);
+
+    // End block
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.get(CoreVM::CoreNumber(0)); // unit value
 }
 
 // ============================================================================

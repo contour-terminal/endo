@@ -6683,3 +6683,66 @@ TEST_CASE("IRGenerator.FSharp.structured.toText_with_jobs")
     // toText with jobs in pipeline
     CHECK(generatesIRSuccessfully("let r = jobs |> toText\nprint r"));
 }
+
+// ============================================================================
+// Variadic Parameters and Shell Aliases
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.variadic.basic_list_collection")
+{
+    // Variadic parameter collects extra args into a list
+    CHECK(generatesIRSuccessfully("let f ...xs = xs; f 1 2 3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.zero_variadic_args")
+{
+    // Zero variadic args should produce an empty list
+    CHECK(generatesIRSuccessfully("let f ...xs = xs; f"));
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.mixed_fixed_and_variadic")
+{
+    // Fixed param + variadic collects remaining into list
+    CHECK(generatesIRSuccessfully("let f x ...rest = x; f 1 2 3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.alias_with_string_args")
+{
+    // Alias with a string argument passed through splat
+    CHECK(executeSourceAndGetOutput(R"(let greet ...args = & echo hello ...args; greet "world")")
+          == "hello world\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.alias_multiple_string_args")
+{
+    // Alias with multiple string arguments passed through splat
+    CHECK(executeSourceAndGetOutput(R"(let greet ...args = & echo hello ...args; greet "foo" "bar")")
+          == "hello foo bar\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.capture_mode_with_splat")
+{
+    // let binding = expression context → capture mode, with splat to trigger dynamic cmd path
+    CHECK(executeSourceAndGetOutput(R"(let run ...args = & echo test ...args; print (run "a"))") == "test a");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.stmt_level_with_splat")
+{
+    // Statement-level shell command via alias function — normal I/O (no capture)
+    CHECK(executeSourceAndGetOutput(R"(let say ...args = & echo hi ...args; say "there")") == "hi there\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.ir_generation")
+{
+    // IR generation for various variadic + splat patterns
+    CHECK(generatesIRSuccessfully(R"(let ll ...args = & echo -l ...args; ll "hello")"));
+    CHECK(generatesIRSuccessfully(R"(let ll ...args = & echo -l ...args; ll "a" "b")"));
+    // Shell command with splat, single fixed arg
+    CHECK(generatesIRSuccessfully(R"(let run x ...args = & echo x ...args; run "test" "a")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.stmt_level_ampersand")
+{
+    // & at statement level generates IR successfully
+    CHECK(generatesIRSuccessfully("& echo test"));
+}

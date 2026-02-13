@@ -127,7 +127,8 @@ bool Parser::isParameterToken() const noexcept
         case Token::GreaterRndOpen:
         case Token::Tilde:
         case Token::DblQuoteStart:
-        case Token::FStringStart: return true;
+        case Token::FStringStart:
+        case Token::Ellipsis: return true;
         case Token::Backtick:
             // Backtick is a parameter token only at nesting level 0
             return _backtickNestingLevel == 0;
@@ -166,6 +167,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
         case Token::Let:
             // F# style let binding
             return parseLet();
+        case Token::Ampersand: {
+            // Shell-first execution: `& cmd args...` bypasses F# function bindings
+            // Parse as a ShellCommandExpr wrapped in ExprStmt (statement-level = normal I/O)
+            _lexer.enterFSharpExpr();
+            auto expr = parseShellCommandExpr();
+            _lexer.leaveFSharpExpr();
+            if (!expr)
+                return nullptr;
+            return std::make_unique<ast::ExprStmt>(std::move(expr));
+        }
         case Token::Type:
             // Record type definition: type Person = { name: str; age: int }
             return parseTypeDefinition();
@@ -1859,6 +1870,20 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
         case Token::Tilde: return parseTildeExpansion();
         case Token::DblQuoteStart: return parseInterpolatedString();
         case Token::FStringStart: return parseFStringExpression();
+        case Token::Ellipsis: {
+            // Splat expression: ...args (expands a list into individual arguments)
+            _lexer.nextToken(); // consume '...'
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add identifier after '...'" },
+                                                   currentContextSnippet(),
+                                                   "Expected identifier after '...' for splat expression");
+                return nullptr;
+            }
+            auto name = consumeLiteral();
+            return std::make_unique<ast::SplatExpr>(std::move(name));
+        }
         default:
             _report.syntaxErrorWithSuggestions(currentLocation(),
                                                {},
@@ -2633,6 +2658,22 @@ TypePtr Parser::parseBaseType()
 std::optional<ast::TypedParameter> Parser::parseTypedParameter()
 {
     TRACE_SCOPE("parseTypedParameter");
+
+    // Variadic parameter: ...name
+    if (_lexer.currentToken() == Token::Ellipsis)
+    {
+        _lexer.nextToken(); // consume '...'
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add identifier after '...'" },
+                                               currentContextSnippet(),
+                                               "Expected identifier after '...' for variadic parameter");
+            return std::nullopt;
+        }
+        auto name = consumeLiteral();
+        return ast::TypedParameter(std::move(name), /*variadic=*/true);
+    }
 
     if (_lexer.currentToken() == Token::Identifier)
     {

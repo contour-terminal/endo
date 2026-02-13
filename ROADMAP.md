@@ -488,6 +488,16 @@ src/
     - [x] `PatternIRGenerator`: multi-slot payload extraction with separate `createLoad` per slot (loop-safe)
     - [x] `PatternIRGenerator`: `collectBindings` traverses payload even for unknown constructors (pre-lookup phase)
     - [x] 3 parser tests + 10 IR generation tests covering enums, single/multi-slot payloads, wildcards, functions, and coexistence with Option/Result
+  - [x] Variadic parameters and shell aliases (Phase 7)
+    - [x] `Token::Ellipsis` (`...`) lexer token for variadic/splat syntax
+    - [x] `TypedParameter::isVariadic` flag and `SplatExpr` AST node with Visitor support
+    - [x] Parser: `...name` in typed parameters creates variadic param, `...name` in shell args creates `SplatExpr`
+    - [x] Parser: `& cmd` at statement level (`Token::Ampersand` case in `parseStmt`) for shell-first execution
+    - [x] IR codegen: variadic arguments collected into List (Cons cells) at call site in `visit(ApplicationExpr)`
+    - [x] IR codegen: `SplatExpr` generates while loop iterating list, emitting `cmd_arg` per element
+    - [x] IR codegen: context-aware `ShellCommandExpr` — capture mode (expression context) vs normal I/O (statement context) via `_shellCommandCaptureMode`
+    - [x] IR codegen: `ApplicationExpr` restores capture mode for argument evaluation (expression context)
+    - [x] 9 test cases covering variadic params, shell aliases with splat, capture mode, IR generation
 
 **Implementation Notes:**
 - See `LANGUAGE.md` Section 14 for detailed parser implementation notes
@@ -500,7 +510,8 @@ src/
 - **Closures**: Captures sorted alphabetically, prepended as extra handler parameters; REPL-persisted functions re-compute captures at prompt start
 - **Mutual recursion**: Dispatch-loop optimization with integer tag selecting function body; separate from self-recursion's single-function loop
 - **Lists**: Cons-cell linked list via TypedObject; comprehension codegen uses two-phase approach (forward iteration + reverse pass)
-- **Shell command expressions**: `& command` temporarily leaves F# mode, reuses `SubstitutionExpr` logic for output capture
+- **Shell command expressions**: `& command` temporarily leaves F# mode, reuses `SubstitutionExpr` logic for output capture; statement-level `& cmd` runs with normal I/O (no capture)
+- **Variadic parameters**: `...args` collects extra arguments into a List at call site; `SplatExpr` in shell commands iterates list emitting `cmd_arg` per element; enables alias-style function definitions (`let ll ...args = & exa -l ...args`)
 
 **See also:** `ROADMAP-StructuredData.md` for Milestone 6 covering structured data
 and system interaction (object pipelines, structured commands, data manipulation verbs).
@@ -762,7 +773,7 @@ Component (base class)
 - [x] Implement priority hover chain: diagnostics → language hover → command resolver
 - [x] Consume LSP hover/diagnostics capabilities via in-process API for consistent behavior
   between the interactive shell and external editors
-- [ ] Implement alias expansion tooltips (placeholder for when aliases are implemented)
+- [ ] Implement alias expansion tooltips (variadic let bindings serve as aliases; show expansion preview)
 - [ ] Implement inline help for commands
 - [ ] Implement error tooltips with suggestions
 - [ ] Integrate with man pages for command help

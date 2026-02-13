@@ -81,6 +81,7 @@ enum class TokenCategory
         case GreaterEqual:
         case ColonColon:
         case DotDot:
+        case Ellipsis:
         case LeftArrow:
         case Question:
         case Caret:

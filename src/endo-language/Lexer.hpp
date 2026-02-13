@@ -126,6 +126,7 @@ enum class Token
     QuestionPipe, // '?|'
     QuestionDot,  // '?.' (optional chaining)
     Dot,          // '.' (field access, F# mode only)
+    Ellipsis,     // '...' (variadic parameter / splat, F# mode only)
     // Note: >> uses GreaterGreater token (context determines compose vs redirect)
     // Note: << uses LessLess token (context determines back-compose vs here-doc)
 };
@@ -493,8 +494,9 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Question: name = "?"; break;
             case QuestionPipe: name = "?|"; break;
             case QuestionDot: name = "?."; break;
-            case Dot:
-                name = ".";
+            case Dot: name = "."; break;
+            case Ellipsis:
+                name = "...";
                 break;
                 // Note: >> and << use GreaterGreater/LessLess tokens
         }

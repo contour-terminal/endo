@@ -41,6 +41,7 @@ struct FSharpPersistentState
         ast::Expr const* body;                              ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
         bool isRecursive = false;                           ///< Whether function is declared with `let rec`
+        bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
     };
 
     /// Function table persisted across REPL prompts (name -> function metadata).
@@ -187,6 +188,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::ListRangeExpr const& node) override;
     void visit(ast::ListComprehensionExpr const& node) override;
     void visit(ast::ShellCommandExpr const& node) override;
+    void visit(ast::SplatExpr const& node) override;
     void visit(ast::OptionExpr const& node) override;
     void visit(ast::ResultExpr const& node) override;
     void visit(ast::TryExpr const& node) override;
@@ -313,6 +315,7 @@ class IRGenerator final: public ast::Visitor
         ast::Expr const* body;                              ///< Function body expression (for inlining)
         ReturnKind returnKind = ReturnKind::Plain;          ///< Whether function returns Result/Option type
         bool isRecursive = false;                           ///< Whether function is declared with `let rec`
+        bool hasVariadicParam = false;                      ///< True if last param is variadic (...args)
         /// Names of all functions in the mutual recursion group (empty for non-mutual).
         std::vector<std::string> mutualGroup;
         /// Captured variable bindings from the enclosing scope at function creation time.
@@ -518,6 +521,10 @@ class IRGenerator final: public ast::Visitor
     bool _hasErrors = false;
     CoreVM::Value* _result = nullptr;
     CoreVM::Signature _processCallSignature;
+
+    /// When false, ShellCommandExpr runs with normal I/O (statement-level).
+    /// When true (default), ShellCommandExpr captures stdout as a string.
+    bool _shellCommandCaptureMode = true;
 
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;

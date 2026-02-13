@@ -69,6 +69,7 @@ struct ConcatListExpr;
 struct ListRangeExpr;
 struct ListComprehensionExpr;
 struct ShellCommandExpr;
+struct SplatExpr;
 struct OptionExpr;
 struct ResultExpr;
 struct TryExpr;
@@ -161,6 +162,7 @@ struct Visitor
     virtual void visit(ListRangeExpr const&) = 0;
     virtual void visit(ListComprehensionExpr const&) = 0;
     virtual void visit(ShellCommandExpr const&) = 0;
+    virtual void visit(SplatExpr const&) = 0;
     virtual void visit(OptionExpr const&) = 0;
     virtual void visit(ResultExpr const&) = 0;
     virtual void visit(TryExpr const&) = 0;

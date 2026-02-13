@@ -864,6 +864,12 @@ void ASTPrinter::visit(ShellCommandExpr const& node)
         node.command->accept(*this);
 }
 
+void ASTPrinter::visit(SplatExpr const& node)
+{
+    _result += "...";
+    _result += node.name;
+}
+
 void ASTPrinter::visit(OptionExpr const& node)
 {
     if (node.isSome)
