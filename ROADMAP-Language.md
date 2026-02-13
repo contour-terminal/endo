@@ -265,6 +265,7 @@ Consult this section to determine what to work on next.
 - [x] `::` (cons) operator codegen: right-associative binary op creating Cons cells (`ConsExpr`)
 - [x] `@` (list concat) operator: `list_concat` native callback with cons-cell copying
 - [x] List print support in `convertToString()` via `list_to_string` / `object_to_string` native callbacks
+- [x] Record print support in `convertToString()` Number branch: dispatch non-List typed objects to `object_to_string` (fixes `each println` on record lists)
 - [x] Fix `createAllocaInEntryBlock`: new `insertAfterAllocas()` method maintains alloca-prefix invariant (fixes 2-param recursive functions with object pattern matching)
 
 ### Phase 3 — List Standard Library (depends on Phase 2)

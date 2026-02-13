@@ -6246,6 +6246,28 @@ TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each")
         structuredExecutesWithOutput("docker ps |> each (fun c -> print c.names)", "web-serverdb-maincache"));
 }
 
+TEST_CASE("IRGenerator.StructuredPipeline.each_println_records")
+{
+    // each println on a list of records should format each record, not print raw pointers
+    CHECK(executesWithOutput("let _ = jobs |> each println",
+                             "{ id = 1; state = Running; command = sleep 100; pid = 1234 }\n"
+                             "{ id = 2; state = Stopped; command = vim; pid = 5678 }\n"
+                             "{ id = 3; state = Done; command = make build; pid = 9012 }\n"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each_println")
+{
+    // Structured command records should also format correctly via each println
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> each println",
+        "{ id = abc123def; image = nginx:latest; command = /docker-entrypoint…; "
+        "created = 2024-01-15 10:00:00; status = Up 3 hours; ports = 80/tcp; names = web-server }\n"
+        "{ id = def456ghi; image = postgres:16; command = docker-entrypoint.s…; "
+        "created = 2024-01-14 08:00:00; status = Up 2 days; ports = 5432/tcp; names = db-main }\n"
+        "{ id = ghi789jkl; image = redis:7; command = docker-entrypoint.s…; "
+        "created = 2024-01-13 12:00:00; status = Exited (0) 1 hour ago; ports = ; names = cache }\n"));
+}
+
 // --- Placeholder lambda sugar with structured records ---
 
 TEST_CASE("IRGenerator.StructuredPipeline.placeholder.docker_ps_map_names")

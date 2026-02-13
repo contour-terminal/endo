@@ -2660,14 +2660,24 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
 {
     if (value->type() == CoreVM::LiteralType::Number)
     {
-        // Check if this Number is actually a list object pointer (e.g., from list_concat native)
-        if (auto objTypeId = getObjectTypeId(value); objTypeId && *objTypeId == CoreVM::BuiltinTypeId::List)
+        if (auto objTypeId = getObjectTypeId(value))
         {
-            auto* callback = findCallback("list_to_string(I)S");
-            if (callback)
+            if (*objTypeId == CoreVM::BuiltinTypeId::List)
             {
-                return _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+                auto* callback = findCallback("list_to_string(I)S");
+                if (callback)
+                    return _builder.createCallFunction(
+                        _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+            else
+            {
+                // Typed objects stored as Number (records, tuples, options, results from native callbacks).
+                // Dispatch to object_to_string which handles all typed objects at runtime via
+                // valueToString().
+                auto* callback = findCallback("object_to_string(I)S");
+                if (callback)
+                    return _builder.createCallFunction(
+                        _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".obj2s");
             }
         }
         return _builder.createN2S(value, std::string(label) + ".n2s");
