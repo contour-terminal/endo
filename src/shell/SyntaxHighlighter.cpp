@@ -40,22 +40,20 @@ HighlightMap computeHighlightMap(std::string_view source)
             }
 
             // Determine token byte length.
-            // Use literal size if available, otherwise compute from source location range.
-            // Fall back to 1 for tokens with empty literal and zero range (e.g., last token before EOF).
+            // Start with literal size, then take the maximum with the range-based calculation.
+            // This handles tokens where literal excludes delimiters (e.g., single-quoted strings
+            // where literal is "hello" but source span is "'hello'").
             auto byteLen = literal.size();
-            if (byteLen == 0)
+            if (range.begin.line == range.end.line)
             {
-                if (range.begin.line == range.end.line)
-                {
-                    auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
-                    auto const byteEnd = columnToByteOffset(source, lineStart, range.end.column);
-                    if (byteEnd > byteStart)
-                        byteLen = byteEnd - byteStart;
-                }
-                // Fallback: token has no literal and zero range (e.g., last token before EOF)
-                if (byteLen == 0 && byteStart < source.size())
-                    byteLen = 1;
+                auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
+                auto const byteEnd = columnToByteOffset(source, lineStart, range.end.column);
+                if (byteEnd > byteStart && byteEnd - byteStart > byteLen)
+                    byteLen = byteEnd - byteStart;
             }
+            // Fallback: token has no literal and zero range (e.g., last token before EOF)
+            if (byteLen == 0 && byteStart < source.size())
+                byteLen = 1;
 
             // Fill the map for this token's byte range
             for (std::size_t i = 0; i < byteLen && byteStart + i < map.size(); ++i)

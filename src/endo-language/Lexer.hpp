@@ -197,7 +197,16 @@ class StringSource final: public Source
     [[nodiscard]] char32_t readChar() override
     {
         if (_offset >= _source.size())
+        {
+            // On first EOF, advance column to maintain consistent "past-the-end" semantics
+            // so confirmToken captures the correct end position for the last token.
+            if (_offset == _source.size())
+            {
+                ++_location.column;
+                ++_offset; // Prevent re-advancing on subsequent EOF reads
+            }
             return static_cast<char32_t>(-1);
+        }
 
         size_t bytesConsumed = 0;
         auto const result = unicode::from_utf8(_source.data() + _offset, &bytesConsumed);

@@ -60,6 +60,17 @@ TEST_CASE("SyntaxHighlighter.string_literal", "[SyntaxHighlighter]")
     }
 }
 
+TEST_CASE("SyntaxHighlighter.single_quoted_string", "[SyntaxHighlighter]")
+{
+    // println 'hello' — single-quoted string including quotes must be fully highlighted
+    auto const source = std::string("println 'hello'");
+    auto const map = computeHighlightMap(source);
+    REQUIRE(map.size() == source.size());
+    // "println" is a keyword/variable, then space, then the entire 'hello' (including quotes) should be
+    // String
+    expectRange(map, 8, 7, String); // 'hello' = 7 bytes including quotes
+}
+
 TEST_CASE("SyntaxHighlighter.number_literal", "[SyntaxHighlighter]")
 {
     auto const map = computeHighlightMap("123");
