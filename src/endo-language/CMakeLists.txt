@@ -7,6 +7,8 @@ add_library(endo STATIC
     Lexer.hpp
     Lexer.cpp
     TokenClassification.hpp
+    ContextAwareTokenizer.hpp
+    ContextAwareTokenizer.cpp
 
     # AST
     AST.hpp

@@ -19,6 +19,7 @@ enum class TokenCategory
     Comment,
     Type,
     Punctuation,
+    Function, ///< Shell builtins (cd, export, exit, etc.)
 };
 
 /// @brief Classifies an endo Token into a semantic category.
@@ -118,6 +119,51 @@ enum class TokenCategory
         // Everything else (whitespace, EOF, etc.)
         default: return TokenCategory::Default;
     }
+}
+
+/// @brief Checks whether a token is an F#-style keyword that starts an F# statement.
+/// @param token The token to check.
+/// @return True if the token is a known F# statement-starting keyword or constructor.
+[[nodiscard]] constexpr bool isFSharpStartToken(Token token) noexcept
+{
+    using enum Token;
+    switch (token)
+    {
+        case Let:
+        case Fun:
+        case Match:
+        case Type:
+        case Rec:
+        case Try:
+        case Mut:
+        case True:
+        case False:
+        case OptionSome:
+        case OptionNone:
+        case ResultOk:
+        case ResultError: return true;
+        default: return false;
+    }
+}
+
+/// @brief Checks whether an identifier is a known F# function that triggers F# mode at statement start.
+/// @param name The identifier to check.
+/// @return True if the identifier is a known F# function.
+[[nodiscard]] constexpr bool isKnownFSharpFunction(std::string_view name) noexcept
+{
+    return name == "print" || name == "println" || name == "each";
+}
+
+/// @brief Checks whether an identifier is a known shell builtin command.
+/// @param name The identifier to check.
+/// @return True if the identifier is a known shell builtin.
+[[nodiscard]] constexpr bool isShellBuiltin(std::string_view name) noexcept
+{
+    return name == "cd" || name == "echo" || name == "exit" || name == "export" || name == "pwd"
+           || name == "env" || name == "read" || name == "time" || name == "fg" || name == "bg"
+           || name == "source" || name == "alias" || name == "unalias" || name == "set" || name == "unset"
+           || name == "jobs" || name == "kill" || name == "wait" || name == "exec" || name == "eval"
+           || name == "test" || name == "true" || name == "false";
 }
 
 } // namespace endo

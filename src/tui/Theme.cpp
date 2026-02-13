@@ -16,14 +16,14 @@ auto darkTheme() -> Theme
         .background = 0x1E1E24_rgb,    // Dark gray
         .surface = 0x282A36_rgb,       // Slightly lighter
         .overlay = 0x323440_rgb,       // Dialog background
-        .text = 0xF8F8F2_rgb,         // Off-white
-        .textMuted = 0x8C8C96_rgb,    // Gray
-        .textInverse = 0x1E1E24_rgb,  // Dark for light bg
-        .success = 0x50FA7B_rgb,      // Green
-        .warning = 0xFFB86C_rgb,      // Orange
-        .error = 0xFF5555_rgb,        // Red
-        .info = 0x8BE9FD_rgb,         // Cyan
-        .border = 0x44475A_rgb,       // Subtle border
+        .text = 0xF8F8F2_rgb,          // Off-white
+        .textMuted = 0x8C8C96_rgb,     // Gray
+        .textInverse = 0x1E1E24_rgb,   // Dark for light bg
+        .success = 0x50FA7B_rgb,       // Green
+        .warning = 0xFFB86C_rgb,       // Orange
+        .error = 0xFF5555_rgb,         // Red
+        .info = 0x8BE9FD_rgb,          // Cyan
+        .border = 0x44475A_rgb,        // Subtle border
         .borderFocused = 0x82B4FF_rgb, // Primary accent
     };
 
@@ -104,16 +104,17 @@ auto darkTheme() -> Theme
 
     // Syntax highlighting - One Dark inspired
     theme.syntaxColors = {
-        .keyword = 0xC678DD_rgb,      // Purple
-        .number = 0xD19A66_rgb,       // Warm orange
-        .string = 0x98C379_rgb,       // Green
-        .op = 0x56B6C2_rgb,           // Cyan
-        .variable = 0xE06C75_rgb,     // Soft red
-        .constructor = 0xE5C07B_rgb,  // Yellow
-        .punctuation = 0xABB2BF_rgb,  // Subtle gray
-        .comment = 0x7F848E_rgb,      // Dim gray
-        .type = 0xE5C07B_rgb,         // Yellow
-        .defaultText = 0xDCDCDC_rgb,  // Default text
+        .keyword = 0xC678DD_rgb,     // Purple
+        .number = 0xD19A66_rgb,      // Warm orange
+        .string = 0x98C379_rgb,      // Green
+        .op = 0x56B6C2_rgb,          // Cyan
+        .variable = 0xE06C75_rgb,    // Soft red
+        .constructor = 0xE5C07B_rgb, // Yellow
+        .punctuation = 0xABB2BF_rgb, // Subtle gray
+        .comment = 0x7F848E_rgb,     // Dim gray
+        .type = 0xE5C07B_rgb,        // Yellow
+        .function = 0x61AFEF_rgb,    // Blue (shell builtins)
+        .defaultText = 0xDCDCDC_rgb, // Default text
     };
 
     theme.borderStyle = BorderStyle::Rounded;
@@ -212,16 +213,17 @@ auto lightTheme() -> Theme
 
     // Syntax highlighting - Light theme
     theme.syntaxColors = {
-        .keyword = 0x963CB4_rgb,       // Purple
-        .number = 0xB46E32_rgb,        // Brown/orange
-        .string = 0x3C8C3C_rgb,        // Green
-        .op = 0x1E788C_rgb,            // Teal
-        .variable = 0xB4323C_rgb,      // Red
-        .constructor = 0xA0821E_rgb,   // Dark yellow
-        .punctuation = 0x646973_rgb,   // Gray
-        .comment = 0x8C919B_rgb,       // Light gray
-        .type = 0xA0821E_rgb,          // Dark yellow
-        .defaultText = 0x282A36_rgb,   // Dark
+        .keyword = 0x963CB4_rgb,     // Purple
+        .number = 0xB46E32_rgb,      // Brown/orange
+        .string = 0x3C8C3C_rgb,      // Green
+        .op = 0x1E788C_rgb,          // Teal
+        .variable = 0xB4323C_rgb,    // Red
+        .constructor = 0xA0821E_rgb, // Dark yellow
+        .punctuation = 0x646973_rgb, // Gray
+        .comment = 0x8C919B_rgb,     // Light gray
+        .type = 0xA0821E_rgb,        // Dark yellow
+        .function = 0x0064C8_rgb,    // Blue (shell builtins)
+        .defaultText = 0x282A36_rgb, // Dark
     };
 
     theme.borderStyle = BorderStyle::Rounded;
@@ -323,6 +325,7 @@ auto monoTheme() -> Theme
         .punctuation = 0x808080_rgb,
         .comment = 0x808080_rgb,
         .type = 0xFFFFFF_rgb,
+        .function = 0xFFFFFF_rgb,
         .defaultText = 0xFFFFFF_rgb,
     };
 

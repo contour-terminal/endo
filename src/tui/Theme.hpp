@@ -122,6 +122,7 @@ struct Theme
         RgbColor punctuation; ///< Punctuation (brackets, semicolons).
         RgbColor comment;     ///< Comments.
         RgbColor type;        ///< Type names.
+        RgbColor function;    ///< Shell builtins (cd, export, etc.).
         RgbColor defaultText; ///< Default/unclassified text.
     } syntaxColors;
 

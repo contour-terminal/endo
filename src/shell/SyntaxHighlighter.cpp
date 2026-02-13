@@ -2,7 +2,7 @@
 #include "SyntaxHighlighter.hpp"
 
 #include "SourceOffsetUtils.hpp"
-#include <endo-language/Lexer.hpp>
+#include <endo-language/ContextAwareTokenizer.hpp>
 
 namespace endo
 {
@@ -14,53 +14,47 @@ HighlightMap computeHighlightMap(std::string_view source)
         return map;
 
     auto const lineStartOffsets = buildLineStartOffsets(source);
+    auto const tokens = tokenizeWithContext(source);
 
-    auto lexer = Lexer { std::make_unique<StringSource>(std::string(source)) };
-    lexer.enterFSharpExpr();
-
-    while (lexer.currentToken() != Token::EndOfInput)
+    for (auto const& classified: tokens)
     {
-        auto const token = lexer.currentToken();
-        auto const category = classifyTokenCategory(token);
+        auto const category = classified.category;
+        if (category == TokenCategory::Default)
+            continue;
 
-        if (category != TokenCategory::Default)
+        auto const range = classified.location;
+        auto const& literal = classified.literal;
+
+        auto const beginLine = range.begin.line;
+        auto const beginCol = range.begin.column;
+
+        // Compute byte start offset
+        std::size_t byteStart = 0;
+        if (beginLine >= 0 && static_cast<std::size_t>(beginLine) < lineStartOffsets.size())
         {
-            auto const range = lexer.currentRange();
-            auto const& literal = lexer.currentLiteral();
-
-            auto const beginLine = range.begin.line;
-            auto const beginCol = range.begin.column;
-
-            // Compute byte start offset
-            std::size_t byteStart = 0;
-            if (beginLine >= 0 && static_cast<std::size_t>(beginLine) < lineStartOffsets.size())
-            {
-                auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
-                byteStart = columnToByteOffset(source, lineStart, beginCol);
-            }
-
-            // Determine token byte length.
-            // Start with literal size, then take the maximum with the range-based calculation.
-            // This handles tokens where literal excludes delimiters (e.g., single-quoted strings
-            // where literal is "hello" but source span is "'hello'").
-            auto byteLen = literal.size();
-            if (range.begin.line == range.end.line)
-            {
-                auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
-                auto const byteEnd = columnToByteOffset(source, lineStart, range.end.column);
-                if (byteEnd > byteStart && byteEnd - byteStart > byteLen)
-                    byteLen = byteEnd - byteStart;
-            }
-            // Fallback: token has no literal and zero range (e.g., last token before EOF)
-            if (byteLen == 0 && byteStart < source.size())
-                byteLen = 1;
-
-            // Fill the map for this token's byte range
-            for (std::size_t i = 0; i < byteLen && byteStart + i < map.size(); ++i)
-                map[byteStart + i] = category;
+            auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
+            byteStart = columnToByteOffset(source, lineStart, beginCol);
         }
 
-        lexer.nextToken();
+        // Determine token byte length.
+        // Start with literal size, then take the maximum with the range-based calculation.
+        // This handles tokens where literal excludes delimiters (e.g., single-quoted strings
+        // where literal is "hello" but source span is "'hello'").
+        auto byteLen = literal.size();
+        if (range.begin.line == range.end.line)
+        {
+            auto const lineStart = lineStartOffsets[static_cast<std::size_t>(beginLine)];
+            auto const byteEnd = columnToByteOffset(source, lineStart, range.end.column);
+            if (byteEnd > byteStart && byteEnd - byteStart > byteLen)
+                byteLen = byteEnd - byteStart;
+        }
+        // Fallback: token has no literal and zero range (e.g., last token before EOF)
+        if (byteLen == 0 && byteStart < source.size())
+            byteLen = 1;
+
+        // Fill the map for this token's byte range
+        for (std::size_t i = 0; i < byteLen && byteStart + i < map.size(); ++i)
+            map[byteStart + i] = category;
     }
 
     return map;

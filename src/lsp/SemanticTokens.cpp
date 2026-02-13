@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SemanticTokens.hpp"
 
+#include <endo-language/ContextAwareTokenizer.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/TokenClassification.hpp>
 
@@ -12,7 +13,7 @@ namespace
 
     // Semantic token type indices (must match legend order)
     constexpr int TypeKeyword = 0;
-    [[maybe_unused]] constexpr int TypeFunction = 1;
+    constexpr int TypeFunction = 1;
     constexpr int TypeVariable = 2;
     constexpr int TypeNumber = 3;
     constexpr int TypeString = 4;
@@ -46,6 +47,7 @@ namespace
             case String: return { TypeString, 0 };
             case Constructor: return { TypeEnumMember, 0 };
             case Operator: return { TypeOperator, 0 };
+            case Function: return { TypeFunction, 0 };
             case Variable: {
                 // Shell variables get the modification modifier
                 using enum Token;
@@ -87,61 +89,40 @@ SemanticTokensLegend createSemanticTokensLegend()
     };
 }
 
-namespace
-{
-
-    /// Tokenizes source with F# mode enabled for proper operator tokenization.
-    [[nodiscard]] std::vector<TokenInfo> tokenizeForLsp(std::string const& source)
-    {
-        auto tokens = std::vector<TokenInfo> {};
-        auto lexer = Lexer { std::make_unique<StringSource>(source) };
-        lexer.enterFSharpExpr(); // Enable F# mode for operator tokenization
-
-        while (lexer.currentToken() != Token::EndOfInput)
-        {
-            tokens.emplace_back(
-                TokenInfo { lexer.currentToken(), lexer.currentLiteral(), lexer.currentRange() });
-            lexer.nextToken();
-        }
-
-        return tokens;
-    }
-
-} // namespace
-
 SemanticTokens computeSemanticTokens(std::string const& source)
 {
-    auto tokens = tokenizeForLsp(source);
+    auto const tokens = tokenizeWithContext(source);
 
     SemanticTokens result;
     int prevLine = 0;
     int prevChar = 0;
 
-    for (auto const& tokenInfo: tokens)
+    for (auto const& classified: tokens)
     {
         // Skip non-semantic tokens
-        if (tokenInfo.token == Token::EndOfInput || tokenInfo.token == Token::LineFeed
-            || tokenInfo.token == Token::Semicolon)
+        if (classified.token == Token::EndOfInput || classified.token == Token::LineFeed
+            || classified.token == Token::Semicolon)
             continue;
 
-        auto const category = classifyTokenCategory(tokenInfo.token);
-        auto const classification = toLspClassification(category, tokenInfo.token);
+        auto const category = classified.category;
+        auto const classification = toLspClassification(category, classified.token);
         if (classification.type < 0)
             continue;
 
         // Convert from lexer's 1-based columns to 0-based for LSP
-        auto const line = tokenInfo.location.begin.line;
-        auto const character = tokenInfo.location.begin.column > 0 ? tokenInfo.location.begin.column - 1 : 0;
+        auto const line = classified.location.begin.line;
+        auto const character =
+            classified.location.begin.column > 0 ? classified.location.begin.column - 1 : 0;
 
         // Compute length from source location range and literal size.
         // Use the maximum of range-based length and literal length because:
         // 1. Operator tokens have empty literals (range is correct)
         // 2. The last token before EOF may have a truncated range
         auto rangeLength = 0;
-        if (tokenInfo.location.begin.line == tokenInfo.location.end.line)
-            rangeLength = tokenInfo.location.end.column - tokenInfo.location.begin.column;
+        if (classified.location.begin.line == classified.location.end.line)
+            rangeLength = classified.location.end.column - classified.location.begin.column;
 
-        auto const literalLength = static_cast<int>(tokenInfo.literal.size());
+        auto const literalLength = static_cast<int>(classified.literal.size());
         auto const length = std::max(rangeLength, literalLength);
 
         if (length <= 0)

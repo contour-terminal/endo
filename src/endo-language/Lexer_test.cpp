@@ -1354,3 +1354,51 @@ TEST_CASE("Lexer.hyphen_identifier_fsharp_from_csv")
     CHECK(lexer.currentToken() == endo::Token::Identifier);
     CHECK(lexer.currentLiteral() == "from-csv");
 }
+
+TEST_CASE("Lexer.shell_mode_path_slash_single_token")
+{
+    // In shell mode (default), "projects/endo" is a single identifier
+    // because '/' is NOT in ReservedSymbols.
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cd projects/endo"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cd");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "projects/endo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.fsharp_mode_path_slash_split_tokens")
+{
+    // In F# mode, "projects/endo" is split into "projects", "/", "endo"
+    // because '/' IS in FSharpReservedSymbols and becomes Token::Slash.
+    // The constructor lexes the first token, so we use "let" to trigger F# mode
+    // before the path tokens are lexed.
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x = projects/endo"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "projects");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Slash);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "endo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}

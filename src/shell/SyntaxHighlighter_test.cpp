@@ -146,6 +146,80 @@ TEST_CASE("SyntaxHighlighter.whitespace_is_default", "[SyntaxHighlighter]")
     expectRange(map, 5, 1, Variable); // "x"
 }
 
+// =============================================================================
+// Context-aware tokenization tests
+// =============================================================================
+
+TEST_CASE("SyntaxHighlighter.shell_path_single_token", "[SyntaxHighlighter]")
+{
+    // "cd projects/endo" — shell command with path argument should keep the path as
+    // a single token, not split by '/'.
+    auto const map = computeHighlightMap("cd projects/endo");
+    REQUIRE(map.size() == 16);
+    expectRange(map, 0, 2, Function);  // "cd" (shell builtin)
+    expectRange(map, 2, 1, Default);   // " "
+    expectRange(map, 3, 13, Variable); // "projects/endo" (single token)
+}
+
+TEST_CASE("SyntaxHighlighter.shell_builtin_export", "[SyntaxHighlighter]")
+{
+    auto const map = computeHighlightMap("export FOO=bar");
+    REQUIRE(map.size() == 14);
+    expectRange(map, 0, 6, Function); // "export"
+}
+
+TEST_CASE("SyntaxHighlighter.shell_builtin_echo", "[SyntaxHighlighter]")
+{
+    auto const map = computeHighlightMap("echo hello world");
+    REQUIRE(map.size() == 16);
+    expectRange(map, 0, 4, Function); // "echo"
+}
+
+TEST_CASE("SyntaxHighlighter.fsharp_operators_preserved", "[SyntaxHighlighter]")
+{
+    // F# expression: operators should still be separate tokens.
+    auto const map = computeHighlightMap("let x = 1 + 2");
+    REQUIRE(map.size() == 13);
+    expectRange(map, 0, 3, Keyword);   // "let"
+    expectRange(map, 4, 1, Variable);  // "x"
+    expectRange(map, 6, 1, Operator);  // "="
+    expectRange(map, 8, 1, Number);    // "1"
+    expectRange(map, 10, 1, Operator); // "+"
+    expectRange(map, 12, 1, Number);   // "2"
+}
+
+TEST_CASE("SyntaxHighlighter.mixed_shell_and_fsharp_multiline", "[SyntaxHighlighter]")
+{
+    // Multi-line: first line is shell, second is F#.
+    auto const source = std::string("cd /tmp\nlet x = 42");
+    auto const map = computeHighlightMap(source);
+    REQUIRE(map.size() == source.size());
+    // Line 1: "cd /tmp"
+    expectRange(map, 0, 2, Function); // "cd"
+    // Line 2: "let x = 42" — starts at offset 8
+    expectRange(map, 8, 3, Keyword);   // "let"
+    expectRange(map, 12, 1, Variable); // "x"
+    expectRange(map, 14, 1, Operator); // "="
+    expectRange(map, 16, 2, Number);   // "42"
+}
+
+TEST_CASE("SyntaxHighlighter.non_builtin_shell_command", "[SyntaxHighlighter]")
+{
+    // A command that is not a known builtin should be Variable (not Function).
+    auto const map = computeHighlightMap("git status");
+    REQUIRE(map.size() == 10);
+    expectRange(map, 0, 3, Variable); // "git" (regular identifier)
+}
+
+TEST_CASE("SyntaxHighlighter.function_color_distinct", "[SyntaxHighlighter]")
+{
+    auto const fnColor = categoryColor(Function);
+    auto const kwColor = categoryColor(Keyword);
+    auto const defColor = categoryColor(Default);
+    CHECK(fnColor.r != kwColor.r);  // Function (blue) vs keyword (purple)
+    CHECK(fnColor.r != defColor.r); // Function vs default
+}
+
 TEST_CASE("SyntaxHighlighter.categoryColor_returns_distinct_colors", "[SyntaxHighlighter]")
 {
     auto const kwColor = categoryColor(Keyword);

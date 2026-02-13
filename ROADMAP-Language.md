@@ -233,6 +233,9 @@ This document tracks the implementation status of F# language features as define
 ## Lexer / Parser
 
 - [x] Context-sensitive tokenization (F# mode vs shell mode)
+- [x] Context-aware syntax highlighting: statement-level mode tracking for shell vs F# tokenization
+- [x] Shell builtin highlighting (`cd`, `export`, `echo`, etc.) as distinct `Function` category
+- [x] Shell path arguments preserved as single tokens (e.g., `cd projects/endo` not split by `/`)
 - [x] F# operator tokens: `+`, `-`, `*`, `/`, `%`, `**`, `|>`, `->`, `<-`
 - [x] Nested parentheses in F# expressions (fixed: `))` no longer merges to `DblRndClose`)
 - [x] `in`, `then`, `else` excluded from `isFSharpPrimary()` to prevent argument consumption

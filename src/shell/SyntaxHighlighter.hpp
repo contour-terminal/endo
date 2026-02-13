@@ -38,6 +38,7 @@ using HighlightMap = std::vector<TokenCategory>;
         case Punctuation: return c.punctuation;
         case Comment: return c.comment;
         case Type: return c.type;
+        case Function: return c.function;
         case Default: return c.defaultText;
     }
     return c.defaultText;
