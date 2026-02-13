@@ -26,6 +26,8 @@ add_library(endo-shell STATIC
     CompletionProviders/VariableCompleter.cpp
     Environment.hpp
     Error.hpp
+    Gradient.hpp
+    Gradient.cpp
     History.hpp
     History.cpp
     Job.hpp
@@ -40,6 +42,12 @@ add_library(endo-shell STATIC
     Prompt.cpp
     PromptComponent.hpp
     PromptComponent.cpp
+    PromptConfig.hpp
+    PromptLayoutEngine.hpp
+    PromptLayoutEngine.cpp
+    PromptModule.hpp
+    PromptPresets.hpp
+    PromptPresets.cpp
     Shell.hpp
     Shell.cpp
     SourceOffsetUtils.hpp
@@ -62,6 +70,28 @@ add_library(endo-shell STATIC
     commands/JobProvider.hpp
     commands/JobsCommand.hpp
     commands/JobsCommand.cpp
+    modules/BatteryModule.hpp
+    modules/BatteryModule.cpp
+    modules/ClockModule.hpp
+    modules/ClockModule.cpp
+    modules/DurationModule.hpp
+    modules/DurationModule.cpp
+    modules/ExitStatusModule.hpp
+    modules/ExitStatusModule.cpp
+    modules/FSharpModeModule.hpp
+    modules/FSharpModeModule.cpp
+    modules/GitModule.hpp
+    modules/GitModule.cpp
+    modules/HostnameModule.hpp
+    modules/HostnameModule.cpp
+    modules/IndicatorModule.hpp
+    modules/IndicatorModule.cpp
+    modules/PathModule.hpp
+    modules/PathModule.cpp
+    modules/StructuredOutputModule.hpp
+    modules/StructuredOutputModule.cpp
+    modules/ToolchainModule.hpp
+    modules/ToolchainModule.cpp
     OutputDefinition.hpp
     OutputDefinitionRegistry.hpp
     OutputDefinitionRegistry.cpp

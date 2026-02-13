@@ -2,13 +2,18 @@
 #pragma once
 
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <endo-language/DiagnosticsCollector.hpp>
 #include <endo-language/HoverInfo.hpp>
+#include <shell/PromptConfig.hpp>
+#include <shell/PromptLayoutEngine.hpp>
+#include <shell/PromptModule.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
@@ -103,6 +108,17 @@ class PromptComponent: public tui::Component
     /// @param names The set of known F# names.
     void setKnownFSharpNames(std::set<std::string> names);
 
+    /// @brief Sets the prompt configuration (layout, modules, separator, etc.).
+    /// @param config The new prompt configuration.
+    void setPromptConfig(PromptConfig config);
+
+    /// @brief Returns the current prompt configuration.
+    [[nodiscard]] PromptConfig const& promptConfig() const noexcept { return _config; }
+
+    /// @brief Sets the prompt context (CWD, exit code, etc.) for module evaluation.
+    /// @param context The new prompt context.
+    void setPromptContext(PromptContext context);
+
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
 
@@ -134,17 +150,29 @@ class PromptComponent: public tui::Component
     CommandResolver* _commandResolver = nullptr;
     std::string _promptStr = "> ";
 
-    // Style constants (OpenCode-inspired)
-    static constexpr auto LeftBarColor = tui::RgbColor { .r = 97, .g = 175, .b = 239 };     // Soft blue
-    static constexpr auto BackgroundColor = tui::RgbColor { .r = 45, .g = 50, .b = 55 };    // Soft gray
-    static constexpr auto PromptTextColor = tui::RgbColor { .r = 180, .g = 180, .b = 180 }; // Light gray
-    static constexpr auto InputTextColor = tui::RgbColor { .r = 220, .g = 220, .b = 220 };  // Brighter
+    // Prompt theming
+    PromptConfig _config;              ///< Layout and module configuration.
+    PromptContext _context;            ///< Current shell context for module evaluation.
+    PromptLayoutEngine _layoutEngine;  ///< Layout rendering engine.
+    std::unordered_map<std::string, std::unique_ptr<PromptModule>> _modules; ///< Module registry.
+
+    /// @brief Initializes the module registry with all available modules.
+    void initializeModules();
+
+    /// @brief Evaluates configured modules and returns their segments.
+    [[nodiscard]] std::vector<PromptSegments> evaluateModules(
+        std::vector<std::string> const& moduleNames) const;
+
+    // Style constants
     static constexpr int HorizontalMargin = 1; // Left and right margin
     static constexpr int LeftBarWidth = 1;
     static constexpr int PaddingAfterBar = 1;
 
     /// @brief Calculates the width of the prompt prefix (bar + padding + prompt text).
     [[nodiscard]] int promptWidth() const;
+
+    /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
+    [[nodiscard]] int chromeHeight() const noexcept;
 
     /// @brief Calculates display width of a string.
     [[nodiscard]] static int displayWidth(std::string_view text);

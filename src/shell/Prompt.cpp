@@ -363,6 +363,29 @@ void Prompt::resume()
     }
 }
 
+void Prompt::setPromptConfig(PromptConfig config)
+{
+    _promptConfig = std::move(config);
+    // Update the prompt indicator string to match config
+    _promptStr = _promptConfig.indicator;
+    if (_promptComponent)
+    {
+        _promptComponent->setPromptConfig(_promptConfig);
+        _promptComponent->setPrompt(_promptStr);
+    }
+}
+
+PromptConfig const& Prompt::promptConfig() const noexcept
+{
+    return _promptConfig;
+}
+
+void Prompt::setPromptContext(PromptContext context)
+{
+    if (_promptComponent)
+        _promptComponent->setPromptContext(std::move(context));
+}
+
 void Prompt::setKnownFSharpNames(std::set<std::string> names)
 {
     if (_promptComponent)

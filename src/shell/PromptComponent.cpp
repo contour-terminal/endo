@@ -5,8 +5,20 @@
 
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
+#include "Gradient.hpp"
 #include "SourceOffsetUtils.hpp"
 #include "SyntaxHighlighter.hpp"
+#include "modules/BatteryModule.hpp"
+#include "modules/ClockModule.hpp"
+#include "modules/DurationModule.hpp"
+#include "modules/ExitStatusModule.hpp"
+#include "modules/FSharpModeModule.hpp"
+#include "modules/GitModule.hpp"
+#include "modules/HostnameModule.hpp"
+#include "modules/IndicatorModule.hpp"
+#include "modules/PathModule.hpp"
+#include "modules/StructuredOutputModule.hpp"
+#include "modules/ToolchainModule.hpp"
 #include <endo-language/HoverProvider.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
@@ -22,16 +34,84 @@
     #pragma clang diagnostic pop
 #endif
 
+using tui::operator""_rgb;
+
 namespace endo
 {
 
 PromptComponent::PromptComponent()
 {
     _inputField.setPrompt(""); // We handle prompt rendering ourselves
+    initializeModules();
+}
+
+void PromptComponent::initializeModules()
+{
+    auto add = [this](std::unique_ptr<PromptModule> mod) {
+        auto const id = std::string(mod->id());
+        _modules[id] = std::move(mod);
+    };
+
+    add(std::make_unique<PathModule>());
+    add(std::make_unique<GitModule>());
+    add(std::make_unique<ExitStatusModule>());
+    add(std::make_unique<DurationModule>(_config.durationThresholdMs));
+    add(std::make_unique<HostnameModule>());
+    add(std::make_unique<ClockModule>());
+    add(std::make_unique<BatteryModule>());
+    add(std::make_unique<FSharpModeModule>());
+    add(std::make_unique<StructuredOutputModule>());
+    add(std::make_unique<ToolchainModule>());
+    add(std::make_unique<IndicatorModule>(_config.indicator));
+}
+
+std::vector<PromptSegments> PromptComponent::evaluateModules(
+    std::vector<std::string> const& moduleNames) const
+{
+    auto results = std::vector<PromptSegments> {};
+    for (auto const& name: moduleNames)
+    {
+        auto it = _modules.find(name);
+        if (it == _modules.end())
+            continue;
+
+        if (!it->second->shouldShow(_context))
+            continue;
+
+        auto segments = it->second->evaluate(_context);
+        if (!segments.empty())
+            results.push_back(std::move(segments));
+    }
+    return results;
+}
+
+void PromptComponent::setPromptConfig(PromptConfig config)
+{
+    _config = std::move(config);
+
+    // Update indicator module
+    if (auto it = _modules.find("indicator"); it != _modules.end())
+    {
+        if (auto* ind = dynamic_cast<IndicatorModule*>(it->second.get()))
+            ind->setIndicator(_config.indicator);
+    }
+
+    // Update duration module threshold
+    if (auto it = _modules.find("duration"); it != _modules.end())
+    {
+        // Recreate with new threshold
+        _modules["duration"] = std::make_unique<DurationModule>(_config.durationThresholdMs);
+    }
+}
+
+void PromptComponent::setPromptContext(PromptContext context)
+{
+    _context = std::move(context);
 }
 
 void PromptComponent::render(tui::Canvas& canvas)
 {
+    auto const& theme = tui::currentTheme();
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
     auto const promptTextWidth = displayWidth(_promptStr);
@@ -40,22 +120,106 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Effective content width (excluding margins)
     auto const contentWidth = canvasWidth - 2 * HorizontalMargin;
 
+    // Use theme-based colors
+    auto const& pc = theme.promptColors;
+
     // Create styles
     tui::Style bgStyle;
-    bgStyle.bg = BackgroundColor;
+    bgStyle.bg = pc.background;
 
     tui::Style leftBarStyle;
-    leftBarStyle.fg = LeftBarColor;
-    leftBarStyle.bg = BackgroundColor;
+    leftBarStyle.fg = pc.separator;
+    leftBarStyle.bg = pc.background;
 
     tui::Style promptStyle;
-    promptStyle.fg = PromptTextColor;
-    promptStyle.bg = BackgroundColor;
+    promptStyle.fg = pc.badgeText;
+    promptStyle.bg = pc.background;
 
     tui::Style ghostStyle;
-    ghostStyle.fg = PromptTextColor;
-    ghostStyle.bg = BackgroundColor;
+    ghostStyle.fg = pc.badgeText;
+    ghostStyle.bg = pc.background;
     ghostStyle.dim = true;
+
+    // Calculate chrome height (info lines above input)
+    auto const chrome = chromeHeight();
+
+    // Render info line chrome above input
+    if (chrome > 0)
+    {
+        auto infoModules = evaluateModules(_config.infoLineModules);
+        auto rightModules = evaluateModules(_config.rightPromptModules);
+
+        // Info line background
+        canvas.fill(tui::Rect { HorizontalMargin, 0, contentWidth, 1 }, ' ', bgStyle);
+
+        auto col = HorizontalMargin;
+
+        // Info line separator
+        if (_config.separator == SeparatorStyle::Bar)
+        {
+            col += canvas.putString(0, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
+            canvas.put(0, col, " ", bgStyle);
+            ++col;
+        }
+        else if (_config.separator == SeparatorStyle::Rounded)
+        {
+            tui::Style sepStyle;
+            sepStyle.fg = pc.separator;
+            sepStyle.bg = pc.background;
+            col += canvas.putString(0, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+            canvas.put(0, col, " ", bgStyle);
+            ++col;
+        }
+
+        // Render info modules
+        for (std::size_t i = 0; i < infoModules.size(); ++i)
+        {
+            if (i > 0)
+            {
+                canvas.put(0, col, " ", bgStyle);
+                ++col;
+            }
+            for (auto const& seg: infoModules[i])
+            {
+                auto segStyle = seg.style;
+                segStyle.bg = pc.background;
+                col += canvas.putString(0, col, seg.text, segStyle);
+            }
+        }
+
+        // Right-aligned modules on info line
+        if (!rightModules.empty())
+        {
+            auto rightWidth = 0;
+            for (auto const& mod: rightModules)
+            {
+                for (auto const& seg: mod)
+                    rightWidth += displayWidth(seg.text);
+                rightWidth += 1; // space between modules
+            }
+            if (rightWidth > 0)
+                --rightWidth; // Remove trailing space
+
+            auto rightCol = canvasWidth - HorizontalMargin - rightWidth;
+            if (rightCol > col + 2) // Ensure at least 2 chars gap
+            {
+                for (std::size_t i = 0; i < rightModules.size(); ++i)
+                {
+                    if (i > 0)
+                    {
+                        canvas.put(0, rightCol, " ", bgStyle);
+                        ++rightCol;
+                    }
+                    for (auto const& seg: rightModules[i])
+                    {
+                        auto segStyle = seg.style;
+                        segStyle.bg = pc.background;
+                        rightCol += canvas.putString(0, rightCol, seg.text, segStyle);
+                    }
+                }
+            }
+        }
+    }
 
     // Get selection bounds
     auto const hasSelection = _inputField.hasSelection();
@@ -83,33 +247,50 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Render each line
-    for (int lineIndex = 0; lineIndex < totalLines && lineIndex < canvas.height(); ++lineIndex)
+    // Render each input line (offset by chrome height)
+    for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + chrome) < canvas.height(); ++lineIndex)
     {
+        auto const row = lineIndex + chrome;
         auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Fill content area with background (with margins)
-        canvas.fill(tui::Rect { HorizontalMargin, lineIndex, contentWidth, 1 }, ' ', bgStyle);
+        canvas.fill(tui::Rect { HorizontalMargin, row, contentWidth, 1 }, ' ', bgStyle);
 
-        // Draw left bar (thin vertical bar) after left margin
-        canvas.put(
-            lineIndex, HorizontalMargin, "\xe2\x96\x8e", leftBarStyle); // U+258E LEFT ONE QUARTER BLOCK
+        // Draw separator on input lines
+        if (_config.separator == SeparatorStyle::Bar)
+        {
+            canvas.put(row, HorizontalMargin, "\xe2\x96\x8e", leftBarStyle); // U+258E
+        }
+        else if (_config.separator == SeparatorStyle::Rounded)
+        {
+            tui::Style sepStyle;
+            sepStyle.fg = pc.separator;
+            sepStyle.bg = pc.background;
+            if (lineIndex == 0)
+                canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
+            else
+                canvas.putString(row, HorizontalMargin, "\xe2\x94\x82", sepStyle); // U+2502 │
+        }
+        else if (_config.separator == SeparatorStyle::None)
+        {
+            canvas.put(row, HorizontalMargin, " ", bgStyle);
+        }
 
-        // Padding after bar
-        canvas.put(lineIndex, HorizontalMargin + 1, " ", bgStyle);
+        // Padding after separator
+        canvas.put(row, HorizontalMargin + 1, " ", bgStyle);
 
         // Prompt or continuation indicator
         auto col = HorizontalMargin + LeftBarWidth + PaddingAfterBar;
         if (lineIndex == 0)
         {
-            col += canvas.putString(lineIndex, col, _promptStr, promptStyle);
+            col += canvas.putString(row, col, _promptStr, promptStyle);
         }
         else
         {
             // Continuation indicator: spaces + middle dots
             for (int i = 0; i < promptTextWidth - 2; ++i)
-                canvas.put(lineIndex, col++, " ", bgStyle);
-            col += canvas.putString(lineIndex, col, "\xc2\xb7\xc2\xb7", promptStyle); // ..
+                canvas.put(row, col++, " ", bgStyle);
+            col += canvas.putString(row, col, "\xc2\xb7\xc2\xb7", promptStyle); // ··
         }
 
         // Calculate byte offset of this line's start in the buffer
@@ -165,18 +346,17 @@ void PromptComponent::render(tui::Canvas& canvas)
                 // Build style for this segment
                 tui::Style segStyle;
                 segStyle.fg = categoryColor(cat);
-                segStyle.bg = BackgroundColor;
+                segStyle.bg = pc.background;
                 segStyle.inverse = selected;
 
                 // Apply curly red underline for error regions
                 if (hasError)
                 {
                     segStyle.underlineStyle = tui::UnderlineStyle::Curly;
-                    segStyle.underlineColor = tui::RgbColor { .r = 255, .g = 85, .b = 85 };
+                    segStyle.underlineColor = 0xFF5555_rgb;
                 }
 
-                col += canvas.putString(
-                    lineIndex, col, lineContent.substr(segStart, segEnd - segStart), segStyle);
+                col += canvas.putString(row, col, lineContent.substr(segStart, segEnd - segStart), segStyle);
                 segStart = segEnd;
             }
         }
@@ -184,13 +364,14 @@ void PromptComponent::render(tui::Canvas& canvas)
         // Ghost text on last line
         if (!_inputField.ghostText().empty() && lineIndex == totalLines - 1)
         {
-            canvas.putString(lineIndex, col, _inputField.ghostText(), ghostStyle);
+            canvas.putString(row, col, _inputField.ghostText(), ghostStyle);
         }
     }
 
-    // Position cursor
+    // Position cursor (add chrome height offset)
     auto const cursorLine = _inputField.cursorLine();
     auto const cursorColumn = _inputField.cursorColumn();
+    auto const cursorRow = cursorLine + chrome;
 
     // Calculate cursor display position (including left margin)
     auto const lineContent = _inputField.lineAt(cursorLine);
@@ -207,14 +388,14 @@ void PromptComponent::render(tui::Canvas& canvas)
         ++graphemeIndex;
     }
 
-    canvas.setCursor(cursorLine, displayCol);
+    canvas.setCursor(cursorRow, displayCol);
 
     // Render completion popup if visible
     if (_completionPopup.visible())
     {
         auto popupSize = _completionPopup.preferredSize();
-        int availableBelow = canvas.height() - cursorLine - 1;
-        int availableAbove = cursorLine;
+        int availableBelow = canvas.height() - cursorRow - 1;
+        int availableAbove = cursorRow;
 
         bool renderBelow = true;
 
@@ -227,8 +408,8 @@ void PromptComponent::render(tui::Canvas& canvas)
                 renderBelow = false;
         }
 
-        int popupRow = renderBelow ? (cursorLine + 1)
-                                   : std::max(0, cursorLine - std::min(popupSize.height, availableAbove));
+        int popupRow = renderBelow ? (cursorRow + 1)
+                                   : std::max(0, cursorRow - std::min(popupSize.height, availableAbove));
         int popupHeight = renderBelow ? std::min(popupSize.height, std::max(0, availableBelow))
                                       : std::min(popupSize.height, availableAbove);
 
@@ -261,24 +442,26 @@ tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
 
 tui::Size PromptComponent::preferredSize() const
 {
-    auto const lineCount = _inputField.lineCount();
-    auto const promptWidth = this->promptWidth();
+    auto const inputLineCount = _inputField.lineCount();
+    auto const pw = this->promptWidth();
 
     // Calculate max line width
     int maxWidth = 0;
-    for (int i = 0; i < lineCount; ++i)
+    for (int i = 0; i < inputLineCount; ++i)
     {
         auto const lineContent = _inputField.lineAt(i);
-        maxWidth = std::max(maxWidth, promptWidth + displayWidth(lineContent));
+        maxWidth = std::max(maxWidth, pw + displayWidth(lineContent));
     }
 
+    // Total height = chrome lines (info/box above) + input lines
+    int totalHeight = inputLineCount + chromeHeight();
+
     // If completion popup is visible, add space for it below the input
-    int totalHeight = lineCount;
     if (_completionPopup.visible())
     {
         auto popupSize = _completionPopup.preferredSize();
         totalHeight += popupSize.height;
-        maxWidth = std::max(maxWidth, promptWidth + popupSize.width);
+        maxWidth = std::max(maxWidth, pw + popupSize.width);
     }
 
     return { maxWidth, totalHeight };
@@ -292,6 +475,15 @@ void PromptComponent::setPrompt(std::string_view prompt)
 int PromptComponent::promptWidth() const
 {
     return LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+}
+
+int PromptComponent::chromeHeight() const noexcept
+{
+    if (_config.layout == PromptLayoutKind::TwoLine || _config.layout == PromptLayoutKind::Powerline)
+        return 1;
+    if (_config.layout == PromptLayoutKind::Boxed)
+        return 3;
+    return 0;
 }
 
 int PromptComponent::displayWidth(std::string_view text)
@@ -571,8 +763,8 @@ void PromptComponent::onHoverConfirmed(int x, int y)
         }
     }
 
-    // Priority 3: Fall through to existing command hover logic (line 0 only)
-    if (y == 0 && _commandResolver)
+    // Priority 3: Fall through to existing command hover logic (first input line only)
+    if (y == chromeHeight() && _commandResolver)
     {
         auto const cmd = getCommandAtColumn(x);
         if (cmd)
@@ -677,13 +869,15 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
     if (x < totalPromptWidth)
         return std::nullopt;
 
+    // Convert screen y to input line index (subtract chrome offset)
+    auto const inputLine = y - chromeHeight();
     auto const totalLines = _inputField.lineCount();
-    if (y < 0 || y >= totalLines)
+    if (inputLine < 0 || inputLine >= totalLines)
         return std::nullopt;
 
-    auto const lineContent = _inputField.lineAt(y);
+    auto const lineContent = _inputField.lineAt(inputLine);
     if (lineContent.empty())
-        return endo::SourcePosition { .line = y, .character = 0 };
+        return endo::SourcePosition { .line = inputLine, .character = 0 };
 
     // Walk grapheme clusters to convert display column to codepoint index
     auto const targetCol = x - totalPromptWidth;
@@ -700,7 +894,7 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
         ++codepointIndex;
     }
 
-    return endo::SourcePosition { .line = y, .character = codepointIndex };
+    return endo::SourcePosition { .line = inputLine, .character = codepointIndex };
 }
 
 std::pair<int, int> PromptComponent::getCommandBounds() const

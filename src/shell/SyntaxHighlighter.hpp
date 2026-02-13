@@ -6,6 +6,7 @@
 
 #include <endo-language/TokenClassification.hpp>
 #include <tui/TerminalOutput.hpp>
+#include <tui/Theme.hpp>
 
 namespace endo
 {
@@ -18,26 +19,36 @@ using HighlightMap = std::vector<TokenCategory>;
 /// @return A vector of TokenCategory, one per byte of source.
 [[nodiscard]] HighlightMap computeHighlightMap(std::string_view source);
 
-/// @brief Returns the display color for a given token category (dark theme).
+/// @brief Returns the display color for a given token category using the current theme.
 /// @param category The token category.
+/// @param theme The theme to read syntax colors from.
 /// @return The RGB color to use for rendering.
-[[nodiscard]] constexpr tui::RgbColor categoryColor(TokenCategory category) noexcept
+[[nodiscard]] inline tui::RgbColor categoryColor(TokenCategory category, tui::Theme const& theme) noexcept
 {
+    auto const& c = theme.syntaxColors;
     using enum TokenCategory;
     switch (category)
     {
-        case Keyword: return { .r = 198, .g = 120, .b = 221 };     // Purple
-        case Number: return { .r = 209, .g = 154, .b = 102 };      // Warm orange
-        case String: return { .r = 152, .g = 195, .b = 121 };      // Green
-        case Operator: return { .r = 86, .g = 182, .b = 194 };     // Cyan
-        case Variable: return { .r = 224, .g = 108, .b = 117 };    // Soft red
-        case Constructor: return { .r = 229, .g = 192, .b = 123 }; // Yellow
-        case Punctuation: return { .r = 171, .g = 178, .b = 191 }; // Subtle gray
-        case Comment: return { .r = 127, .g = 132, .b = 142 };     // Dim gray
-        case Type: return { .r = 229, .g = 192, .b = 123 };        // Yellow (same as Constructor)
-        case Default: return { .r = 220, .g = 220, .b = 220 };     // Default text color
+        case Keyword: return c.keyword;
+        case Number: return c.number;
+        case String: return c.string;
+        case Operator: return c.op;
+        case Variable: return c.variable;
+        case Constructor: return c.constructor;
+        case Punctuation: return c.punctuation;
+        case Comment: return c.comment;
+        case Type: return c.type;
+        case Default: return c.defaultText;
     }
-    return { .r = 220, .g = 220, .b = 220 };
+    return c.defaultText;
+}
+
+/// @brief Returns the display color for a given token category (using global theme).
+/// @param category The token category.
+/// @return The RGB color to use for rendering.
+[[nodiscard]] inline tui::RgbColor categoryColor(TokenCategory category) noexcept
+{
+    return categoryColor(category, tui::currentTheme());
 }
 
 } // namespace endo

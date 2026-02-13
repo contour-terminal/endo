@@ -6,6 +6,8 @@
 #include <set>
 #include <string>
 
+#include <shell/PromptConfig.hpp>
+#include <shell/PromptModule.hpp>
 #include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
@@ -83,6 +85,20 @@ class Prompt
     /// Re-enables raw mode and terminal protocols.
     void resume();
 
+    /// @brief Sets the prompt configuration (layout, modules, etc.).
+    /// @param config The new prompt configuration.
+    void setPromptConfig(PromptConfig config);
+
+    /// @brief Returns the current prompt configuration.
+    [[nodiscard]] PromptConfig const& promptConfig() const noexcept;
+
+    /// @brief Sets the prompt context (CWD, exit code, etc.) for module evaluation.
+    /// @param context The new prompt context.
+    void setPromptContext(PromptContext context);
+
+    /// @brief Returns the Terminal for color scheme access.
+    [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
+
     /// @brief Sets externally known F# names for diagnostics suppression.
     ///
     /// @param names The set of known F# names (persisted from prior REPL prompts).
@@ -141,6 +157,7 @@ class Prompt
     std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
     std::string _promptStr = "> ";
+    PromptConfig _promptConfig;
     bool _initialized = false;
     bool _aborted = false;
     bool _multilineEnabled = true; ///< Enable multiline editing by default
