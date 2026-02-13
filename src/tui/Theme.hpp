@@ -89,6 +89,42 @@ struct Theme
     Style completionDesc;     ///< Description text in completion menu.
     Style completionMatch;    ///< Highlighted matched characters in fuzzy completion.
 
+    // Prompt color palette
+    /// @brief Colors used by the shell prompt modules and layout engine.
+    struct PromptColorPalette
+    {
+        RgbColor path;           ///< Path module text color.
+        RgbColor gitClean;       ///< Git branch name when clean.
+        RgbColor gitDirty;       ///< Git branch name when dirty (unstaged changes).
+        RgbColor gitStaged;      ///< Git indicator when staged changes exist.
+        RgbColor indicator;      ///< Input line indicator (e.g., "> ").
+        RgbColor indicatorError; ///< Indicator color when last command failed.
+        RgbColor exitCode;       ///< Exit code badge color.
+        RgbColor duration;       ///< Duration badge color.
+        RgbColor hostname;       ///< Hostname text color.
+        RgbColor background;     ///< Prompt background color.
+        RgbColor separator;      ///< Separator/bar color.
+        RgbColor badge;          ///< Badge background color.
+        RgbColor badgeText;      ///< Badge text color.
+        RgbColor clock;          ///< Clock text color.
+    } promptColors;
+
+    // Syntax highlighting palette
+    /// @brief Colors used by the syntax highlighter for different token categories.
+    struct SyntaxHighlightPalette
+    {
+        RgbColor keyword;     ///< Keywords (if, then, else, match, etc.).
+        RgbColor number;      ///< Numeric literals.
+        RgbColor string;      ///< String literals.
+        RgbColor op;          ///< Operators (+, -, |>, etc.).
+        RgbColor variable;    ///< Variables ($VAR).
+        RgbColor constructor; ///< Constructors (Some, None, Ok, Error).
+        RgbColor punctuation; ///< Punctuation (brackets, semicolons).
+        RgbColor comment;     ///< Comments.
+        RgbColor type;        ///< Type names.
+        RgbColor defaultText; ///< Default/unclassified text.
+    } syntaxColors;
+
     // Border style
     BorderStyle borderStyle = BorderStyle::Rounded;
 };

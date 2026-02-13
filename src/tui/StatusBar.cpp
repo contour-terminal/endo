@@ -149,7 +149,7 @@ auto defaultStatusBarStyle() -> StatusBarStyle
 
     // Keys in bold/accent color
     style.keyStyle.bold = true;
-    style.keyStyle.fg = RgbColor { .r = 130, .g = 180, .b = 255 }; // Light blue
+    style.keyStyle.fg = 0x82B4FF_rgb; // Light blue
 
     // Actions in normal color
     style.actionStyle.fg = static_cast<std::uint8_t>(252); // Light gray

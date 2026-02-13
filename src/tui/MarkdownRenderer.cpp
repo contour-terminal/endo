@@ -228,11 +228,11 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
     italicStyle.italic = true;
 
     auto linkStyle = Style {};
-    linkStyle.fg = RgbColor { .r = 0, .g = 180, .b = 216 };
+    linkStyle.fg = 0x00B4D8_rgb;
     linkStyle.underline = true;
 
     auto listMarkerStyle = Style {};
-    listMarkerStyle.fg = RgbColor { .r = 0, .g = 180, .b = 0 };
+    listMarkerStyle.fg = 0x00B400_rgb;
 
     auto blockquoteStyle = Style {};
     blockquoteStyle.italic = true;

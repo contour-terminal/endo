@@ -426,7 +426,7 @@ auto defaultListStyle() -> ListStyle
     // Selected items: inverse or bold with accent color
     style.selected = Style {};
     style.selected.bold = true;
-    style.selected.fg = RgbColor { .r = 130, .g = 180, .b = 255 }; // Light blue
+    style.selected.fg = 0x82B4FF_rgb; // Light blue
 
     // Disabled items: dim
     style.disabled = Style {};

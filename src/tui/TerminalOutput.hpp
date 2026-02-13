@@ -20,6 +20,16 @@ struct RgbColor
     std::uint8_t b = 0;
 };
 
+/// @brief User-defined literal for creating RgbColor from a hex value.
+///
+/// Usage: `0xFF6600_rgb` creates RgbColor{255, 102, 0}.
+[[nodiscard]] consteval RgbColor operator""_rgb(unsigned long long hex) noexcept
+{
+    return RgbColor { .r = static_cast<std::uint8_t>((hex >> 16) & 0xFF),
+                      .g = static_cast<std::uint8_t>((hex >> 8) & 0xFF),
+                      .b = static_cast<std::uint8_t>(hex & 0xFF) };
+}
+
 /// @brief Color representation: default, 256-color index, or true color (RGB).
 using Color = std::variant<std::monostate, std::uint8_t, RgbColor>;
 

@@ -10,21 +10,21 @@ auto darkTheme() -> Theme
 
     // Color palette - Dark theme
     theme.colors = ColorPalette {
-        .primary = RgbColor { .r = 130, .g = 180, .b = 255 },       // Light blue
-        .secondary = RgbColor { .r = 180, .g = 130, .b = 255 },     // Light purple
-        .accent = RgbColor { .r = 255, .g = 180, .b = 130 },        // Light orange
-        .background = RgbColor { .r = 30, .g = 30, .b = 36 },       // Dark gray
-        .surface = RgbColor { .r = 40, .g = 42, .b = 54 },          // Slightly lighter
-        .overlay = RgbColor { .r = 50, .g = 52, .b = 64 },          // Dialog background
-        .text = RgbColor { .r = 248, .g = 248, .b = 242 },          // Off-white
-        .textMuted = RgbColor { .r = 140, .g = 140, .b = 150 },     // Gray
-        .textInverse = RgbColor { .r = 30, .g = 30, .b = 36 },      // Dark for light bg
-        .success = RgbColor { .r = 80, .g = 250, .b = 123 },        // Green
-        .warning = RgbColor { .r = 255, .g = 184, .b = 108 },       // Orange
-        .error = RgbColor { .r = 255, .g = 85, .b = 85 },           // Red
-        .info = RgbColor { .r = 139, .g = 233, .b = 253 },          // Cyan
-        .border = RgbColor { .r = 68, .g = 71, .b = 90 },           // Subtle border
-        .borderFocused = RgbColor { .r = 130, .g = 180, .b = 255 }, // Primary accent
+        .primary = 0x82B4FF_rgb,       // Light blue
+        .secondary = 0xB482FF_rgb,     // Light purple
+        .accent = 0xFFB482_rgb,        // Light orange
+        .background = 0x1E1E24_rgb,    // Dark gray
+        .surface = 0x282A36_rgb,       // Slightly lighter
+        .overlay = 0x323440_rgb,       // Dialog background
+        .text = 0xF8F8F2_rgb,         // Off-white
+        .textMuted = 0x8C8C96_rgb,    // Gray
+        .textInverse = 0x1E1E24_rgb,  // Dark for light bg
+        .success = 0x50FA7B_rgb,      // Green
+        .warning = 0xFFB86C_rgb,      // Orange
+        .error = 0xFF5555_rgb,        // Red
+        .info = 0x8BE9FD_rgb,         // Cyan
+        .border = 0x44475A_rgb,       // Subtle border
+        .borderFocused = 0x82B4FF_rgb, // Primary accent
     };
 
     // Text styles
@@ -84,6 +84,38 @@ auto darkTheme() -> Theme
     theme.completionMatch.fg = theme.colors.info;       // Highlighted matched chars (cyan)
     theme.completionMatch.bold = true;
 
+    // Prompt colors - Tokyo Night inspired
+    theme.promptColors = {
+        .path = 0x61AFEF_rgb,           // Teal/soft blue
+        .gitClean = 0x50FA7B_rgb,       // Green
+        .gitDirty = 0xFFB86C_rgb,       // Orange
+        .gitStaged = 0x8BE9FD_rgb,      // Cyan
+        .indicator = 0x82B4FF_rgb,      // Blue
+        .indicatorError = 0xFF5555_rgb, // Red
+        .exitCode = 0xFF5555_rgb,       // Red
+        .duration = 0xFFB86C_rgb,       // Orange
+        .hostname = 0xB482FF_rgb,       // Purple
+        .background = 0x2D3237_rgb,     // Soft gray
+        .separator = 0x61AFEF_rgb,      // Soft blue (left bar)
+        .badge = 0x3C4148_rgb,          // Dark badge bg
+        .badgeText = 0xB4B4B4_rgb,      // Light gray
+        .clock = 0x8C8C96_rgb,          // Muted
+    };
+
+    // Syntax highlighting - One Dark inspired
+    theme.syntaxColors = {
+        .keyword = 0xC678DD_rgb,      // Purple
+        .number = 0xD19A66_rgb,       // Warm orange
+        .string = 0x98C379_rgb,       // Green
+        .op = 0x56B6C2_rgb,           // Cyan
+        .variable = 0xE06C75_rgb,     // Soft red
+        .constructor = 0xE5C07B_rgb,  // Yellow
+        .punctuation = 0xABB2BF_rgb,  // Subtle gray
+        .comment = 0x7F848E_rgb,      // Dim gray
+        .type = 0xE5C07B_rgb,         // Yellow
+        .defaultText = 0xDCDCDC_rgb,  // Default text
+    };
+
     theme.borderStyle = BorderStyle::Rounded;
 
     return theme;
@@ -95,21 +127,21 @@ auto lightTheme() -> Theme
 
     // Color palette - Light theme
     theme.colors = ColorPalette {
-        .primary = RgbColor { .r = 0, .g = 100, .b = 200 },       // Blue
-        .secondary = RgbColor { .r = 100, .g = 0, .b = 180 },     // Purple
-        .accent = RgbColor { .r = 200, .g = 100, .b = 0 },        // Orange
-        .background = RgbColor { .r = 250, .g = 250, .b = 250 },  // Off-white
-        .surface = RgbColor { .r = 240, .g = 240, .b = 245 },     // Light gray
-        .overlay = RgbColor { .r = 255, .g = 255, .b = 255 },     // White
-        .text = RgbColor { .r = 40, .g = 42, .b = 54 },           // Dark gray
-        .textMuted = RgbColor { .r = 120, .g = 120, .b = 130 },   // Medium gray
-        .textInverse = RgbColor { .r = 255, .g = 255, .b = 255 }, // White
-        .success = RgbColor { .r = 0, .g = 150, .b = 80 },        // Green
-        .warning = RgbColor { .r = 200, .g = 130, .b = 0 },       // Orange
-        .error = RgbColor { .r = 200, .g = 50, .b = 50 },         // Red
-        .info = RgbColor { .r = 0, .g = 130, .b = 180 },          // Cyan
-        .border = RgbColor { .r = 200, .g = 200, .b = 210 },      // Light border
-        .borderFocused = RgbColor { .r = 0, .g = 100, .b = 200 }, // Primary
+        .primary = 0x0064C8_rgb,       // Blue
+        .secondary = 0x6400B4_rgb,     // Purple
+        .accent = 0xC86400_rgb,        // Orange
+        .background = 0xFAFAFA_rgb,    // Off-white
+        .surface = 0xF0F0F5_rgb,       // Light gray
+        .overlay = 0xFFFFFF_rgb,       // White
+        .text = 0x282A36_rgb,          // Dark gray
+        .textMuted = 0x787882_rgb,     // Medium gray
+        .textInverse = 0xFFFFFF_rgb,   // White
+        .success = 0x009650_rgb,       // Green
+        .warning = 0xC88200_rgb,       // Orange
+        .error = 0xC83232_rgb,         // Red
+        .info = 0x0082B4_rgb,          // Cyan
+        .border = 0xC8C8D2_rgb,        // Light border
+        .borderFocused = 0x0064C8_rgb, // Primary
     };
 
     // Apply same style patterns as dark theme
@@ -152,13 +184,45 @@ auto lightTheme() -> Theme
     theme.info.fg = theme.colors.info;
 
     // Completion styles
-    theme.ghostText.dim = true;                         // Default ghost text is dim (SGR 2)
-    theme.completionItem.fg = theme.colors.text;        // Normal menu item
-    theme.completionSelected.fg = theme.colors.primary; // Selected item
-    theme.completionSelected.inverse = true;            // Inverse for visibility
-    theme.completionDesc.fg = theme.colors.textMuted;   // Description text
-    theme.completionMatch.fg = theme.colors.info;       // Highlighted matched chars (cyan)
+    theme.ghostText.dim = true;
+    theme.completionItem.fg = theme.colors.text;
+    theme.completionSelected.fg = theme.colors.primary;
+    theme.completionSelected.inverse = true;
+    theme.completionDesc.fg = theme.colors.textMuted;
+    theme.completionMatch.fg = theme.colors.info;
     theme.completionMatch.bold = true;
+
+    // Prompt colors - Light theme
+    theme.promptColors = {
+        .path = 0x0064C8_rgb,           // Blue
+        .gitClean = 0x009650_rgb,       // Green
+        .gitDirty = 0xC88200_rgb,       // Orange
+        .gitStaged = 0x0082B4_rgb,      // Cyan
+        .indicator = 0x0064C8_rgb,      // Blue
+        .indicatorError = 0xC83232_rgb, // Red
+        .exitCode = 0xC83232_rgb,       // Red
+        .duration = 0xC88200_rgb,       // Orange
+        .hostname = 0x6400B4_rgb,       // Purple
+        .background = 0xEBEDF0_rgb,     // Light gray
+        .separator = 0x0064C8_rgb,      // Blue
+        .badge = 0xDCE1E6_rgb,          // Light badge bg
+        .badgeText = 0x3C3E46_rgb,      // Dark text
+        .clock = 0x787882_rgb,          // Muted
+    };
+
+    // Syntax highlighting - Light theme
+    theme.syntaxColors = {
+        .keyword = 0x963CB4_rgb,       // Purple
+        .number = 0xB46E32_rgb,        // Brown/orange
+        .string = 0x3C8C3C_rgb,        // Green
+        .op = 0x1E788C_rgb,            // Teal
+        .variable = 0xB4323C_rgb,      // Red
+        .constructor = 0xA0821E_rgb,   // Dark yellow
+        .punctuation = 0x646973_rgb,   // Gray
+        .comment = 0x8C919B_rgb,       // Light gray
+        .type = 0xA0821E_rgb,          // Dark yellow
+        .defaultText = 0x282A36_rgb,   // Dark
+    };
 
     theme.borderStyle = BorderStyle::Rounded;
 
@@ -169,23 +233,23 @@ auto monoTheme() -> Theme
 {
     auto theme = Theme {};
 
-    // Monochrome palette using 256-color indexes
+    // Monochrome palette
     theme.colors = ColorPalette {
-        .primary = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .secondary = RgbColor { .r = 200, .g = 200, .b = 200 },
-        .accent = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .background = RgbColor { .r = 0, .g = 0, .b = 0 },
-        .surface = RgbColor { .r = 30, .g = 30, .b = 30 },
-        .overlay = RgbColor { .r = 40, .g = 40, .b = 40 },
-        .text = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .textMuted = RgbColor { .r = 128, .g = 128, .b = 128 },
-        .textInverse = RgbColor { .r = 0, .g = 0, .b = 0 },
-        .success = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .warning = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .error = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .info = RgbColor { .r = 255, .g = 255, .b = 255 },
-        .border = RgbColor { .r = 100, .g = 100, .b = 100 },
-        .borderFocused = RgbColor { .r = 255, .g = 255, .b = 255 },
+        .primary = 0xFFFFFF_rgb,
+        .secondary = 0xC8C8C8_rgb,
+        .accent = 0xFFFFFF_rgb,
+        .background = 0x000000_rgb,
+        .surface = 0x1E1E1E_rgb,
+        .overlay = 0x282828_rgb,
+        .text = 0xFFFFFF_rgb,
+        .textMuted = 0x808080_rgb,
+        .textInverse = 0x000000_rgb,
+        .success = 0xFFFFFF_rgb,
+        .warning = 0xFFFFFF_rgb,
+        .error = 0xFFFFFF_rgb,
+        .info = 0xFFFFFF_rgb,
+        .border = 0x646464_rgb,
+        .borderFocused = 0xFFFFFF_rgb,
     };
 
     // Simple monochrome styles
@@ -223,12 +287,44 @@ auto monoTheme() -> Theme
     theme.info.bold = true;
 
     // Completion styles
-    theme.ghostText.dim = true;              // Default ghost text is dim
-    theme.completionItem = {};               // Normal
-    theme.completionSelected.inverse = true; // Selected
-    theme.completionDesc.dim = true;         // Description
-    theme.completionMatch.bold = true;       // Highlighted matched chars (bold for mono)
+    theme.ghostText.dim = true;
+    theme.completionItem = {};
+    theme.completionSelected.inverse = true;
+    theme.completionDesc.dim = true;
+    theme.completionMatch.bold = true;
     theme.completionMatch.underline = true;
+
+    // Prompt colors - Monochrome
+    theme.promptColors = {
+        .path = 0xFFFFFF_rgb,
+        .gitClean = 0xFFFFFF_rgb,
+        .gitDirty = 0xC8C8C8_rgb,
+        .gitStaged = 0xFFFFFF_rgb,
+        .indicator = 0xFFFFFF_rgb,
+        .indicatorError = 0xC8C8C8_rgb,
+        .exitCode = 0xFFFFFF_rgb,
+        .duration = 0xC8C8C8_rgb,
+        .hostname = 0xFFFFFF_rgb,
+        .background = 0x1E1E1E_rgb,
+        .separator = 0xC8C8C8_rgb,
+        .badge = 0x323232_rgb,
+        .badgeText = 0xC8C8C8_rgb,
+        .clock = 0x808080_rgb,
+    };
+
+    // Syntax highlighting - Monochrome
+    theme.syntaxColors = {
+        .keyword = 0xFFFFFF_rgb,
+        .number = 0xC8C8C8_rgb,
+        .string = 0xC8C8C8_rgb,
+        .op = 0xFFFFFF_rgb,
+        .variable = 0xFFFFFF_rgb,
+        .constructor = 0xFFFFFF_rgb,
+        .punctuation = 0x808080_rgb,
+        .comment = 0x808080_rgb,
+        .type = 0xFFFFFF_rgb,
+        .defaultText = 0xFFFFFF_rgb,
+    };
 
     theme.borderStyle = BorderStyle::Single;
 
