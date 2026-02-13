@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <chrono>
 #include <csignal>
 
 #include <unistd.h>
@@ -124,24 +125,43 @@ auto Terminal::isSuspended() const noexcept -> bool
 
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
-    // Send DSR (Device Status Report) to query cursor position
+    // Send DSR (Device Status Report) to query cursor position.
     // Response will be: CSI row ; col R
     _output.writeRaw("\033[6n");
     _output.flush();
 
-    // Read response with a short timeout
-    auto events = _input.poll(100); // 100ms timeout
+    // Poll with a deadline loop. The ColorSchemeReport from enableProtocols() may arrive
+    // before the CursorPositionReport, so we keep polling until we find a CPR or time out.
+    auto constexpr totalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
 
-    // Look for cursor position report in the events
-    for (auto const& event: events)
+    while (true)
     {
-        if (auto const* cpr = std::get_if<CursorPositionReport>(&event))
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+            break;
+
+        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        auto events = _input.poll(static_cast<int>(remaining));
+
+        if (events.empty())
+            break; // Real timeout — no more data coming
+
+        for (auto const& event: events)
         {
-            return { cpr->row, cpr->column };
+            if (auto const* cpr = std::get_if<CursorPositionReport>(&event))
+                return { cpr->row, cpr->column };
+
+            // Handle ColorSchemeReport inline so it isn't dropped
+            if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
+            {
+                auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
+                handleColorSchemeReport(scheme);
+            }
         }
     }
 
-    // Failed to get response
+    // Failed to get response within timeout
     return { 0, 0 };
 }
 

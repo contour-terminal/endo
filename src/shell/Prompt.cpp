@@ -345,16 +345,10 @@ void Prompt::resume()
         _terminal.resume();
 
         // Check if the command left the cursor at a non-column-1 position,
-        // indicating output that didn't end with a newline. Show a reverse-video
-        // indicator (like fish shell) and move to a fresh line.
+        // indicating output that didn't end with a newline. Show a dim indicator
+        // (like fish shell) and move to a fresh line.
         if (auto const [row, col] = _terminal.queryCursorPosition(); col > 1)
-        {
-            auto& out = _terminal.output();
-            out.write("\u23CE", tui::Style { .dim = true });
-            out.clearToEndOfLine();
-            out.writeRaw("\r\n");
-            out.flush();
-        }
+            emitPartialLineIndicator(STDOUT_FILENO, col);
 
         if (_screen)
         {
@@ -458,6 +452,17 @@ tui::KeyBindings& Prompt::keyBindings()
     // This will crash if initialization failed (_aborted), but that's acceptable
     // since the shell can't work without a functional terminal anyway
     return _promptComponent->inputField().keyBindings();
+}
+
+void emitPartialLineIndicator(int fd, int cursorColumn)
+{
+    if (cursorColumn <= 1)
+        return;
+
+    // SGR 2 (dim) + U+23CE (return symbol) + SGR 0 (reset) + CSI K (clear to EOL) + CR LF
+    static constexpr std::string_view indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    ::write(fd, indicator.data(), indicator.size());
 }
 
 } // namespace endo

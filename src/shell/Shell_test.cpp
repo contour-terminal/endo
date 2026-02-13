@@ -2181,3 +2181,76 @@ TEST_CASE("table.terminalWidth.minimum_column_width")
     auto table = endo::formatRecordTable(nullptr, nullptr, config);
     CHECK(table == "[]\n");
 }
+
+// ============================================================================
+// Partial-line indicator
+// ============================================================================
+
+#include "Prompt.hpp"
+
+namespace
+{
+
+std::string readAllFromPipe(int readFd)
+{
+    std::string result;
+    char buf[256];
+    for (;;)
+    {
+        auto const n = ::read(readFd, buf, sizeof(buf));
+        if (n <= 0)
+            break;
+        result.append(buf, static_cast<size_t>(n));
+    }
+    return result;
+}
+
+} // namespace
+
+TEST_CASE("shell.partial_line_indicator.emits_when_not_at_col1")
+{
+    int fds[2];
+    REQUIRE(::pipe(fds) == 0);
+
+    endo::emitPartialLineIndicator(fds[1], 5);
+    ::close(fds[1]);
+
+    auto const output = readAllFromPipe(fds[0]);
+    ::close(fds[0]);
+
+    // Must contain the return symbol U+23CE (UTF-8: E2 8F 8E)
+    CHECK(output.find("\u23CE") != std::string::npos);
+    // Must contain CSI K (clear to EOL)
+    CHECK(output.find("\033[K") != std::string::npos);
+    // Must end with CR LF
+    CHECK(output.size() >= 2);
+    CHECK(output.substr(output.size() - 2) == "\r\n");
+}
+
+TEST_CASE("shell.partial_line_indicator.silent_at_col1")
+{
+    int fds[2];
+    REQUIRE(::pipe(fds) == 0);
+
+    endo::emitPartialLineIndicator(fds[1], 1);
+    ::close(fds[1]);
+
+    auto const output = readAllFromPipe(fds[0]);
+    ::close(fds[0]);
+
+    CHECK(output.empty());
+}
+
+TEST_CASE("shell.partial_line_indicator.silent_on_failure")
+{
+    int fds[2];
+    REQUIRE(::pipe(fds) == 0);
+
+    endo::emitPartialLineIndicator(fds[1], 0);
+    ::close(fds[1]);
+
+    auto const output = readAllFromPipe(fds[0]);
+    ::close(fds[0]);
+
+    CHECK(output.empty());
+}

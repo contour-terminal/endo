@@ -173,4 +173,12 @@ class Prompt
     void setupHoverCallbacks();
 };
 
+/// @brief Emits a dim partial-line indicator (⏎) and moves to a fresh line.
+///
+/// Called when a command's output did not end with a newline, to visually mark the
+/// incomplete line before the next prompt.
+/// @param fd File descriptor to write to (typically STDOUT_FILENO).
+/// @param cursorColumn Current cursor column (1-based). No-op if <= 1.
+void emitPartialLineIndicator(int fd, int cursorColumn);
+
 } // namespace endo
