@@ -4279,6 +4279,159 @@ TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
 }
 
 // =============================================================================
+// nth Builtin
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_nth_first")
+{
+    CHECK(executesWithOutput("let r = match nth 0 [10; 20; 30] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "10"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nth_middle")
+{
+    CHECK(executesWithOutput("let r = match nth 1 [10; 20; 30] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "20"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nth_last")
+{
+    CHECK(executesWithOutput("let r = match nth 2 [10; 20; 30] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nth_out_of_bounds")
+{
+    CHECK(executesWithOutput("let r = match nth 5 [10; 20; 30] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "-1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nth_empty")
+{
+    CHECK(executesWithOutput("let r = match nth 0 [] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "-1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_nth_pipeline")
+{
+    CHECK(executesWithOutput("let r = match [1;2;3] |> nth 1 with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "2"));
+}
+
+// =============================================================================
+// last Builtin
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_last_basic")
+{
+    CHECK(executesWithOutput("let r = match last [1; 2; 3] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_last_single")
+{
+    CHECK(executesWithOutput("let r = match last [42] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_last_empty")
+{
+    CHECK(executesWithOutput("let r = match last [] with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "-1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_last_pipeline")
+{
+    CHECK(executesWithOutput("let r = match [1;2;3] |> last with\n"
+                             "    | Some v -> v\n"
+                             "    | None -> -1\n"
+                             "print r",
+                             "3"));
+}
+
+// =============================================================================
+// replicate Builtin
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_replicate_basic")
+{
+    CHECK(executesWithOutput("print (replicate 3 42)", "[42; 42; 42]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_replicate_zero")
+{
+    CHECK(executesWithOutput("print (replicate 0 1)", "[]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_replicate_one")
+{
+    CHECK(executesWithOutput("print (replicate 1 99)", "[99]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_replicate_pipeline")
+{
+    // 7 |> replicate 3 → [7; 7; 7]
+    CHECK(executesWithOutput("print (7 |> replicate 3)", "[7; 7; 7]"));
+}
+
+// =============================================================================
+// Character Ranges
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.char_range_basic")
+{
+    CHECK(executesWithOutput("print ['a'..'e']", "[a; b; c; d; e]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.char_range_uppercase")
+{
+    CHECK(executesWithOutput("print ['A'..'E']", "[A; B; C; D; E]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.char_range_digits")
+{
+    CHECK(executesWithOutput("print ['0'..'5']", "[0; 1; 2; 3; 4; 5]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.char_range_single")
+{
+    CHECK(executesWithOutput("print ['x'..'x']", "[x]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.char_range_empty")
+{
+    // Reverse range with no step → empty list
+    CHECK(executesWithOutput("print ['z'..'a']", "[]"));
+}
+
+// =============================================================================
 // String Standard Library
 // =============================================================================
 

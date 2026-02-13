@@ -451,6 +451,109 @@ TestRuntime::TestRuntime()
             args.setResult(!list || list->tag == 0);
         });
 
+    // Register list_nth builtin: returns Option (Some element | None) at given index
+    runtime.registerFunction("list_nth")
+        .param<CoreVM::CoreNumber>("index")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto index = args.getInt(1);
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(2)));
+            int64_t i = 0;
+            while (cur && cur->tag == 1 && i < index)
+            {
+                cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+                ++i;
+            }
+            if (cur && cur->tag == 1 && i == index)
+            {
+                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                some->tag = 1;
+                some->setSlot(0, cur->getSlot(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+            else
+            {
+                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                none->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+        });
+
+    // Register list_last builtin: returns Option (Some lastElement | None)
+    runtime.registerFunction("list_last")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+            if (!cur || cur->tag == 0)
+            {
+                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                none->tag = 0;
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+            else
+            {
+                while (cur->tag == 1)
+                {
+                    auto* next = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+                    if (!next || next->tag == 0)
+                        break;
+                    cur = next;
+                }
+                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
+                some->tag = 1;
+                some->setSlot(0, cur->getSlot(0));
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+        });
+
+    // Register list_replicate builtin: creates a list of N copies of a value
+    runtime.registerFunction("list_replicate")
+        .param<CoreVM::CoreNumber>("count")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto count = args.getInt(1);
+            auto value = static_cast<uint64_t>(args.getInt(2));
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0; // Nil
+            for (int64_t i = 0; i < count; ++i)
+            {
+                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1;
+                cons->setSlot(0, value);
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                acc = cons;
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
+    // Register list_char_range builtin: builds a list of single-character strings from ordinal range
+    runtime.registerFunction("list_char_range")
+        .param<CoreVM::CoreNumber>("startOrd")
+        .param<CoreVM::CoreNumber>("endOrd")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            auto startOrd = args.getInt(1);
+            auto endOrd = args.getInt(2);
+            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+            acc->tag = 0; // Nil
+            if (startOrd <= endOrd)
+            {
+                for (auto ord = endOrd; ord >= startOrd; --ord)
+                {
+                    auto* str = args.caller()->newString(std::string(1, static_cast<char>(ord)));
+                    auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+                    cons->tag = 1;
+                    cons->setSlot(0, reinterpret_cast<uintptr_t>(str));
+                    cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
+                    acc = cons;
+                }
+            }
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
+        });
+
     // Register object_to_string builtin: runtime dispatch for object printing
     runtime.registerFunction("object_to_string")
         .param<CoreVM::CoreNumber>("obj")

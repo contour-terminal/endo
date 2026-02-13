@@ -80,10 +80,13 @@ This document tracks the implementation status of F# language features as define
 
 - [x] List literal construction: `[1; 2; 3]`
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
+- [x] Character ranges: `['a'..'z']`, `['A'..'Z']`, `['0'..'9']`
 - [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
 - [x] List concatenation: `@` (`[1; 2] @ [3; 4]`)
 - [x] List comprehensions: `[for x in items -> expr]`, with optional `when` filter
 - [x] Standard list operations: `map`, `filter`, `fold`, `reduce`, `reverse`
+- [x] Indexed access: `nth`, `last` — return `option<T>`
+- [x] Construction: `replicate` — create list of N copies of a value
 - [x] Utility list operations: `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten`
 - [x] Remaining list operations (`each`, etc.)
 
@@ -185,6 +188,8 @@ This document tracks the implementation status of F# language features as define
 - [x] `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten` — list utility functions
 - [x] `sort`, `reverse`, `distinct` — list transformations
 - [x] `sortBy`, `groupBy` — key-based list sorting and grouping (hybrid IR + native)
+- [x] `nth`, `last` — indexed list access returning `option<T>`
+- [x] `replicate` — create list of N copies of a value
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
@@ -280,6 +285,9 @@ Consult this section to determine what to work on next.
 - [x] `ListComprehensionExpr` codegen: forward iteration + optional filter + reverse for correct order
 - [x] Utility: `zip`, `flatten`, `take`, `drop`, `find`, `exists`, `forall`
 - [x] Key-based: `sortBy`, `groupBy` — hybrid IR loop (key extraction) + native callbacks (sort/group)
+- [x] Indexed access: `nth`, `last` — return `option<T>`, yield to user-defined functions of same name
+- [x] Construction: `replicate` — create list of N copies of a value
+- [x] Character ranges: `['a'..'z']` via `list_char_range` native callback
 
 ### Phase 4 — Records (parallel with Phase 2/3) ✅
 - [x] Type definitions: `type Person = { name: str; age: int }` — new AST node + parser + TypeRegistry product type

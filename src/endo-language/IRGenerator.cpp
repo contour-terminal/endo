@@ -3165,6 +3165,97 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "nth" && !lookupFSharpFunction(name))
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("nth requires exactly 2 arguments (index, list), got {}", argExprs.size());
+            return true;
+        }
+        auto* indexVal = codegen(argExprs[0]);
+        if (!indexVal)
+        {
+            reportTypeError("Failed to evaluate nth index argument");
+            return true;
+        }
+        auto* listVal = codegen(argExprs[1]);
+        if (!listVal)
+        {
+            reportTypeError("Failed to evaluate nth list argument");
+            return true;
+        }
+        auto* callback = findCallback("list_nth(II)I");
+        if (!callback)
+        {
+            reportTypeError("list_nth builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { indexVal, listVal }, "list_nth");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+        if (auto elemTypeId = getListElementTypeId(listVal))
+            annotateInnerObjectTypeId(_result, *elemTypeId);
+        return true;
+    }
+
+    if (name == "last" && !lookupFSharpFunction(name))
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("last requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate last argument");
+            return true;
+        }
+        auto* callback = findCallback("list_last(I)I");
+        if (!callback)
+        {
+            reportTypeError("list_last builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "list_last");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+        if (auto elemTypeId = getListElementTypeId(argVal))
+            annotateInnerObjectTypeId(_result, *elemTypeId);
+        return true;
+    }
+
+    if (name == "replicate" && !lookupFSharpFunction(name))
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("replicate requires exactly 2 arguments (count, value), got {}", argExprs.size());
+            return true;
+        }
+        auto* countVal = codegen(argExprs[0]);
+        if (!countVal)
+        {
+            reportTypeError("Failed to evaluate replicate count argument");
+            return true;
+        }
+        auto* valueVal = codegen(argExprs[1]);
+        if (!valueVal)
+        {
+            reportTypeError("Failed to evaluate replicate value argument");
+            return true;
+        }
+        auto* callback = findCallback("list_replicate(II)I");
+        if (!callback)
+        {
+            reportTypeError("list_replicate builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(
+            _builder.getBuiltinFunction(*callback), { countVal, valueVal }, "list_replicate");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        return true;
+    }
+
     // --- String builtins ---
 
     // Unary string functions: trim, toLower, toUpper
@@ -4600,6 +4691,21 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 _builder.getBuiltinFunction(*callback), { value }, "list_isEmpty");
             return;
         }
+        if (funcIdent->name == "last")
+        {
+            auto* callback = findCallback("list_last(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_last builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "list_last");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
+            return;
+        }
         // toText: convert object to its string representation (bypass table rendering)
         if (funcIdent->name == "toText")
         {
@@ -4723,6 +4829,63 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 }
             }
             reportTypeError("Pipeline partial application requires a named function");
+            return;
+        }
+
+        // Handle list builtins as partial applications in pipelines:
+        // list |> nth 1 → list_nth(1, list)
+        if (baseIdent->name == "nth")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("nth in pipeline requires exactly 1 index argument");
+                return;
+            }
+            auto* indexArg = codegen(explicitArgExprs[0]);
+            if (!indexArg)
+            {
+                reportTypeError("Failed to evaluate nth index argument");
+                return;
+            }
+            auto* callback = findCallback("list_nth(II)I");
+            if (!callback)
+            {
+                reportTypeError("list_nth builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { indexArg, value }, "list_nth");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            if (auto elemTypeId = getListElementTypeId(value))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
+            return;
+        }
+
+        // count |> replicate value → list_replicate(count, value)
+        // Actually: list |> replicate N is not meaningful. replicate is: replicate count value
+        // In pipeline: value |> replicate 3 → list_replicate(3, value)
+        if (baseIdent->name == "replicate")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("replicate in pipeline requires exactly 1 count argument");
+                return;
+            }
+            auto* countArg = codegen(explicitArgExprs[0]);
+            if (!countArg)
+            {
+                reportTypeError("Failed to evaluate replicate count argument");
+                return;
+            }
+            auto* callback = findCallback("list_replicate(II)I");
+            if (!callback)
+            {
+                reportTypeError("list_replicate builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { countArg, value }, "list_replicate");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
             return;
         }
 
@@ -6427,6 +6590,30 @@ void IRGenerator::visit(ast::ConcatListExpr const& node)
 void IRGenerator::visit(ast::ListRangeExpr const& node)
 {
     TRACE_SCOPE("visit(ListRangeExpr)");
+
+    // Detect character range: ['a'..'z'] where start and end are single-character string literals
+    if (auto const* startLit = dynamic_cast<ast::LiteralExpr const*>(node.start.get()))
+    {
+        if (auto const* endLit = dynamic_cast<ast::LiteralExpr const*>(node.end.get()))
+        {
+            if (startLit->value.size() == 1 && endLit->value.size() == 1 && !node.step)
+            {
+                auto startOrd =
+                    _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(startLit->value[0])));
+                auto endOrd = _builder.get(CoreVM::CoreNumber(static_cast<unsigned char>(endLit->value[0])));
+                auto* callback = findCallback("list_char_range(II)I");
+                if (!callback)
+                {
+                    reportTypeError("list_char_range builtin not found");
+                    return;
+                }
+                _result = _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { startOrd, endOrd }, "list_char_range");
+                annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                return;
+            }
+        }
+    }
 
     // Evaluate start, step, and end expressions
     auto* startVal = codegen(node.start.get());
