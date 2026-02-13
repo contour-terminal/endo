@@ -271,6 +271,7 @@ class Shell final
     std::optional<ProcessId> _rightPid;
 
     int _exitCode = -1;
+    std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
     bool _interactive = true; ///< Whether running in interactive mode
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID

@@ -33,6 +33,7 @@
 #include "Process.hpp"
 #include "ProcessGroup.hpp"
 #include "Prompt.hpp"
+#include "PromptPresets.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
 #include "commands/JobsCommand.hpp"
@@ -40,6 +41,7 @@
 #include "commands/PsCommand.hpp"
 #include "platform/LinuxFileInfoProvider.hpp"
 #include "platform/LinuxProcessProvider.hpp"
+#include <tui/Theme.hpp>
 #include <endo-language/ASTPrinter.hpp>
 #include <endo-language/IRGenerator.hpp>
 #include <endo-language/Lexer.hpp>
@@ -647,6 +649,31 @@ Shell::Shell(TTY& tty, Environment& env):
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
     registerBuiltinFunctions();
+
+    // Register dark/light mode auto-switching via terminal color scheme detection
+    prompt.terminal().onColorSchemeChanged([](tui::ColorScheme scheme) {
+        auto& mgr = tui::ThemeManager::instance();
+        mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
+    });
+
+    // Auto-execute init.endo if it exists
+    if (auto const* home = std::getenv("HOME"))
+    {
+        auto const initPath = std::filesystem::path(home) / ".config" / "endo" / "init.endo";
+        if (std::filesystem::exists(initPath))
+        {
+            try
+            {
+                auto ifs = std::ifstream(initPath);
+                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+                execute(content);
+            }
+            catch (std::exception const& e)
+            {
+                std::println(std::cerr, "endo: warning: error loading {}: {}", initPath.string(), e.what());
+            }
+        }
+    }
 }
 
 Shell::~Shell()
@@ -762,6 +789,28 @@ int Shell::run()
         emitCurrentWorkingDirectory();
         emitPromptStart();
 
+        // Populate prompt context for module evaluation
+        {
+            auto ctx = PromptContext {};
+            ctx.cwd = std::filesystem::current_path().string();
+            if (auto const* home = std::getenv("HOME"))
+                ctx.homePath = home;
+            ctx.lastExitCode = _exitCode;
+            ctx.lastDuration = _lastCommandDuration;
+            ctx.terminalWidth = prompt.terminal().columns();
+            ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
+            if (ctx.isSSH)
+            {
+                auto buf = std::array<char, 256> {};
+                if (gethostname(buf.data(), buf.size()) == 0)
+                    ctx.hostname = buf.data();
+            }
+            ctx.theme = &tui::currentTheme();
+            ctx.fsharpState = &_fsharpState;
+            ctx.outputDefs = &_outputDefinitions;
+            prompt.setPromptContext(std::move(ctx));
+        }
+
         // Display the prompt before waiting for input
         prompt.display();
 
@@ -801,7 +850,10 @@ int Shell::run()
 
             auto const _ = Prompt::ScopedSuspend(prompt);
             emitCommandStart();
+            auto const cmdStart = std::chrono::steady_clock::now();
             _exitCode = execute(lineBuffer);
+            _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - cmdStart);
             emitCommandFinished(_exitCode);
 
             // Update diagnostics with known F# names from persisted state
@@ -2177,6 +2229,73 @@ void Shell::registerBuiltinFunctions()
 
             auto* result = OutputParser::parseFields(*args.caller(), output, variant);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    // ---- Prompt configuration builtins ----
+
+    _runtime.registerFunction("set_prompt_preset")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& name = args.getString(1);
+            prompt.setPromptConfig(promptPreset(name));
+        });
+
+    _runtime.registerFunction("set_prompt_indicator")
+        .param<CoreVM::CoreString>("chars")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto config = prompt.promptConfig();
+            config.indicator = std::string(args.getString(1)) + " ";
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    _runtime.registerFunction("set_prompt_layout")
+        .param<CoreVM::CoreString>("kind")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& kind = args.getString(1);
+            auto config = prompt.promptConfig();
+            if (kind == "single-line") config.layout = PromptLayoutKind::SingleLine;
+            else if (kind == "two-line") config.layout = PromptLayoutKind::TwoLine;
+            else if (kind == "boxed") config.layout = PromptLayoutKind::Boxed;
+            else if (kind == "powerline") config.layout = PromptLayoutKind::Powerline;
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    _runtime.registerFunction("set_prompt_separator")
+        .param<CoreVM::CoreString>("style")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& style = args.getString(1);
+            auto config = prompt.promptConfig();
+            if (style == "none") config.separator = SeparatorStyle::None;
+            else if (style == "bar") config.separator = SeparatorStyle::Bar;
+            else if (style == "powerline") config.separator = SeparatorStyle::Powerline;
+            else if (style == "rounded") config.separator = SeparatorStyle::Rounded;
+            else if (style == "boxed") config.separator = SeparatorStyle::Boxed;
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    _runtime.registerFunction("set_prompt_transient")
+        .param<CoreVM::CoreString>("mode")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& mode = args.getString(1);
+            auto config = prompt.promptConfig();
+            if (mode == "off") config.transient = TransientMode::Off;
+            else if (mode == "minimal") config.transient = TransientMode::Minimal;
+            else if (mode == "arrow") config.transient = TransientMode::Arrow;
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    _runtime.registerFunction("set_prompt_duration_threshold")
+        .param<CoreVM::CoreNumber>("ms")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto config = prompt.promptConfig();
+            config.durationThresholdMs = args.getInt(1);
+            prompt.setPromptConfig(std::move(config));
         });
 
     // clang-format on
