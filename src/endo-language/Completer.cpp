@@ -138,8 +138,15 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
             break;
         }
         case CompletionContextType::Argument: {
-            deduplicateInto(results, filterByPrefix(constructorCandidates(), prefix));
-            deduplicateInto(results, filterByPrefix(symbolCandidates(dataSource.symbols), prefix));
+            if (ctx.command.has_value() && isBuiltinWithArgumentCompletion(*ctx.command))
+            {
+                deduplicateInto(results, builtinArgumentCandidates(*ctx.command, prefix));
+            }
+            else
+            {
+                deduplicateInto(results, filterByPrefix(constructorCandidates(), prefix));
+                deduplicateInto(results, filterByPrefix(symbolCandidates(dataSource.symbols), prefix));
+            }
             deduplicateInto(results, filterByPrefix(dataSource.additionalCandidates, prefix));
             break;
         }

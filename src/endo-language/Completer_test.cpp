@@ -237,3 +237,78 @@ TEST_CASE("Completer.collectRecordInfo.no_type_for_anonymous_record", "[completi
     auto info = collectRecordInfo("let r = { x = 1 }");
     CHECK(info.variableTypes.count("r") == 0);
 }
+
+// =============================================================================
+// Builtin argument completion integration tests
+// =============================================================================
+
+TEST_CASE("Completer.set_prompt_preset_offers_presets", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    CHECK(hasCandidate(results, "minimal-arrow"));
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(hasCandidate(results, "endo-signature"));
+}
+
+TEST_CASE("Completer.set_prompt_preset_filters_by_prefix", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_preset pow", 21, dataSource);
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(!hasCandidate(results, "minimal-arrow"));
+}
+
+TEST_CASE("Completer.set_prompt_layout_offers_values", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_layout ", 18, dataSource);
+    CHECK(hasCandidate(results, "single-line"));
+    CHECK(hasCandidate(results, "two-line"));
+    CHECK(hasCandidate(results, "boxed"));
+    CHECK(hasCandidate(results, "powerline"));
+}
+
+TEST_CASE("Completer.set_prompt_prefix_offers_builtins", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_", 11, dataSource);
+    CHECK(hasCandidate(results, "set_prompt_preset"));
+    CHECK(hasCandidate(results, "set_prompt_layout"));
+    CHECK(hasCandidate(results, "set_prompt_separator"));
+    CHECK(hasCandidate(results, "set_prompt_transient"));
+    CHECK(hasCandidate(results, "set_prompt_indicator"));
+    CHECK(hasCandidate(results, "set_prompt_duration_threshold"));
+}
+
+TEST_CASE("Completer.set_prompt_indicator_no_candidates", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_indicator ", 21, dataSource);
+    // Free-form string argument: no enum values, no constructors, no symbols
+    CHECK(results.empty());
+}
+
+TEST_CASE("Completer.set_prompt_preset_no_constructors", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    // Should have enum values but NOT constructors
+    CHECK(!hasCandidate(results, "Some"));
+    CHECK(!hasCandidate(results, "None"));
+    CHECK(!hasCandidate(results, "Ok"));
+    CHECK(!hasCandidate(results, "Error"));
+    // Should still have preset enum values
+    CHECK(hasCandidate(results, "minimal-arrow"));
+}
+
+TEST_CASE("Completer.non_builtin_argument_still_has_constructors", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("echo ", 5, dataSource);
+    // Non-builtin command should still show constructors
+    CHECK(hasCandidate(results, "Some"));
+    CHECK(hasCandidate(results, "None"));
+    CHECK(hasCandidate(results, "Ok"));
+    CHECK(hasCandidate(results, "Error"));
+}

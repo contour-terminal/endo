@@ -22,6 +22,47 @@ namespace
         OptionMethod { "defaultValue", "Option.defaultValue d opt -> value" },
     };
 
+    /// @brief Enumerated argument value with description.
+    struct EnumValueEntry
+    {
+        std::string_view value;
+        std::string_view description;
+    };
+
+    constexpr std::array presetValues = {
+        EnumValueEntry { "minimal-arrow", "Clean arrow-based prompt" },
+        EnumValueEntry { "lambda-clean", "Lambda symbol prompt" },
+        EnumValueEntry { "opencode-bar", "OpenCode-style bar prompt" },
+        EnumValueEntry { "powerline", "Powerline-style segments" },
+        EnumValueEntry { "transient", "Minimal transient prompt" },
+        EnumValueEntry { "dashboard", "Dashboard-style prompt" },
+        EnumValueEntry { "boxed-module", "Boxed module prompt" },
+        EnumValueEntry { "gradient-glow", "Gradient glow prompt" },
+        EnumValueEntry { "context-adaptive", "Context-adaptive prompt" },
+        EnumValueEntry { "endo-signature", "Endo signature prompt" },
+    };
+
+    constexpr std::array layoutValues = {
+        EnumValueEntry { "single-line", "Single line prompt" },
+        EnumValueEntry { "two-line", "Two line prompt" },
+        EnumValueEntry { "boxed", "Boxed prompt layout" },
+        EnumValueEntry { "powerline", "Powerline prompt layout" },
+    };
+
+    constexpr std::array separatorValues = {
+        EnumValueEntry { "none", "No separator" },
+        EnumValueEntry { "bar", "Bar separator (|)" },
+        EnumValueEntry { "powerline", "Powerline separator" },
+        EnumValueEntry { "rounded", "Rounded separator" },
+        EnumValueEntry { "boxed", "Boxed separator" },
+    };
+
+    constexpr std::array transientValues = {
+        EnumValueEntry { "off", "Disable transient prompt" },
+        EnumValueEntry { "minimal", "Minimal transient prompt" },
+        EnumValueEntry { "arrow", "Arrow transient prompt" },
+    };
+
     /// @brief Helper to check if a name starts with a given prefix (case-sensitive).
     [[nodiscard]] bool startsWith(std::string_view name, std::string_view prefix)
     {
@@ -101,6 +142,28 @@ std::vector<CompletionCandidate> builtinCandidates()
         { "print", "print", "F# print function", "", CompletionKind::Builtin },
         { "println", "println", "F# print with newline", "", CompletionKind::Builtin },
         { "echo", "echo", "builtin", "", CompletionKind::Builtin },
+        { "set_prompt_preset", "set_prompt_preset", "Set prompt theme preset", "", CompletionKind::Builtin },
+        { "set_prompt_indicator",
+          "set_prompt_indicator",
+          "Set prompt indicator character(s)",
+          "",
+          CompletionKind::Builtin },
+        { "set_prompt_layout", "set_prompt_layout", "Set prompt layout style", "", CompletionKind::Builtin },
+        { "set_prompt_separator",
+          "set_prompt_separator",
+          "Set prompt separator style",
+          "",
+          CompletionKind::Builtin },
+        { "set_prompt_transient",
+          "set_prompt_transient",
+          "Set transient prompt mode",
+          "",
+          CompletionKind::Builtin },
+        { "set_prompt_duration_threshold",
+          "set_prompt_duration_threshold",
+          "Set duration display threshold (ms)",
+          "",
+          CompletionKind::Builtin },
     };
 }
 
@@ -223,6 +286,46 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     }
 
     return results;
+}
+
+bool isBuiltinWithArgumentCompletion(std::string const& commandName)
+{
+    static auto const names = std::set<std::string> {
+        "set_prompt_preset",    "set_prompt_indicator", "set_prompt_layout",
+        "set_prompt_separator", "set_prompt_transient", "set_prompt_duration_threshold",
+    };
+    return names.contains(commandName);
+}
+
+std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& commandName,
+                                                           std::string const& prefix)
+{
+    auto collectValues = [&](auto const& entries) {
+        std::vector<CompletionCandidate> results;
+        for (auto const& entry: entries)
+        {
+            if (startsWith(entry.value, prefix))
+                results.push_back(CompletionCandidate {
+                    .text = std::string(entry.value),
+                    .displayText = std::string(entry.value),
+                    .description = std::string(entry.description),
+                    .detail = {},
+                    .kind = CompletionKind::EnumValue,
+                });
+        }
+        return results;
+    };
+
+    if (commandName == "set_prompt_preset")
+        return collectValues(presetValues);
+    if (commandName == "set_prompt_layout")
+        return collectValues(layoutValues);
+    if (commandName == "set_prompt_separator")
+        return collectValues(separatorValues);
+    if (commandName == "set_prompt_transient")
+        return collectValues(transientValues);
+
+    return {};
 }
 
 std::vector<CompletionCandidate> symbolCandidates(std::vector<SymbolDefinitionInfo> const& symbols)

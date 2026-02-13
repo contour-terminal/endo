@@ -67,6 +67,12 @@ TEST_CASE("CompletionCandidates.builtinCandidates.returns_expected_builtins", "[
     CHECK(hasCandidate(builtins, "print"));
     CHECK(hasCandidate(builtins, "println"));
     CHECK(hasCandidate(builtins, "echo"));
+    CHECK(hasCandidate(builtins, "set_prompt_preset"));
+    CHECK(hasCandidate(builtins, "set_prompt_indicator"));
+    CHECK(hasCandidate(builtins, "set_prompt_layout"));
+    CHECK(hasCandidate(builtins, "set_prompt_separator"));
+    CHECK(hasCandidate(builtins, "set_prompt_transient"));
+    CHECK(hasCandidate(builtins, "set_prompt_duration_threshold"));
 }
 
 TEST_CASE("CompletionCandidates.builtinCandidates.kind_is_builtin", "[completion]")
@@ -302,4 +308,96 @@ TEST_CASE("CompletionCandidates.symbolCandidates.formats_recursive_function", "[
     auto candidates = symbolCandidates(symbols);
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].description.find("rec") != std::string::npos);
+}
+
+// =============================================================================
+// builtinArgumentCandidates tests
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.preset_returns_all_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_preset", "");
+    CHECK(candidates.size() == 10);
+    CHECK(hasCandidate(candidates, "minimal-arrow"));
+    CHECK(hasCandidate(candidates, "powerline"));
+    CHECK(hasCandidate(candidates, "endo-signature"));
+    for (auto const& c: candidates)
+        CHECK(c.kind == CompletionKind::EnumValue);
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.preset_filters_by_prefix", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_preset", "pow");
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].text == "powerline");
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.layout_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_layout", "");
+    CHECK(candidates.size() == 4);
+    CHECK(hasCandidate(candidates, "single-line"));
+    CHECK(hasCandidate(candidates, "two-line"));
+    CHECK(hasCandidate(candidates, "boxed"));
+    CHECK(hasCandidate(candidates, "powerline"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.separator_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_separator", "");
+    CHECK(candidates.size() == 5);
+    CHECK(hasCandidate(candidates, "none"));
+    CHECK(hasCandidate(candidates, "bar"));
+    CHECK(hasCandidate(candidates, "powerline"));
+    CHECK(hasCandidate(candidates, "rounded"));
+    CHECK(hasCandidate(candidates, "boxed"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.transient_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_transient", "");
+    CHECK(candidates.size() == 3);
+    CHECK(hasCandidate(candidates, "off"));
+    CHECK(hasCandidate(candidates, "minimal"));
+    CHECK(hasCandidate(candidates, "arrow"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.indicator_returns_empty", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_indicator", "");
+    CHECK(candidates.empty());
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.duration_threshold_returns_empty", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("set_prompt_duration_threshold", "");
+    CHECK(candidates.empty());
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.unknown_command_returns_empty", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("ls", "");
+    CHECK(candidates.empty());
+}
+
+// =============================================================================
+// isBuiltinWithArgumentCompletion tests
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.set_prompt_commands", "[completion]")
+{
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_preset"));
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_indicator"));
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_layout"));
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_separator"));
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_transient"));
+    CHECK(isBuiltinWithArgumentCompletion("set_prompt_duration_threshold"));
+}
+
+TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_return_false", "[completion]")
+{
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("echo"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("ls"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("cd"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("set_prompt"));
 }

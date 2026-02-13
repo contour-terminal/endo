@@ -45,6 +45,27 @@ namespace endo
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> const& recordFields,
     std::unordered_map<std::string, std::string> const& variableTypes = {});
 
+/// @brief Checks if a command is a builtin whose argument space is fully handled.
+///
+/// Returns true for builtins that either accept enumerated values (e.g., set_prompt_preset)
+/// or free-form input (e.g., set_prompt_indicator), indicating that generic constructor
+/// and symbol candidates should not be offered.
+///
+/// @param commandName The command name to check.
+/// @return true if the command's argument completion is fully handled.
+[[nodiscard]] bool isBuiltinWithArgumentCompletion(std::string const& commandName);
+
+/// @brief Returns argument value completion candidates for a given builtin command.
+///
+/// For builtins that accept enumerated string values (e.g., set_prompt_preset, set_prompt_layout),
+/// returns matching value candidates filtered by prefix.
+///
+/// @param commandName The builtin command name (e.g., "set_prompt_preset").
+/// @param prefix The argument prefix to filter by (may be empty for all values).
+/// @return Matching completion candidates with CompletionKind::EnumValue.
+[[nodiscard]] std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& commandName,
+                                                                         std::string const& prefix);
+
 /// @brief Returns symbol-based completion candidates from the given definitions.
 ///
 /// Formats function signatures (e.g., "add(x, y)") and value binding descriptions
