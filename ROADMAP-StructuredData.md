@@ -171,10 +171,15 @@ F# higher-order function:
     *   This is a parser-only transformation — no changes to IR, CoreVM, or runtime.
     *   15 tests covering `ps`, `docker`, `git` records with `map`, `filter`, `sortBy`, `exists`.
 
-3.  **Table Rendering:**
+3.  **Table Rendering:** ✅
     *   Default renderer for `list<Record>` results — auto-format as table.
-    *   Auto-detect column widths, handle wide data.
+    *   Auto-detect column widths, handle wide data with terminal-width-aware shrinking.
     *   Explicit opt-out via `|> toText` or `|> println`.
+    *   Parser routes bare `ps`/`ls`/`jobs` as F# expressions with `displayResult=true`.
+    *   Peek-ahead logic: only routes to F# when followed by end-of-statement, `|>`, string literal, or `(`.
+    *   Shell-style arguments (e.g., `ls -la`) fall through to normal shell command parsing.
+    *   `toText` builtin converts objects to string representation (pipeline and direct call).
+    *   17 new tests covering bare commands, pipelines, toText, and table config.
 
 ## Suggested System Commands for Structured Output
 
