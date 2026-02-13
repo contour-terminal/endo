@@ -538,6 +538,12 @@ std::optional<HoverInfo> computeHover(std::string const& source, SourcePosition 
         if (auto text = operatorHover(tokenInfo.token))
             return HoverInfo { .markdownText = std::move(*text), .range = range };
 
+        // Boolean literal hover
+        if (tokenInfo.token == Token::True)
+            return HoverInfo { .markdownText = "`true` : `bool`\n\nBoolean true value.", .range = range };
+        if (tokenInfo.token == Token::False)
+            return HoverInfo { .markdownText = "`false` : `bool`\n\nBoolean false value.", .range = range };
+
         // Try builtin hover for identifiers
         if (tokenInfo.token == Token::Identifier)
         {

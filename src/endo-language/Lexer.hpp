@@ -84,6 +84,8 @@ enum class Token
     Rec,   // 'rec'
     And,   // 'and' (mutual recursion)
     As,    // 'as' (pattern alias)
+    True,  // 'true' (boolean literal)
+    False, // 'false' (boolean literal)
     // Note: 'in' is NOT a keyword token - it's recognized contextually by the parser
 
     // F# style constructors
@@ -447,6 +449,8 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
             case Rec: name = "rec"; break;
             case And: name = "and"; break;
             case As: name = "as"; break;
+            case True: name = "true"; break;
+            case False: name = "false"; break;
             // F# style constructors
             case OptionSome: name = "Some"; break;
             case OptionNone: name = "None"; break;

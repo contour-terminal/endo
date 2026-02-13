@@ -52,10 +52,6 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Void)
         .bind(dummyHandler);
 
-    runtime.registerFunction("true").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
-
-    runtime.registerFunction("false").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
-
     runtime.registerFunction("export")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Void)
@@ -121,6 +117,11 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
     runtime.registerFunction("which")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("setvar.exitstatus")
+        .param<CoreVM::CoreNumber>("code")
+        .returnType(CoreVM::LiteralType::Void)
         .bind(dummyHandler);
 
     runtime.registerFunction("list_to_string")

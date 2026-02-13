@@ -92,8 +92,6 @@ std::vector<CompletionCandidate> builtinCandidates()
         { "unset", "unset", "builtin", "", CompletionKind::Builtin },
         { "read", "read", "builtin", "", CompletionKind::Builtin },
         { "sleep", "sleep", "builtin", "", CompletionKind::Builtin },
-        { "true", "true", "builtin", "", CompletionKind::Builtin },
-        { "false", "false", "builtin", "", CompletionKind::Builtin },
         { "jobs", "jobs", "builtin", "", CompletionKind::Builtin },
         { "fg", "fg", "builtin", "", CompletionKind::Builtin },
         { "bg", "bg", "builtin", "", CompletionKind::Builtin },

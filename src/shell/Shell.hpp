@@ -119,8 +119,6 @@ class Shell final
     void builtinCmdExecPiped(CoreVM::Params& context);
     void builtinSetAndExport(CoreVM::Params& context);
     void builtinExport(CoreVM::Params& context);
-    void builtinTrue(CoreVM::Params& context);
-    void builtinFalse(CoreVM::Params& context);
     void builtinReadDefault(CoreVM::Params& context);
     void builtinRead(CoreVM::Params& context);
     void builtinOpenRead(CoreVM::Params& context);

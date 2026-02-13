@@ -42,7 +42,9 @@ enum class TokenCategory
         case And:
         case As:
         case Try:
-        case Finally: return TokenCategory::Keyword;
+        case Finally:
+        case True:
+        case False: return TokenCategory::Keyword;
 
         // Numbers
         case Number: return TokenCategory::Number;

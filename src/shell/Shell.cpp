@@ -905,14 +905,6 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinSetAndExport, this);
 
-    _runtime.registerFunction("true")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinTrue, this);
-
-    _runtime.registerFunction("false")
-        .returnType(CoreVM::LiteralType::Boolean)
-        .bind(&Shell::builtinFalse, this);
-
     _runtime.registerFunction("cd")
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(&Shell::builtinChDirHome, this);
@@ -3342,18 +3334,6 @@ void Shell::builtinSetAndExport(CoreVM::Params& context)
 void Shell::builtinExport(CoreVM::Params& context)
 {
     _env.exportVariable(context.getString(1));
-}
-
-void Shell::builtinTrue(CoreVM::Params& context)
-{
-    _exitCode = 0;
-    context.setResult(true);
-}
-
-void Shell::builtinFalse(CoreVM::Params& context)
-{
-    _exitCode = 1;
-    context.setResult(false);
 }
 
 std::vector<std::string> Shell::splitByIFS(std::string_view input) const

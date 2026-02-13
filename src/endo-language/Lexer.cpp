@@ -57,6 +57,12 @@ namespace
         if (literal == "finally")
             return Token::Finally;
 
+        // Boolean literals
+        if (literal == "true")
+            return Token::True;
+        if (literal == "false")
+            return Token::False;
+
         return Token::Identifier;
     }
 } // namespace
