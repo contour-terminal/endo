@@ -23,13 +23,13 @@ namespace
     [[nodiscard]] std::set<std::string> const& builtinNames()
     {
         static auto const names = std::set<std::string> {
-            "cat",   "cd",       "exit",    "export",  "set",      "unset", "read",     "sleep",   "true",
-            "false", "jobs",     "fg",      "bg",      "wait",     "bind",  "which",    "if",      "then",
-            "else",  "elif",     "fi",      "for",     "while",    "do",    "done",     "case",    "esac",
-            "in",    "function", "return",  "break",   "continue", "echo",  "printf",   "test",    "source",
-            ".",     "exec",     "eval",    "shift",   "trap",     "type",  "local",    "declare", "typeset",
-            "alias", "unalias",  "command", "builtin", "hash",     "let",   "readonly", "select",  "time",
-            "until", "print",    "println",
+            "cat",   "cd",       "exit",     "export", "set",     "unset",    "read",    "sleep",
+            "jobs",  "fg",       "bg",       "wait",   "bind",    "which",    "if",      "then",
+            "else",  "elif",     "fi",       "for",    "while",   "do",       "done",    "case",
+            "esac",  "in",       "function", "return", "break",   "continue", "echo",    "printf",
+            "test",  "source",   ".",        "exec",   "eval",    "shift",    "trap",    "type",
+            "local", "declare",  "typeset",  "alias",  "unalias", "command",  "builtin", "hash",
+            "let",   "readonly", "select",   "time",   "until",   "print",    "println",
         };
         return names;
     }
@@ -94,12 +94,6 @@ namespace
             {
                 programCalls.push_back(call);
             }
-            else if (auto const* funcDef = dynamic_cast<ast::FunctionDefStmt const*>(&node))
-            {
-                functionNames.insert(funcDef->name);
-                if (funcDef->body)
-                    walkNode(*funcDef->body);
-            }
             else if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(&node))
             {
                 functionNames.insert(letStmt->name);
@@ -108,32 +102,12 @@ namespace
                 if (letStmt->value)
                     walkExpr(*letStmt->value);
             }
-            else if (auto const* ifStmt = dynamic_cast<ast::IfStmt const*>(&node))
-            {
-                if (ifStmt->condition)
-                    walkNode(*ifStmt->condition);
-                if (ifStmt->thenBlock)
-                    walkNode(*ifStmt->thenBlock);
-                if (ifStmt->elseBlock)
-                    walkNode(*ifStmt->elseBlock);
-            }
             else if (auto const* whileStmt = dynamic_cast<ast::WhileStmt const*>(&node))
             {
                 if (whileStmt->condition)
-                    walkNode(*whileStmt->condition);
+                    walkExpr(*whileStmt->condition);
                 if (whileStmt->body)
                     walkNode(*whileStmt->body);
-            }
-            else if (auto const* forStmt = dynamic_cast<ast::ForListStmt const*>(&node))
-            {
-                if (forStmt->body)
-                    walkNode(*forStmt->body);
-            }
-            else if (auto const* caseStmt = dynamic_cast<ast::CaseStmt const*>(&node))
-            {
-                for (auto const& clause: caseStmt->clauses)
-                    if (clause.body)
-                        walkNode(*clause.body);
             }
             else if (auto const* logAnd = dynamic_cast<ast::LogicalAndStmt const*>(&node))
             {

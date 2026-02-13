@@ -416,30 +416,6 @@ struct BuiltinExportStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-struct BuiltinTrueStmt final: public Statement
-{
-    std::reference_wrapper<CoreVM::NativeCallback const> callback;
-
-    explicit BuiltinTrueStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
-        callback { callback }
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-struct BuiltinFalseStmt final: public Statement
-{
-    std::reference_wrapper<CoreVM::NativeCallback const> callback;
-
-    explicit BuiltinFalseStmt(std::reference_wrapper<CoreVM::NativeCallback const> callback):
-        callback { callback }
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
 struct BuiltinReadStmt final: public Statement
 {
     std::reference_wrapper<CoreVM::NativeCallback const> callback;
@@ -697,36 +673,15 @@ struct CompoundStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-// if command; then a; else b; fi
-//
-// This is an if statement.
-// It is a condition, followed by a then block, followed by an optional else block.
-struct IfStmt final: public Statement
-{
-    std::unique_ptr<Statement> condition;
-    std::unique_ptr<Statement> thenBlock;
-    std::unique_ptr<Statement> elseBlock;
-
-    IfStmt(std::unique_ptr<Statement> condition,
-           std::unique_ptr<Statement> thenBlock,
-           std::unique_ptr<Statement> elseBlock):
-        condition(std::move(condition)), thenBlock(std::move(thenBlock)), elseBlock(std::move(elseBlock))
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-// while command; do a; done
-//
-// This is a while statement.
-// It is a condition, followed by a body.
+/// While loop: `while expr do body done`
+///
+/// Condition is an F# boolean expression.
 struct WhileStmt final: public Statement
 {
-    std::unique_ptr<Statement> condition;
+    std::unique_ptr<Expr> condition;
     std::unique_ptr<Statement> body;
 
-    WhileStmt(std::unique_ptr<Statement> condition, std::unique_ptr<Statement> body):
+    WhileStmt(std::unique_ptr<Expr> condition, std::unique_ptr<Statement> body):
         condition(std::move(condition)), body(std::move(body))
     {
     }
@@ -768,25 +723,6 @@ struct LogicalOrStmt final: public Statement
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-/// For-list statement: `for var in list; do ...; done`
-///
-/// Iterates over a list of items, assigning each to the loop variable.
-struct ForListStmt final: public Statement
-{
-    std::string variable;                     ///< Loop variable name
-    std::vector<std::unique_ptr<Expr>> items; ///< Items to iterate
-    std::unique_ptr<Statement> body;          ///< Loop body
-
-    ForListStmt(std::string variable,
-                std::vector<std::unique_ptr<Expr>> items,
-                std::unique_ptr<Statement> body):
-        variable(std::move(variable)), items(std::move(items)), body(std::move(body))
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
 /// For-in statement with pattern destructuring: `for pattern in expr do body done`
 ///
 /// Iterates over a typed list, destructuring each element with a pattern.
@@ -804,66 +740,6 @@ struct ForInStmt final: public Statement
               std::unique_ptr<Expr> src,
               std::unique_ptr<Statement> bodyStmt):
         pattern(std::move(pat)), source(std::move(src)), body(std::move(bodyStmt))
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-/// C-style for statement: `for ((init; cond; step)); do ...; done`
-///
-/// Traditional C-style for loop with arithmetic expressions.
-struct ForCStyleStmt final: public Statement
-{
-    std::unique_ptr<ArithExpr> init;      ///< Initialization expression (may be null)
-    std::unique_ptr<ArithExpr> condition; ///< Loop condition (may be null for infinite loop)
-    std::unique_ptr<ArithExpr> step;      ///< Step/increment expression (may be null)
-    std::unique_ptr<Statement> body;      ///< Loop body
-
-    ForCStyleStmt(std::unique_ptr<ArithExpr> init,
-                  std::unique_ptr<ArithExpr> condition,
-                  std::unique_ptr<ArithExpr> step,
-                  std::unique_ptr<Statement> body):
-        init(std::move(init)), condition(std::move(condition)), step(std::move(step)), body(std::move(body))
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-/// Case clause for pattern matching
-struct CaseClause
-{
-    std::vector<std::string> patterns; ///< Pipe-separated patterns
-    std::unique_ptr<Statement> body;   ///< Commands to execute on match
-};
-
-/// Case statement: `case word in pattern) ...; esac`
-///
-/// Pattern matching construct similar to switch in other languages.
-struct CaseStmt final: public Statement
-{
-    std::unique_ptr<Expr> word;      ///< Word to match against patterns
-    std::vector<CaseClause> clauses; ///< Pattern-body pairs
-
-    CaseStmt(std::unique_ptr<Expr> word, std::vector<CaseClause> clauses):
-        word(std::move(word)), clauses(std::move(clauses))
-    {
-    }
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-/// Function definition: `function name() { ... }` or `name() { ... }`
-///
-/// Defines a shell function that can be called later.
-struct FunctionDefStmt final: public Statement
-{
-    std::string name;                ///< Function name
-    std::unique_ptr<Statement> body; ///< Function body
-
-    FunctionDefStmt(std::string name, std::unique_ptr<Statement> body):
-        name(std::move(name)), body(std::move(body))
     {
     }
 
@@ -890,18 +766,6 @@ struct ContinueStmt final: public Statement
     int levels = 1; ///< Number of loop levels to skip
 
     explicit ContinueStmt(int levels = 1): levels(levels) {}
-
-    void accept(Visitor& visitor) const override { visitor.visit(*this); }
-};
-
-/// Return statement: `return [n]`
-///
-/// Returns from a function with the specified exit code (default: $?).
-struct ReturnStmt final: public Statement
-{
-    std::unique_ptr<Expr> value; ///< Optional return value (defaults to $?)
-
-    explicit ReturnStmt(std::unique_ptr<Expr> value = nullptr): value(std::move(value)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1244,6 +1108,18 @@ struct BoolLiteralExpr final: public Expr
 
     explicit BoolLiteralExpr(bool v): value(v) {}
 
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Break expression: `break` inside F# expressions (e.g., in if-then-else within loops)
+struct BreakExpr final: public Expr
+{
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Continue expression: `continue` inside F# expressions (e.g., in if-then-else within loops)
+struct ContinueExpr final: public Expr
+{
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 

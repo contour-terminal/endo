@@ -5,14 +5,13 @@ namespace endo::ast
 {
 
 struct ArithExpansionExpr;
+struct BreakExpr;
 struct BreakStmt;
 struct BuiltinChDirStmt;
 struct BuiltinSetStmt;
 struct BuiltinExportStmt;
-struct BuiltinFalseStmt;
 struct BuiltinExitStmt;
 struct BuiltinReadStmt;
-struct BuiltinTrueStmt;
 struct BuiltinUnsetStmt;
 struct BuiltinJobsStmt;
 struct BuiltinFgStmt;
@@ -21,21 +20,17 @@ struct BuiltinWaitStmt;
 struct BuiltinBindStmt;
 struct BuiltinWhichStmt;
 struct CallPipeline;
-struct CaseStmt;
 struct CommandFileSubst;
 struct CompoundStmt;
 struct ConcatExpr;
+struct ContinueExpr;
 struct ContinueStmt;
 struct FStringExpr;
 struct FileDescriptor;
-struct ForCStyleStmt;
 struct ForInStmt;
-struct ForListStmt;
-struct FunctionDefStmt;
 struct GlobExpr;
 struct HereDocument;
 struct HereString;
-struct IfStmt;
 struct InputRedirect;
 struct LiteralExpr;
 struct LogicalAndStmt;
@@ -43,7 +38,6 @@ struct LogicalOrStmt;
 struct OutputRedirect;
 struct ParamExpansionExpr;
 struct ProgramCall;
-struct ReturnStmt;
 struct StructuredPipelineSourceExpr;
 struct SubstitutionExpr;
 struct TildeExpr;
@@ -106,24 +100,16 @@ struct Visitor
 
     // flow control
     virtual void visit(BreakStmt const&) = 0;
-    virtual void visit(CaseStmt const&) = 0;
     virtual void visit(CompoundStmt const&) = 0;
     virtual void visit(ContinueStmt const&) = 0;
-    virtual void visit(ForCStyleStmt const&) = 0;
     virtual void visit(ForInStmt const&) = 0;
-    virtual void visit(ForListStmt const&) = 0;
-    virtual void visit(FunctionDefStmt const&) = 0;
-    virtual void visit(IfStmt const&) = 0;
     virtual void visit(LogicalAndStmt const&) = 0;
     virtual void visit(LogicalOrStmt const&) = 0;
-    virtual void visit(ReturnStmt const&) = 0;
     virtual void visit(WhileStmt const&) = 0;
 
     // builtin statements
     virtual void visit(BuiltinExitStmt const&) = 0;
     virtual void visit(BuiltinExportStmt const&) = 0;
-    virtual void visit(BuiltinTrueStmt const&) = 0;
-    virtual void visit(BuiltinFalseStmt const&) = 0;
     virtual void visit(BuiltinReadStmt const&) = 0;
     virtual void visit(BuiltinChDirStmt const&) = 0;
     virtual void visit(BuiltinSetStmt const&) = 0;
@@ -162,6 +148,8 @@ struct Visitor
     virtual void visit(IntLiteralExpr const&) = 0;
     virtual void visit(FloatLiteralExpr const&) = 0;
     virtual void visit(BoolLiteralExpr const&) = 0;
+    virtual void visit(BreakExpr const&) = 0;
+    virtual void visit(ContinueExpr const&) = 0;
     virtual void visit(ParenExpr const&) = 0;
     virtual void visit(LambdaExpr const&) = 0;
     virtual void visit(MatchExpr const&) = 0;

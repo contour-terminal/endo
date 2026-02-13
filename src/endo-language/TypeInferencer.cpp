@@ -1396,20 +1396,15 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
     // --- Shell statements: skip type inference for these ---
     // They don't participate in F# type inference
     if (dynamic_cast<ast::ProgramCall const*>(&stmt) || dynamic_cast<ast::CallPipeline const*>(&stmt)
-        || dynamic_cast<ast::IfStmt const*>(&stmt) || dynamic_cast<ast::WhileStmt const*>(&stmt)
-        || dynamic_cast<ast::ForListStmt const*>(&stmt) || dynamic_cast<ast::ForCStyleStmt const*>(&stmt)
-        || dynamic_cast<ast::CaseStmt const*>(&stmt) || dynamic_cast<ast::FunctionDefStmt const*>(&stmt)
-        || dynamic_cast<ast::LogicalAndStmt const*>(&stmt) || dynamic_cast<ast::LogicalOrStmt const*>(&stmt)
-        || dynamic_cast<ast::ForInStmt const*>(&stmt) || dynamic_cast<ast::BreakStmt const*>(&stmt)
-        || dynamic_cast<ast::ContinueStmt const*>(&stmt) || dynamic_cast<ast::ReturnStmt const*>(&stmt))
+        || dynamic_cast<ast::WhileStmt const*>(&stmt) || dynamic_cast<ast::LogicalAndStmt const*>(&stmt)
+        || dynamic_cast<ast::LogicalOrStmt const*>(&stmt) || dynamic_cast<ast::ForInStmt const*>(&stmt)
+        || dynamic_cast<ast::BreakStmt const*>(&stmt) || dynamic_cast<ast::ContinueStmt const*>(&stmt))
     {
         return subst;
     }
 
     // Builtin statements: skip
     if (dynamic_cast<ast::BuiltinExitStmt const*>(&stmt) || dynamic_cast<ast::BuiltinExportStmt const*>(&stmt)
-        || dynamic_cast<ast::BuiltinTrueStmt const*>(&stmt)
-        || dynamic_cast<ast::BuiltinFalseStmt const*>(&stmt)
         || dynamic_cast<ast::BuiltinReadStmt const*>(&stmt) || dynamic_cast<ast::BuiltinSetStmt const*>(&stmt)
         || dynamic_cast<ast::BuiltinChDirStmt const*>(&stmt)
         || dynamic_cast<ast::BuiltinUnsetStmt const*>(&stmt)

@@ -127,14 +127,11 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::BuiltinExportStmt const& node) override;
     void visit(ast::BuiltinChDirStmt const& node) override;
     void visit(ast::BuiltinSetStmt const& node) override;
-    void visit(ast::BuiltinFalseStmt const& node) override;
     void visit(ast::BuiltinReadStmt const& node) override;
-    void visit(ast::BuiltinTrueStmt const& node) override;
     void visit(ast::CallPipeline const& node) override;
     void visit(ast::CommandFileSubst const& node) override;
     void visit(ast::CompoundStmt const& node) override;
     void visit(ast::FileDescriptor const& node) override;
-    void visit(ast::IfStmt const& node) override;
     void visit(ast::LogicalAndStmt const& node) override;
     void visit(ast::LogicalOrStmt const& node) override;
     void visit(ast::InputRedirect const& node) override;
@@ -160,13 +157,8 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::SubstitutionExpr const& node) override;
     void visit(ast::WhileStmt const& node) override;
     void visit(ast::ForInStmt const& node) override;
-    void visit(ast::ForListStmt const& node) override;
-    void visit(ast::ForCStyleStmt const& node) override;
-    void visit(ast::CaseStmt const& node) override;
-    void visit(ast::FunctionDefStmt const& node) override;
     void visit(ast::BreakStmt const& node) override;
     void visit(ast::ContinueStmt const& node) override;
-    void visit(ast::ReturnStmt const& node) override;
 
     // F# style expressions and statements
     void visit(ast::IfExpr const& node) override;
@@ -183,6 +175,8 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::IntLiteralExpr const& node) override;
     void visit(ast::FloatLiteralExpr const& node) override;
     void visit(ast::BoolLiteralExpr const& node) override;
+    void visit(ast::BreakExpr const& node) override;
+    void visit(ast::ContinueExpr const& node) override;
     void visit(ast::ParenExpr const& node) override;
     void visit(ast::LambdaExpr const& node) override;
     void visit(ast::MatchExpr const& node) override;

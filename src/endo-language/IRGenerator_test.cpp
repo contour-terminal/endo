@@ -5965,3 +5965,56 @@ TEST_CASE("IRGenerator.BareExpr.float_literal")
 {
     CHECK(executesWithOutput("(3.14)", "3.14\n"));
 }
+
+// ========================================================================
+// Statement-level F# control flow (unified — replaces shell control flow)
+// ========================================================================
+
+TEST_CASE("IRGenerator.FSharp.stmt_if_then_else")
+{
+    CHECK(executesWithOutput("if true then print 1 else print 0", "1"));
+    CHECK(executesWithOutput("if false then print 1 else print 0", "0"));
+    CHECK(executesWithOutput("if 3 > 1 then print \"yes\" else print \"no\"", "yes"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_if_in_let")
+{
+    CHECK(executesWithOutput("let x = 5; if x > 3 then print x else print 0", "5"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_while_basic")
+{
+    CHECK(generatesIRSuccessfully("while false do done"));
+    CHECK(generatesIRSuccessfully("while false do echo hi; done"));
+    CHECK(generatesIRSuccessfully("while true do break done"));
+    CHECK(executesWithOutput("let mut x = 3\nwhile x > 0 do\nprint x\nx <- x - 1\ndone", "321"));
+    CHECK(executesWithOutput("let mut x = 3; while x > 0 do print x; x <- x - 1; done", "321"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_while_break")
+{
+    CHECK(executesWithOutput(
+        "let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; done", "12"));
+    CHECK(executesWithOutput(
+        "let mut x = 0\nwhile true do\nx <- x + 1\nif x == 3 then break else print x\ndone", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_simple_variable")
+{
+    CHECK(executesWithOutput("for x in [1; 2; 3] do print x done", "123"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_destructuring")
+{
+    CHECK(executesWithOutput("for (a, b) in [(1, 2); (3, 4)] do print a done", "13"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_break")
+{
+    CHECK(executesWithOutput("for x in [1; 2; 3; 4; 5] do\nif x == 3 then break else print x\ndone", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_continue")
+{
+    CHECK(executesWithOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\ndone", "13"));
+}

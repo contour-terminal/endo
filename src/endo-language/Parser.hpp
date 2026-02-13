@@ -46,16 +46,9 @@ class Parser
     std::unique_ptr<ast::Statement> parseBlock(std::string_view traceMessage = {});
     std::unique_ptr<ast::Statement> parseStmt();
     std::string consumeLiteral();
-    std::unique_ptr<ast::IfStmt> parseIf();
     std::unique_ptr<ast::WhileStmt> parseWhile();
     std::unique_ptr<ast::Statement> parseFor();
-    std::unique_ptr<ast::ForListStmt> parseForList();
     std::unique_ptr<ast::ForInStmt> parseForIn();
-    std::unique_ptr<ast::ForCStyleStmt> parseForCStyle();
-    std::unique_ptr<ast::CaseStmt> parseCase();
-    [[nodiscard]] bool isFunctionDefinition() const noexcept;
-    std::unique_ptr<ast::FunctionDefStmt> parseFunctionDef();
-    std::unique_ptr<ast::ReturnStmt> parseReturn();
     std::unique_ptr<ast::BreakStmt> parseBreak();
     std::unique_ptr<ast::ContinueStmt> parseContinue();
     [[nodiscard]] bool isRedirectToken() const noexcept;

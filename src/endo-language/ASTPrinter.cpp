@@ -142,11 +142,6 @@ void ASTPrinter::visit(BuiltinExportStmt const& node)
     _result += "export " + node.name;
 }
 
-void ASTPrinter::visit(BuiltinFalseStmt const&)
-{
-    _result += "false";
-}
-
 void ASTPrinter::visit(BuiltinReadStmt const& node)
 {
     _result += "read";
@@ -155,11 +150,6 @@ void ASTPrinter::visit(BuiltinReadStmt const& node)
         _result += ' ';
         param->accept(*this);
     }
-}
-
-void ASTPrinter::visit(BuiltinTrueStmt const&)
-{
-    _result += "true";
 }
 
 void ASTPrinter::visit(CompoundStmt const& node)
@@ -172,28 +162,13 @@ void ASTPrinter::visit(CompoundStmt const& node)
     }
 }
 
-void ASTPrinter::visit(IfStmt const& node)
-{
-    _result += "if ";
-    _result += print(*node.condition);
-    _result += "; ";
-    _result += print(*node.thenBlock);
-    _result += "; ";
-    if (node.elseBlock)
-    {
-        _result += "else ";
-        _result += print(*node.elseBlock);
-    }
-    _result += "fi";
-}
-
 void ASTPrinter::visit(WhileStmt const& node)
 {
     _result += "while ";
     _result += print(*node.condition);
-    _result += "; ";
+    _result += " do ";
     _result += print(*node.body);
-    _result += "done";
+    _result += " done";
 }
 
 void ASTPrinter::visit(ForInStmt const& node)
@@ -205,69 +180,6 @@ void ASTPrinter::visit(ForInStmt const& node)
     _result += " do ";
     _result += print(*node.body);
     _result += " done";
-}
-
-void ASTPrinter::visit(ForListStmt const& node)
-{
-    _result += "for ";
-    _result += node.variable;
-    _result += " in ";
-    for (size_t i = 0; i < node.items.size(); ++i)
-    {
-        if (i > 0)
-            _result += " ";
-        node.items[i]->accept(*this);
-    }
-    _result += "; do ";
-    _result += print(*node.body);
-    _result += "; done";
-}
-
-void ASTPrinter::visit(ForCStyleStmt const& node)
-{
-    _result += "for ((";
-    if (node.init)
-        printArithExpr(node.init.get());
-    _result += "; ";
-    if (node.condition)
-        printArithExpr(node.condition.get());
-    _result += "; ";
-    if (node.step)
-        printArithExpr(node.step.get());
-    _result += ")); do ";
-    _result += print(*node.body);
-    _result += "; done";
-}
-
-void ASTPrinter::visit(CaseStmt const& node)
-{
-    _result += "case ";
-    node.word->accept(*this);
-    _result += " in ";
-    for (auto const& clause: node.clauses)
-    {
-        for (size_t i = 0; i < clause.patterns.size(); ++i)
-        {
-            if (i > 0)
-                _result += "|";
-            _result += clause.patterns[i];
-        }
-        _result += ") ";
-        if (clause.body)
-            _result += print(*clause.body);
-        _result += ";; ";
-    }
-    _result += "esac";
-}
-
-void ASTPrinter::visit(FunctionDefStmt const& node)
-{
-    _result += "function ";
-    _result += node.name;
-    _result += "() { ";
-    if (node.body)
-        _result += print(*node.body);
-    _result += " }";
 }
 
 void ASTPrinter::visit(BreakStmt const& node)
@@ -282,16 +194,6 @@ void ASTPrinter::visit(ContinueStmt const& node)
     _result += "continue";
     if (node.levels > 1)
         _result += " " + std::to_string(node.levels);
-}
-
-void ASTPrinter::visit(ReturnStmt const& node)
-{
-    _result += "return";
-    if (node.value)
-    {
-        _result += " ";
-        node.value->accept(*this);
-    }
 }
 
 void ASTPrinter::visit(LogicalAndStmt const& node)
@@ -776,6 +678,16 @@ void ASTPrinter::visit(FloatLiteralExpr const& node)
 void ASTPrinter::visit(BoolLiteralExpr const& node)
 {
     _result += node.value ? "true" : "false";
+}
+
+void ASTPrinter::visit(BreakExpr const& /*node*/)
+{
+    _result += "break";
+}
+
+void ASTPrinter::visit(ContinueExpr const& /*node*/)
+{
+    _result += "continue";
 }
 
 void ASTPrinter::visit(ParenExpr const& node)

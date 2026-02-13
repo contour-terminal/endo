@@ -101,12 +101,6 @@ TEST_CASE("DiagnosticsCollector.absolute_path_no_diagnostic", "[diagnostics][com
     CHECK(diagnostics.empty());
 }
 
-TEST_CASE("DiagnosticsCollector.shell_function_no_diagnostic", "[diagnostics][command-not-found]")
-{
-    auto diagnostics = collectDiagnostics("function greet() { echo hello; }\ngreet");
-    CHECK(diagnostics.empty());
-}
-
 TEST_CASE("DiagnosticsCollector.fsharp_function_no_diagnostic", "[diagnostics][command-not-found]")
 {
     auto diagnostics = collectDiagnostics("let greet name = println name\ngreet world");

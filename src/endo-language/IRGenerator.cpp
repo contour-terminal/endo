@@ -1173,11 +1173,6 @@ void IRGenerator::visit(ast::BuiltinSetStmt const& node)
         _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "set");
 }
 
-void IRGenerator::visit(ast::BuiltinFalseStmt const& node)
-{
-    _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "false");
-}
-
 void IRGenerator::visit(ast::BuiltinReadStmt const& node)
 {
     auto callArguments = std::vector<CoreVM::Value*> {};
@@ -1186,11 +1181,6 @@ void IRGenerator::visit(ast::BuiltinReadStmt const& node)
 
     _result =
         _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), callArguments, "read");
-}
-
-void IRGenerator::visit(ast::BuiltinTrueStmt const& node)
-{
-    _result = _builder.createCallFunction(_builder.getBuiltinFunction(node.callback.get()), {}, "true");
 }
 
 void IRGenerator::visit(ast::CallPipeline const& node)
@@ -1342,28 +1332,6 @@ void IRGenerator::visit(ast::CompoundStmt const& node)
 void IRGenerator::visit(ast::FileDescriptor const& node)
 {
     _result = _builder.get(CoreVM::CoreNumber { node.value });
-}
-
-void IRGenerator::visit(ast::IfStmt const& node)
-{
-    CoreVM::BasicBlock* cond = _builder.createBlock("if.cond");
-    CoreVM::BasicBlock* trueBlock = _builder.createBlock("if.trueBlock");
-    CoreVM::BasicBlock* falseBlock = _builder.createBlock("if.falseBlock");
-    CoreVM::BasicBlock* end = _builder.createBlock("if.end");
-
-    _builder.createBr(cond);
-    _builder.setInsertPoint(cond);
-    _builder.createCondBr(toBool(codegen(node.condition.get())), trueBlock, falseBlock);
-
-    _builder.setInsertPoint(trueBlock);
-    codegen(node.thenBlock.get());
-    _builder.createBr(end);
-
-    _builder.setInsertPoint(falseBlock);
-    codegen(node.elseBlock.get());
-    _builder.createBr(end);
-
-    _builder.setInsertPoint(end);
 }
 
 void IRGenerator::visit(ast::LogicalAndStmt const& node)
@@ -2302,271 +2270,6 @@ void IRGenerator::visit(ast::ForInStmt const& node)
     _result = nullptr;
 }
 
-void IRGenerator::visit(ast::ForListStmt const& node)
-{
-    // for var in item1 item2 ...; do body; done
-    //
-    // IR pattern:
-    //   for.init:  index = 0; items = [item1, item2, ...]
-    //   for.cond:  if index >= count goto for.end
-    //   for.body:  var = items[index]; BODY
-    //   for.step:  index++; goto for.cond
-    //   for.end:
-
-    // Initialize the iterator
-    auto* initIterCb = findCallback("internal.for_init(S)V");
-    if (!initIterCb)
-    {
-        reportTypeError("Internal error: internal.for_init builtin not found");
-        return;
-    }
-    _builder.createCallFunction(
-        _builder.getBuiltinFunction(*initIterCb), { _builder.get(node.variable) }, "for_init");
-
-    // Add all items to the iterator
-    auto* addItemCb = findCallback("internal.for_add_item(S)V");
-    if (!addItemCb)
-    {
-        reportTypeError("Internal error: internal.for_add_item builtin not found");
-        return;
-    }
-    for (auto const& item: node.items)
-    {
-        auto* itemValue = codegen(item.get());
-        if (itemValue)
-            _builder.createCallFunction(
-                _builder.getBuiltinFunction(*addItemCb), { itemValue }, "for_add_item");
-    }
-
-    CoreVM::BasicBlock* cond = _builder.createBlock("for.cond");
-    CoreVM::BasicBlock* body = _builder.createBlock("for.body");
-    CoreVM::BasicBlock* step = _builder.createBlock("for.step");
-    CoreVM::BasicBlock* end = _builder.createBlock("for.end");
-
-    _builder.createBr(cond);
-
-    // Condition: check if there are more items
-    _builder.setInsertPoint(cond);
-    auto* hasMoreCb = findCallback("internal.for_has_more()B");
-    if (!hasMoreCb)
-    {
-        reportTypeError("Internal error: internal.for_has_more builtin not found");
-        return;
-    }
-    auto* hasMore = _builder.createCallFunction(_builder.getBuiltinFunction(*hasMoreCb), {}, "for_has_more");
-    _builder.createCondBr(hasMore, body, end);
-
-    // Body: set variable to next item and execute body
-    _builder.setInsertPoint(body);
-    auto* nextCb = findCallback("internal.for_next(S)V");
-    if (!nextCb)
-    {
-        reportTypeError("Internal error: internal.for_next builtin not found");
-        return;
-    }
-    _builder.createCallFunction(
-        _builder.getBuiltinFunction(*nextCb), { _builder.get(node.variable) }, "for_next");
-
-    pushLoopContext(step, end);
-    codegen(node.body.get());
-    popLoopContext();
-    // Only add step branch if body wasn't terminated (by break/continue/return)
-    if (_builder.getInsertPoint() && !_builder.getInsertPoint()->getTerminator())
-        _builder.createBr(step);
-
-    // Step: just loop back to condition (next was already called)
-    _builder.setInsertPoint(step);
-    _builder.createBr(cond);
-
-    // End: clean up the for-loop state
-    _builder.setInsertPoint(end);
-    auto* cleanupCb = findCallback("internal.for_cleanup()V");
-    if (cleanupCb)
-        _builder.createCallFunction(_builder.getBuiltinFunction(*cleanupCb), {}, "for_cleanup");
-}
-
-void IRGenerator::visit(ast::ForCStyleStmt const& node)
-{
-    // for ((init; cond; step)); do body; done
-    //
-    // IR pattern:
-    //   forc.init: eval(init)
-    //   forc.cond: if !eval(cond) goto forc.end
-    //   forc.body: BODY
-    //   forc.step: eval(step); goto forc.cond
-    //   forc.end:
-
-    CoreVM::BasicBlock* initBlock = _builder.createBlock("forc.init");
-    CoreVM::BasicBlock* cond = _builder.createBlock("forc.cond");
-    CoreVM::BasicBlock* body = _builder.createBlock("forc.body");
-    CoreVM::BasicBlock* step = _builder.createBlock("forc.step");
-    CoreVM::BasicBlock* end = _builder.createBlock("forc.end");
-
-    _builder.createBr(initBlock);
-
-    // Init: evaluate init expression
-    _builder.setInsertPoint(initBlock);
-    if (node.init)
-        codegenArith(node.init.get());
-    _builder.createBr(cond);
-
-    // Condition: check condition
-    _builder.setInsertPoint(cond);
-    if (node.condition)
-    {
-        auto* condValue = codegenArith(node.condition.get());
-        // If condValue is already Boolean (from comparison), use it directly
-        // Otherwise, convert to Boolean by comparing with 0
-        CoreVM::Value* condBool = condValue;
-        if (condValue->type() != CoreVM::LiteralType::Boolean)
-            condBool = _builder.createNCmpNE(condValue, _builder.get(CoreVM::CoreNumber(0)));
-        _builder.createCondBr(condBool, body, end);
-    }
-    else
-    {
-        // No condition = infinite loop (always enter body)
-        _builder.createBr(body);
-    }
-
-    // Body
-    _builder.setInsertPoint(body);
-    pushLoopContext(step, end);
-    codegen(node.body.get());
-    popLoopContext();
-    _builder.createBr(step);
-
-    // Step: evaluate step expression and loop
-    _builder.setInsertPoint(step);
-    if (node.step)
-        codegenArith(node.step.get());
-    _builder.createBr(cond);
-
-    _builder.setInsertPoint(end);
-}
-
-void IRGenerator::visit(ast::CaseStmt const& node)
-{
-    // case word in pattern1) cmd1;; pattern2) cmd2;; esac
-    //
-    // IR pattern:
-    //   case.word:  word_value = eval(word)
-    //   case.check0: if matches(word, patterns[0]) goto case.body0
-    //   case.check1: if matches(word, patterns[1]) goto case.body1
-    //   ...         goto case.end
-    //   case.body0: commands; goto case.end
-    //   case.body1: commands; goto case.end
-    //   case.end:
-
-    // Evaluate the word first
-    auto* wordValue = codegen(node.word.get());
-    if (!wordValue)
-        return;
-
-    CoreVM::BasicBlock* endBlock = _builder.createBlock("case.end");
-
-    // Create blocks for each clause
-    std::vector<CoreVM::BasicBlock*> bodyBlocks;
-    std::vector<CoreVM::BasicBlock*> checkBlocks;
-
-    for (size_t i = 0; i < node.clauses.size(); ++i)
-    {
-        checkBlocks.push_back(_builder.createBlock(std::format("case.check{}", i)));
-        bodyBlocks.push_back(_builder.createBlock(std::format("case.body{}", i)));
-    }
-
-    // Start checking patterns
-    _builder.createBr(checkBlocks.empty() ? endBlock : checkBlocks[0]);
-
-    // Generate pattern matching checks
-    auto* matchCb = findCallback("internal.case_match(SS)B");
-    if (!matchCb)
-    {
-        reportTypeError("Internal error: internal.case_match builtin not found");
-        return;
-    }
-
-    for (size_t i = 0; i < node.clauses.size(); ++i)
-    {
-        auto const& clause = node.clauses[i];
-        _builder.setInsertPoint(checkBlocks[i]);
-
-        // Check each pattern (pipe-separated)
-        // For multiple patterns, we chain the checks: if any pattern matches, go to body
-        CoreVM::BasicBlock* nextClause = (i + 1 < checkBlocks.size()) ? checkBlocks[i + 1] : endBlock;
-
-        for (size_t p = 0; p < clause.patterns.size(); ++p)
-        {
-            auto const& pattern = clause.patterns[p];
-            auto* match = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*matchCb), { wordValue, _builder.get(pattern) }, "case_match");
-
-            // Create intermediate check block for next pattern (if any)
-            CoreVM::BasicBlock* nextPatternCheck =
-                (p + 1 < clause.patterns.size())
-                    ? _builder.createBlock(std::format("case.check{}.pat{}", i, p + 1))
-                    : nextClause;
-
-            _builder.createCondBr(match, bodyBlocks[i], nextPatternCheck);
-
-            if (p + 1 < clause.patterns.size())
-                _builder.setInsertPoint(nextPatternCheck);
-        }
-
-        // Handle empty patterns (shouldn't happen, but defensive)
-        if (clause.patterns.empty())
-            _builder.createBr(nextClause);
-    }
-
-    // Generate body blocks
-    for (size_t i = 0; i < node.clauses.size(); ++i)
-    {
-        auto const& clause = node.clauses[i];
-        _builder.setInsertPoint(bodyBlocks[i]);
-        if (clause.body)
-            codegen(clause.body.get());
-        _builder.createBr(endBlock);
-    }
-
-    _builder.setInsertPoint(endBlock);
-}
-
-void IRGenerator::visit(ast::FunctionDefStmt const& node)
-{
-    // Register the function for later invocation
-    // Functions are compiled as separate handlers and called at runtime
-    auto* registerCb = findCallback("internal.function_register(S)V");
-    if (!registerCb)
-    {
-        reportTypeError("Internal error: internal.function_register builtin not found");
-        return;
-    }
-
-    // Save current handler and insertion point
-    auto* savedHandler = _builder.handler();
-    auto* savedBlock = _builder.getInsertPoint();
-
-    // Create a new handler for the function and switch to it
-    auto* funcHandler = _builder.getHandler(node.name);
-    _builder.setHandler(funcHandler);
-    auto* entryBlock = _builder.createBlock(node.name + ".entry");
-    _builder.setInsertPoint(entryBlock);
-
-    pushFunctionContext();
-    codegen(node.body.get());
-    popFunctionContext();
-
-    // Always add return at the end - the VM will handle duplicate terminators
-    _builder.createRet(_builder.get(CoreVM::CoreNumber(0)));
-
-    // Restore to main handler
-    _builder.setHandler(savedHandler);
-    _builder.setInsertPoint(savedBlock);
-
-    // Register the function name
-    _builder.createCallFunction(
-        _builder.getBuiltinFunction(*registerCb), { _builder.get(node.name) }, "function_register");
-}
-
 void IRGenerator::visit(ast::BreakStmt const& node)
 {
     auto* ctx = getLoopContext(node.levels);
@@ -2576,6 +2279,18 @@ void IRGenerator::visit(ast::BreakStmt const& node)
         return;
     }
     _builder.createBr(ctx->breakTarget);
+}
+
+void IRGenerator::visit(ast::BreakExpr const& /*node*/)
+{
+    auto* ctx = getLoopContext(1);
+    if (!ctx)
+    {
+        reportTypeError("break: not in a loop");
+        return;
+    }
+    _builder.createBr(ctx->breakTarget);
+    _result = nullptr;
 }
 
 void IRGenerator::visit(ast::ContinueStmt const& node)
@@ -2589,46 +2304,16 @@ void IRGenerator::visit(ast::ContinueStmt const& node)
     _builder.createBr(ctx->continueTarget);
 }
 
-void IRGenerator::visit(ast::ReturnStmt const& node)
+void IRGenerator::visit(ast::ContinueExpr const& /*node*/)
 {
-    if (!inFunction())
+    auto* ctx = getLoopContext(1);
+    if (!ctx)
     {
-        reportTypeError("return: not in a function");
+        reportTypeError("continue: not in a loop");
         return;
     }
-
-    CoreVM::Value* returnValue = nullptr;
-    if (node.value)
-    {
-        returnValue = codegen(node.value.get());
-        if (!returnValue)
-            return;
-        if (returnValue->type() == CoreVM::LiteralType::String)
-            returnValue = _builder.createS2N(returnValue);
-    }
-    else
-    {
-        // Default to last exit code ($?)
-        auto* exitStatusCb = findCallback("getvar.exitstatus()S");
-        if (exitStatusCb)
-        {
-            auto* exitStr = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*exitStatusCb), {}, "getvar.exitstatus");
-            returnValue = _builder.createS2N(exitStr);
-        }
-        else
-        {
-            returnValue = _builder.get(CoreVM::CoreNumber(0));
-        }
-    }
-
-    // Set $? to the return value before exiting
-    auto* setExitCb = findCallback("setvar.exitstatus(I)V");
-    if (setExitCb)
-        _builder.createCallFunction(
-            _builder.getBuiltinFunction(*setExitCb), { returnValue }, "setvar.exitstatus");
-
-    _builder.createRet(returnValue);
+    _builder.createBr(ctx->continueTarget);
+    _result = nullptr;
 }
 
 CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
@@ -3536,9 +3221,10 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, thenResult, "if.then.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
+    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler
+             || (_builder.getInsertPoint() && _builder.getInsertPoint()->getTerminator()))
     {
-        // Tail call in then branch — no merge needed from this path
+        // Tail call or break/continue in then branch — no merge needed from this path
     }
     else
     {
@@ -3563,9 +3249,10 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, elseResult, "if.else.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
+    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler
+             || (_builder.getInsertPoint() && _builder.getInsertPoint()->getTerminator()))
     {
-        // Tail call in else branch — no merge needed from this path
+        // Tail call or break/continue in else branch — no merge needed from this path
     }
     else
     {
@@ -4081,6 +3768,19 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 
     auto* value = codegen(node.expr.get());
 
+    // When a boolean literal is used as a statement (e.g., bare `true` or `false`),
+    // set the shell exit code accordingly (true→0, false→1) to match shell semantics.
+    if (auto const* boolLit = dynamic_cast<ast::BoolLiteralExpr const*>(node.expr.get()))
+    {
+        if (auto* callback = findCallback("setvar.exitstatus(I)V"))
+        {
+            auto const exitCode = boolLit->value ? 0 : 1;
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback),
+                                        { _builder.get(CoreVM::CoreNumber(exitCode)) },
+                                        "setExitStatus");
+        }
+    }
+
     if (node.displayResult && value)
     {
         // Bare expression evaluation: auto-display the result
@@ -4115,7 +3815,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         }
     }
 
-    _result = nullptr;
+    _result = value;
 }
 
 void IRGenerator::visit(ast::BinaryExpr const& node)
