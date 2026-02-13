@@ -146,7 +146,7 @@ F# higher-order function:
     *   Field access via `.` already works on records.
     *   30 pipeline tests covering all HOFs with mock `ps` records.
 
-2.  **Placeholder Lambda Sugar (`_`)**:
+2.  **Placeholder Lambda Sugar (`_`)**: ✅
     *   Parser sugar: `_` in expression position creates an implicit lambda.
     *   `_.field` → `fun __x -> __x.field`
     *   `_.field == value` → `fun __x -> __x.field == value`
@@ -154,6 +154,7 @@ F# higher-order function:
     *   Works anywhere a function is expected: `filter (_.name == "endo")`, `sortBy _.cpu`
     *   Only one `_` per expression (multiple would be ambiguous).
     *   This is a parser-only transformation — no changes to IR, CoreVM, or runtime.
+    *   15 tests covering `ps`, `docker`, `git` records with `map`, `filter`, `sortBy`, `exists`.
 
 3.  **Table Rendering:**
     *   Default renderer for `list<Record>` results — auto-format as table.

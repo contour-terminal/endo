@@ -5082,6 +5082,54 @@ TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
 }
 
 // ============================================================================
+// Placeholder Lambda Sugar with Structured Records (ps)
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_pid")
+{
+    // _.pid desugars to fun __x -> __x.pid
+    CHECK(executesWithOutput("let pids = ps |> map _.pid\nprint pids", "[1; 42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_command")
+{
+    CHECK(executesWithOutput("let cmds = ps |> map _.command\nprint cmds", "[/sbin/init; firefox; vim]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_user")
+{
+    CHECK(executesWithOutput("let users = ps |> map _.user\nprint users", "[root; alice; bob]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_map")
+{
+    // (_.pid > 10) desugars to fun __x -> __x.pid > 10
+    CHECK(executesWithOutput("let pids = ps |> filter (_.pid > 10) |> map _.pid\nprint pids", "[42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_string_eq")
+{
+    CHECK(executesWithOutput("let cmds = ps |> filter (_.user == \"alice\") |> map _.command\nprint cmds",
+                             "[firefox]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_map_command")
+{
+    CHECK(executesWithOutput("let cmds = ps |> filter (_.pid > 10) |> map _.command\nprint cmds",
+                             "[firefox; vim]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_sortBy")
+{
+    CHECK(executesWithOutput("let pids = ps |> sortBy _.pid |> map _.pid\nprint pids", "[1; 42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_ps_exists")
+{
+    CHECK(executesWithOutput("let r = ps |> exists (_.pid > 50)\nprint r", "true"));
+}
+
+// ============================================================================
 // Option Default Operator (?|)
 // ============================================================================
 
@@ -5900,6 +5948,50 @@ TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each")
 {
     CHECK(
         structuredExecutesWithOutput("docker ps |> each (fun c -> print c.names)", "web-serverdb-maincache"));
+}
+
+// --- Placeholder lambda sugar with structured records ---
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.docker_ps_map_names")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> map _.names |> print", "[web-server; db-main; cache]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.docker_ps_filter_status")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> filter (_.status |> contains \"Up\") |> map _.names |> print",
+        "[web-server; db-main]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.docker_ps_map_image")
+{
+    CHECK(structuredExecutesWithOutput("docker ps |> map _.image |> print",
+                                       "[nginx:latest; postgres:16; redis:7]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.docker_images_filter_tag")
+{
+    CHECK(structuredExecutesWithOutput(
+        "docker images |> filter (_.tag == \"latest\") |> map _.repository |> print", "[nginx]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.git_log_map_message")
+{
+    CHECK(structuredExecutesWithOutput("git log |> map _.message |> print",
+                                       "[feat: add login; fix: null check; docs: update README]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.git_log_filter_author")
+{
+    CHECK(structuredExecutesWithOutput("git log |> filter (_.author == \"Alice\") |> map _.sha |> print",
+                                       "[abc123; ghi789]"));
+}
+
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.git_status_filter_modified")
+{
+    CHECK(structuredExecutesWithOutput(
+        "git status |> filter (_.status |> contains \"M\") |> map _.path |> print", "[src/main.cpp]"));
 }
 
 // =============================================================================
