@@ -52,17 +52,13 @@ add_library(endo-shell STATIC
     Suggestions.cpp
     TTY.hpp
     TTY.cpp
-    ProcessProvider.hpp
-    LinuxProcessProvider.hpp
-    LinuxProcessProvider.cpp
-    StructuredCommand.hpp
-    PsCommand.hpp
-    PsCommand.cpp
-    FileInfoProvider.hpp
-    LinuxFileInfoProvider.hpp
-    LinuxFileInfoProvider.cpp
-    LsCommand.hpp
-    LsCommand.cpp
+    commands/ProcessProvider.hpp
+    commands/StructuredCommand.hpp
+    commands/PsCommand.hpp
+    commands/PsCommand.cpp
+    commands/FileInfoProvider.hpp
+    commands/LsCommand.hpp
+    commands/LsCommand.cpp
     OutputDefinition.hpp
     OutputDefinitionRegistry.hpp
     OutputDefinitionRegistry.cpp
@@ -74,7 +70,14 @@ add_library(endo-shell STATIC
 
 # Platform-specific implementations
 if(WIN32)
-    target_sources(endo-shell PRIVATE WindowsPipe.cpp WindowsTTY.cpp WindowsProcess.cpp)
+    target_sources(endo-shell PRIVATE platform/WindowsPipe.cpp platform/WindowsTTY.cpp platform/WindowsProcess.cpp)
+else()
+    target_sources(endo-shell PRIVATE
+        platform/LinuxProcessProvider.hpp
+        platform/LinuxProcessProvider.cpp
+        platform/LinuxFileInfoProvider.hpp
+        platform/LinuxFileInfoProvider.cpp
+    )
 endif()
 
 find_package(Threads REQUIRED)

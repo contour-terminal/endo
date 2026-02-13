@@ -25,16 +25,16 @@
 #include <unordered_set>
 
 #include "Error.hpp"
-#include "LinuxFileInfoProvider.hpp"
-#include "LinuxProcessProvider.hpp"
-#include "LsCommand.hpp"
+#include "platform/LinuxFileInfoProvider.hpp"
+#include "platform/LinuxProcessProvider.hpp"
+#include "commands/LsCommand.hpp"
 #include "OutputParser.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
 #include "ProcessGroup.hpp"
 #include "Prompt.hpp"
-#include "PsCommand.hpp"
+#include "commands/PsCommand.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
 #include <endo-language/ASTPrinter.hpp>

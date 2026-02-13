@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "FileInfoProvider.hpp"
+#include "../commands/FileInfoProvider.hpp"
 
 namespace endo
 {
