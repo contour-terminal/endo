@@ -49,6 +49,7 @@ void Prompt::initialize()
 
     // Create PromptComponent
     _promptComponent = std::make_unique<PromptComponent>();
+    _promptComponent->setPromptConfig(_promptConfig);
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
     _promptComponent->setCompleter(_completer);
