@@ -937,6 +937,7 @@ TEST_CASE("Lexer.fsharp_range_lexer_behavior")
 {
     // Range syntax 1..10 is lexed as: Number(1), DotDot(..), Number(10)
     auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("1..10"));
+    lexer.enterFSharpExpr();
     CHECK(lexer.currentToken() == endo::Token::Number);
     CHECK(lexer.currentLiteral() == "1");
 
@@ -947,6 +948,46 @@ TEST_CASE("Lexer.fsharp_range_lexer_behavior")
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::Number);
     CHECK(lexer.currentLiteral() == "10");
+}
+
+TEST_CASE("Lexer.shell_mode_dotdot_as_identifier")
+{
+    // In shell mode, .. should be an identifier (e.g., cd ..)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("cd .."));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "cd");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "..");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.shell_mode_dotdot_path")
+{
+    // In shell mode, ../foo should be an identifier (path traversal)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("ls ../foo"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "ls");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "../foo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("Lexer.ellipsis_always_produces_token")
+{
+    // ... always produces Ellipsis token (used for variadic splat in both modes)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("..."));
+    CHECK(lexer.currentToken() == endo::Token::Ellipsis);
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
 }
 
 // ============================================================================

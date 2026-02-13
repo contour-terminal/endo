@@ -196,7 +196,12 @@ Token Lexer::nextToken()
                 nextChar();
                 if (_currentChar == '.')
                     return consumeCharAndConfirmToken(Token::Ellipsis); // ... (variadic/splat)
-                return confirmToken(Token::DotDot);                     // .. (range operator)
+                // .. (range operator) — only in F# mode
+                if (_fsharpDepth > 0)
+                    return confirmToken(Token::DotDot);
+                // Shell mode: treat as identifier (e.g., cd .., ls ../foo)
+                _nextToken.literal = "..";
+                return consumeIdentifier();
             }
             // In F# mode, single dot is a field access operator
             if (_fsharpDepth > 0)

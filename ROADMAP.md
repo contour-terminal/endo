@@ -39,7 +39,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 
 | Component | Status |
 |-----------|--------|
-| Lexer with shell syntax tokens | ✅ |
+| Lexer with shell syntax tokens (incl. `..` as shell identifier) | ✅ |
 | Parser (if/while, pipes, commands, redirects) | ✅ |
 | AST with visitor pattern | ✅ |
 | IR generation to CoreVM bytecode | ✅ |
