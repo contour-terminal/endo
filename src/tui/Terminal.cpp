@@ -79,7 +79,20 @@ auto Terminal::output() noexcept -> TerminalOutput&
 
 auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
 {
-    return _input.poll(timeoutMs);
+    auto events = _input.poll(timeoutMs);
+
+    // Consume ColorSchemeReport events internally — do not pass to application
+    std::erase_if(events, [this](InputEvent const& event) {
+        if (auto const* csr = std::get_if<ColorSchemeReport>(&event))
+        {
+            auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
+            handleColorSchemeReport(scheme);
+            return true;
+        }
+        return false;
+    });
+
+    return events;
 }
 
 auto Terminal::columns() const noexcept -> int
@@ -130,6 +143,26 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
     // Failed to get response
     return { 0, 0 };
+}
+
+auto Terminal::colorScheme() const noexcept -> ColorScheme
+{
+    return _colorScheme;
+}
+
+void Terminal::onColorSchemeChanged(std::function<void(ColorScheme)> callback)
+{
+    _colorSchemeCallbacks.push_back(std::move(callback));
+}
+
+void Terminal::handleColorSchemeReport(ColorScheme scheme)
+{
+    if (scheme == _colorScheme)
+        return;
+
+    _colorScheme = scheme;
+    for (auto const& cb: _colorSchemeCallbacks)
+        cb(scheme);
 }
 
 } // namespace tui

@@ -60,7 +60,17 @@ struct CursorPositionReport
     int column; ///< Cursor column (1-based).
 };
 
+/// @brief Color scheme report from the terminal (CSI ? 997 ; N n).
+///
+/// This is an internal event consumed by Terminal::poll() and not propagated
+/// to application code. It signals a dark/light mode change.
+struct ColorSchemeReport
+{
+    int mode; ///< 1 = dark, 2 = light.
+};
+
 /// @brief Discriminated union of all possible terminal input events.
-using InputEvent = std::variant<KeyEvent, MouseEvent, ResizeEvent, PasteEvent, CursorPositionReport>;
+using InputEvent =
+    std::variant<KeyEvent, MouseEvent, ResizeEvent, PasteEvent, CursorPositionReport, ColorSchemeReport>;
 
 } // namespace tui

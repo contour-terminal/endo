@@ -34,6 +34,16 @@ namespace
     constexpr auto EnableBracketedPaste = "\033[?2004h"sv;
     constexpr auto DisableBracketedPaste = "\033[?2004l"sv;
 
+    // Color scheme change notifications (DEC mode 2031)
+    // When enabled, the terminal sends CSI ? 997 ; N n when the palette changes
+    // N: 1 = dark, 2 = light
+    constexpr auto EnableColorSchemeNotify = "\033[?2031h"sv;
+    constexpr auto DisableColorSchemeNotify = "\033[?2031l"sv;
+
+    // One-shot color scheme query: CSI ? 996 n
+    // Response: CSI ? 997 ; N n (same format as notifications)
+    constexpr auto QueryColorScheme = "\033[?996n"sv;
+
     // SGR extended mouse format (mode 1006) - allows coordinates > 223
     // Uses CSI < button ; column ; row M/m format instead of legacy X10 encoding
     constexpr auto EnableSGRMouse = "\033[?1006h"sv;
@@ -219,10 +229,13 @@ void TerminalInput::enableProtocols()
     writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
     writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
     writeToTerminal(EnableBracketedPaste);
+    writeToTerminal(EnableColorSchemeNotify);    // Subscribe to dark/light mode changes
+    writeToTerminal(QueryColorScheme);           // Query current color scheme
 }
 
 void TerminalInput::disableProtocols()
 {
+    writeToTerminal(DisableColorSchemeNotify);
     writeToTerminal(DisableBracketedPaste);
     writeToTerminal(DisableAnyMotionTracking); // Disable in reverse order
     writeToTerminal(DisablePassiveMouseTracking);

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
+#include <functional>
 #include <vector>
 
 #include <tui/Error.hpp>
@@ -10,6 +12,14 @@
 
 namespace tui
 {
+
+/// @brief Detected terminal color scheme (dark or light mode).
+enum class ColorScheme : std::uint8_t
+{
+    Unknown, ///< Color scheme not yet detected.
+    Dark,    ///< Dark background.
+    Light,   ///< Light background.
+};
 
 /// @brief Top-level terminal coordinator that owns both input and output subsystems.
 ///
@@ -69,10 +79,27 @@ class Terminal
     /// @return Pair of (row, column), both 1-based, or (0, 0) on failure.
     [[nodiscard]] auto queryCursorPosition() -> std::pair<int, int>;
 
+    /// @brief Returns the cached color scheme (dark or light mode).
+    [[nodiscard]] auto colorScheme() const noexcept -> ColorScheme;
+
+    /// @brief Registers a callback for color scheme change notifications.
+    ///
+    /// The callback is invoked when the terminal reports a color scheme change
+    /// via CSI ? 997 ; N n (triggered by DEC mode 2031 subscription).
+    /// Multiple handlers can be registered.
+    /// @param callback The callback to invoke on scheme change.
+    void onColorSchemeChanged(std::function<void(ColorScheme)> callback);
+
+    /// @brief Called internally by VtParser when a color scheme report is received.
+    /// @param scheme The reported color scheme.
+    void handleColorSchemeReport(ColorScheme scheme);
+
   private:
     TerminalInput _input;
     TerminalOutput _output;
     bool _initialized = false;
+    ColorScheme _colorScheme = ColorScheme::Unknown;
+    std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
 };
 
 } // namespace tui

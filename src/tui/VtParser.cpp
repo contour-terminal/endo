@@ -558,6 +558,18 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         return;
     }
 
+    // Handle color scheme report: CSI ? 997 ; N n
+    // N: 1 = dark, 2 = light
+    if (finalByte == 'n' && _paramBuf.starts_with("?"))
+    {
+        auto const privateParams = parseCsiParams(_paramBuf.substr(1));
+        if (privateParams.size() >= 2 && privateParams[0] == 997)
+        {
+            events.emplace_back(ColorSchemeReport { .mode = privateParams[1] });
+            return;
+        }
+    }
+
     // Standard CSI sequences (cursor keys, function keys, etc.)
     // Skip sequences with private markers (>, ?, but not <)
     if (!_paramBuf.empty() && (_paramBuf[0] == '>' || _paramBuf[0] == '?'))
