@@ -8,6 +8,7 @@
 #include <crispy/assert.h>
 #include <crispy/utils.h>
 
+#include <array>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
@@ -678,6 +679,60 @@ void Shell::setPositionalParameters(std::vector<std::string> params)
     _positionalParameters = std::move(params);
 }
 
+// ========================================================================
+// Shell integration (OSC 133) and CWD propagation (OSC 7)
+// ========================================================================
+
+void Shell::emitPromptStart()
+{
+    if (_interactive && _tty.isTerminal())
+        _tty.writeToStdout("\033]133;A\033\\");
+}
+
+void Shell::emitPromptEnd()
+{
+    if (_interactive && _tty.isTerminal())
+        _tty.writeToStdout("\033]133;B\033\\");
+}
+
+void Shell::emitCommandStart()
+{
+    if (_interactive && _tty.isTerminal())
+        _tty.writeToStdout("\033]133;C\033\\");
+}
+
+void Shell::emitCommandFinished(int exitCode)
+{
+    if (_interactive && _tty.isTerminal())
+        _tty.writeToStdout(std::format("\033]133;D;{}\033\\", exitCode));
+}
+
+void Shell::emitCurrentWorkingDirectory()
+{
+    if (!_interactive || !_tty.isTerminal())
+        return;
+
+    auto const cwd = _env.get("PWD").value_or(std::filesystem::current_path().string());
+
+    // Percent-encode the path for the file:// URI
+    auto encoded = std::string();
+    for (auto const ch: cwd)
+    {
+        if (std::isalnum(static_cast<unsigned char>(ch)) || ch == '/' || ch == '-' || ch == '_' || ch == '.'
+            || ch == '~')
+            encoded += ch;
+        else
+            encoded += std::format("%{:02X}", static_cast<unsigned char>(ch));
+    }
+
+    // Get hostname for the file:// URI
+    auto hostname = std::array<char, 256> {};
+    if (gethostname(hostname.data(), hostname.size()) != 0)
+        hostname[0] = '\0';
+
+    _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname.data(), encoded));
+}
+
 int Shell::run()
 {
     if (_interactive && !_tty.isTerminal())
@@ -703,8 +758,14 @@ int Shell::run()
         // Report completed jobs before prompting
         reportJobStatus();
 
+        // Shell integration: notify terminal of CWD and prompt lifecycle
+        emitCurrentWorkingDirectory();
+        emitPromptStart();
+
         // Display the prompt before waiting for input
         prompt.display();
+
+        emitPromptEnd();
 
         // Wait for input or signals
         int const pollResult = poll(fds, static_cast<nfds_t>(nfds), -1);
@@ -739,7 +800,9 @@ int Shell::run()
             }
 
             auto const _ = Prompt::ScopedSuspend(prompt);
+            emitCommandStart();
             _exitCode = execute(lineBuffer);
+            emitCommandFinished(_exitCode);
 
             // Update diagnostics with known F# names from persisted state
             auto names = std::set<std::string>();
@@ -754,6 +817,9 @@ int Shell::run()
     // Windows fallback: simple loop without poll
     while (!_quit && prompt.ready())
     {
+        emitCurrentWorkingDirectory();
+        emitPromptStart();
+
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
 
@@ -765,7 +831,9 @@ int Shell::run()
         }
 
         auto const _ = Prompt::ScopedSuspend(prompt);
+        emitCommandStart();
         _exitCode = execute(lineBuffer);
+        emitCommandFinished(_exitCode);
 
         // Update diagnostics with known F# names from persisted state
         auto names = std::set<std::string>();
@@ -3363,6 +3431,8 @@ void Shell::builtinChDir(CoreVM::Params& context)
     auto const result = _processManager.changeDirectory(path);
     if (!result.has_value())
         error("Failed to change directory to '{}': {}", path, toString(result.error()));
+    else
+        emitCurrentWorkingDirectory();
 
     context.setResult(result.has_value());
 }
@@ -3376,6 +3446,8 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
     auto const result = _processManager.changeDirectory(std::filesystem::path(path));
     if (!result.has_value())
         error("Failed to change directory to '{}': {}", path, toString(result.error()));
+    else
+        emitCurrentWorkingDirectory();
 
     context.setResult(result.has_value());
 }

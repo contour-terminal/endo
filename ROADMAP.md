@@ -791,6 +791,8 @@ Component (base class)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests
+- [x] Implement OSC 133 shell integration (prompt start/end, command start/finished markers)
+- [x] Implement OSC 7 current working directory propagation to terminal
 
 ---
 

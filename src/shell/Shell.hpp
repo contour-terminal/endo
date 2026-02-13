@@ -206,6 +206,13 @@ class Shell final
 
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);
 
+    // Shell integration (OSC 133) and CWD propagation (OSC 7)
+    void emitPromptStart();
+    void emitPromptEnd();
+    void emitCommandStart();
+    void emitCommandFinished(int exitCode);
+    void emitCurrentWorkingDirectory();
+
     template <typename... Args>
     void error(std::format_string<Args...> const& message, Args&&... args)
     {
