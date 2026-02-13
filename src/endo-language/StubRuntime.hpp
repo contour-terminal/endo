@@ -258,6 +258,32 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
     // Command substitution builtins (needed for structured pipeline fallback)
     runtime.registerFunction("internal.subst_start").returnType(CoreVM::LiteralType::Void).bind(dummyHandler);
     runtime.registerFunction("internal.subst_end").returnType(CoreVM::LiteralType::String).bind(dummyHandler);
+
+    // Prompt configuration builtins
+    runtime.registerFunction("set_prompt_preset")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+    runtime.registerFunction("set_prompt_indicator")
+        .param<CoreVM::CoreString>("chars")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+    runtime.registerFunction("set_prompt_layout")
+        .param<CoreVM::CoreString>("kind")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+    runtime.registerFunction("set_prompt_separator")
+        .param<CoreVM::CoreString>("style")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+    runtime.registerFunction("set_prompt_transient")
+        .param<CoreVM::CoreString>("mode")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+    runtime.registerFunction("set_prompt_duration_threshold")
+        .param<CoreVM::CoreNumber>("ms")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
 }
 
 } // namespace endo

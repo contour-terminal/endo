@@ -321,6 +321,7 @@ enum class CompletionItemKind : int
     Module = 9,
     Keyword = 14,
     Snippet = 15,
+    EnumMember = 20,
 };
 
 /// LSP CompletionItem for textDocument/completion.

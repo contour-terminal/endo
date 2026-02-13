@@ -19,6 +19,7 @@ enum class CompletionKind
     Field,       ///< Record field
     Builtin,     ///< Shell builtin command
     Command,     ///< External command from PATH
+    EnumValue,   ///< Enumerated parameter value (e.g., preset names)
     Other,       ///< Anything else (history, env vars, etc.)
 };
 
