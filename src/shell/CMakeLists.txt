@@ -10,6 +10,8 @@ add_library(endo-shell STATIC
     CompletionAdapter.hpp
     CompletionAdapter.cpp
     CompletionProvider.hpp
+    CompletionProviders/BuiltinArgumentCompleter.hpp
+    CompletionProviders/BuiltinArgumentCompleter.cpp
     CompletionProviders/CommandCompleter.hpp
     CompletionProviders/CommandCompleter.cpp
     CompletionProviders/FSharpCompleter.hpp

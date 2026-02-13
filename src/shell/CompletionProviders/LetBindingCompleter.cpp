@@ -51,6 +51,10 @@ LetBindingCompleter::LetBindingCompleter(FSharpPersistentState const& state): _s
 
 std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext const& context)
 {
+    // Skip symbol suggestions for builtins that accept only enumerated values
+    if (context.command.has_value() && isBuiltinWithArgumentCompletion(*context.command))
+        return {};
+
     auto const& prefix = context.prefix;
 
     // Convert persisted state to shared symbol format

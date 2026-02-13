@@ -2,6 +2,7 @@
 #pragma once
 
 #include <shell/CompletionProvider.hpp>
+#include <shell/CompletionProviders/BuiltinArgumentCompleter.hpp>
 #include <shell/CompletionProviders/CommandCompleter.hpp>
 #include <shell/CompletionProviders/FSharpCompleter.hpp>
 #include <shell/CompletionProviders/FileCompleter.hpp>

@@ -123,8 +123,13 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
     // Tokenize to determine if we're in command or argument position
     try
     {
-        auto inputUpToCursor = input.substr(0, wordStart);
-        auto tokens = Lexer::tokenize(std::make_unique<StringSource>(std::string(inputUpToCursor)));
+        auto inputUpToCursor = std::string(input.substr(0, wordStart));
+
+        // Strip trailing unclosed quote (cursor may be inside a quoted argument)
+        if (!inputUpToCursor.empty() && (inputUpToCursor.back() == '"' || inputUpToCursor.back() == '\''))
+            inputUpToCursor.pop_back();
+
+        auto tokens = Lexer::tokenize(std::make_unique<StringSource>(inputUpToCursor));
 
         if (tokens.empty())
         {

@@ -799,6 +799,7 @@ Component (base class)
 - [x] Implement color scheme change notification and auto-switching
 - [x] Implement prompt builtin functions (`set_prompt_preset`, `set_prompt_indicator`, `set_prompt_layout`, `set_prompt_separator`, `set_prompt_transient`, `set_prompt_duration_threshold`)
 - [x] Add `set_prompt_*` builtins to LSP/completion with parameter value auto-completion (preset names, layout/separator/transient enum values)
+- [x] Fix quoted-string completion for `set_prompt_*` builtins (unterminated quote handling in context analyzer, `BuiltinArgumentCompleter` shell provider)
 - [x] Add hover documentation for `set_prompt_*` builtin functions
 - [x] Implement `~/.config/endo/init.endo` auto-execution
 - [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)

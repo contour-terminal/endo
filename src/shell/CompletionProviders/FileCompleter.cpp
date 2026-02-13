@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstdlib>
 
+#include <endo-language/CompletionCandidates.hpp>
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
 
@@ -17,6 +18,10 @@ namespace endo
 
 std::vector<CompletionItem> FileCompleter::complete(CompletionContext const& context)
 {
+    // Skip file suggestions for builtins that accept only enumerated values
+    if (context.command.has_value() && isBuiltinWithArgumentCompletion(*context.command))
+        return {};
+
     auto const& prefix = context.prefix;
 
     if (prefix.empty())

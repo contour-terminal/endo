@@ -312,3 +312,63 @@ TEST_CASE("Completer.non_builtin_argument_still_has_constructors", "[completion]
     CHECK(hasCandidate(results, "Ok"));
     CHECK(hasCandidate(results, "Error"));
 }
+
+// =============================================================================
+// Quoted-string completion tests (context analyzer with unterminated quotes)
+// =============================================================================
+
+TEST_CASE("CompletionContext.quoted_argument_detects_command", "[completion][context]")
+{
+    // Cursor after opening quote: set_prompt_preset "
+    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_preset \"", 19);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "set_prompt_preset");
+}
+
+TEST_CASE("CompletionContext.quoted_argument_with_partial_text", "[completion][context]")
+{
+    // Cursor after partial text inside quote: set_prompt_preset "pow
+    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_preset \"pow", 22);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix == "pow");
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "set_prompt_preset");
+}
+
+TEST_CASE("CompletionContext.single_quoted_argument_detects_command", "[completion][context]")
+{
+    // Single-quoted variant: set_prompt_layout '
+    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_layout '", 19);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "set_prompt_layout");
+}
+
+TEST_CASE("Completer.quoted_set_prompt_preset_offers_all_presets", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // Cursor after opening quote — empty prefix, all presets
+    auto results = computeCompletions("set_prompt_preset \"", 19, dataSource);
+    CHECK(hasCandidate(results, "minimal-arrow"));
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(hasCandidate(results, "endo-signature"));
+}
+
+TEST_CASE("Completer.quoted_set_prompt_preset_filters_by_prefix", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // Cursor after partial text inside quote
+    auto results = computeCompletions("set_prompt_preset \"pow", 22, dataSource);
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(!hasCandidate(results, "minimal-arrow"));
+}
+
+TEST_CASE("Completer.quoted_set_prompt_layout_offers_values", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_layout \"", 19, dataSource);
+    CHECK(hasCandidate(results, "single-line"));
+    CHECK(hasCandidate(results, "two-line"));
+    CHECK(hasCandidate(results, "boxed"));
+}
