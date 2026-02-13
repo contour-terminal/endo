@@ -785,9 +785,18 @@ Component (base class)
 **Dependency:** Phase 2.4 (highlighting for prompt elements)
 
 **Tasks:**
-- [ ] Design prompt configuration format
-- [ ] Implement prompt segment system
-- [ ] Implement common segments (cwd, git, time, exit code)
+- [x] Design prompt configuration format (`PromptConfig` with layout, separator, transient, modules)
+- [x] Implement prompt segment system (`PromptModule` interface, `PromptSegments` data model)
+- [x] Implement common segments (path, git, exit status, duration, hostname, clock, battery, toolchain, F# mode, structured output, indicator)
+- [x] Implement layout engine (`PromptLayoutEngine` with SingleLine, TwoLine, Boxed, Powerline)
+- [x] Implement 10 prompt presets (minimal-arrow, lambda-clean, opencode-bar, powerline, transient, dashboard, boxed-module, gradient-glow, context-adaptive, endo-signature)
+- [x] Implement truecolor gradient support for path module (`Gradient.hpp/.cpp`)
+- [x] Extend theme system with `PromptColorPalette` and `SyntaxHighlightPalette`
+- [x] Make syntax highlighter theme-aware (`categoryColor(cat, theme)`)
+- [x] Implement dark/light mode detection via VT CSI ? 2031 h / CSI ? 997 n
+- [x] Implement color scheme change notification and auto-switching
+- [x] Implement prompt builtin functions (`set_prompt_preset`, `set_prompt_indicator`, `set_prompt_layout`, `set_prompt_separator`, `set_prompt_transient`, `set_prompt_duration_threshold`)
+- [x] Implement `~/.config/endo/init.endo` auto-execution
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests

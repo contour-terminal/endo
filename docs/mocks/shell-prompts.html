@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Endo Shell Prompt Designs</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --term-bg: #1a1b26;
+    --term-fg: #c0caf5;
+    --term-cols: 100;
+    --cell-w: 8.4px;
+    --cell-h: 19px;
+    --page-bg: #0f0f17;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--page-bg);
+    color: #a0a8c0;
+    font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 40px 20px;
+  }
+
+  h1 {
+    text-align: center;
+    color: #7aa2f7;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+  }
+  .subtitle {
+    text-align: center;
+    color: #565f89;
+    font-size: 13px;
+    margin-bottom: 48px;
+  }
+
+  .prompt-card {
+    max-width: 880px;
+    margin: 0 auto 40px;
+    background: #16161e;
+    border: 1px solid #24283b;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .prompt-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    background: #1a1b2e;
+    border-bottom: 1px solid #24283b;
+  }
+  .prompt-card-header .label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #7aa2f7;
+  }
+  .prompt-card-header .tag {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 99px;
+    background: #24283b;
+    color: #565f89;
+  }
+  .prompt-card-header .tag.compact { background: #1a3a2a; color: #9ece6a; }
+  .prompt-card-header .tag.rich    { background: #2a1f3a; color: #bb9af7; }
+  .prompt-card-header .tag.info    { background: #1a2a3a; color: #7dcfff; }
+
+  .prompt-desc {
+    padding: 10px 20px;
+    font-size: 12px;
+    color: #565f89;
+    border-bottom: 1px solid #1e2030;
+  }
+
+  /* Terminal viewport */
+  .term {
+    background: var(--term-bg);
+    color: var(--term-fg);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: var(--cell-h);
+    padding: 16px 20px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .term .line {
+    min-height: var(--cell-h);
+  }
+
+  /* Color palette — matching popular terminal themes */
+  .c-reset      { color: var(--term-fg); }
+  .c-dim        { color: #565f89; }
+  .c-bold       { font-weight: 600; }
+  .c-italic     { font-style: italic; }
+  .c-underline  { text-decoration: underline; }
+
+  /* Named semantic colors */
+  .c-red        { color: #f7768e; }
+  .c-green      { color: #9ece6a; }
+  .c-yellow     { color: #e0af68; }
+  .c-blue       { color: #7aa2f7; }
+  .c-magenta    { color: #bb9af7; }
+  .c-cyan       { color: #7dcfff; }
+  .c-orange     { color: #ff9e64; }
+  .c-teal       { color: #73daca; }
+  .c-pink       { color: #ff007c; }
+  .c-lavender   { color: #c0a8ff; }
+  .c-white      { color: #c0caf5; }
+  .c-bright-white { color: #ffffff; }
+  .c-gray       { color: #444b6a; }
+  .c-slate      { color: #737aa2; }
+
+  /* Background spans */
+  .bg-dark      { background: #12121a; }
+  .bg-panel     { background: #24283b; border-radius: 3px; padding: 0 2px; }
+  .bg-blue      { background: #24344d; }
+  .bg-green     { background: #1e3a28; }
+  .bg-red       { background: #3a1e28; }
+  .bg-yellow    { background: #3a3420; }
+  .bg-magenta   { background: #2e1e3a; }
+  .bg-cyan      { background: #1a2e38; }
+  .bg-orange    { background: #3a2a1a; }
+  .bg-teal      { background: #1a3a35; }
+
+  /* Powerline / angled segment backgrounds */
+  .seg {
+    display: inline;
+    padding: 0 6px;
+    border-radius: 2px;
+  }
+  .seg-blue    { background: #3b4261; color: #c0caf5; }
+  .seg-green   { background: #2a4030; color: #9ece6a; }
+  .seg-yellow  { background: #3a3420; color: #e0af68; }
+  .seg-red     { background: #3a2028; color: #f7768e; }
+  .seg-magenta { background: #2e1e3a; color: #bb9af7; }
+  .seg-cyan    { background: #1e303d; color: #7dcfff; }
+  .seg-teal    { background: #1a3a35; color: #73daca; }
+  .seg-orange  { background: #3a2a1a; color: #ff9e64; }
+
+  /* Cursor */
+  .cursor {
+    background: #c0caf5;
+    color: #1a1b26;
+  }
+
+  /* Output styling */
+  .output { color: #565f89; }
+
+  .notes {
+    max-width: 880px;
+    margin: 48px auto 0;
+    padding: 20px;
+    background: #16161e;
+    border: 1px solid #24283b;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #565f89;
+    line-height: 1.8;
+  }
+  .notes h3 { color: #7aa2f7; font-size: 14px; margin-bottom: 8px; }
+  .notes code { color: #bb9af7; background: #24283b; padding: 1px 5px; border-radius: 3px; }
+  .notes ul { padding-left: 20px; }
+</style>
+</head>
+<body>
+
+<h1>Endo Shell — Prompt Design Gallery</h1>
+<p class="subtitle">10 prompt styles for a modern, customizable shell &middot; truecolor &middot; unicode &middot; fixed-width grid</p>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 1: Minimal Arrow -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">1 &mdash; Minimal Arrow</span>
+    <span class="tag compact">Compact</span>
+  </div>
+  <div class="prompt-desc">Single character prompt. Zero noise. Directory via window title / OSC 7.</div>
+  <div class="term">
+<span class="line"><span class="c-blue">&#10095;</span> ls -la</span>
+<span class="line"><span class="output">drwxr-xr-x  12 user user  4096 Feb 13 14:22 .</span></span>
+<span class="line"><span class="output">-rw-r--r--   1 user user  1847 Feb 13 14:20 CLAUDE.md</span></span>
+<span class="line"><span class="c-blue">&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 2: Lambda Clean -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">2 &mdash; Lambda Clean</span>
+    <span class="tag compact">Compact</span>
+  </div>
+  <div class="prompt-desc">Functional programming nod with &#955; symbol. Tilde-contracted path. Exit status on error only.</div>
+  <div class="term">
+<span class="line"><span class="c-teal">~/projects/endo</span> <span class="c-magenta">&#955;</span> cargo build 2&gt;/dev/null</span>
+<span class="line"><span class="output">   Compiling endo v0.1.0</span></span>
+<span class="line"><span class="c-teal">~/projects/endo</span> <span class="c-magenta">&#955;</span> false</span>
+<span class="line"><span class="c-teal">~/projects/endo</span> <span class="c-red">[1]</span> <span class="c-magenta">&#955;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 3: OpenCode Bar -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">3 &mdash; OpenCode Bar</span>
+    <span class="tag">Styled</span>
+  </div>
+  <div class="prompt-desc">Vertical left accent bar inspired by modern code editors. Current Endo default style — refined.</div>
+  <div class="term">
+<span class="line"><span class="c-blue">&#9614;</span><span class="bg-panel"> <span class="c-slate">~/projects/endo</span> <span class="c-dim">on</span> <span class="c-magenta">&#xe0a0; master</span> </span></span>
+<span class="line"><span class="c-blue">&#9614;</span><span class="bg-panel"> <span class="c-bright-white">git status</span>                                                </span></span>
+<span class="line"><span class="output">On branch master</span></span>
+<span class="line"><span class="output">Changes not staged for commit:</span></span>
+<span class="line"><span class="output">  modified:   src/shell/SyntaxHighlighter.cpp</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-blue">&#9614;</span><span class="bg-panel"> <span class="c-slate">~/projects/endo</span> <span class="c-dim">on</span> <span class="c-magenta">&#xe0a0; master</span> </span></span>
+<span class="line"><span class="c-blue">&#9614;</span><span class="bg-panel"> <span class="cursor"> </span>                                                          </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 4: Powerline Classic -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">4 &mdash; Powerline Segments</span>
+    <span class="tag rich">Rich</span>
+  </div>
+  <div class="prompt-desc">Angled powerline segments with git branch, directory, and execution context.</div>
+  <div class="term">
+<span class="line"><span class="seg seg-blue"> <span class="c-bold">&#xf115;</span> endo </span><span style="color:#3b4261;background:#2a4030">&#xe0b0;</span><span class="seg seg-green"> &#xe0a0; master </span><span style="color:#2a4030;background:#3a3420">&#xe0b0;</span><span class="seg seg-yellow"> &#xe612; 2 &#10539; </span><span style="color:#3a3420">&#xe0b0;</span></span>
+<span class="line"><span class="c-green">&#10095;</span> cmake --build --preset clang-debug</span>
+<span class="line"><span class="output">[100%] Built target endo</span></span>
+<span class="line"></span>
+<span class="line"><span class="seg seg-blue"> <span class="c-bold">&#xf115;</span> endo </span><span style="color:#3b4261;background:#2a4030">&#xe0b0;</span><span class="seg seg-green"> &#xe0a0; master </span><span style="color:#2a4030">&#xe0b0;</span></span>
+<span class="line"><span class="c-green">&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 5: Transient + Duration -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">5 &mdash; Transient Prompt</span>
+    <span class="tag info">Info-dense</span>
+  </div>
+  <div class="prompt-desc">Full prompt shown only on active line. Previous prompts collapse to a simple arrow + duration badge. Reduces visual clutter in scrollback.</div>
+  <div class="term">
+<span class="line"><span class="c-dim">&#10095;</span> <span class="c-dim">ls src/</span>                                        <span class="c-dim">2.1ms</span></span>
+<span class="line"><span class="c-dim">&#10095;</span> <span class="c-dim">cmake --build --preset clang-debug</span>              <span class="c-green">4.3s</span></span>
+<span class="line"><span class="c-dim">&#10095;</span> <span class="c-dim">false</span>                                      <span class="c-red">&#10007; 1</span> <span class="c-dim">0.8ms</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-teal">&#9581;&#9472;</span> <span class="c-slate">~/projects/endo</span> <span class="c-dim">on</span> <span class="c-magenta">master</span> <span class="c-yellow">[2&#10539;]</span></span>
+<span class="line"><span class="c-teal">&#9584;&#9472;</span> <span class="c-teal">&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 6: Dashboard Right-Prompt -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">6 &mdash; Dashboard (Left + Right Prompt)</span>
+    <span class="tag info">Info-dense</span>
+  </div>
+  <div class="prompt-desc">Left: path + git. Right-aligned: clock, battery, exec time. Demonstrates right-prompt capability.</div>
+  <div class="term">
+<span class="line"><span class="c-blue">&#xf115;</span> <span class="c-teal">~/projects/endo</span> <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span>                    <span class="c-dim">&#xf240;</span> <span class="c-green">87%</span> <span class="c-dim">&#9474;</span> <span class="c-slate">14:22:08</span></span>
+<span class="line"><span class="c-blue">&#10095;</span> ctest --preset=clang-debug</span>
+<span class="line"><span class="output">100% tests passed, 0 tests failed</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-blue">&#xf115;</span> <span class="c-teal">~/projects/endo</span> <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span>           <span class="c-yellow">&#9201; 3.2s</span> <span class="c-dim">&#9474;</span> <span class="c-dim">&#xf240;</span> <span class="c-green">87%</span> <span class="c-dim">&#9474;</span> <span class="c-slate">14:22:11</span></span>
+<span class="line"><span class="c-blue">&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 7: Boxed Module -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">7 &mdash; Boxed Module</span>
+    <span class="tag rich">Rich</span>
+  </div>
+  <div class="prompt-desc">Box-drawing characters create structured info blocks. Each block is a "module" that can be enabled/disabled.</div>
+  <div class="term">
+<span class="line"><span class="c-dim">&#9484;&#9472;</span><span class="c-blue">&#9582;</span><span class="c-dim">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span></span>
+<span class="line"><span class="c-dim">&#9474;</span> <span class="c-teal">&#xf07c;</span> <span class="c-white">~/projects/endo</span>   <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span>   <span class="c-yellow">&#10539;2</span> <span class="c-green">&#10010;1</span>   <span class="c-dim">cmake</span> <span class="c-dim">&#9474;</span> <span class="c-orange">C++23</span> <span class="c-dim">&#9474;</span> <span class="c-cyan">clang-18</span></span>
+<span class="line"><span class="c-dim">&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span></span>
+<span class="line"> <span class="c-green">&#10095;&#10095;</span> cmake --build --preset clang-debug</span>
+<span class="line"> <span class="output">[100%] Built target endo</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-dim">&#9484;&#9472;</span><span class="c-blue">&#9582;</span><span class="c-dim">&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span></span>
+<span class="line"><span class="c-dim">&#9474;</span> <span class="c-teal">&#xf07c;</span> <span class="c-white">~/projects/endo</span>   <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span>   <span class="c-yellow">&#10539;2</span> <span class="c-green">&#10010;1</span>   <span class="c-green">&#10003; 4.3s</span></span>
+<span class="line"><span class="c-dim">&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</span></span>
+<span class="line"> <span class="c-green">&#10095;&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 8: Gradient Glow -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">8 &mdash; Gradient Glow</span>
+    <span class="tag rich">Rich</span>
+  </div>
+  <div class="prompt-desc">Truecolor gradient on the path and arrow. Demonstrates per-character color interpolation. Visually distinctive.</div>
+  <div class="term">
+<span class="line"><span style="color:#7aa2f7">~</span><span style="color:#7da8f3">/</span><span style="color:#80aef0">p</span><span style="color:#83b4ec">r</span><span style="color:#86bae9">o</span><span style="color:#89c0e5">j</span><span style="color:#8dc6e2">e</span><span style="color:#90ccde">c</span><span style="color:#93d2db">t</span><span style="color:#96d8d7">s</span><span style="color:#93d6d3">/</span><span style="color:#8fd4cf">e</span><span style="color:#8cd2cc">n</span><span style="color:#88d0c8">d</span><span style="color:#85cec4">o</span></span>
+<span class="line"><span style="color:#f7768e">&#10148;</span><span style="color:#e87e9b">&#10148;</span><span style="color:#d986a8">&#10148;</span> git log --oneline -3</span>
+<span class="line"><span class="output">c20a91d docs: mark Phase 6.4.3 Table Rendering complete</span></span>
+<span class="line"><span class="output">ad31c1c lang: route bare ps/ls/jobs as structured F# expressions</span></span>
+<span class="line"><span class="output">af6f416 table: add terminal-width-aware column shrinking</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:#7aa2f7">~</span><span style="color:#7da8f3">/</span><span style="color:#80aef0">p</span><span style="color:#83b4ec">r</span><span style="color:#86bae9">o</span><span style="color:#89c0e5">j</span><span style="color:#8dc6e2">e</span><span style="color:#90ccde">c</span><span style="color:#93d2db">t</span><span style="color:#96d8d7">s</span><span style="color:#93d6d3">/</span><span style="color:#8fd4cf">e</span><span style="color:#8cd2cc">n</span><span style="color:#88d0c8">d</span><span style="color:#85cec4">o</span></span>
+<span class="line"><span style="color:#f7768e">&#10148;</span><span style="color:#e87e9b">&#10148;</span><span style="color:#d986a8">&#10148;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 9: Context Adaptive -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">9 &mdash; Context Adaptive</span>
+    <span class="tag info">Info-dense</span>
+  </div>
+  <div class="prompt-desc">Prompt morphs based on context: git status colors the branch, error changes the arrow, SSH adds host, toolchain detected from project. Shows only what matters.</div>
+  <div class="term">
+<span class="line"><span class="c-dim">&#9484; normal &#9472; clean repo</span></span>
+<span class="line"><span class="c-teal">endo</span> <span class="c-green">&#xe0a0; master</span> <span class="c-blue">&#10095;</span> echo "all clean"</span>
+<span class="line"><span class="output">all clean</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-dim">&#9484; dirty working tree &#9472; branch turns yellow</span></span>
+<span class="line"><span class="c-teal">endo</span> <span class="c-yellow">&#xe0a0; master &#10539;2</span> <span class="c-blue">&#10095;</span> make test</span>
+<span class="line"><span class="output">FAIL: 2 tests failed</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-dim">&#9484; command failed &#9472; arrow turns red, exit code shown</span></span>
+<span class="line"><span class="c-teal">endo</span> <span class="c-yellow">&#xe0a0; master &#10539;2</span> <span class="c-red">&#10095;</span><span class="c-red c-dim">[2]</span> vi src/main.cpp</span>
+<span class="line"></span>
+<span class="line"><span class="c-dim">&#9484; SSH session &#9472; hostname prepended automatically</span></span>
+<span class="line"><span class="c-orange">&#xf0318;</span> <span class="c-orange">devbox</span><span class="c-dim">:</span><span class="c-teal">endo</span> <span class="c-green">&#xe0a0; master</span> <span class="c-blue">&#10095;</span> uptime</span>
+<span class="line"><span class="output"> 14:22:08 up 42 days, 3:17, 2 users</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-dim">&#9484; long-running command &#9472; duration badge appears</span></span>
+<span class="line"><span class="c-teal">endo</span> <span class="c-green">&#xe0a0; master</span> <span class="c-yellow">&#9201;12.4s</span> <span class="c-blue">&#10095;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- PROMPT 10: Endo Signature -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="prompt-card">
+  <div class="prompt-card-header">
+    <span class="label">10 &mdash; Endo Signature</span>
+    <span class="tag rich">Rich</span>
+  </div>
+  <div class="prompt-desc">Purpose-built for Endo: functional pipe symbol, F# mode indicator, structured output badge, two-line with rounded corners. The "brand" prompt.</div>
+  <div class="term">
+<span class="line"><span class="c-blue">&#9581;&#9472;</span> <span class="c-teal">~/projects/endo</span> <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span> <span class="c-dim">&#9474;</span> <span class="bg-teal"><span class="c-bright-white"> &#x1d453;# </span></span> <span class="c-dim">&#9474;</span> <span class="bg-blue"><span class="c-cyan"> &#9655; ps ls jobs </span></span></span>
+<span class="line"><span class="c-blue">&#9584;&#9472;</span> <span class="c-blue c-bold">|&gt;</span> ps |&gt; filter (fun p -&gt; p.cpu &gt; 5.0) |&gt; each println</span>
+<span class="line"><span class="output">  PID  CPU%  MEM%  COMMAND</span></span>
+<span class="line"><span class="output"> 1234  12.3   4.1  firefox</span></span>
+<span class="line"><span class="output"> 5678   8.7   2.3  code</span></span>
+<span class="line"></span>
+<span class="line"><span class="c-blue">&#9581;&#9472;</span> <span class="c-teal">~/projects/endo</span> <span class="c-dim">&#xe0a0;</span> <span class="c-magenta">master</span> <span class="c-dim">&#9474;</span> <span class="bg-teal"><span class="c-bright-white"> &#x1d453;# </span></span> <span class="c-dim">&#9474;</span> <span class="c-green">&#10003;</span> <span class="c-yellow">&#9201;1.2s</span></span>
+<span class="line"><span class="c-blue">&#9584;&#9472;</span> <span class="c-blue c-bold">|&gt;</span> <span class="cursor"> </span></span>
+  </div>
+</div>
+
+
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<!-- Design Notes -->
+<!-- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ -->
+<div class="notes">
+  <h3>Design Notes &amp; Customization Engine Implications</h3>
+  <ul>
+    <li><strong>Prompt Sections as Modules:</strong> Each info element (path, git, duration, clock, battery, exit status) is an independent <code>PromptModule</code> that can be enabled/disabled/reordered.</li>
+    <li><strong>Conditional Visibility:</strong> Modules like exit status (#2, #9), duration (#5, #6, #9, #10), SSH hostname (#9), and battery (#6) only render when their condition is met (error, &gt;threshold, SSH session, on battery).</li>
+    <li><strong>Transient Prompt (#5):</strong> After command execution, the full prompt collapses to a minimal form in scrollback. This requires re-rendering the previous prompt line.</li>
+    <li><strong>Right Prompt (#6):</strong> Content right-aligned on the info line. Requires knowing terminal width and padding calculation.</li>
+    <li><strong>Gradient Support (#8):</strong> Per-character truecolor interpolation between two RGB endpoints. Engine needs a <code>gradient(start_color, end_color, text)</code> primitive.</li>
+    <li><strong>Layout Models:</strong> Single-line (#1, #2, #9), two-line (#3, #5, #10), boxed (#7), and powerline (#4). The engine should support a <code>layout</code> property.</li>
+    <li><strong>Separator Glyphs:</strong> Powerline (#4) uses <code>&#xe0b0;</code>/<code>&#xe0b2;</code>. Box-drawing (#5, #7, #10) uses <code>&#9581;&#9584;&#9472;&#9474;</code>. Bar (#3) uses <code>&#9614;</code>. These are configurable separator styles.</li>
+    <li><strong>Color Semantics:</strong> Colors should be theme-aware tokens (<code>prompt.path</code>, <code>prompt.git.clean</code>, <code>prompt.git.dirty</code>, <code>prompt.error</code>) not hardcoded RGB, enabling theme switching.</li>
+    <li><strong>Suggested Config Format (YAML):</strong>
+      <pre style="color:#bb9af7;margin:8px 0;font-size:12px">
+prompt:
+  layout: two-line         # single-line | two-line | boxed
+  separator: rounded       # arrow | powerline | rounded | bar | none
+  modules:
+    line1: [path, git, duration?, exit_status?]
+    line2: [indicator]
+  right_prompt: [clock, battery?]
+  transient: minimal       # off | minimal | arrow
+  indicator: "|>"          # character(s) before cursor
+  theme: tokyo-night       # color theme reference</pre>
+    </li>
+    <li><strong>Module Examples:</strong> <code>path</code> (tilde-contracted CWD, depth limit), <code>git</code> (branch, dirty/staged counts), <code>duration</code> (last cmd time, threshold), <code>exit_status</code> (nonzero only), <code>clock</code> (HH:MM:SS), <code>battery</code> (icon + percentage), <code>hostname</code> (SSH only), <code>toolchain</code> (detected from project), <code>fsharp_mode</code> (Endo-specific indicator).</li>
+  </ul>
+</div>
+
+</body>
+</html>
