@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/PromptConfig.hpp>
+#include <shell/PromptModule.hpp>
+
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
 
-#include <shell/PromptConfig.hpp>
-#include <shell/PromptModule.hpp>
 #include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
@@ -18,6 +19,7 @@ namespace endo
 // Forward declarations
 class Completer;
 class CommandResolver;
+class History;
 class PromptComponent;
 
 /// @brief TUI-based prompt using tui::Terminal and tui::InputField.
@@ -108,6 +110,10 @@ class Prompt
     /// @param completer The completer (ownership not transferred).
     void setCompleter(Completer* completer);
 
+    /// @brief Sets the history source for inline history cycling.
+    /// @param history The history object (ownership not transferred).
+    void setHistory(History const* history);
+
     // ========================================================================
     // Keybindings
     // ========================================================================
@@ -156,6 +162,7 @@ class Prompt
     std::unique_ptr<PromptComponent> _promptComponent;
     std::unique_ptr<CommandResolver> _commandResolver;
     Completer* _completer = nullptr;
+    History const* _history = nullptr;
     std::string _promptStr = "> ";
     PromptConfig _promptConfig;
     bool _initialized = false;

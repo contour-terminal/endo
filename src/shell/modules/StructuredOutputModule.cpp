@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "StructuredOutputModule.hpp"
+#include <shell/OutputDefinitionRegistry.hpp>
 
 #include <endo-language/IRGenerator.hpp>
-#include <shell/OutputDefinitionRegistry.hpp>
 #include <tui/Theme.hpp>
 
 namespace endo
@@ -28,7 +28,9 @@ PromptSegments StructuredOutputModule::evaluate(PromptContext const& ctx) const
     {
         for (auto const& [cmd, _]: ctx.fsharpState->structuredCommands)
         {
-            text += " " + cmd;
+            // Only show simple commands (no embedded NUL = no subcommand variants)
+            if (cmd.find('\0') == std::string::npos)
+                text += " " + cmd;
         }
     }
 

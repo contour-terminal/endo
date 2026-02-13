@@ -649,6 +649,7 @@ Shell::Shell(TTY& tty, Environment& env):
     // Initialize completion system
     completer = std::make_unique<Completer>(_env, history, _fsharpState);
     prompt.setCompleter(completer.get());
+    prompt.setHistory(&history);
 
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.

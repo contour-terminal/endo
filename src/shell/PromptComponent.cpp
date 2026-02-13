@@ -6,6 +6,7 @@
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
 #include "Gradient.hpp"
+#include "History.hpp"
 #include "SourceOffsetUtils.hpp"
 #include "SyntaxHighlighter.hpp"
 #include "modules/BatteryModule.hpp"
@@ -80,7 +81,19 @@ std::vector<PromptSegments> PromptComponent::evaluateModules(
 
         auto segments = it->second->evaluate(_context);
         if (!segments.empty())
+        {
+            // Apply gradient to path module when configured
+            if (_config.useGradientPath && name == "path")
+            {
+                std::string pathText;
+                for (auto const& seg: segments)
+                    pathText += seg.text;
+                segments = gradient(_config.gradientStart, _config.gradientEnd, pathText);
+                for (auto& seg: segments)
+                    seg.style.bold = true;
+            }
             results.push_back(std::move(segments));
+        }
     }
     return results;
 }
@@ -115,7 +128,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     auto const canvasWidth = canvas.width();
     auto const totalLines = _inputField.lineCount();
     auto const promptTextWidth = displayWidth(_promptStr);
-    auto const totalPromptWidth = HorizontalMargin + LeftBarWidth + PaddingAfterBar + promptTextWidth;
+    auto const totalPromptWidth = HorizontalMargin + leftBarWidth() + PaddingAfterBar + promptTextWidth;
 
     // Effective content width (excluding margins)
     auto const contentWidth = canvasWidth - 2 * HorizontalMargin;
@@ -167,6 +180,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             sepStyle.fg = pc.separator;
             sepStyle.bg = pc.background;
             col += canvas.putString(0, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+            col += canvas.putString(0, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
             canvas.put(0, col, " ", bgStyle);
             ++col;
         }
@@ -176,8 +190,24 @@ void PromptComponent::render(tui::Canvas& canvas)
         {
             if (i > 0)
             {
-                canvas.put(0, col, " ", bgStyle);
-                ++col;
+                if (_config.separator == SeparatorStyle::Rounded)
+                {
+                    // Dim │ pipe separator between module groups
+                    tui::Style dimPipeStyle;
+                    dimPipeStyle.fg = pc.separator;
+                    dimPipeStyle.bg = pc.background;
+                    dimPipeStyle.dim = true;
+                    canvas.put(0, col, " ", bgStyle);
+                    ++col;
+                    col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
+                    canvas.put(0, col, " ", bgStyle);
+                    ++col;
+                }
+                else
+                {
+                    canvas.put(0, col, " ", bgStyle);
+                    ++col;
+                }
             }
             for (auto const& seg: infoModules[i])
             {
@@ -267,7 +297,10 @@ void PromptComponent::render(tui::Canvas& canvas)
             sepStyle.fg = pc.separator;
             sepStyle.bg = pc.background;
             if (lineIndex == 0)
-                canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
+            {
+                canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle);     // U+2570 ╰
+                canvas.putString(row, HorizontalMargin + 1, "\xe2\x94\x80", sepStyle); // U+2500 ─
+            }
             else
                 canvas.putString(row, HorizontalMargin, "\xe2\x94\x82", sepStyle); // U+2502 │
         }
@@ -277,10 +310,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
 
         // Padding after separator
-        canvas.put(row, HorizontalMargin + 1, " ", bgStyle);
+        canvas.put(row, HorizontalMargin + leftBarWidth(), " ", bgStyle);
 
         // Prompt or continuation indicator
-        auto col = HorizontalMargin + LeftBarWidth + PaddingAfterBar;
+        auto col = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
         if (lineIndex == 0)
         {
             col += canvas.putString(row, col, _promptStr, promptStyle);
@@ -474,7 +507,7 @@ void PromptComponent::setPrompt(std::string_view prompt)
 
 int PromptComponent::promptWidth() const
 {
-    return LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+    return leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
 }
 
 int PromptComponent::chromeHeight() const noexcept
@@ -528,6 +561,63 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         }
     }
 
+    // Inline history cycling: Up/Down cycles through history (prefix-matched when input is non-empty)
+    if (!_completionPopup.visible())
+    {
+        if (auto const* key = std::get_if<tui::KeyEvent>(&event))
+        {
+            auto const inputText = std::string(_inputField.text());
+            if (key->key == tui::KeyCode::Up || key->key == tui::KeyCode::Down)
+            {
+                if (key->key == tui::KeyCode::Up)
+                {
+                    if (!_historyCycleIndex.has_value())
+                    {
+                        // First Up press: compute candidates from completer, save original input
+                        _historyCycleSavedInput = inputText;
+                        _historyCandidates.clear();
+                        if (_history)
+                        {
+                            auto matches = _history->search(inputText, 50);
+                            for (auto const& entry: matches)
+                                if (entry != inputText)
+                                    _historyCandidates.push_back(std::string(entry));
+                        }
+                        if (!_historyCandidates.empty())
+                            _historyCycleIndex = 0;
+                    }
+                    else if (*_historyCycleIndex + 1 < _historyCandidates.size())
+                    {
+                        ++(*_historyCycleIndex);
+                    }
+                    // else: at end, do nothing (don't wrap)
+                }
+                else // Down
+                {
+                    if (_historyCycleIndex.has_value())
+                    {
+                        if (*_historyCycleIndex > 0)
+                            --(*_historyCycleIndex);
+                        else
+                        {
+                            // Back to original input
+                            _historyCycleIndex.reset();
+                        }
+                    }
+                }
+
+                // Apply the selected candidate or restore original
+                if (_historyCycleIndex.has_value())
+                    _inputField.setText(_historyCandidates[*_historyCycleIndex]);
+                else
+                    _inputField.setText(_historyCycleSavedInput);
+
+                updateGhostText();
+                return Action::Changed;
+            }
+        }
+    }
+
     // Handle key events with special completion handling
     if (auto const* key = std::get_if<tui::KeyEvent>(&event))
     {
@@ -574,16 +664,20 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         case tui::InputFieldAction::Submit:
             _inputField.clearGhostText();
             _completionPopup.hide();
+            resetHistoryCycling();
             return Action::Submit;
         case tui::InputFieldAction::Abort:
             _inputField.clearGhostText();
             _completionPopup.hide();
+            resetHistoryCycling();
             return Action::Abort;
         case tui::InputFieldAction::Eof:
             _inputField.clearGhostText();
             _completionPopup.hide();
+            resetHistoryCycling();
             return Action::Eof;
         case tui::InputFieldAction::Changed:
+            resetHistoryCycling();
             updateGhostText();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
             if (popupWasVisible && popupDismissedByTyping)
@@ -789,7 +883,7 @@ std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn)
 {
     // Calculate the prompt prefix width
     auto const totalPromptWidth =
-        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
 
     // Check if column is within command bounds
     auto const [cmdStart, cmdEnd] = getCommandBounds();
@@ -863,7 +957,7 @@ std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, i
 std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int x, int y) const
 {
     auto const totalPromptWidth =
-        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
 
     // Screen x must be within the text area
     if (x < totalPromptWidth)
@@ -900,7 +994,7 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
 std::pair<int, int> PromptComponent::getCommandBounds() const
 {
     auto const totalPromptWidth =
-        HorizontalMargin + LeftBarWidth + PaddingAfterBar + displayWidth(_promptStr);
+        HorizontalMargin + leftBarWidth() + PaddingAfterBar + displayWidth(_promptStr);
 
     auto const text = _inputField.text();
     if (text.empty())
@@ -934,6 +1028,12 @@ std::pair<int, int> PromptComponent::getCommandBounds() const
     int const cmdEnd = cmdStart + cmdWidth;
 
     return { cmdStart, cmdEnd };
+}
+
+void PromptComponent::resetHistoryCycling()
+{
+    _historyCycleIndex.reset();
+    _historyCandidates.clear();
 }
 
 } // namespace endo

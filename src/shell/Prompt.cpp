@@ -53,6 +53,7 @@ void Prompt::initialize()
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
     _promptComponent->setCompleter(_completer);
+    _promptComponent->setHistory(_history);
     _promptComponent->setCommandResolver(_commandResolver.get());
 
     // Set up clipboard callback to use OSC 52
@@ -398,6 +399,13 @@ void Prompt::setCompleter(Completer* completer)
     _completer = completer;
     if (_promptComponent)
         _promptComponent->setCompleter(completer);
+}
+
+void Prompt::setHistory(History const* history)
+{
+    _history = history;
+    if (_promptComponent)
+        _promptComponent->setHistory(history);
 }
 
 void Prompt::setMultilineEnabled(bool enable)

@@ -26,7 +26,8 @@ int PromptLayoutEngine::render(tui::Canvas& canvas,
     switch (config.layout)
     {
         case PromptLayoutKind::SingleLine: return renderSingleLine(canvas, config, infoModules, theme);
-        case PromptLayoutKind::TwoLine: return renderTwoLine(canvas, config, infoModules, rightModules, theme);
+        case PromptLayoutKind::TwoLine:
+            return renderTwoLine(canvas, config, infoModules, rightModules, theme);
         case PromptLayoutKind::Boxed: return renderBoxed(canvas, config, infoModules, theme);
         case PromptLayoutKind::Powerline: return renderPowerline(canvas, config, infoModules, theme);
     }
@@ -122,18 +123,34 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
         sepStyle.fg = theme.promptColors.separator;
         sepStyle.bg = theme.promptColors.background;
         col += canvas.putString(0, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+        col += canvas.putString(0, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
         canvas.put(0, col, " ", bgStyle);
         ++col;
     }
 
-    // Info modules with space separation
+    // Info modules with space separation (or │ for Rounded)
     auto const infoStartCol = col;
     for (std::size_t i = 0; i < infoModules.size(); ++i)
     {
         if (i > 0)
         {
-            canvas.put(0, col, " ", bgStyle);
-            ++col;
+            if (config.separator == SeparatorStyle::Rounded)
+            {
+                tui::Style dimPipeStyle;
+                dimPipeStyle.fg = theme.promptColors.separator;
+                dimPipeStyle.bg = theme.promptColors.background;
+                dimPipeStyle.dim = true;
+                canvas.put(0, col, " ", bgStyle);
+                ++col;
+                col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
+                canvas.put(0, col, " ", bgStyle);
+                ++col;
+            }
+            else
+            {
+                canvas.put(0, col, " ", bgStyle);
+                ++col;
+            }
         }
         // Apply background to each segment
         for (auto seg: infoModules[i])
@@ -188,6 +205,7 @@ int PromptLayoutEngine::renderTwoLine(tui::Canvas& canvas,
         sepStyle.fg = theme.promptColors.separator;
         sepStyle.bg = theme.promptColors.background;
         col += canvas.putString(1, col, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
+        col += canvas.putString(1, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
         canvas.put(1, col, " ", bgStyle);
         ++col;
     }

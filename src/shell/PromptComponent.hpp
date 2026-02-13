@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/PromptConfig.hpp>
+#include <shell/PromptLayoutEngine.hpp>
+#include <shell/PromptModule.hpp>
+
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -11,9 +15,6 @@
 
 #include <endo-language/DiagnosticsCollector.hpp>
 #include <endo-language/HoverInfo.hpp>
-#include <shell/PromptConfig.hpp>
-#include <shell/PromptLayoutEngine.hpp>
-#include <shell/PromptModule.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
@@ -23,6 +24,7 @@ namespace endo
 
 class Completer;
 class CommandResolver;
+class History;
 
 /// @brief A styled prompt component for the shell.
 ///
@@ -82,6 +84,9 @@ class PromptComponent: public tui::Component
 
     /// @brief Sets the command resolver for tooltip display.
     void setCommandResolver(CommandResolver* resolver) { _commandResolver = resolver; }
+
+    /// @brief Sets the history source for inline history cycling.
+    void setHistory(History const* history) { _history = history; }
 
     /// @brief Called when a hover is confirmed over this component.
     ///
@@ -148,12 +153,13 @@ class PromptComponent: public tui::Component
     tui::CompletionPopup _completionPopup;
     Completer* _completer = nullptr;
     CommandResolver* _commandResolver = nullptr;
+    History const* _history = nullptr;
     std::string _promptStr = "> ";
 
     // Prompt theming
-    PromptConfig _config;              ///< Layout and module configuration.
-    PromptContext _context;            ///< Current shell context for module evaluation.
-    PromptLayoutEngine _layoutEngine;  ///< Layout rendering engine.
+    PromptConfig _config;             ///< Layout and module configuration.
+    PromptContext _context;           ///< Current shell context for module evaluation.
+    PromptLayoutEngine _layoutEngine; ///< Layout rendering engine.
     std::unordered_map<std::string, std::unique_ptr<PromptModule>> _modules; ///< Module registry.
 
     /// @brief Initializes the module registry with all available modules.
@@ -167,6 +173,12 @@ class PromptComponent: public tui::Component
     static constexpr int HorizontalMargin = 1; // Left and right margin
     static constexpr int LeftBarWidth = 1;
     static constexpr int PaddingAfterBar = 1;
+
+    /// @brief Returns the effective left bar width (2 for Rounded separator with ─, 1 otherwise).
+    [[nodiscard]] int leftBarWidth() const noexcept
+    {
+        return (_config.separator == SeparatorStyle::Rounded) ? 2 : LeftBarWidth;
+    }
 
     /// @brief Calculates the width of the prompt prefix (bar + padding + prompt text).
     [[nodiscard]] int promptWidth() const;
@@ -216,6 +228,14 @@ class PromptComponent: public tui::Component
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime {};
     static constexpr auto DoubleTabThreshold = std::chrono::milliseconds(400);
+
+    // Inline history cycling (fish-style prefix search)
+    std::vector<std::string> _historyCandidates; ///< Cached prefix-matched history entries.
+    std::optional<size_t> _historyCycleIndex;    ///< Current position in candidates (nullopt = not cycling).
+    std::string _historyCycleSavedInput;         ///< Original input text before cycling started.
+
+    /// @brief Resets inline history cycling state.
+    void resetHistoryCycling();
 };
 
 } // namespace endo
