@@ -178,5 +178,7 @@ The following are excellent candidates for commands that would greatly benefit f
     *   Fields: `index: int`, `timestamp: datetime`, `command: string`
 *   **`env`**: Environment variables.
     *   Fields: `name: string`, `value: string`
+*   **`mkdir`**: Directory creation with metadata output
+    *   Fields: `name: string`, `path: string`, `mode: int`, `mtime: datetime`
 
 By following this roadmap, Endo can provide a uniquely powerful and modern environment for system administration and development tasks.
