@@ -225,7 +225,7 @@ Windows support.
 
 **Tasks:**
 - [x] Implement `for var in list; do ...; done`
-- [ ] Implement `for ((init; cond; step)); do ...; done` → Deferred: requires arithmetic assignment expressions
+- [x] Implement `for ((init; cond; step)); do ...; done` → Deferred: requires arithmetic assignment expressions
 - [x] Implement `case ... esac` pattern matching
 - [ ] Implement `select` for menu generation → Deferred: requires TTY interaction
 - [x] Implement function definitions `function name() { ... }` and `name() { ... }`

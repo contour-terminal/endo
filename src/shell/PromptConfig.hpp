@@ -43,16 +43,17 @@ enum class TransientMode : std::uint8_t
 /// and other visual options. Can be populated from presets or user configuration.
 struct PromptConfig
 {
-    PromptLayoutKind layout = PromptLayoutKind::TwoLine;   ///< Layout style.
-    SeparatorStyle separator = SeparatorStyle::Bar;        ///< Separator style.
-    TransientMode transient = TransientMode::Off;          ///< Transient prompt mode.
-    std::string indicator = "> ";                          ///< Indicator character(s) on the input line.
+    std::string_view name;                               ///< Optional name of the preset or config.
+    PromptLayoutKind layout = PromptLayoutKind::TwoLine; ///< Layout style.
+    SeparatorStyle separator = SeparatorStyle::Bar;      ///< Separator style.
+    TransientMode transient = TransientMode::Off;        ///< Transient prompt mode.
+    std::string indicator = "> ";                        ///< Indicator character(s) on the input line.
     std::vector<std::string> infoLineModules = { "path", "git" }; ///< Modules for the info line.
-    std::vector<std::string> rightPromptModules;           ///< Modules for the right-aligned section.
-    int64_t durationThresholdMs = 2000;                    ///< Min duration (ms) to show duration module.
-    bool useGradientPath = false;                          ///< Enable gradient coloring for path module.
-    tui::RgbColor gradientStart {};                        ///< Gradient start color.
-    tui::RgbColor gradientEnd {};                          ///< Gradient end color.
+    std::vector<std::string> rightPromptModules;                  ///< Modules for the right-aligned section.
+    int64_t durationThresholdMs = 2000; ///< Min duration (ms) to show duration module.
+    bool useGradientPath = false;       ///< Enable gradient coloring for path module.
+    tui::RgbColor gradientStart {};     ///< Gradient start color.
+    tui::RgbColor gradientEnd {};       ///< Gradient end color.
 };
 
 } // namespace endo
