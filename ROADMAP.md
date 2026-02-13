@@ -609,6 +609,7 @@ The library includes:
 - [x] Add completion styles to Theme (`ghostText`, `completionItem`, `completionSelected`, `completionDesc`)
 - [x] Design and implement completion popup UI (`CompletionPopup.cpp` - bordered list with scroll indicators)
 - [x] Integrate completion with Prompt (Tab/Ctrl+Space triggers, menu navigation, ghost text rendering)
+- [x] Fix inline history cycling (Up/Down with prefix) to use `History::search()` directly instead of `Completer::complete()` — fixes cycling for file paths, arguments, and options
 - [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
 - [x] Implement F# dot-access completion (`FSharpCompleter.cpp` — Option module methods, `_.field` record fields, `value.method`/`value.field` — 24 tests)
 
@@ -797,7 +798,9 @@ Component (base class)
 - [x] Implement dark/light mode detection via VT CSI ? 2031 h / CSI ? 997 n
 - [x] Implement color scheme change notification and auto-switching
 - [x] Implement prompt builtin functions (`set_prompt_preset`, `set_prompt_indicator`, `set_prompt_layout`, `set_prompt_separator`, `set_prompt_transient`, `set_prompt_duration_threshold`)
+- [x] Add `set_prompt_*` builtins to LSP/completion with parameter value auto-completion (preset names, layout/separator/transient enum values)
 - [x] Implement `~/.config/endo/init.endo` auto-execution
+- [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests
