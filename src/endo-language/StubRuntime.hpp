@@ -192,6 +192,9 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
 
+    // structured_jobs builtin stub
+    runtime.registerFunction("structured_jobs").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
     // Helper builtins for FileInfo mode/mtime formatting and testing
     runtime.registerFunction("format_datetime")
         .param<CoreVM::CoreNumber>("epoch")
@@ -212,6 +215,32 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
     runtime.registerFunction("mode_isExecutable")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+
+    // Data source wrapper stubs (open-json, open-csv, from-json, from-csv)
+    runtime.registerFunction("open_json")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("open_csv")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("from_json")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("from_csv")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
 
     // Output definition structured command stubs

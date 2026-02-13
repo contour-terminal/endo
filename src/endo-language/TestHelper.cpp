@@ -564,6 +564,49 @@ TestRuntime::TestRuntime()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
 
+    // Register structured_jobs mock: returns 3 deterministic jobs
+    runtime.registerFunction("structured_jobs")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+
+            // Mock job data for deterministic testing
+            struct MockJob
+            {
+                int64_t id;
+                char const* state;
+                char const* command;
+                int64_t pid;
+            };
+            constexpr MockJob jobs[] = {
+                { 1, "Running", "sleep 100", 1234 },
+                { 2, "Stopped", "vim", 5678 },
+                { 3, "Done", "make build", 9012 },
+            };
+
+            // Build cons-cell list right-to-left
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0; // Nil
+
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& j = jobs[i];
+                auto* record = runner->allocObject(CoreVM::BuiltinTypeId::JobInfo);
+                record->setSlot(0, static_cast<uint64_t>(j.id));
+                record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(j.state)));
+                record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(j.command)));
+                record->setSlot(3, static_cast<uint64_t>(j.pid));
+
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1; // Cons
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
     // Register helper builtins for FileInfo mode/mtime formatting and testing
     runtime.registerFunction("format_datetime")
         .param<CoreVM::CoreNumber>("epoch")
@@ -972,6 +1015,38 @@ TestRuntime::TestRuntime()
             }
             args.setResult(args.caller()->newString(result));
         });
+
+    // Data source wrapper stubs (open-json, open-csv, from-json, from-csv)
+    auto dummyHandler = [](CoreVM::Params& args) {
+        // Return an empty list (Nil)
+        auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
+        nil->tag = 0;
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
+    };
+    runtime.registerFunction("open_json")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("open_csv")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("from_json")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("from_csv")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params&)

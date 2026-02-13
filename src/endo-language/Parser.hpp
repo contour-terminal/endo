@@ -131,6 +131,13 @@ class Parser
     // Type definitions (records and discriminated unions)
     std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int
 
+    // Data source commands (open-json/open-csv/from-json/from-csv with 'as' type annotation)
+    std::unique_ptr<ast::Expr> tryParseDataSource(std::unique_ptr<ast::Statement> stmt);
+
+    /// Parses record field definitions: `{ name: type; age: int; score: int = 0 }`
+    /// Shared between parseTypeDefinition and data source type annotations.
+    std::vector<ast::DataSourceFieldDef> parseDataSourceFieldDefs();
+
     // Pattern parsing for match expressions
     // Grammar: pattern ::= or_pattern ('when' expr)?
     //          or_pattern ::= as_pattern ('|' as_pattern)*

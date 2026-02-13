@@ -226,6 +226,56 @@ void ASTPrinter::visit(StructuredPipelineSourceExpr const& node)
     _result += " |>)";
 }
 
+void ASTPrinter::visit(DataSourceExpr const& node)
+{
+    switch (node.kind)
+    {
+        case DataSourceExpr::Kind::OpenJson: _result += "open-json"; break;
+        case DataSourceExpr::Kind::OpenCsv: _result += "open-csv"; break;
+        case DataSourceExpr::Kind::FromJson: _result += "from-json"; break;
+        case DataSourceExpr::Kind::FromCsv: _result += "from-csv"; break;
+    }
+
+    if (node.filePath)
+    {
+        _result += " ";
+        node.filePath->accept(*this);
+    }
+    if (node.pipeSource)
+    {
+        node.pipeSource->accept(*this);
+        _result += " | ";
+        switch (node.kind)
+        {
+            case DataSourceExpr::Kind::FromJson: _result += "from-json"; break;
+            case DataSourceExpr::Kind::FromCsv: _result += "from-csv"; break;
+            default: break;
+        }
+    }
+
+    _result += " as ";
+    if (!node.typeName.empty())
+    {
+        _result += node.typeName;
+    }
+    else
+    {
+        _result += "{ ";
+        for (size_t i = 0; i < node.inlineFields.size(); ++i)
+        {
+            if (i > 0)
+                _result += "; ";
+            _result += std::format("{}: {}", node.inlineFields[i].name, toString(node.inlineFields[i].type));
+            if (node.inlineFields[i].defaultValue)
+            {
+                _result += " = ";
+                node.inlineFields[i].defaultValue->accept(*this);
+            }
+        }
+        _result += " }";
+    }
+}
+
 void ASTPrinter::visit(SubstitutionExpr const& node)
 {
     _result += node.backtick ? "`" : "$(";

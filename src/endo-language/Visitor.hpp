@@ -6,6 +6,7 @@ namespace endo::ast
 
 struct ArithExpansionExpr;
 struct BreakExpr;
+struct DataSourceExpr;
 struct BreakStmt;
 struct BuiltinChDirStmt;
 struct BuiltinSetStmt;
@@ -128,6 +129,7 @@ struct Visitor
     virtual void visit(LiteralExpr const&) = 0;
     virtual void visit(ParamExpansionExpr const&) = 0;
     virtual void visit(StructuredPipelineSourceExpr const&) = 0;
+    virtual void visit(DataSourceExpr const&) = 0;
     virtual void visit(SubstitutionExpr const&) = 0;
     virtual void visit(CommandFileSubst const&) = 0;
     virtual void visit(TildeExpr const&) = 0;

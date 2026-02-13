@@ -1259,3 +1259,98 @@ TEST_CASE("Lexer.comment_block_inline")
     CHECK(lexer.currentToken() == endo::Token::Number);
     CHECK(lexer.currentLiteral() == "20");
 }
+
+// =============================================================================
+// Hyphen-in-identifier tests (Phase 6.1.3)
+// =============================================================================
+
+TEST_CASE("Lexer.hyphen_identifier_shell_mode")
+{
+    // In shell mode, hyphens are already part of identifiers
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("open-json"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "open-json");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_mode")
+{
+    // In F# mode, hyphen-letter should form compound identifiers.
+    // Use "let x = open-json" so that the lexer enters F# mode naturally on `open-json`.
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x = open-json"));
+    CHECK(lexer.currentToken() == endo::Token::Let); // let
+    lexer.enterFSharpExpr();
+    lexer.nextToken(); // x
+    CHECK(lexer.currentLiteral() == "x");
+    lexer.nextToken(); // =
+    CHECK(lexer.currentToken() == endo::Token::Equal);
+    lexer.nextToken(); // open-json (in F# mode, hyphen-letter forms compound id)
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "open-json");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_subtraction_with_spaces")
+{
+    // `a - b` in F# mode should be three tokens (subtraction)
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let a - b"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken(); // a
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "a");
+
+    lexer.nextToken(); // -
+    CHECK(lexer.currentToken() == endo::Token::Minus);
+
+    lexer.nextToken(); // b
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "b");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_ab")
+{
+    // `a-b` in F# mode: hyphen followed by letter → single identifier
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let a-b"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken(); // a-b
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "a-b");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_x_minus_1")
+{
+    // `x-1` in F# mode: hyphen followed by digit → not part of identifier
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let x-1"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken(); // x
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "x");
+
+    lexer.nextToken();
+    // '-' followed by '1' in F# mode — the case '-' branch in nextToken handles this
+    // It sees '-' then digit '1' → produces Number("-1")
+    CHECK(lexer.currentToken() == endo::Token::Number);
+    CHECK(lexer.currentLiteral() == "-1");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_multi_hyphen")
+{
+    // Multi-hyphen identifiers: `my-long-name`
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let my-long-name"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "my-long-name");
+}
+
+TEST_CASE("Lexer.hyphen_identifier_fsharp_from_csv")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("let from-csv"));
+    CHECK(lexer.currentToken() == endo::Token::Let);
+    lexer.enterFSharpExpr();
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "from-csv");
+}

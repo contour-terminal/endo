@@ -39,6 +39,7 @@ class ASTPrinter: public Visitor
     void visit(LogicalOrStmt const& node) override;
     void visit(LiteralExpr const& node) override;
     void visit(StructuredPipelineSourceExpr const& node) override;
+    void visit(DataSourceExpr const& node) override;
     void visit(SubstitutionExpr const& node) override;
     void visit(CommandFileSubst const& node) override;
     void visit(TildeExpr const& node) override;

@@ -32,10 +32,18 @@ This new milestone will focus on building the infrastructure and features requir
     *   This interface allows a command to advertise the `Type` of the objects it will output (e.g., `list<ProcessInfoRecord>`).
     *   Platform-abstracted via `ProcessProvider` interface for cross-platform support.
 
-3.  **Implement a Structured Data Wrapper:**
-    *   Create a built-in command or a mechanism to wrap existing CLI tools that produce structured text formats like JSON, CSV, or YAML.
-    *   This wrapper would be responsible for parsing the text output and transforming it into a stream of Endo records.
-    *   Example: `from-json | ...` or `open-csv file.csv | ...`
+3.  **Implement a Structured Data Wrapper:** ✅
+    *   Four data source commands: `open-json`, `open-csv`, `from-json`, `from-csv` with `as` type annotation syntax.
+    *   Inline record type definitions: `open-json "file.json" as { name: string; age: int }`.
+    *   Named type references: `type Person = { name: str; age: int }` then `open-csv "people.csv" as Person`.
+    *   Pipeline integration: `open-json "data.json" as { name: string; score: int } |> filter (_.score > 50) |> map _.name`.
+    *   Pipe-based sources: `curl api/users | from-json as { name: string; id: int } |> map _.name`.
+    *   JSON auto-detection (NDJSON vs array), CSV header auto-detection.
+    *   Schema descriptor format for runtime callback communication.
+    *   Lexer extended: `string` accepted as alias for `str` in type annotations.
+    *   Lexer extended: hyphen-letter continuation in F# mode for compound identifiers (e.g., `open-json`, `from-csv`).
+    *   `OutputParser::buildVariantFromDesc()` parses schema descriptors at runtime.
+    *   `OutputParser::detectCsvHeader()` auto-detects and skips CSV header rows.
     *   **Note:** Output Recognition Files (Phase 6.3a) automate this for pipeline contexts by declaratively defining how to parse command output. Explicit wrappers like `from-json` remain available for ad-hoc use where no definition file exists.
 
 ### Phase 6.2: Built-in Structured Commands
@@ -59,9 +67,12 @@ This new milestone will focus on building the infrastructure and features requir
     *   `ProcessInfo` registered as well-known type (`BuiltinTypeId::ProcessInfo = 6`) with field access support.
     *   Platform-abstracted via `LinuxProcessProvider` (reads `/proc`); `WindowsProcessProvider` to follow.
 
-3.  **`jobs`:**
+3.  **`jobs`:** ✅
     *   Rewrite the existing `jobs` built-in to output a stream of `JobInfo` records.
-    *   `JobInfo` record fields: `id: int`, `state: JobState`, `command: string`.
+    *   `JobInfo` record fields: `id: int`, `state: str`, `command: str`, `pid: int`.
+    *   Fully integrated with pipeline operations: `jobs |> filter (_.state == "Running") |> map _.command`.
+    *   `JobInfo` registered as well-known type (`BuiltinTypeId::JobInfo = 8`) with field access support.
+    *   Abstracted via `JobProvider` interface; bridges `JobTable` in the shell.
 
 ### Phase 6.3: Extensible Command Discovery
 

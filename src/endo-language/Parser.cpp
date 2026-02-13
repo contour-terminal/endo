@@ -96,7 +96,8 @@ bool Parser::isEndOfStmt() const noexcept
         || _lexer.currentToken() == Token::AmpAmp
         || _lexer.currentToken() == Token::PipePipe
         || _lexer.currentToken() == Token::RndClose
-        || _lexer.currentToken() == Token::Ampersand)
+        || _lexer.currentToken() == Token::Ampersand
+        || _lexer.currentToken() == Token::As)
         return true;
 
     // Backtick is end-of-statement only when we're inside a backtick substitution
@@ -295,6 +296,53 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 auto stmt = parseLogicalExpr();
                 if (!stmt)
                     return nullptr;
+
+                // Check for data source 'as' type annotation:
+                // open-json "file" as { ... } or curl | from-json as { ... }
+                if (_lexer.currentToken() == Token::As)
+                {
+                    if (auto dataSource = tryParseDataSource(std::move(stmt)))
+                    {
+                        // Check for |> pipeline continuation
+                        // DataSourceExpr already produces a typed list value — use it directly
+                        // as the pipeline source (no StructuredPipelineSourceExpr wrapper needed).
+                        if (_lexer.currentToken() == Token::ForwardPipe)
+                        {
+                            _lexer.enterFSharpExpr();
+                            _lexer.nextToken(); // consume first |>
+
+                            auto step = parseFSharpComposition();
+                            if (!step)
+                            {
+                                _lexer.leaveFSharpExpr();
+                                return nullptr;
+                            }
+
+                            std::unique_ptr<ast::Expr> pipeline =
+                                std::make_unique<ast::PipelineExpr>(std::move(dataSource), std::move(step));
+
+                            while (_lexer.currentToken() == Token::ForwardPipe)
+                            {
+                                _lexer.nextToken();
+                                auto right = parseFSharpComposition();
+                                if (!right)
+                                {
+                                    _lexer.leaveFSharpExpr();
+                                    return nullptr;
+                                }
+                                pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline),
+                                                                               std::move(right));
+                            }
+
+                            _lexer.leaveFSharpExpr();
+                            return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                        }
+
+                        return std::make_unique<ast::ExprStmt>(std::move(dataSource));
+                    }
+                    // If tryParseDataSource returned nullptr, the 'as' was not
+                    // after a data source command — fall through.
+                }
 
                 // Shell command followed by |> → structured F# pipeline
                 // Build left-associative pipeline chain: source |> step1 |> step2 |> ...
@@ -2404,7 +2452,7 @@ TypePtr Parser::parseBaseType()
         _lexer.nextToken();
         return types::floatType();
     }
-    if (typeName == "str")
+    if (typeName == "str" || typeName == "string")
     {
         _lexer.nextToken();
         return types::strType();
@@ -3767,6 +3815,201 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
     _knownRecordTypes[typeName] = std::move(fieldNames);
 
     return std::make_unique<ast::RecordTypeDefStmt>(std::move(typeName), std::move(fields));
+}
+
+std::vector<ast::DataSourceFieldDef> Parser::parseDataSourceFieldDefs()
+{
+    TRACE_SCOPE("parseDataSourceFieldDefs");
+    std::vector<ast::DataSourceFieldDef> fields;
+
+    while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
+    {
+        if (_lexer.currentToken() != Token::Identifier)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Provide a field name" },
+                                               currentContextSnippet(),
+                                               "Expected field name in data source type annotation, got '{}'",
+                                               _lexer.currentLiteral());
+            return {};
+        }
+        auto fieldName = _lexer.currentLiteral();
+        _lexer.nextToken(); // consume field name
+
+        if (_lexer.currentToken() != Token::Colon)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add ':' and type after field name" },
+                                               currentContextSnippet(),
+                                               "Expected ':' after field name '{}', got '{}'",
+                                               fieldName,
+                                               _lexer.currentLiteral());
+            return {};
+        }
+        _lexer.nextToken(); // consume ':'
+
+        auto fieldType = parseType();
+        if (!fieldType)
+            return {};
+
+        // Check for optional default value: = expr
+        std::unique_ptr<ast::Expr> defaultValue;
+        if (_lexer.currentToken() == Token::Equal)
+        {
+            _lexer.nextToken(); // consume '='
+            defaultValue = parseFSharpExpr();
+            if (!defaultValue)
+                return {};
+        }
+
+        fields.push_back(
+            ast::DataSourceFieldDef { std::move(fieldName), std::move(fieldType), std::move(defaultValue) });
+
+        // Consume separator: semicolon or newline
+        if (_lexer.currentToken() == Token::Semicolon)
+            _lexer.nextToken();
+        consumeNewlines();
+    }
+
+    return fields;
+}
+
+std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::Statement> stmt)
+{
+    TRACE_SCOPE("tryParseDataSource");
+
+    // Must be at 'as' keyword
+    if (_lexer.currentToken() != Token::As)
+        return nullptr;
+
+    // Determine the data source kind and extract components from the parsed statement
+    ast::DataSourceExpr::Kind kind {};
+    std::unique_ptr<ast::Expr> filePath;
+    std::unique_ptr<ast::Statement> pipeSource;
+
+    auto const isDataSourceName = [](std::string_view name) {
+        return name == "open-json" || name == "open-csv" || name == "from-json" || name == "from-csv";
+    };
+
+    auto const nameToKind = [](std::string_view name) -> ast::DataSourceExpr::Kind {
+        if (name == "open-json")
+            return ast::DataSourceExpr::Kind::OpenJson;
+        if (name == "open-csv")
+            return ast::DataSourceExpr::Kind::OpenCsv;
+        if (name == "from-json")
+            return ast::DataSourceExpr::Kind::FromJson;
+        return ast::DataSourceExpr::Kind::FromCsv;
+    };
+
+    if (auto* call = dynamic_cast<ast::ProgramCall*>(stmt.get()))
+    {
+        if (!isDataSourceName(call->program))
+            return nullptr;
+
+        kind = nameToKind(call->program);
+
+        // For open-*: extract file path from first argument
+        if (kind == ast::DataSourceExpr::Kind::OpenJson || kind == ast::DataSourceExpr::Kind::OpenCsv)
+        {
+            if (!call->parameters.empty())
+                filePath = std::move(call->parameters[0]);
+        }
+    }
+    else if (auto* pipeline = dynamic_cast<ast::CallPipeline*>(stmt.get()))
+    {
+        // Check if last call in pipeline is from-json or from-csv
+        if (pipeline->calls.empty())
+            return nullptr;
+
+        auto& lastCall = pipeline->calls.back();
+        if (!isDataSourceName(lastCall->program))
+            return nullptr;
+
+        kind = nameToKind(lastCall->program);
+
+        // Build pipe source from all calls except the last
+        if (pipeline->calls.size() == 1)
+        {
+            // Standalone from-json/from-csv (reads from stdin)
+            pipeSource = nullptr;
+        }
+        else
+        {
+            // Extract all calls except the last as the pipe source
+            std::vector<std::unique_ptr<ast::ProgramCall>> sourceCalls;
+            for (size_t i = 0; i + 1 < pipeline->calls.size(); ++i)
+                sourceCalls.push_back(std::move(pipeline->calls[i]));
+
+            if (sourceCalls.size() == 1)
+            {
+                pipeSource = std::move(sourceCalls[0]);
+            }
+            else
+            {
+                pipeSource = std::make_unique<ast::CallPipeline>(std::move(sourceCalls));
+            }
+        }
+    }
+    else
+    {
+        return nullptr;
+    }
+
+    // Consume 'as' keyword
+    _lexer.enterFSharpExpr();
+    _lexer.nextToken(); // consume 'as'
+    consumeNewlines();
+
+    // Parse type specification
+    auto result = std::make_unique<ast::DataSourceExpr>();
+    result->kind = kind;
+    result->filePath = std::move(filePath);
+    result->pipeSource = std::move(pipeSource);
+
+    if (_lexer.currentToken() == Token::BraceOpen)
+    {
+        // Inline record type: { name: string; age: int }
+        _lexer.nextToken(); // consume '{'
+        consumeNewlines();
+
+        result->inlineFields = parseDataSourceFieldDefs();
+        if (result->inlineFields.empty() && _lexer.currentToken() != Token::BraceClose)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr; // error already reported
+        }
+
+        if (_lexer.currentToken() != Token::BraceClose)
+        {
+            _lexer.leaveFSharpExpr();
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a closing '}'" },
+                                               currentContextSnippet(),
+                                               "Expected '}}' at end of type annotation, got '{}'",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '}'
+    }
+    else if (_lexer.currentToken() == Token::Identifier)
+    {
+        // Named type reference: Person, UserRecord, etc.
+        result->typeName = _lexer.currentLiteral();
+        _lexer.nextToken(); // consume type name
+    }
+    else
+    {
+        _lexer.leaveFSharpExpr();
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a type: '{ ... }' or a type name" },
+                                           currentContextSnippet(),
+                                           "Expected type annotation after 'as', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+
+    _lexer.leaveFSharpExpr();
+    return result;
 }
 
 std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()

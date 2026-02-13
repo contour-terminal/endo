@@ -2,7 +2,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include "AST.hpp"
 #include "TestHelper.hpp"
 
 using namespace endo::test;
@@ -6418,4 +6417,177 @@ TEST_CASE("IRGenerator.FSharp.stmt_for_break")
 TEST_CASE("IRGenerator.FSharp.stmt_for_continue")
 {
     CHECK(executesWithOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\ndone", "13"));
+}
+
+// ============================================================================
+// Structured jobs command
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_map_id")
+{
+    CHECK(executesWithOutput("let ids = jobs |> map (fun j -> j.id)\nprint ids", "[1; 2; 3]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_map_command")
+{
+    CHECK(executesWithOutput("let cmds = jobs |> map (fun j -> j.command)\nprint cmds",
+                             "[sleep 100; vim; make build]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_map_state")
+{
+    CHECK(executesWithOutput("let states = jobs |> map (fun j -> j.state)\nprint states",
+                             "[Running; Stopped; Done]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_map_pid")
+{
+    CHECK(executesWithOutput("let pids = jobs |> map (fun j -> j.pid)\nprint pids", "[1234; 5678; 9012]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_state")
+{
+    CHECK(executesWithOutput("let states = jobs |> map _.state\nprint states", "[Running; Stopped; Done]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_command")
+{
+    CHECK(executesWithOutput("let cmds = jobs |> map _.command\nprint cmds", "[sleep 100; vim; make build]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_pid")
+{
+    CHECK(executesWithOutput("let pids = jobs |> map _.pid\nprint pids", "[1234; 5678; 9012]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_state")
+{
+    CHECK(executesWithOutput(
+        "let ids = jobs |> filter (fun j -> j.state == \"Running\") |> map (fun j -> j.id)\nprint ids",
+        "[1]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_placeholder")
+{
+    CHECK(executesWithOutput("let cmds = jobs |> filter (_.state == \"Done\") |> map _.command\nprint cmds",
+                             "[make build]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_stopped")
+{
+    CHECK(executesWithOutput("let ids = jobs |> filter (_.state == \"Stopped\") |> map _.id\nprint ids",
+                             "[2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_exists")
+{
+    CHECK(executesWithOutput("let r = jobs |> exists (fun j -> j.state == \"Stopped\")\nprint r", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_exists_false")
+{
+    CHECK(
+        executesWithOutput("let r = jobs |> exists (fun j -> j.state == \"Terminated\")\nprint r", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_find")
+{
+    CHECK(executesWithOutput("match jobs |> find (fun j -> j.id == 2) with\n"
+                             "| Some j -> print j.command\n"
+                             "| None -> print \"none\"",
+                             "vim"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_take")
+{
+    CHECK(executesWithOutput("let ids = jobs |> take 2 |> map _.id\nprint ids", "[1; 2]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.jobs_chained")
+{
+    CHECK(executesWithOutput(
+        "let cmds = jobs |> filter (_.state == \"Running\") |> map _.command\nprint cmds", "[sleep 100]"));
+}
+
+// =============================================================================
+// Data Source Wrapper Tests (Phase 6.1.3)
+// =============================================================================
+
+TEST_CASE("IRGenerator.DataSource.open_json_parses")
+{
+    CHECK(generatesIRSuccessfully("open-json \"test.json\" as { name: string; age: int }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_csv_parses")
+{
+    CHECK(generatesIRSuccessfully("open-csv \"test.csv\" as { name: string; age: int }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.from_json_parses")
+{
+    // Standalone from-json reads from stdin
+    CHECK(generatesIRSuccessfully("from-json as { name: string; age: int }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.from_csv_parses")
+{
+    CHECK(generatesIRSuccessfully("from-csv as { name: string; age: int }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_json_named_type")
+{
+    // Using a named type reference
+    CHECK(generatesIRSuccessfully(
+        "type Person = { name: string; age: int }\nopen-json \"test.json\" as Person"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_csv_named_type")
+{
+    CHECK(
+        generatesIRSuccessfully("type Record = { user: string; pid: int }\nopen-csv \"data.csv\" as Record"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_json_with_pipeline")
+{
+    // Data source followed by pipeline
+    CHECK(
+        generatesIRSuccessfully("open-json \"test.json\" as { name: string; age: int } |> length |> print"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_csv_with_pipeline")
+{
+    CHECK(generatesIRSuccessfully(
+        "open-csv \"data.csv\" as { name: string; score: int } |> map _.name |> print"));
+}
+
+TEST_CASE("IRGenerator.DataSource.from_json_with_pipeline")
+{
+    CHECK(generatesIRSuccessfully("from-json as { id: int; status: string } |> filter (_.id > 0) |> print"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_json_bool_field")
+{
+    CHECK(generatesIRSuccessfully("open-json \"test.json\" as { name: string; active: bool }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.open_json_float_field")
+{
+    CHECK(generatesIRSuccessfully("open-json \"test.json\" as { name: string; score: float }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.unknown_named_type_error")
+{
+    // Referencing a non-existent type should produce an error
+    CHECK(generatesIRWithError("open-json \"test.json\" as UnknownType", "Unknown type"));
+}
+
+TEST_CASE("IRGenerator.DataSource.pipe_chain_from_json")
+{
+    // Shell pipe chain ending with from-json
+    CHECK(generatesIRSuccessfully("echo hello | from-json as { name: string }"));
+}
+
+TEST_CASE("IRGenerator.DataSource.pipe_chain_from_csv")
+{
+    CHECK(generatesIRSuccessfully("echo hello | from-csv as { name: string; value: int }"));
 }

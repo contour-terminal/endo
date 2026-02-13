@@ -622,6 +622,29 @@ Token Lexer::consumeIdentifier(Token token)
         nextChar();
     }
 
+    // In F# mode, allow hyphen-letter continuation to form compound identifiers
+    // like "open-json", "from-csv", "is-even". Hyphen followed by digit/space/operator/EOF
+    // remains the minus operator. In shell mode, hyphen is already non-reserved.
+    if (_fsharpDepth > 0 && token == Token::Identifier && !_nextToken.literal.empty())
+    {
+        while (_currentChar == U'-')
+        {
+            auto const afterHyphen = _source->peekChar();
+            if ((afterHyphen >= U'a' && afterHyphen <= U'z') || (afterHyphen >= U'A' && afterHyphen <= U'Z'))
+            {
+                _nextToken.literal += '-';
+                nextChar(); // consume '-'
+                while (!eof() && reserved.find(_currentChar) == std::string_view::npos)
+                {
+                    _nextToken.literal += unicode::to_utf8(_currentChar);
+                    nextChar();
+                }
+            }
+            else
+                break;
+        }
+    }
+
     // Check for F# keywords only for regular identifiers (not DollarName)
     if (token == Token::Identifier)
     {

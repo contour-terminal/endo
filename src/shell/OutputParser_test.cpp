@@ -287,3 +287,74 @@ TEST_CASE("OutputParser.fields_empty_input")
     CHECK(listLength(result) == 0);
     CHECK(result->tag == 0); // Nil
 }
+
+// =============================================================================
+// Schema descriptor parsing tests (Phase 6.1.3)
+// =============================================================================
+
+TEST_CASE("OutputParser.buildVariantFromDesc.two_fields")
+{
+    auto variant = OutputParser::buildVariantFromDesc("name:string,age:int", 200, ParserConfig::Type::Json);
+    REQUIRE(variant.schema.size() == 2);
+    CHECK(variant.schema[0].name == "name");
+    CHECK(variant.schema[0].type == CoreVM::LiteralType::String);
+    CHECK(variant.schema[1].name == "age");
+    CHECK(variant.schema[1].type == CoreVM::LiteralType::Number);
+    CHECK(variant.assignedTypeId == 200);
+}
+
+TEST_CASE("OutputParser.buildVariantFromDesc.bool_and_float")
+{
+    auto variant =
+        OutputParser::buildVariantFromDesc("active:bool,score:float", 201, ParserConfig::Type::Fields);
+    REQUIRE(variant.schema.size() == 2);
+    CHECK(variant.schema[0].name == "active");
+    CHECK(variant.schema[0].type == CoreVM::LiteralType::Boolean);
+    CHECK(variant.schema[1].name == "score");
+    CHECK(variant.schema[1].type == CoreVM::LiteralType::Float);
+    CHECK(variant.parser.fieldSeparator == ",");
+}
+
+TEST_CASE("OutputParser.buildVariantFromDesc.single_field")
+{
+    auto variant = OutputParser::buildVariantFromDesc("id:int", 202, ParserConfig::Type::Json);
+    REQUIRE(variant.schema.size() == 1);
+    CHECK(variant.schema[0].name == "id");
+    CHECK(variant.schema[0].type == CoreVM::LiteralType::Number);
+}
+
+TEST_CASE("OutputParser.detectCsvHeader.matches")
+{
+    std::vector<OutputFieldSchema> schema = {
+        { "name", "", CoreVM::LiteralType::String },
+        { "age", "", CoreVM::LiteralType::Number },
+    };
+    CHECK(OutputParser::detectCsvHeader("name,age", ",", schema));
+}
+
+TEST_CASE("OutputParser.detectCsvHeader.case_insensitive")
+{
+    std::vector<OutputFieldSchema> schema = {
+        { "name", "", CoreVM::LiteralType::String },
+        { "age", "", CoreVM::LiteralType::Number },
+    };
+    CHECK(OutputParser::detectCsvHeader("Name,Age", ",", schema));
+}
+
+TEST_CASE("OutputParser.detectCsvHeader.no_match_data")
+{
+    std::vector<OutputFieldSchema> schema = {
+        { "name", "", CoreVM::LiteralType::String },
+        { "age", "", CoreVM::LiteralType::Number },
+    };
+    CHECK_FALSE(OutputParser::detectCsvHeader("Alice,30", ",", schema));
+}
+
+TEST_CASE("OutputParser.detectCsvHeader.wrong_count")
+{
+    std::vector<OutputFieldSchema> schema = {
+        { "name", "", CoreVM::LiteralType::String },
+        { "age", "", CoreVM::LiteralType::Number },
+    };
+    CHECK_FALSE(OutputParser::detectCsvHeader("name,age,extra", ",", schema));
+}

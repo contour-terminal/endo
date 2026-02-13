@@ -154,6 +154,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::OutputRedirect const& node) override;
     void visit(ast::ProgramCall const& node) override;
     void visit(ast::StructuredPipelineSourceExpr const& node) override;
+    void visit(ast::DataSourceExpr const& node) override;
     void visit(ast::SubstitutionExpr const& node) override;
     void visit(ast::WhileStmt const& node) override;
     void visit(ast::ForInStmt const& node) override;

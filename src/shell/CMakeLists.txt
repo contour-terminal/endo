@@ -59,6 +59,9 @@ add_library(endo-shell STATIC
     commands/FileInfoProvider.hpp
     commands/LsCommand.hpp
     commands/LsCommand.cpp
+    commands/JobProvider.hpp
+    commands/JobsCommand.hpp
+    commands/JobsCommand.cpp
     OutputDefinition.hpp
     OutputDefinitionRegistry.hpp
     OutputDefinitionRegistry.cpp

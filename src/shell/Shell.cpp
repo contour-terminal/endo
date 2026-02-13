@@ -15,6 +15,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -25,18 +26,19 @@
 #include <unordered_set>
 
 #include "Error.hpp"
-#include "platform/LinuxFileInfoProvider.hpp"
-#include "platform/LinuxProcessProvider.hpp"
-#include "commands/LsCommand.hpp"
 #include "OutputParser.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
 #include "Process.hpp"
 #include "ProcessGroup.hpp"
 #include "Prompt.hpp"
-#include "commands/PsCommand.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
+#include "commands/JobsCommand.hpp"
+#include "commands/LsCommand.hpp"
+#include "commands/PsCommand.hpp"
+#include "platform/LinuxFileInfoProvider.hpp"
+#include "platform/LinuxProcessProvider.hpp"
 #include <endo-language/ASTPrinter.hpp>
 #include <endo-language/IRGenerator.hpp>
 #include <endo-language/Lexer.hpp>
@@ -569,6 +571,12 @@ Shell::Shell(TTY& tty, Environment& env):
     };
     _fsharpState.recordTypeFields["FileInfo"] = {
         { "name", "str" }, { "size", "int" }, { "mode", "int" }, { "mtime", "int" }, { "isDir", "bool" },
+    };
+    _fsharpState.recordTypeFields["JobInfo"] = {
+        { "id", "int" },
+        { "state", "str" },
+        { "command", "str" },
+        { "pid", "int" },
     };
 
     // Load output definition files for structured pipelines
@@ -1743,6 +1751,40 @@ void Shell::registerBuiltinFunctions()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });
 
+    // F# structured_jobs builtin: returns list<JobInfo> from the shell's job table
+    _runtime.registerFunction("structured_jobs")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([this](CoreVM::Params& args) {
+            // Bridge JobTable to JobProvider interface inline
+            class ShellJobProvider final: public JobProvider
+            {
+              public:
+                explicit ShellJobProvider(JobTable const& table): _table(table) {}
+                [[nodiscard]] std::vector<JobEntry> listJobs() const override
+                {
+                    std::vector<JobEntry> result;
+                    for (auto const* job: _table.listJobs())
+                    {
+                        result.push_back(JobEntry {
+                            .id = job->id,
+                            .state = std::string(toString(job->state)),
+                            .command = job->command,
+                            .pid = static_cast<int64_t>(job->pgid),
+                        });
+                    }
+                    return result;
+                }
+
+              private:
+                JobTable const& _table;
+            };
+
+            ShellJobProvider provider(jobTable);
+            JobsCommand cmd(provider);
+            auto* result = cmd.execute(*_runner);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
     // Helper builtins for FileInfo mode/mtime formatting and testing
     _runtime.registerFunction("format_datetime")
         .param<CoreVM::CoreNumber>("epoch")
@@ -1863,6 +1905,211 @@ void Shell::registerBuiltinFunctions()
                 });
         }
     }
+
+    // --- Data source wrappers (open-json, open-csv, from-json, from-csv) ---
+
+    _runtime.registerFunction("open_json")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& filePath = args.getString(1);
+            auto const& schemaDesc = args.getString(2);
+            auto const typeId = static_cast<uint16_t>(args.getInt(3));
+
+            // Read file contents
+            std::string contents;
+            try
+            {
+                auto const path = std::filesystem::path(filePath);
+                if (std::filesystem::exists(path))
+                {
+                    auto ifs = std::ifstream(path);
+                    contents.assign(std::istreambuf_iterator<char>(ifs),
+                                    std::istreambuf_iterator<char>());
+                }
+            }
+            catch (...)
+            {
+            }
+
+            // Build variant from schema descriptor
+            auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Json);
+
+            // Auto-detect JSON format: first non-whitespace '[' → Array, else → Lines
+            auto const firstNonWs = contents.find_first_not_of(" \t\r\n");
+            if (firstNonWs != std::string::npos && contents[firstNonWs] == '[')
+                variant.parser.format = ParserConfig::Format::Array;
+            else
+                variant.parser.format = ParserConfig::Format::Lines;
+
+            auto* result = OutputParser::parseJson(*args.caller(), contents, variant);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    _runtime.registerFunction("open_csv")
+        .param<CoreVM::CoreString>("path")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& filePath = args.getString(1);
+            auto const& schemaDesc = args.getString(2);
+            auto const typeId = static_cast<uint16_t>(args.getInt(3));
+
+            // Read file contents
+            std::string contents;
+            try
+            {
+                auto const path = std::filesystem::path(filePath);
+                if (std::filesystem::exists(path))
+                {
+                    auto ifs = std::ifstream(path);
+                    contents.assign(std::istreambuf_iterator<char>(ifs),
+                                    std::istreambuf_iterator<char>());
+                }
+            }
+            catch (...)
+            {
+            }
+
+            auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Fields);
+
+            // Auto-detect CSV header: check if first line matches schema field names
+            if (!contents.empty())
+            {
+                auto const firstNewline = contents.find('\n');
+                auto const firstLine = contents.substr(0, firstNewline);
+                if (OutputParser::detectCsvHeader(firstLine, variant.parser.fieldSeparator, variant.schema))
+                {
+                    // Skip the header line
+                    if (firstNewline != std::string::npos)
+                        contents = contents.substr(firstNewline + 1);
+                    else
+                        contents.clear();
+                }
+            }
+
+            auto* result = OutputParser::parseFields(*args.caller(), contents, variant);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    _runtime.registerFunction("from_json")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& sourceCmd = args.getString(1);
+            auto const& schemaDesc = args.getString(2);
+            auto const typeId = static_cast<uint16_t>(args.getInt(3));
+
+            // Spawn source command and capture output
+            std::string output;
+            if (!sourceCmd.empty())
+            {
+                auto pipeResult = createPipe();
+                if (pipeResult.has_value())
+                {
+                    auto& pipe = pipeResult.value();
+                    SpawnConfig config;
+                    config.program = "/bin/sh";
+                    config.arguments = { "sh", "-c", std::string(sourceCmd) };
+                    config.stdinFd = _tty.inputFd();
+                    config.stdoutFd = pipe->writer();
+                    config.stderrFd = 2;
+
+                    auto pidResult = _processManager.spawn(config);
+                    pipe->closeWriter();
+
+                    char buf[4096];
+                    while (true)
+                    {
+                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        if (n <= 0)
+                            break;
+                        output.append(buf, static_cast<size_t>(n));
+                    }
+                    pipe->closeReader();
+                    if (pidResult.has_value())
+                        (void) _processManager.wait(*pidResult);
+                }
+            }
+
+            auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Json);
+
+            auto const firstNonWs = output.find_first_not_of(" \t\r\n");
+            if (firstNonWs != std::string::npos && output[firstNonWs] == '[')
+                variant.parser.format = ParserConfig::Format::Array;
+            else
+                variant.parser.format = ParserConfig::Format::Lines;
+
+            auto* result = OutputParser::parseJson(*args.caller(), output, variant);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    _runtime.registerFunction("from_csv")
+        .param<CoreVM::CoreString>("source_cmd")
+        .param<CoreVM::CoreString>("schema_desc")
+        .param<CoreVM::CoreNumber>("type_id")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& sourceCmd = args.getString(1);
+            auto const& schemaDesc = args.getString(2);
+            auto const typeId = static_cast<uint16_t>(args.getInt(3));
+
+            // Spawn source command and capture output
+            std::string output;
+            if (!sourceCmd.empty())
+            {
+                auto pipeResult = createPipe();
+                if (pipeResult.has_value())
+                {
+                    auto& pipe = pipeResult.value();
+                    SpawnConfig config;
+                    config.program = "/bin/sh";
+                    config.arguments = { "sh", "-c", std::string(sourceCmd) };
+                    config.stdinFd = _tty.inputFd();
+                    config.stdoutFd = pipe->writer();
+                    config.stderrFd = 2;
+
+                    auto pidResult = _processManager.spawn(config);
+                    pipe->closeWriter();
+
+                    char buf[4096];
+                    while (true)
+                    {
+                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        if (n <= 0)
+                            break;
+                        output.append(buf, static_cast<size_t>(n));
+                    }
+                    pipe->closeReader();
+                    if (pidResult.has_value())
+                        (void) _processManager.wait(*pidResult);
+                }
+            }
+
+            auto variant = OutputParser::buildVariantFromDesc(schemaDesc, typeId, ParserConfig::Type::Fields);
+
+            // Auto-detect CSV header
+            if (!output.empty())
+            {
+                auto const firstNewline = output.find('\n');
+                auto const firstLine = output.substr(0, firstNewline);
+                if (OutputParser::detectCsvHeader(firstLine, variant.parser.fieldSeparator, variant.schema))
+                {
+                    if (firstNewline != std::string::npos)
+                        output = output.substr(firstNewline + 1);
+                    else
+                        output.clear();
+                }
+            }
+
+            auto* result = OutputParser::parseFields(*args.caller(), output, variant);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
 
     // clang-format on
 }

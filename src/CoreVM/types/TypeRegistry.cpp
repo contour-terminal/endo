@@ -104,8 +104,22 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(fileInfoType));
 
+    // JobInfo: Product type with 4 fields for background job information
+    auto jobInfoType = std::make_unique<TypeDescriptor>();
+    jobInfoType->kind = TypeKind::Product;
+    jobInfoType->id = BuiltinTypeId::JobInfo;
+    jobInfoType->name = "JobInfo";
+    jobInfoType->slotCount = 4;
+    jobInfoType->fields = {
+        { "id", 0, LiteralType::Number },
+        { "state", 1, LiteralType::String },
+        { "command", 2, LiteralType::String },
+        { "pid", 3, LiteralType::Number },
+    };
+    addType(std::move(jobInfoType));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::FileInfo + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::JobInfo + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

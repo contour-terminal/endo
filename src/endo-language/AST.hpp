@@ -630,6 +630,41 @@ struct StructuredPipelineSourceExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Field definition with optional default value for data source type annotation.
+struct DataSourceFieldDef
+{
+    std::string name;                   ///< Field name
+    TypePtr type;                       ///< Field type annotation
+    std::unique_ptr<Expr> defaultValue; ///< Optional default (literal) for missing fields
+};
+
+/// Data source expression: open-json/open-csv/from-json/from-csv with 'as' type annotation.
+///
+/// Parses arbitrary JSON/CSV data into typed records for pipeline use.
+/// Examples:
+///   open-json "users.json" as { name: string; age: int }
+///   curl api/users | from-json as { name: string; age: int } |> filter (_.age > 25)
+struct DataSourceExpr final: public Expr
+{
+    enum class Kind
+    {
+        OpenJson, ///< Read JSON from file
+        OpenCsv,  ///< Read CSV from file
+        FromJson, ///< Parse JSON from piped input
+        FromCsv,  ///< Parse CSV from piped input
+    };
+
+    Kind kind;
+    std::unique_ptr<Expr> filePath;        ///< For open-*: file path expression
+    std::unique_ptr<Statement> pipeSource; ///< For from-*: shell commands piped in (may be nullptr for stdin)
+
+    // Type specification: EITHER named type OR inline fields (exactly one is populated)
+    std::string typeName;                         ///< Non-empty if referencing existing type (e.g., "Person")
+    std::vector<DataSourceFieldDef> inlineFields; ///< Non-empty if inline definition
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Process substitution: `<(command)` or `>(command)`
 ///
 /// This is a bashism, but it's useful for endo.

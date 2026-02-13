@@ -4,6 +4,7 @@
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
+#include <algorithm>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -248,6 +249,82 @@ CoreVM::TypedObject* OutputParser::parseFields(CoreVM::Runner& runner,
         list = createCons(runner, *it, list);
 
     return list;
+}
+
+OutputVariant OutputParser::buildVariantFromDesc(std::string_view schemaDesc,
+                                                 uint16_t typeId,
+                                                 ParserConfig::Type parserType)
+{
+    OutputVariant variant;
+    variant.assignedTypeId = typeId;
+    variant.parser.type = parserType;
+    variant.parser.format = ParserConfig::Format::Lines; // default, caller may override
+
+    // Parse "name:type,age:int,active:bool" format
+    size_t pos = 0;
+    while (pos < schemaDesc.size())
+    {
+        auto const colonPos = schemaDesc.find(':', pos);
+        if (colonPos == std::string_view::npos)
+            break;
+
+        auto const name = std::string(schemaDesc.substr(pos, colonPos - pos));
+        auto const nextComma = schemaDesc.find(',', colonPos + 1);
+        auto const typeStr = schemaDesc.substr(
+            colonPos + 1,
+            nextComma == std::string_view::npos ? std::string_view::npos : nextComma - colonPos - 1);
+
+        auto vmType = CoreVM::LiteralType::String;
+        if (typeStr == "int")
+            vmType = CoreVM::LiteralType::Number;
+        else if (typeStr == "float")
+            vmType = CoreVM::LiteralType::Float;
+        else if (typeStr == "bool")
+            vmType = CoreVM::LiteralType::Boolean;
+
+        variant.schema.push_back(OutputFieldSchema { .name = name, .sourceKey = {}, .type = vmType });
+
+        if (nextComma == std::string_view::npos)
+            break;
+        pos = nextComma + 1;
+    }
+
+    // For CSV, set comma as default field separator
+    if (parserType == ParserConfig::Type::Fields)
+        variant.parser.fieldSeparator = ",";
+
+    return variant;
+}
+
+bool OutputParser::detectCsvHeader(std::string_view firstLine,
+                                   std::string_view separator,
+                                   std::vector<OutputFieldSchema> const& schema)
+{
+    // Split the first line by separator
+    auto const fields = splitFields(firstLine, separator, std::nullopt);
+    if (fields.size() != schema.size())
+        return false;
+
+    // Check if each field matches a schema field name (case-insensitive)
+    size_t matches = 0;
+    for (size_t i = 0; i < fields.size() && i < schema.size(); ++i)
+    {
+        auto fieldLower = fields[i];
+        auto schemaLower = schema[i].name;
+        // Simple case-insensitive compare
+        std::transform(fieldLower.begin(), fieldLower.end(), fieldLower.begin(), ::tolower);
+        std::transform(schemaLower.begin(), schemaLower.end(), schemaLower.begin(), ::tolower);
+        // Trim whitespace from field
+        while (!fieldLower.empty() && fieldLower.front() == ' ')
+            fieldLower.erase(fieldLower.begin());
+        while (!fieldLower.empty() && fieldLower.back() == ' ')
+            fieldLower.pop_back();
+        if (fieldLower == schemaLower)
+            ++matches;
+    }
+
+    // Consider it a header if all fields match
+    return matches == schema.size();
 }
 
 } // namespace endo

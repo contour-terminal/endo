@@ -2471,7 +2471,7 @@ class IRProgram
     std::vector<std::unique_ptr<IRHandler>> _handlers;
     std::vector<CustomProductType> _customProductTypes;
     std::vector<CustomSumType> _customSumTypes;
-    uint16_t _nextCustomTypeId = BuiltinTypeId::FileInfo + 1; ///< Next type ID for custom types
+    uint16_t _nextCustomTypeId = BuiltinTypeId::JobInfo + 1; ///< Next type ID for custom types
 
     friend class IRBuilder;
 };

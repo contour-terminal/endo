@@ -342,6 +342,22 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["FileInfo"] = std::move(fileInfoType);
     }
 
+    // Pre-register JobInfo record type for the jobs builtin.
+    {
+        RecordTypeInfo jobInfoType;
+        jobInfoType.typeId = CoreVM::BuiltinTypeId::JobInfo;
+        jobInfoType.name = "JobInfo";
+        jobInfoType.fields = {
+            { "id", 0, CoreVM::LiteralType::Number },
+            { "state", 1, CoreVM::LiteralType::String },
+            { "command", 2, CoreVM::LiteralType::String },
+            { "pid", 3, CoreVM::LiteralType::Number },
+        };
+        for (auto const& f: jobInfoType.fields)
+            jobInfoType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["JobInfo"] = std::move(jobInfoType);
+    }
+
     // Pre-register output definition record types from persistent state.
     if (persistentState)
     {
@@ -2114,6 +2130,181 @@ void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
     codegen(node.command.get());
 }
 
+void IRGenerator::visit(ast::DataSourceExpr const& node)
+{
+    TRACE_SCOPE("visit(DataSourceExpr)");
+
+    // 1. Resolve or register the record type
+    uint16_t typeId = 0;
+    std::string schemaDesc;
+
+    if (!node.typeName.empty())
+    {
+        // Named type reference — look up in _recordTypes
+        auto const* recInfo = lookupRecordType(node.typeName);
+        if (!recInfo)
+        {
+            reportTypeError("Unknown type '{}' in data source 'as' annotation", node.typeName);
+            return;
+        }
+        typeId = recInfo->typeId;
+
+        // Build schema descriptor from registered fields
+        for (size_t i = 0; i < recInfo->fields.size(); ++i)
+        {
+            if (i > 0)
+                schemaDesc += ',';
+            auto const& f = recInfo->fields[i];
+            schemaDesc += f.name;
+            schemaDesc += ':';
+            switch (f.type)
+            {
+                case CoreVM::LiteralType::String: schemaDesc += "string"; break;
+                case CoreVM::LiteralType::Number: schemaDesc += "int"; break;
+                case CoreVM::LiteralType::Float: schemaDesc += "float"; break;
+                case CoreVM::LiteralType::Boolean: schemaDesc += "bool"; break;
+                default: schemaDesc += "string"; break;
+            }
+        }
+    }
+    else
+    {
+        // Inline field definition — register a new type
+        typeId = _builder.program()->allocateCustomTypeId();
+
+        std::vector<CoreVM::FieldInfo> fields;
+        std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes;
+
+        for (uint8_t i = 0; i < node.inlineFields.size(); ++i)
+        {
+            auto const& field = node.inlineFields[i];
+            auto vmType = CoreVM::LiteralType::String; // default
+            if (auto const* prim = std::get_if<PrimitiveTypeNode>(&field.type->node))
+            {
+                switch (prim->kind)
+                {
+                    case PrimitiveType::Int: vmType = CoreVM::LiteralType::Number; break;
+                    case PrimitiveType::Float: vmType = CoreVM::LiteralType::Float; break;
+                    case PrimitiveType::Str: vmType = CoreVM::LiteralType::String; break;
+                    case PrimitiveType::Bool: vmType = CoreVM::LiteralType::Boolean; break;
+                    case PrimitiveType::Unit: vmType = CoreVM::LiteralType::Void; break;
+                }
+            }
+            fields.push_back({ field.name, i, vmType });
+            fieldTypes[field.name] = vmType;
+
+            // Build schema descriptor
+            if (i > 0)
+                schemaDesc += ',';
+            schemaDesc += field.name;
+            schemaDesc += ':';
+            switch (vmType)
+            {
+                case CoreVM::LiteralType::String: schemaDesc += "string"; break;
+                case CoreVM::LiteralType::Number: schemaDesc += "int"; break;
+                case CoreVM::LiteralType::Float: schemaDesc += "float"; break;
+                case CoreVM::LiteralType::Boolean: schemaDesc += "bool"; break;
+                default: schemaDesc += "string"; break;
+            }
+        }
+
+        // Generate an anonymous type name
+        auto const anonymousTypeName = std::format("__datasource_{}", typeId);
+
+        // Store in the IR generator's record type table
+        RecordTypeInfo info;
+        info.typeId = typeId;
+        info.name = anonymousTypeName;
+        info.fields = fields;
+        info.fieldTypes = std::move(fieldTypes);
+        _recordTypes[anonymousTypeName] = std::move(info);
+
+        // Register as a custom product type
+        CoreVM::IRProgram::CustomProductType customType;
+        customType.name = anonymousTypeName;
+        customType.fields = fields;
+        customType.assignedId = typeId;
+        _builder.program()->addCustomProductType(std::move(customType));
+    }
+
+    // 2. Determine callback name based on kind
+    std::string callbackName;
+    switch (node.kind)
+    {
+        case ast::DataSourceExpr::Kind::OpenJson: callbackName = "open_json"; break;
+        case ast::DataSourceExpr::Kind::OpenCsv: callbackName = "open_csv"; break;
+        case ast::DataSourceExpr::Kind::FromJson: callbackName = "from_json"; break;
+        case ast::DataSourceExpr::Kind::FromCsv: callbackName = "from_csv"; break;
+    }
+
+    // 3. Build callback arguments
+    auto const sig = callbackName + "(SSI)I";
+    auto* cb = findCallback(sig);
+    if (!cb)
+    {
+        reportTypeError("Data source builtin '{}' not found", callbackName);
+        return;
+    }
+
+    // First argument: file path (for open-*) or reconstructed source command (for from-*)
+    CoreVM::Value* firstArg = nullptr;
+    if (node.kind == ast::DataSourceExpr::Kind::OpenJson || node.kind == ast::DataSourceExpr::Kind::OpenCsv)
+    {
+        if (node.filePath)
+        {
+            codegen(node.filePath.get());
+            firstArg = _result;
+        }
+        else
+        {
+            firstArg = _builder.get("");
+        }
+    }
+    else
+    {
+        // For from-*: reconstruct the source command string from the pipe source AST
+        std::string sourceCmdStr;
+        if (node.pipeSource)
+        {
+            if (auto const* pipeline = dynamic_cast<ast::CallPipeline const*>(node.pipeSource.get()))
+            {
+                for (size_t i = 0; i < pipeline->calls.size(); ++i)
+                {
+                    if (i > 0)
+                        sourceCmdStr += " | ";
+                    sourceCmdStr += pipeline->calls[i]->program;
+                    for (auto const& param: pipeline->calls[i]->parameters)
+                        if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(param.get()))
+                        {
+                            sourceCmdStr += ' ';
+                            sourceCmdStr += lit->value;
+                        }
+                }
+            }
+            else if (auto const* call = dynamic_cast<ast::ProgramCall const*>(node.pipeSource.get()))
+            {
+                sourceCmdStr = call->program;
+                for (auto const& param: call->parameters)
+                    if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(param.get()))
+                    {
+                        sourceCmdStr += ' ';
+                        sourceCmdStr += lit->value;
+                    }
+            }
+        }
+        firstArg = _builder.get(sourceCmdStr);
+    }
+
+    auto* schemaArg = _builder.get(schemaDesc);
+    auto* typeIdArg = _builder.get(CoreVM::CoreNumber(typeId));
+
+    // 4. Emit callback call
+    _result = _builder.createCallFunction(
+        _builder.getBuiltinFunction(*cb), { firstArg, schemaArg, typeIdArg }, callbackName);
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    annotateListElementTypeId(_result, typeId);
+}
+
 void IRGenerator::visit(ast::SubstitutionExpr const& node)
 {
     // Command substitution: $(command) or `command`
@@ -3126,6 +3317,26 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "ps");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
         annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::ProcessInfo);
+        return true;
+    }
+
+    // jobs: zero-arg builtin returning list<JobInfo>
+    if (name == "jobs")
+    {
+        if (!argExprs.empty())
+        {
+            reportTypeError("jobs takes no arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* callback = findCallback("structured_jobs()I");
+        if (!callback)
+        {
+            reportTypeError("structured_jobs builtin not registered");
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "jobs");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::JobInfo);
         return true;
     }
 
@@ -5535,7 +5746,8 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             return;
         }
         // Zero-argument builtins (e.g., ps, ls) invoked as bare identifiers in F# context
-        if ((node.name == "ps" || node.name == "ls") && tryGenerateBuiltinCall(node.name, {}))
+        if ((node.name == "ps" || node.name == "ls" || node.name == "jobs")
+            && tryGenerateBuiltinCall(node.name, {}))
             return;
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
         return;
