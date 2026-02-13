@@ -327,6 +327,21 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["ProcessInfo"] = std::move(processInfoType);
     }
 
+    // Pre-register FileInfo record type for the ls builtin.
+    {
+        RecordTypeInfo fileInfoType;
+        fileInfoType.typeId = CoreVM::BuiltinTypeId::FileInfo;
+        fileInfoType.name = "FileInfo";
+        fileInfoType.fields = {
+            { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Number },
+            { "mode", 2, CoreVM::LiteralType::Number },   { "mtime", 3, CoreVM::LiteralType::Number },
+            { "isDir", 4, CoreVM::LiteralType::Boolean },
+        };
+        for (auto const& f: fileInfoType.fields)
+            fileInfoType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["FileInfo"] = std::move(fileInfoType);
+    }
+
     // Pre-register output definition record types from persistent state.
     if (persistentState)
     {
@@ -3114,6 +3129,114 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // ls: zero-or-one-arg builtin returning list<FileInfo>
+    if (name == "ls")
+    {
+        if (argExprs.size() > 1)
+        {
+            reportTypeError("ls takes 0 or 1 arguments, got {}", argExprs.size());
+            return true;
+        }
+        auto* callback = findCallback("structured_ls(S)I");
+        if (!callback)
+        {
+            reportTypeError("structured_ls builtin not registered");
+            return true;
+        }
+        CoreVM::Value* pathArg = nullptr;
+        if (argExprs.empty())
+        {
+            pathArg = _builder.get(".");
+        }
+        else
+        {
+            pathArg = codegen(argExprs[0]);
+            if (!pathArg)
+            {
+                reportTypeError("Failed to evaluate ls path argument");
+                return true;
+            }
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { pathArg }, "ls");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::FileInfo);
+        return true;
+    }
+
+    // formatDateTime: int -> string (format epoch seconds as UTC datetime string)
+    if (name == "formatDateTime")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("formatDateTime takes 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg = codegen(argExprs[0]);
+        if (!arg)
+        {
+            reportTypeError("Failed to evaluate formatDateTime argument");
+            return true;
+        }
+        auto* callback = findCallback("format_datetime(I)S");
+        if (!callback)
+        {
+            reportTypeError("format_datetime builtin not registered");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatDateTime");
+        return true;
+    }
+
+    // formatMode: int -> string (format permission bits as rwx string)
+    if (name == "formatMode")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("formatMode takes 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg = codegen(argExprs[0]);
+        if (!arg)
+        {
+            reportTypeError("Failed to evaluate formatMode argument");
+            return true;
+        }
+        auto* callback = findCallback("format_mode(I)S");
+        if (!callback)
+        {
+            reportTypeError("format_mode builtin not registered");
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatMode");
+        return true;
+    }
+
+    // isReadable/isWritable/isExecutable: int -> bool (test permission bits)
+    if (name == "isReadable" || name == "isWritable" || name == "isExecutable")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("{} takes 1 argument, got {}", name, argExprs.size());
+            return true;
+        }
+        auto* arg = codegen(argExprs[0]);
+        if (!arg)
+        {
+            reportTypeError("Failed to evaluate {} argument", name);
+            return true;
+        }
+        auto const callbackSig = std::format("mode_{}(I)B", name);
+        auto* callback = findCallback(callbackSig);
+        if (!callback)
+        {
+            reportTypeError("{} builtin not registered", name);
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, name);
+        return true;
+    }
+
     return false;
 }
 
@@ -5411,8 +5534,8 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(node.name);
             return;
         }
-        // Zero-argument builtins (e.g., ps) invoked as bare identifiers in F# context
-        if (node.name == "ps" && tryGenerateBuiltinCall(node.name, {}))
+        // Zero-argument builtins (e.g., ps, ls) invoked as bare identifiers in F# context
+        if ((node.name == "ps" || node.name == "ls") && tryGenerateBuiltinCall(node.name, {}))
             return;
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));
         return;

@@ -5822,6 +5822,303 @@ TEST_CASE("IRGenerator.FSharp.ps.head_after_filter")
 }
 
 // =============================================================================
+// ls (FileInfo) Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.ls.basic_call")
+{
+    // ls returns a list — check length (3 mock files)
+    CHECK(executesWithOutput("let files = ls\nprint (length files)", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.with_path_argument")
+{
+    // ls with explicit path argument
+    CHECK(executesWithOutput("let files = ls \"/tmp\"\nprint (length files)", "3"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.field_access_name")
+{
+    // Extract name from first element via head + match
+    CHECK(executesWithOutput("match head ls with\n"
+                             "| Some f -> print f.name\n"
+                             "| None -> print \"empty\"",
+                             "docs"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.field_access_size")
+{
+    // Map to extract sizes from all files
+    CHECK(executesWithOutput("let sizes = ls |> map (fun f -> f.size)\n"
+                             "print sizes",
+                             "[4096; 42; 256]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.field_access_isDir")
+{
+    // Extract isDir from first element (docs is a directory)
+    CHECK(executesWithOutput("match head ls with\n"
+                             "| Some f -> print f.isDir\n"
+                             "| None -> print \"empty\"",
+                             "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.field_access_mode")
+{
+    // Map to extract mode values
+    CHECK(executesWithOutput("let modes = ls |> map (fun f -> f.mode)\n"
+                             "print modes",
+                             "[493; 420; 493]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.field_access_mtime")
+{
+    // Map to extract mtime values
+    CHECK(executesWithOutput("let mtimes = ls |> map (fun f -> f.mtime)\n"
+                             "print mtimes",
+                             "[1700000000; 1700001000; 1700002000]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.filter_dirs")
+{
+    // Filter to only directories — should get 1 (docs)
+    CHECK(executesWithOutput("let dirs = ls |> filter (fun f -> f.isDir == true)\n"
+                             "print (length dirs)",
+                             "1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.filter_files")
+{
+    // Filter to only files (not dirs) — should get 2
+    CHECK(executesWithOutput("let files = ls |> filter (fun f -> f.isDir == false)\n"
+                             "print (length files)",
+                             "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.map_name")
+{
+    // Map to extract names from all files
+    CHECK(executesWithOutput("let names = ls |> map (fun f -> f.name)\n"
+                             "print names",
+                             "[docs; hello.txt; script.sh]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.filter_and_map")
+{
+    // Pipeline: filter by size > 100 then map to name
+    CHECK(executesWithOutput("let names = ls |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
+                             "print names",
+                             "[docs; script.sh]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.sortBy_size")
+{
+    // sortBy size ascending: 42(hello.txt), 256(script.sh), 4096(docs)
+    CHECK(executesWithOutput("print (ls |> sortBy (fun f -> f.size) |> map (fun f -> f.name))",
+                             "[hello.txt; script.sh; docs]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.fold_size_sum")
+{
+    // fold to sum all sizes: 4096 + 42 + 256 = 4394
+    CHECK(executesWithOutput("print (ls |> fold 0 (fun acc f -> acc + f.size))", "4394"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.find_by_name")
+{
+    // find the file named "hello.txt", print its size
+    CHECK(executesWithOutput("match ls |> find (fun f -> f.name == \"hello.txt\") with\n"
+                             "| Some f -> print f.size\n"
+                             "| None -> print \"none\"",
+                             "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.find_none")
+{
+    // find a file with size > 10000 — should be None
+    CHECK(executesWithOutput("match ls |> find (fun f -> f.size > 10000) with\n"
+                             "| Some f -> print f.name\n"
+                             "| None -> print \"none\"",
+                             "none"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.exists_large_file")
+{
+    // check if any file has size > 1000
+    CHECK(executesWithOutput("print (ls |> exists (fun f -> f.size > 1000))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.forall_positive_size")
+{
+    // all sizes are > 0
+    CHECK(executesWithOutput("print (ls |> forall (fun f -> f.size > 0))", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.forall_large_size")
+{
+    // not all sizes are > 100 (hello.txt has 42)
+    CHECK(executesWithOutput("print (ls |> forall (fun f -> f.size > 100))", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.take_2")
+{
+    // take first 2 files, map to names
+    CHECK(executesWithOutput("print (ls |> take 2 |> map (fun f -> f.name))", "[docs; hello.txt]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.drop_1")
+{
+    // drop first file, map to names
+    CHECK(executesWithOutput("print (ls |> drop 1 |> map (fun f -> f.name))", "[hello.txt; script.sh]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.reverse")
+{
+    // reverse the list and map to names
+    CHECK(
+        executesWithOutput("print (ls |> reverse |> map (fun f -> f.name))", "[script.sh; hello.txt; docs]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.head_after_filter")
+{
+    // head of filtered list (size < 300) — first match is hello.txt (size=42)
+    CHECK(executesWithOutput("match ls |> filter (fun f -> f.size < 300) |> head with\n"
+                             "| Some f -> print f.name\n"
+                             "| None -> print \"none\"",
+                             "hello.txt"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.isEmpty_after_filter_true")
+{
+    // no file has size > 10000
+    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size > 10000) |> isEmpty)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.isEmpty_after_filter_false")
+{
+    // all files have size > 0
+    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size > 0) |> isEmpty)", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.length_after_filter")
+{
+    // 2 files with size <= 256 (hello.txt=42, script.sh=256)
+    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size <= 256) |> length)", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.pipeline_with_let")
+{
+    // Store ls result, then pipeline
+    CHECK(
+        executesWithOutput("let files = ls\n"
+                           "let bigFiles = files |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
+                           "print bigFiles",
+                           "[docs; script.sh]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.filter_sortBy_map")
+{
+    // 3-stage pipeline: filter size > 0, sortBy size, map to name
+    CHECK(executesWithOutput(
+        "print (ls |> filter (fun f -> f.size > 0) |> sortBy (fun f -> f.size) |> map (fun f -> f.name))",
+        "[hello.txt; script.sh; docs]"));
+}
+
+// --- formatMode helper tests ---
+
+TEST_CASE("IRGenerator.FSharp.formatMode.rwxr_xr_x")
+{
+    // 0755 = 493 decimal → "rwxr-xr-x"
+    CHECK(executesWithOutput("print (formatMode 493)", "rwxr-xr-x"));
+}
+
+TEST_CASE("IRGenerator.FSharp.formatMode.rw_r__r__")
+{
+    // 0644 = 420 decimal → "rw-r--r--"
+    CHECK(executesWithOutput("print (formatMode 420)", "rw-r--r--"));
+}
+
+TEST_CASE("IRGenerator.FSharp.formatMode.no_permissions")
+{
+    // 0000 → "---------"
+    CHECK(executesWithOutput("print (formatMode 0)", "---------"));
+}
+
+TEST_CASE("IRGenerator.FSharp.formatMode.all_permissions")
+{
+    // 0777 = 511 decimal → "rwxrwxrwx"
+    CHECK(executesWithOutput("print (formatMode 511)", "rwxrwxrwx"));
+}
+
+// --- formatDateTime helper tests ---
+
+TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_1700000000")
+{
+    // 1700000000 = 2023-11-14 22:13:20 UTC
+    CHECK(executesWithOutput("print (formatDateTime 1700000000)", "2023-11-14 22:13:20"));
+}
+
+TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_zero")
+{
+    // 0 = 1970-01-01 00:00:00 UTC
+    CHECK(executesWithOutput("print (formatDateTime 0)", "1970-01-01 00:00:00"));
+}
+
+// --- isReadable/isWritable/isExecutable helper tests ---
+
+TEST_CASE("IRGenerator.FSharp.isReadable.true")
+{
+    // 0644 = 420 — has read bits
+    CHECK(executesWithOutput("print (isReadable 420)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.isReadable.false")
+{
+    // 0000 — no permissions
+    CHECK(executesWithOutput("print (isReadable 0)", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.isWritable.true")
+{
+    // 0644 = 420 — has write bits
+    CHECK(executesWithOutput("print (isWritable 420)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.isWritable.false")
+{
+    // 0444 = 292 — read-only
+    CHECK(executesWithOutput("print (isWritable 292)", "false"));
+}
+
+TEST_CASE("IRGenerator.FSharp.isExecutable.true")
+{
+    // 0755 = 493 — has execute bits
+    CHECK(executesWithOutput("print (isExecutable 493)", "true"));
+}
+
+TEST_CASE("IRGenerator.FSharp.isExecutable.false")
+{
+    // 0644 = 420 — no execute bits
+    CHECK(executesWithOutput("print (isExecutable 420)", "false"));
+}
+
+// --- Combined ls + helpers tests ---
+
+TEST_CASE("IRGenerator.FSharp.ls.map_formatMode")
+{
+    // Map over ls results to format mode as rwx strings
+    CHECK(executesWithOutput("print (ls |> map (fun f -> formatMode f.mode))",
+                             "[rwxr-xr-x; rw-r--r--; rwxr-xr-x]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.ls.filter_executable")
+{
+    // Filter files where mode is executable
+    CHECK(executesWithOutput("print (ls |> filter (fun f -> isExecutable f.mode) |> map (fun f -> f.name))",
+                             "[docs; script.sh]"));
+}
+
+// =============================================================================
 // Structured Pipeline Tests (Output Recognition Files)
 // =============================================================================
 

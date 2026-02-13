@@ -25,7 +25,9 @@
 #include <unordered_set>
 
 #include "Error.hpp"
+#include "LinuxFileInfoProvider.hpp"
 #include "LinuxProcessProvider.hpp"
+#include "LsCommand.hpp"
 #include "OutputParser.hpp"
 #include "Pipe.hpp"
 #include "Platform.hpp"
@@ -564,6 +566,9 @@ Shell::Shell(TTY& tty, Environment& env):
     _fsharpState.recordTypeFields["ProcessInfo"] = {
         { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
+    _fsharpState.recordTypeFields["FileInfo"] = {
+        { "name", "str" }, { "size", "int" }, { "mode", "int" }, { "mtime", "int" }, { "isDir", "bool" },
     };
 
     // Load output definition files for structured pipelines
@@ -1724,6 +1729,74 @@ void Shell::registerBuiltinFunctions()
             PsCommand cmd(provider);
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    // F# structured_ls builtin: returns list<FileInfo> from platform file info provider
+    _runtime.registerFunction("structured_ls")
+        .param<CoreVM::CoreString>("path")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([this](CoreVM::Params& args) {
+            auto const path = args.getString(1);
+            LinuxFileInfoProvider provider;
+            LsCommand cmd(provider, std::string(path));
+            auto* result = cmd.execute(*_runner);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    // Helper builtins for FileInfo mode/mtime formatting and testing
+    _runtime.registerFunction("format_datetime")
+        .param<CoreVM::CoreNumber>("epoch")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const epoch = static_cast<time_t>(args.getInt(1));
+            struct tm tm {};
+            gmtime_r(&epoch, &tm);
+            auto result = std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
+                                      tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                                      tm.tm_hour, tm.tm_min, tm.tm_sec);
+            args.setResult(args.caller()->newString(result));
+        });
+
+    _runtime.registerFunction("format_mode")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            std::string result;
+            result += (mode & 0400) ? 'r' : '-';
+            result += (mode & 0200) ? 'w' : '-';
+            result += (mode & 0100) ? 'x' : '-';
+            result += (mode & 0040) ? 'r' : '-';
+            result += (mode & 0020) ? 'w' : '-';
+            result += (mode & 0010) ? 'x' : '-';
+            result += (mode & 0004) ? 'r' : '-';
+            result += (mode & 0002) ? 'w' : '-';
+            result += (mode & 0001) ? 'x' : '-';
+            args.setResult(args.caller()->newString(result));
+        });
+
+    _runtime.registerFunction("mode_isReadable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0444) != 0 ? 1 : 0));
+        });
+
+    _runtime.registerFunction("mode_isWritable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0222) != 0 ? 1 : 0));
+        });
+
+    _runtime.registerFunction("mode_isExecutable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0111) != 0 ? 1 : 0));
         });
 
     // Register structured command callbacks for output definitions

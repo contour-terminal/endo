@@ -85,14 +85,27 @@ void TypeRegistry::registerBuiltins()
         { "pid", 0, LiteralType::Number },
         { "ppid", 1, LiteralType::Number },
         { "user", 2, LiteralType::String },
-        { "cpu", 3, LiteralType::Number },  // stored as bit_cast<uint64_t>(double)
+        { "cpu", 3, LiteralType::Number }, // stored as bit_cast<uint64_t>(double)
         { "mem", 4, LiteralType::Number },
         { "command", 5, LiteralType::String },
     };
     addType(std::move(processInfoType));
 
+    // FileInfo: Product type with 5 fields for file/directory information
+    auto fileInfoType = std::make_unique<TypeDescriptor>();
+    fileInfoType->kind = TypeKind::Product;
+    fileInfoType->id = BuiltinTypeId::FileInfo;
+    fileInfoType->name = "FileInfo";
+    fileInfoType->slotCount = 5;
+    fileInfoType->fields = {
+        { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Number },
+        { "mode", 2, LiteralType::Number },   { "mtime", 3, LiteralType::Number },
+        { "isDir", 4, LiteralType::Boolean },
+    };
+    addType(std::move(fileInfoType));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::ProcessInfo + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::FileInfo + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

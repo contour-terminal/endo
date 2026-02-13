@@ -518,6 +518,112 @@ TestRuntime::TestRuntime()
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
 
+    // Register structured_ls mock: returns 3 deterministic test files
+    runtime.registerFunction("structured_ls")
+        .param<CoreVM::CoreString>("path")
+        .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
+        .bind([](CoreVM::Params& args) {
+            auto* runner = args.caller();
+
+            // Mock file data for deterministic testing
+            struct MockFile
+            {
+                char const* name;
+                int64_t size;
+                int64_t mode;
+                int64_t mtime;
+                bool isDir;
+            };
+            constexpr MockFile files[] = {
+                { "docs", 4096, 0755, 1700000000, true },
+                { "hello.txt", 42, 0644, 1700001000, false },
+                { "script.sh", 256, 0755, 1700002000, false },
+            };
+
+            // Build cons-cell list right-to-left
+            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
+            list->tag = 0; // Nil
+
+            for (int i = 2; i >= 0; --i)
+            {
+                auto const& f = files[i];
+                auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
+                record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
+                record->setSlot(1, static_cast<uint64_t>(f.size));
+                record->setSlot(2, static_cast<uint64_t>(f.mode));
+                record->setSlot(3, static_cast<uint64_t>(f.mtime));
+                record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
+
+                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
+                cons->tag = 1; // Cons
+                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
+                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
+                list = cons;
+            }
+
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        });
+
+    // Register helper builtins for FileInfo mode/mtime formatting and testing
+    runtime.registerFunction("format_datetime")
+        .param<CoreVM::CoreNumber>("epoch")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const epoch = static_cast<time_t>(args.getInt(1));
+            struct tm tm {};
+            gmtime_r(&epoch, &tm);
+            auto result = std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
+                                      tm.tm_year + 1900,
+                                      tm.tm_mon + 1,
+                                      tm.tm_mday,
+                                      tm.tm_hour,
+                                      tm.tm_min,
+                                      tm.tm_sec);
+            args.setResult(args.caller()->newString(result));
+        });
+
+    runtime.registerFunction("format_mode")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::String)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            std::string result;
+            result += (mode & 0400) ? 'r' : '-';
+            result += (mode & 0200) ? 'w' : '-';
+            result += (mode & 0100) ? 'x' : '-';
+            result += (mode & 0040) ? 'r' : '-';
+            result += (mode & 0020) ? 'w' : '-';
+            result += (mode & 0010) ? 'x' : '-';
+            result += (mode & 0004) ? 'r' : '-';
+            result += (mode & 0002) ? 'w' : '-';
+            result += (mode & 0001) ? 'x' : '-';
+            args.setResult(args.caller()->newString(result));
+        });
+
+    runtime.registerFunction("mode_isReadable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0444) != 0 ? 1 : 0));
+        });
+
+    runtime.registerFunction("mode_isWritable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0222) != 0 ? 1 : 0));
+        });
+
+    runtime.registerFunction("mode_isExecutable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind([](CoreVM::Params& args) {
+            auto const mode = static_cast<int>(args.getInt(1));
+            args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0111) != 0 ? 1 : 0));
+        });
+
     // Register command substitution builtins (needed for structured pipeline fallback)
     runtime.registerFunction("internal.subst_start")
         .returnType(CoreVM::LiteralType::Void)

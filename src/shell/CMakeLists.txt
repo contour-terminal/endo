@@ -58,6 +58,11 @@ add_library(endo-shell STATIC
     StructuredCommand.hpp
     PsCommand.hpp
     PsCommand.cpp
+    FileInfoProvider.hpp
+    LinuxFileInfoProvider.hpp
+    LinuxFileInfoProvider.cpp
+    LsCommand.hpp
+    LsCommand.cpp
     OutputDefinition.hpp
     OutputDefinitionRegistry.hpp
     OutputDefinitionRegistry.cpp

@@ -186,6 +186,34 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::String)
         .bind(dummyHandler);
 
+    // structured_ls builtin stub
+    runtime.registerFunction("structured_ls")
+        .param<CoreVM::CoreString>("path")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    // Helper builtins for FileInfo mode/mtime formatting and testing
+    runtime.registerFunction("format_datetime")
+        .param<CoreVM::CoreNumber>("epoch")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+    runtime.registerFunction("format_mode")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+    runtime.registerFunction("mode_isReadable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+    runtime.registerFunction("mode_isWritable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+    runtime.registerFunction("mode_isExecutable")
+        .param<CoreVM::CoreNumber>("mode")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(dummyHandler);
+
     // Output definition structured command stubs
     runtime.registerFunction("structured_docker_ps")
         .returnType(CoreVM::LiteralType::Number)
