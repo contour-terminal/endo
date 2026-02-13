@@ -5808,6 +5808,11 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             TableConfig config;
             config.style = useColor ? TableStyle::Bordered : TableStyle::Plain;
             config.useColor = useColor;
+            if (useColor)
+            {
+                if (auto size = _tty.getSize(); size.has_value())
+                    config.terminalWidth = size->cols;
+            }
             auto table = formatRecordTable(obj, runner, config);
             [[maybe_unused]] auto written = write(outputFd, table.data(), table.size());
             return;

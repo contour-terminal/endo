@@ -145,6 +145,35 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     for (auto& w: colWidths)
         w = std::min(w, config.maxColumnWidth);
 
+    // Terminal-width-aware shrinking
+    if (config.terminalWidth > 0)
+    {
+        // Compute total table width including overhead
+        int overhead = 0;
+        if (config.style == TableStyle::Bordered)
+            overhead = static_cast<int>(numCols + 1) + 2 * static_cast<int>(numCols); // borders + padding
+        else if (config.style == TableStyle::Compact)
+            overhead = 1 + 2 * static_cast<int>(numCols - 1); // leading space + gaps
+        else
+            overhead = 2 * static_cast<int>(numCols - 1); // gaps only
+
+        int totalColWidth = 0;
+        for (auto const w: colWidths)
+            totalColWidth += w;
+
+        int const totalWidth = totalColWidth + overhead;
+        if (totalWidth > config.terminalWidth && totalColWidth > 0)
+        {
+            int const available = std::max(static_cast<int>(numCols) * 4, config.terminalWidth - overhead);
+            for (auto& w: colWidths)
+            {
+                auto const newW =
+                    std::max(4, static_cast<int>(static_cast<int64_t>(w) * available / totalColWidth));
+                w = newW;
+            }
+        }
+    }
+
     std::string result;
 
     if (config.style == TableStyle::Bordered)

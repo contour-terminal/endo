@@ -24,6 +24,7 @@ struct TableConfig
     TableStyle style = TableStyle::Bordered; ///< Table style
     bool useColor = true;                    ///< Emit SGR escape sequences
     int maxColumnWidth = 40;                 ///< Max width per column
+    int terminalWidth = 0;                   ///< Terminal width in columns (0 = no constraint)
 };
 
 /// Checks if a TypedObject is a non-empty list where all elements are Product-type records.
