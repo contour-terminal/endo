@@ -592,7 +592,7 @@ The library includes:
 - Completion system uses an abstraction layer (`CompletionProvider` interface) to allow both local and AI-powered completion providers
 - Initial implementation provides local completion based on the current command line context
 - Fish-style ghost text suggestions appear dimmed after the cursor
-- Tab or Ctrl+Space triggers completion menu; Right arrow or End accepts ghost text
+- Tab or Ctrl+Space triggers completion menu; Right arrow, End, or Ctrl+E accepts ghost text
 
 **Tasks:**
 - [x] Design completion provider interface (`CompletionProvider`, `CompletionItem`, `CompletionContext`)
@@ -799,6 +799,7 @@ Component (base class)
 - [x] Implement color scheme change notification and auto-switching
 - [x] Implement prompt builtin functions (`set_prompt_preset`, `set_prompt_indicator`, `set_prompt_layout`, `set_prompt_separator`, `set_prompt_transient`, `set_prompt_duration_threshold`)
 - [x] Add `set_prompt_*` builtins to LSP/completion with parameter value auto-completion (preset names, layout/separator/transient enum values)
+- [x] Add hover documentation for `set_prompt_*` builtin functions
 - [x] Implement `~/.config/endo/init.endo` auto-execution
 - [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)
 - [ ] Implement VT420 host-writable status line integration

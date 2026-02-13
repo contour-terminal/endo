@@ -647,7 +647,8 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         // Right arrow or End at end of line accepts ghost text
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
-            if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End)
+            if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
+                || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
             {
                 _inputField.acceptGhostText();
                 updateGhostText();
