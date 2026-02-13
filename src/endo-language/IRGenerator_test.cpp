@@ -466,6 +466,18 @@ TEST_CASE("IRGenerator.FSharp.pipeline_with_expression")
     REQUIRE(generatesIRSuccessfully("let double x = x * 2; let result = (3 + 2) |> double"));
 }
 
+TEST_CASE("IRGenerator.FSharp.pipeline_variable_to_function")
+{
+    // Variable binding piped into a function: x |> println
+    CHECK(executeSourceAndGetOutput("let x = 'world' ; x |> println") == "world\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.pipeline_variable_to_function_multi_prompt")
+{
+    // Variable binding in one prompt, piped in the next
+    CHECK(sessionProducesOutput({ "let x = 'world'", "x |> print" }, "world"));
+}
+
 // =============================================================================
 // F# Lambda Expression Tests
 // =============================================================================

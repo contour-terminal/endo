@@ -776,11 +776,13 @@ int Shell::execute(std::string const& lineBuffer)
     {
         CoreVM::diagnostics::ConsoleReport report;
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
-        if (!_fsharpState.functions.empty())
+        if (!_fsharpState.functions.empty() || !_fsharpState.valueBindings.empty())
         {
             std::unordered_set<std::string> names;
             for (auto const& [name, _]: _fsharpState.functions)
                 names.insert(name);
+            for (auto const& binding: _fsharpState.valueBindings)
+                names.insert(binding.name);
             parser.setKnownFSharpFunctions(std::move(names));
         }
         auto rootNode = parser.parse();

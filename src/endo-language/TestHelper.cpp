@@ -1091,11 +1091,13 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
 
         // Parse
         Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
-        if (!fsharpState.functions.empty())
+        if (!fsharpState.functions.empty() || !fsharpState.valueBindings.empty())
         {
             std::unordered_set<std::string> names;
             for (auto const& [name, _]: fsharpState.functions)
                 names.insert(name);
+            for (auto const& binding: fsharpState.valueBindings)
+                names.insert(binding.name);
             parser.setKnownFSharpFunctions(std::move(names));
         }
         auto ast = parser.parse();

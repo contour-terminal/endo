@@ -131,6 +131,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Forward pipe: `|>` (data |> func)
 - [x] Shell pipe: `|` (cmd1 | cmd2)
 - [x] Structured pipeline: shell command `|>` F# pipeline with output recognition files
+- [x] Variable binding pipeline: `let x = ...; x |> func` (single and multi-prompt)
 
 ### Composition
 - [x] Forward: `>>`

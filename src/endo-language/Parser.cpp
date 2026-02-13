@@ -210,12 +210,54 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             }
             else if (_knownFSharpFunctions.contains(_lexer.currentLiteral()))
             {
-                // Bare top-level call to a known F# function
+                // Bare top-level call to a known F# function or variable
                 _lexer.enterFSharpExpr();
                 auto expr = parseFSharpApplication();
                 _lexer.leaveFSharpExpr();
                 if (!expr)
                     return nullptr;
+                // Check for mutable assignment: x <- expr
+                if (_lexer.currentToken() == Token::LeftArrow)
+                {
+                    if (auto* identExpr = dynamic_cast<ast::IdentifierExpr*>(expr.get()))
+                    {
+                        auto name = identExpr->name;
+                        _lexer.nextToken(); // consume '<-'
+                        _lexer.enterFSharpExpr();
+                        auto value = parseFSharpExpr();
+                        _lexer.leaveFSharpExpr();
+                        if (!value)
+                            return nullptr;
+                        return std::make_unique<ast::MutAssignStmt>(std::move(name), std::move(value));
+                    }
+                }
+                // Check for trailing |> pipeline
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    std::unique_ptr<ast::Expr> pipeline =
+                        std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken();
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                }
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
             else
@@ -2783,6 +2825,10 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
             _knownFSharpFunctions.insert(ab.name);
     }
     else if (dynamic_cast<ast::LambdaExpr const*>(result->value.get()) != nullptr)
+    {
+        _knownFSharpFunctions.insert(result->name);
+    }
+    else
     {
         _knownFSharpFunctions.insert(result->name);
     }
