@@ -3310,6 +3310,30 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // toText: convert object value to its string representation
+    if (name == "toText")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("toText requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate toText argument");
+            return true;
+        }
+        auto* callback = findCallback("object_to_string(I)S");
+        if (!callback)
+        {
+            reportTypeError("object_to_string builtin not found");
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "toText");
+        return true;
+    }
+
     // ps: zero-arg builtin returning list<ProcessInfo>
     if (name == "ps")
     {
@@ -4515,6 +4539,19 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             }
             _result = _builder.createCallFunction(
                 _builder.getBuiltinFunction(*callback), { value }, "list_isEmpty");
+            return;
+        }
+        // toText: convert object to its string representation (bypass table rendering)
+        if (funcIdent->name == "toText")
+        {
+            auto* callback = findCallback("object_to_string(I)S");
+            if (!callback)
+            {
+                reportTypeError("object_to_string builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "toText");
             return;
         }
         // Unary string builtins in pipeline

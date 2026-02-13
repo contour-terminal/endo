@@ -209,6 +209,58 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     return nullptr;
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
+            else if ((_lexer.currentLiteral() == "ps" || _lexer.currentLiteral() == "ls"
+                      || _lexer.currentLiteral() == "jobs")
+                     && [this]() {
+                            // Peek at next token to decide F# vs shell routing.
+                            // Only route to F# when followed by end-of-stmt, pipeline, string, or paren.
+                            auto const savedTok = _lexer.currentToken();
+                            auto const savedLit = std::string(_lexer.currentLiteral());
+                            auto const savedRange = _lexer.currentRange();
+                            _lexer.nextToken();
+                            auto const nextTok = _lexer.currentToken();
+                            _lexer.pushBackToken(savedTok, savedLit, savedRange);
+                            return nextTok == Token::LineFeed || nextTok == Token::Semicolon
+                                   || nextTok == Token::EndOfInput || nextTok == Token::ForwardPipe
+                                   || nextTok == Token::String || nextTok == Token::DblQuoteStart
+                                   || nextTok == Token::RndOpen;
+                        }())
+            {
+                // Structured commands: route as F# expressions with display for table rendering
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Check for trailing |> pipeline (e.g., ps |> filter ...)
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    std::unique_ptr<ast::Expr> pipeline =
+                        std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken();
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline), /*displayResult=*/true);
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/true);
+            }
             else if (_knownFSharpFunctions.contains(_lexer.currentLiteral()))
             {
                 // Bare top-level call to a known F# function or variable

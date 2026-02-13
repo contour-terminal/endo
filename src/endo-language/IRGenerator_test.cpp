@@ -6613,3 +6613,73 @@ TEST_CASE("IRGenerator.DataSource.pipe_chain_from_csv")
 {
     CHECK(generatesIRSuccessfully("echo hello | from-csv as { name: string; value: int }"));
 }
+
+// =============================================================================
+// Bare Structured Command Routing (Phase 6.4.3)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_ps_produces_output")
+{
+    // Bare `ps` at statement level should route through F# path with display_result
+    auto result = endo::test::executeSourceWithStructuredState("ps");
+    REQUIRE(result.has_value());
+    CHECK(!result->output.empty()); // display_result produces record list output
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_jobs_produces_output")
+{
+    // Bare `jobs` at statement level should route through F# path
+    auto result = endo::test::executeSourceWithStructuredState("jobs");
+    REQUIRE(result.has_value());
+    CHECK(!result->output.empty()); // display_result produces list output
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_ls_produces_output")
+{
+    // Bare `ls` at statement level should route through F# path
+    auto result = endo::test::executeSourceWithStructuredState("ls");
+    REQUIRE(result.has_value());
+    CHECK(!result->output.empty());
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_ls_with_string_path")
+{
+    // ls with quoted string path should route through F# path
+    auto result = endo::test::executeSourceWithStructuredState("ls \".\"");
+    REQUIRE(result.has_value());
+    CHECK(!result->output.empty());
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_ps_with_pipeline")
+{
+    // ps with pipeline should route through F# path (mock PIDs: 1, 42, 100)
+    CHECK(executesWithOutput("let r = ps |> map (fun p -> p.pid)\nprint r", "[1; 42; 100]"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.bare_jobs_with_pipeline")
+{
+    // jobs with pipeline at statement level (mock IDs: 1, 2, 3)
+    CHECK(executesWithOutput("let r = jobs |> map (fun j -> j.id)\nprint r", "[1; 2; 3]"));
+}
+
+// =============================================================================
+// toText Tests (Phase 6.4.3)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.structured.toText_in_pipeline")
+{
+    // ps |> toText should produce string representation instead of table
+    CHECK(generatesIRSuccessfully("let r = ps |> toText\nprint r"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.toText_direct_call")
+{
+    // toText as a direct call
+    CHECK(generatesIRSuccessfully("let r = toText ps\nprint r"));
+}
+
+TEST_CASE("IRGenerator.FSharp.structured.toText_with_jobs")
+{
+    // toText with jobs in pipeline
+    CHECK(generatesIRSuccessfully("let r = jobs |> toText\nprint r"));
+}

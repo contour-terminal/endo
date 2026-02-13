@@ -1504,10 +1504,10 @@ TEST_CASE("shell.jobs.dollar_bang")
 
 TEST_CASE("shell.jobs.jobs_builtin_empty")
 {
-    // jobs builtin with no background jobs should produce no output
+    // jobs builtin with no background jobs should display empty list
     TestShell shell;
     auto result = shell("jobs").output();
-    CHECK(result.empty());
+    CHECK(result == "[]\n");
     CHECK(shell.exitCode == 0);
 }
 
