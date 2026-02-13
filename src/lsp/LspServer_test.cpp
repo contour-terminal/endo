@@ -538,6 +538,35 @@ TEST_CASE("SemanticTokens.token length matches literal length", "[lsp][semantic]
     CHECK(tokens.data[17] == 2);
 }
 
+TEST_CASE("SemanticTokens.shell_builtin_cd_as_function", "[lsp][semantic]")
+{
+    // "cd /tmp" — "cd" should be classified as function (type 1).
+    auto tokens = computeSemanticTokens("cd /tmp");
+    // "cd" should be present as function token
+    REQUIRE(tokens.data.size() >= 5);
+    CHECK(tokens.data[3] == 1); // function type (index 1)
+}
+
+TEST_CASE("SemanticTokens.shell_path_not_split", "[lsp][semantic]")
+{
+    // "cd projects/endo" — the path should be a single token, not split by '/'.
+    auto tokens = computeSemanticTokens("cd projects/endo");
+    // We expect 2 tokens: cd(function), projects/endo(variable)
+    REQUIRE(tokens.data.size() == 10); // 2 tokens * 5
+    CHECK(tokens.data[3] == 1);        // cd → function type
+    CHECK(tokens.data[8] == 2);        // projects/endo → variable type
+    CHECK(tokens.data[7] == 13);       // length of "projects/endo" = 13
+}
+
+TEST_CASE("SemanticTokens.fsharp_slash_as_operator", "[lsp][semantic]")
+{
+    // In F# context, "/" should be tokenized as an operator.
+    auto tokens = computeSemanticTokens("let x = 4 / 2");
+    // Expect: let(keyword), x(variable), =(operator), 4(number), /(operator), 2(number)
+    REQUIRE(tokens.data.size() == 30); // 6 tokens * 5
+    CHECK(tokens.data[23] == 5);       // '/' → operator type
+}
+
 // =============================================================================
 // Hover tests
 // =============================================================================
@@ -709,6 +738,15 @@ TEST_CASE("Hover.mutable binding shows mut qualifier", "[lsp][hover]")
     CHECK(hover->contents.value.find("counter") != std::string::npos);
     CHECK(hover->contents.value.find("mutable") != std::string::npos);
     CHECK(hover->contents.value.find("mut") != std::string::npos);
+}
+
+TEST_CASE("Hover.exported binding shows export qualifier", "[lsp][hover]")
+{
+    auto hover = computeHover("let export PATH = \"/usr/bin\"", Position { 0, 11 });
+    REQUIRE(hover.has_value());
+    CHECK(hover->contents.value.find("PATH") != std::string::npos);
+    CHECK(hover->contents.value.find("exported") != std::string::npos);
+    CHECK(hover->contents.value.find("export") != std::string::npos);
 }
 
 // =============================================================================

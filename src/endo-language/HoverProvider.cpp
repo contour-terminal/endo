@@ -301,6 +301,7 @@ namespace
 
     /// Formats hover markdown for a let binding signature (variable or function).
     /// @param name The binding name
+    /// @param isExported Whether the binding is exported as an environment variable
     /// @param isMutable Whether the binding is mutable
     /// @param isRecursive Whether the binding is recursive
     /// @param parameters Function parameters (empty for simple bindings)
@@ -310,6 +311,7 @@ namespace
     /// @param typeDefinition Optional type definition source text for supplementary info
     /// @return Markdown hover string
     [[nodiscard]] std::string formatLetBinding(std::string const& name,
+                                               bool isExported,
                                                bool isMutable,
                                                bool isRecursive,
                                                std::vector<ast::TypedParameter> const& parameters,
@@ -323,6 +325,8 @@ namespace
         if (!parameters.empty())
         {
             result = "`" + name + "` \u2014 function\n\n```endo\nlet ";
+            if (isExported)
+                result += "export ";
             if (isRecursive)
                 result += "rec ";
             result += name;
@@ -345,12 +349,16 @@ namespace
                                                     : std::nullopt;
 
             result = "`" + name + "` \u2014 ";
+            if (isExported)
+                result += "exported ";
             if (isMutable)
                 result += "mutable ";
             result += "binding";
             if (displayType)
                 result += " : `" + *displayType + "`";
             result += "\n\n```endo\nlet ";
+            if (isExported)
+                result += "export ";
             if (isMutable)
                 result += "mut ";
             result += name;
@@ -474,6 +482,7 @@ namespace
                 }
 
                 return formatLetBinding(name,
+                                        letStmt->isExported,
                                         letStmt->isMutable,
                                         letStmt->isRecursive,
                                         letStmt->parameters,
@@ -486,7 +495,8 @@ namespace
             for (auto const& andBinding: letStmt->andBindings)
             {
                 if (andBinding.name == name)
-                    return formatLetBinding(name, false, true, andBinding.parameters, andBinding.returnType);
+                    return formatLetBinding(
+                        name, false, false, true, andBinding.parameters, andBinding.returnType);
             }
         }
 
