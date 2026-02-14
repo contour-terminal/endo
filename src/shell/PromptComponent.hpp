@@ -124,6 +124,9 @@ class PromptComponent: public tui::Component
     /// @param context The new prompt context.
     void setPromptContext(PromptContext context);
 
+    /// @brief Returns ms until next module refresh, or -1 if no module needs refresh.
+    [[nodiscard]] int moduleRefreshTimeoutMs() const;
+
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
 
@@ -224,6 +227,13 @@ class PromptComponent: public tui::Component
     /// @param y The screen row (component-relative, = line index).
     /// @return The corresponding source position, or std::nullopt if outside text.
     [[nodiscard]] std::optional<endo::SourcePosition> screenToSourcePosition(int x, int y) const;
+
+    // Module auto-refresh deadline
+    std::optional<std::chrono::steady_clock::time_point> _nextModuleRefresh;
+
+    /// @brief Computes the next refresh deadline from active module intervals.
+    /// @return The earliest deadline, or std::nullopt if no module needs refresh.
+    [[nodiscard]] std::optional<std::chrono::steady_clock::time_point> computeModuleRefreshDeadline() const;
 
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime {};

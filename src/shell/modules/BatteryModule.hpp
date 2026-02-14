@@ -14,8 +14,14 @@ class BatteryModule final: public PromptModule
 {
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "battery"; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
+
+    [[nodiscard]] std::optional<std::chrono::milliseconds> refreshInterval() const override
+    {
+        return std::chrono::seconds(30);
+    }
 };
 
 } // namespace endo

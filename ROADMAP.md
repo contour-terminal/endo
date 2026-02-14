@@ -814,6 +814,7 @@ Component (base class)
 - [x] Add hover documentation for `set_prompt_*` builtin functions
 - [x] Implement `~/.config/endo/init.endo` auto-execution
 - [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)
+- [x] Implement auto-refresh for live prompt modules (clock 1s, battery 30s) via `refreshInterval()` virtual method
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests

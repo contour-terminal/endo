@@ -22,8 +22,8 @@ class OutputDefinitionRegistry;
 /// @brief A single styled text segment within a prompt.
 struct PromptSegment
 {
-    std::string text;  ///< The text content.
-    tui::Style style;  ///< The style to render this segment with.
+    std::string text; ///< The text content.
+    tui::Style style; ///< The style to render this segment with.
 };
 
 /// @brief A sequence of styled segments forming a prompt section.
@@ -32,16 +32,16 @@ using PromptSegments = std::vector<PromptSegment>;
 /// @brief Context information available to prompt modules during evaluation.
 struct PromptContext
 {
-    std::string cwd;                                ///< Current working directory.
-    std::string homePath;                           ///< User's home directory path.
-    int lastExitCode = 0;                           ///< Exit code of the last command.
-    std::chrono::milliseconds lastDuration { 0 };   ///< Duration of the last command.
-    int terminalWidth = 80;                         ///< Terminal width in columns.
-    bool isSSH = false;                             ///< Whether running inside an SSH session.
-    std::string hostname;                           ///< Hostname of the machine.
-    tui::Theme const* theme = nullptr;              ///< Current TUI theme.
-    FSharpPersistentState const* fsharpState = nullptr;         ///< F# persistent state (functions, bindings).
-    OutputDefinitionRegistry const* outputDefs = nullptr;       ///< Output definitions for structured commands.
+    std::string cwd;                                      ///< Current working directory.
+    std::string homePath;                                 ///< User's home directory path.
+    int lastExitCode = 0;                                 ///< Exit code of the last command.
+    std::chrono::milliseconds lastDuration { 0 };         ///< Duration of the last command.
+    int terminalWidth = 80;                               ///< Terminal width in columns.
+    bool isSSH = false;                                   ///< Whether running inside an SSH session.
+    std::string hostname;                                 ///< Hostname of the machine.
+    tui::Theme const* theme = nullptr;                    ///< Current TUI theme.
+    FSharpPersistentState const* fsharpState = nullptr;   ///< F# persistent state (functions, bindings).
+    OutputDefinitionRegistry const* outputDefs = nullptr; ///< Output definitions for structured commands.
 };
 
 /// @brief Abstract interface for a pluggable prompt module.
@@ -69,6 +69,15 @@ class PromptModule
     {
         (void) ctx;
         return true;
+    }
+
+    /// @brief Returns the desired auto-refresh interval for this module.
+    /// Modules displaying time-varying data (clock, battery) should override this.
+    /// The prompt re-renders at the minimum interval of all active modules.
+    /// @return Refresh interval, or std::nullopt if no auto-refresh needed (default).
+    [[nodiscard]] virtual std::optional<std::chrono::milliseconds> refreshInterval() const
+    {
+        return std::nullopt;
     }
 };
 

@@ -125,8 +125,18 @@ std::string Prompt::read()
     // Event loop
     while (ready())
     {
-        // Use hover timeout if hovering, otherwise block indefinitely
-        int const timeout = _screen->pollTimeoutMs();
+        // Combine hover timeout with module auto-refresh timeout
+        auto const hoverTimeout = _screen->pollTimeoutMs();
+        auto const moduleTimeout = _promptComponent->moduleRefreshTimeoutMs();
+        int timeout;
+        if (hoverTimeout < 0 && moduleTimeout < 0)
+            timeout = -1;
+        else if (hoverTimeout < 0)
+            timeout = moduleTimeout;
+        else if (moduleTimeout < 0)
+            timeout = hoverTimeout;
+        else
+            timeout = std::min(hoverTimeout, moduleTimeout);
         auto events = _terminal.poll(timeout);
 
         // If no events received (timeout), process hover timer

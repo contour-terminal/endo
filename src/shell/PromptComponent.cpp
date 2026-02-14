@@ -161,6 +161,7 @@ void PromptComponent::render(tui::Canvas& canvas)
     {
         auto infoModules = evaluateModules(_config.infoLineModules);
         auto rightModules = evaluateModules(_config.rightPromptModules);
+        _nextModuleRefresh = computeModuleRefreshDeadline();
 
         // Info line background
         canvas.fill(tui::Rect { HorizontalMargin, 0, contentWidth, 1 }, ' ', bgStyle);
@@ -1038,6 +1039,48 @@ void PromptComponent::resetHistoryCycling()
 {
     _historyCycleIndex.reset();
     _historyCandidates.clear();
+}
+
+std::optional<std::chrono::steady_clock::time_point> PromptComponent::computeModuleRefreshDeadline() const
+{
+    auto minInterval = std::optional<std::chrono::milliseconds> {};
+
+    auto const checkModules = [&](std::vector<std::string> const& moduleNames) {
+        for (auto const& name: moduleNames)
+        {
+            auto const it = _modules.find(name);
+            if (it == _modules.end())
+                continue;
+            if (!it->second->shouldShow(_context))
+                continue;
+            if (auto const interval = it->second->refreshInterval())
+            {
+                if (!minInterval || *interval < *minInterval)
+                    minInterval = *interval;
+            }
+        }
+    };
+
+    checkModules(_config.infoLineModules);
+    checkModules(_config.rightPromptModules);
+
+    if (minInterval)
+        return std::chrono::steady_clock::now() + *minInterval;
+
+    return std::nullopt;
+}
+
+int PromptComponent::moduleRefreshTimeoutMs() const
+{
+    if (!_nextModuleRefresh)
+        return -1;
+
+    auto const now = std::chrono::steady_clock::now();
+    if (now >= *_nextModuleRefresh)
+        return 0;
+
+    auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(*_nextModuleRefresh - now);
+    return std::max(100, static_cast<int>(remaining.count()));
 }
 
 } // namespace endo
