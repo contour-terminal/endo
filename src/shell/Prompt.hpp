@@ -171,6 +171,10 @@ class Prompt
 
     void initialize();
     void setupHoverCallbacks();
+
+    /// @brief Replaces the full prompt with a compact transient indicator before scrolling off.
+    /// @param inputText The user's submitted command text.
+    void emitTransientPrompt(std::string_view inputText);
 };
 
 /// @brief Emits a dim partial-line indicator (⏎) and moves to a fresh line.

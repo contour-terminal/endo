@@ -132,6 +132,9 @@ class PromptComponent: public tui::Component
 
     [[nodiscard]] tui::InputField const& inputField() const noexcept { return _inputField; }
 
+    /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
+    [[nodiscard]] int chromeHeight() const noexcept;
+
     /// @brief Returns the CompletionPopup for direct access.
     [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
@@ -185,9 +188,6 @@ class PromptComponent: public tui::Component
 
     /// @brief Calculates the width of the prompt prefix (bar + padding + prompt text).
     [[nodiscard]] int promptWidth() const;
-
-    /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
-    [[nodiscard]] int chromeHeight() const noexcept;
 
     /// @brief Calculates display width of a string.
     [[nodiscard]] static int displayWidth(std::string_view text);

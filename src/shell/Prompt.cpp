@@ -175,16 +175,24 @@ std::string Prompt::read()
                 case PromptComponent::Action::Submit: {
                     // Redraw to clear ghost text before moving cursor
                     _screen->draw();
-                    // Move cursor past the editor region before returning
                     auto& out = _terminal.output();
-                    auto const totalLines = _promptComponent->inputField().lineCount();
-                    auto const cursorLine = _promptComponent->inputField().cursorLine();
-                    auto const linesToMoveDown = totalLines - cursorLine;
-                    if (linesToMoveDown > 0)
-                        out.moveDown(linesToMoveDown);
+                    auto const inputText = std::string(_promptComponent->text());
+                    if (_promptConfig.transient != TransientMode::Off)
+                    {
+                        emitTransientPrompt(inputText);
+                    }
+                    else
+                    {
+                        // Move cursor past the editor region before returning
+                        auto const totalLines = _promptComponent->inputField().lineCount();
+                        auto const cursorLine = _promptComponent->inputField().cursorLine();
+                        auto const linesToMoveDown = totalLines - cursorLine;
+                        if (linesToMoveDown > 0)
+                            out.moveDown(linesToMoveDown);
+                    }
                     out.writeRaw("\r\n");
                     out.flush();
-                    return std::string(_promptComponent->text());
+                    return inputText;
                 }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
@@ -269,14 +277,21 @@ std::optional<std::string> Prompt::processInput()
         {
             case PromptComponent::Action::Submit: {
                 auto& out = _terminal.output();
-                auto const totalLines = _promptComponent->inputField().lineCount();
-                auto const cursorLine = _promptComponent->inputField().cursorLine();
-                auto const linesToMoveDown = totalLines - cursorLine;
-                if (linesToMoveDown > 0)
-                    out.moveDown(linesToMoveDown);
+                auto result = std::string(_promptComponent->text());
+                if (_promptConfig.transient != TransientMode::Off)
+                {
+                    emitTransientPrompt(result);
+                }
+                else
+                {
+                    auto const totalLines = _promptComponent->inputField().lineCount();
+                    auto const cursorLine = _promptComponent->inputField().cursorLine();
+                    auto const linesToMoveDown = totalLines - cursorLine;
+                    if (linesToMoveDown > 0)
+                        out.moveDown(linesToMoveDown);
+                }
                 out.writeRaw("\r\n");
                 out.flush();
-                auto result = std::string(_promptComponent->text());
                 _promptComponent->clear();
                 return result;
             }
@@ -462,6 +477,50 @@ tui::KeyBindings& Prompt::keyBindings()
     // This will crash if initialization failed (_aborted), but that's acceptable
     // since the shell can't work without a functional terminal anyway
     return _promptComponent->inputField().keyBindings();
+}
+
+void Prompt::emitTransientPrompt(std::string_view inputText)
+{
+    if (_promptConfig.transient == TransientMode::Off)
+        return;
+
+    auto& out = _terminal.output();
+    auto const chrome = _promptComponent->chromeHeight();
+    auto const totalInputLines = _promptComponent->inputField().lineCount();
+    auto const cursorLine = _promptComponent->inputField().cursorLine();
+    auto const totalHeight = chrome + totalInputLines;
+    auto const currentRow = chrome + cursorLine;
+
+    // Move cursor up to the top of the prompt region
+    if (currentRow > 0)
+        out.moveUp(currentRow);
+
+    // Write transient content on the first line
+    out.writeRaw("\r");
+    out.clearLine();
+
+    if (_promptConfig.transient == TransientMode::Arrow)
+        out.write("\u276F ", tui::Style { .dim = true });
+
+    // Show first line of input (with ellipsis for multi-line)
+    auto const firstNewline = inputText.find('\n');
+    if (firstNewline != std::string_view::npos)
+    {
+        out.writeRaw(inputText.substr(0, firstNewline));
+        out.write("\u2026", tui::Style { .dim = true });
+    }
+    else
+    {
+        out.writeRaw(inputText);
+    }
+
+    // Clear remaining rows
+    for (auto i = 1; i < totalHeight; ++i)
+    {
+        out.moveDown(1);
+        out.writeRaw("\r");
+        out.clearLine();
+    }
 }
 
 void emitPartialLineIndicator(int fd, int cursorColumn)
