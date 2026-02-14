@@ -101,7 +101,29 @@ let n = parseInt "42"             # str -> int
 let f = parseFloat "3.14"         # str -> float
 ```
 
-### 13.4 Function and Command Resolution
+### 13.4 Dual-Mode Builtins
+
+Some builtins adapt their behavior based on how they are called. When invoked with bare
+arguments they behave like traditional shell commands; when invoked with quoted or
+parenthesized arguments they return typed F# values.
+
+| Builtin | Shell form | F# form | F# return type |
+|---------|-----------|---------|----------------|
+| `env` | `echo $VAR` | `env "VAR"` | `Option<string>` |
+| `which` | `which git` | `which "git"` | `Option<string>` |
+
+```endo
+# Shell mode: prints path, sets exit code
+which git
+# /usr/bin/git
+
+# F# mode: returns Option<string> for pattern matching
+match which "git" with
+| Some path -> println $"Found: {path}"
+| None -> println "not installed"
+```
+
+### 13.5 Function and Command Resolution
 
 When you call something, endo resolves it in this order:
 
@@ -130,7 +152,7 @@ let allFunctions = functions      # User-defined functions
 let allBuiltins = builtins        # Shell builtins
 ```
 
-### 13.5 Transitioning from Bash
+### 13.6 Transitioning from Bash
 
 Common patterns and their endo equivalents:
 

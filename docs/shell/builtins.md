@@ -254,7 +254,15 @@ fi
 
 ## which
 
-Locate a command.
+Locate a command in `$PATH`.
+
+**Description:** `which` is a dual-mode builtin that searches the system `$PATH` for a given
+command. In **shell mode** (bare argument), it prints the resolved path to stdout and sets the
+exit code. In **F# mode** (quoted or parenthesized argument), it returns an `Option<string>`
+value suitable for pattern matching, pipelines, and functional composition.
+
+The mode is determined by syntax: bare identifiers like `which git` use shell mode, while
+quoted strings like `which "git"` or parenthesized expressions like `which (name)` use F# mode.
 
 ### Shell form
 
@@ -264,10 +272,10 @@ Locate a command.
 which command
 ```
 
-**Description:** Searches `$PATH` for the given command and prints its full path. Returns
-a non-zero exit code if the command is not found.
+Searches `$PATH` for *command* and prints its absolute path to stdout. Returns exit code `0`
+on success or `1` if the command is not found.
 
-**Example:**
+**Examples:**
 
 ```endo
 which git
@@ -275,6 +283,11 @@ which git
 
 which nonexistent
 # (returns exit code 1)
+
+# Use in a conditional
+if which cargo; then
+    echo "Rust toolchain available"
+fi
 ```
 
 ### F# form
@@ -283,15 +296,18 @@ which nonexistent
 
 ```
 which "command"
+which (expr)
 ```
 
-**Description:** When called with a quoted or parenthesized argument, `which` returns
-`Option<string>` — `Some path` if the program is found in `$PATH`, or `None` otherwise.
-This enables pattern matching and functional composition.
+**Return type:** `Option<string>`
+
+Returns `Some path` if the program is found in `$PATH`, or `None` otherwise. The returned
+path is the fully resolved absolute path to the executable.
 
 **Examples:**
 
 ```endo
+# Pattern match on the result
 match which "git" with
 | Some path -> println path
 | None -> println "git not found"
@@ -301,7 +317,15 @@ let gitPath = which "git" ?| "/usr/bin/git"
 
 # In a pipeline
 "ls" |> which |> fun opt -> match opt with | Some p -> println p | None -> println "not found"
+
+# Bind to a variable
+let result = which "cargo"
 ```
+
+!!! tip
+    Use the shell form (`which git`) for quick interactive lookups.
+    Use the F# form (`which "git"`) when you need to branch on the result or compose it
+    into a larger expression.
 
 ---
 

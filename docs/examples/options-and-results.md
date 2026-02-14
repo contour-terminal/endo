@@ -82,6 +82,22 @@ let r8 = try getNone 0 with | None -> 99
 print "try None = "; println r8
 ```
 
+## Real-World Example: `which` Builtin
+
+The `which` builtin returns `Option<string>` in F# mode, making it a natural fit for
+option handling patterns:
+
+```endo
+// Check if a tool is available and get its path
+match which "git" with
+| Some path -> println $"git found at: {path}"
+| None -> println "git is not installed"
+
+// Provide a fallback with the ?| operator
+let editor = which "nvim" ?| "/usr/bin/vi"
+println editor
+```
+
 ## Key Techniques
 
 - **`Option` type** represents values that may or may not exist. `Some value` wraps a present value; `None` represents absence. This eliminates null pointer errors by forcing explicit handling.
