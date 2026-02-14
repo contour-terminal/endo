@@ -929,6 +929,33 @@ std::optional<uint16_t> IRGenerator::getListElementTypeId(CoreVM::Value* val) co
     return std::nullopt;
 }
 
+void IRGenerator::annotateListElementLiteralType(CoreVM::Value* val, CoreVM::LiteralType type)
+{
+    _listElementLiteralTypes[val] = type;
+}
+
+std::optional<CoreVM::LiteralType> IRGenerator::getListElementLiteralType(CoreVM::Value* val) const
+{
+    auto it = _listElementLiteralTypes.find(val);
+    if (it != _listElementLiteralTypes.end())
+        return it->second;
+    return std::nullopt;
+}
+
+std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(
+    std::span<CoreVM::Value* const> values)
+{
+    if (values.empty())
+        return std::nullopt;
+    auto const commonType = values.front()->type();
+    if (commonType == CoreVM::LiteralType::Void)
+        return std::nullopt;
+    for (size_t i = 1; i < values.size(); ++i)
+        if (values[i]->type() != commonType)
+            return std::nullopt;
+    return commonType;
+}
+
 std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariables(
     ast::Expr const* body, std::vector<std::string> const& boundNames) const
 {
@@ -3127,6 +3154,8 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         // Propagate list element type through tail (same element type as input list)
         if (auto elemTypeId = getListElementTypeId(argVal))
             annotateListElementTypeId(_result, *elemTypeId);
+        if (auto elt = getListElementLiteralType(argVal))
+            annotateListElementLiteralType(_result, *elt);
         return true;
     }
 
@@ -3266,6 +3295,8 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _result = _builder.createCallFunction(
             _builder.getBuiltinFunction(*callback), { countVal, valueVal }, "list_replicate");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        if (valueVal->type() != CoreVM::LiteralType::Void)
+            annotateListElementLiteralType(_result, valueVal->type());
         return true;
     }
 
@@ -3394,6 +3425,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _result = _builder.createCallFunction(
             _builder.getBuiltinFunction(*callback), { arg1, arg2 }, "string_split");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+        annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
         return true;
     }
 
@@ -3629,8 +3661,8 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                 reportTypeError("fetch builtin not registered");
                 return true;
             }
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { urlVal }, "fetch");
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { urlVal }, "fetch");
         }
         else
         {
@@ -4199,6 +4231,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Propagate list element type annotation through the binding
     if (auto elemTypeId = getListElementTypeId(value))
         annotateListElementTypeId(storage, *elemTypeId);
+    if (auto elt = getListElementLiteralType(value))
+        annotateListElementLiteralType(storage, *elt);
 
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
@@ -4359,6 +4393,8 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Propagate list element type annotation through the binding
         if (auto elemTypeId = getListElementTypeId(value))
             annotateListElementTypeId(storage, *elemTypeId);
+        if (auto elt = getListElementLiteralType(value))
+            annotateListElementLiteralType(storage, *elt);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -4372,6 +4408,29 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 void IRGenerator::visit(ast::ExprStmt const& node)
 {
     TRACE_SCOPE("visit(ExprStmt)");
+
+    // Bare variadic function at statement level → invoke with zero args
+    if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(node.expr.get()))
+    {
+        if (auto const* func = lookupFSharpFunction(ident->name))
+        {
+            if (func->hasVariadicParam)
+            {
+                auto const savedCaptureMode = _shellCommandCaptureMode;
+                _shellCommandCaptureMode = false; // Statement level → normal I/O
+
+                // Build empty list for the variadic parameter
+                auto* nilTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+                CoreVM::Value* list = _builder.createObjAlloc(nilTypeId, "varargs.nil");
+                list = _builder.createObjSetTag(list, _builder.get(CoreVM::CoreNumber(0)), "varargs.nil.tag");
+                std::vector<CoreVM::Value*> args = { list };
+
+                generateFSharpCall(func, ident->name, args);
+                _shellCommandCaptureMode = savedCaptureMode;
+                return;
+            }
+        }
+    }
 
     // At statement level, shell commands should run with normal I/O (not capture mode)
     auto const savedCaptureMode = _shellCommandCaptureMode;
@@ -4758,6 +4817,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             // Propagate list element type through tail
             if (auto elemTypeId = getListElementTypeId(value))
                 annotateListElementTypeId(_result, *elemTypeId);
+            if (auto elt = getListElementLiteralType(value))
+                annotateListElementLiteralType(_result, *elt);
             return;
         }
         if (funcIdent->name == "length")
@@ -4979,6 +5040,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _result = _builder.createCallFunction(
                 _builder.getBuiltinFunction(*callback), { countArg, value }, "list_replicate");
             annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            if (value->type() != CoreVM::LiteralType::Void)
+                annotateListElementLiteralType(_result, value->type());
             return;
         }
 
@@ -5100,6 +5163,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 annotateInnerType(paramStorage, *innerType);
             if (auto elemTypeId = getListElementTypeId(allArgs[i]))
                 annotateListElementTypeId(paramStorage, *elemTypeId);
+            if (auto elt = getListElementLiteralType(allArgs[i]))
+                annotateListElementLiteralType(paramStorage, *elt);
 
             // Track function references passed as arguments (HOF support)
             if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
@@ -5185,6 +5250,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             annotateInnerType(paramAlloca, *innerType);
         if (auto elemTypeId = getListElementTypeId(value))
             annotateListElementTypeId(paramAlloca, *elemTypeId);
+        if (auto elt = getListElementLiteralType(value))
+            annotateListElementLiteralType(paramAlloca, *elt);
 
         auto* bodyResult = codegen(func->body);
         if (bodyResult)
@@ -5255,6 +5322,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         annotateInnerType(storage, *innerType);
     if (auto elemTypeId = getListElementTypeId(value))
         annotateListElementTypeId(storage, *elemTypeId);
+    if (auto elt = getListElementLiteralType(value))
+        annotateListElementLiteralType(storage, *elt);
 
     // Track function references passed as piped value (HOF support)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
@@ -5453,6 +5522,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), list, "varargs.tail");
             list = cons;
         }
+
+        // Annotate list element literal type if all variadic args share the same type
+        auto const variadicArgs = std::span<CoreVM::Value* const>(args).subspan(fixedCount);
+        if (auto commonType = determineCommonLiteralType(variadicArgs))
+            annotateListElementLiteralType(list, *commonType);
 
         // Replace variadic args with the built list
         std::vector<CoreVM::Value*> finalArgs(args.begin(), args.begin() + fixedCount);
@@ -5747,6 +5821,8 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
             annotateInnerType(alloca, *innerType);
         if (auto elemTypeId = getListElementTypeId(args[i]))
             annotateListElementTypeId(alloca, *elemTypeId);
+        if (auto elt = getListElementLiteralType(args[i]))
+            annotateListElementLiteralType(alloca, *elt);
     }
 
     CoreVM::AllocaInstr* resultStorage = nullptr;
@@ -5919,6 +5995,8 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
             annotateInnerType(storage, *innerType);
         if (auto elemTypeId = getListElementTypeId(args[i]))
             annotateListElementTypeId(storage, *elemTypeId);
+        if (auto elt = getListElementLiteralType(args[i]))
+            annotateListElementLiteralType(storage, *elt);
 
         // Track function references passed as arguments (HOF support)
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
@@ -6188,6 +6266,8 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     // Propagate list element type annotation through variable loads
     if (auto elemTypeId = getListElementTypeId(storage))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(storage))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -6600,6 +6680,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
 
     _result = acc;
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+
+    // Annotate list element literal type if all elements share the same type
+    if (auto commonType = determineCommonLiteralType(elemValues))
+        annotateListElementLiteralType(_result, *commonType);
 }
 
 void IRGenerator::visit(ast::ConsExpr const& node)
@@ -6642,6 +6726,10 @@ void IRGenerator::visit(ast::ConsExpr const& node)
 
     _result = obj;
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+
+    // Annotate list element literal type from the head value
+    if (headVal->type() != CoreVM::LiteralType::Void)
+        annotateListElementLiteralType(_result, headVal->type());
 }
 
 void IRGenerator::visit(ast::ConcatListExpr const& node)
@@ -6678,6 +6766,8 @@ void IRGenerator::visit(ast::ConcatListExpr const& node)
     _result = _builder.createCallFunction(
         _builder.getBuiltinFunction(*callback), { leftReload, rightVal }, "concat.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elt = getListElementLiteralType(leftVal))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::visit(ast::ListRangeExpr const& node)
@@ -6703,6 +6793,7 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
                 _result = _builder.createCallFunction(
                     _builder.getBuiltinFunction(*callback), { startOrd, endOrd }, "list_char_range");
                 annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
                 return;
             }
         }
@@ -6823,6 +6914,7 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(accStorage, "range.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    annotateListElementLiteralType(_result, CoreVM::LiteralType::Number);
 }
 
 void IRGenerator::visit(ast::ListComprehensionExpr const& node)
@@ -6852,7 +6944,8 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     nil = _builder.createObjSetTag(nil, tag0, "comp.nil.tag");
     _builder.createStore(accStorage, nil);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "comp.elem");
+    auto const compElemType = getListElementLiteralType(sourceVal).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(compElemType, "comp.elem");
 
     // Create blocks for phase 1
     auto* condBlock = _builder.createBlock("comp.cond");
@@ -8676,6 +8769,8 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
             annotateObjectTypeId(storage, *objTypeId);
         if (auto elemTypeId = getListElementTypeId(args[i]))
             annotateListElementTypeId(storage, *elemTypeId);
+        if (auto elt = getListElementLiteralType(args[i]))
+            annotateListElementLiteralType(storage, *elt);
 
         // Track function references passed as arguments
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
@@ -8695,6 +8790,8 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         auto* loaded = _builder.createLoad(storage, std::string(label));
         if (auto elemTypeId = getListElementTypeId(storage))
             annotateListElementTypeId(loaded, *elemTypeId);
+        if (auto elt = getListElementLiteralType(storage))
+            annotateListElementLiteralType(loaded, *elt);
         if (auto objTypeId = getObjectTypeId(storage))
             annotateObjectTypeId(loaded, *objTypeId);
         return loaded;
@@ -8825,7 +8922,8 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     nil = _builder.createObjSetTag(nil, tag0, "map.nil.tag");
     _builder.createStore(accStorage, nil);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "map.elem");
+    auto const mapElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(mapElemType, "map.elem");
 
     // Propagate list element type to extracted elements (e.g., ProcessInfo for ps)
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -8964,7 +9062,8 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     nil = _builder.createObjSetTag(nil, tag0, "filter.nil.tag");
     _builder.createStore(accStorage, nil);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "filter.elem");
+    auto const filterElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(filterElemType, "filter.elem");
 
     // Propagate list element type to extracted elements (e.g., ProcessInfo for ps)
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -8973,6 +9072,8 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
         // Also annotate srcStorage so the result list inherits element type
         annotateListElementTypeId(srcStorage, *elemTypeId);
     }
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(srcStorage, *elt);
 
     // Create blocks
     auto* condBlock = _builder.createBlock("filter.cond");
@@ -9023,7 +9124,7 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.acc.tmp");
     auto* accForCons = _builder.createLoad(accStorage, "filter.acc.for_cons");
     _builder.createStore(accTmp, accForCons);
-    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "filter.elem.tmp");
+    auto* elemTmp = createAllocaInEntryBlock(filterElemType, "filter.elem.tmp");
     _builder.createStore(elemTmp, elemForCons);
 
     CoreVM::Value* cons = _builder.createObjAlloc(typeId, "filter.cons");
@@ -9083,6 +9184,8 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     // Propagate list element type through filter (same element type as input)
     if (auto elemTypeId = getListElementTypeId(listValue))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
@@ -9111,7 +9214,8 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
     auto* accStorage = createAllocaInEntryBlock(initValue->type(), "fold.acc");
     _builder.createStore(accStorage, initValue);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "fold.elem");
+    auto const foldElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(foldElemType, "fold.elem");
 
     // Propagate list element type to extracted elements
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -9186,9 +9290,10 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "reduce.src");
     _builder.createStore(srcStorage, listValue);
 
-    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.acc");
+    auto const reduceElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* accStorage = createAllocaInEntryBlock(reduceElemType, "reduce.acc");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "reduce.result");
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.elem");
+    auto* elemAlloca = createAllocaInEntryBlock(reduceElemType, "reduce.elem");
 
     // Propagate list element type to extracted elements
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -9265,7 +9370,7 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     // Wrap result in Some
     _builder.setInsertPoint(someBlock);
     auto* finalAcc = _builder.createLoad(accStorage, "reduce.final_acc");
-    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "reduce.acc.tmp");
+    auto* accTmp = createAllocaInEntryBlock(reduceElemType, "reduce.acc.tmp");
     _builder.createStore(accTmp, finalAcc);
 
     CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "reduce.some");
@@ -9347,6 +9452,8 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
     if (auto elemTypeId = getListElementTypeId(listValue))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value* listValue)
@@ -9371,7 +9478,8 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "find.src");
     _builder.createStore(srcStorage, listValue);
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "find.elem");
+    auto const findElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(findElemType, "find.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "find.result");
 
     // Propagate list element type to extracted elements
@@ -9421,7 +9529,7 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
     // Found: wrap element in Some
     _builder.setInsertPoint(foundBlock);
     auto* foundElem = _builder.createLoad(elemAlloca, "find.found.elem");
-    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "find.elem.tmp");
+    auto* elemTmp = createAllocaInEntryBlock(findElemType, "find.elem.tmp");
     _builder.createStore(elemTmp, foundElem);
 
     CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "find.some");
@@ -9466,7 +9574,8 @@ void IRGenerator::generateExistsIR(std::string const& predParamName, CoreVM::Val
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "exists.src");
     _builder.createStore(srcStorage, listValue);
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "exists.elem");
+    auto const existsElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(existsElemType, "exists.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "exists.result");
 
     // Propagate list element type to extracted elements
@@ -9546,7 +9655,8 @@ void IRGenerator::generateForallIR(std::string const& predParamName, CoreVM::Val
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "forall.src");
     _builder.createStore(srcStorage, listValue);
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "forall.elem");
+    auto const forallElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(forallElemType, "forall.elem");
     auto* resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Boolean, "forall.result");
 
     // Propagate list element type to extracted elements
@@ -9634,7 +9744,8 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     // Allocas
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "each.src");
     _builder.createStore(srcStorage, listValue);
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "each.elem");
+    auto const eachElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(eachElemType, "each.elem");
 
     // Propagate list element type to extracted elements
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -9816,6 +9927,8 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
     if (auto elemTypeId = getListElementTypeId(listValue))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
@@ -9870,6 +9983,8 @@ void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listV
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
     if (auto elemTypeId = getListElementTypeId(listValue))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
@@ -10165,6 +10280,8 @@ void IRGenerator::generateSortIR(CoreVM::Value* listValue)
     _result =
         _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { listValue }, "sort.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateDistinctIR(CoreVM::Value* listValue)
@@ -10178,6 +10295,8 @@ void IRGenerator::generateDistinctIR(CoreVM::Value* listValue)
     _result =
         _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { listValue }, "distinct.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Value* listValue)
@@ -10210,7 +10329,8 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     nil = _builder.createObjSetTag(nil, tag0, "sortBy.nil.tag");
     _builder.createStore(accStorage, nil);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem");
+    auto const sortByElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(sortByElemType, "sortBy.elem");
 
     // Propagate list element type to extracted elements
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -10218,7 +10338,7 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
 
     // Temp allocas for values that must survive ObjAlloc
     auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.key.tmp");
-    auto* elemTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "sortBy.elem.tmp2");
+    auto* elemTmp2 = createAllocaInEntryBlock(sortByElemType, "sortBy.elem.tmp2");
     auto* tupleTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.tuple.tmp");
     auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc.tmp");
 
@@ -10309,6 +10429,8 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
     if (auto elemTypeId = getListElementTypeId(listValue))
         annotateListElementTypeId(_result, *elemTypeId);
+    if (auto elt = getListElementLiteralType(listValue))
+        annotateListElementLiteralType(_result, *elt);
 }
 
 void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue)
@@ -10341,7 +10463,8 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     nil = _builder.createObjSetTag(nil, tag0, "groupBy.nil.tag");
     _builder.createStore(accStorage, nil);
 
-    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.elem");
+    auto const groupByElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(groupByElemType, "groupBy.elem");
 
     // Propagate list element type to extracted elements
     if (auto elemTypeId = getListElementTypeId(listValue))
@@ -10349,7 +10472,7 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
 
     // Temp allocas for values that must survive ObjAlloc
     auto* keyTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.key.tmp");
-    auto* elemTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "groupBy.elem.tmp2");
+    auto* elemTmp2 = createAllocaInEntryBlock(groupByElemType, "groupBy.elem.tmp2");
     auto* tupleTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.tuple.tmp");
     auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc.tmp");
 

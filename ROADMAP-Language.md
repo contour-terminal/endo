@@ -76,6 +76,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Variadic parameters: `let f ...args = ...` — collects extra arguments into a list
 - [x] Splat expression: `...args` in shell commands — expands list into individual command arguments
 - [x] Shell aliases via let bindings: `let ll ...args = & exa -l ...args`
+- [x] Variadic function invocation at statement level: bare `ll` or `ll somefile` with shell-mode arg parsing
 
 ## Lists & Collections
 
@@ -90,6 +91,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Construction: `replicate` — create list of N copies of a value
 - [x] Utility list operations: `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten`
 - [x] Remaining list operations (`each`, etc.)
+- [x] List element literal type tracking for correct string printing in HOFs
 
 ## Pattern Matching
 

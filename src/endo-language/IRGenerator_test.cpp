@@ -6958,6 +6958,57 @@ TEST_CASE("IRGenerator.FSharp.variadic.stmt_level_ampersand")
     CHECK(generatesIRSuccessfully("& echo test"));
 }
 
+TEST_CASE("IRGenerator.FSharp.variadic.zero_arg_invocation")
+{
+    // Zero-arg variadic function at statement level runs the body
+    CHECK(executeSourceAndGetOutput("let greet ...xs = print \"hello\"; greet") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.unquoted_shell_args")
+{
+    // Unquoted identifiers as shell arguments at statement level (splat to shell command)
+    CHECK(executeSourceAndGetOutput(R"(let say ...xs = & echo ...xs; say hello world)") == "hello world\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.flag_args")
+{
+    // Shell flags as arguments at statement level
+    CHECK(executeSourceAndGetOutput(R"(let say ...xs = & echo ...xs; say -la)") == "-la\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.each_print_strings")
+{
+    // Variadic function iterating string args with each+print
+    CHECK(executeSourceAndGetOutput(R"(let say ...xs = each (fun x -> print x) xs; say hello world)")
+          == "helloworld");
+}
+
+TEST_CASE("IRGenerator.FSharp.variadic.each_print_flag_args")
+{
+    // Variadic function iterating flag args with each+print
+    CHECK(executeSourceAndGetOutput(R"(let say ...xs = each (fun x -> print x) xs; say -la)") == "-la");
+}
+
+// =============================================================================
+// F# list element string printing tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list.each_print_strings")
+{
+    CHECK(executeSourceAndGetOutput(R"(each print ["hello"; "world"])") == "helloworld");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.each_println_strings")
+{
+    CHECK(executeSourceAndGetOutput(R"(each println ["hello"; "world"])") == "hello\nworld\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.each_print_numbers")
+{
+    // Numbers should still work correctly with element type tracking
+    CHECK(executeSourceAndGetOutput(R"(each print [1; 2; 3])") == "123");
+}
+
 // =============================================================================
 // F# fetch builtin IR Generation Tests
 // =============================================================================

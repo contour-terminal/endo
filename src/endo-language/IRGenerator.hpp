@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 
@@ -651,6 +652,23 @@ class IRGenerator final: public ast::Visitor
 
     /// Retrieves the list element type ID annotation for a value, if any.
     [[nodiscard]] std::optional<uint16_t> getListElementTypeId(CoreVM::Value* val) const;
+
+    /// Tracks the element literal type for list values.
+    /// When a list is known to contain elements of a specific primitive type (String, Number, Float),
+    /// this annotation propagates through let bindings and pipelines so that HOF element allocas
+    /// use the correct type instead of hardcoded Number.
+    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _listElementLiteralTypes;
+
+    /// Annotates a list value with the literal type of its elements.
+    void annotateListElementLiteralType(CoreVM::Value* val, CoreVM::LiteralType type);
+
+    /// Retrieves the list element literal type annotation for a value, if any.
+    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementLiteralType(CoreVM::Value* val) const;
+
+    /// Determines the common literal type of a collection of values.
+    /// Returns the shared type if all values have the same non-Void type, std::nullopt otherwise.
+    [[nodiscard]] static std::optional<CoreVM::LiteralType> determineCommonLiteralType(
+        std::span<CoreVM::Value* const> values);
 
     /// Tracks registered record type definitions.
     struct RecordTypeInfo
