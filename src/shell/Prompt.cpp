@@ -190,18 +190,21 @@ std::string Prompt::read()
                         if (linesToMoveDown > 0)
                             out.moveDown(linesToMoveDown);
                     }
+                    out.enableReflow();
                     out.writeRaw("\r\n");
                     out.flush();
                     return inputText;
                 }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
+                    _terminal.output().enableReflow();
                     _terminal.output().writeRaw("^C\r\n");
                     _terminal.output().flush();
                     _promptComponent->clear();
                     return {};
                 case PromptComponent::Action::Eof:
                     // Ctrl+D on empty line - signal EOF
+                    _terminal.output().enableReflow();
                     _terminal.output().writeRaw("\r\n");
                     _terminal.output().flush();
                     _aborted = true;
@@ -290,17 +293,20 @@ std::optional<std::string> Prompt::processInput()
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                 }
+                out.enableReflow();
                 out.writeRaw("\r\n");
                 out.flush();
                 _promptComponent->clear();
                 return result;
             }
             case PromptComponent::Action::Abort:
+                _terminal.output().enableReflow();
                 _terminal.output().writeRaw("^C\r\n");
                 _terminal.output().flush();
                 _promptComponent->clear();
                 return std::string {};
             case PromptComponent::Action::Eof:
+                _terminal.output().enableReflow();
                 _terminal.output().writeRaw("\r\n");
                 _terminal.output().flush();
                 _aborted = true;
@@ -352,6 +358,9 @@ void Prompt::display()
     // Update component area
     auto prefSize = _promptComponent->preferredSize();
     _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), prefSize.height });
+
+    // Disable text reflow during prompt rendering (re-enabled on submit/abort/EOF)
+    _terminal.output().disableReflow();
 
     // Render
     _screen->draw();

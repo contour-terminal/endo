@@ -325,6 +325,16 @@ void TerminalOutput::setSingleWidth()
     _buffer += "\033#5";
 }
 
+void TerminalOutput::disableReflow()
+{
+    _buffer += "\033[?2028l";
+}
+
+void TerminalOutput::enableReflow()
+{
+    _buffer += "\033[?2028h";
+}
+
 void TerminalOutput::showCursor()
 {
     _buffer += "\033[?25h";

@@ -160,6 +160,12 @@ class TerminalOutput
     /// @brief Sets the current line to single-width (ESC #5).
     void setSingleWidth();
 
+    /// @brief Disables text reflow mode (DEC mode 2028l — Contour extension).
+    void disableReflow();
+
+    /// @brief Enables text reflow mode (DEC mode 2028h — Contour extension).
+    void enableReflow();
+
     /// @brief Shows the cursor (CSI ?25h).
     void showCursor();
 
