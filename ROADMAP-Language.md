@@ -10,7 +10,7 @@ This document tracks the implementation status of F# language features as define
 
 - [x] Immutable bindings: `let x = 42`
 - [x] Mutable bindings: `let mut x = 0`
-- [x] Export bindings: `let export X = expr` — binds value and exports as environment variable
+- [x] Export bindings: `let export X = expr` — binds value and exports as environment variable (scalar types only)
 - [x] Mutation operator: `x <- x + 1`
 - [x] Lambda expressions: `fun x -> x * 2`
 - [x] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc

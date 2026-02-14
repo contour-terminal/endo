@@ -372,7 +372,15 @@ let export GREETING = "hello"
 let export VERBOSE = true     # exports as "true"
 ```
 
-> **Note:** `let export rec` is not allowed — functions cannot be exported.
+> **Note:** Only scalar types (string, number, float, bool) can be exported.
+> Compound types (list, tuple, option, result) produce a compile error.
+> Use `|> join ":"` to convert lists:
+>
+> ```fsharp
+> let export PATH = ["/bin"; "/usr/bin"; "/usr/local/bin"] |> join ":"
+> ```
+>
+> `let export rec` is not allowed — functions cannot be exported.
 > Export happens at binding time only; subsequent mutations are not re-exported.
 
 ### 4.4 Destructuring

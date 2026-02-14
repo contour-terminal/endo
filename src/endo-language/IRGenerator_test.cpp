@@ -90,6 +90,32 @@ TEST_CASE("IRGenerator.FSharp.let_export_ir_generation")
     REQUIRE(generatesIRSuccessfully("let export mut Y = \"test\""));
 }
 
+TEST_CASE("IRGenerator.FSharp.let_export_list_error")
+{
+    CHECK(generatesIRWithError("let export X = [1; 2; 3]", "'let export' requires a scalar type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_tuple_error")
+{
+    CHECK(generatesIRWithError("let export X = (1, 2)", "'let export' requires a scalar type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_option_error")
+{
+    CHECK(generatesIRWithError("let export X = Some 42", "'let export' requires a scalar type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_result_error")
+{
+    CHECK(generatesIRWithError("let export X = Ok 42", "'let export' requires a scalar type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_list_join")
+{
+    CHECK(executeSourceAndGetOutput(R"(let export X = ["/bin"; "/usr/bin"] |> join ":"; print X)")
+          == "/bin:/usr/bin");
+}
+
 // =============================================================================
 // F# Identifier Expression IR Generation Tests
 // =============================================================================
@@ -4591,6 +4617,11 @@ TEST_CASE("IRGenerator.FSharp.string_join_basic")
 TEST_CASE("IRGenerator.FSharp.string_join_empty")
 {
     CHECK(executesWithOutput(R"(print (join "," []))", ""));
+}
+
+TEST_CASE("IRGenerator.FSharp.string_join_pipeline")
+{
+    CHECK(executesWithOutput(R"(let r = ["a"; "b"; "c"] |> join "-"; print r)", "a-b-c"));
 }
 
 // =============================================================================

@@ -4177,6 +4177,15 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr;
 
+    // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
+    // Users should compose with |> join ":" to convert lists before exporting.
+    if (node.isExported && isObjectExpr)
+    {
+        reportTypeError("'let export' requires a scalar type (string, number, float, bool), "
+                        "not a compound type. Use '|> join \":\"' to convert lists to strings.");
+        return;
+    }
+
     // Codegen the value expression
     CoreVM::Value* value = codegen(node.value.get());
     if (!value)
@@ -5071,6 +5080,32 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             }
             _result = _builder.createCallFunction(
                 _builder.getBuiltinFunction(*callback), { value, patternArg }, sigName);
+            return;
+        }
+
+        // Handle join as partial application in pipeline:
+        // list |> join ":"  →  string_join(":", list)
+        if (baseIdent->name == "join")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("join in pipeline requires exactly 1 argument");
+                return;
+            }
+            auto* separatorArg = codegen(explicitArgExprs[0]);
+            if (!separatorArg)
+            {
+                reportTypeError("Failed to evaluate join separator argument");
+                return;
+            }
+            auto* callback = findCallback("string_join(SI)S");
+            if (!callback)
+            {
+                reportTypeError("string_join builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { separatorArg, value }, "string_join");
             return;
         }
 
