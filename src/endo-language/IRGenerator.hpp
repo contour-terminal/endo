@@ -126,6 +126,12 @@ class IRGenerator final: public ast::Visitor
     template <typename... Args>
     void reportTypeError(std::format_string<Args...> f, Args&&... args);
 
+    /// Reports a type error with suggestions for fixing at the current location.
+    template <typename... Args>
+    void reportTypeErrorWithSuggestions(std::vector<std::string> suggestions,
+                                        std::format_string<Args...> f,
+                                        Args&&... args);
+
     void visit(ast::BuiltinExitStmt const& node) override;
     void visit(ast::BuiltinExportStmt const& node) override;
     void visit(ast::BuiltinChDirStmt const& node) override;

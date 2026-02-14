@@ -5096,6 +5096,7 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
     TRACE_SCOPE("parseListLiteralTokenized");
 
     _lexer.nextToken(); // consume '['
+    consumeNewlines();  // allow newline after '['
 
     // Empty list: []
     if (_lexer.currentToken() == Token::BracketClose)
@@ -5170,6 +5171,7 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
     while (_lexer.currentToken() == Token::Semicolon || _lexer.currentToken() == Token::Comma)
     {
         _lexer.nextToken(); // consume separator
+        consumeNewlines();  // allow newline after separator
 
         // Allow trailing separator
         if (_lexer.currentToken() == Token::BracketClose)
@@ -5180,6 +5182,8 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
             return nullptr;
         elements.push_back(std::move(elem));
     }
+
+    consumeNewlines(); // allow newline before ']'
 
     if (_lexer.currentToken() != Token::BracketClose)
     {

@@ -868,6 +868,21 @@ TEST_CASE("Parser.FSharp.list_identifiers")
     CHECK(elem2->name == "z");
 }
 
+TEST_CASE("Parser.FSharp.list_multiline")
+{
+    auto ast = parse("let xs = [\n  1;\n  2;\n  3\n]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "xs");
+
+    auto* listExpr = dynamic_cast<endo::ast::ListExpr*>(letStmt->value.get());
+    REQUIRE(listExpr != nullptr);
+    REQUIRE(listExpr->elements.size() == 3);
+}
+
 // ============================================================================
 // List Range Tests
 // ============================================================================

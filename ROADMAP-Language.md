@@ -80,7 +80,7 @@ This document tracks the implementation status of F# language features as define
 
 ## Lists & Collections
 
-- [x] List literal construction: `[1; 2; 3]`
+- [x] List literal construction: `[1; 2; 3]` (including multi-line)
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
 - [x] Character ranges: `['a'..'z']`, `['A'..'Z']`, `['0'..'9']`
 - [x] Cons operator: `::` (right-associative, `1 :: 2 :: []`)
@@ -92,6 +92,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Utility list operations: `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten`
 - [x] Remaining list operations (`each`, etc.)
 - [x] List element literal type tracking for correct string printing in HOFs
+- [x] List/tuple elements with block-creating expressions (env, if-then-else) — store-per-element fix
+- [x] Compile-time type checking for heterogeneous list literals (prevents runtime crash)
 
 ## Pattern Matching
 
@@ -166,6 +168,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Pattern matching on errors
 - [x] Try-finally: `try ... finally cleanup`
 - [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue`
+- [x] Compile-time error for unwrapped Option/Result in binary operations (with suggestion to use `?`)
 
 ## Control Flow
 

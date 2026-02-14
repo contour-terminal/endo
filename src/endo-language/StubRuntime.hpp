@@ -192,6 +192,66 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::String)
         .bind(dummyHandler);
 
+    // String operation stubs needed by IRGenerator
+    runtime.registerFunction("string_replace")
+        .param<CoreVM::CoreString>("str")
+        .param<CoreVM::CoreString>("old_val")
+        .param<CoreVM::CoreString>("new_val")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("string_split")
+        .param<CoreVM::CoreString>("str")
+        .param<CoreVM::CoreString>("sep")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("string_join")
+        .param<CoreVM::CoreString>("sep")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    // List operation stubs needed by IRGenerator
+    runtime.registerFunction("list_nth")
+        .param<CoreVM::CoreNumber>("list")
+        .param<CoreVM::CoreNumber>("index")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_last")
+        .param<CoreVM::CoreNumber>("list")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_replicate")
+        .param<CoreVM::CoreNumber>("count")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_char_range")
+        .param<CoreVM::CoreNumber>("start")
+        .param<CoreVM::CoreNumber>("end")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("list_range")
+        .param<CoreVM::CoreNumber>("start")
+        .param<CoreVM::CoreNumber>("step")
+        .param<CoreVM::CoreNumber>("end")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    // Display result stub needed by IRGenerator
+    runtime.registerFunction("display_result")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    // Structured PS stub
+    runtime.registerFunction("structured_ps").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+
     // HTTP fetch builtin stubs
     runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")

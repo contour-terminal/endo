@@ -1179,6 +1179,17 @@ void IRGenerator::reportTypeError(std::format_string<Args...> f, Args&&... args)
     _hasErrors = true;
 }
 
+template <typename... Args>
+void IRGenerator::reportTypeErrorWithSuggestions(std::vector<std::string> suggestions,
+                                                 std::format_string<Args...> f,
+                                                 Args&&... args)
+{
+    auto const msg = std::format(f, std::forward<Args>(args)...);
+    _report.typeErrorWithSuggestions(
+        _builder.sourceLocation(), std::move(suggestions), std::nullopt, "{}", std::string_view(msg));
+    _hasErrors = true;
+}
+
 void IRGenerator::visit(ast::BuiltinExitStmt const& node)
 {
     CoreVM::Value* exitCode = nullptr;
@@ -3098,6 +3109,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         _builder.setInsertPoint(mergeBlock);
         _result = _builder.createLoad(resultStorage, "env.result");
         annotateInnerType(_result, CoreVM::LiteralType::String);
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
         return true;
     }
 
@@ -3895,27 +3907,31 @@ void IRGenerator::visit(ast::TupleExpr const& node)
     // Determine the type ID
     auto typeId = node.elements.size() == 2 ? CoreVM::BuiltinTypeId::Tuple2 : CoreVM::BuiltinTypeId::Tuple3;
 
-    // Codegen all elements
-    std::vector<CoreVM::Value*> elemValues;
-    for (auto const& elem: node.elements)
+    // Codegen all elements, storing each to an alloca immediately.
+    // Elements like `env "X"` create control-flow blocks; storing before the next
+    // element's codegen prevents block-boundary cleanup from discarding values.
+    std::vector<CoreVM::AllocaInstr*> elemAllocas;
+    elemAllocas.reserve(node.elements.size());
+    for (size_t i = 0; i < node.elements.size(); ++i)
     {
-        auto* val = codegen(elem.get());
+        auto* val = codegen(node.elements[i].get());
         if (!val)
         {
             reportTypeError("Failed to generate code for tuple element");
             return;
         }
-        elemValues.push_back(val);
+        auto* alloca = createAllocaInEntryBlock(val->type(), "tuple.elem." + std::to_string(i));
+        _builder.createStore(alloca, val);
+        elemAllocas.push_back(alloca);
     }
 
-    // Allocate the tuple object
+    // Allocate the tuple object and reload each element from its alloca
     CoreVM::Value* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)), "tuple");
 
-    // Set each slot
-    for (size_t i = 0; i < elemValues.size(); ++i)
+    for (size_t i = 0; i < elemAllocas.size(); ++i)
     {
-        obj =
-            _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemValues[i], "tuple.slot");
+        auto* elemVal = _builder.createLoad(elemAllocas[i], "tuple.elem.reload." + std::to_string(i));
+        obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemVal, "tuple.slot");
     }
 
     _result = obj;
@@ -4527,6 +4543,51 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         }
         return;
     }
+
+    // Check for Option/Result operands that need unwrapping
+    auto const checkWrappedType = [&](CoreVM::Value* operand, std::string_view side) -> bool {
+        if (auto const typeId = getObjectTypeId(operand))
+        {
+            if (*typeId == CoreVM::BuiltinTypeId::Option || *typeId == CoreVM::BuiltinTypeId::Result)
+            {
+                // Build a readable type name — typeName() may return "object" for loaded values
+                // since SSA chain walking doesn't traverse through loads, so fall back to
+                // annotation-based naming when possible.
+                auto tn = typeName(operand);
+                if (tn == "object")
+                {
+                    auto const baseName = *typeId == CoreVM::BuiltinTypeId::Option ? "option" : "result";
+                    if (auto const innerType = getInnerType(operand);
+                        innerType && *innerType != CoreVM::LiteralType::Void)
+                    {
+                        auto const innerName = [&]() -> std::string_view {
+                            switch (*innerType)
+                            {
+                                case CoreVM::LiteralType::Number: return "int";
+                                case CoreVM::LiteralType::Float: return "float";
+                                case CoreVM::LiteralType::String: return "string";
+                                case CoreVM::LiteralType::Boolean: return "bool";
+                                default: return "unknown";
+                            }
+                        }();
+                        tn = std::format("{}<{}>", baseName, innerName);
+                    }
+                    else
+                        tn = baseName;
+                }
+                auto suggestions = std::vector<std::string> { std::format(
+                    "Use '?' to unwrap the {} operand, e.g.: expr?", side) };
+                reportTypeErrorWithSuggestions(
+                    std::move(suggestions),
+                    "Cannot use '{}' value directly in binary operation; it must be unwrapped first",
+                    tn);
+                return true;
+            }
+        }
+        return false;
+    };
+    if (checkWrappedType(left, "left") || checkWrappedType(right, "right"))
+        return;
 
     // String concatenation: if + operator and either operand is a string, concat
     if (node.op == ast::BinaryOp::Add
@@ -6663,30 +6724,38 @@ void IRGenerator::visit(ast::ListExpr const& node)
         return;
     }
 
-    // Codegen all elements left-to-right (correct evaluation order),
-    // storing results in a vector.
+    // Codegen all elements left-to-right, storing each to an alloca immediately.
+    // Elements like `env "X"` create control-flow blocks; storing before the next
+    // element's codegen prevents block-boundary cleanup from discarding values.
     std::vector<CoreVM::Value*> elemValues;
+    std::vector<CoreVM::AllocaInstr*> elemAllocas;
     elemValues.reserve(node.elements.size());
-    for (auto const& elem: node.elements)
+    elemAllocas.reserve(node.elements.size());
+    for (size_t i = 0; i < node.elements.size(); ++i)
     {
-        auto* val = codegen(elem.get());
+        auto* val = codegen(node.elements[i].get());
         if (!val)
         {
             reportTypeError("Failed to evaluate list element");
             return;
         }
         elemValues.push_back(val);
+        auto* alloca = createAllocaInEntryBlock(val->type(), "list.elem." + std::to_string(i));
+        _builder.createStore(alloca, val);
+        elemAllocas.push_back(alloca);
     }
 
-    // Store evaluated elements in allocas so they survive across basic blocks
-    // created by ObjAlloc/ObjSetSlot below.
-    std::vector<CoreVM::AllocaInstr*> elemAllocas;
-    elemAllocas.reserve(elemValues.size());
-    for (size_t i = 0; i < elemValues.size(); ++i)
+    // Check element type homogeneity
+    for (size_t i = 1; i < elemValues.size(); ++i)
     {
-        auto* alloca = createAllocaInEntryBlock(elemValues[i]->type(), "list.elem." + std::to_string(i));
-        _builder.createStore(alloca, elemValues[i]);
-        elemAllocas.push_back(alloca);
+        if (!typesCompatible(elemValues[0], elemValues[i]))
+        {
+            reportTypeError("List elements must have the same type: element 0 is '{}' but element {} is '{}'",
+                            typeName(elemValues[0]),
+                            i,
+                            typeName(elemValues[i]));
+            return;
+        }
     }
 
     // Build the list right-to-left: start with Nil, then prepend elements
@@ -7277,6 +7346,7 @@ void IRGenerator::visit(ast::OptionExpr const& node)
         obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "option.tag");
         obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), innerValue, "option.value");
         _result = obj;
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
         annotateInnerType(_result, innerValue->type());
         if (auto objTypeId = getObjectTypeId(innerValue))
             annotateInnerObjectTypeId(_result, *objTypeId);
@@ -7286,6 +7356,7 @@ void IRGenerator::visit(ast::OptionExpr const& node)
         // None - just set tag to 0, no payload needed
         obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(0)), "option.tag");
         _result = obj;
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
     }
 }
 
@@ -7316,6 +7387,7 @@ void IRGenerator::visit(ast::ResultExpr const& node)
     obj = _builder.createObjSetTag(obj, tag, "result.tag");
     obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
     _result = obj;
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
     if (node.isOk)
     {
         annotateInnerType(_result, payloadValue->type());

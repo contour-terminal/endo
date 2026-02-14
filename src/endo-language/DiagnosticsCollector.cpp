@@ -10,6 +10,7 @@
 
 #include "StubRuntime.hpp"
 #include <endo-language/AST.hpp>
+#include <endo-language/IRGenerator.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/Parser.hpp>
 
@@ -265,6 +266,36 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
             .severity = severity,
             .message = msg.text,
         });
+    }
+
+    // Run IR generation to detect type errors with suggestions (e.g., unwrapped Option/Result).
+    // Only propagate errors that have suggestions attached — this avoids false positives from
+    // shell builtins and identifiers not registered in the stub runtime.
+    if (ast && !report.containsFailures())
+    {
+        CoreVM::diagnostics::BufferedReport irReport;
+        IRGenerator::generate(*ast, irReport, runtime, nullptr);
+        for (auto const& msg: irReport.messages())
+        {
+            if (msg.suggestions.empty())
+                continue;
+
+            auto severity = DiagnosticSeverity::Error;
+            using Type = CoreVM::diagnostics::Type;
+            switch (msg.type)
+            {
+                case Type::Warning: severity = DiagnosticSeverity::Warning; break;
+                case Type::TypeError: [[fallthrough]];
+                case Type::LinkError: severity = DiagnosticSeverity::Error; break;
+                default: break;
+            }
+
+            diagnostics.push_back(DiagnosticMessage {
+                .range = coreVmToSourceRange(msg.sourceLocation),
+                .severity = severity,
+                .message = msg.text,
+            });
+        }
     }
 
     // Walk the AST to find unknown commands (only if parse succeeded)

@@ -116,6 +116,12 @@ TEST_CASE("IRGenerator.FSharp.let_export_list_join")
           == "/bin:/usr/bin");
 }
 
+TEST_CASE("IRGenerator.FSharp.list_multiline_join")
+{
+    CHECK(executeSourceAndGetOutput("let r = [\n  \"a\";\n  \"b\";\n  \"c\"\n] |> join \",\"\nprint r")
+          == "a,b,c");
+}
+
 // =============================================================================
 // F# Identifier Expression IR Generation Tests
 // =============================================================================
@@ -7079,4 +7085,115 @@ TEST_CASE("IRGenerator.FSharp.fetch.three_args_error")
 {
     // fetch with too many arguments should be a type error
     CHECK(generatesIRWithError(R"(let r = fetch "a" "b" "c")", "fetch requires 1 or 2 arguments"));
+}
+
+// =============================================================================
+// List/Tuple with block-creating elements (env, if-then-else)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.list_env_calls_in_list")
+{
+    // env calls create control-flow blocks (some/none/merge diamond);
+    // storing each element to an alloca immediately prevents block-boundary
+    // cleanup from discarding intermediate values.
+    CHECK(executesSuccessfully(R"(let r = [(env "HOME"); (env "PATH")]; print r)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_if_then_else_elements")
+{
+    // if-then-else creates blocks; same pattern as env
+    CHECK(executeSourceAndGetOutput("let r = [if true then 1 else 2; if false then 3 else 4]; print r")
+          == "[1; 4]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_handler_function_calls")
+{
+    // Handler-compiled (UCALL) function calls as list elements
+    CHECK(executeSourceAndGetOutput("let f (x: int) : int = x * 2\nlet r = [f 1; f 2; f 3]\nprint r")
+          == "[2; 4; 6]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_inlined_function_calls")
+{
+    // AST-inlined function calls (no control-flow blocks)
+    CHECK(executeSourceAndGetOutput("let f x = x + 1\nlet r = [f 10; f 20]\nprint r") == "[11; 21]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_builtin_function_calls")
+{
+    // Native callback calls as list elements
+    CHECK(executeSourceAndGetOutput(R"(let r = [string_length "abc"; string_length "hello"]; print r)")
+          == "[3; 5]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_mixed_custom_and_builtin")
+{
+    // Mix of handler function (string) + block-creating builtin (option<string>) is heterogeneous
+    CHECK(generatesIRWithError(R"(let f (x: string) : string = x; let r = [f "test"; env "HOME"]; print r)",
+                               "List elements must have the same type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_heterogeneous_int_and_string")
+{
+    // Mixing int and string in list literal should be a type error
+    CHECK(generatesIRWithError(R"(let r = [1; "hello"])", "List elements must have the same type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_heterogeneous_string_and_option")
+{
+    // Mixing string and option<string> in list literal should be a type error
+    CHECK(generatesIRWithError(R"(let r = ["foo"; (env "HOME")])", "List elements must have the same type"));
+}
+
+TEST_CASE("IRGenerator.FSharp.list_homogeneous_options")
+{
+    // Homogeneous list of options should still work
+    CHECK(executesSuccessfully(R"(let r = [(env "HOME"); (env "PATH")]; print r)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_env_calls")
+{
+    // Tuple with env calls — each creates control-flow blocks
+    CHECK(executesSuccessfully(R"(let t = ((env "HOME"), (env "PATH")); print "ok")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple_if_then_else")
+{
+    // Tuple with if-then-else elements
+    CHECK(executeSourceAndGetOutput("let t = (if true then 1 else 2, if false then 3 else 4)\nprint \"ok\"")
+          == "ok");
+}
+
+// =============================================================================
+// Option/Result in Binary Operation — Type Error Detection
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.option_in_binary_add")
+{
+    // Using Option directly in + should produce a type error
+    CHECK(generatesIRWithError(R"(let r = (env "HOME") + "/.local/bin")", "must be unwrapped first"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_in_binary_comparison")
+{
+    // Using Option directly in == should produce a type error
+    CHECK(generatesIRWithError(R"(let r = (env "HOME") == "foo")", "must be unwrapped first"));
+}
+
+TEST_CASE("IRGenerator.FSharp.result_in_binary_add")
+{
+    // Using Result directly in + should produce a type error
+    CHECK(generatesIRWithError(R"(let r = (Ok 42) + 1)", "must be unwrapped first"));
+}
+
+TEST_CASE("IRGenerator.FSharp.option_unwrapped_in_binary_ok")
+{
+    // Using unwrapped Option with ? should compile without type errors (IR generation succeeds)
+    CHECK(generatesIRSuccessfully(R"(let r = (env "HOME")? + "/.local/bin"; print r)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.result_unwrapped_in_binary_ok")
+{
+    // Using unwrapped Result with ? should compile without type errors
+    CHECK(generatesIRSuccessfully(R"(let r = (Ok 42)? + 1; print r)"));
 }
