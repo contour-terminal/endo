@@ -225,3 +225,23 @@ TEST_CASE("DiagnosticsCollector.option_unwrapped_no_type_error", "[diagnostics][
     for (auto const& d: diagnostics)
         CHECK(d.message.find("must be unwrapped") == std::string::npos);
 }
+
+TEST_CASE("DiagnosticsCollector.heterogeneous_list_type_error", "[diagnostics][type-error]")
+{
+    auto diagnostics = collectDiagnostics(R"(let x = ['a', 'b', (env 'c')])");
+    REQUIRE(!diagnostics.empty());
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("same type") != std::string::npos)
+        {
+            found = true;
+            CHECK(d.severity == DiagnosticSeverity::Error);
+            REQUIRE(!d.suggestions.empty());
+            CHECK(d.suggestions[0].find("?") != std::string::npos);
+            CHECK(d.range.start.line == 0);
+            CHECK(d.range.end.character > d.range.start.character);
+        }
+    }
+    CHECK(found);
+}

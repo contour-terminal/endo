@@ -5203,14 +5203,18 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
 {
     TRACE_SCOPE("parseListLiteralTokenized");
 
+    auto const openLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume '['
     consumeNewlines();  // allow newline after '['
 
     // Empty list: []
     if (_lexer.currentToken() == Token::BracketClose)
     {
+        auto const closeLoc = _lexer.currentRange();
         _lexer.nextToken();
-        return std::make_unique<ast::ListExpr>(std::vector<std::unique_ptr<ast::Expr>> {});
+        auto node = std::make_unique<ast::ListExpr>(std::vector<std::unique_ptr<ast::Expr>> {});
+        node->location = SourceLocationRange { openLoc.begin, closeLoc.end };
+        return node;
     }
 
     // Check for list comprehension: [for ...
@@ -5302,9 +5306,12 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
                                            _lexer.currentLiteral());
         return nullptr;
     }
+    auto const closeLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume ']'
 
-    return std::make_unique<ast::ListExpr>(std::move(elements));
+    auto node = std::make_unique<ast::ListExpr>(std::move(elements));
+    node->location = SourceLocationRange { openLoc.begin, closeLoc.end };
+    return node;
 }
 
 // Parse list comprehension when [ is already consumed (F# mode)

@@ -844,8 +844,11 @@ void PromptComponent::onHoverConfirmed(int x, int y)
     {
         if (auto diag = diagnosticAt(sourcePos->line, sourcePos->character))
         {
+            auto tooltipText = diag->message;
+            for (auto const& hint: diag->suggestions)
+                tooltipText += "\nhint: " + hint;
             tui::Point tooltipPos { bounds.x + x, bounds.y + y + 1 };
-            scr->showTooltip(diag->message, tooltipPos, tui::TooltipContentType::PlainText);
+            scr->showTooltip(tooltipText, tooltipPos, tui::TooltipContentType::PlainText);
             return;
         }
     }

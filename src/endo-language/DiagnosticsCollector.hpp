@@ -25,6 +25,7 @@ struct DiagnosticMessage
     SourceRange range;
     DiagnosticSeverity severity = DiagnosticSeverity::Error;
     std::string message;
+    std::vector<std::string> suggestions; ///< Optional fix suggestions (displayed as hints)
 };
 
 /// Collects diagnostics by parsing the given source.

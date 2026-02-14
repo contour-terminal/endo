@@ -265,6 +265,7 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
             .range = coreVmToSourceRange(msg.sourceLocation),
             .severity = severity,
             .message = msg.text,
+            .suggestions = msg.suggestions,
         });
     }
 
@@ -294,6 +295,7 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
                 .range = coreVmToSourceRange(msg.sourceLocation),
                 .severity = severity,
                 .message = msg.text,
+                .suggestions = msg.suggestions,
             });
         }
     }

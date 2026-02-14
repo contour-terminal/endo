@@ -6719,6 +6719,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
 {
     TRACE_SCOPE("visit(ListExpr)");
 
+    // Save this node's source location before codegenning children,
+    // which will overwrite _builder.sourceLocation() with their own locations.
+    auto const listExprLocation = _builder.sourceLocation();
+
     auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
 
     // Empty list: just allocate a Nil (tag=0)
@@ -6753,14 +6757,27 @@ void IRGenerator::visit(ast::ListExpr const& node)
     }
 
     // Check element type homogeneity
+    _builder.setSourceLocation(listExprLocation);
     for (size_t i = 1; i < elemValues.size(); ++i)
     {
         if (!typesCompatible(elemValues[0], elemValues[i]))
         {
-            reportTypeError("List elements must have the same type: element 0 is '{}' but element {} is '{}'",
-                            typeName(elemValues[0]),
-                            i,
-                            typeName(elemValues[i]));
+            auto suggestions = std::vector<std::string> {};
+            if (auto const tid = getObjectTypeId(elemValues[i]);
+                tid && (*tid == CoreVM::BuiltinTypeId::Option || *tid == CoreVM::BuiltinTypeId::Result))
+            {
+                suggestions.push_back(std::format("Use '?' to unwrap element {}, e.g.: (expr)?", i));
+            }
+            else
+            {
+                suggestions.push_back("Ensure all list elements have the same type");
+            }
+            reportTypeErrorWithSuggestions(
+                std::move(suggestions),
+                "List elements must have the same type: element 0 is '{}' but element {} is '{}'",
+                typeName(elemValues[0]),
+                i,
+                typeName(elemValues[i]));
             return;
         }
     }

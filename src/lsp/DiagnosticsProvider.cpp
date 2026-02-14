@@ -17,6 +17,10 @@ std::vector<Diagnostic> computeDiagnostics(std::string const& source,
 
     for (auto const& msg: messages)
     {
+        auto fullMessage = msg.message;
+        for (auto const& hint: msg.suggestions)
+            fullMessage += "\nhint: " + hint;
+
         diagnostics.push_back(Diagnostic {
             .range =
                 Range {
@@ -26,7 +30,7 @@ std::vector<Diagnostic> computeDiagnostics(std::string const& source,
                 },
             .severity = static_cast<DiagnosticSeverity>(static_cast<int>(msg.severity)),
             .source = "endo",
-            .message = msg.message,
+            .message = fullMessage,
         });
     }
 
