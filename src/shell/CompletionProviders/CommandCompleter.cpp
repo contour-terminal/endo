@@ -9,7 +9,7 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <set>
+#include <map>
 
 namespace endo
 {
@@ -27,15 +27,23 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
     // Get builtin candidates from shared engine
     auto builtins = builtinCandidates();
 
-    // Build PATH command candidates
+    // Build PATH command candidates with resolved path as description
+    auto const homeValue = _env.get("HOME");
+    auto const home = homeValue ? std::string(*homeValue) : std::string {};
+
     std::vector<CompletionCandidate> pathCandidates;
     pathCandidates.reserve(_cachedCommands.size());
-    for (auto const& cmd: _cachedCommands)
+    for (auto const& [cmd, fullPath]: _cachedCommands)
+    {
+        auto description = fullPath;
+        if (!home.empty() && description.starts_with(home))
+            description.replace(0, home.size(), "~");
         pathCandidates.push_back(CompletionCandidate { .text = cmd,
                                                        .displayText = cmd,
-                                                       .description = "",
+                                                       .description = std::move(description),
                                                        .detail = {},
                                                        .kind = CompletionKind::Command });
+    }
 
     // Apply fuzzy scoring: builtins at higher base score
     auto results = applyFuzzyScoring(builtins, prefix, 100);
@@ -90,9 +98,9 @@ void CommandCompleter::refreshCacheIfNeeded() const
     }
 }
 
-std::vector<std::string> CommandCompleter::scanPath() const
+std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() const
 {
-    std::set<std::string> commands; // Use set for deduplication
+    std::map<std::string, std::string> commands; // name → full path, keeps first occurrence (PATH priority)
 
     auto pathValue = _env.get("PATH");
     if (!pathValue)
@@ -126,17 +134,17 @@ std::vector<std::string> CommandCompleter::scanPath() const
                 continue;
 
             auto perms = status.permissions();
-            bool isExecutable =
+            auto const isExecutable =
                 (perms & std::filesystem::perms::owner_exec) != std::filesystem::perms::none
                 || (perms & std::filesystem::perms::group_exec) != std::filesystem::perms::none
                 || (perms & std::filesystem::perms::others_exec) != std::filesystem::perms::none;
 
             if (isExecutable)
-                commands.insert(path.filename().string());
+                commands.try_emplace(path.filename().string(), path.string());
         }
     }
 
-    return std::vector<std::string>(commands.begin(), commands.end());
+    return { commands.begin(), commands.end() };
 }
 
 std::vector<std::string> CommandCompleter::builtinNames()

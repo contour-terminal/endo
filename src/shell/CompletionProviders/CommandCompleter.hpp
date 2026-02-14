@@ -5,6 +5,7 @@
 #include <shell/platform/EnvironmentProvider.hpp>
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace endo
@@ -29,12 +30,12 @@ class CommandCompleter: public CompletionProvider
   private:
     EnvironmentProvider const& _env;
 
-    // Cached PATH scan results
-    mutable std::vector<std::string> _cachedCommands;
+    // Cached PATH scan results: (command name, full path)
+    mutable std::vector<std::pair<std::string, std::string>> _cachedCommands;
     mutable std::string _cachedPath;
 
     void refreshCacheIfNeeded() const;
-    [[nodiscard]] std::vector<std::string> scanPath() const;
+    [[nodiscard]] std::vector<std::pair<std::string, std::string>> scanPath() const;
     [[nodiscard]] static std::vector<std::string> builtinNames();
 };
 
