@@ -332,6 +332,17 @@ Consult this section to determine what to work on next.
 - [x] Shell integration: load definitions, register callbacks, spawn commands
 - [x] Bundled definitions for `docker ps`, `docker images`, `git log`, `git status`
 
+### Phase 6.3b — Container Type Tag Slots (runtime element type propagation) ✅
+- [x] Extra type tag slot per container: List slot 2, Option slot 1, Result slot 1, Tuple2 slot 2, Tuple3 slot 3
+- [x] TypeRegistry slotCount increases for all container types
+- [x] Pack/unpack helpers for tuple type tags (`packTypeTag`/`unpackTypeTag`)
+- [x] Runner factory methods: `makeNilList`, `makeConsCell`, `makeSomeOption`, `makeNoneOption`, `makeOkResult`, `makeErrorResult`
+- [x] IR emit helpers: `emitNilList`, `emitListCons`, `emitSomeOption`, `emitNoneOption`, `emitOkResult`, `emitErrorResult`, `emitTuple2`, `emitTuple3`
+- [x] All raw ObjAlloc patterns replaced with emit helpers (List ~20, Option ~13, Result ~2, Tuple ~5 sites)
+- [x] `slotValueToString` helper dispatches on `LiteralType` for proper string/bool/float formatting
+- [x] `valueToString` reads type tag slots for all container types (fixes `println ['a', 'b', 'c']` printing raw pointers)
+- [x] Fix `convertToString` Object branch: check typed objects before `getInnerType()` (innerType describes payload, not container)
+
 ### Phase 6.4 — Bare Expression Evaluation & Table Display
 - [x] Bare expression evaluation at shell prompt: `42`, `Some 42`, `(1, 2)`, `Ok 5`, etc.
 - [x] `display_result` builtin for runtime value display dispatch
