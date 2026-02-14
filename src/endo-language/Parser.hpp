@@ -129,8 +129,15 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpPrimary();     // literals, identifiers, (expr), fun ..., & command
     std::unique_ptr<ast::Expr> parseBlockExprOrRecord(); // { ... } — block, record literal, or record update
     std::unique_ptr<ast::Expr> parseBlockExpr();         // { let x = 1; x + 2 }
-    std::unique_ptr<ast::Expr> parseShellCommandExpr();  // & git status (shell command in F# context)
-    std::unique_ptr<ast::Expr> parseTryWith();           // try expr with ... | try expr finally ...
+
+    /// Parses a sequence of F# expressions/let-bindings delimited by indentation (offside rule).
+    /// Returns a single expression if only one item was parsed, or wraps in BlockExpr.
+    /// @param referenceColumn The column of the enclosing keyword (e.g., `if`), used for indentation check.
+    /// @param terminatorKeyword Optional keyword that terminates the sequence (e.g., "else").
+    std::unique_ptr<ast::Expr> parseFSharpExprSequence(
+        size_t referenceColumn, std::optional<std::string_view> terminatorKeyword = std::nullopt);
+    std::unique_ptr<ast::Expr> parseShellCommandExpr(); // & git status (shell command in F# context)
+    std::unique_ptr<ast::Expr> parseTryWith();          // try expr with ... | try expr finally ...
 
     // Type definitions (records and discriminated unions)
     std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int

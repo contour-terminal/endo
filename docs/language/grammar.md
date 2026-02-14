@@ -88,8 +88,12 @@ lambda_expression = "fun" { pattern } "->" expression
                   | if_expression
                   ;
 
-if_expression   = "if" expression "then" expression [ "else" expression ]
+if_expression   = "if" expression "then" expr_sequence [ "else" expr_sequence ]
                 | match_expression
+                ;
+
+expr_sequence   = expression                                          (* single expression *)
+                | expression NEWLINE { expression NEWLINE } expression (* multi-expression via offside rule *)
                 ;
 
 match_expression = "match" expression "with" { match_arm }

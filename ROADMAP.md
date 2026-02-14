@@ -53,7 +53,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | Process substitution (`<(cmd)`, `>(cmd)`) | ✅ |
 | Logical operators (`&&`, `||`) | ✅ |
 | Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
-| If-then-else-elif expressions (else optional) | ✅ |
+| If-then-else-elif expressions (else optional, multi-expression branches) | ✅ |
 | While-do-end statements | ✅ |
 | For-in loops (`for var in list do ... end`) | ✅ |
 | Break and continue statements | ✅ |
@@ -360,6 +360,7 @@ src/
 - [x] Implement as-patterns in match expressions (`| n as val -> ...`)
 - [x] Persist F# function definitions across REPL prompts (`FSharpPersistentState`)
 - [x] Implement if-then-else expressions (`IfExpr` AST node, parser, IR codegen with alloca/branch/merge)
+- [x] Multi-expression if-then-else branches (F# offside rule) — `parseFSharpExprSequence()` with column-based termination, wraps in `BlockExpr`, 7 test cases
 - [x] Implement mutable variable assignment (`MutAssignStmt` AST node, `<-` operator, mutability tracking via `BindingInfo`)
 - [x] Implement tuple expressions (`TupleExpr` AST node, 2-/3-element tuples via TypedObject with Tuple2/Tuple3 types)
 - [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)

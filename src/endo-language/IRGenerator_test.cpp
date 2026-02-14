@@ -2334,6 +2334,66 @@ TEST_CASE("IRGenerator.FSharp.if_expr_same_type_tuple")
 }
 
 // =============================================================================
+// Multi-expression if-then-else branches (offside rule)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_then_branch")
+{
+    // Multi-expression then branch with let bindings
+    CHECK(
+        executesWithOutput("let r =\n    if true then\n        let a = 3\n        let b = 4\n        a + b\n"
+                           "    else\n        0\nprint r",
+                           "7"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_else_branch")
+{
+    // Multi-expression else branch with let bindings
+    CHECK(executesWithOutput("let r =\n    if false then\n        0\n    else\n        let b = 10\n"
+                             "        let c = 20\n        b + c\nprint r",
+                             "30"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_both_branches")
+{
+    // Both branches have multiple expressions
+    CHECK(
+        executesWithOutput("let r =\n    if true then\n        let x = 2\n        let y = 3\n        x * y\n"
+                           "    else\n        let a = 10\n        let b = 20\n        a + b\nprint r",
+                           "6"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_backward_compat_single_line")
+{
+    // Single-line if-then-else still works
+    CHECK(executesWithOutput("let x = if true then 1 else 2; print x", "1"));
+    CHECK(executesWithOutput("let x = if false then 1 else 2; print x", "2"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_with_print_statements")
+{
+    // Multi-expression branches with side-effectful expressions (print)
+    CHECK(executesWithOutput("if true then\n    print 1\n    print 2\nelse\n    print 3\n", "12"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_nested")
+{
+    // Nested if-then-else inside outer else branch
+    CHECK(executesWithOutput(
+        "let r =\n    if false then\n        0\n    else\n        if true then\n            let x = 42\n"
+        "            x\n        else\n            99\nprint r",
+        "42"));
+}
+
+TEST_CASE("IRGenerator.FSharp.if_multi_expr_recursive_function")
+{
+    // Recursive function with multi-expression branches (calc-1x1 pattern)
+    CHECK(executesWithOutput("let rec go (n: int) =\n    if n <= 0 then\n        let result = 42\n"
+                             "        result\n    else\n        go (n - 1)\nprint (go 3)",
+                             "42"));
+}
+
+// =============================================================================
 // Phase 2 — Mutable Variable Assignment
 // =============================================================================
 

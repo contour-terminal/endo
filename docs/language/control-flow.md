@@ -22,6 +22,17 @@ let category =
     else
         "senior"
 
+# Multi-expression branches (offside rule)
+# Indented lines beyond the `if` column continue the branch.
+let rec process (n: int) =
+    if n <= 0 then
+        let result = 42
+        println $"Done: {result}"
+        result
+    else
+        println $"Step {n}"
+        process (n - 1)
+
 # If expression at statement level (for side effects)
 if fileExists path then
     echo "File found"

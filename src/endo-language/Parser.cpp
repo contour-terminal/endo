@@ -4625,6 +4625,108 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
     return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
 }
 
+std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColumn,
+                                                           std::optional<std::string_view> terminatorKeyword)
+{
+    TRACE_SCOPE("parseFSharpExprSequence");
+
+    std::vector<std::unique_ptr<ast::Statement>> statements;
+    std::unique_ptr<ast::Expr> lastExpr;
+
+    // Parse the first item
+    if (_lexer.currentToken() == Token::Let)
+    {
+        auto let = parseLet();
+        if (!let)
+            return nullptr;
+        statements.push_back(std::move(let));
+    }
+    else
+    {
+        lastExpr = parseFSharpExpr();
+        if (!lastExpr)
+            return nullptr;
+    }
+
+    // Try to parse more items, terminated by indentation or keyword.
+    // Only continue across LineFeed tokens (true line breaks), NOT semicolons.
+    // Semicolons are hard statement separators that terminate the sequence.
+    for (;;)
+    {
+        // Semicolons terminate the expression sequence (hard statement boundary)
+        if (_lexer.currentToken() == Token::Semicolon)
+            break;
+
+        // Only consume LineFeed tokens (true line breaks)
+        bool sawLineFeed = false;
+        while (_lexer.currentToken() == Token::LineFeed)
+        {
+            _lexer.nextToken();
+            sawLineFeed = true;
+        }
+
+        // Check for terminator keyword (e.g., "else")
+        if (terminatorKeyword.has_value() && _lexer.currentToken() == Token::Identifier
+            && _lexer.currentLiteral() == terminatorKeyword.value())
+        {
+            if (sawLineFeed)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
+        // Check column: if current token is at or before reference column, stop
+        if (sawLineFeed && currentTokenColumn() <= referenceColumn)
+        {
+            _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
+        // Check if current token can start a new expression or let binding
+        if (_lexer.currentToken() != Token::Let && !isFSharpPrimary())
+        {
+            if (sawLineFeed)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
+        // Must have a line feed to continue with a new item
+        if (!sawLineFeed)
+            break;
+
+        // Demote previous expression to statement
+        if (lastExpr)
+        {
+            statements.push_back(std::make_unique<ast::ExprStmt>(std::move(lastExpr)));
+            lastExpr = nullptr;
+        }
+
+        // Parse next item
+        if (_lexer.currentToken() == Token::Let)
+        {
+            auto let = parseLet();
+            if (!let)
+                return nullptr;
+            statements.push_back(std::move(let));
+        }
+        else
+        {
+            lastExpr = parseFSharpExpr();
+            if (!lastExpr)
+                return nullptr;
+        }
+    }
+
+    // If only one expression and no statements, return it directly (backward compat)
+    if (statements.empty() && lastExpr)
+        return lastExpr;
+
+    // If we have statements but no trailing expression, use unit as the result
+    if (!lastExpr)
+        lastExpr = std::make_unique<ast::UnitExpr>();
+
+    return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(lastExpr));
+}
+
 std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 {
     TRACE_SCOPE("parseFSharpPrimary");
@@ -4743,6 +4845,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Check for if-then-else expression
             if (lit == "if")
             {
+                auto const ifColumn = currentTokenColumn();
                 auto const ifLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume 'if'
                 consumeNewlines();
@@ -4763,7 +4866,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 _lexer.nextToken(); // consume 'then'
                 consumeNewlines();
 
-                auto thenExpr = parseFSharpExpr();
+                auto thenExpr = parseFSharpExprSequence(ifColumn, "else");
                 if (!thenExpr)
                     return nullptr;
 
@@ -4776,7 +4879,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 {
                     _lexer.nextToken(); // consume 'else'
                     consumeNewlines();
-                    elseExpr = parseFSharpExpr();
+                    elseExpr = parseFSharpExprSequence(ifColumn);
                     if (!elseExpr)
                         return nullptr;
                 }
