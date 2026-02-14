@@ -191,22 +191,22 @@ std::string Prompt::read()
                         if (linesToMoveDown > 0)
                             out.moveDown(linesToMoveDown);
                     }
-                    out.enableReflow();
                     out.writeRaw("\r\n");
+                    out.enableReflow();
                     out.flush();
                     return inputText;
                 }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
-                    _terminal.output().enableReflow();
                     _terminal.output().writeRaw("^C\r\n");
+                    _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _promptComponent->clear();
                     return {};
                 case PromptComponent::Action::Eof:
                     // Ctrl+D on empty line - signal EOF
-                    _terminal.output().enableReflow();
                     _terminal.output().writeRaw("\r\n");
+                    _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _aborted = true;
                     return {};
@@ -294,21 +294,21 @@ std::optional<std::string> Prompt::processInput()
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                 }
-                out.enableReflow();
                 out.writeRaw("\r\n");
+                out.enableReflow();
                 out.flush();
                 _promptComponent->clear();
                 return result;
             }
             case PromptComponent::Action::Abort:
-                _terminal.output().enableReflow();
                 _terminal.output().writeRaw("^C\r\n");
+                _terminal.output().enableReflow();
                 _terminal.output().flush();
                 _promptComponent->clear();
                 return std::string {};
             case PromptComponent::Action::Eof:
-                _terminal.output().enableReflow();
                 _terminal.output().writeRaw("\r\n");
+                _terminal.output().enableReflow();
                 _terminal.output().flush();
                 _aborted = true;
                 return std::string {};
