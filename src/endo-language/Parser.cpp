@@ -3058,6 +3058,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
 {
     TRACE_SCOPE("parseLetInExpr");
+    auto const letLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'let'
 
     // Check for 'rec' modifier
@@ -3107,7 +3108,10 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
         if (!body)
             return nullptr;
 
-        return std::make_unique<ast::LetInExpr>(std::move(pat), std::move(value), std::move(body));
+        auto const endLoc = body->location;
+        auto node = std::make_unique<ast::LetInExpr>(std::move(pat), std::move(value), std::move(body));
+        node->location = endLoc ? SourceLocationRange { letLoc.begin, endLoc->end } : letLoc;
+        return node;
     }
 
     // Expect identifier (binding name)
@@ -3194,12 +3198,15 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     if (!body)
         return nullptr;
 
-    return std::make_unique<ast::LetInExpr>(isRecursive,
-                                            std::move(name),
-                                            std::move(parameters),
-                                            std::move(returnType),
-                                            std::move(value),
-                                            std::move(body));
+    auto const endLoc = body->location;
+    auto node = std::make_unique<ast::LetInExpr>(isRecursive,
+                                                 std::move(name),
+                                                 std::move(parameters),
+                                                 std::move(returnType),
+                                                 std::move(value),
+                                                 std::move(body));
+    node->location = endLoc ? SourceLocationRange { letLoc.begin, endLoc->end } : letLoc;
+    return node;
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
@@ -3507,21 +3514,29 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpUnary()
     // Handle negation: -expr
     if (_lexer.currentToken() == Token::Minus)
     {
+        auto const opLoc = _lexer.currentRange();
         _lexer.nextToken();
         auto operand = parseFSharpUnary();
         if (!operand)
             return nullptr;
-        return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
+        auto const endLoc = operand->location;
+        auto node = std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Neg, std::move(operand));
+        node->location = endLoc ? SourceLocationRange { opLoc.begin, endLoc->end } : opLoc;
+        return node;
     }
 
     // Handle logical not: !expr
     if (_lexer.currentToken() == Token::Not)
     {
+        auto const opLoc = _lexer.currentRange();
         _lexer.nextToken();
         auto operand = parseFSharpUnary();
         if (!operand)
             return nullptr;
-        return std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Not, std::move(operand));
+        auto const endLoc = operand->location;
+        auto node = std::make_unique<ast::UnaryExpr>(ast::UnaryOp::Not, std::move(operand));
+        node->location = endLoc ? SourceLocationRange { opLoc.begin, endLoc->end } : opLoc;
+        return node;
     }
 
     return parseFSharpApplication();
@@ -3584,8 +3599,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
                 return nullptr;
             }
             auto fieldName = _lexer.currentLiteral();
+            auto const fieldLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume field name
+            auto const beginLoc = expr->location;
             expr = std::make_unique<ast::FieldAccessExpr>(std::move(expr), std::move(fieldName));
+            expr->location = beginLoc ? SourceLocationRange { beginLoc->begin, fieldLoc.end } : fieldLoc;
             hasPostfixOps = true;
         }
         else if (_lexer.currentToken() == Token::QuestionDot)
@@ -3601,14 +3619,20 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
                 return nullptr;
             }
             auto fieldName = _lexer.currentLiteral();
+            auto const fieldLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume field name
+            auto const beginLoc = expr->location;
             expr = std::make_unique<ast::OptionalChainExpr>(std::move(expr), std::move(fieldName));
+            expr->location = beginLoc ? SourceLocationRange { beginLoc->begin, fieldLoc.end } : fieldLoc;
             hasPostfixOps = true;
         }
         else if (_lexer.currentToken() == Token::Question)
         {
+            auto const qLoc = _lexer.currentRange();
+            auto const beginLoc = expr->location;
             _lexer.nextToken(); // consume '?'
             expr = std::make_unique<ast::TryExpr>(std::move(expr));
+            expr->location = beginLoc ? SourceLocationRange { beginLoc->begin, qLoc.end } : qLoc;
             hasPostfixOps = true;
         }
         else
@@ -3636,6 +3660,7 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
 
     // try expr with | pattern -> handler | ...
     // try expr finally cleanup
+    auto const tryLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'try'
 
     // Parse the body expression
@@ -3652,7 +3677,10 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
         if (!cleanup)
             return nullptr;
 
-        return std::make_unique<ast::TryFinallyExpr>(std::move(body), std::move(cleanup));
+        auto const endLoc = cleanup->location;
+        auto node = std::make_unique<ast::TryFinallyExpr>(std::move(body), std::move(cleanup));
+        node->location = endLoc ? SourceLocationRange { tryLoc.begin, endLoc->end } : tryLoc;
+        return node;
     }
 
     // Expect 'with' keyword
@@ -3726,12 +3754,19 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
         return nullptr;
     }
 
-    return std::make_unique<ast::TryWithExpr>(std::move(body), std::move(handlers));
+    auto node = std::make_unique<ast::TryWithExpr>(std::move(body), std::move(handlers));
+    auto const& lastHandler = node->handlers.back();
+    if (lastHandler.body && lastHandler.body->location)
+        node->location = SourceLocationRange { tryLoc.begin, lastHandler.body->location->end };
+    else
+        node->location = tryLoc;
+    return node;
 }
 
 std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
 {
     TRACE_SCOPE("parseLambda");
+    auto const funLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'fun'
 
     // Parse parameters until we see '->'
@@ -3773,7 +3808,10 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
     if (!body)
         return nullptr;
 
-    return std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body));
+    auto const endLoc = body->location;
+    auto node = std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body));
+    node->location = endLoc ? SourceLocationRange { funLoc.begin, endLoc->end } : funLoc;
+    return node;
 }
 
 std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
@@ -4533,6 +4571,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         case Token::Number: {
             // Parse as integer or float
             auto const& lit = _lexer.currentLiteral();
+            auto const loc = _lexer.currentRange();
 
             // Detect base prefix (skip optional leading '-')
             auto sv = std::string_view(lit);
@@ -4550,7 +4589,9 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             {
                 auto const value = std::stod(lit);
                 _lexer.nextToken();
-                return std::make_unique<ast::FloatLiteralExpr>(value);
+                auto node = std::make_unique<ast::FloatLiteralExpr>(value);
+                node->location = loc;
+                return node;
             }
 
             // Integer parsing with base detection
@@ -4575,7 +4616,9 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     value = 0;
             }
             _lexer.nextToken();
-            return std::make_unique<ast::IntLiteralExpr>(value);
+            auto node = std::make_unique<ast::IntLiteralExpr>(value);
+            node->location = loc;
+            return node;
         }
 
         case Token::BracketOpen: {
@@ -4584,12 +4627,18 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         }
 
         case Token::True: {
+            auto const loc = _lexer.currentRange();
             _lexer.nextToken();
-            return std::make_unique<ast::BoolLiteralExpr>(true);
+            auto node = std::make_unique<ast::BoolLiteralExpr>(true);
+            node->location = loc;
+            return node;
         }
         case Token::False: {
+            auto const loc = _lexer.currentRange();
             _lexer.nextToken();
-            return std::make_unique<ast::BoolLiteralExpr>(false);
+            auto node = std::make_unique<ast::BoolLiteralExpr>(false);
+            node->location = loc;
+            return node;
         }
 
         case Token::Identifier: {
@@ -4598,18 +4647,25 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Check for break/continue expressions (used inside loops in F# if-then-else)
             if (lit == "break")
             {
+                auto const loc = _lexer.currentRange();
                 _lexer.nextToken();
-                return std::make_unique<ast::BreakExpr>();
+                auto node = std::make_unique<ast::BreakExpr>();
+                node->location = loc;
+                return node;
             }
             if (lit == "continue")
             {
+                auto const loc = _lexer.currentRange();
                 _lexer.nextToken();
-                return std::make_unique<ast::ContinueExpr>();
+                auto node = std::make_unique<ast::ContinueExpr>();
+                node->location = loc;
+                return node;
             }
 
             // Check for if-then-else expression
             if (lit == "if")
             {
+                auto const ifLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume 'if'
                 consumeNewlines();
                 auto condition = parseFSharpExpr();
@@ -4650,8 +4706,14 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 if (!elseExpr)
                     return nullptr;
 
-                return std::make_unique<ast::IfExpr>(
+                auto const endLoc = elseExpr->location;
+                auto node = std::make_unique<ast::IfExpr>(
                     std::move(condition), std::move(thenExpr), std::move(elseExpr));
+                if (endLoc)
+                    node->location = SourceLocationRange { ifLoc.begin, endLoc->end };
+                else
+                    node->location = ifLoc;
+                return node;
             }
 
             // Check for list literal starting with '[' (in non-F# mode, [ is part of identifier)
@@ -4663,9 +4725,12 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Placeholder lambda sugar: _ → IdentifierExpr("__x")
             if (lit == "_")
             {
+                auto const loc = _lexer.currentRange();
                 _lexer.nextToken();
                 ++_placeholderCount;
-                return std::make_unique<ast::IdentifierExpr>("__x");
+                auto node = std::make_unique<ast::IdentifierExpr>("__x");
+                node->location = loc;
+                return node;
             }
 
             // User-defined union constructor
@@ -4673,14 +4738,17 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             {
                 auto const& [ctorTypeName, variantIdx] = ctorIt->second;
                 auto payloadSlots = _constructorPayloadSlots[lit];
+                auto const ctorLoc = _lexer.currentRange();
                 auto ctorName = consumeLiteral();
 
                 std::vector<std::unique_ptr<ast::Expr>> args;
+                std::optional<SourceLocationRange> lastArgLoc;
                 if (payloadSlots > 0 && isFSharpPrimary())
                 {
                     auto arg = parseFSharpPrimary();
                     if (!arg)
                         return nullptr;
+                    lastArgLoc = arg->location;
 
                     // For multi-slot constructors, if the argument is a tuple, flatten it
                     if (payloadSlots > 1)
@@ -4701,22 +4769,32 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     }
                 }
 
-                return std::make_unique<ast::UnionConstructorExpr>(
+                auto node = std::make_unique<ast::UnionConstructorExpr>(
                     ctorTypeName, std::move(ctorName), std::move(args));
+                node->location =
+                    lastArgLoc ? SourceLocationRange { ctorLoc.begin, lastArgLoc->end } : ctorLoc;
+                return node;
             }
 
             // Regular identifier
+            auto const loc = _lexer.currentRange();
             std::string name = consumeLiteral();
-            return std::make_unique<ast::IdentifierExpr>(std::move(name));
+            auto node = std::make_unique<ast::IdentifierExpr>(std::move(name));
+            node->location = loc;
+            return node;
         }
 
         case Token::RndOpen: {
             // Unit expression: (), or parenthesized expression, or tuple
+            auto const openLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume '('
             if (_lexer.currentToken() == Token::RndClose)
             {
+                auto const closeLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume ')'
-                return std::make_unique<ast::UnitExpr>();
+                auto node = std::make_unique<ast::UnitExpr>();
+                node->location = SourceLocationRange { openLoc.begin, closeLoc.end };
+                return node;
             }
 
             // Save and reset placeholder state for this parenthesized scope
@@ -4751,21 +4829,27 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                        _lexer.currentLiteral());
                     return nullptr;
                 }
+                auto const closeLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume ')'
 
                 auto const localPlaceholders = _placeholderCount;
                 _placeholderCount = savedPlaceholderCount;
                 _placeholderScopeActive = savedPlaceholderScope;
 
+                auto const spanLoc = SourceLocationRange { openLoc.begin, closeLoc.end };
                 if (localPlaceholders > 0)
                 {
                     // Wrap tuple in lambda: (_.a, _.b) → fun __x -> (__x.a, __x.b)
                     std::vector<ast::TypedParameter> params;
                     params.emplace_back("__x");
-                    return std::make_unique<ast::LambdaExpr>(
+                    auto node = std::make_unique<ast::LambdaExpr>(
                         std::move(params), std::make_unique<ast::TupleExpr>(std::move(elements)));
+                    node->location = spanLoc;
+                    return node;
                 }
-                return std::make_unique<ast::TupleExpr>(std::move(elements));
+                auto node = std::make_unique<ast::TupleExpr>(std::move(elements));
+                node->location = spanLoc;
+                return node;
             }
 
             if (_lexer.currentToken() != Token::RndClose)
@@ -4777,20 +4861,26 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    _lexer.currentLiteral());
                 return nullptr;
             }
+            auto const closeLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume ')'
 
             auto const localPlaceholders = _placeholderCount;
             _placeholderCount = savedPlaceholderCount;
             _placeholderScopeActive = savedPlaceholderScope;
 
+            auto const spanLoc = SourceLocationRange { openLoc.begin, closeLoc.end };
             if (localPlaceholders > 0)
             {
                 // Wrap expression in lambda: (_ + 1) → fun __x -> __x + 1
                 std::vector<ast::TypedParameter> params;
                 params.emplace_back("__x");
-                return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(first));
+                auto node = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(first));
+                node->location = spanLoc;
+                return node;
             }
-            return std::make_unique<ast::ParenExpr>(std::move(first));
+            auto node = std::make_unique<ast::ParenExpr>(std::move(first));
+            node->location = spanLoc;
+            return node;
         }
 
         case Token::BraceOpen: {
@@ -4805,6 +4895,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
         case Token::OptionSome: {
             // Some expr - Option constructor with value
+            auto const someLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume 'Some'
             auto value = parseFSharpPrimary();
             if (!value)
@@ -4816,17 +4907,24 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    _lexer.currentLiteral());
                 return nullptr;
             }
-            return std::make_unique<ast::OptionExpr>(true, std::move(value));
+            auto const endLoc = value->location;
+            auto node = std::make_unique<ast::OptionExpr>(true, std::move(value));
+            node->location = endLoc ? SourceLocationRange { someLoc.begin, endLoc->end } : someLoc;
+            return node;
         }
 
         case Token::OptionNone: {
             // None - Option constructor without value
+            auto const loc = _lexer.currentRange();
             _lexer.nextToken(); // consume 'None'
-            return std::make_unique<ast::OptionExpr>(false);
+            auto node = std::make_unique<ast::OptionExpr>(false);
+            node->location = loc;
+            return node;
         }
 
         case Token::ResultOk: {
             // Ok expr - Result constructor for success
+            auto const okLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume 'Ok'
             auto value = parseFSharpPrimary();
             if (!value)
@@ -4838,11 +4936,15 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    _lexer.currentLiteral());
                 return nullptr;
             }
-            return std::make_unique<ast::ResultExpr>(true, std::move(value));
+            auto const endLoc = value->location;
+            auto node = std::make_unique<ast::ResultExpr>(true, std::move(value));
+            node->location = endLoc ? SourceLocationRange { okLoc.begin, endLoc->end } : okLoc;
+            return node;
         }
 
         case Token::ResultError: {
             // Error expr - Result constructor for error
+            auto const errorLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume 'Error'
             auto value = parseFSharpPrimary();
             if (!value)
@@ -4854,7 +4956,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    _lexer.currentLiteral());
                 return nullptr;
             }
-            return std::make_unique<ast::ResultExpr>(false, std::move(value));
+            auto const endLoc = value->location;
+            auto node = std::make_unique<ast::ResultExpr>(false, std::move(value));
+            node->location = endLoc ? SourceLocationRange { errorLoc.begin, endLoc->end } : errorLoc;
+            return node;
         }
 
         case Token::Try: {
@@ -4864,8 +4969,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
         case Token::String: {
             // Single-quoted string literal: 'hello'
+            auto const loc = _lexer.currentRange();
             std::string value = consumeLiteral();
-            return std::make_unique<ast::LiteralExpr>(std::move(value), ast::LiteralQuoting::Quoted);
+            auto node = std::make_unique<ast::LiteralExpr>(std::move(value), ast::LiteralQuoting::Quoted);
+            node->location = loc;
+            return node;
         }
 
         case Token::DblQuoteStart: {
@@ -5824,6 +5932,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
     // Consume 'match' keyword
     if (_lexer.currentToken() != Token::Match)
         return nullptr;
+    auto const matchLoc = _lexer.currentRange();
     _lexer.nextToken();
 
     // Parse scrutinee expression
@@ -5947,7 +6056,14 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
         return nullptr;
     }
 
-    return std::make_unique<ast::MatchExpr>(std::move(scrutinee), std::move(arms));
+    auto node = std::make_unique<ast::MatchExpr>(std::move(scrutinee), std::move(arms));
+    // Span from 'match' to last arm body
+    auto const& lastArm = node->arms.back();
+    if (lastArm.body && lastArm.body->location)
+        node->location = SourceLocationRange { matchLoc.begin, lastArm.body->location->end };
+    else
+        node->location = matchLoc;
+    return node;
 }
 
 std::unique_ptr<pattern::Pattern> Parser::parsePattern()

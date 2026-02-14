@@ -178,3 +178,50 @@ TEST_CASE("DiagnosticsCollector.exit_no_crash", "[diagnostics][builtins]")
     auto diagnostics = collectDiagnostics("exit 0");
     CHECK(diagnostics.empty());
 }
+
+// =============================================================================
+// Type error suggestion propagation
+// =============================================================================
+
+TEST_CASE("DiagnosticsCollector.option_in_binary_op_type_error", "[diagnostics][type-error]")
+{
+    auto diagnostics = collectDiagnostics(R"(let r = (env "HOME") + "/.local/bin")");
+    REQUIRE(!diagnostics.empty());
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("must be unwrapped first") != std::string::npos)
+        {
+            found = true;
+            CHECK(d.severity == DiagnosticSeverity::Error);
+            REQUIRE(!d.suggestions.empty());
+            CHECK(d.suggestions[0].find("?") != std::string::npos);
+            // Diagnostic must have a non-zero-width source range (not the default (0,0))
+            CHECK(d.range.end.character > d.range.start.character);
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DiagnosticsCollector.option_type_error_has_correct_range", "[diagnostics][type-error]")
+{
+    //           0123456789...
+    auto diagnostics = collectDiagnostics(R"(let r = (env "HOME") + "/.local/bin")");
+    REQUIRE(!diagnostics.empty());
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("must be unwrapped") != std::string::npos)
+        {
+            // Range should cover from `(env "HOME")` through `"/.local/bin"` on line 0
+            CHECK(d.range.start.line == 0);
+            CHECK(d.range.end.character > d.range.start.character);
+        }
+    }
+}
+
+TEST_CASE("DiagnosticsCollector.option_unwrapped_no_type_error", "[diagnostics][type-error]")
+{
+    auto diagnostics = collectDiagnostics(R"(let r = (env "HOME")? + "/.local/bin")");
+    for (auto const& d: diagnostics)
+        CHECK(d.message.find("must be unwrapped") == std::string::npos);
+}

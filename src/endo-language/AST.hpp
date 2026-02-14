@@ -29,6 +29,18 @@ struct Node
     virtual ~Node() = default;
 
     virtual void accept(Visitor&) const = 0;
+
+  protected:
+    /// Computes a source location range spanning from the left to the right child node.
+    void setSpanFromChildren(Node const& left, Node const& right)
+    {
+        if (left.location && right.location)
+            location = SourceLocationRange { left.location->begin, right.location->end };
+        else if (left.location)
+            location = left.location;
+        else if (right.location)
+            location = right.location;
+    }
 };
 
 struct FileDescriptor final: public Node
@@ -1058,6 +1070,7 @@ struct BinaryExpr final: public Expr
     BinaryExpr(BinaryOp operation, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r):
         op(operation), left(std::move(l)), right(std::move(r))
     {
+        setSpanFromChildren(*left, *right);
     }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
@@ -1088,6 +1101,7 @@ struct PipelineExpr final: public Expr
     PipelineExpr(std::unique_ptr<Expr> val, std::unique_ptr<Expr> func):
         value(std::move(val)), function(std::move(func))
     {
+        setSpanFromChildren(*value, *function);
     }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
@@ -1105,6 +1119,7 @@ struct ApplicationExpr final: public Expr
     ApplicationExpr(std::unique_ptr<Expr> func, std::unique_ptr<Expr> arg):
         function(std::move(func)), argument(std::move(arg))
     {
+        setSpanFromChildren(*function, *argument);
     }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
@@ -1261,7 +1276,10 @@ struct ConsExpr final: public Expr
     std::unique_ptr<Expr> head; ///< Element to prepend
     std::unique_ptr<Expr> tail; ///< Existing list
 
-    ConsExpr(std::unique_ptr<Expr> h, std::unique_ptr<Expr> t): head(std::move(h)), tail(std::move(t)) {}
+    ConsExpr(std::unique_ptr<Expr> h, std::unique_ptr<Expr> t): head(std::move(h)), tail(std::move(t))
+    {
+        setSpanFromChildren(*head, *tail);
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1276,6 +1294,7 @@ struct ConcatListExpr final: public Expr
 
     ConcatListExpr(std::unique_ptr<Expr> l, std::unique_ptr<Expr> r): left(std::move(l)), right(std::move(r))
     {
+        setSpanFromChildren(*left, *right);
     }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
@@ -1435,6 +1454,7 @@ struct OptionDefaultExpr final: public Expr
     OptionDefaultExpr(std::unique_ptr<Expr> opt, std::unique_ptr<Expr> def):
         option(std::move(opt)), defaultValue(std::move(def))
     {
+        setSpanFromChildren(*option, *defaultValue);
     }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }

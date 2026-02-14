@@ -4517,6 +4517,10 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
 {
     TRACE_SCOPE("visit(BinaryExpr)");
 
+    // Save this node's source location before codegenning children,
+    // which will overwrite _builder.sourceLocation() with their own locations.
+    auto const binaryExprLocation = _builder.sourceLocation();
+
     // Binary operands are not in tail position
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
@@ -4543,6 +4547,9 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
         }
         return;
     }
+
+    // Restore the BinaryExpr's own source location for error reporting
+    _builder.setSourceLocation(binaryExprLocation);
 
     // Check for Option/Result operands that need unwrapping
     auto const checkWrappedType = [&](CoreVM::Value* operand, std::string_view side) -> bool {

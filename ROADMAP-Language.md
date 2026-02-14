@@ -168,7 +168,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Pattern matching on errors
 - [x] Try-finally: `try ... finally cleanup`
 - [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue`
-- [x] Compile-time error for unwrapped Option/Result in binary operations (with suggestion to use `?`)
+- [x] Compile-time error for unwrapped Option/Result in binary operations (with suggestion in shell hover + LSP)
+- [x] Source location tracking on F# expression AST nodes for accurate diagnostic ranges
 
 ## Control Flow
 
