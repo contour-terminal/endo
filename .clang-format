@@ -70,12 +70,20 @@ UseTab: Never
 IncludeCategories:
   - Regex:     '^<(shell)/'
     Priority:  0
-  - Regex:     '^<(vtparser)/'
-    Priority:  1
-  - Regex:     '^<(CoreVM)/'
+  - Regex:     '^<(endo-language)/'
     Priority:  2
+  - Regex:     '^<(http)/'
+    Priority:  3
+  - Regex:     '^<(lsp)/'
+    Priority:  4
+  - Regex:     '^<(tui)/'
+    Priority:  5
+  - Regex:     '^<(vtparser)/'
+    Priority:  10
+  - Regex:     '^<(CoreVM)/'
+    Priority:  20
   - Regex:     '^<(crispy)/'
-    Priority:  6
+    Priority:  30
   - Regex:     '^<(unicode)/'
     Priority:  40
   - Regex:     '^<(fmt)/'
