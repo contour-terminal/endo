@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/TerminalInput.hpp>
+
 #include <array>
 #include <string_view>
 
@@ -8,8 +10,6 @@
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <tui/TerminalInput.hpp>
 
 namespace tui
 {
@@ -229,8 +229,8 @@ void TerminalInput::enableProtocols()
     writeToTerminal(EnablePassiveMouseTracking); // Contour extension (uiHandled flag) - must be before 1003
     writeToTerminal(EnableAnyMotionTracking);    // Track ALL mouse movements (for hover) - must be last
     writeToTerminal(EnableBracketedPaste);
-    writeToTerminal(EnableColorSchemeNotify);    // Subscribe to dark/light mode changes
-    writeToTerminal(QueryColorScheme);           // Query current color scheme
+    writeToTerminal(EnableColorSchemeNotify); // Subscribe to dark/light mode changes
+    writeToTerminal(QueryColorScheme);        // Query current color scheme
 }
 
 void TerminalInput::disableProtocols()

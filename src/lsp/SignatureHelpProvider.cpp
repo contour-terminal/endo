@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SignatureHelpProvider.hpp"
 
-#include <vector>
-
-#include "StubRuntime.hpp"
-#include "SymbolCollector.hpp"
 #include <endo-language/AST.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/Parser.hpp>
 #include <endo-language/Type.hpp>
+
+#include <vector>
+
+#include "StubRuntime.hpp"
+#include "SymbolCollector.hpp"
 
 namespace endo::lsp
 {

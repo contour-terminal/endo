@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <algorithm>
-#include <cctype>
-
 #include <tui/Canvas.hpp>
 #include <tui/List.hpp>
 #include <tui/Theme.hpp>
+
+#include <algorithm>
+#include <cctype>
 
 namespace tui
 {

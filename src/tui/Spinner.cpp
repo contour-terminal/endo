@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Spinner.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <format>
-
-#include <tui/Spinner.hpp>
 
 namespace tui
 {

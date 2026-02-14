@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/Lexer.hpp>
+
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "LspTypes.hpp"
-#include <endo-language/Lexer.hpp>
 
 namespace endo::lsp
 {

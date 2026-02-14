@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FileCompleter.hpp"
 
-#include <algorithm>
-#include <cstdlib>
-
 #include <endo-language/CompletionCandidates.hpp>
+
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
+
+#include <algorithm>
+#include <cstdlib>
 
 #if !defined(_WIN32)
     #include <pwd.h>

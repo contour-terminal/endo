@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ClockModule.hpp"
 
+#include <tui/Theme.hpp>
+
 #include <chrono>
 #include <format>
-
-#include <tui/Theme.hpp>
 
 namespace endo
 {

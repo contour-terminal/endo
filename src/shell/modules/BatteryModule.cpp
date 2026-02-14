@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "BatteryModule.hpp"
 
+#include <tui/Theme.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <string>
-
-#include <tui/Theme.hpp>
 
 namespace endo
 {

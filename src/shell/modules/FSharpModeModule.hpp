@@ -11,6 +11,7 @@ class FSharpModeModule final: public PromptModule
 {
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "fsharp_mode"; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 };

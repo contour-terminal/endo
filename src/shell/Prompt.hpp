@@ -4,14 +4,14 @@
 #include <shell/PromptConfig.hpp>
 #include <shell/PromptModule.hpp>
 
+#include <tui/KeyBindings.hpp>
+#include <tui/Screen.hpp>
+#include <tui/Terminal.hpp>
+
 #include <memory>
 #include <optional>
 #include <set>
 #include <string>
-
-#include <tui/KeyBindings.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Terminal.hpp>
 
 namespace endo
 {

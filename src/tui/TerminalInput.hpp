@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <vector>
-
-#include <termios.h>
-
 #include <tui/Error.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/VtParser.hpp>
+
+#include <vector>
+
+#include <termios.h>
 
 namespace tui
 {

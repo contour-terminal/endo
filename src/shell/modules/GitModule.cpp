@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "GitModule.hpp"
 
+#include <tui/Theme.hpp>
+
 #include <array>
 #include <cstdio>
 #include <string>
-
-#include <tui/Theme.hpp>
 
 namespace endo
 {
@@ -16,8 +16,8 @@ namespace
     struct GitInfo
     {
         std::string branch;
-        int dirty = 0;   ///< Number of unstaged changes.
-        int staged = 0;  ///< Number of staged changes.
+        int dirty = 0;  ///< Number of unstaged changes.
+        int staged = 0; ///< Number of staged changes.
         bool valid = false;
     };
 
@@ -107,7 +107,8 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
             branchStyle.fg = ctx.theme->promptColors.gitClean;
     }
 
-    segments.push_back(PromptSegment { .text = "\xee\x82\xa0 " + info.branch, .style = branchStyle }); // U+E0A0
+    segments.push_back(
+        PromptSegment { .text = "\xee\x82\xa0 " + info.branch, .style = branchStyle }); // U+E0A0
 
     // Dirty/staged indicators
     if (info.dirty > 0 || info.staged > 0)
@@ -120,8 +121,8 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
 
         auto indicatorStyle = tui::Style {};
         if (ctx.theme)
-            indicatorStyle.fg = (info.dirty > 0) ? ctx.theme->promptColors.gitDirty
-                                                  : ctx.theme->promptColors.gitStaged;
+            indicatorStyle.fg =
+                (info.dirty > 0) ? ctx.theme->promptColors.gitDirty : ctx.theme->promptColors.gitStaged;
         segments.push_back(PromptSegment { .text = indicatorText, .style = indicatorStyle });
     }
 

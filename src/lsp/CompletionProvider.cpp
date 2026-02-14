@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CompletionProvider.hpp"
 
-#include "SymbolCollector.hpp"
 #include <endo-language/Completer.hpp>
 #include <endo-language/CompletionItem.hpp>
+
+#include "SymbolCollector.hpp"
 
 namespace endo::lsp
 {

@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Terminal.hpp>
+
 #include <chrono>
 #include <csignal>
 
 #include <unistd.h>
-
-#include <tui/Terminal.hpp>
 
 namespace tui
 {

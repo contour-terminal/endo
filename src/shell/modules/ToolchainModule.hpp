@@ -14,6 +14,7 @@ class ToolchainModule final: public PromptModule
 {
   public:
     [[nodiscard]] std::string_view id() const noexcept override { return "toolchain"; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
     [[nodiscard]] bool shouldShow(PromptContext const& ctx) const override;
 };

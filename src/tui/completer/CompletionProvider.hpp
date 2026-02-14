@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/completer/CompletionItem.hpp>
+
 #include <string_view>
 #include <vector>
-
-#include <tui/completer/CompletionItem.hpp>
 
 namespace tui
 {

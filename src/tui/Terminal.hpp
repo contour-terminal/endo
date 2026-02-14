@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <cstdint>
-#include <functional>
-#include <vector>
-
 #include <tui/Error.hpp>
 #include <tui/InputEvent.hpp>
 #include <tui/TerminalInput.hpp>
 #include <tui/TerminalOutput.hpp>
+
+#include <cstdint>
+#include <functional>
+#include <vector>
 
 namespace tui
 {

@@ -129,8 +129,7 @@ std::vector<ProcessEntry> LinuxProcessProvider::listProcesses() const
         // Calculate CPU% = (utime + stime) / CLK_TCK / uptime * 100
         if (uptimeSeconds > 0.0)
         {
-            auto const totalTimeSec =
-                static_cast<double>(utime + stime) / static_cast<double>(clockTicks);
+            auto const totalTimeSec = static_cast<double>(utime + stime) / static_cast<double>(clockTicks);
             auto const processUptimeSec =
                 uptimeSeconds - (static_cast<double>(starttime) / static_cast<double>(clockTicks));
             if (processUptimeSec > 0.0)

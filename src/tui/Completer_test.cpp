@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <catch2/catch_test_macros.hpp>
-
 #include <tui/completer/Completer.hpp>
 #include <tui/completer/CompletionItem.hpp>
 #include <tui/completer/CompletionProvider.hpp>
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
+
+#include <catch2/catch_test_macros.hpp>
 
 using namespace tui;
 

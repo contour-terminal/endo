@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/CompletionContext.hpp>
+
+#include <tui/completer/CompletionItem.hpp>
+
 #include <string>
 #include <vector>
-
-#include <endo-language/CompletionContext.hpp>
-#include <tui/completer/CompletionItem.hpp>
 
 namespace endo
 {

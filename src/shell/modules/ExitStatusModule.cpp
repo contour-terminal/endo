@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ExitStatusModule.hpp"
 
-#include <string>
-
 #include <tui/Theme.hpp>
+
+#include <string>
 
 namespace endo
 {

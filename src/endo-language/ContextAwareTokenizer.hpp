@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/Lexer.hpp>
+#include <endo-language/TokenClassification.hpp>
+
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <endo-language/Lexer.hpp>
-#include <endo-language/TokenClassification.hpp>
 
 namespace endo
 {

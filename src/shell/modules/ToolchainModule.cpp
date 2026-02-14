@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ToolchainModule.hpp"
 
+#include <tui/Theme.hpp>
+
 #include <filesystem>
 #include <string_view>
-
-#include <tui/Theme.hpp>
 
 namespace endo
 {

@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
+
+#include <lsp/LspServer.hpp>
+
 #include <crispy/logstore.h>
 
 #include <cerrno>
@@ -12,9 +17,6 @@
 #include <string_view>
 
 #include "Shell.hpp"
-#include <endo-language/LogCategories.hpp>
-#include <endo-language/LogConfig.hpp>
-#include <lsp/LspServer.hpp>
 
 using namespace std::string_view_literals;
 

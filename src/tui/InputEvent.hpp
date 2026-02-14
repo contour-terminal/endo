@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/KeyCode.hpp>
+#include <tui/Modifier.hpp>
+
 #include <cstdint>
 #include <string>
 #include <variant>
-
-#include <tui/KeyCode.hpp>
-#include <tui/Modifier.hpp>
 
 namespace tui
 {

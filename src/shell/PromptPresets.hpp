@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/PromptConfig.hpp>
+
 #include <string_view>
 #include <vector>
-
-#include <shell/PromptConfig.hpp>
 
 namespace endo
 {

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <string_view>
-#include <vector>
-
 #include <tui/Cell.hpp>
 #include <tui/Rect.hpp>
+
+#include <string_view>
+#include <vector>
 
 namespace tui
 {

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "TTY.hpp"
-
 #include <cstring>
 #include <expected>
 #include <format>
@@ -9,6 +7,7 @@
 
 #include "Error.hpp"
 #include "Platform.hpp"
+#include "TTY.hpp"
 
 #if defined(_WIN32)
     #include <windows.h>

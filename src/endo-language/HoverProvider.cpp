@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HoverProvider.hpp"
 
-#include <unordered_map>
-#include <vector>
-
-#include "StubRuntime.hpp"
 #include <endo-language/AST.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/Parser.hpp>
 #include <endo-language/Type.hpp>
+
+#include <unordered_map>
+#include <vector>
+
+#include "StubRuntime.hpp"
 
 namespace endo
 {

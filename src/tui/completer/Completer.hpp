@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/completer/CompletionItem.hpp>
+#include <tui/completer/CompletionProvider.hpp>
+#include <tui/completer/FuzzyMatch.hpp>
+#include <tui/completer/SmartCaseMatch.hpp>
+
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <tui/completer/CompletionItem.hpp>
-#include <tui/completer/CompletionProvider.hpp>
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace tui
 {

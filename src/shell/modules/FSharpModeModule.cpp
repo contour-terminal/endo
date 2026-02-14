@@ -2,6 +2,7 @@
 #include "FSharpModeModule.hpp"
 
 #include <endo-language/IRGenerator.hpp>
+
 #include <tui/Theme.hpp>
 
 namespace endo

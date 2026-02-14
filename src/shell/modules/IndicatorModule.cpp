@@ -12,7 +12,7 @@ PromptSegments IndicatorModule::evaluate(PromptContext const& ctx) const
     if (ctx.theme)
     {
         style.fg = (ctx.lastExitCode != 0) ? ctx.theme->promptColors.indicatorError
-                                            : ctx.theme->promptColors.indicator;
+                                           : ctx.theme->promptColors.indicator;
     }
 
     return { PromptSegment { .text = _indicator, .style = style } };

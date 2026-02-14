@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <catch2/catch_test_macros.hpp>
-
 #include <tui/Buffer.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/Cell.hpp>
 #include <tui/Rect.hpp>
 #include <tui/Theme.hpp>
+
+#include <catch2/catch_test_macros.hpp>
 
 using namespace tui;
 

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SyntaxHighlighter.hpp"
 
-#include "SourceOffsetUtils.hpp"
 #include <endo-language/ContextAwareTokenizer.hpp>
+
+#include "SourceOffsetUtils.hpp"
 
 namespace endo
 {

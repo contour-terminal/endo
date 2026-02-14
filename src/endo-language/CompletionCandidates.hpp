@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/CompletionItem.hpp>
+
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <endo-language/CompletionItem.hpp>
 
 namespace endo
 {

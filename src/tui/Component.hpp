@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/CursorShape.hpp>
+#include <tui/InputEvent.hpp>
+#include <tui/Rect.hpp>
+
 #include <algorithm>
 #include <span>
 #include <string>
 #include <vector>
-
-#include <tui/CursorShape.hpp>
-#include <tui/InputEvent.hpp>
-#include <tui/Rect.hpp>
 
 namespace tui
 {

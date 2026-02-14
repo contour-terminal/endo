@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/completer/SmartCaseMatch.hpp>
+
 #include <algorithm>
 #include <cctype>
-
-#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace tui
 {

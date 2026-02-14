@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/VtParser.hpp>
+
 #include <charconv>
 #include <cstdint>
 #include <ranges>
 #include <string_view>
 #include <vector>
-
-#include <tui/VtParser.hpp>
 
 namespace tui
 {

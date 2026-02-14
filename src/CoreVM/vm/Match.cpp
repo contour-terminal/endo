@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <CoreVM/CoreVM.hpp>
 
-#include <vector>
 #include <cstdint>
+#include <vector>
+
 namespace CoreVM
 {
 
@@ -10,6 +11,7 @@ namespace CoreVM
 Match::Match(MatchDef def): _def(std::move(def))
 {
 }
+
 // }}} Match
 // {{{ MatchSame
 MatchSame::MatchSame(const MatchDef& def, Program* program): Match(def)
@@ -28,6 +30,7 @@ uint64_t MatchSame::evaluate(const CoreString* condition, Runner* /*env*/) const
 
     return _def.elsePC; // no match found
 }
+
 // }}}
 // {{{ MatchHead
 MatchHead::MatchHead(const MatchDef& def, Program* program): Match(def)
@@ -46,6 +49,7 @@ uint64_t MatchHead::evaluate(const CoreString* condition, Runner* /*env*/) const
 
     return _def.elsePC; // no match found
 }
+
 // }}}
 // {{{ MatchTail
 MatchTail::MatchTail(const MatchDef& def, Program* program): Match(def)
@@ -64,6 +68,7 @@ uint64_t MatchTail::evaluate(const CoreString* condition, Runner* /*env*/) const
 
     return _def.elsePC; // no match found
 }
+
 // }}}
 // {{{ MatchRegEx
 MatchRegEx::MatchRegEx(const MatchDef& def, Program* program): Match(def)
@@ -88,6 +93,7 @@ uint64_t MatchRegEx::evaluate(const CoreString* condition, Runner* env) const
 
     return _def.elsePC; // no match found
 }
+
 // }}}
 
 } // namespace CoreVM

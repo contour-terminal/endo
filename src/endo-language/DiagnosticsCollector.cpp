@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "DiagnosticsCollector.hpp"
 
+#include <endo-language/AST.hpp>
+#include <endo-language/IRGenerator.hpp>
+#include <endo-language/Lexer.hpp>
+#include <endo-language/Parser.hpp>
+
 #include <cstdlib>
 #include <filesystem>
 #include <format>
@@ -9,10 +14,6 @@
 #include <unordered_set>
 
 #include "StubRuntime.hpp"
-#include <endo-language/AST.hpp>
-#include <endo-language/IRGenerator.hpp>
-#include <endo-language/Lexer.hpp>
-#include <endo-language/Parser.hpp>
 
 namespace endo
 {

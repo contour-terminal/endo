@@ -5,6 +5,13 @@
 #include <shell/PromptLayoutEngine.hpp>
 #include <shell/PromptModule.hpp>
 
+#include <endo-language/DiagnosticsCollector.hpp>
+#include <endo-language/HoverInfo.hpp>
+
+#include <tui/CompletionPopup.hpp>
+#include <tui/Component.hpp>
+#include <tui/InputField.hpp>
+
 #include <chrono>
 #include <memory>
 #include <optional>
@@ -12,12 +19,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
-#include <endo-language/DiagnosticsCollector.hpp>
-#include <endo-language/HoverInfo.hpp>
-#include <tui/CompletionPopup.hpp>
-#include <tui/Component.hpp>
-#include <tui/InputField.hpp>
 
 namespace endo
 {

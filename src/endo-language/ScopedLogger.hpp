@@ -19,6 +19,7 @@ struct ScopedLogger
     }
 
     static auto write(std::string message) { return std::format("{}{}\n", indentation(), message); }
+
     auto writeInternal(std::string message) { _category()("{}{}\n", indentation(), message); }
 
     ScopedLogger(std::string message, auto&& log): _message(std::move(message)), _category(log)

@@ -3,10 +3,10 @@
 
 #include <shell/CompletionProvider.hpp>
 
+#include <endo-language/IRGenerator.hpp>
+
 #include <string>
 #include <vector>
-
-#include <endo-language/IRGenerator.hpp>
 
 namespace endo
 {

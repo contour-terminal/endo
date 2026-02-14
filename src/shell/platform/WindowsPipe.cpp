@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "Pipe.hpp"
-
 #include <expected>
 #include <memory>
 
 #include "Error.hpp"
+#include "Pipe.hpp"
 #include "Platform.hpp"
 
 #if defined(_WIN32)

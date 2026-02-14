@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "History.hpp"
 
-#include <algorithm>
-
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
+
+#include <algorithm>
 
 namespace endo
 {

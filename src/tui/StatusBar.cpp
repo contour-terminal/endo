@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <algorithm>
-
 #include <tui/Canvas.hpp>
 #include <tui/StatusBar.hpp>
 #include <tui/Theme.hpp>
+
+#include <algorithm>
 
 namespace tui
 {

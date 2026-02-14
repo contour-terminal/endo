@@ -3,6 +3,7 @@
 #include <shell/OutputDefinitionRegistry.hpp>
 
 #include <endo-language/IRGenerator.hpp>
+
 #include <tui/Theme.hpp>
 
 namespace endo

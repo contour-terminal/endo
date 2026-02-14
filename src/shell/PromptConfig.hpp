@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/TerminalOutput.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
-
-#include <tui/TerminalOutput.hpp>
 
 namespace endo
 {

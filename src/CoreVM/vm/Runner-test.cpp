@@ -90,4 +90,5 @@ TEST(flow_vm_Runner, ndiv)
     ASSERT_EQ(1, vm->getStackPointer());
     EXPECT_EQ(3, vm->stack(-1));
 }
+
 // }}}

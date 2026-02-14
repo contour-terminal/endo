@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <vector>
-
 #include <shell/PromptConfig.hpp>
 #include <shell/PromptModule.hpp>
+
+#include <vector>
 
 namespace tui
 {

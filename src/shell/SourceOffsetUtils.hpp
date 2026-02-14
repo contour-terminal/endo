@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/HoverInfo.hpp>
+
 #include <cstddef>
 #include <string_view>
 #include <vector>
-
-#include <endo-language/HoverInfo.hpp>
 
 namespace endo
 {

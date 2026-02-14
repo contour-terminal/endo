@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PersistentHistory.hpp"
 
+#include <tui/completer/FuzzyMatch.hpp>
+#include <tui/completer/SmartCaseMatch.hpp>
+
 #include <yaml-cpp/yaml.h>
 
 #include <algorithm>
@@ -9,9 +12,6 @@
 #include <fstream>
 #include <ranges>
 #include <string>
-
-#include <tui/completer/FuzzyMatch.hpp>
-#include <tui/completer/SmartCaseMatch.hpp>
 
 namespace endo
 {

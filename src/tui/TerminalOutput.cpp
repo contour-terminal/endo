@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/TerminalOutput.hpp>
+
 #include <array>
 #include <cctype>
 #include <cstdlib>
@@ -10,8 +12,6 @@
 #include <poll.h>
 #include <termios.h>
 #include <unistd.h>
-
-#include <tui/TerminalOutput.hpp>
 
 namespace tui
 {

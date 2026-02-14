@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PromptComponent.hpp"
 
+#include <endo-language/HoverProvider.hpp>
+
+#include <tui/Canvas.hpp>
+#include <tui/Screen.hpp>
+#include <tui/Theme.hpp>
+#include <tui/Unicode.hpp>
+
 #include <algorithm>
 
 #include "CommandResolver.hpp"
@@ -20,11 +27,6 @@
 #include "modules/PathModule.hpp"
 #include "modules/StructuredOutputModule.hpp"
 #include "modules/ToolchainModule.hpp"
-#include <endo-language/HoverProvider.hpp>
-#include <tui/Canvas.hpp>
-#include <tui/Screen.hpp>
-#include <tui/Theme.hpp>
-#include <tui/Unicode.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push

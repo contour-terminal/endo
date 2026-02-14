@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include <tui/Buffer.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/CompletionPopup.hpp>
@@ -11,6 +8,9 @@
 #include <tui/Rect.hpp>
 #include <tui/Theme.hpp>
 #include <tui/completer/CompletionItem.hpp>
+
+#include <string>
+#include <vector>
 
 namespace tui::test
 {

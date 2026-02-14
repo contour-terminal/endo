@@ -57,6 +57,7 @@ PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view
         std::size_t offset;
         std::size_t length;
     };
+
     auto spans = std::vector<ClusterSpan> {};
 
     auto segmenter = unicode::utf8_grapheme_segmenter(text);
@@ -83,9 +84,8 @@ PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view
         auto const t = (count == 1) ? 0.0f : static_cast<float>(i) / static_cast<float>(count - 1);
         auto style = tui::Style {};
         style.fg = lerpColor(start, end, t);
-        segments.push_back(
-            PromptSegment { .text = std::string(text.substr(spans[i].offset, spans[i].length)),
-                            .style = style });
+        segments.push_back(PromptSegment { .text = std::string(text.substr(spans[i].offset, spans[i].length)),
+                                           .style = style });
     }
 
     return segments;

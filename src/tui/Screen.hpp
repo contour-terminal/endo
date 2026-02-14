@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <memory>
-#include <unordered_map>
-#include <unordered_set>
-
 #include <tui/Buffer.hpp>
 #include <tui/Component.hpp>
 #include <tui/CursorShape.hpp>
 #include <tui/HoverState.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Tooltip.hpp>
+
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace tui
 {
@@ -51,7 +51,7 @@ struct ScreenConfig
     Rect fixedArea;                                 ///< For Viewport::Fixed.
     int inlineMaxHeight = 0;                        ///< For Viewport::Inline (0 = no limit).
     UnscrollMode unscrollMode = UnscrollMode::Auto; ///< Unscroll behavior for inline mode.
-    bool inhibitReflow = false; ///< Disable text reflow (DEC 2028) on rendered lines.
+    bool inhibitReflow = false;                     ///< Disable text reflow (DEC 2028) on rendered lines.
 };
 
 /// Cursor movement calculations for inline rendering.

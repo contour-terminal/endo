@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/TerminalOutput.hpp>
+
 #include <array>
 #include <chrono>
 #include <cstddef>
 #include <span>
 #include <string_view>
-
-#include <tui/TerminalOutput.hpp>
 
 namespace tui
 {

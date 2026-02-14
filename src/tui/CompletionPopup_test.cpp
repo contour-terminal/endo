@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <catch2/catch_test_macros.hpp>
-
 #include <tui/CompletionPopup.hpp>
 #include <tui/TestHelpers.hpp>
+
+#include <catch2/catch_test_macros.hpp>
 
 using namespace tui;
 using namespace tui::test;

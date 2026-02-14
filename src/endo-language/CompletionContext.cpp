@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CompletionContext.hpp"
 
-#include <algorithm>
-
 #include <endo-language/Lexer.hpp>
+
+#include <algorithm>
 
 namespace endo
 {

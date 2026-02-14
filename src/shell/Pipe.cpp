@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Pipe.hpp"
 
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
+
 #include <cstring>
 #include <stdexcept>
 #include <string>
-
-#include <endo-language/LogCategories.hpp>
-#include <endo-language/LogConfig.hpp>
 
 #if !defined(_WIN32)
     #include <fcntl.h>

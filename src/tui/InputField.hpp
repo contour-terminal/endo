@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/CompletionPopup.hpp>
+#include <tui/Component.hpp>
+#include <tui/InputEvent.hpp>
+#include <tui/KeyBindings.hpp>
+#include <tui/TerminalOutput.hpp>
+#include <tui/completer/CompletionProvider.hpp>
+
 #include <chrono>
 #include <cstddef>
 #include <functional>
@@ -8,13 +15,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <tui/CompletionPopup.hpp>
-#include <tui/Component.hpp>
-#include <tui/InputEvent.hpp>
-#include <tui/KeyBindings.hpp>
-#include <tui/TerminalOutput.hpp>
-#include <tui/completer/CompletionProvider.hpp>
 
 namespace tui
 {

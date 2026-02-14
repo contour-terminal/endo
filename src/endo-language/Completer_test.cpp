@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <endo-language/Completer.hpp>
+#include <endo-language/CompletionContext.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
-
-#include <endo-language/Completer.hpp>
-#include <endo-language/CompletionContext.hpp>
 
 using namespace endo;
 

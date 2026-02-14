@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <string>
-
 #include <shell/PromptModule.hpp>
+
+#include <string>
 
 namespace endo
 {
@@ -19,6 +19,7 @@ class IndicatorModule final: public PromptModule
     explicit IndicatorModule(std::string indicator = "> "): _indicator(std::move(indicator)) {}
 
     [[nodiscard]] std::string_view id() const noexcept override { return "indicator"; }
+
     [[nodiscard]] PromptSegments evaluate(PromptContext const& ctx) const override;
 
     /// @brief Sets the indicator string.

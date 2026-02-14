@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <string>
-
 #include <tui/TerminalOutput.hpp> // For Style
+
+#include <string>
 
 namespace tui
 {

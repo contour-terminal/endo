@@ -2,6 +2,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <format>
+
 namespace CoreVM
 {
 

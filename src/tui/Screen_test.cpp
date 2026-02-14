@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/HoverState.hpp>
+#include <tui/Screen.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
 #include <thread>
-
-#include <tui/HoverState.hpp>
-#include <tui/Screen.hpp>
 
 using namespace tui;
 

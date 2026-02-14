@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SymbolCollector.hpp"
 
-#include <unordered_map>
-
-#include "StubRuntime.hpp"
 #include <endo-language/AST.hpp>
 #include <endo-language/Lexer.hpp>
 #include <endo-language/Parser.hpp>
 #include <endo-language/Pattern.hpp>
+
+#include <unordered_map>
+
+#include "StubRuntime.hpp"
 
 namespace endo::lsp
 {

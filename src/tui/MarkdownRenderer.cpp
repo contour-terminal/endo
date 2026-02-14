@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/MarkdownRenderer.hpp>
+
 #include <string>
 #include <string_view>
-
-#include <tui/MarkdownRenderer.hpp>
 
 namespace tui
 {

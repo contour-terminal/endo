@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/LogPanel.hpp>
+
 #include <algorithm>
 #include <format>
 #include <string>
-
-#include <tui/LogPanel.hpp>
 
 namespace tui
 {

@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/InputEvent.hpp>
+
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <tui/InputEvent.hpp>
 
 namespace tui
 {

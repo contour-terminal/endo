@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "DurationModule.hpp"
 
-#include <format>
-
 #include <tui/Theme.hpp>
+
+#include <format>
 
 namespace endo
 {

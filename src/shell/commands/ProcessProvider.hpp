@@ -11,11 +11,11 @@ namespace endo
 /// Platform-independent process entry returned by ProcessProvider.
 struct ProcessEntry
 {
-    int64_t pid;       ///< Process ID
-    int64_t ppid;      ///< Parent process ID
-    std::string user;  ///< Owner username
-    double cpuPercent; ///< CPU usage percentage
-    int64_t memKb;     ///< Resident memory in kilobytes
+    int64_t pid;         ///< Process ID
+    int64_t ppid;        ///< Parent process ID
+    std::string user;    ///< Owner username
+    double cpuPercent;   ///< CPU usage percentage
+    int64_t memKb;       ///< Resident memory in kilobytes
     std::string command; ///< Command name or full command line
 };
 

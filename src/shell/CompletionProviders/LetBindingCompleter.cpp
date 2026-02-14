@@ -2,11 +2,11 @@
 #include "LetBindingCompleter.hpp"
 #include <shell/CompletionAdapter.hpp>
 
-#include <algorithm>
-
 #include <endo-language/CompletionCandidates.hpp>
 #include <endo-language/CompletionItem.hpp>
 #include <endo-language/Type.hpp>
+
+#include <algorithm>
 
 namespace endo
 {

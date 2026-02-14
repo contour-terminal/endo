@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FSharpCompleter.hpp"
 
-#include <algorithm>
-
 #include <endo-language/CompletionCandidates.hpp>
+
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
+
+#include <algorithm>
 
 namespace endo
 {

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Sixel.hpp>
+
 #include <algorithm>
 #include <format>
 #include <limits>
 #include <string>
 #include <vector>
-
-#include <tui/Sixel.hpp>
 
 namespace tui
 {

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Text.hpp>
+
 #include <algorithm>
 #include <cctype>
-
-#include <tui/Text.hpp>
 
 namespace tui
 {
