@@ -61,6 +61,11 @@ void Parser::setKnownFSharpFunctions(std::unordered_set<std::string> names)
     _knownFSharpFunctions = std::move(names);
 }
 
+void Parser::setKnownVariadicFunctions(std::unordered_set<std::string> names)
+{
+    _knownVariadicFunctions = std::move(names);
+}
+
 CoreVM::SourceLocation Parser::currentLocation() const
 {
     return toCoreLoc(_lexer.currentRange());
@@ -271,6 +276,52 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     return std::make_unique<ast::ExprStmt>(std::move(pipeline), /*displayResult=*/true);
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/true);
+            }
+            else if (_knownVariadicFunctions.contains(_lexer.currentLiteral()))
+            {
+                // Variadic function at statement level: parse args as shell tokens
+                auto funcName = _lexer.currentLiteral();
+                _lexer.nextToken(); // consume function name
+
+                std::unique_ptr<ast::Expr> result = std::make_unique<ast::IdentifierExpr>(funcName);
+
+                // Collect arguments in shell tokenization mode (identifiers, flags, paths, etc.)
+                while (isParameterToken())
+                {
+                    auto arg = parseParameter();
+                    if (!arg)
+                        break;
+                    result = std::make_unique<ast::ApplicationExpr>(std::move(result), std::move(arg));
+                }
+
+                // Handle trailing |> pipeline
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    auto pipeline = std::make_unique<ast::PipelineExpr>(std::move(result), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken();
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                }
+
+                return std::make_unique<ast::ExprStmt>(std::move(result));
             }
             else if (_knownFSharpFunctions.contains(_lexer.currentLiteral()))
             {
@@ -2980,6 +3031,16 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _knownFSharpFunctions.insert(result->name);
         for (auto const& ab: result->andBindings)
             _knownFSharpFunctions.insert(ab.name);
+
+        // Track variadic functions separately for shell-mode argument parsing
+        auto const hasVariadic =
+            std::ranges::any_of(result->parameters, [](auto const& p) { return p.isVariadic; });
+        if (hasVariadic)
+        {
+            _knownVariadicFunctions.insert(result->name);
+            // Remove from regular F# functions so variadic dispatch takes priority
+            _knownFSharpFunctions.erase(result->name);
+        }
     }
     else if (dynamic_cast<ast::LambdaExpr const*>(result->value.get()) != nullptr)
     {

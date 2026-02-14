@@ -32,6 +32,9 @@ class Parser
     /// Sets the known F# function names for bare top-level call dispatch.
     void setKnownFSharpFunctions(std::unordered_set<std::string> names);
 
+    /// Sets the known variadic function names for shell-mode argument parsing at statement level.
+    void setKnownVariadicFunctions(std::unordered_set<std::string> names);
+
   private:
     /// Converts the current lexer location to CoreVM SourceLocation format.
     [[nodiscard]] CoreVM::SourceLocation currentLocation() const;
@@ -198,6 +201,8 @@ class Parser
     int _backtickNestingLevel = 0; ///< Nesting level for backtick substitution
     std::unordered_set<std::string>
         _knownFSharpFunctions; ///< User-defined F# function names for bare call dispatch
+    std::unordered_set<std::string>
+        _knownVariadicFunctions; ///< Variadic function names for shell-mode argument parsing
 
     /// Known record type names → field names (populated by parseTypeDefinition).
     std::unordered_map<std::string, std::vector<std::string>> _knownRecordTypes;
