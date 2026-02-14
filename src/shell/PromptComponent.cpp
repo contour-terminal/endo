@@ -387,7 +387,8 @@ void PromptComponent::render(tui::Canvas& canvas)
                 if (hasError)
                 {
                     segStyle.underlineStyle = tui::UnderlineStyle::Curly;
-                    segStyle.underlineColor = 0xFFFF55_rgb;
+                    segStyle.underlineColor = 0xC0C000_rgb; // Yellow color for errors (stands out on both
+                                                            // light and dark backgrounds)
                 }
 
                 col += canvas.putString(row, col, lineContent.substr(segStart, segEnd - segStart), segStyle);

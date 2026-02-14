@@ -67,6 +67,7 @@ void Prompt::initialize()
         .viewport = tui::Viewport::Inline,
         .fixedArea = {},
         .inlineMaxHeight = _terminal.rows() / 2, // Max 50% of terminal height
+        .inhibitReflow = true,
     };
     _screen = std::make_unique<tui::Screen>(_terminal, screenConfig);
 
@@ -358,9 +359,6 @@ void Prompt::display()
     // Update component area
     auto prefSize = _promptComponent->preferredSize();
     _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), prefSize.height });
-
-    // Disable text reflow during prompt rendering (re-enabled on submit/abort/EOF)
-    _terminal.output().disableReflow();
 
     // Render
     _screen->draw();

@@ -51,6 +51,7 @@ struct ScreenConfig
     Rect fixedArea;                                 ///< For Viewport::Fixed.
     int inlineMaxHeight = 0;                        ///< For Viewport::Inline (0 = no limit).
     UnscrollMode unscrollMode = UnscrollMode::Auto; ///< Unscroll behavior for inline mode.
+    bool inhibitReflow = false; ///< Disable text reflow (DEC 2028) on rendered lines.
 };
 
 /// Cursor movement calculations for inline rendering.

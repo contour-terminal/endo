@@ -508,22 +508,18 @@ void TerminalOutput::appendSgr(Style const& style)
         _buffer += std::format("48;2;{};{};{}", rgb->r, rgb->g, rgb->b);
     }
 
-    // Underline color (SGR 58)
+    _buffer += 'm';
+
+    // Underline color (SGR 58) — emitted as a separate sequence to avoid exceeding
+    // the 16-element parameter array limit in some terminals (e.g. contour) when
+    // combined with fg/bg colors in the same sequence.
     if (!isDefaultUlColor)
     {
         if (auto const* idx = std::get_if<std::uint8_t>(&style.underlineColor))
-        {
-            appendSep();
-            _buffer += std::format("58;5;{}", *idx);
-        }
+            _buffer += std::format("\033[58:5:{}m", *idx);
         else if (auto const* rgb = std::get_if<RgbColor>(&style.underlineColor))
-        {
-            appendSep();
-            _buffer += std::format("58;2;{};{};{}", rgb->r, rgb->g, rgb->b);
-        }
+            _buffer += std::format("\033[58:2:{}:{}:{}m", rgb->r, rgb->g, rgb->b);
     }
-
-    _buffer += 'm';
 }
 
 void TerminalOutput::appendSgrReset()

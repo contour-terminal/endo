@@ -618,6 +618,9 @@ void Screen::flushInline()
     {
         out.writeRaw("\r"); // Move to start of line
 
+        if (_config.inhibitReflow)
+            out.disableReflow();
+
         for (int col = 0; col < _current.cols();)
         {
             Cell const& cell = _current.at(row, col);
