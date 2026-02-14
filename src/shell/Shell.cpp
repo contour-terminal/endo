@@ -37,6 +37,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "CommandResolver.hpp"
 #include "Error.hpp"
 #include "OutputParser.hpp"
 #include "Pipe.hpp"
@@ -1384,6 +1385,28 @@ void Shell::registerBuiltinFunctions()
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
         .bind(&Shell::builtinWhich, this);
+
+    // F# which builtin: returns Option<string> for program lookup via PATH
+    _runtime.registerFunction("which_find")
+        .param<CoreVM::CoreString>("program")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& program = args.getString(1);
+            CommandResolver resolver(_env);
+            auto const info = resolver.resolve(program);
+            if (info.type == CommandType::External)
+            {
+                auto* pathStr = args.caller()->newString(info.tooltip);
+                auto* some = args.caller()->makeSomeOption(reinterpret_cast<uintptr_t>(pathStr),
+                                                           CoreVM::LiteralType::String);
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+            else
+            {
+                auto* none = args.caller()->makeNoneOption();
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+        });
 
     // F# print builtins
     _runtime.registerFunction("print")

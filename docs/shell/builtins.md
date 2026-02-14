@@ -256,6 +256,8 @@ fi
 
 Locate a command.
 
+### Shell form
+
 **Syntax:**
 
 ```
@@ -273,6 +275,32 @@ which git
 
 which nonexistent
 # (returns exit code 1)
+```
+
+### F# form
+
+**Syntax:**
+
+```
+which "command"
+```
+
+**Description:** When called with a quoted or parenthesized argument, `which` returns
+`Option<string>` — `Some path` if the program is found in `$PATH`, or `None` otherwise.
+This enables pattern matching and functional composition.
+
+**Examples:**
+
+```endo
+match which "git" with
+| Some path -> println path
+| None -> println "git not found"
+
+# With default operator
+let gitPath = which "git" ?| "/usr/bin/git"
+
+# In a pipeline
+"ls" |> which |> fun opt -> match opt with | Some p -> println p | None -> println "not found"
 ```
 
 ---

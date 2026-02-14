@@ -3269,6 +3269,32 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "which")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("which requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate which argument");
+            return true;
+        }
+        auto* callback = findCallback("which_find(S)I");
+        if (!callback)
+        {
+            reportTypeError("which_find builtin not found");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { argVal }, "which_find");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+        annotateInnerType(_result, CoreVM::LiteralType::String);
+        return true;
+    }
+
     if (name == "head")
     {
         if (argExprs.size() != 1)
@@ -5133,6 +5159,20 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 annotateListElementLiteralType(_result, *elt);
             return;
         }
+        if (funcIdent->name == "which")
+        {
+            auto* callback = findCallback("which_find(S)I");
+            if (!callback)
+            {
+                reportTypeError("which_find builtin not found");
+                return;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "which_find");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            annotateInnerType(_result, CoreVM::LiteralType::String);
+            return;
+        }
         if (funcIdent->name == "length")
         {
             auto* callback = findCallback("list_length(I)I");
@@ -6702,9 +6742,20 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         std::vector<std::pair<std::string, CoreVM::AllocaInstr*>> bindings;
         for (auto const& binding: patternIRGenerator.bindings())
         {
+            // For constructor patterns with payload on Option/Result, use the inner literal
+            // type for the binding alloca so that extracted values retain their correct type
+            // (e.g., String from Option<string> instead of Number from callback return type).
+            auto allocaType = scrutinee->type();
+            if (auto innerLiteralType = getInnerType(scrutinee))
+            {
+                if (auto* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
+                {
+                    if (ctorPat->payload.has_value())
+                        allocaType = *innerLiteralType;
+                }
+            }
             // Use createAllocaInEntryBlock to ensure proper stack tracking
-            auto* storage =
-                createAllocaInEntryBlock(scrutinee->type(), binding.name + ".arm" + std::to_string(i));
+            auto* storage = createAllocaInEntryBlock(allocaType, binding.name + ".arm" + std::to_string(i));
             bindings.emplace_back(binding.name, storage);
         }
         armBindingStorage.push_back(std::move(bindings));

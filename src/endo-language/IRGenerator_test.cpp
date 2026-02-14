@@ -3289,6 +3289,75 @@ TEST_CASE("IRGenerator.FSharp.env_question_operator_none")
 }
 
 // ============================================================================
+// F# which builtin (returns Option<string>)
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.which_found")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("git", "/usr/bin/git");
+    CHECK(
+        executeSourceAndGetOutput(R"(let r = match which "git" with | Some p -> p | None -> "none"; print r)")
+        == "/usr/bin/git");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_not_found")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    CHECK(executeSourceAndGetOutput(
+              R"(let r = match which "nonexistent" with | Some p -> "found" | None -> "none"; print r)")
+          == "none");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_let_binding")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("ls", "/bin/ls");
+    CHECK(executeSourceAndGetOutput(
+              R"(let w = which "ls"; let r = match w with | Some p -> p | None -> "none"; print r)")
+          == "/bin/ls");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_pipeline")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("cat", "/usr/bin/cat");
+    CHECK(executeSourceAndGetOutput(
+              R"(which "cat" |> fun opt -> match opt with | Some p -> print p | None -> print "none")")
+          == "/usr/bin/cat");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_default_operator")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("git", "/usr/bin/git");
+    CHECK(executeSourceAndGetOutput(R"(print (which "git" ?| "/default"))") == "/usr/bin/git");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_default_operator_none")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    CHECK(executeSourceAndGetOutput(R"(print (which "missing" ?| "/default"))") == "/default");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.which_ir_generation")
+{
+    CHECK(generatesIRSuccessfully(R"(which "git")"));
+}
+
+// ============================================================================
 // Phase 1 Foundation: Unit type ()
 // ============================================================================
 

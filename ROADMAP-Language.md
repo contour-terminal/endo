@@ -191,6 +191,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `string_of_int` — integer to string conversion
 - [x] `not` — boolean negation
 - [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
+- [x] `which` — returns `option<str>` for program lookup (`Some path` if found in `$PATH`, `None` if not)
 - [x] `head`, `tail`, `length`, `isEmpty` — list operations
 - [x] `map`, `filter`, `fold`, `reduce` — higher-order list functions (IR-level codegen)
 - [x] `find`, `exists`, `forall`, `take`, `drop`, `zip`, `flatten` — list utility functions

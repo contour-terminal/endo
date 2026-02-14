@@ -313,6 +313,54 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/true);
             }
+            else if (_lexer.currentLiteral() == "which" && [this]() {
+                         // Route to F# when followed by quoted or parenthesized args.
+                         // Bare identifiers (which git) fall through to shell mode.
+                         auto const savedTok = _lexer.currentToken();
+                         auto const savedLit = std::string(_lexer.currentLiteral());
+                         auto const savedRange = _lexer.currentRange();
+                         _lexer.nextToken();
+                         auto const nextTok = _lexer.currentToken();
+                         _lexer.pushBackToken(savedTok, savedLit, savedRange);
+                         return nextTok == Token::String || nextTok == Token::DblQuoteStart
+                                || nextTok == Token::RndOpen;
+                     }())
+            {
+                // F# which: returns Option<string> for program lookup
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Check for trailing |> pipeline
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    std::unique_ptr<ast::Expr> pipeline =
+                        std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken();
+                        auto right = parseFSharpComposition();
+                        if (!right)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                    }
+                    _lexer.leaveFSharpExpr();
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
             else if (_knownVariadicFunctions.contains(_lexer.currentLiteral()))
             {
                 // Variadic function at statement level: parse args as shell tokens

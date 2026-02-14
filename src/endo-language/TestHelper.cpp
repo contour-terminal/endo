@@ -1001,6 +1001,26 @@ TestRuntime::TestRuntime()
             // No-op in test: just marks the variable as exported
         });
 
+    // Register which_find builtin (returns Option<string>: Some(path) or None)
+    runtime.registerFunction("which_find")
+        .param<CoreVM::CoreString>("program")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const& program = args.getString(1);
+            if (auto const it = mockWhichPaths.find(program); it != mockWhichPaths.end())
+            {
+                auto* pathStr = args.caller()->newString(it->second);
+                auto* some = args.caller()->makeSomeOption(reinterpret_cast<uintptr_t>(pathStr),
+                                                           CoreVM::LiteralType::String);
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+            }
+            else
+            {
+                auto* none = args.caller()->makeNoneOption();
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+            }
+        });
+
     // --- String standard library builtins ---
 
     // string_trim: removes leading/trailing whitespace
@@ -1234,6 +1254,16 @@ void TestRuntime::setMockEnvVar(std::string const& key, std::string const& value
 void TestRuntime::clearMockEnvVars()
 {
     mockEnv.clear();
+}
+
+void TestRuntime::setMockWhichPath(std::string const& program, std::string const& path)
+{
+    mockWhichPaths[program] = path;
+}
+
+void TestRuntime::clearMockWhichPaths()
+{
+    mockWhichPaths.clear();
 }
 
 void TestRuntime::clearErrors()
