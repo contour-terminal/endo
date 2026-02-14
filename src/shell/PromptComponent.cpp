@@ -687,7 +687,10 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)
+            {
                 _completionPopup.hide();
+                return Action::Changed; // Trigger re-render so popup disappears
+            }
             break;
     }
 
