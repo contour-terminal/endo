@@ -155,9 +155,6 @@ bool executesSuccessfully(std::string const& source);
 /// Returns true if the source code executes and returns the expected exit code.
 bool executesWithExitCode(std::string const& source, int64_t expectedExitCode);
 
-/// Returns true if the source code executes and produces the expected output.
-bool executesWithOutput(std::string const& source, std::string_view expectedOutput);
-
 /// Returns true if execution succeeds with expected exit code AND output.
 bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput);
 

@@ -342,62 +342,65 @@ TEST_CASE("IRGenerator.FSharp.function_with_complex_body")
 TEST_CASE("IRGenerator.FSharp.handler_typed_identity")
 {
     // Identity function with type annotation compiles as handler (UCALL/URET)
-    CHECK(executesWithOutput("let id (x: int) = x; print (id 42)", "42"));
+    CHECK(executeSourceAndGetOutput("let id (x: int) = x; print (id 42)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_arithmetic")
 {
     // Integer arithmetic with typed params compiles as handler
-    CHECK(executesWithOutput("let add (x: int) (y: int) = x + y; print (add 3 4)", "7"));
-    CHECK(executesWithOutput("let sq (x: int) = x * x; print (sq 5)", "25"));
+    CHECK(executeSourceAndGetOutput("let add (x: int) (y: int) = x + y; print (add 3 4)") == "7");
+    CHECK(executeSourceAndGetOutput("let sq (x: int) = x * x; print (sq 5)") == "25");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_if_then_else")
 {
     // Branching with typed params in handler
-    CHECK(executesWithOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs (0 - 7))", "7"));
-    CHECK(executesWithOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs 3)", "3"));
+    CHECK(executeSourceAndGetOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs (0 - 7))")
+          == "7");
+    CHECK(executeSourceAndGetOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs 3)") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_string_concat")
 {
     // String concat with typed string param compiles as handler
-    CHECK(executesWithOutput(R"(let greet (name: str) = "hello " + name; print (greet "world"))",
-                             "hello world"));
+    CHECK(executeSourceAndGetOutput(R"(let greet (name: str) = "hello " + name; print (greet "world"))")
+          == "hello world");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_multiple_calls")
 {
     // Multiple calls to the same handler
-    CHECK(executesWithOutput("let inc (x: int) = x + 1; print (inc (inc (inc 0)))", "3"));
+    CHECK(executeSourceAndGetOutput("let inc (x: int) = x + 1; print (inc (inc (inc 0)))") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_float")
 {
     // Float function with type annotations compiles as handler
-    CHECK(executesWithOutput("let double (x: float) = x * 2.0; print (double 3.5)", "7"));
+    CHECK(executeSourceAndGetOutput("let double (x: float) = x * 2.0; print (double 3.5)") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_typed_bool")
 {
     // Boolean parameter with type annotation
-    CHECK(executesWithOutput(R"(let show (b: bool) = if b then "yes" else "no"; print (show true))", "yes"));
+    CHECK(executeSourceAndGetOutput(R"(let show (b: bool) = if b then "yes" else "no"; print (show true))")
+          == "yes");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_zero_params")
 {
     // Zero-parameter function compiles as handler
-    CHECK(executesWithOutput("let answer = 42; print answer", "42"));
+    CHECK(executeSourceAndGetOutput("let answer = 42; print answer") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_fallback_untyped")
 {
     // Functions without type annotations fall back to AST inlining but still work
-    CHECK(executesWithOutput("let id x = x; print (id 42)", "42"));
-    CHECK(executesWithOutput("let add x y = x + y; print (add 3 4)", "7"));
-    CHECK(executesWithOutput("let double x = x * 2.0; print (double 3.5)", "7"));
-    CHECK(executesWithOutput("let make x = x :: []; print (make 99)", "[99]"));
-    CHECK(executesWithOutput(R"(let greet name = "hello " + name; print (greet "world"))", "hello world"));
+    CHECK(executeSourceAndGetOutput("let id x = x; print (id 42)") == "42");
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; print (add 3 4)") == "7");
+    CHECK(executeSourceAndGetOutput("let double x = x * 2.0; print (double 3.5)") == "7");
+    CHECK(executeSourceAndGetOutput("let make x = x :: []; print (make 99)") == "[99]");
+    CHECK(executeSourceAndGetOutput(R"(let greet name = "hello " + name; print (greet "world"))")
+          == "hello world");
 }
 
 // =============================================================================
@@ -407,53 +410,55 @@ TEST_CASE("IRGenerator.FSharp.handler_fallback_untyped")
 TEST_CASE("IRGenerator.FSharp.closure_capture_int")
 {
     // Closure captures an integer from enclosing scope
-    CHECK(executesWithOutput("let x = 10; let addx (y: int) = x + y; print (addx 5)", "15"));
+    CHECK(executeSourceAndGetOutput("let x = 10; let addx (y: int) = x + y; print (addx 5)") == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_capture_multiple")
 {
     // Closure captures multiple variables
-    CHECK(executesWithOutput("let a = 3; let b = 7; let f (x: int) = a + b + x; print (f 10)", "20"));
+    CHECK(executeSourceAndGetOutput("let a = 3; let b = 7; let f (x: int) = a + b + x; print (f 10)")
+          == "20");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_capture_string")
 {
     // Closure captures a string from enclosing scope (type annotation is `str` not `string`)
-    CHECK(executesWithOutput(
-        R"(let prefix = "hello "; let greet (name: str) = prefix + name; print (greet "world"))",
-        "hello world"));
+    CHECK(executeSourceAndGetOutput(
+              R"(let prefix = "hello "; let greet (name: str) = prefix + name; print (greet "world"))")
+          == "hello world");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_capture_float")
 {
     // Closure captures a float
-    CHECK(executesWithOutput("let scale = 2.5; let f (x: float) = x * scale; print (f 4.0)", "10"));
+    CHECK(executeSourceAndGetOutput("let scale = 2.5; let f (x: float) = x * scale; print (f 4.0)") == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_multiple_calls")
 {
     // Same closure called multiple times with different arguments
-    CHECK(executesWithOutput("let offset = 100; let f (x: int) = x + offset; print (f 1); print (f 2)",
-                             "101102"));
+    CHECK(executeSourceAndGetOutput("let offset = 100; let f (x: int) = x + offset; print (f 1); print (f 2)")
+          == "101102");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_nested_lets")
 {
     // Closure captures from nested let bindings
-    CHECK(executesWithOutput("let x = 5; let y = 10; let z = 20; let f (n: int) = x + y + z + n; print (f 1)",
-                             "36"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = 5; let y = 10; let z = 20; let f (n: int) = x + y + z + n; print (f 1)")
+          == "36");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_zero_params_with_capture")
 {
     // Thunk with capture — uses untyped parameter, falls back to AST inlining
-    CHECK(executesWithOutput("let x = 42; let f _dummy = x; print (f 0)", "42"));
+    CHECK(executeSourceAndGetOutput("let x = 42; let f _dummy = x; print (f 0)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.closure_capture_untyped_fallback")
 {
     // Untyped closure falls back to AST inlining but still works
-    CHECK(executesWithOutput("let x = 10; let addx y = x + y; print (addx 5)", "15"));
+    CHECK(executeSourceAndGetOutput("let x = 10; let addx y = x + y; print (addx 5)") == "15");
 }
 
 // =============================================================================
@@ -463,42 +468,44 @@ TEST_CASE("IRGenerator.FSharp.closure_capture_untyped_fallback")
 TEST_CASE("IRGenerator.FSharp.handler_recursive_countdown")
 {
     // Tail-recursive countdown using UTCALL
-    CHECK(executesWithOutput(
-        "let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1); print (countdown 10)", "0"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1); print (countdown 10)")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_recursive_factorial_tail")
 {
     // Tail-recursive factorial with accumulator
-    CHECK(executesWithOutput(
-        "let rec fact (n: int) (acc: int) = if n <= 1 then acc else fact (n - 1) (n * acc);"
-        " print (fact 5 1)",
-        "120"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec fact (n: int) (acc: int) = if n <= 1 then acc else fact (n - 1) (n * acc);"
+              " print (fact 5 1)")
+          == "120");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_recursive_sum")
 {
     // Tail-recursive sum using match
-    CHECK(executesWithOutput(
-        "let rec sum (n: int) (acc: int) = match n with | 0 -> acc | _ -> sum (n - 1) (acc + n);"
-        " print (sum 10 0)",
-        "55"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec sum (n: int) (acc: int) = match n with | 0 -> acc | _ -> sum (n - 1) (acc + n);"
+              " print (sum 10 0)")
+          == "55");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_recursive_multiple_calls")
 {
     // Recursive function called multiple times
-    CHECK(executesWithOutput("let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1);"
-                             " print (countdown 5); print (countdown 3)",
-                             "00"));
+    CHECK(executeSourceAndGetOutput("let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1);"
+                                    " print (countdown 5); print (countdown 3)")
+          == "00");
 }
 
 TEST_CASE("IRGenerator.FSharp.handler_recursive_with_capture")
 {
     // Recursive function that captures a variable
-    CHECK(executesWithOutput(
-        "let step = 2; let rec count (n: int) = if n <= 0 then 0 else count (n - step); print (count 10)",
-        "0"));
+    CHECK(
+        executeSourceAndGetOutput(
+            "let step = 2; let rec count (n: int) = if n <= 0 then 0 else count (n - step); print (count 10)")
+        == "0");
 }
 
 // =============================================================================
@@ -530,23 +537,23 @@ TEST_CASE("IRGenerator.FSharp.pipeline_chain_execution_order")
     // f(x) = x * 2, g(x) = x + 10, h(x) = x * 3
     // Correct (left-to-right): ((5 * 2) + 10) * 3 = (10 + 10) * 3 = 60
     // Wrong (right-to-left): would attempt to compose functions, not apply sequentially
-    CHECK(executesWithOutput("let f (x: int) = x * 2\n"
-                             "let g (x: int) = x + 10\n"
-                             "let h (x: int) = x * 3\n"
-                             "print (5 |> f |> g |> h)",
-                             "60"));
+    CHECK(executeSourceAndGetOutput("let f (x: int) = x * 2\n"
+                                    "let g (x: int) = x + 10\n"
+                                    "let h (x: int) = x * 3\n"
+                                    "print (5 |> f |> g |> h)")
+          == "60");
 
     // Also verify with string-producing functions to make order unambiguous:
     // f appends "-f", g appends "-g", h appends "-h"
     // "start" |> f |> g |> h → "start-f-g-h"
-    CHECK(executesWithOutput(R"(let f (s: str) = s + "-f")"
-                             "\n"
-                             R"(let g (s: str) = s + "-g")"
-                             "\n"
-                             R"(let h (s: str) = s + "-h")"
-                             "\n"
-                             R"(print ("start" |> f |> g |> h))",
-                             "start-f-g-h"));
+    CHECK(executeSourceAndGetOutput(R"(let f (s: str) = s + "-f")"
+                                    "\n"
+                                    R"(let g (s: str) = s + "-g")"
+                                    "\n"
+                                    R"(let h (s: str) = s + "-h")"
+                                    "\n"
+                                    R"(print ("start" |> f |> g |> h))")
+          == "start-f-g-h");
 }
 
 TEST_CASE("IRGenerator.FSharp.pipeline_with_expression")
@@ -1107,77 +1114,77 @@ TEST_CASE("IRGenerator.FSharp.exec_try_multiple_unwraps_same_function")
 TEST_CASE("IRGenerator.FSharp.exec_try_result_ok_match")
 {
     // Pattern match on ?-returning function with Ok value
-    CHECK(executesWithOutput("let f x = x?; "
-                             "let r = match (f (Ok 42)) with | Ok n -> n | Error e -> 0; "
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let f x = x?; "
+                                    "let r = match (f (Ok 42)) with | Ok n -> n | Error e -> 0; "
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_result_error_match")
 {
     // Pattern match on ?-returning function with Error value (error propagation)
-    CHECK(executesWithOutput("let f x = x?; "
-                             "let r = match (f (Error 99)) with | Ok n -> n | Error e -> e; "
-                             "print r",
-                             "99"));
+    CHECK(executeSourceAndGetOutput("let f x = x?; "
+                                    "let r = match (f (Error 99)) with | Ok n -> n | Error e -> e; "
+                                    "print r")
+          == "99");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_option_some_match")
 {
     // Pattern match on ?-returning function with Some value
-    CHECK(executesWithOutput("let f x = x?; "
-                             "let r = match (f (Some 42)) with | Some n -> n | None -> 0; "
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let f x = x?; "
+                                    "let r = match (f (Some 42)) with | Some n -> n | None -> 0; "
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_option_none_match")
 {
     // Pattern match on ?-returning function with None value (error propagation)
-    CHECK(executesWithOutput("let f x = x?; "
-                             "let r = match (f None) with | Some n -> n | None -> 0; "
-                             "print r",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("let f x = x?; "
+                                    "let r = match (f None) with | Some n -> n | None -> 0; "
+                                    "print r")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_in_let_in")
 {
     // ? inside let-in expression
-    CHECK(executesWithOutput("let inc x = Some (x + 1); "
-                             "let f x = let v = (inc x)? in v * 2; "
-                             "let r = match (f 5) with | Some n -> n | None -> 0; "
-                             "print r",
-                             "12"));
+    CHECK(executeSourceAndGetOutput("let inc x = Some (x + 1); "
+                                    "let f x = let v = (inc x)? in v * 2; "
+                                    "let r = match (f 5) with | Some n -> n | None -> 0; "
+                                    "print r")
+          == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_chained_with_match")
 {
     // Chained ? with pattern match on result
-    CHECK(executesWithOutput("let wrap x = Ok x; "
-                             "let f x = (wrap (wrap x)?)?; "
-                             "let r = match (f 42) with | Ok n -> n | Error e -> 0; "
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let wrap x = Ok x; "
+                                    "let f x = (wrap (wrap x)?)?; "
+                                    "let r = match (f 42) with | Ok n -> n | Error e -> 0; "
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_function_call_with_match")
 {
     // ? on function call result with pattern match
-    CHECK(executesWithOutput("let inc x = Ok (x + 1); "
-                             "let f x = (inc x)?; "
-                             "let r = match (f 5) with | Ok n -> n | Error e -> 0; "
-                             "print r",
-                             "6"));
+    CHECK(executeSourceAndGetOutput("let inc x = Ok (x + 1); "
+                                    "let f x = (inc x)?; "
+                                    "let r = match (f 5) with | Ok n -> n | Error e -> 0; "
+                                    "print r")
+          == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.exec_try_result_error_propagation_with_match")
 {
     // Error propagation through ? with match on outer function
-    CHECK(executesWithOutput("let maybe_fail x = if x > 0 then Ok x else Error 0; "
-                             "let f x = (maybe_fail x)?; "
-                             "let r = match (f 0) with | Ok n -> n | Error e -> 99; "
-                             "print r",
-                             "99"));
+    CHECK(executeSourceAndGetOutput("let maybe_fail x = if x > 0 then Ok x else Error 0; "
+                                    "let f x = (maybe_fail x)?; "
+                                    "let r = match (f 0) with | Ok n -> n | Error e -> 99; "
+                                    "print r")
+          == "99");
 }
 
 // =============================================================================
@@ -1811,12 +1818,12 @@ TEST_CASE("IRGenerator.FSharp.mutual_rec_parser_test")
 
 TEST_CASE("IRGenerator.FSharp.mutual_rec_multiline")
 {
-    CHECK(executesWithOutput("let rec isEven n =\n"
-                             "    match n with | 0 -> 1 | _ -> isOdd (n - 1)\n"
-                             "and isOdd n =\n"
-                             "    match n with | 0 -> 0 | _ -> isEven (n - 1);\n"
-                             "print (isEven 4)",
-                             "1"));
+    CHECK(executeSourceAndGetOutput("let rec isEven n =\n"
+                                    "    match n with | 0 -> 1 | _ -> isOdd (n - 1)\n"
+                                    "and isOdd n =\n"
+                                    "    match n with | 0 -> 0 | _ -> isEven (n - 1);\n"
+                                    "print (isEven 4)")
+          == "1");
 }
 
 // =============================================================================
@@ -2130,42 +2137,42 @@ TEST_CASE("IRGenerator.FSharp.session_mutable_other_vars_unaffected")
 
 TEST_CASE("IRGenerator.FSharp.logical_or_true_false")
 {
-    CHECK(executesWithOutput("let x = true || false; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = true || false; print x") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.logical_or_false_true")
 {
-    CHECK(executesWithOutput("let x = false || true; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = false || true; print x") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.print_bool_true")
 {
-    CHECK(executesWithOutput("let x = true; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = true; print x") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.print_bool_false")
 {
-    CHECK(executesWithOutput("let x = false; print x", "false"));
+    CHECK(executeSourceAndGetOutput("let x = false; print x") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.logical_or_false_false")
 {
-    CHECK(executesWithOutput("let x = false || false; print x", "false"));
+    CHECK(executeSourceAndGetOutput("let x = false || false; print x") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.logical_or_true_true")
 {
-    CHECK(executesWithOutput("let x = true || true; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = true || true; print x") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.logical_and_true_false")
 {
-    CHECK(executesWithOutput("let x = true && false; print x", "false"));
+    CHECK(executeSourceAndGetOutput("let x = true && false; print x") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.logical_and_true_true")
 {
-    CHECK(executesWithOutput("let x = true && true; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = true && true; print x") == "true");
 }
 
 // =============================================================================
@@ -2174,17 +2181,17 @@ TEST_CASE("IRGenerator.FSharp.logical_and_true_true")
 
 TEST_CASE("IRGenerator.FSharp.string_concat_basic")
 {
-    CHECK(executesWithOutput(R"(let s = "hello" + " world"; print s)", "hello world"));
+    CHECK(executeSourceAndGetOutput(R"(let s = "hello" + " world"; print s)") == "hello world");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_concat_number_right")
 {
-    CHECK(executesWithOutput(R"(let s = "count: " + 42; print s)", "count: 42"));
+    CHECK(executeSourceAndGetOutput(R"(let s = "count: " + 42; print s)") == "count: 42");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_concat_number_left")
 {
-    CHECK(executesWithOutput(R"(let s = 42 + " items"; print s)", "42 items"));
+    CHECK(executeSourceAndGetOutput(R"(let s = 42 + " items"; print s)") == "42 items");
 }
 
 // =============================================================================
@@ -2193,65 +2200,69 @@ TEST_CASE("IRGenerator.FSharp.string_concat_number_left")
 
 TEST_CASE("IRGenerator.FSharp.if_expr_true")
 {
-    CHECK(executesWithOutput("let x = if true then 1 else 2; print x", "1"));
+    CHECK(executeSourceAndGetOutput("let x = if true then 1 else 2; print x") == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_false")
 {
-    CHECK(executesWithOutput("let x = if false then 1 else 2; print x", "2"));
+    CHECK(executeSourceAndGetOutput("let x = if false then 1 else 2; print x") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_string_true")
 {
-    CHECK(executesWithOutput("print (if true then \"Hello\" else \"World\")", "Hello"));
+    CHECK(executeSourceAndGetOutput("print (if true then \"Hello\" else \"World\")") == "Hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_string_false")
 {
-    CHECK(executesWithOutput("print (if false then \"Hello\" else \"World\")", "World"));
+    CHECK(executeSourceAndGetOutput("print (if false then \"Hello\" else \"World\")") == "World");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_float_true")
 {
-    CHECK(executesWithOutput("print (if true then 3.14 else 2.81)", "3.14"));
+    CHECK(executeSourceAndGetOutput("print (if true then 3.14 else 2.81)") == "3.14");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_float_false")
 {
-    CHECK(executesWithOutput("print (if false then 3.14 else 2.81)", "2.81"));
+    CHECK(executeSourceAndGetOutput("print (if false then 3.14 else 2.81)") == "2.81");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_with_comparison")
 {
-    CHECK(executesWithOutput("let id x = x; print (id 5)", "5"));
-    CHECK(executesWithOutput("print (7)", "7"));
-    CHECK(executesWithOutput("let id x = x; print (id (7))", "7"));
-    CHECK(executesWithOutput("let id x = x; print (id (0 - 7))", "-7"));
-    CHECK(executesWithOutput("let abs x = if x < 0 then 0 - x else x; print (abs (0 - 7))", "7"));
+    CHECK(executeSourceAndGetOutput("let id x = x; print (id 5)") == "5");
+    CHECK(executeSourceAndGetOutput("print (7)") == "7");
+    CHECK(executeSourceAndGetOutput("let id x = x; print (id (7))") == "7");
+    CHECK(executeSourceAndGetOutput("let id x = x; print (id (0 - 7))") == "-7");
+    CHECK(executeSourceAndGetOutput("let abs x = if x < 0 then 0 - x else x; print (abs (0 - 7))") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_nested")
 {
-    CHECK(executesWithOutput(
-        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 50)", "50"));
+    CHECK(executeSourceAndGetOutput(
+              "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 50)")
+          == "50");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_nested_low")
 {
-    CHECK(executesWithOutput(
-        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp (0 - 5))", "0"));
+    CHECK(executeSourceAndGetOutput(
+              "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp (0 - 5))")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_nested_high")
 {
-    CHECK(executesWithOutput(
-        "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 200)", "100"));
+    CHECK(executeSourceAndGetOutput(
+              "let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp 200)")
+          == "100");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_expr_recursive_factorial")
 {
-    CHECK(executesWithOutput(
-        "let rec fact n acc = if n <= 1 then acc else fact (n - 1) (acc * n); print (fact 5 1)", "120"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec fact n acc = if n <= 1 then acc else fact (n - 1) (acc * n); print (fact 5 1)")
+          == "120");
 }
 
 // =============================================================================
@@ -2340,57 +2351,58 @@ TEST_CASE("IRGenerator.FSharp.if_expr_same_type_tuple")
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_then_branch")
 {
     // Multi-expression then branch with let bindings
-    CHECK(
-        executesWithOutput("let r =\n    if true then\n        let a = 3\n        let b = 4\n        a + b\n"
-                           "    else\n        0\nprint r",
-                           "7"));
+    CHECK(executeSourceAndGetOutput(
+              "let r =\n    if true then\n        let a = 3\n        let b = 4\n        a + b\n"
+              "    else\n        0\nprint r")
+          == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_else_branch")
 {
     // Multi-expression else branch with let bindings
-    CHECK(executesWithOutput("let r =\n    if false then\n        0\n    else\n        let b = 10\n"
-                             "        let c = 20\n        b + c\nprint r",
-                             "30"));
+    CHECK(executeSourceAndGetOutput("let r =\n    if false then\n        0\n    else\n        let b = 10\n"
+                                    "        let c = 20\n        b + c\nprint r")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_both_branches")
 {
     // Both branches have multiple expressions
-    CHECK(
-        executesWithOutput("let r =\n    if true then\n        let x = 2\n        let y = 3\n        x * y\n"
-                           "    else\n        let a = 10\n        let b = 20\n        a + b\nprint r",
-                           "6"));
+    CHECK(executeSourceAndGetOutput(
+              "let r =\n    if true then\n        let x = 2\n        let y = 3\n        x * y\n"
+              "    else\n        let a = 10\n        let b = 20\n        a + b\nprint r")
+          == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_backward_compat_single_line")
 {
     // Single-line if-then-else still works
-    CHECK(executesWithOutput("let x = if true then 1 else 2; print x", "1"));
-    CHECK(executesWithOutput("let x = if false then 1 else 2; print x", "2"));
+    CHECK(executeSourceAndGetOutput("let x = if true then 1 else 2; print x") == "1");
+    CHECK(executeSourceAndGetOutput("let x = if false then 1 else 2; print x") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_with_print_statements")
 {
     // Multi-expression branches with side-effectful expressions (print)
-    CHECK(executesWithOutput("if true then\n    print 1\n    print 2\nelse\n    print 3\n", "12"));
+    CHECK(executeSourceAndGetOutput("if true then\n    print 1\n    print 2\nelse\n    print 3\n") == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_nested")
 {
     // Nested if-then-else inside outer else branch
-    CHECK(executesWithOutput(
-        "let r =\n    if false then\n        0\n    else\n        if true then\n            let x = 42\n"
-        "            x\n        else\n            99\nprint r",
-        "42"));
+    CHECK(
+        executeSourceAndGetOutput(
+            "let r =\n    if false then\n        0\n    else\n        if true then\n            let x = 42\n"
+            "            x\n        else\n            99\nprint r")
+        == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.if_multi_expr_recursive_function")
 {
     // Recursive function with multi-expression branches (calc-1x1 pattern)
-    CHECK(executesWithOutput("let rec go (n: int) =\n    if n <= 0 then\n        let result = 42\n"
-                             "        result\n    else\n        go (n - 1)\nprint (go 3)",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let rec go (n: int) =\n    if n <= 0 then\n        let result = 42\n"
+                                    "        result\n    else\n        go (n - 1)\nprint (go 3)")
+          == "42");
 }
 
 // =============================================================================
@@ -2399,12 +2411,12 @@ TEST_CASE("IRGenerator.FSharp.if_multi_expr_recursive_function")
 
 TEST_CASE("IRGenerator.FSharp.mutable_assignment_basic")
 {
-    CHECK(executesWithOutput("let mut x = 1; x <- 42; print x", "42"));
+    CHECK(executeSourceAndGetOutput("let mut x = 1; x <- 42; print x") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.mutable_assignment_increment")
 {
-    CHECK(executesWithOutput("let mut counter = 0; counter <- counter + 1; print counter", "1"));
+    CHECK(executeSourceAndGetOutput("let mut counter = 0; counter <- counter + 1; print counter") == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.immutable_assignment_error")
@@ -2419,56 +2431,64 @@ TEST_CASE("IRGenerator.FSharp.immutable_assignment_error")
 
 TEST_CASE("IRGenerator.FSharp.tuple_fst")
 {
-    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; let t = (1, 2); print (fst t)", "1"));
+    CHECK(executeSourceAndGetOutput("let fst t = match t with | (a, _) -> a; let t = (1, 2); print (fst t)")
+          == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_snd")
 {
-    CHECK(executesWithOutput("let snd t = match t with | (_, b) -> b; let t = (1, 2); print (snd t)", "2"));
+    CHECK(executeSourceAndGetOutput("let snd t = match t with | (_, b) -> b; let t = (1, 2); print (snd t)")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_pattern_match")
 {
-    CHECK(executesWithOutput("let t = (3, 4); let r = match t with | (a, b) -> a + b; print r", "7"));
+    CHECK(executeSourceAndGetOutput("let t = (3, 4); let r = match t with | (a, b) -> a + b; print r")
+          == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_3_elements")
 {
-    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; let t = (10, 20, 30); print (fst t)",
-                             "10"));
+    CHECK(executeSourceAndGetOutput(
+              "let fst t = match t with | (a, _) -> a; let t = (10, 20, 30); print (fst t)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_swap")
 {
-    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; "
-                             "let snd t = match t with | (_, b) -> b; "
-                             "let swap t = match t with | (a, b) -> (b, a); "
-                             "let s = swap (1, 2); print (fst s); print (snd s)",
-                             "21"));
+    CHECK(executeSourceAndGetOutput("let fst t = match t with | (a, _) -> a; "
+                                    "let snd t = match t with | (_, b) -> b; "
+                                    "let swap t = match t with | (a, b) -> (b, a); "
+                                    "let s = swap (1, 2); print (fst s); print (snd s)")
+          == "21");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_sum_pair")
 {
     CHECK(
-        executesWithOutput("let sum_pair t = match t with | (a, b) -> a + b; print (sum_pair (3, 4))", "7"));
+        executeSourceAndGetOutput("let sum_pair t = match t with | (a, b) -> a + b; print (sum_pair (3, 4))")
+        == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_mixed_types")
 {
     // Extract numeric element from mixed tuple via pattern matching
-    CHECK(executesWithOutput(R"(let t = (42, "hello"); let r = match t with | (a, b) -> a; print r)", "42"));
+    CHECK(executeSourceAndGetOutput(R"(let t = (42, "hello"); let r = match t with | (a, b) -> a; print r)")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_numeric_snd")
 {
     // Extract second numeric element via pattern matching
-    CHECK(executesWithOutput(R"(let t = ("world", 99); let r = match t with | (_, b) -> b; print r)", "99"));
+    CHECK(executeSourceAndGetOutput(R"(let t = ("world", 99); let r = match t with | (_, b) -> b; print r)")
+          == "99");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_snd_via_function")
 {
     // Extract numeric second element via user-defined function
-    CHECK(executesWithOutput("let get_snd t = match t with | (_, b) -> b; print (get_snd (1, 42))", "42"));
+    CHECK(executeSourceAndGetOutput("let get_snd t = match t with | (_, b) -> b; print (get_snd (1, 42))")
+          == "42");
 }
 
 // =============================================================================
@@ -2477,42 +2497,42 @@ TEST_CASE("IRGenerator.FSharp.tuple_snd_via_function")
 
 TEST_CASE("IRGenerator.FSharp.builtin_string_length")
 {
-    CHECK(executesWithOutput(R"(print (string_length "hello"))", "5"));
+    CHECK(executeSourceAndGetOutput(R"(print (string_length "hello"))") == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.builtin_string_of_int")
 {
-    CHECK(executesWithOutput(R"(print (string_of_int 42))", "42"));
+    CHECK(executeSourceAndGetOutput(R"(print (string_of_int 42))") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.builtin_int_of_string")
 {
-    CHECK(executesWithOutput(R"(let n = int_of_string "7"; print (n + 3))", "10"));
+    CHECK(executeSourceAndGetOutput(R"(let n = int_of_string "7"; print (n + 3))") == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.builtin_not_true")
 {
-    CHECK(executesWithOutput("let x = not true; print x", "false"));
+    CHECK(executeSourceAndGetOutput("let x = not true; print x") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.builtin_not_false")
 {
-    CHECK(executesWithOutput("let x = not false; print x", "true"));
+    CHECK(executeSourceAndGetOutput("let x = not false; print x") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.builtin_pipeline_string_of_int_length")
 {
-    CHECK(executesWithOutput("let r = 42 |> string_of_int |> string_length; print r", "2"));
+    CHECK(executeSourceAndGetOutput("let r = 42 |> string_of_int |> string_length; print r") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_fst_direct")
 {
-    CHECK(executesWithOutput("let fst t = match t with | (a, _) -> a; print (fst (1, 2))", "1"));
+    CHECK(executeSourceAndGetOutput("let fst t = match t with | (a, _) -> a; print (fst (1, 2))") == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_snd_direct")
 {
-    CHECK(executesWithOutput("let snd t = match t with | (_, b) -> b; print (snd (1, 2))", "2"));
+    CHECK(executeSourceAndGetOutput("let snd t = match t with | (_, b) -> b; print (snd (1, 2))") == "2");
 }
 
 // =============================================================================
@@ -2521,77 +2541,77 @@ TEST_CASE("IRGenerator.FSharp.tuple_snd_direct")
 
 TEST_CASE("IRGenerator.FSharp.float_literal")
 {
-    CHECK(executesWithOutput("print 3.14", "3.14"));
+    CHECK(executeSourceAndGetOutput("print 3.14") == "3.14");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_arithmetic_add")
 {
-    CHECK(executesWithOutput("print (1.5 + 2.5)", "4"));
+    CHECK(executeSourceAndGetOutput("print (1.5 + 2.5)") == "4");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_arithmetic_sub")
 {
-    CHECK(executesWithOutput("print (5.0 - 2.5)", "2.5"));
+    CHECK(executeSourceAndGetOutput("print (5.0 - 2.5)") == "2.5");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_arithmetic_mul")
 {
-    CHECK(executesWithOutput("print (3.0 * 2.5)", "7.5"));
+    CHECK(executeSourceAndGetOutput("print (3.0 * 2.5)") == "7.5");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_arithmetic_div")
 {
-    CHECK(executesWithOutput("print (7.0 / 2.0)", "3.5"));
+    CHECK(executeSourceAndGetOutput("print (7.0 / 2.0)") == "3.5");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_negation")
 {
-    CHECK(executesWithOutput("print (-3.14)", "-3.14"));
+    CHECK(executeSourceAndGetOutput("print (-3.14)") == "-3.14");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_mixed_int_promotion")
 {
-    CHECK(executesWithOutput("print (1 + 2.5)", "3.5"));
+    CHECK(executeSourceAndGetOutput("print (1 + 2.5)") == "3.5");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_mixed_int_promotion_reverse")
 {
-    CHECK(executesWithOutput("print (2.5 + 1)", "3.5"));
+    CHECK(executeSourceAndGetOutput("print (2.5 + 1)") == "3.5");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_comparison_lt")
 {
-    CHECK(executesWithOutput("let r = if 2.5 < 3.0 then 1 else 0; print r", "1"));
+    CHECK(executeSourceAndGetOutput("let r = if 2.5 < 3.0 then 1 else 0; print r") == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_comparison_gt")
 {
-    CHECK(executesWithOutput("let r = if 3.0 > 2.5 then 1 else 0; print r", "1"));
+    CHECK(executeSourceAndGetOutput("let r = if 3.0 > 2.5 then 1 else 0; print r") == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_string_concat")
 {
-    CHECK(executesWithOutput(R"(print ("pi=" + 3.14))", "pi=3.14"));
+    CHECK(executeSourceAndGetOutput(R"(print ("pi=" + 3.14))") == "pi=3.14");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_in_function")
 {
-    CHECK(executesWithOutput("let double x = x * 2.0; print (double 3.5)", "7"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2.0; print (double 3.5)") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_let_binding")
 {
-    CHECK(executesWithOutput("let pi = 3.14; print pi", "3.14"));
+    CHECK(executeSourceAndGetOutput("let pi = 3.14; print pi") == "3.14");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_pow")
 {
-    CHECK(executesWithOutput("print (2.0 ** 3.0)", "8"));
+    CHECK(executeSourceAndGetOutput("print (2.0 ** 3.0)") == "8");
 }
 
 TEST_CASE("IRGenerator.FSharp.float_mod")
 {
-    CHECK(executesWithOutput("print (7.5 % 2.0)", "1.5"));
+    CHECK(executeSourceAndGetOutput("print (7.5 % 2.0)") == "1.5");
 }
 
 // =============================================================================
@@ -3218,7 +3238,7 @@ TEST_CASE("IRGenerator.FSharp.env_question_operator")
     rt.clearMockEnvVars();
     rt.setMockEnvVar("HOME", "/home/user");
     // ? operator on env result: unwraps Some
-    CHECK(executesWithOutput("let unwrap opt = opt?; let r = unwrap (env \"HOME\")", ""));
+    CHECK(executeSourceAndGetOutput("let unwrap opt = opt?; let r = unwrap (env \"HOME\")") == "");
     // Verify the function generates IR successfully with env and ?
     CHECK(generatesIRSuccessfully(R"(let unwrap opt = opt?; let r = unwrap (env "HOME"))"));
     rt.clearMockEnvVars();
@@ -3244,12 +3264,12 @@ TEST_CASE("IRGenerator.FSharp.unit_type")
 
 TEST_CASE("IRGenerator.FSharp.unit_print")
 {
-    CHECK(executesWithOutput("print ()", "0"));
+    CHECK(executeSourceAndGetOutput("print ()") == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.unit_let_binding")
 {
-    CHECK(executesWithOutput("let x = (); print x", "0"));
+    CHECK(executeSourceAndGetOutput("let x = (); print x") == "0");
 }
 
 // ============================================================================
@@ -3258,22 +3278,22 @@ TEST_CASE("IRGenerator.FSharp.unit_let_binding")
 
 TEST_CASE("IRGenerator.FSharp.string_repeat_basic")
 {
-    CHECK(executesWithOutput(R"(print ("ha" * 3))", "hahaha"));
+    CHECK(executeSourceAndGetOutput(R"(print ("ha" * 3))") == "hahaha");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_repeat_commutative")
 {
-    CHECK(executesWithOutput(R"(print (3 * "ab"))", "ababab"));
+    CHECK(executeSourceAndGetOutput(R"(print (3 * "ab"))") == "ababab");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_repeat_zero")
 {
-    CHECK(executesWithOutput(R"(print ("x" * 0))", ""));
+    CHECK(executeSourceAndGetOutput(R"(print ("x" * 0))") == "");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_repeat_one")
 {
-    CHECK(executesWithOutput(R"(print ("y" * 1))", "y"));
+    CHECK(executeSourceAndGetOutput(R"(print ("y" * 1))") == "y");
 }
 
 // ============================================================================
@@ -3282,17 +3302,17 @@ TEST_CASE("IRGenerator.FSharp.string_repeat_one")
 
 TEST_CASE("IRGenerator.FSharp.block_scope_basic")
 {
-    CHECK(executesWithOutput("let r = { let x = 10; x + 5 }; print r", "15"));
+    CHECK(executeSourceAndGetOutput("let r = { let x = 10; x + 5 }; print r") == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.block_scope_multiple_lets")
 {
-    CHECK(executesWithOutput("let r = { let x = 1; let y = 2; x + y }; print r", "3"));
+    CHECK(executeSourceAndGetOutput("let r = { let x = 1; let y = 2; x + y }; print r") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.block_scope_isolation")
 {
-    CHECK(executesWithOutput("let x = 1; let r = { let x = 99; x }; print r; print x", "991"));
+    CHECK(executeSourceAndGetOutput("let x = 1; let r = { let x = 99; x }; print r; print x") == "991");
 }
 
 // ============================================================================
@@ -3301,20 +3321,23 @@ TEST_CASE("IRGenerator.FSharp.block_scope_isolation")
 
 TEST_CASE("IRGenerator.FSharp.compose_forward")
 {
-    CHECK(executesWithOutput("let double x = x * 2; let inc x = x + 1; let f = double >> inc; print (f 5)",
-                             "11"));
+    CHECK(executeSourceAndGetOutput(
+              "let double x = x * 2; let inc x = x + 1; let f = double >> inc; print (f 5)")
+          == "11");
 }
 
 TEST_CASE("IRGenerator.FSharp.compose_backward")
 {
-    CHECK(executesWithOutput("let double x = x * 2; let inc x = x + 1; let f = inc << double; print (f 5)",
-                             "11"));
+    CHECK(executeSourceAndGetOutput(
+              "let double x = x * 2; let inc x = x + 1; let f = inc << double; print (f 5)")
+          == "11");
 }
 
 TEST_CASE("IRGenerator.FSharp.compose_chain")
 {
-    CHECK(executesWithOutput(
-        "let a x = x + 1; let b x = x * 2; let c x = x - 3; let f = a >> b >> c; print (f 5)", "9"));
+    CHECK(executeSourceAndGetOutput(
+              "let a x = x + 1; let b x = x * 2; let c x = x - 3; let f = a >> b >> c; print (f 5)")
+          == "9");
 }
 
 // ============================================================================
@@ -3323,22 +3346,22 @@ TEST_CASE("IRGenerator.FSharp.compose_chain")
 
 TEST_CASE("IRGenerator.FSharp.tuple_destructure_basic")
 {
-    CHECK(executesWithOutput("let (x, y) = (10, 20); print x; print y", "1020"));
+    CHECK(executeSourceAndGetOutput("let (x, y) = (10, 20); print x; print y") == "1020");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_destructure_from_binding")
 {
-    CHECK(executesWithOutput("let t = (3, 4); let (a, b) = t; print (a + b)", "7"));
+    CHECK(executeSourceAndGetOutput("let t = (3, 4); let (a, b) = t; print (a + b)") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_destructure_3_elements")
 {
-    CHECK(executesWithOutput("let (a, b, c) = (1, 2, 3); print (a + b + c)", "6"));
+    CHECK(executeSourceAndGetOutput("let (a, b, c) = (1, 2, 3); print (a + b + c)") == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.tuple_destructure_let_in")
 {
-    CHECK(executesWithOutput("let r = let (x, y) = (5, 6) in x * y; print r", "30"));
+    CHECK(executeSourceAndGetOutput("let r = let (x, y) = (5, 6) in x * y; print r") == "30");
 }
 
 // =============================================================================
@@ -3362,22 +3385,22 @@ TEST_CASE("IRGenerator.FSharp.list_multiple")
 
 TEST_CASE("IRGenerator.FSharp.list_print_empty")
 {
-    CHECK(executesWithOutput("print []", "[]"));
+    CHECK(executeSourceAndGetOutput("print []") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_print_single")
 {
-    CHECK(executesWithOutput("print [42]", "[42]"));
+    CHECK(executeSourceAndGetOutput("print [42]") == "[42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_print_multiple")
 {
-    CHECK(executesWithOutput("print [1; 2; 3]", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print [1; 2; 3]") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_print_binding")
 {
-    CHECK(executesWithOutput("let x = [10; 20; 30]; print x", "[10; 20; 30]"));
+    CHECK(executeSourceAndGetOutput("let x = [10; 20; 30]; print x") == "[10; 20; 30]");
 }
 
 // =============================================================================
@@ -3386,42 +3409,42 @@ TEST_CASE("IRGenerator.FSharp.list_print_binding")
 
 TEST_CASE("IRGenerator.FSharp.type_tag.string_list")
 {
-    CHECK(executesWithOutput("println ['a', 'b', 'c']", "[\"a\"; \"b\"; \"c\"]\n"));
+    CHECK(executeSourceAndGetOutput("println ['a', 'b', 'c']") == "[\"a\"; \"b\"; \"c\"]\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.string_list_words")
 {
-    CHECK(executesWithOutput(R"(println ["hello", "world"])", "[\"hello\"; \"world\"]\n"));
+    CHECK(executeSourceAndGetOutput(R"(println ["hello", "world"])") == "[\"hello\"; \"world\"]\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.nested_string_list")
 {
-    CHECK(executesWithOutput(R"(println [["a", "b"], ["c"]])", "[[\"a\"; \"b\"]; [\"c\"]]\n"));
+    CHECK(executeSourceAndGetOutput(R"(println [["a", "b"], ["c"]])") == "[[\"a\"; \"b\"]; [\"c\"]]\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.option_with_string")
 {
-    CHECK(executesWithOutput(R"(println (Some "hello"))", "Some \"hello\"\n"));
+    CHECK(executeSourceAndGetOutput(R"(println (Some "hello"))") == "Some \"hello\"\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.result_with_string")
 {
-    CHECK(executesWithOutput(R"(println (Ok "success"))", "Ok \"success\"\n"));
+    CHECK(executeSourceAndGetOutput(R"(println (Ok "success"))") == "Ok \"success\"\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.tuple_with_string")
 {
-    CHECK(executesWithOutput(R"(println (42, "hello"))", "(42, \"hello\")\n"));
+    CHECK(executeSourceAndGetOutput(R"(println (42, "hello"))") == "(42, \"hello\")\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.tuple3_mixed")
 {
-    CHECK(executesWithOutput(R"(println ("hello", 42, true))", "(\"hello\", 42, true)\n"));
+    CHECK(executeSourceAndGetOutput(R"(println ("hello", 42, true))") == "(\"hello\", 42, true)\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.type_tag.list_of_options")
 {
-    CHECK(executesWithOutput(R"(println [Some "a", None])", "[Some \"a\"; None]\n"));
+    CHECK(executeSourceAndGetOutput(R"(println [Some "a", None])") == "[Some \"a\"; None]\n");
 }
 
 // =============================================================================
@@ -3430,22 +3453,22 @@ TEST_CASE("IRGenerator.FSharp.type_tag.list_of_options")
 
 TEST_CASE("IRGenerator.FSharp.cons_single")
 {
-    CHECK(executesWithOutput("print (1 :: [])", "[1]"));
+    CHECK(executeSourceAndGetOutput("print (1 :: [])") == "[1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.cons_multiple")
 {
-    CHECK(executesWithOutput("print (1 :: 2 :: 3 :: [])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (1 :: 2 :: 3 :: [])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.cons_prepend_to_list")
 {
-    CHECK(executesWithOutput("print (0 :: [1; 2; 3])", "[0; 1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (0 :: [1; 2; 3])") == "[0; 1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.cons_with_binding")
 {
-    CHECK(executesWithOutput("let xs = [2; 3]; print (1 :: xs)", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("let xs = [2; 3]; print (1 :: xs)") == "[1; 2; 3]");
 }
 
 // =============================================================================
@@ -3454,8 +3477,9 @@ TEST_CASE("IRGenerator.FSharp.cons_with_binding")
 
 TEST_CASE("IRGenerator.FSharp.match_empty_list")
 {
-    CHECK(executesWithOutput("let x = []; let r = match x with | [] -> \"empty\" | _ -> \"not\"; print r",
-                             "empty"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = []; let r = match x with | [] -> \"empty\" | _ -> \"not\"; print r")
+          == "empty");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_cons_head")
@@ -3468,45 +3492,48 @@ TEST_CASE("IRGenerator.FSharp.match_cons_head")
 
 TEST_CASE("IRGenerator.FSharp.match_nonempty_vs_empty")
 {
-    CHECK(executesWithOutput("let x = [1]; let r = match x with | [] -> 0 | h :: _ -> h; print r", "1"));
+    CHECK(executeSourceAndGetOutput("let x = [1]; let r = match x with | [] -> 0 | h :: _ -> h; print r")
+          == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_cons_second_element")
 {
-    CHECK(executesWithOutput(
-        "let x = [1; 2; 3]; let r = match x with | _ :: second :: _ -> second | _ -> 0; print r", "2"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = [1; 2; 3]; let r = match x with | _ :: second :: _ -> second | _ -> 0; print r")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_fixed_length_list")
 {
-    CHECK(executesWithOutput("let x = [10; 20]; let r = match x with | [a; b] -> a + b | _ -> 0; print r",
-                             "30"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = [10; 20]; let r = match x with | [a; b] -> a + b | _ -> 0; print r")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_recursive_simple")
 {
     // Simple 1-parameter recursive function with list pattern matching
-    CHECK(executesWithOutput("let rec f xs = match xs with | [] -> 0 | h :: t -> f t; "
-                             "print (f [1; 2])",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("let rec f xs = match xs with | [] -> 0 | h :: t -> f t; "
+                                    "print (f [1; 2])")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_recursive_sum")
 {
     // Use accumulator style since non-tail recursion (h + sum t) is not supported
-    CHECK(executesWithOutput(
-        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t; "
-        "print (sumAcc 0 [1; 2; 3; 4])",
-        "10"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t; "
+              "print (sumAcc 0 [1; 2; 3; 4])")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.match_recursive_length")
 {
     // Use accumulator style since non-tail recursion (1 + len t) is not supported
-    CHECK(executesWithOutput(
-        "let rec lenAcc acc xs = match xs with | [] -> acc | _ :: t -> lenAcc (acc + 1) t; "
-        "print (lenAcc 0 [10; 20; 30])",
-        "3"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec lenAcc acc xs = match xs with | [] -> acc | _ :: t -> lenAcc (acc + 1) t; "
+              "print (lenAcc 0 [10; 20; 30])")
+          == "3");
 }
 
 // =============================================================================
@@ -3515,47 +3542,47 @@ TEST_CASE("IRGenerator.FSharp.match_recursive_length")
 
 TEST_CASE("IRGenerator.FSharp.list_range_simple")
 {
-    CHECK(executesWithOutput("print [1..3]", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print [1..3]") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_single")
 {
-    CHECK(executesWithOutput("print [1..1]", "[1]"));
+    CHECK(executeSourceAndGetOutput("print [1..1]") == "[1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_empty")
 {
-    CHECK(executesWithOutput("print [5..3]", "[]"));
+    CHECK(executeSourceAndGetOutput("print [5..3]") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_step")
 {
-    CHECK(executesWithOutput("print [1..2..7]", "[1; 3; 5; 7]"));
+    CHECK(executeSourceAndGetOutput("print [1..2..7]") == "[1; 3; 5; 7]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_negative_step")
 {
-    CHECK(executesWithOutput("print [10..-1..7]", "[10; 9; 8; 7]"));
+    CHECK(executeSourceAndGetOutput("print [10..-1..7]") == "[10; 9; 8; 7]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_even_step")
 {
-    CHECK(executesWithOutput("print [0..2..10]", "[0; 2; 4; 6; 8; 10]"));
+    CHECK(executeSourceAndGetOutput("print [0..2..10]") == "[0; 2; 4; 6; 8; 10]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_with_pattern_matching")
 {
-    CHECK(executesWithOutput(
-        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
-        "print (sumAcc 0 [1..5])",
-        "15"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+              "print (sumAcc 0 [1..5])")
+          == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_let_binding")
 {
-    CHECK(executesWithOutput("let xs = [1..5]\n"
-                             "print xs",
-                             "[1; 2; 3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("let xs = [1..5]\n"
+                                    "print xs")
+          == "[1; 2; 3; 4; 5]");
 }
 
 // =============================================================================
@@ -3564,47 +3591,47 @@ TEST_CASE("IRGenerator.FSharp.list_range_let_binding")
 
 TEST_CASE("IRGenerator.FSharp.list_concat_basic")
 {
-    CHECK(executesWithOutput("print ([1; 2] @ [3; 4])", "[1; 2; 3; 4]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2] @ [3; 4])") == "[1; 2; 3; 4]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_empty_left")
 {
-    CHECK(executesWithOutput("print ([] @ [1; 2])", "[1; 2]"));
+    CHECK(executeSourceAndGetOutput("print ([] @ [1; 2])") == "[1; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_empty_right")
 {
-    CHECK(executesWithOutput("print ([1; 2] @ [])", "[1; 2]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2] @ [])") == "[1; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_both_empty")
 {
-    CHECK(executesWithOutput("print ([] @ [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print ([] @ [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_chained")
 {
-    CHECK(executesWithOutput("print ([1] @ [2] @ [3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([1] @ [2] @ [3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_with_cons")
 {
-    CHECK(executesWithOutput("print (0 :: [1; 2] @ [3; 4])", "[0; 1; 2; 3; 4]"));
+    CHECK(executeSourceAndGetOutput("print (0 :: [1; 2] @ [3; 4])") == "[0; 1; 2; 3; 4]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_with_range")
 {
-    CHECK(executesWithOutput("print ([1..3] @ [4..6])", "[1; 2; 3; 4; 5; 6]"));
+    CHECK(executeSourceAndGetOutput("print ([1..3] @ [4..6])") == "[1; 2; 3; 4; 5; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_bound_variables")
 {
-    CHECK(executesWithOutput("let a = [1; 2]; let b = [3; 4]; print (a @ b)", "[1; 2; 3; 4]"));
+    CHECK(executeSourceAndGetOutput("let a = [1; 2]; let b = [3; 4]; print (a @ b)") == "[1; 2; 3; 4]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_single_elements")
 {
-    CHECK(executesWithOutput("print ([1] @ [2])", "[1; 2]"));
+    CHECK(executeSourceAndGetOutput("print ([1] @ [2])") == "[1; 2]");
 }
 
 // =============================================================================
@@ -3614,15 +3641,17 @@ TEST_CASE("IRGenerator.FSharp.list_concat_single_elements")
 TEST_CASE("IRGenerator.FSharp.list_nested_in_option")
 {
     // List inside Some/None
-    CHECK(executesWithOutput("let x = Some [1; 2; 3]; match x with | Some xs -> print xs | None -> print 0",
-                             "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = Some [1; 2; 3]; match x with | Some xs -> print xs | None -> print 0")
+          == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nested_in_result")
 {
     // List inside Ok/Error
-    CHECK(executesWithOutput("let x = Ok [10; 20]; match x with | Ok xs -> print xs | Error _ -> print 0",
-                             "[10; 20]"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = Ok [10; 20]; match x with | Ok xs -> print xs | Error _ -> print 0")
+          == "[10; 20]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_in_tuple")
@@ -3634,163 +3663,168 @@ TEST_CASE("IRGenerator.FSharp.list_in_tuple")
 TEST_CASE("IRGenerator.FSharp.list_as_function_arg")
 {
     // Pass list to function and operate on it
-    CHECK(executesWithOutput("let first xs = match xs with | h :: _ -> h | [] -> 0; print (first [5; 6; 7])",
-                             "5"));
+    CHECK(executeSourceAndGetOutput(
+              "let first xs = match xs with | h :: _ -> h | [] -> 0; print (first [5; 6; 7])")
+          == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_as_function_return")
 {
     // Return a list from a function
-    CHECK(executesWithOutput("let make x = x :: []; print (make 99)", "[99]"));
+    CHECK(executeSourceAndGetOutput("let make x = x :: []; print (make 99)") == "[99]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_wildcard_tail")
 {
     // Wildcard in tail position
     CHECK(
-        executesWithOutput("let x = [1; 2; 3]; let r = match x with | h :: _ -> h | [] -> 0; print r", "1"));
+        executeSourceAndGetOutput("let x = [1; 2; 3]; let r = match x with | h :: _ -> h | [] -> 0; print r")
+        == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_wildcard_head")
 {
     // Wildcard in head position
-    CHECK(executesWithOutput(
-        "let rec last xs = match xs with | [x] -> x | _ :: t -> last t | [] -> 0; print (last [10; 20; 30])",
-        "30"));
+    CHECK(executeSourceAndGetOutput("let rec last xs = match xs with | [x] -> x | _ :: t -> last t | [] -> "
+                                    "0; print (last [10; 20; 30])")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_three_elements")
 {
     // Fixed 3-element list pattern
-    CHECK(executesWithOutput(
-        "let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r", "6"));
+    CHECK(executeSourceAndGetOutput(
+              "let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r")
+          == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_large")
 {
     // Larger range
-    CHECK(executesWithOutput(
-        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
-        "print (sumAcc 0 [1..10])",
-        "55"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+              "print (sumAcc 0 [1..10])")
+          == "55");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_step_not_aligned")
 {
     // Step doesn't evenly divide range — should stop before overshooting
-    CHECK(executesWithOutput("print [1..3..10]", "[1; 4; 7; 10]"));
+    CHECK(executeSourceAndGetOutput("print [1..3..10]") == "[1; 4; 7; 10]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_step_overshoot")
 {
     // Step overshoots end — should include only start (aligned to valid elements)
-    CHECK(executesWithOutput("print [1..10..5]", "[1]"));
+    CHECK(executeSourceAndGetOutput("print [1..10..5]") == "[1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_step_exact_fit")
 {
     // Step exactly fits the range
-    CHECK(executesWithOutput("print [0..5..10]", "[0; 5; 10]"));
+    CHECK(executeSourceAndGetOutput("print [0..5..10]") == "[0; 5; 10]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_cons_right_associative")
 {
     // Verify :: is right-associative: 1 :: 2 :: 3 :: [] = 1 :: (2 :: (3 :: []))
-    CHECK(executesWithOutput("print (1 :: 2 :: 3 :: [])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (1 :: 2 :: 3 :: [])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_right_associative")
 {
     // Verify @ is right-associative: [1] @ [2] @ [3] = [1] @ ([2] @ [3])
-    CHECK(executesWithOutput("print ([1] @ [2] @ [3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([1] @ [2] @ [3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_cons_precedence_over_concat")
 {
     // :: has same precedence as @, both right-associative
     // 0 :: [1; 2] @ [3; 4] should parse as 0 :: ([1; 2] @ [3; 4])
-    CHECK(executesWithOutput("print (0 :: [1; 2] @ [3; 4])", "[0; 1; 2; 3; 4]"));
+    CHECK(executeSourceAndGetOutput("print (0 :: [1; 2] @ [3; 4])") == "[0; 1; 2; 3; 4]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_recursive_count_elements")
 {
     // Count elements greater than a threshold
-    CHECK(executesWithOutput("let rec countAbove threshold acc xs = match xs with\n"
-                             "  | [] -> acc\n"
-                             "  | h :: t -> if h > threshold then countAbove threshold (acc + 1) t else "
-                             "countAbove threshold acc t\n"
-                             "print (countAbove 3 0 [1; 5; 2; 7; 3; 8])",
-                             "3"));
+    CHECK(
+        executeSourceAndGetOutput("let rec countAbove threshold acc xs = match xs with\n"
+                                  "  | [] -> acc\n"
+                                  "  | h :: t -> if h > threshold then countAbove threshold (acc + 1) t else "
+                                  "countAbove threshold acc t\n"
+                                  "print (countAbove 3 0 [1; 5; 2; 7; 3; 8])")
+        == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_recursive_find_max")
 {
     // Find maximum element in a list
-    CHECK(executesWithOutput("let rec maxAcc acc xs = match xs with\n"
-                             "  | [] -> acc\n"
-                             "  | h :: t -> if h > acc then maxAcc h t else maxAcc acc t\n"
-                             "print (maxAcc 0 [3; 7; 2; 9; 1])",
-                             "9"));
+    CHECK(executeSourceAndGetOutput("let rec maxAcc acc xs = match xs with\n"
+                                    "  | [] -> acc\n"
+                                    "  | h :: t -> if h > acc then maxAcc h t else maxAcc acc t\n"
+                                    "print (maxAcc 0 [3; 7; 2; 9; 1])")
+          == "9");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_rec_reverse_cons_in_tail_arg")
 {
     // ConsExpr in tail call arguments — previously a known limitation.
-    CHECK(executesWithOutput("let rec revAcc acc xs = match xs with\n"
-                             "  | [] -> acc\n"
-                             "  | h :: t -> revAcc (h :: acc) t\n"
-                             "print (revAcc [] [1; 2; 3])",
-                             "[3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("let rec revAcc acc xs = match xs with\n"
+                                    "  | [] -> acc\n"
+                                    "  | h :: t -> revAcc (h :: acc) t\n"
+                                    "print (revAcc [] [1; 2; 3])")
+          == "[3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_rec_reverse_longer")
 {
     // Longer list to exercise multiple loop iterations with cons construction.
-    CHECK(executesWithOutput("let rec revAcc acc xs = match xs with\n"
-                             "  | [] -> acc\n"
-                             "  | h :: t -> revAcc (h :: acc) t\n"
-                             "print (revAcc [] [1; 2; 3; 4; 5])",
-                             "[5; 4; 3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("let rec revAcc acc xs = match xs with\n"
+                                    "  | [] -> acc\n"
+                                    "  | h :: t -> revAcc (h :: acc) t\n"
+                                    "print (revAcc [] [1; 2; 3; 4; 5])")
+          == "[5; 4; 3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_nested_cons_depth3")
 {
     // Match on 3-deep nested cons (a :: b :: c :: rest)
-    CHECK(executesWithOutput("let x = [10; 20; 30; 40; 50]\n"
-                             "let r = match x with | a :: b :: c :: _ -> a + b + c | _ -> 0\n"
-                             "print r",
-                             "60"));
+    CHECK(executeSourceAndGetOutput("let x = [10; 20; 30; 40; 50]\n"
+                                    "let r = match x with | a :: b :: c :: _ -> a + b + c | _ -> 0\n"
+                                    "print r")
+          == "60");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_fallthrough_to_empty")
 {
     // Non-matching cons pattern falls through to empty pattern
-    CHECK(executesWithOutput("let x = []; let r = match x with | h :: t -> h | [] -> 99; print r", "99"));
+    CHECK(executeSourceAndGetOutput("let x = []; let r = match x with | h :: t -> h | [] -> 99; print r")
+          == "99");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_match_fallthrough_to_wildcard")
 {
     // Non-matching specific pattern falls through to wildcard
-    CHECK(executesWithOutput("let x = [1; 2; 3]\n"
-                             "let r = match x with | [a] -> a | _ -> 42\n"
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let x = [1; 2; 3]\n"
+                                    "let r = match x with | [a] -> a | _ -> 42\n"
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_concat_preserves_order")
 {
     // Verify concatenation preserves element order from both sides
-    CHECK(executesWithOutput(
-        "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
-        "let xs = [1; 2] @ [3; 4] @ [5; 6]\n"
-        "print (sumAcc 0 xs)",
-        "21"));
+    CHECK(executeSourceAndGetOutput(
+              "let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t\n"
+              "let xs = [1; 2] @ [3; 4] @ [5; 6]\n"
+              "print (sumAcc 0 xs)")
+          == "21");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_range_negative_descend_empty")
 {
     // Negative step but start < end — should be empty
-    CHECK(executesWithOutput("print [1..-1..5]", "[]"));
+    CHECK(executeSourceAndGetOutput("print [1..-1..5]") == "[]");
 }
 
 // =============================================================================
@@ -3799,52 +3833,52 @@ TEST_CASE("IRGenerator.FSharp.list_range_negative_descend_empty")
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_basic")
 {
-    CHECK(executesWithOutput("print [for x in [1;2;3] -> x]", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3] -> x]") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_transform")
 {
-    CHECK(executesWithOutput("print [for x in [1;2;3] -> x * 2]", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3] -> x * 2]") == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_with_filter")
 {
-    CHECK(executesWithOutput("print [for x in [1;2;3;4;5] when x > 2 -> x]", "[3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3;4;5] when x > 2 -> x]") == "[3; 4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_filter_and_transform")
 {
-    CHECK(executesWithOutput("print [for x in [1;2;3;4;5] when x > 2 -> x * 10]", "[30; 40; 50]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3;4;5] when x > 2 -> x * 10]") == "[30; 40; 50]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_empty_source")
 {
-    CHECK(executesWithOutput("print [for x in [] -> x * 2]", "[]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [] -> x * 2]") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_all_filtered")
 {
-    CHECK(executesWithOutput("print [for x in [1;2;3] when x > 10 -> x]", "[]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3] when x > 10 -> x]") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_from_range")
 {
-    CHECK(executesWithOutput("print [for x in [1..5] -> x * x]", "[1; 4; 9; 16; 25]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [1..5] -> x * x]") == "[1; 4; 9; 16; 25]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_let_binding")
 {
-    CHECK(executesWithOutput("let s = [for x in [1;2;3;4] -> x * x]\nprint s", "[1; 4; 9; 16]"));
+    CHECK(executeSourceAndGetOutput("let s = [for x in [1;2;3;4] -> x * x]\nprint s") == "[1; 4; 9; 16]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_single_element")
 {
-    CHECK(executesWithOutput("print [for x in [42] -> x + 1]", "[43]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [42] -> x + 1]") == "[43]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_comprehension_preserves_order")
 {
-    CHECK(executesWithOutput("print [for x in [5;4;3;2;1] -> x]", "[5; 4; 3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("print [for x in [5;4;3;2;1] -> x]") == "[5; 4; 3; 2; 1]");
 }
 
 // =============================================================================
@@ -3910,76 +3944,85 @@ TEST_CASE("IRGenerator.FSharp.list_recursive_non_tail_position")
 TEST_CASE("IRGenerator.FSharp.hof_basic")
 {
     // Basic HOF: pass a named function as an argument
-    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nprint (apply double 5)", "10"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nlet apply f x = f x\nprint (apply double 5)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_lambda_argument")
 {
     // HOF with lambda argument
-    CHECK(executesWithOutput("let apply f x = f x\nprint (apply (fun x -> x * 2) 5)", "10"));
+    CHECK(executeSourceAndGetOutput("let apply f x = f x\nprint (apply (fun x -> x * 2) 5)") == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_twice")
 {
     // Apply function to result of itself
-    CHECK(executesWithOutput("let double x = x * 2\nlet twice f x = f (f x)\nprint (twice double 3)", "12"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nlet twice f x = f (f x)\nprint (twice double 3)")
+          == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_compose")
 {
     // Function composition
-    CHECK(executesWithOutput("let double x = x * 2\nlet add1 x = x + 1\nlet compose f g x = f (g x)\nprint "
-                             "(compose double add1 5)",
-                             "12"));
+    CHECK(executeSourceAndGetOutput(
+              "let double x = x * 2\nlet add1 x = x + 1\nlet compose f g x = f (g x)\nprint "
+              "(compose double add1 5)")
+          == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_partial_application")
 {
     // Partial application of HOF
-    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nlet g = apply double\nprint (g 5)",
-                             "10"));
+    CHECK(executeSourceAndGetOutput(
+              "let double x = x * 2\nlet apply f x = f x\nlet g = apply double\nprint (g 5)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_returning_closure")
 {
     // HOF returning closure that captures function ref
-    CHECK(executesWithOutput(
-        "let double x = x * 2\nlet make_caller f = fun x -> f x\nlet g = make_caller double\nprint (g 5)",
-        "10"));
+    CHECK(
+        executeSourceAndGetOutput(
+            "let double x = x * 2\nlet make_caller f = fun x -> f x\nlet g = make_caller double\nprint (g 5)")
+        == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_multiple_function_args")
 {
     // Multiple function arguments
-    CHECK(executesWithOutput(
-        "let double x = x * 2\nlet add1 x = x + 1\nlet apply2 f g x = g (f x)\nprint (apply2 double add1 3)",
-        "7"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nlet add1 x = x + 1\nlet apply2 f g x = g (f "
+                                    "x)\nprint (apply2 double add1 3)")
+          == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_pipeline")
 {
     // HOF in pipeline
-    CHECK(executesWithOutput("let double x = x * 2\nlet apply f x = f x\nprint (5 |> apply double)", "10"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nlet apply f x = f x\nprint (5 |> apply double)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_string_function")
 {
     // HOF with string function
-    CHECK(executesWithOutput("let shout s = s + \"!\"\nlet apply f x = f x\nprint (apply shout \"hello\")",
-                             "hello!"));
+    CHECK(executeSourceAndGetOutput(
+              "let shout s = s + \"!\"\nlet apply f x = f x\nprint (apply shout \"hello\")")
+          == "hello!");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_nested_partial_application")
 {
     // Nested partial application: (add 1) passed as function arg
-    CHECK(executesWithOutput("let add x y = x + y\nlet apply f x = f x\nlet g = apply (add 1)\nprint (g 5)",
-                             "6"));
+    CHECK(executeSourceAndGetOutput(
+              "let add x y = x + y\nlet apply f x = f x\nlet g = apply (add 1)\nprint (g 5)")
+          == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.hof_function_alias")
 {
     // Function alias through HOF (identity returning a function)
-    CHECK(executesWithOutput("let double x = x * 2\nlet id f = f\nlet g = id double\nprint (g 5)", "10"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nlet id f = f\nlet g = id double\nprint (g 5)")
+          == "10");
 }
 
 // =============================================================================
@@ -3989,240 +4032,240 @@ TEST_CASE("IRGenerator.FSharp.hof_function_alias")
 TEST_CASE("IRGenerator.FSharp.record_type_def_and_field_access")
 {
     // Basic record type definition, creation, and field access
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 10; y = 20 }\n"
-                             "print p.x",
-                             "10"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 10; y = 20 }\n"
+                                    "print p.x")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_field_access_second_field")
 {
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 10; y = 20 }\n"
-                             "print p.y",
-                             "20"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 10; y = 20 }\n"
+                                    "print p.y")
+          == "20");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_field_arithmetic")
 {
     // Use record fields in arithmetic
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 3; y = 4 }\n"
-                             "print (p.x + p.y)",
-                             "7"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 3; y = 4 }\n"
+                                    "print (p.x + p.y)")
+          == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_basic")
 {
     // Record update creates a new record with one field changed
-    CHECK(executesWithOutput("type Person = { name: int; age: int }\n"
-                             "let p = { name = 1; age = 30 }\n"
-                             "let q = { p with age = 31 }\n"
-                             "print q.age",
-                             "31"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: int; age: int }\n"
+                                    "let p = { name = 1; age = 30 }\n"
+                                    "let q = { p with age = 31 }\n"
+                                    "print q.age")
+          == "31");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_preserves_unchanged")
 {
     // Record update preserves fields that aren't overridden
-    CHECK(executesWithOutput("type Person = { name: int; age: int }\n"
-                             "let p = { name = 42; age = 30 }\n"
-                             "let q = { p with age = 31 }\n"
-                             "print q.name",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: int; age: int }\n"
+                                    "let p = { name = 42; age = 30 }\n"
+                                    "let q = { p with age = 31 }\n"
+                                    "print q.name")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_pattern_match_punning")
 {
     // Record pattern matching with field punning
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 5; y = 10 }\n"
-                             "let r = match p with | { x; y } -> x + y\n"
-                             "print r",
-                             "15"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 5; y = 10 }\n"
+                                    "let r = match p with | { x; y } -> x + y\n"
+                                    "print r")
+          == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_pattern_match_explicit_binding")
 {
     // Record pattern matching with explicit variable binding
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 5; y = 10 }\n"
-                             "let r = match p with | { x = a; y = b } -> a * b\n"
-                             "print r",
-                             "50"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 5; y = 10 }\n"
+                                    "let r = match p with | { x = a; y = b } -> a * b\n"
+                                    "print r")
+          == "50");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_passed_to_function")
 {
     // Record passed as function argument
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let sum_point p = p.x + p.y\n"
-                             "let p = { x = 3; y = 7 }\n"
-                             "print (sum_point p)",
-                             "10"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let sum_point p = p.x + p.y\n"
+                                    "let p = { x = 3; y = 7 }\n"
+                                    "print (sum_point p)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_returned_from_function")
 {
     // Record created and returned from a function
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let make_point a b = { x = a; y = b }\n"
-                             "let p = make_point 100 200\n"
-                             "print p.x",
-                             "100"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let make_point a b = { x = a; y = b }\n"
+                                    "let p = make_point 100 200\n"
+                                    "print p.x")
+          == "100");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_with_expression")
 {
     // Record update using an expression involving the original record
-    CHECK(executesWithOutput("type Counter = { value: int }\n"
-                             "let c = { value = 10 }\n"
-                             "let c2 = { c with value = c.value + 1 }\n"
-                             "print c2.value",
-                             "11"));
+    CHECK(executeSourceAndGetOutput("type Counter = { value: int }\n"
+                                    "let c = { value = 10 }\n"
+                                    "let c2 = { c with value = c.value + 1 }\n"
+                                    "print c2.value")
+          == "11");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_multiple_types")
 {
     // Multiple record types in the same program
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "type Size = { w: int; h: int }\n"
-                             "let p = { x = 1; y = 2 }\n"
-                             "let s = { w = 10; h = 20 }\n"
-                             "print (p.x + s.w)",
-                             "11"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "type Size = { w: int; h: int }\n"
+                                    "let p = { x = 1; y = 2 }\n"
+                                    "let s = { w = 10; h = 20 }\n"
+                                    "print (p.x + s.w)")
+          == "11");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_let_destructure")
 {
     // Record destructuring in let binding
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 7; y = 8 }\n"
-                             "let { x; y } = p\n"
-                             "print (x + y)",
-                             "15"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 7; y = 8 }\n"
+                                    "let { x; y } = p\n"
+                                    "print (x + y)")
+          == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_string_field_access")
 {
     // String field access via dot notation
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let p = { name = \"Alice\"; age = 30 }\n"
-                             "print p.name",
-                             "Alice"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let p = { name = \"Alice\"; age = 30 }\n"
+                                    "print p.name")
+          == "Alice");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_string_field_destructure")
 {
     // String field via let destructuring
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let p = { name = \"Bob\"; age = 25 }\n"
-                             "let { name; age } = p\n"
-                             "print name",
-                             "Bob"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let p = { name = \"Bob\"; age = 25 }\n"
+                                    "let { name; age } = p\n"
+                                    "print name")
+          == "Bob");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_string_field_match")
 {
     // String field via pattern matching
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let p = { name = \"Charlie\"; age = 35 }\n"
-                             "print (match p with | { name; age } -> name)",
-                             "Charlie"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let p = { name = \"Charlie\"; age = 35 }\n"
+                                    "print (match p with | { name; age } -> name)")
+          == "Charlie");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_string_field_fstring")
 {
     // String field used in f-string interpolation
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let p = { name = \"Diana\"; age = 28 }\n"
-                             "print $\"Hello, {p.name}!\"",
-                             "Hello, Diana!"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let p = { name = \"Diana\"; age = 28 }\n"
+                                    "print $\"Hello, {p.name}!\"")
+          == "Hello, Diana!");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_println_whole_record")
 {
     // Printing a whole record should produce formatted output
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p = { x = 3; y = 4 }\n"
-                             "print p",
-                             "{ x = 3; y = 4 }"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 3; y = 4 }\n"
+                                    "print p")
+          == "{ x = 3; y = 4 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_println")
 {
     // Print a record created via record update
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
-                             "print p2",
-                             "{ x = 4; y = 6 }"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                                    "print p2")
+          == "{ x = 4; y = 6 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_field_access_after")
 {
     // Access fields of a record created via record update
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
-                             "print p2.x\n"
-                             "print p2.y",
-                             "46"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                                    "print p2.x\n"
+                                    "print p2.y")
+          == "46");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_println_with_string_fields")
 {
     // Printing a record with string fields should show string values, not pointers
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let p = { name = \"Alice\"; age = 30 }\n"
-                             "print p",
-                             "{ name = Alice; age = 30 }"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let p = { name = \"Alice\"; age = 30 }\n"
+                                    "print p")
+          == "{ name = Alice; age = 30 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_destructure_then_update")
 {
     // Let destructuring followed by record update on the same type
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let { x; y } = p1\n"
-                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
-                             "print p2",
-                             "{ x = 4; y = 6 }"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let { x; y } = p1\n"
+                                    "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                                    "print p2")
+          == "{ x = 4; y = 6 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_destructure_two_types_then_update")
 {
     // Let destructuring on one record type followed by record update on another type
-    CHECK(executesWithOutput("type Person = { name: str; age: int }\n"
-                             "let alice = { name = \"Alice\"; age = 30 }\n"
-                             "let { name; age } = alice\n"
-                             "type Point = { x: int; y: int }\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
-                             "print p2",
-                             "{ x = 4; y = 6 }"));
+    CHECK(executeSourceAndGetOutput("type Person = { name: str; age: int }\n"
+                                    "let alice = { name = \"Alice\"; age = 30 }\n"
+                                    "let { name; age } = alice\n"
+                                    "type Point = { x: int; y: int }\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }\n"
+                                    "print p2")
+          == "{ x = 4; y = 6 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_with_inlined_match_function")
 {
     // Inlined untyped function with match creates blocks during record update value codegen.
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let double n = match n with | 0 -> 0 | n -> n * 2\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let p2 = { p1 with x = double (p1.x) }\n"
-                             "print p2",
-                             "{ x = 6; y = 4 }"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let double n = match n with | 0 -> 0 | n -> n * 2\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let p2 = { p1 with x = double (p1.x) }\n"
+                                    "print p2")
+          == "{ x = 6; y = 4 }");
 }
 
 TEST_CASE("IRGenerator.FSharp.record_update_with_multiple_inlined_match_functions")
 {
     // Multiple update fields each calling inlined match functions.
-    CHECK(executesWithOutput("type Point = { x: int; y: int }\n"
-                             "let double n = match n with | 0 -> 0 | n -> n * 2\n"
-                             "let p1 = { x = 3; y = 4 }\n"
-                             "let p2 = { p1 with x = double (p1.x); y = double (p1.y) }\n"
-                             "print p2",
-                             "{ x = 6; y = 8 }"));
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let double n = match n with | 0 -> 0 | n -> n * 2\n"
+                                    "let p1 = { x = 3; y = 4 }\n"
+                                    "let p2 = { p1 with x = double (p1.x); y = double (p1.y) }\n"
+                                    "print p2")
+          == "{ x = 6; y = 8 }");
 }
 
 // =============================================================================
@@ -4232,154 +4275,154 @@ TEST_CASE("IRGenerator.FSharp.record_update_with_multiple_inlined_match_function
 TEST_CASE("IRGenerator.FSharp.union_type_basic_enum")
 {
     // Unit constructors only (enum-like ADT), match all variants
-    CHECK(executesWithOutput("type Color =\n"
-                             "    | Red\n"
-                             "    | Green\n"
-                             "    | Blue\n"
-                             "let c = Green\n"
-                             "let r = match c with\n"
-                             "    | Red -> 1\n"
-                             "    | Green -> 2\n"
-                             "    | Blue -> 3\n"
-                             "print r",
-                             "2"));
+    CHECK(executeSourceAndGetOutput("type Color =\n"
+                                    "    | Red\n"
+                                    "    | Green\n"
+                                    "    | Blue\n"
+                                    "let c = Green\n"
+                                    "let r = match c with\n"
+                                    "    | Red -> 1\n"
+                                    "    | Green -> 2\n"
+                                    "    | Blue -> 3\n"
+                                    "print r")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_single_payload")
 {
     // Single-payload constructor, match + extract
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Circle of int\n"
-                             "    | Point\n"
-                             "let s = Circle 42\n"
-                             "let r = match s with\n"
-                             "    | Circle radius -> radius\n"
-                             "    | Point -> 0\n"
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Point\n"
+                                    "let s = Circle 42\n"
+                                    "let r = match s with\n"
+                                    "    | Circle radius -> radius\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_tuple_payload")
 {
     // Multi-slot constructor (Rectangle of int * int), match + extract both slots
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Rectangle of int * int\n"
-                             "    | Point\n"
-                             "let s = Rectangle (10, 20)\n"
-                             "let r = match s with\n"
-                             "    | Rectangle (w, h) -> w + h\n"
-                             "    | Point -> 0\n"
-                             "print r",
-                             "30"));
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Rectangle of int * int\n"
+                                    "    | Point\n"
+                                    "let s = Rectangle (10, 20)\n"
+                                    "let r = match s with\n"
+                                    "    | Rectangle (w, h) -> w + h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_with_function")
 {
     // Pass ADT to function, match inside function
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Circle of int\n"
-                             "    | Point\n"
-                             "let area s = match s with\n"
-                             "    | Circle r -> r * r\n"
-                             "    | Point -> 0\n"
-                             "print (area (Circle 5))",
-                             "25"));
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Point\n"
+                                    "let area s = match s with\n"
+                                    "    | Circle r -> r * r\n"
+                                    "    | Point -> 0\n"
+                                    "print (area (Circle 5))")
+          == "25");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_wildcard")
 {
     // Match with wildcard fallback
-    CHECK(executesWithOutput("type Color =\n"
-                             "    | Red\n"
-                             "    | Green\n"
-                             "    | Blue\n"
-                             "let c = Blue\n"
-                             "let r = match c with\n"
-                             "    | Red -> 1\n"
-                             "    | _ -> 0\n"
-                             "print r",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("type Color =\n"
+                                    "    | Red\n"
+                                    "    | Green\n"
+                                    "    | Blue\n"
+                                    "let c = Blue\n"
+                                    "let r = match c with\n"
+                                    "    | Red -> 1\n"
+                                    "    | _ -> 0\n"
+                                    "print r")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_mixed_with_option")
 {
     // Ensure Option/Result still works alongside user ADTs
-    CHECK(executesWithOutput("type Color =\n"
-                             "    | Red\n"
-                             "    | Green\n"
-                             "let c = Red\n"
-                             "let o = Some 42\n"
-                             "let r = match o with\n"
-                             "    | Some x -> x\n"
-                             "    | None -> 0\n"
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("type Color =\n"
+                                    "    | Red\n"
+                                    "    | Green\n"
+                                    "let c = Red\n"
+                                    "let o = Some 42\n"
+                                    "let r = match o with\n"
+                                    "    | Some x -> x\n"
+                                    "    | None -> 0\n"
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_int_payload")
 {
     // int payloads
-    CHECK(executesWithOutput("type Expr =\n"
-                             "    | Num of int\n"
-                             "    | Neg of int\n"
-                             "let e = Num 7\n"
-                             "let r = match e with\n"
-                             "    | Num n -> n\n"
-                             "    | Neg n -> 0 - n\n"
-                             "print r",
-                             "7"));
+    CHECK(executeSourceAndGetOutput("type Expr =\n"
+                                    "    | Num of int\n"
+                                    "    | Neg of int\n"
+                                    "let e = Num 7\n"
+                                    "let r = match e with\n"
+                                    "    | Num n -> n\n"
+                                    "    | Neg n -> 0 - n\n"
+                                    "print r")
+          == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_multiple_arms_with_payloads")
 {
     // Direct match with different constructor variants — no function inlining
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Circle of int\n"
-                             "    | Rectangle of int * int\n"
-                             "    | Point\n"
-                             "let s = Circle 5\n"
-                             "let r = match s with\n"
-                             "    | Circle r -> r * r\n"
-                             "    | Rectangle (w, h) -> w * h\n"
-                             "    | Point -> 0\n"
-                             "print r",
-                             "25"));
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Circle of int\n"
-                             "    | Rectangle of int * int\n"
-                             "    | Point\n"
-                             "let s = Rectangle (3, 4)\n"
-                             "let r = match s with\n"
-                             "    | Circle r -> r * r\n"
-                             "    | Rectangle (w, h) -> w * h\n"
-                             "    | Point -> 0\n"
-                             "print r",
-                             "12"));
-    CHECK(executesWithOutput("type Shape =\n"
-                             "    | Circle of int\n"
-                             "    | Rectangle of int * int\n"
-                             "    | Point\n"
-                             "let s = Point\n"
-                             "let r = match s with\n"
-                             "    | Circle r -> r * r\n"
-                             "    | Rectangle (w, h) -> w * h\n"
-                             "    | Point -> 0\n"
-                             "print r",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Rectangle of int * int\n"
+                                    "    | Point\n"
+                                    "let s = Circle 5\n"
+                                    "let r = match s with\n"
+                                    "    | Circle r -> r * r\n"
+                                    "    | Rectangle (w, h) -> w * h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "25");
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Rectangle of int * int\n"
+                                    "    | Point\n"
+                                    "let s = Rectangle (3, 4)\n"
+                                    "let r = match s with\n"
+                                    "    | Circle r -> r * r\n"
+                                    "    | Rectangle (w, h) -> w * h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "12");
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Rectangle of int * int\n"
+                                    "    | Point\n"
+                                    "let s = Point\n"
+                                    "let r = match s with\n"
+                                    "    | Circle r -> r * r\n"
+                                    "    | Rectangle (w, h) -> w * h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.union_type_unit_constructor_match")
 {
     // Unit constructor matches correctly, no payload extraction
-    CHECK(executesWithOutput("type Option2 =\n"
-                             "    | Nothing\n"
-                             "    | Just of int\n"
-                             "let x = Nothing\n"
-                             "let r = match x with\n"
-                             "    | Nothing -> 0\n"
-                             "    | Just n -> n\n"
-                             "print r",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("type Option2 =\n"
+                                    "    | Nothing\n"
+                                    "    | Just of int\n"
+                                    "let x = Nothing\n"
+                                    "let r = match x with\n"
+                                    "    | Nothing -> 0\n"
+                                    "    | Just n -> n\n"
+                                    "print r")
+          == "0");
 }
 
 // =============================================================================
@@ -4389,87 +4432,87 @@ TEST_CASE("IRGenerator.FSharp.union_type_unit_constructor_match")
 TEST_CASE("IRGenerator.FSharp.list_head_cons")
 {
     // head [1;2;3] → Some 1
-    CHECK(executesWithOutput("let r = match head [1;2;3] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> 0\n"
-                             "print r",
-                             "1"));
+    CHECK(executeSourceAndGetOutput("let r = match head [1;2;3] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> 0\n"
+                                    "print r")
+          == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_head_empty")
 {
     // head [] → None
-    CHECK(executesWithOutput("let r = match head [] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> 0\n"
-                             "print r",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("let r = match head [] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> 0\n"
+                                    "print r")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_head_pipeline")
 {
     // [42] |> head → Some 42
-    CHECK(executesWithOutput("let r = match [42] |> head with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> 0\n"
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let r = match [42] |> head with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> 0\n"
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_tail_basic")
 {
-    CHECK(executesWithOutput("print (tail [1;2;3])", "[2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (tail [1;2;3])") == "[2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_tail_empty")
 {
-    CHECK(executesWithOutput("print (tail [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (tail [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_tail_single")
 {
-    CHECK(executesWithOutput("print (tail [1])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (tail [1])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_tail_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3] |> tail)", "[2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3] |> tail)") == "[2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_length_basic")
 {
-    CHECK(executesWithOutput("print (length [1;2;3])", "3"));
+    CHECK(executeSourceAndGetOutput("print (length [1;2;3])") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_length_empty")
 {
-    CHECK(executesWithOutput("print (length [])", "0"));
+    CHECK(executeSourceAndGetOutput("print (length [])") == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_length_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3] |> length)", "3"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3] |> length)") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_isEmpty_true")
 {
-    CHECK(executesWithOutput("print (isEmpty [])", "true"));
+    CHECK(executeSourceAndGetOutput("print (isEmpty [])") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_isEmpty_false")
 {
-    CHECK(executesWithOutput("print (isEmpty [1;2])", "false"));
+    CHECK(executeSourceAndGetOutput("print (isEmpty [1;2])") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_isEmpty_pipeline")
 {
-    CHECK(executesWithOutput("print ([] |> isEmpty)", "true"));
+    CHECK(executeSourceAndGetOutput("print ([] |> isEmpty)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
 {
     // [1;2;3] |> tail |> length → 2
-    CHECK(executesWithOutput("print ([1;2;3] |> tail |> length)", "2"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3] |> tail |> length)") == "2");
 }
 
 // =============================================================================
@@ -4478,56 +4521,56 @@ TEST_CASE("IRGenerator.FSharp.list_pipeline_chained")
 
 TEST_CASE("IRGenerator.FSharp.list_nth_first")
 {
-    CHECK(executesWithOutput("let r = match nth 0 [10; 20; 30] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "10"));
+    CHECK(executeSourceAndGetOutput("let r = match nth 0 [10; 20; 30] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nth_middle")
 {
-    CHECK(executesWithOutput("let r = match nth 1 [10; 20; 30] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "20"));
+    CHECK(executeSourceAndGetOutput("let r = match nth 1 [10; 20; 30] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "20");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nth_last")
 {
-    CHECK(executesWithOutput("let r = match nth 2 [10; 20; 30] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "30"));
+    CHECK(executeSourceAndGetOutput("let r = match nth 2 [10; 20; 30] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nth_out_of_bounds")
 {
-    CHECK(executesWithOutput("let r = match nth 5 [10; 20; 30] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "-1"));
+    CHECK(executeSourceAndGetOutput("let r = match nth 5 [10; 20; 30] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "-1");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nth_empty")
 {
-    CHECK(executesWithOutput("let r = match nth 0 [] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "-1"));
+    CHECK(executeSourceAndGetOutput("let r = match nth 0 [] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "-1");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_nth_pipeline")
 {
-    CHECK(executesWithOutput("let r = match [1;2;3] |> nth 1 with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "2"));
+    CHECK(executeSourceAndGetOutput("let r = match [1;2;3] |> nth 1 with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "2");
 }
 
 // =============================================================================
@@ -4536,38 +4579,38 @@ TEST_CASE("IRGenerator.FSharp.list_nth_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.list_last_basic")
 {
-    CHECK(executesWithOutput("let r = match last [1; 2; 3] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "3"));
+    CHECK(executeSourceAndGetOutput("let r = match last [1; 2; 3] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_last_single")
 {
-    CHECK(executesWithOutput("let r = match last [42] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let r = match last [42] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_last_empty")
 {
-    CHECK(executesWithOutput("let r = match last [] with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "-1"));
+    CHECK(executeSourceAndGetOutput("let r = match last [] with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "-1");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_last_pipeline")
 {
-    CHECK(executesWithOutput("let r = match [1;2;3] |> last with\n"
-                             "    | Some v -> v\n"
-                             "    | None -> -1\n"
-                             "print r",
-                             "3"));
+    CHECK(executeSourceAndGetOutput("let r = match [1;2;3] |> last with\n"
+                                    "    | Some v -> v\n"
+                                    "    | None -> -1\n"
+                                    "print r")
+          == "3");
 }
 
 // =============================================================================
@@ -4576,23 +4619,23 @@ TEST_CASE("IRGenerator.FSharp.list_last_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.list_replicate_basic")
 {
-    CHECK(executesWithOutput("print (replicate 3 42)", "[42; 42; 42]"));
+    CHECK(executeSourceAndGetOutput("print (replicate 3 42)") == "[42; 42; 42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_replicate_zero")
 {
-    CHECK(executesWithOutput("print (replicate 0 1)", "[]"));
+    CHECK(executeSourceAndGetOutput("print (replicate 0 1)") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_replicate_one")
 {
-    CHECK(executesWithOutput("print (replicate 1 99)", "[99]"));
+    CHECK(executeSourceAndGetOutput("print (replicate 1 99)") == "[99]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_replicate_pipeline")
 {
     // 7 |> replicate 3 → [7; 7; 7]
-    CHECK(executesWithOutput("print (7 |> replicate 3)", "[7; 7; 7]"));
+    CHECK(executeSourceAndGetOutput("print (7 |> replicate 3)") == "[7; 7; 7]");
 }
 
 // =============================================================================
@@ -4601,28 +4644,28 @@ TEST_CASE("IRGenerator.FSharp.list_replicate_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.char_range_basic")
 {
-    CHECK(executesWithOutput("print ['a'..'e']", "[\"a\"; \"b\"; \"c\"; \"d\"; \"e\"]"));
+    CHECK(executeSourceAndGetOutput("print ['a'..'e']") == "[\"a\"; \"b\"; \"c\"; \"d\"; \"e\"]");
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_uppercase")
 {
-    CHECK(executesWithOutput("print ['A'..'E']", "[\"A\"; \"B\"; \"C\"; \"D\"; \"E\"]"));
+    CHECK(executeSourceAndGetOutput("print ['A'..'E']") == "[\"A\"; \"B\"; \"C\"; \"D\"; \"E\"]");
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_digits")
 {
-    CHECK(executesWithOutput("print ['0'..'5']", "[\"0\"; \"1\"; \"2\"; \"3\"; \"4\"; \"5\"]"));
+    CHECK(executeSourceAndGetOutput("print ['0'..'5']") == "[\"0\"; \"1\"; \"2\"; \"3\"; \"4\"; \"5\"]");
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_single")
 {
-    CHECK(executesWithOutput("print ['x'..'x']", "[\"x\"]"));
+    CHECK(executeSourceAndGetOutput("print ['x'..'x']") == "[\"x\"]");
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_empty")
 {
     // Reverse range with no step → empty list
-    CHECK(executesWithOutput("print ['z'..'a']", "[]"));
+    CHECK(executeSourceAndGetOutput("print ['z'..'a']") == "[]");
 }
 
 // =============================================================================
@@ -4631,107 +4674,107 @@ TEST_CASE("IRGenerator.FSharp.char_range_empty")
 
 TEST_CASE("IRGenerator.FSharp.string_trim_basic")
 {
-    CHECK(executesWithOutput(R"(print (trim "  hello  "))", "hello"));
+    CHECK(executeSourceAndGetOutput(R"(print (trim "  hello  "))") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_trim_empty")
 {
-    CHECK(executesWithOutput(R"(print (trim "   "))", ""));
+    CHECK(executeSourceAndGetOutput(R"(print (trim "   "))") == "");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_trim_pipeline")
 {
-    CHECK(executesWithOutput(R"(print ("  hello  " |> trim))", "hello"));
+    CHECK(executeSourceAndGetOutput(R"(print ("  hello  " |> trim))") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_toLower_basic")
 {
-    CHECK(executesWithOutput(R"(print (toLower "HELLO"))", "hello"));
+    CHECK(executeSourceAndGetOutput(R"(print (toLower "HELLO"))") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_toLower_pipeline")
 {
-    CHECK(executesWithOutput(R"(print ("HELLO" |> toLower))", "hello"));
+    CHECK(executeSourceAndGetOutput(R"(print ("HELLO" |> toLower))") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_toUpper_basic")
 {
-    CHECK(executesWithOutput(R"(print (toUpper "hello"))", "HELLO"));
+    CHECK(executeSourceAndGetOutput(R"(print (toUpper "hello"))") == "HELLO");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_toUpper_pipeline")
 {
-    CHECK(executesWithOutput(R"(print ("hello" |> toUpper))", "HELLO"));
+    CHECK(executeSourceAndGetOutput(R"(print ("hello" |> toUpper))") == "HELLO");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_contains_true")
 {
-    CHECK(executesWithOutput(R"(print (contains "hello world" "world"))", "true"));
+    CHECK(executeSourceAndGetOutput(R"(print (contains "hello world" "world"))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_contains_false")
 {
-    CHECK(executesWithOutput(R"(print (contains "hello" "xyz"))", "false"));
+    CHECK(executeSourceAndGetOutput(R"(print (contains "hello" "xyz"))") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_startsWith_true")
 {
-    CHECK(executesWithOutput(R"(print (startsWith "hello" "hel"))", "true"));
+    CHECK(executeSourceAndGetOutput(R"(print (startsWith "hello" "hel"))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_startsWith_false")
 {
-    CHECK(executesWithOutput(R"(print (startsWith "hello" "xyz"))", "false"));
+    CHECK(executeSourceAndGetOutput(R"(print (startsWith "hello" "xyz"))") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_endsWith_true")
 {
-    CHECK(executesWithOutput(R"(print (endsWith "hello" "llo"))", "true"));
+    CHECK(executeSourceAndGetOutput(R"(print (endsWith "hello" "llo"))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_endsWith_false")
 {
-    CHECK(executesWithOutput(R"(print (endsWith "hello" "xyz"))", "false"));
+    CHECK(executeSourceAndGetOutput(R"(print (endsWith "hello" "xyz"))") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_replace_basic")
 {
-    CHECK(executesWithOutput(R"(print (replace "l" "r" "hello"))", "herro"));
+    CHECK(executeSourceAndGetOutput(R"(print (replace "l" "r" "hello"))") == "herro");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_replace_multi")
 {
-    CHECK(executesWithOutput(R"(print (replace "," "" "a,b,c"))", "abc"));
+    CHECK(executeSourceAndGetOutput(R"(print (replace "," "" "a,b,c"))") == "abc");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_replace_no_match")
 {
-    CHECK(executesWithOutput(R"(print (replace "x" "y" "hello"))", "hello"));
+    CHECK(executeSourceAndGetOutput(R"(print (replace "x" "y" "hello"))") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_split_basic")
 {
-    CHECK(executesWithOutput(R"(let parts = split "," "a,b,c"; print (length parts))", "3"));
+    CHECK(executeSourceAndGetOutput(R"(let parts = split "," "a,b,c"; print (length parts))") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_split_head")
 {
-    CHECK(executesWithOutput(R"(let parts = split "," "a,b,c"; print (head parts ?| ""))", "a"));
+    CHECK(executeSourceAndGetOutput(R"(let parts = split "," "a,b,c"; print (head parts ?| ""))") == "a");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_join_basic")
 {
-    CHECK(executesWithOutput(R"(print (join "-" (split "," "a,b,c")))", "a-b-c"));
+    CHECK(executeSourceAndGetOutput(R"(print (join "-" (split "," "a,b,c")))") == "a-b-c");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_join_empty")
 {
-    CHECK(executesWithOutput(R"(print (join "," []))", ""));
+    CHECK(executeSourceAndGetOutput(R"(print (join "," []))") == "");
 }
 
 TEST_CASE("IRGenerator.FSharp.string_join_pipeline")
 {
-    CHECK(executesWithOutput(R"(let r = ["a"; "b"; "c"] |> join "-"; print r)", "a-b-c"));
+    CHECK(executeSourceAndGetOutput(R"(let r = ["a"; "b"; "c"] |> join "-"; print r)") == "a-b-c");
 }
 
 // =============================================================================
@@ -4740,59 +4783,60 @@ TEST_CASE("IRGenerator.FSharp.string_join_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.list_map_basic")
 {
-    CHECK(executesWithOutput("print (map (fun x -> x * 2) [1; 2; 3])", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> x * 2) [1; 2; 3])") == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_named_function")
 {
-    CHECK(executesWithOutput("let double x = x * 2\nprint (map double [1; 2; 3])", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("let double x = x * 2\nprint (map double [1; 2; 3])") == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_empty")
 {
-    CHECK(executesWithOutput("print (map (fun x -> x * 2) [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> x * 2) [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_single")
 {
-    CHECK(executesWithOutput("print (map (fun x -> x + 10) [5])", "[15]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> x + 10) [5])") == "[15]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_identity")
 {
-    CHECK(executesWithOutput("print (map (fun x -> x) [1; 2; 3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> x) [1; 2; 3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_pipeline")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * 2))", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3] |> map (fun x -> x * 2))") == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_chained")
 {
-    CHECK(
-        executesWithOutput("print ([1; 2; 3] |> map (fun x -> x + 1) |> map (fun x -> x * 2))", "[4; 6; 8]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3] |> map (fun x -> x + 1) |> map (fun x -> x * 2))")
+          == "[4; 6; 8]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_partial")
 {
-    CHECK(
-        executesWithOutput("let doubleAll = map (fun x -> x * 2)\nprint (doubleAll [1; 2; 3])", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("let doubleAll = map (fun x -> x * 2)\nprint (doubleAll [1; 2; 3])")
+          == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_closure")
 {
-    CHECK(executesWithOutput("let offset = 10\nprint (map (fun x -> x + offset) [1; 2; 3])", "[11; 12; 13]"));
+    CHECK(executeSourceAndGetOutput("let offset = 10\nprint (map (fun x -> x + offset) [1; 2; 3])")
+          == "[11; 12; 13]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_negate")
 {
-    CHECK(executesWithOutput("print (map (fun x -> 0 - x) [1; 2; 3])", "[-1; -2; -3]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> 0 - x) [1; 2; 3])") == "[-1; -2; -3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_map_placeholder")
 {
-    CHECK(executesWithOutput("print (map (_ * 2) [1; 2; 3])", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print (map (_ * 2) [1; 2; 3])") == "[2; 4; 6]");
 }
 
 // =============================================================================
@@ -4801,53 +4845,56 @@ TEST_CASE("IRGenerator.FSharp.list_map_placeholder")
 
 TEST_CASE("IRGenerator.FSharp.list_filter_basic")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x % 2 == 0) [1; 2; 3; 4; 5; 6])", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x % 2 == 0) [1; 2; 3; 4; 5; 6])")
+          == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_all_pass")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [1; 2; 3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x > 0) [1; 2; 3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_none_pass")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x > 10) [1; 2; 3])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x > 10) [1; 2; 3])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_empty")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x > 0) [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_single_pass")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x > 0) [5])", "[5]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x > 0) [5])") == "[5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_single_fail")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x > 10) [5])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x > 10) [5])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_pipeline")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0))", "[2; 4; 6]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0))")
+          == "[2; 4; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_partial")
 {
-    CHECK(executesWithOutput("let getEvens = filter (fun x -> x % 2 == 0)\nprint (getEvens [1; 2; 3; 4])",
-                             "[2; 4]"));
+    CHECK(executeSourceAndGetOutput(
+              "let getEvens = filter (fun x -> x % 2 == 0)\nprint (getEvens [1; 2; 3; 4])")
+          == "[2; 4]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_preserves_order")
 {
-    CHECK(executesWithOutput("print (filter (fun x -> x != 3) [1; 2; 3; 4; 5])", "[1; 2; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print (filter (fun x -> x != 3) [1; 2; 3; 4; 5])") == "[1; 2; 4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_placeholder")
 {
-    CHECK(executesWithOutput("print (filter (_ > 2) [1; 2; 3; 4; 5])", "[3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print (filter (_ > 2) [1; 2; 3; 4; 5])") == "[3; 4; 5]");
 }
 
 // =============================================================================
@@ -4856,55 +4903,57 @@ TEST_CASE("IRGenerator.FSharp.list_filter_placeholder")
 
 TEST_CASE("IRGenerator.FSharp.list_fold_sum")
 {
-    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + x) [1; 2; 3; 4; 5])", "15"));
+    CHECK(executeSourceAndGetOutput("print (fold 0 (fun acc x -> acc + x) [1; 2; 3; 4; 5])") == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_product")
 {
-    CHECK(executesWithOutput("print (fold 1 (fun acc x -> acc * x) [1; 2; 3; 4; 5])", "120"));
+    CHECK(executeSourceAndGetOutput("print (fold 1 (fun acc x -> acc * x) [1; 2; 3; 4; 5])") == "120");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_empty")
 {
-    CHECK(executesWithOutput("print (fold 42 (fun acc x -> acc + x) [])", "42"));
+    CHECK(executeSourceAndGetOutput("print (fold 42 (fun acc x -> acc + x) [])") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_single")
 {
-    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + x) [7])", "7"));
+    CHECK(executeSourceAndGetOutput("print (fold 0 (fun acc x -> acc + x) [7])") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_count")
 {
-    CHECK(executesWithOutput("print (fold 0 (fun acc x -> acc + 1) [10; 20; 30])", "3"));
+    CHECK(executeSourceAndGetOutput("print (fold 0 (fun acc x -> acc + 1) [10; 20; 30])") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_max")
 {
-    CHECK(executesWithOutput("print (fold 0 (fun acc x -> if x > acc then x else acc) [3; 1; 4; 1; 5; 9])",
-                             "9"));
+    CHECK(executeSourceAndGetOutput(
+              "print (fold 0 (fun acc x -> if x > acc then x else acc) [3; 1; 4; 1; 5; 9])")
+          == "9");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_pipeline")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5] |> fold 0 (fun acc x -> acc + x))", "15"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3; 4; 5] |> fold 0 (fun acc x -> acc + x))") == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_left_associative")
 {
     // ((100 - 1) - 2) - 3 = 94
-    CHECK(executesWithOutput("print (fold 100 (fun acc x -> acc - x) [1; 2; 3])", "94"));
+    CHECK(executeSourceAndGetOutput("print (fold 100 (fun acc x -> acc - x) [1; 2; 3])") == "94");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_partial")
 {
-    CHECK(executesWithOutput("let sum = fold 0 (fun acc x -> acc + x)\nprint (sum [1; 2; 3])", "6"));
+    CHECK(executeSourceAndGetOutput("let sum = fold 0 (fun acc x -> acc + x)\nprint (sum [1; 2; 3])") == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_fold_partial_init_only")
 {
     CHECK(
-        executesWithOutput("let sumFrom0 = fold 0\nprint (sumFrom0 (fun acc x -> acc + x) [1; 2; 3])", "6"));
+        executeSourceAndGetOutput("let sumFrom0 = fold 0\nprint (sumFrom0 (fun acc x -> acc + x) [1; 2; 3])")
+        == "6");
 }
 
 // =============================================================================
@@ -4913,66 +4962,66 @@ TEST_CASE("IRGenerator.FSharp.list_fold_partial_init_only")
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_sum")
 {
-    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) [1; 2; 3; 4]\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "10"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> a + b) [1; 2; 3; 4]\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_product")
 {
-    CHECK(executesWithOutput("let r = reduce (fun a b -> a * b) [1; 2; 3; 4]\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "24"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> a * b) [1; 2; 3; 4]\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "24");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_single")
 {
-    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) [42]\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> a + b) [42]\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_empty")
 {
-    CHECK(executesWithOutput("let r = reduce (fun a b -> a + b) []\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "none"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> a + b) []\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "none");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_max")
 {
-    CHECK(executesWithOutput("let r = reduce (fun a b -> if a > b then a else b) [3; 1; 4; 1; 5; 9]\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "9"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> if a > b then a else b) [3; 1; 4; 1; 5; 9]\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "9");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_pipeline")
 {
-    CHECK(executesWithOutput("let r = [1; 2; 3; 4; 5] |> reduce (fun a b -> a + b)\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "15"));
+    CHECK(executeSourceAndGetOutput("let r = [1; 2; 3; 4; 5] |> reduce (fun a b -> a + b)\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "15");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reduce_left_associative")
 {
     // (10 - 3) - 2 = 5
-    CHECK(executesWithOutput("let r = reduce (fun a b -> a - b) [10; 3; 2]\n"
-                             "match r with\n"
-                             "    | Some v -> print v\n"
-                             "    | None -> print \"none\"",
-                             "5"));
+    CHECK(executeSourceAndGetOutput("let r = reduce (fun a b -> a - b) [10; 3; 2]\n"
+                                    "match r with\n"
+                                    "    | Some v -> print v\n"
+                                    "    | None -> print \"none\"")
+          == "5");
 }
 
 // =============================================================================
@@ -4981,32 +5030,32 @@ TEST_CASE("IRGenerator.FSharp.list_reduce_left_associative")
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_basic")
 {
-    CHECK(executesWithOutput("print (reverse [1; 2; 3])", "[3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("print (reverse [1; 2; 3])") == "[3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_single")
 {
-    CHECK(executesWithOutput("print (reverse [42])", "[42]"));
+    CHECK(executeSourceAndGetOutput("print (reverse [42])") == "[42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_empty")
 {
-    CHECK(executesWithOutput("print (reverse [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (reverse [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_pipeline")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3] |> reverse)", "[3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3] |> reverse)") == "[3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_double")
 {
-    CHECK(executesWithOutput("print (reverse (reverse [1; 2; 3]))", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (reverse (reverse [1; 2; 3]))") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_reverse_preserves_length")
 {
-    CHECK(executesWithOutput("print (length (reverse [1; 2; 3; 4; 5]))", "5"));
+    CHECK(executeSourceAndGetOutput("print (length (reverse [1; 2; 3; 4; 5]))") == "5");
 }
 
 // =============================================================================
@@ -5017,95 +5066,102 @@ TEST_CASE("IRGenerator.FSharp.list_reverse_preserves_length")
 
 TEST_CASE("IRGenerator.FSharp.list_find_match")
 {
-    CHECK(executesWithOutput(
-        "match find (fun x -> x > 3) [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"", "4"));
+    CHECK(executeSourceAndGetOutput(
+              "match find (fun x -> x > 3) [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"")
+          == "4");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_find_no_match")
 {
-    CHECK(executesWithOutput(
-        "match find (fun x -> x > 10) [1;2;3] with | Some v -> print v | None -> print \"none\"", "none"));
+    CHECK(executeSourceAndGetOutput(
+              "match find (fun x -> x > 10) [1;2;3] with | Some v -> print v | None -> print \"none\"")
+          == "none");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_find_empty")
 {
-    CHECK(executesWithOutput(
-        "match find (fun x -> x > 0) [] with | Some v -> print v | None -> print \"none\"", "none"));
+    CHECK(executeSourceAndGetOutput(
+              "match find (fun x -> x > 0) [] with | Some v -> print v | None -> print \"none\"")
+          == "none");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_find_first_match")
 {
-    CHECK(executesWithOutput(
-        "match find (fun x -> x % 2 == 0) [1;2;4;6] with | Some v -> print v | None -> print \"none\"", "2"));
+    CHECK(executeSourceAndGetOutput(
+              "match find (fun x -> x % 2 == 0) [1;2;4;6] with | Some v -> print v | None -> print \"none\"")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_find_pipeline")
 {
-    CHECK(executesWithOutput(
-        "match ([1;2;3;4;5] |> find (fun x -> x > 3)) with | Some v -> print v | None -> print \"none\"",
-        "4"));
+    CHECK(
+        executeSourceAndGetOutput(
+            "match ([1;2;3;4;5] |> find (fun x -> x > 3)) with | Some v -> print v | None -> print \"none\"")
+        == "4");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_find_partial")
 {
-    CHECK(executesWithOutput("let findBig = find (fun x -> x > 3)\n"
-                             "match findBig [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"",
-                             "4"));
+    CHECK(executeSourceAndGetOutput(
+              "let findBig = find (fun x -> x > 3)\n"
+              "match findBig [1;2;3;4;5] with | Some v -> print v | None -> print \"none\"")
+          == "4");
 }
 
 // --- exists ---
 
 TEST_CASE("IRGenerator.FSharp.list_exists_true")
 {
-    CHECK(executesWithOutput("print (exists (fun x -> x > 3) [1;2;3;4;5])", "true"));
+    CHECK(executeSourceAndGetOutput("print (exists (fun x -> x > 3) [1;2;3;4;5])") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_exists_false")
 {
-    CHECK(executesWithOutput("print (exists (fun x -> x > 10) [1;2;3])", "false"));
+    CHECK(executeSourceAndGetOutput("print (exists (fun x -> x > 10) [1;2;3])") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_exists_empty")
 {
-    CHECK(executesWithOutput("print (exists (fun x -> x > 0) [])", "false"));
+    CHECK(executeSourceAndGetOutput("print (exists (fun x -> x > 0) [])") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_exists_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3;4;5] |> exists (fun x -> x > 3))", "true"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3;4;5] |> exists (fun x -> x > 3))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_exists_partial")
 {
-    CHECK(executesWithOutput("let hasBig = exists (fun x -> x > 10)\nprint (hasBig [1;2;3])", "false"));
+    CHECK(executeSourceAndGetOutput("let hasBig = exists (fun x -> x > 10)\nprint (hasBig [1;2;3])")
+          == "false");
 }
 
 // --- forall ---
 
 TEST_CASE("IRGenerator.FSharp.list_forall_true")
 {
-    CHECK(executesWithOutput("print (forall (fun x -> x > 0) [1;2;3])", "true"));
+    CHECK(executeSourceAndGetOutput("print (forall (fun x -> x > 0) [1;2;3])") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_forall_false")
 {
-    CHECK(executesWithOutput("print (forall (fun x -> x > 2) [1;2;3])", "false"));
+    CHECK(executeSourceAndGetOutput("print (forall (fun x -> x > 2) [1;2;3])") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_forall_empty")
 {
-    CHECK(executesWithOutput("print (forall (fun x -> x > 0) [])", "true"));
+    CHECK(executeSourceAndGetOutput("print (forall (fun x -> x > 0) [])") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_forall_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3] |> forall (fun x -> x > 0))", "true"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3] |> forall (fun x -> x > 0))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_forall_partial")
 {
-    CHECK(
-        executesWithOutput("let allPositive = forall (fun x -> x > 0)\nprint (allPositive [1;2;3])", "true"));
+    CHECK(executeSourceAndGetOutput("let allPositive = forall (fun x -> x > 0)\nprint (allPositive [1;2;3])")
+          == "true");
 }
 
 // --- each ---
@@ -5117,7 +5173,7 @@ TEST_CASE("IRGenerator.FSharp.list_each_basic")
 
 TEST_CASE("IRGenerator.FSharp.list_each_pipeline")
 {
-    CHECK(executesWithOutput("let _ = [1; 2; 3] |> each (fun x -> print x)", "123"));
+    CHECK(executeSourceAndGetOutput("let _ = [1; 2; 3] |> each (fun x -> print x)") == "123");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_print_ref")
@@ -5127,197 +5183,201 @@ TEST_CASE("IRGenerator.FSharp.list_each_print_ref")
 
 TEST_CASE("IRGenerator.FSharp.list_each_println")
 {
-    CHECK(executesWithOutput("let _ = [1; 2; 3] |> each println", "1\n2\n3\n"));
+    CHECK(executeSourceAndGetOutput("let _ = [1; 2; 3] |> each println") == "1\n2\n3\n");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_empty")
 {
-    CHECK(executesWithOutput("each (fun x -> print x) []", ""));
+    CHECK(executeSourceAndGetOutput("each (fun x -> print x) []") == "");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_single")
 {
-    CHECK(executesWithOutput("let _ = [42] |> each print", "42"));
+    CHECK(executeSourceAndGetOutput("let _ = [42] |> each print") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_returns_unit")
 {
-    CHECK(executesWithOutput("let r = each (fun x -> print x) [1; 2]\nprint r", "120"));
+    CHECK(executeSourceAndGetOutput("let r = each (fun x -> print x) [1; 2]\nprint r") == "120");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_chained_pipeline")
 {
-    CHECK(executesWithOutput("let _ = [1;2;3;4] |> filter (fun x -> x % 2 == 0) |> each print", "24"));
+    CHECK(executeSourceAndGetOutput("let _ = [1;2;3;4] |> filter (fun x -> x % 2 == 0) |> each print")
+          == "24");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_each_with_lambda_body")
 {
-    CHECK(executesWithOutput("let _ = [10; 20; 30] |> each (fun x -> println (x * 2))", "20\n40\n60\n"));
+    CHECK(executeSourceAndGetOutput("let _ = [10; 20; 30] |> each (fun x -> println (x * 2))")
+          == "20\n40\n60\n");
 }
 
 // --- take ---
 
 TEST_CASE("IRGenerator.FSharp.list_take_basic")
 {
-    CHECK(executesWithOutput("print (take 3 [1;2;3;4;5])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (take 3 [1;2;3;4;5])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_zero")
 {
-    CHECK(executesWithOutput("print (take 0 [1;2;3])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (take 0 [1;2;3])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_all")
 {
-    CHECK(executesWithOutput("print (take 5 [1;2;3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (take 5 [1;2;3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_more")
 {
-    CHECK(executesWithOutput("print (take 10 [1;2;3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (take 10 [1;2;3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_empty")
 {
-    CHECK(executesWithOutput("print (take 3 [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (take 3 [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3;4;5] |> take 3)", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3;4;5] |> take 3)") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_take_partial")
 {
-    CHECK(executesWithOutput("let first3 = take 3\nprint (first3 [1;2;3;4;5])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("let first3 = take 3\nprint (first3 [1;2;3;4;5])") == "[1; 2; 3]");
 }
 
 // --- drop ---
 
 TEST_CASE("IRGenerator.FSharp.list_drop_basic")
 {
-    CHECK(executesWithOutput("print (drop 3 [1;2;3;4;5])", "[4; 5]"));
+    CHECK(executeSourceAndGetOutput("print (drop 3 [1;2;3;4;5])") == "[4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_zero")
 {
-    CHECK(executesWithOutput("print (drop 0 [1;2;3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (drop 0 [1;2;3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_all")
 {
-    CHECK(executesWithOutput("print (drop 3 [1;2;3])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (drop 3 [1;2;3])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_more")
 {
-    CHECK(executesWithOutput("print (drop 10 [1;2;3])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (drop 10 [1;2;3])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_empty")
 {
-    CHECK(executesWithOutput("print (drop 3 [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (drop 3 [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_pipeline")
 {
-    CHECK(executesWithOutput("print ([1;2;3;4;5] |> drop 2)", "[3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3;4;5] |> drop 2)") == "[3; 4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_drop_partial")
 {
-    CHECK(executesWithOutput("let skipFirst2 = drop 2\nprint (skipFirst2 [1;2;3;4;5])", "[3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("let skipFirst2 = drop 2\nprint (skipFirst2 [1;2;3;4;5])")
+          == "[3; 4; 5]");
 }
 
 // --- zip ---
 
 TEST_CASE("IRGenerator.FSharp.list_zip_basic")
 {
-    CHECK(executesWithOutput("print (zip [1;2;3] [4;5;6])", "[(1, 4); (2, 5); (3, 6)]"));
+    CHECK(executeSourceAndGetOutput("print (zip [1;2;3] [4;5;6])") == "[(1, 4); (2, 5); (3, 6)]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_unequal_left")
 {
-    CHECK(executesWithOutput("print (zip [1;2] [4;5;6])", "[(1, 4); (2, 5)]"));
+    CHECK(executeSourceAndGetOutput("print (zip [1;2] [4;5;6])") == "[(1, 4); (2, 5)]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_unequal_right")
 {
-    CHECK(executesWithOutput("print (zip [1;2;3] [4;5])", "[(1, 4); (2, 5)]"));
+    CHECK(executeSourceAndGetOutput("print (zip [1;2;3] [4;5])") == "[(1, 4); (2, 5)]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_empty_left")
 {
-    CHECK(executesWithOutput("print (zip [] [1;2;3])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (zip [] [1;2;3])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_empty_right")
 {
-    CHECK(executesWithOutput("print (zip [1;2;3] [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (zip [1;2;3] [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_single")
 {
-    CHECK(executesWithOutput("print (zip [1] [2])", "[(1, 2)]"));
+    CHECK(executeSourceAndGetOutput("print (zip [1] [2])") == "[(1, 2)]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_zip_pipeline")
 {
     // Pipeline pipes into last param (__ys), so [4;5;6] |> zip [1;2;3] means zip [1;2;3] [4;5;6]
-    CHECK(executesWithOutput("print ([4;5;6] |> zip [1;2;3])", "[(1, 4); (2, 5); (3, 6)]"));
+    CHECK(executeSourceAndGetOutput("print ([4;5;6] |> zip [1;2;3])") == "[(1, 4); (2, 5); (3, 6)]");
 }
 
 // --- flatten ---
 
 TEST_CASE("IRGenerator.FSharp.list_flatten_basic")
 {
-    CHECK(executesWithOutput("print (flatten [[1;2]; [3;4]; [5;6]])", "[1; 2; 3; 4; 5; 6]"));
+    CHECK(executeSourceAndGetOutput("print (flatten [[1;2]; [3;4]; [5;6]])") == "[1; 2; 3; 4; 5; 6]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_flatten_empty_outer")
 {
-    CHECK(executesWithOutput("print (flatten [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (flatten [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_flatten_empty_inner")
 {
-    CHECK(executesWithOutput("print (flatten [[]; [1;2]; []])", "[1; 2]"));
+    CHECK(executeSourceAndGetOutput("print (flatten [[]; [1;2]; []])") == "[1; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_flatten_single")
 {
-    CHECK(executesWithOutput("print (flatten [[1;2;3]])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (flatten [[1;2;3]])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_flatten_pipeline")
 {
-    CHECK(executesWithOutput("print ([[1;2]; [3;4]] |> flatten)", "[1; 2; 3; 4]"));
+    CHECK(executeSourceAndGetOutput("print ([[1;2]; [3;4]] |> flatten)") == "[1; 2; 3; 4]");
 }
 
 // --- Composition tests ---
 
 TEST_CASE("IRGenerator.FSharp.list_util_take_then_map")
 {
-    CHECK(executesWithOutput("print ([1;2;3;4;5] |> take 3 |> map (fun x -> x * 10))", "[10; 20; 30]"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3;4;5] |> take 3 |> map (fun x -> x * 10))")
+          == "[10; 20; 30]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_util_drop_then_fold")
 {
-    CHECK(executesWithOutput("print ([1;2;3;4;5] |> drop 2 |> fold 0 (fun a x -> a + x))", "12"));
+    CHECK(executeSourceAndGetOutput("print ([1;2;3;4;5] |> drop 2 |> fold 0 (fun a x -> a + x))") == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_util_filter_then_find")
 {
-    CHECK(
-        executesWithOutput("match ([1;2;3;4;5] |> filter (fun x -> x > 2) |> find (fun x -> x % 2 == 0)) with"
-                           " | Some v -> print v | None -> print \"none\"",
-                           "4"));
+    CHECK(executeSourceAndGetOutput(
+              "match ([1;2;3;4;5] |> filter (fun x -> x > 2) |> find (fun x -> x % 2 == 0)) with"
+              " | Some v -> print v | None -> print \"none\"")
+          == "4");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_util_map_flatten")
 {
-    CHECK(
-        executesWithOutput("print (flatten (map (fun x -> [x; x * 10]) [1;2;3]))", "[1; 10; 2; 20; 3; 30]"));
+    CHECK(executeSourceAndGetOutput("print (flatten (map (fun x -> [x; x * 10]) [1;2;3]))")
+          == "[1; 10; 2; 20; 3; 30]");
 }
 
 // =============================================================================
@@ -5326,58 +5386,62 @@ TEST_CASE("IRGenerator.FSharp.list_util_map_flatten")
 
 TEST_CASE("IRGenerator.FSharp.list_hof_filter_then_map")
 {
-    CHECK(executesWithOutput(
-        "print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * 10))",
-        "[20; 40; 60]"));
+    CHECK(executeSourceAndGetOutput(
+              "print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * 10))")
+          == "[20; 40; 60]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_map_then_fold")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * x) |> fold 0 (fun acc x -> acc + x))",
-                             "14"));
+    CHECK(executeSourceAndGetOutput(
+              "print ([1; 2; 3] |> map (fun x -> x * x) |> fold 0 (fun acc x -> acc + x))")
+          == "14");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_filter_map_fold")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * "
-                             "x) |> fold 0 (fun acc x -> acc + x))",
-                             "56"));
+    CHECK(executeSourceAndGetOutput(
+              "print ([1; 2; 3; 4; 5; 6] |> filter (fun x -> x % 2 == 0) |> map (fun x -> x * "
+              "x) |> fold 0 (fun acc x -> acc + x))")
+          == "56");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_map_reverse")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3] |> map (fun x -> x * 2) |> reverse)", "[6; 4; 2]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3] |> map (fun x -> x * 2) |> reverse)") == "[6; 4; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_with_let_binding")
 {
-    CHECK(executesWithOutput("let xs = [1; 2; 3; 4; 5]\n"
-                             "let evens = filter (fun x -> x % 2 == 0) xs\n"
-                             "let doubled = map (fun x -> x * 2) evens\n"
-                             "print doubled",
-                             "[4; 8]"));
+    CHECK(executeSourceAndGetOutput("let xs = [1; 2; 3; 4; 5]\n"
+                                    "let evens = filter (fun x -> x % 2 == 0) xs\n"
+                                    "let doubled = map (fun x -> x * 2) evens\n"
+                                    "print doubled")
+          == "[4; 8]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_nested_map")
 {
-    CHECK(executesWithOutput(
-        "let double x = x * 2\nlet add1 x = x + 1\nprint (map add1 (map double [1; 2; 3]))", "[3; 5; 7]"));
+    CHECK(executeSourceAndGetOutput(
+              "let double x = x * 2\nlet add1 x = x + 1\nprint (map add1 (map double [1; 2; 3]))")
+          == "[3; 5; 7]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_fold_with_if")
 {
-    CHECK(executesWithOutput("print (fold 0 (fun acc x -> if x > 3 then acc + x else acc) [1; 2; 3; 4; 5])",
-                             "9"));
+    CHECK(executeSourceAndGetOutput(
+              "print (fold 0 (fun acc x -> if x > 3 then acc + x else acc) [1; 2; 3; 4; 5])")
+          == "9");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_filter_length")
 {
-    CHECK(executesWithOutput("print (length (filter (fun x -> x > 3) [1; 2; 3; 4; 5]))", "2"));
+    CHECK(executeSourceAndGetOutput("print (length (filter (fun x -> x > 3) [1; 2; 3; 4; 5]))") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_hof_map_with_range")
 {
-    CHECK(executesWithOutput("print (map (fun x -> x * x) [1..5])", "[1; 4; 9; 16; 25]"));
+    CHECK(executeSourceAndGetOutput("print (map (fun x -> x * x) [1..5])") == "[1; 4; 9; 16; 25]");
 }
 
 // =============================================================================
@@ -5387,49 +5451,49 @@ TEST_CASE("IRGenerator.FSharp.list_hof_map_with_range")
 TEST_CASE("IRGenerator.FSharp.placeholder_increment")
 {
     // (_ + 1) desugars to fun __x -> __x + 1
-    CHECK(executesWithOutput("let inc = (_ + 1); print (inc 5)", "6"));
+    CHECK(executeSourceAndGetOutput("let inc = (_ + 1); print (inc 5)") == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_multiply")
 {
     // (_ * 2) desugars to fun __x -> __x * 2
-    CHECK(executesWithOutput("let double = (_ * 2); print (double 7)", "14"));
+    CHECK(executeSourceAndGetOutput("let double = (_ * 2); print (double 7)") == "14");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_same_param_twice")
 {
     // (_ + _) desugars to fun __x -> __x + __x — same parameter used twice
-    CHECK(executesWithOutput("let f = (_ + _); print (f 7)", "14"));
+    CHECK(executeSourceAndGetOutput("let f = (_ + _); print (f 7)") == "14");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_complex_expr")
 {
     // (_ * _ + _) desugars to fun __x -> __x * __x + __x
-    CHECK(executesWithOutput("let f = (_ * _ + _); print (f 3)", "12"));
+    CHECK(executeSourceAndGetOutput("let f = (_ * _ + _); print (f 3)") == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_pipeline")
 {
     // Pipeline with placeholder lambda
-    CHECK(executesWithOutput("print (5 |> (_ + 1))", "6"));
+    CHECK(executeSourceAndGetOutput("print (5 |> (_ + 1))") == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_composition")
 {
     // Two independent placeholder lambdas
-    CHECK(executesWithOutput("let f = (_ * 2); let g = (_ + 1); print (g (f 3))", "7"));
+    CHECK(executeSourceAndGetOutput("let f = (_ * 2); let g = (_ + 1); print (g (f 3))") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_pipeline_chained")
 {
     // Chained pipelines with placeholder lambdas
-    CHECK(executesWithOutput("print (10 |> (_ * 2) |> (_ + 1))", "21"));
+    CHECK(executeSourceAndGetOutput("print (10 |> (_ * 2) |> (_ + 1))") == "21");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
 {
     // (_ - 3)
-    CHECK(executesWithOutput("let f = (_ - 3); print (f 10)", "7"));
+    CHECK(executeSourceAndGetOutput("let f = (_ - 3); print (f 10)") == "7");
 }
 
 // ============================================================================
@@ -5439,45 +5503,49 @@ TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_pid")
 {
     // _.pid desugars to fun __x -> __x.pid
-    CHECK(executesWithOutput("let pids = ps |> map _.pid\nprint pids", "[1; 42; 100]"));
+    CHECK(executeSourceAndGetOutput("let pids = ps |> map _.pid\nprint pids") == "[1; 42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_command")
 {
-    CHECK(executesWithOutput("let cmds = ps |> map _.command\nprint cmds", "[/sbin/init; firefox; vim]"));
+    CHECK(executeSourceAndGetOutput("let cmds = ps |> map _.command\nprint cmds")
+          == "[/sbin/init; firefox; vim]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_map_user")
 {
-    CHECK(executesWithOutput("let users = ps |> map _.user\nprint users", "[root; alice; bob]"));
+    CHECK(executeSourceAndGetOutput("let users = ps |> map _.user\nprint users") == "[root; alice; bob]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_map")
 {
     // (_.pid > 10) desugars to fun __x -> __x.pid > 10
-    CHECK(executesWithOutput("let pids = ps |> filter (_.pid > 10) |> map _.pid\nprint pids", "[42; 100]"));
+    CHECK(executeSourceAndGetOutput("let pids = ps |> filter (_.pid > 10) |> map _.pid\nprint pids")
+          == "[42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_string_eq")
 {
-    CHECK(executesWithOutput("let cmds = ps |> filter (_.user == \"alice\") |> map _.command\nprint cmds",
-                             "[firefox]"));
+    CHECK(executeSourceAndGetOutput(
+              "let cmds = ps |> filter (_.user == \"alice\") |> map _.command\nprint cmds")
+          == "[firefox]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_filter_map_command")
 {
-    CHECK(executesWithOutput("let cmds = ps |> filter (_.pid > 10) |> map _.command\nprint cmds",
-                             "[firefox; vim]"));
+    CHECK(executeSourceAndGetOutput("let cmds = ps |> filter (_.pid > 10) |> map _.command\nprint cmds")
+          == "[firefox; vim]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_sortBy")
 {
-    CHECK(executesWithOutput("let pids = ps |> sortBy _.pid |> map _.pid\nprint pids", "[1; 42; 100]"));
+    CHECK(executeSourceAndGetOutput("let pids = ps |> sortBy _.pid |> map _.pid\nprint pids")
+          == "[1; 42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.placeholder_ps_exists")
 {
-    CHECK(executesWithOutput("let r = ps |> exists (_.pid > 50)\nprint r", "true"));
+    CHECK(executeSourceAndGetOutput("let r = ps |> exists (_.pid > 50)\nprint r") == "true");
 }
 
 // ============================================================================
@@ -5487,61 +5555,61 @@ TEST_CASE("IRGenerator.FSharp.placeholder_ps_exists")
 TEST_CASE("IRGenerator.FSharp.option_default_some")
 {
     // Some value ?| default → unwraps to the Some value
-    CHECK(executesWithOutput("print (Some 42 ?| 0)", "42"));
+    CHECK(executeSourceAndGetOutput("print (Some 42 ?| 0)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_none")
 {
     // None ?| default → evaluates to the default
-    CHECK(executesWithOutput("print (None ?| 99)", "99"));
+    CHECK(executeSourceAndGetOutput("print (None ?| 99)") == "99");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_string_some")
 {
     // String Some unwraps correctly
-    CHECK(executesWithOutput("print (Some \"hello\" ?| \"world\")", "hello"));
+    CHECK(executeSourceAndGetOutput("print (Some \"hello\" ?| \"world\")") == "hello");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_string_none")
 {
     // Typed None with string default
-    CHECK(executesWithOutput("let x: option<str> = None; print (x ?| \"default\")", "default"));
+    CHECK(executeSourceAndGetOutput("let x: option<str> = None; print (x ?| \"default\")") == "default");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_nested")
 {
     // Nested ?| — inner None falls back, then result used as default for outer
-    CHECK(executesWithOutput("print (None ?| (Some 5 ?| 0))", "5"));
+    CHECK(executeSourceAndGetOutput("print (None ?| (Some 5 ?| 0))") == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_with_expr")
 {
     // Default is an expression, not just a literal
-    CHECK(executesWithOutput("print (Some 10 ?| (3 + 4))", "10"));
+    CHECK(executeSourceAndGetOutput("print (Some 10 ?| (3 + 4))") == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_in_let")
 {
     // ?| in a let binding
-    CHECK(executesWithOutput("let x = Some 7 ?| 0; print x", "7"));
+    CHECK(executeSourceAndGetOutput("let x = Some 7 ?| 0; print x") == "7");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_none_in_let")
 {
     // ?| with None in a let binding
-    CHECK(executesWithOutput("let x = None ?| 42; print x", "42"));
+    CHECK(executeSourceAndGetOutput("let x = None ?| 42; print x") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_find")
 {
     // find returns Option — ?| provides fallback
-    CHECK(executesWithOutput("print (find (fun x -> x > 10) [1;2;3] ?| -1)", "-1"));
+    CHECK(executeSourceAndGetOutput("print (find (fun x -> x > 10) [1;2;3] ?| -1)") == "-1");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_default_find_found")
 {
     // find returns Some when element found — ?| unwraps
-    CHECK(executesWithOutput("print (find (fun x -> x > 1) [1;2;3] ?| -1)", "2"));
+    CHECK(executeSourceAndGetOutput("print (find (fun x -> x > 1) [1;2;3] ?| -1)") == "2");
 }
 
 // ============================================================================
@@ -5551,103 +5619,105 @@ TEST_CASE("IRGenerator.FSharp.option_default_find_found")
 TEST_CASE("IRGenerator.FSharp.option_map_some")
 {
     // Option.map applies function to Some value, wraps result in Some
-    CHECK(executesWithOutput("print (Option.map (fun x -> x * 2) (Some 21) ?| 0)", "42"));
+    CHECK(executeSourceAndGetOutput("print (Option.map (fun x -> x * 2) (Some 21) ?| 0)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_map_none")
 {
     // Option.map on None returns None
-    CHECK(executesWithOutput("print (Option.map (fun x -> x * 2) None ?| 0)", "0"));
+    CHECK(executeSourceAndGetOutput("print (Option.map (fun x -> x * 2) None ?| 0)") == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_map_named")
 {
     // Option.map with a named function
-    CHECK(executesWithOutput("let double (x: int) = x * 2\nprint (Option.map double (Some 5) ?| 0)", "10"));
+    CHECK(executeSourceAndGetOutput("let double (x: int) = x * 2\nprint (Option.map double (Some 5) ?| 0)")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_map_method")
 {
     // Method-style: opt.map f
-    CHECK(executesWithOutput("let r = (Some 21).map (fun x -> x * 2)\nprint (r ?| 0)", "42"));
+    CHECK(executeSourceAndGetOutput("let r = (Some 21).map (fun x -> x * 2)\nprint (r ?| 0)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_map_pipeline")
 {
     // Pipeline: value |> Option.map f |> Option.defaultValue def
-    CHECK(
-        executesWithOutput("print (Some 21 |> Option.map (fun x -> x * 2) |> Option.defaultValue 0)", "42"));
+    CHECK(executeSourceAndGetOutput("print (Some 21 |> Option.map (fun x -> x * 2) |> Option.defaultValue 0)")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_bind_some")
 {
     // Option.bind applies function that returns Option
-    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
-                             "print (Option.bind half (Some 10) ?| 0)",
-                             "5"));
+    CHECK(executeSourceAndGetOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                                    "print (Option.bind half (Some 10) ?| 0)")
+          == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_bind_none")
 {
     // Option.bind on None returns None
-    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
-                             "print (Option.bind half None ?| 0)",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                                    "print (Option.bind half None ?| 0)")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_bind_returns_none")
 {
     // Option.bind where f returns None
-    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
-                             "print (Option.bind half (Some 3) ?| 0)",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                                    "print (Option.bind half (Some 3) ?| 0)")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_bind_method")
 {
     // Method-style: opt.bind f
-    CHECK(executesWithOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
-                             "print ((Some 10).bind half ?| 0)",
-                             "5"));
+    CHECK(executeSourceAndGetOutput("let half (x: int) = if x % 2 == 0 then Some (x / 2) else None\n"
+                                    "print ((Some 10).bind half ?| 0)")
+          == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_defaultValue_some")
 {
     // Option.defaultValue with Some returns inner value
-    CHECK(executesWithOutput("print (Option.defaultValue 0 (Some 42))", "42"));
+    CHECK(executeSourceAndGetOutput("print (Option.defaultValue 0 (Some 42))") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_defaultValue_none")
 {
     // Option.defaultValue with None returns default
-    CHECK(executesWithOutput("print (Option.defaultValue 0 None)", "0"));
+    CHECK(executeSourceAndGetOutput("print (Option.defaultValue 0 None)") == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_defaultValue_method")
 {
     // Method-style: opt.defaultValue def
-    CHECK(executesWithOutput("print ((Some 42).defaultValue 0)", "42"));
+    CHECK(executeSourceAndGetOutput("print ((Some 42).defaultValue 0)") == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_defaultValue_pipeline")
 {
     // Pipeline: value |> Option.defaultValue def
-    CHECK(executesWithOutput("print (Some 42 |> Option.defaultValue 0)", "42"));
-    CHECK(executesWithOutput("print (None |> Option.defaultValue 99)", "99"));
+    CHECK(executeSourceAndGetOutput("print (Some 42 |> Option.defaultValue 0)") == "42");
+    CHECK(executeSourceAndGetOutput("print (None |> Option.defaultValue 99)") == "99");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_map_string")
 {
     // Option.map with strings
-    CHECK(executesWithOutput(R"(print (Option.map (fun s -> s + "!") (Some "hi") ?| ""))", "hi!"));
+    CHECK(executeSourceAndGetOutput(R"(print (Option.map (fun s -> s + "!") (Some "hi") ?| ""))") == "hi!");
 }
 
 TEST_CASE("IRGenerator.FSharp.option_chained_pipeline")
 {
     // Chaining multiple Option.map calls in pipeline with Option.defaultValue
-    CHECK(executesWithOutput("print (Some 5 |> Option.map (fun x -> x * 2) |> Option.map (fun x -> x + 1) |> "
-                             "Option.defaultValue 0)",
-                             "11"));
+    CHECK(executeSourceAndGetOutput(
+              "print (Some 5 |> Option.map (fun x -> x * 2) |> Option.map (fun x -> x + 1) |> "
+              "Option.defaultValue 0)")
+          == "11");
 }
 
 // ============================================================================
@@ -5655,55 +5725,57 @@ TEST_CASE("IRGenerator.FSharp.option_chained_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.for_in_tuple_destructure")
 {
-    CHECK(executesWithOutput("for (x, y) in [(1, 2); (3, 4)] do\nprint x\nend", "13"));
+    CHECK(executeSourceAndGetOutput("for (x, y) in [(1, 2); (3, 4)] do\nprint x\nend") == "13");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_tuple_both")
 {
-    CHECK(executesWithOutput("let mut r = 0\nfor (x, y) in [(1, 2); (3, 4)] do\nr <- r + x + y\nend\nprint r",
-                             "10"));
+    CHECK(executeSourceAndGetOutput(
+              "let mut r = 0\nfor (x, y) in [(1, 2); (3, 4)] do\nr <- r + x + y\nend\nprint r")
+          == "10");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_wildcard")
 {
-    CHECK(executesWithOutput("for (x, _) in [(1, 2); (3, 4)] do\nprint x\nend", "13"));
+    CHECK(executeSourceAndGetOutput("for (x, _) in [(1, 2); (3, 4)] do\nprint x\nend") == "13");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_empty_list")
 {
     // Empty list — body never executes
-    CHECK(executesWithOutput("for (x, y) in [] do\nprint x\nend", ""));
+    CHECK(executeSourceAndGetOutput("for (x, y) in [] do\nprint x\nend") == "");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_accumulator")
 {
-    CHECK(executesWithOutput(
-        "let mut sum = 0\nfor (x, _) in [(1, 10); (2, 20); (3, 30)] do\nsum <- sum + x\nend\nprint sum",
-        "6"));
+    CHECK(executeSourceAndGetOutput(
+              "let mut sum = 0\nfor (x, _) in [(1, 10); (2, 20); (3, 30)] do\nsum <- sum + x\nend\nprint sum")
+          == "6");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_three_elements")
 {
     // Iterates through all 3 elements
-    CHECK(executesWithOutput(
-        "let mut sum = 0\nfor (x, _) in [(10, 0); (20, 0); (30, 0)] do\nsum <- sum + x\nend\nprint sum",
-        "60"));
+    CHECK(executeSourceAndGetOutput(
+              "let mut sum = 0\nfor (x, _) in [(10, 0); (20, 0); (30, 0)] do\nsum <- sum + x\nend\nprint sum")
+          == "60");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_second_element")
 {
     // Access second tuple element
-    CHECK(executesWithOutput("for (_, y) in [(1, 2); (3, 4)] do\nprint y\nend", "24"));
+    CHECK(executeSourceAndGetOutput("for (_, y) in [(1, 2); (3, 4)] do\nprint y\nend") == "24");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_single_element")
 {
-    CHECK(executesWithOutput("for (x, y) in [(42, 7)] do\nprint x\nprint y\nend", "427"));
+    CHECK(executeSourceAndGetOutput("for (x, y) in [(42, 7)] do\nprint x\nprint y\nend") == "427");
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_simple_variable")
 {
-    CHECK(executesWithOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\nend", "102030"));
+    CHECK(executeSourceAndGetOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\nend")
+          == "102030");
 }
 
 // ============================================================================
@@ -5712,10 +5784,10 @@ TEST_CASE("IRGenerator.FSharp.for_in_simple_variable")
 
 TEST_CASE("IRGenerator.FSharp.optional_chain_some")
 {
-    CHECK(executesWithOutput("type P = { name: str; age: int }\n"
-                             "let x = Some { name = \"Alice\"; age = 30 }\n"
-                             "print (x?.name ?| \"none\")",
-                             "Alice"));
+    CHECK(executeSourceAndGetOutput("type P = { name: str; age: int }\n"
+                                    "let x = Some { name = \"Alice\"; age = 30 }\n"
+                                    "print (x?.name ?| \"none\")")
+          == "Alice");
 }
 
 TEST_CASE("IRGenerator.FSharp.optional_chain_none")
@@ -5729,27 +5801,27 @@ TEST_CASE("IRGenerator.FSharp.optional_chain_none")
 
 TEST_CASE("IRGenerator.FSharp.optional_chain_int_field")
 {
-    CHECK(executesWithOutput("type P = { age: int }\n"
-                             "let x = Some { age = 30 }\n"
-                             "print (x?.age ?| 0)",
-                             "30"));
+    CHECK(executeSourceAndGetOutput("type P = { age: int }\n"
+                                    "let x = Some { age = 30 }\n"
+                                    "print (x?.age ?| 0)")
+          == "30");
 }
 
 TEST_CASE("IRGenerator.FSharp.optional_chain_none_int")
 {
-    CHECK(executesWithOutput("type P = { age: int }\n"
-                             "let x = None\n"
-                             "print (x?.age ?| 0)",
-                             "0"));
+    CHECK(executeSourceAndGetOutput("type P = { age: int }\n"
+                                    "let x = None\n"
+                                    "print (x?.age ?| 0)")
+          == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.optional_chain_with_let")
 {
-    CHECK(executesWithOutput("type P = { age: int }\n"
-                             "let x = Some { age = 30 }\n"
-                             "let result = x?.age ?| 0\n"
-                             "print result",
-                             "30"));
+    CHECK(executeSourceAndGetOutput("type P = { age: int }\n"
+                                    "let x = Some { age = 30 }\n"
+                                    "let result = x?.age ?| 0\n"
+                                    "print result")
+          == "30");
 }
 
 // =============================================================================
@@ -5758,42 +5830,42 @@ TEST_CASE("IRGenerator.FSharp.optional_chain_with_let")
 
 TEST_CASE("IRGenerator.FSharp.list_sort_basic")
 {
-    CHECK(executesWithOutput("print (sort [3; 1; 2])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sort [3; 1; 2])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_empty")
 {
-    CHECK(executesWithOutput("print (sort [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (sort [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_single")
 {
-    CHECK(executesWithOutput("print (sort [42])", "[42]"));
+    CHECK(executeSourceAndGetOutput("print (sort [42])") == "[42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_already_sorted")
 {
-    CHECK(executesWithOutput("print (sort [1; 2; 3; 4; 5])", "[1; 2; 3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print (sort [1; 2; 3; 4; 5])") == "[1; 2; 3; 4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_reverse_sorted")
 {
-    CHECK(executesWithOutput("print (sort [5; 4; 3; 2; 1])", "[1; 2; 3; 4; 5]"));
+    CHECK(executeSourceAndGetOutput("print (sort [5; 4; 3; 2; 1])") == "[1; 2; 3; 4; 5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_duplicates")
 {
-    CHECK(executesWithOutput("print (sort [3; 1; 2; 1; 3])", "[1; 1; 2; 3; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sort [3; 1; 2; 1; 3])") == "[1; 1; 2; 3; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_negative")
 {
-    CHECK(executesWithOutput("print (sort [3; -1; 0; -5; 2])", "[-5; -1; 0; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sort [3; -1; 0; -5; 2])") == "[-5; -1; 0; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sort_pipeline")
 {
-    CHECK(executesWithOutput("print ([3; 1; 2] |> sort)", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([3; 1; 2] |> sort)") == "[1; 2; 3]");
 }
 
 // =============================================================================
@@ -5802,37 +5874,38 @@ TEST_CASE("IRGenerator.FSharp.list_sort_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_basic")
 {
-    CHECK(executesWithOutput("print (distinct [1; 2; 3; 2; 1])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [1; 2; 3; 2; 1])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_no_dupes")
 {
-    CHECK(executesWithOutput("print (distinct [1; 2; 3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [1; 2; 3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_all_same")
 {
-    CHECK(executesWithOutput("print (distinct [5; 5; 5; 5])", "[5]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [5; 5; 5; 5])") == "[5]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_empty")
 {
-    CHECK(executesWithOutput("print (distinct [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_single")
 {
-    CHECK(executesWithOutput("print (distinct [42])", "[42]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [42])") == "[42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_pipeline")
 {
-    CHECK(executesWithOutput("print ([1; 2; 3; 2; 1] |> distinct)", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3; 2; 1] |> distinct)") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_distinct_preserves_order")
 {
-    CHECK(executesWithOutput("print (distinct [3; 1; 4; 1; 5; 9; 2; 6; 5; 3])", "[3; 1; 4; 5; 9; 2; 6]"));
+    CHECK(executeSourceAndGetOutput("print (distinct [3; 1; 4; 1; 5; 9; 2; 6; 5; 3])")
+          == "[3; 1; 4; 5; 9; 2; 6]");
 }
 
 // =============================================================================
@@ -5841,54 +5914,56 @@ TEST_CASE("IRGenerator.FSharp.list_distinct_preserves_order")
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_identity")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> x) [3; 1; 2])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x) [3; 1; 2])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_descending")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> 0 - x) [3; 1; 2])", "[3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> 0 - x) [3; 1; 2])") == "[3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_empty")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> x) [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x) [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_single")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> x) [42])", "[42]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x) [42])") == "[42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_already_sorted")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> x) [1; 2; 3])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x) [1; 2; 3])") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_duplicates")
 {
-    CHECK(executesWithOutput("print (sortBy (fun x -> x) [3; 1; 2; 1; 3])", "[1; 1; 2; 3; 3]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x) [3; 1; 2; 1; 3])") == "[1; 1; 2; 3; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_pipeline")
 {
-    CHECK(executesWithOutput("print ([3; 1; 2] |> sortBy (fun x -> x))", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([3; 1; 2] |> sortBy (fun x -> x))") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_named_function")
 {
-    CHECK(executesWithOutput("let negate x = 0 - x\nprint (sortBy negate [3; 1; 2])", "[3; 2; 1]"));
+    CHECK(executeSourceAndGetOutput("let negate x = 0 - x\nprint (sortBy negate [3; 1; 2])") == "[3; 2; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_stable")
 {
     // stable_sort preserves relative order for equal keys
     // x % 3: [5→2, 3→0, 1→1, 4→1, 2→2, 6→0] → group 0:[3,6], group 1:[1,4], group 2:[5,2]
-    CHECK(executesWithOutput("print (sortBy (fun x -> x % 3) [5; 3; 1; 4; 2; 6])", "[3; 6; 1; 4; 5; 2]"));
+    CHECK(executeSourceAndGetOutput("print (sortBy (fun x -> x % 3) [5; 3; 1; 4; 2; 6])")
+          == "[3; 6; 1; 4; 5; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_sortBy_partial")
 {
-    CHECK(executesWithOutput("let sortAsc = sortBy (fun x -> x)\nprint (sortAsc [3; 1; 2])", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("let sortAsc = sortBy (fun x -> x)\nprint (sortAsc [3; 1; 2])")
+          == "[1; 2; 3]");
 }
 
 // =============================================================================
@@ -5897,46 +5972,47 @@ TEST_CASE("IRGenerator.FSharp.list_sortBy_partial")
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_basic")
 {
-    CHECK(executesWithOutput("print (groupBy (fun x -> x % 2) [1; 2; 3; 4; 5])",
-                             "[(1, [1; 3; 5]); (0, [2; 4])]"));
+    CHECK(executeSourceAndGetOutput("print (groupBy (fun x -> x % 2) [1; 2; 3; 4; 5])")
+          == "[(1, [1; 3; 5]); (0, [2; 4])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_identity")
 {
-    CHECK(executesWithOutput("print (groupBy (fun x -> x) [1; 2; 3])", "[(1, [1]); (2, [2]); (3, [3])]"));
+    CHECK(executeSourceAndGetOutput("print (groupBy (fun x -> x) [1; 2; 3])")
+          == "[(1, [1]); (2, [2]); (3, [3])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_empty")
 {
-    CHECK(executesWithOutput("print (groupBy (fun x -> x) [])", "[]"));
+    CHECK(executeSourceAndGetOutput("print (groupBy (fun x -> x) [])") == "[]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_single")
 {
-    CHECK(executesWithOutput("print (groupBy (fun x -> x) [42])", "[(42, [42])]"));
+    CHECK(executeSourceAndGetOutput("print (groupBy (fun x -> x) [42])") == "[(42, [42])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_all_same_key")
 {
-    CHECK(executesWithOutput("print (groupBy (fun x -> 0) [1; 2; 3])", "[(0, [1; 2; 3])]"));
+    CHECK(executeSourceAndGetOutput("print (groupBy (fun x -> 0) [1; 2; 3])") == "[(0, [1; 2; 3])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_pipeline")
 {
-    CHECK(
-        executesWithOutput("print ([1; 2; 3; 4] |> groupBy (fun x -> x % 2))", "[(1, [1; 3]); (0, [2; 4])]"));
+    CHECK(executeSourceAndGetOutput("print ([1; 2; 3; 4] |> groupBy (fun x -> x % 2))")
+          == "[(1, [1; 3]); (0, [2; 4])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_named_function")
 {
-    CHECK(executesWithOutput("let parity x = x % 2\nprint (groupBy parity [1; 2; 3; 4])",
-                             "[(1, [1; 3]); (0, [2; 4])]"));
+    CHECK(executeSourceAndGetOutput("let parity x = x % 2\nprint (groupBy parity [1; 2; 3; 4])")
+          == "[(1, [1; 3]); (0, [2; 4])]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_groupBy_partial")
 {
-    CHECK(executesWithOutput("let byParity = groupBy (fun x -> x % 2)\nprint (byParity [1; 2; 3])",
-                             "[(1, [1; 3]); (0, [2])]"));
+    CHECK(executeSourceAndGetOutput("let byParity = groupBy (fun x -> x % 2)\nprint (byParity [1; 2; 3])")
+          == "[(1, [1; 3]); (0, [2])]");
 }
 
 // =============================================================================
@@ -5945,12 +6021,13 @@ TEST_CASE("IRGenerator.FSharp.list_groupBy_partial")
 
 TEST_CASE("IRGenerator.FSharp.list_sort_then_distinct")
 {
-    CHECK(executesWithOutput("print ([3; 1; 2; 1; 3] |> sort |> distinct)", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("print ([3; 1; 2; 1; 3] |> sort |> distinct)") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.list_filter_then_sort")
 {
-    CHECK(executesWithOutput("print ([5; 3; 8; 1; 4] |> filter (fun x -> x > 2) |> sort)", "[3; 4; 5; 8]"));
+    CHECK(executeSourceAndGetOutput("print ([5; 3; 8; 1; 4] |> filter (fun x -> x > 2) |> sort)")
+          == "[3; 4; 5; 8]");
 }
 
 // =============================================================================
@@ -5960,216 +6037,219 @@ TEST_CASE("IRGenerator.FSharp.list_filter_then_sort")
 TEST_CASE("IRGenerator.FSharp.ps.basic_call")
 {
     // ps returns a list — check length
-    CHECK(executesWithOutput("let procs = ps\nprint (length procs)", "3"));
+    CHECK(executeSourceAndGetOutput("let procs = ps\nprint (length procs)") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.field_access_pid")
 {
     // Extract pid from first element via head + match
-    CHECK(executesWithOutput("match head ps with\n"
-                             "| Some p -> print p.pid\n"
-                             "| None -> print \"empty\"",
-                             "1"));
+    CHECK(executeSourceAndGetOutput("match head ps with\n"
+                                    "| Some p -> print p.pid\n"
+                                    "| None -> print \"empty\"")
+          == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.field_access_command")
 {
     // Extract command from first element
-    CHECK(executesWithOutput("match head ps with\n"
-                             "| Some p -> print p.command\n"
-                             "| None -> print \"empty\"",
-                             "/sbin/init"));
+    CHECK(executeSourceAndGetOutput("match head ps with\n"
+                                    "| Some p -> print p.command\n"
+                                    "| None -> print \"empty\"")
+          == "/sbin/init");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.filter_by_pid")
 {
     // Filter processes with pid > 10 — should get 2 (pid=42, pid=100)
-    CHECK(executesWithOutput("let filtered = ps |> filter (fun p -> p.pid > 10)\n"
-                             "print (length filtered)",
-                             "2"));
+    CHECK(executeSourceAndGetOutput("let filtered = ps |> filter (fun p -> p.pid > 10)\n"
+                                    "print (length filtered)")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.map_pid")
 {
     // Map to extract pids from all processes
-    CHECK(executesWithOutput("let pids = ps |> map (fun p -> p.pid)\n"
-                             "print pids",
-                             "[1; 42; 100]"));
+    CHECK(executeSourceAndGetOutput("let pids = ps |> map (fun p -> p.pid)\n"
+                                    "print pids")
+          == "[1; 42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.map_command")
 {
     // Map to extract commands
-    CHECK(executesWithOutput("let cmds = ps |> map (fun p -> p.command)\n"
-                             "print cmds",
-                             "[/sbin/init; firefox; vim]"));
+    CHECK(executeSourceAndGetOutput("let cmds = ps |> map (fun p -> p.command)\n"
+                                    "print cmds")
+          == "[/sbin/init; firefox; vim]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.filter_and_map")
 {
     // Pipeline composition: filter by pid then map to command
-    CHECK(executesWithOutput("let cmds = ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)\n"
-                             "print cmds",
-                             "[firefox; vim]"));
+    CHECK(executeSourceAndGetOutput(
+              "let cmds = ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)\n"
+              "print cmds")
+          == "[firefox; vim]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.field_access_user")
 {
     // Access user field from second element
-    CHECK(executesWithOutput("match head (tail ps) with\n"
-                             "| Some p -> print p.user\n"
-                             "| None -> print \"empty\"",
-                             "alice"));
+    CHECK(executeSourceAndGetOutput("match head (tail ps) with\n"
+                                    "| Some p -> print p.user\n"
+                                    "| None -> print \"empty\"")
+          == "alice");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.field_access_mem")
 {
     // Map to extract memory values
-    CHECK(executesWithOutput("let mems = ps |> map (fun p -> p.mem)\n"
-                             "print mems",
-                             "[1024; 4096; 2048]"));
+    CHECK(executeSourceAndGetOutput("let mems = ps |> map (fun p -> p.mem)\n"
+                                    "print mems")
+          == "[1024; 4096; 2048]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.exists_high_cpu")
 {
     // Check if any process has cpu > 10
-    CHECK(executesWithOutput("let r = ps |> exists (fun p -> p.pid > 50)\n"
-                             "print r",
-                             "true"));
+    CHECK(executeSourceAndGetOutput("let r = ps |> exists (fun p -> p.pid > 50)\n"
+                                    "print r")
+          == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.pipeline_with_let")
 {
     // Store ps result, then pipeline
-    CHECK(executesWithOutput("let procs = ps\n"
-                             "let highPid = procs |> filter (fun p -> p.pid > 1) |> map (fun p -> p.pid)\n"
-                             "print highPid",
-                             "[42; 100]"));
+    CHECK(executeSourceAndGetOutput(
+              "let procs = ps\n"
+              "let highPid = procs |> filter (fun p -> p.pid > 1) |> map (fun p -> p.pid)\n"
+              "print highPid")
+          == "[42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.fold_mem_sum")
 {
     // fold to sum all memory values: 1024 + 4096 + 2048 = 7168
-    CHECK(executesWithOutput("print (ps |> fold 0 (fun acc p -> acc + p.mem))", "7168"));
+    CHECK(executeSourceAndGetOutput("print (ps |> fold 0 (fun acc p -> acc + p.mem))") == "7168");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.fold_pid_sum")
 {
     // fold to sum all pids: 1 + 42 + 100 = 143
-    CHECK(executesWithOutput("print (ps |> fold 0 (fun acc p -> acc + p.pid))", "143"));
+    CHECK(executeSourceAndGetOutput("print (ps |> fold 0 (fun acc p -> acc + p.pid))") == "143");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.reduce_pid_sum")
 {
     // reduce via mapped pids: 1 + 42 + 100 = 143
-    CHECK(executesWithOutput("match ps |> map (fun p -> p.pid) |> reduce (fun a b -> a + b) with\n"
-                             "| Some v -> print v\n"
-                             "| None -> print \"none\"",
-                             "143"));
+    CHECK(executeSourceAndGetOutput("match ps |> map (fun p -> p.pid) |> reduce (fun a b -> a + b) with\n"
+                                    "| Some v -> print v\n"
+                                    "| None -> print \"none\"")
+          == "143");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.find_by_pid")
 {
     // find the process with pid 42, print its command
-    CHECK(executesWithOutput("match ps |> find (fun p -> p.pid == 42) with\n"
-                             "| Some p -> print p.command\n"
-                             "| None -> print \"none\"",
-                             "firefox"));
+    CHECK(executeSourceAndGetOutput("match ps |> find (fun p -> p.pid == 42) with\n"
+                                    "| Some p -> print p.command\n"
+                                    "| None -> print \"none\"")
+          == "firefox");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.find_none")
 {
     // find a process with pid > 1000 — should be None
-    CHECK(executesWithOutput("match ps |> find (fun p -> p.pid > 1000) with\n"
-                             "| Some p -> print p.pid\n"
-                             "| None -> print \"none\"",
-                             "none"));
+    CHECK(executeSourceAndGetOutput("match ps |> find (fun p -> p.pid > 1000) with\n"
+                                    "| Some p -> print p.pid\n"
+                                    "| None -> print \"none\"")
+          == "none");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.forall_positive_pid")
 {
     // all pids are > 0
-    CHECK(executesWithOutput("print (ps |> forall (fun p -> p.pid > 0))", "true"));
+    CHECK(executeSourceAndGetOutput("print (ps |> forall (fun p -> p.pid > 0))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.forall_high_mem")
 {
     // not all memory values are > 2000 (init has 1024)
-    CHECK(executesWithOutput("print (ps |> forall (fun p -> p.mem > 2000))", "false"));
+    CHECK(executeSourceAndGetOutput("print (ps |> forall (fun p -> p.mem > 2000))") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.sortBy_mem")
 {
     // sortBy memory ascending: 1024(pid=1), 2048(pid=100), 4096(pid=42)
-    CHECK(
-        executesWithOutput("print (ps |> sortBy (fun p -> p.mem) |> map (fun p -> p.pid))", "[1; 100; 42]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> sortBy (fun p -> p.mem) |> map (fun p -> p.pid))")
+          == "[1; 100; 42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.reverse_pids")
 {
     // reverse the list and map to pids
-    CHECK(executesWithOutput("print (ps |> reverse |> map (fun p -> p.pid))", "[100; 42; 1]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> reverse |> map (fun p -> p.pid))") == "[100; 42; 1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.take_2")
 {
     // take first 2 processes, map to pids
-    CHECK(executesWithOutput("print (ps |> take 2 |> map (fun p -> p.pid))", "[1; 42]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> take 2 |> map (fun p -> p.pid))") == "[1; 42]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.drop_1")
 {
     // drop first process, map to pids
-    CHECK(executesWithOutput("print (ps |> drop 1 |> map (fun p -> p.pid))", "[42; 100]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> drop 1 |> map (fun p -> p.pid))") == "[42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.filter_sortBy_map")
 {
     // 3-stage pipeline: filter pid > 1, sortBy mem, map to command
     // pid=42(mem=4096,"firefox"), pid=100(mem=2048,"vim") → sorted: vim, firefox
-    CHECK(executesWithOutput(
-        "print (ps |> filter (fun p -> p.pid > 1) |> sortBy (fun p -> p.mem) |> map (fun p -> p.command))",
-        "[vim; firefox]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> filter (fun p -> p.pid > 1) |> sortBy (fun p -> p.mem) |> "
+                                    "map (fun p -> p.command))")
+          == "[vim; firefox]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.filter_reverse_map")
 {
     // filter ppid == 1 (alice, bob), reverse, map to user
-    CHECK(executesWithOutput(
-        "print (ps |> filter (fun p -> p.ppid == 1) |> reverse |> map (fun p -> p.user))", "[bob; alice]"));
+    CHECK(executeSourceAndGetOutput(
+              "print (ps |> filter (fun p -> p.ppid == 1) |> reverse |> map (fun p -> p.user))")
+          == "[bob; alice]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.isEmpty_after_filter_true")
 {
     // no process has pid > 1000
-    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.pid > 1000) |> isEmpty)", "true"));
+    CHECK(executeSourceAndGetOutput("print (ps |> filter (fun p -> p.pid > 1000) |> isEmpty)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.isEmpty_after_filter_false")
 {
     // all processes have pid > 0
-    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.pid > 0) |> isEmpty)", "false"));
+    CHECK(executeSourceAndGetOutput("print (ps |> filter (fun p -> p.pid > 0) |> isEmpty)") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.length_after_filter")
 {
     // 2 processes with mem > 1024 (alice=4096, bob=2048)
-    CHECK(executesWithOutput("print (ps |> filter (fun p -> p.mem > 1024) |> length)", "2"));
+    CHECK(executeSourceAndGetOutput("print (ps |> filter (fun p -> p.mem > 1024) |> length)") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.map_users")
 {
     // map to extract user names
-    CHECK(executesWithOutput("print (ps |> map (fun p -> p.user))", "[root; alice; bob]"));
+    CHECK(executeSourceAndGetOutput("print (ps |> map (fun p -> p.user))") == "[root; alice; bob]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ps.head_after_filter")
 {
     // head of filtered list (pid > 10) — first match is firefox (pid=42)
-    CHECK(executesWithOutput("match ps |> filter (fun p -> p.pid > 10) |> head with\n"
-                             "| Some p -> print p.command\n"
-                             "| None -> print \"none\"",
-                             "firefox"));
+    CHECK(executeSourceAndGetOutput("match ps |> filter (fun p -> p.pid > 10) |> head with\n"
+                                    "| Some p -> print p.command\n"
+                                    "| None -> print \"none\"")
+          == "firefox");
 }
 
 // =============================================================================
@@ -6179,200 +6259,203 @@ TEST_CASE("IRGenerator.FSharp.ps.head_after_filter")
 TEST_CASE("IRGenerator.FSharp.ls.basic_call")
 {
     // ls returns a list — check length (3 mock files)
-    CHECK(executesWithOutput("let files = ls\nprint (length files)", "3"));
+    CHECK(executeSourceAndGetOutput("let files = ls\nprint (length files)") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.with_path_argument")
 {
     // ls with explicit path argument
-    CHECK(executesWithOutput("let files = ls \"/tmp\"\nprint (length files)", "3"));
+    CHECK(executeSourceAndGetOutput("let files = ls \"/tmp\"\nprint (length files)") == "3");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.field_access_name")
 {
     // Extract name from first element via head + match
-    CHECK(executesWithOutput("match head ls with\n"
-                             "| Some f -> print f.name\n"
-                             "| None -> print \"empty\"",
-                             "docs"));
+    CHECK(executeSourceAndGetOutput("match head ls with\n"
+                                    "| Some f -> print f.name\n"
+                                    "| None -> print \"empty\"")
+          == "docs");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.field_access_size")
 {
     // Map to extract sizes from all files
-    CHECK(executesWithOutput("let sizes = ls |> map (fun f -> f.size)\n"
-                             "print sizes",
-                             "[4096; 42; 256]"));
+    CHECK(executeSourceAndGetOutput("let sizes = ls |> map (fun f -> f.size)\n"
+                                    "print sizes")
+          == "[4096; 42; 256]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.field_access_isDir")
 {
     // Extract isDir from first element (docs is a directory)
-    CHECK(executesWithOutput("match head ls with\n"
-                             "| Some f -> print f.isDir\n"
-                             "| None -> print \"empty\"",
-                             "true"));
+    CHECK(executeSourceAndGetOutput("match head ls with\n"
+                                    "| Some f -> print f.isDir\n"
+                                    "| None -> print \"empty\"")
+          == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.field_access_mode")
 {
     // Map to extract mode values
-    CHECK(executesWithOutput("let modes = ls |> map (fun f -> f.mode)\n"
-                             "print modes",
-                             "[493; 420; 493]"));
+    CHECK(executeSourceAndGetOutput("let modes = ls |> map (fun f -> f.mode)\n"
+                                    "print modes")
+          == "[493; 420; 493]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.field_access_mtime")
 {
     // Map to extract mtime values
-    CHECK(executesWithOutput("let mtimes = ls |> map (fun f -> f.mtime)\n"
-                             "print mtimes",
-                             "[1700000000; 1700001000; 1700002000]"));
+    CHECK(executeSourceAndGetOutput("let mtimes = ls |> map (fun f -> f.mtime)\n"
+                                    "print mtimes")
+          == "[1700000000; 1700001000; 1700002000]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_dirs")
 {
     // Filter to only directories — should get 1 (docs)
-    CHECK(executesWithOutput("let dirs = ls |> filter (fun f -> f.isDir == true)\n"
-                             "print (length dirs)",
-                             "1"));
+    CHECK(executeSourceAndGetOutput("let dirs = ls |> filter (fun f -> f.isDir == true)\n"
+                                    "print (length dirs)")
+          == "1");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_files")
 {
     // Filter to only files (not dirs) — should get 2
-    CHECK(executesWithOutput("let files = ls |> filter (fun f -> f.isDir == false)\n"
-                             "print (length files)",
-                             "2"));
+    CHECK(executeSourceAndGetOutput("let files = ls |> filter (fun f -> f.isDir == false)\n"
+                                    "print (length files)")
+          == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.map_name")
 {
     // Map to extract names from all files
-    CHECK(executesWithOutput("let names = ls |> map (fun f -> f.name)\n"
-                             "print names",
-                             "[docs; hello.txt; script.sh]"));
+    CHECK(executeSourceAndGetOutput("let names = ls |> map (fun f -> f.name)\n"
+                                    "print names")
+          == "[docs; hello.txt; script.sh]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_and_map")
 {
     // Pipeline: filter by size > 100 then map to name
-    CHECK(executesWithOutput("let names = ls |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
-                             "print names",
-                             "[docs; script.sh]"));
+    CHECK(executeSourceAndGetOutput(
+              "let names = ls |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
+              "print names")
+          == "[docs; script.sh]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.sortBy_size")
 {
     // sortBy size ascending: 42(hello.txt), 256(script.sh), 4096(docs)
-    CHECK(executesWithOutput("print (ls |> sortBy (fun f -> f.size) |> map (fun f -> f.name))",
-                             "[hello.txt; script.sh; docs]"));
+    CHECK(executeSourceAndGetOutput("print (ls |> sortBy (fun f -> f.size) |> map (fun f -> f.name))")
+          == "[hello.txt; script.sh; docs]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.fold_size_sum")
 {
     // fold to sum all sizes: 4096 + 42 + 256 = 4394
-    CHECK(executesWithOutput("print (ls |> fold 0 (fun acc f -> acc + f.size))", "4394"));
+    CHECK(executeSourceAndGetOutput("print (ls |> fold 0 (fun acc f -> acc + f.size))") == "4394");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.find_by_name")
 {
     // find the file named "hello.txt", print its size
-    CHECK(executesWithOutput("match ls |> find (fun f -> f.name == \"hello.txt\") with\n"
-                             "| Some f -> print f.size\n"
-                             "| None -> print \"none\"",
-                             "42"));
+    CHECK(executeSourceAndGetOutput("match ls |> find (fun f -> f.name == \"hello.txt\") with\n"
+                                    "| Some f -> print f.size\n"
+                                    "| None -> print \"none\"")
+          == "42");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.find_none")
 {
     // find a file with size > 10000 — should be None
-    CHECK(executesWithOutput("match ls |> find (fun f -> f.size > 10000) with\n"
-                             "| Some f -> print f.name\n"
-                             "| None -> print \"none\"",
-                             "none"));
+    CHECK(executeSourceAndGetOutput("match ls |> find (fun f -> f.size > 10000) with\n"
+                                    "| Some f -> print f.name\n"
+                                    "| None -> print \"none\"")
+          == "none");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.exists_large_file")
 {
     // check if any file has size > 1000
-    CHECK(executesWithOutput("print (ls |> exists (fun f -> f.size > 1000))", "true"));
+    CHECK(executeSourceAndGetOutput("print (ls |> exists (fun f -> f.size > 1000))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.forall_positive_size")
 {
     // all sizes are > 0
-    CHECK(executesWithOutput("print (ls |> forall (fun f -> f.size > 0))", "true"));
+    CHECK(executeSourceAndGetOutput("print (ls |> forall (fun f -> f.size > 0))") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.forall_large_size")
 {
     // not all sizes are > 100 (hello.txt has 42)
-    CHECK(executesWithOutput("print (ls |> forall (fun f -> f.size > 100))", "false"));
+    CHECK(executeSourceAndGetOutput("print (ls |> forall (fun f -> f.size > 100))") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.take_2")
 {
     // take first 2 files, map to names
-    CHECK(executesWithOutput("print (ls |> take 2 |> map (fun f -> f.name))", "[docs; hello.txt]"));
+    CHECK(executeSourceAndGetOutput("print (ls |> take 2 |> map (fun f -> f.name))") == "[docs; hello.txt]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.drop_1")
 {
     // drop first file, map to names
-    CHECK(executesWithOutput("print (ls |> drop 1 |> map (fun f -> f.name))", "[hello.txt; script.sh]"));
+    CHECK(executeSourceAndGetOutput("print (ls |> drop 1 |> map (fun f -> f.name))")
+          == "[hello.txt; script.sh]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.reverse")
 {
     // reverse the list and map to names
-    CHECK(
-        executesWithOutput("print (ls |> reverse |> map (fun f -> f.name))", "[script.sh; hello.txt; docs]"));
+    CHECK(executeSourceAndGetOutput("print (ls |> reverse |> map (fun f -> f.name))")
+          == "[script.sh; hello.txt; docs]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.head_after_filter")
 {
     // head of filtered list (size < 300) — first match is hello.txt (size=42)
-    CHECK(executesWithOutput("match ls |> filter (fun f -> f.size < 300) |> head with\n"
-                             "| Some f -> print f.name\n"
-                             "| None -> print \"none\"",
-                             "hello.txt"));
+    CHECK(executeSourceAndGetOutput("match ls |> filter (fun f -> f.size < 300) |> head with\n"
+                                    "| Some f -> print f.name\n"
+                                    "| None -> print \"none\"")
+          == "hello.txt");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.isEmpty_after_filter_true")
 {
     // no file has size > 10000
-    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size > 10000) |> isEmpty)", "true"));
+    CHECK(executeSourceAndGetOutput("print (ls |> filter (fun f -> f.size > 10000) |> isEmpty)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.isEmpty_after_filter_false")
 {
     // all files have size > 0
-    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size > 0) |> isEmpty)", "false"));
+    CHECK(executeSourceAndGetOutput("print (ls |> filter (fun f -> f.size > 0) |> isEmpty)") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.length_after_filter")
 {
     // 2 files with size <= 256 (hello.txt=42, script.sh=256)
-    CHECK(executesWithOutput("print (ls |> filter (fun f -> f.size <= 256) |> length)", "2"));
+    CHECK(executeSourceAndGetOutput("print (ls |> filter (fun f -> f.size <= 256) |> length)") == "2");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.pipeline_with_let")
 {
     // Store ls result, then pipeline
-    CHECK(
-        executesWithOutput("let files = ls\n"
-                           "let bigFiles = files |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
-                           "print bigFiles",
-                           "[docs; script.sh]"));
+    CHECK(executeSourceAndGetOutput(
+              "let files = ls\n"
+              "let bigFiles = files |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)\n"
+              "print bigFiles")
+          == "[docs; script.sh]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_sortBy_map")
 {
     // 3-stage pipeline: filter size > 0, sortBy size, map to name
-    CHECK(executesWithOutput(
-        "print (ls |> filter (fun f -> f.size > 0) |> sortBy (fun f -> f.size) |> map (fun f -> f.name))",
-        "[hello.txt; script.sh; docs]"));
+    CHECK(
+        executeSourceAndGetOutput(
+            "print (ls |> filter (fun f -> f.size > 0) |> sortBy (fun f -> f.size) |> map (fun f -> f.name))")
+        == "[hello.txt; script.sh; docs]");
 }
 
 // --- formatMode helper tests ---
@@ -6380,25 +6463,25 @@ TEST_CASE("IRGenerator.FSharp.ls.filter_sortBy_map")
 TEST_CASE("IRGenerator.FSharp.formatMode.rwxr_xr_x")
 {
     // 0755 = 493 decimal → "rwxr-xr-x"
-    CHECK(executesWithOutput("print (formatMode 493)", "rwxr-xr-x"));
+    CHECK(executeSourceAndGetOutput("print (formatMode 493)") == "rwxr-xr-x");
 }
 
 TEST_CASE("IRGenerator.FSharp.formatMode.rw_r__r__")
 {
     // 0644 = 420 decimal → "rw-r--r--"
-    CHECK(executesWithOutput("print (formatMode 420)", "rw-r--r--"));
+    CHECK(executeSourceAndGetOutput("print (formatMode 420)") == "rw-r--r--");
 }
 
 TEST_CASE("IRGenerator.FSharp.formatMode.no_permissions")
 {
     // 0000 → "---------"
-    CHECK(executesWithOutput("print (formatMode 0)", "---------"));
+    CHECK(executeSourceAndGetOutput("print (formatMode 0)") == "---------");
 }
 
 TEST_CASE("IRGenerator.FSharp.formatMode.all_permissions")
 {
     // 0777 = 511 decimal → "rwxrwxrwx"
-    CHECK(executesWithOutput("print (formatMode 511)", "rwxrwxrwx"));
+    CHECK(executeSourceAndGetOutput("print (formatMode 511)") == "rwxrwxrwx");
 }
 
 // --- formatDateTime helper tests ---
@@ -6406,13 +6489,13 @@ TEST_CASE("IRGenerator.FSharp.formatMode.all_permissions")
 TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_1700000000")
 {
     // 1700000000 = 2023-11-14 22:13:20 UTC
-    CHECK(executesWithOutput("print (formatDateTime 1700000000)", "2023-11-14 22:13:20"));
+    CHECK(executeSourceAndGetOutput("print (formatDateTime 1700000000)") == "2023-11-14 22:13:20");
 }
 
 TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_zero")
 {
     // 0 = 1970-01-01 00:00:00 UTC
-    CHECK(executesWithOutput("print (formatDateTime 0)", "1970-01-01 00:00:00"));
+    CHECK(executeSourceAndGetOutput("print (formatDateTime 0)") == "1970-01-01 00:00:00");
 }
 
 // --- isReadable/isWritable/isExecutable helper tests ---
@@ -6420,37 +6503,37 @@ TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_zero")
 TEST_CASE("IRGenerator.FSharp.isReadable.true")
 {
     // 0644 = 420 — has read bits
-    CHECK(executesWithOutput("print (isReadable 420)", "true"));
+    CHECK(executeSourceAndGetOutput("print (isReadable 420)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.isReadable.false")
 {
     // 0000 — no permissions
-    CHECK(executesWithOutput("print (isReadable 0)", "false"));
+    CHECK(executeSourceAndGetOutput("print (isReadable 0)") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.isWritable.true")
 {
     // 0644 = 420 — has write bits
-    CHECK(executesWithOutput("print (isWritable 420)", "true"));
+    CHECK(executeSourceAndGetOutput("print (isWritable 420)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.isWritable.false")
 {
     // 0444 = 292 — read-only
-    CHECK(executesWithOutput("print (isWritable 292)", "false"));
+    CHECK(executeSourceAndGetOutput("print (isWritable 292)") == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.isExecutable.true")
 {
     // 0755 = 493 — has execute bits
-    CHECK(executesWithOutput("print (isExecutable 493)", "true"));
+    CHECK(executeSourceAndGetOutput("print (isExecutable 493)") == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.isExecutable.false")
 {
     // 0644 = 420 — no execute bits
-    CHECK(executesWithOutput("print (isExecutable 420)", "false"));
+    CHECK(executeSourceAndGetOutput("print (isExecutable 420)") == "false");
 }
 
 // --- Combined ls + helpers tests ---
@@ -6458,15 +6541,16 @@ TEST_CASE("IRGenerator.FSharp.isExecutable.false")
 TEST_CASE("IRGenerator.FSharp.ls.map_formatMode")
 {
     // Map over ls results to format mode as rwx strings
-    CHECK(executesWithOutput("print (ls |> map (fun f -> formatMode f.mode))",
-                             "[rwxr-xr-x; rw-r--r--; rwxr-xr-x]"));
+    CHECK(executeSourceAndGetOutput("print (ls |> map (fun f -> formatMode f.mode))")
+          == "[rwxr-xr-x; rw-r--r--; rwxr-xr-x]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_executable")
 {
     // Filter files where mode is executable
-    CHECK(executesWithOutput("print (ls |> filter (fun f -> isExecutable f.mode) |> map (fun f -> f.name))",
-                             "[docs; script.sh]"));
+    CHECK(executeSourceAndGetOutput(
+              "print (ls |> filter (fun f -> isExecutable f.mode) |> map (fun f -> f.name))")
+          == "[docs; script.sh]");
 }
 
 // =============================================================================
@@ -6601,10 +6685,10 @@ TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each")
 TEST_CASE("IRGenerator.StructuredPipeline.each_println_records")
 {
     // each println on a list of records should format each record, not print raw pointers
-    CHECK(executesWithOutput("let _ = jobs |> each println",
-                             "{ id = 1; state = Running; command = sleep 100; pid = 1234 }\n"
-                             "{ id = 2; state = Stopped; command = vim; pid = 5678 }\n"
-                             "{ id = 3; state = Done; command = make build; pid = 9012 }\n"));
+    CHECK(executeSourceAndGetOutput("let _ = jobs |> each println")
+          == "{ id = 1; state = Running; command = sleep 100; pid = 1234 }\n"
+             "{ id = 2; state = Stopped; command = vim; pid = 5678 }\n"
+             "{ id = 3; state = Done; command = make build; pid = 9012 }\n");
 }
 
 TEST_CASE("IRGenerator.StructuredPipeline.docker_ps.each_println")
@@ -6670,74 +6754,74 @@ TEST_CASE("IRGenerator.StructuredPipeline.placeholder.git_status_filter_modified
 
 TEST_CASE("IRGenerator.BareExpr.number")
 {
-    CHECK(executesWithOutput("42", "42\n"));
+    CHECK(executeSourceAndGetOutput("42") == "42\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.arithmetic")
 {
-    CHECK(executesWithOutput("(3 + 4)", "7\n"));
+    CHECK(executeSourceAndGetOutput("(3 + 4)") == "7\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.list")
 {
     // List literals at shell prompt need parentheses since [ is a shell identifier char
-    CHECK(executesWithOutput("([1; 2; 3])", "[1; 2; 3]\n"));
+    CHECK(executeSourceAndGetOutput("([1; 2; 3])") == "[1; 2; 3]\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.option_some")
 {
-    CHECK(executesWithOutput("Some 42", "Some 42\n"));
+    CHECK(executeSourceAndGetOutput("Some 42") == "Some 42\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.option_none")
 {
-    CHECK(executesWithOutput("None", "None\n"));
+    CHECK(executeSourceAndGetOutput("None") == "None\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.result_ok")
 {
-    CHECK(executesWithOutput("Ok 5", "Ok 5\n"));
+    CHECK(executeSourceAndGetOutput("Ok 5") == "Ok 5\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.tuple")
 {
-    CHECK(executesWithOutput("(1, 2)", "(1, 2)\n"));
+    CHECK(executeSourceAndGetOutput("(1, 2)") == "(1, 2)\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.bool_true")
 {
-    CHECK(executesWithOutput("(true)", "true\n"));
+    CHECK(executeSourceAndGetOutput("(true)") == "true\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.bool_false")
 {
-    CHECK(executesWithOutput("(false)", "false\n"));
+    CHECK(executeSourceAndGetOutput("(false)") == "false\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.lambda_apply")
 {
-    CHECK(executesWithOutput("(fun x -> x + 1) 5", "6\n"));
+    CHECK(executeSourceAndGetOutput("(fun x -> x + 1) 5") == "6\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.nested_multiply")
 {
     // Use let to bind intermediate result since (( is shell arithmetic in shell mode
-    CHECK(executesWithOutput("(2 + 3)", "5\n"));
+    CHECK(executeSourceAndGetOutput("(2 + 3)") == "5\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.result_error")
 {
-    CHECK(executesWithOutput("Error 99", "Error 99\n"));
+    CHECK(executeSourceAndGetOutput("Error 99") == "Error 99\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.negative_number")
 {
-    CHECK(executesWithOutput("(-7)", "-7\n"));
+    CHECK(executeSourceAndGetOutput("(-7)") == "-7\n");
 }
 
 TEST_CASE("IRGenerator.BareExpr.float_literal")
 {
-    CHECK(executesWithOutput("(3.14)", "3.14\n"));
+    CHECK(executeSourceAndGetOutput("(3.14)") == "3.14\n");
 }
 
 // ========================================================================
@@ -6746,23 +6830,23 @@ TEST_CASE("IRGenerator.BareExpr.float_literal")
 
 TEST_CASE("IRGenerator.FSharp.stmt_if_then_else")
 {
-    CHECK(executesWithOutput("if true then print 1 else print 0", "1"));
-    CHECK(executesWithOutput("if false then print 1 else print 0", "0"));
-    CHECK(executesWithOutput("if 3 > 1 then print \"yes\" else print \"no\"", "yes"));
+    CHECK(executeSourceAndGetOutput("if true then print 1 else print 0") == "1");
+    CHECK(executeSourceAndGetOutput("if false then print 1 else print 0") == "0");
+    CHECK(executeSourceAndGetOutput("if 3 > 1 then print \"yes\" else print \"no\"") == "yes");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_if_in_let")
 {
-    CHECK(executesWithOutput("let x = 5; if x > 3 then print x else print 0", "5"));
+    CHECK(executeSourceAndGetOutput("let x = 5; if x > 3 then print x else print 0") == "5");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_if_without_else")
 {
     // if-then without else returns unit (F# style)
-    CHECK(executesWithOutput("if true then print 1", "1"));
-    CHECK(executesWithOutput("if false then print 1", ""));
-    CHECK(executesWithOutput("let mut x = 0\nif true then x <- 42\nprint x", "42"));
-    CHECK(executesWithOutput("let mut x = 0\nif false then x <- 42\nprint x", "0"));
+    CHECK(executeSourceAndGetOutput("if true then print 1") == "1");
+    CHECK(executeSourceAndGetOutput("if false then print 1") == "");
+    CHECK(executeSourceAndGetOutput("let mut x = 0\nif true then x <- 42\nprint x") == "42");
+    CHECK(executeSourceAndGetOutput("let mut x = 0\nif false then x <- 42\nprint x") == "0");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_while_basic")
@@ -6770,54 +6854,58 @@ TEST_CASE("IRGenerator.FSharp.stmt_while_basic")
     CHECK(generatesIRSuccessfully("while false do end"));
     CHECK(generatesIRSuccessfully("while false do echo hi; end"));
     CHECK(generatesIRSuccessfully("while true do break end"));
-    CHECK(executesWithOutput("let mut x = 3\nwhile x > 0 do\nprint x\nx <- x - 1\nend", "321"));
-    CHECK(executesWithOutput("let mut x = 3; while x > 0 do print x; x <- x - 1; end", "321"));
+    CHECK(executeSourceAndGetOutput("let mut x = 3\nwhile x > 0 do\nprint x\nx <- x - 1\nend") == "321");
+    CHECK(executeSourceAndGetOutput("let mut x = 3; while x > 0 do print x; x <- x - 1; end") == "321");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_while_break")
 {
-    CHECK(executesWithOutput(
-        "let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; end", "12"));
-    CHECK(executesWithOutput(
-        "let mut x = 0\nwhile true do\nx <- x + 1\nif x == 3 then break else print x\nend", "12"));
+    CHECK(executeSourceAndGetOutput(
+              "let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; end")
+          == "12");
+    CHECK(executeSourceAndGetOutput(
+              "let mut x = 0\nwhile true do\nx <- x + 1\nif x == 3 then break else print x\nend")
+          == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_simple_variable")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3] do print x end", "123"));
+    CHECK(executeSourceAndGetOutput("for x in [1; 2; 3] do print x end") == "123");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_destructuring")
 {
-    CHECK(executesWithOutput("for (a, b) in [(1, 2); (3, 4)] do print a end", "13"));
+    CHECK(executeSourceAndGetOutput("for (a, b) in [(1, 2); (3, 4)] do print a end") == "13");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_break")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3; 4; 5] do\nif x == 3 then break else print x\nend", "12"));
+    CHECK(executeSourceAndGetOutput("for x in [1; 2; 3; 4; 5] do\nif x == 3 then break else print x\nend")
+          == "12");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_continue")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\nend", "13"));
+    CHECK(executeSourceAndGetOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\nend")
+          == "13");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_bare_range")
 {
     // Bare range expression (without brackets) in for-in loop
-    CHECK(executesWithOutput("for i in 1..5 do print i end", "12345"));
+    CHECK(executeSourceAndGetOutput("for i in 1..5 do print i end") == "12345");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_bare_range_step")
 {
     // Bare range with step
-    CHECK(executesWithOutput("for i in 1..2..10 do print i end", "13579"));
+    CHECK(executeSourceAndGetOutput("for i in 1..2..10 do print i end") == "13579");
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_bracketed_range")
 {
     // Bracketed range still works
-    CHECK(executesWithOutput("for i in [1..5] do print i end", "12345"));
+    CHECK(executeSourceAndGetOutput("for i in [1..5] do print i end") == "12345");
 }
 
 TEST_CASE("IRGenerator.FSharp.bare_range_let_binding")
@@ -6832,88 +6920,95 @@ TEST_CASE("IRGenerator.FSharp.bare_range_let_binding")
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_map_id")
 {
-    CHECK(executesWithOutput("let ids = jobs |> map (fun j -> j.id)\nprint ids", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("let ids = jobs |> map (fun j -> j.id)\nprint ids") == "[1; 2; 3]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_map_command")
 {
-    CHECK(executesWithOutput("let cmds = jobs |> map (fun j -> j.command)\nprint cmds",
-                             "[sleep 100; vim; make build]"));
+    CHECK(executeSourceAndGetOutput("let cmds = jobs |> map (fun j -> j.command)\nprint cmds")
+          == "[sleep 100; vim; make build]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_map_state")
 {
-    CHECK(executesWithOutput("let states = jobs |> map (fun j -> j.state)\nprint states",
-                             "[Running; Stopped; Done]"));
+    CHECK(executeSourceAndGetOutput("let states = jobs |> map (fun j -> j.state)\nprint states")
+          == "[Running; Stopped; Done]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_map_pid")
 {
-    CHECK(executesWithOutput("let pids = jobs |> map (fun j -> j.pid)\nprint pids", "[1234; 5678; 9012]"));
+    CHECK(executeSourceAndGetOutput("let pids = jobs |> map (fun j -> j.pid)\nprint pids")
+          == "[1234; 5678; 9012]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_state")
 {
-    CHECK(executesWithOutput("let states = jobs |> map _.state\nprint states", "[Running; Stopped; Done]"));
+    CHECK(executeSourceAndGetOutput("let states = jobs |> map _.state\nprint states")
+          == "[Running; Stopped; Done]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_command")
 {
-    CHECK(executesWithOutput("let cmds = jobs |> map _.command\nprint cmds", "[sleep 100; vim; make build]"));
+    CHECK(executeSourceAndGetOutput("let cmds = jobs |> map _.command\nprint cmds")
+          == "[sleep 100; vim; make build]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_placeholder_pid")
 {
-    CHECK(executesWithOutput("let pids = jobs |> map _.pid\nprint pids", "[1234; 5678; 9012]"));
+    CHECK(executeSourceAndGetOutput("let pids = jobs |> map _.pid\nprint pids") == "[1234; 5678; 9012]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_state")
 {
-    CHECK(executesWithOutput(
-        "let ids = jobs |> filter (fun j -> j.state == \"Running\") |> map (fun j -> j.id)\nprint ids",
-        "[1]"));
+    CHECK(executeSourceAndGetOutput(
+              "let ids = jobs |> filter (fun j -> j.state == \"Running\") |> map (fun j -> j.id)\nprint ids")
+          == "[1]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_placeholder")
 {
-    CHECK(executesWithOutput("let cmds = jobs |> filter (_.state == \"Done\") |> map _.command\nprint cmds",
-                             "[make build]"));
+    CHECK(executeSourceAndGetOutput(
+              "let cmds = jobs |> filter (_.state == \"Done\") |> map _.command\nprint cmds")
+          == "[make build]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_filter_stopped")
 {
-    CHECK(executesWithOutput("let ids = jobs |> filter (_.state == \"Stopped\") |> map _.id\nprint ids",
-                             "[2]"));
+    CHECK(
+        executeSourceAndGetOutput("let ids = jobs |> filter (_.state == \"Stopped\") |> map _.id\nprint ids")
+        == "[2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_exists")
 {
-    CHECK(executesWithOutput("let r = jobs |> exists (fun j -> j.state == \"Stopped\")\nprint r", "true"));
+    CHECK(executeSourceAndGetOutput("let r = jobs |> exists (fun j -> j.state == \"Stopped\")\nprint r")
+          == "true");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_exists_false")
 {
-    CHECK(
-        executesWithOutput("let r = jobs |> exists (fun j -> j.state == \"Terminated\")\nprint r", "false"));
+    CHECK(executeSourceAndGetOutput("let r = jobs |> exists (fun j -> j.state == \"Terminated\")\nprint r")
+          == "false");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_find")
 {
-    CHECK(executesWithOutput("match jobs |> find (fun j -> j.id == 2) with\n"
-                             "| Some j -> print j.command\n"
-                             "| None -> print \"none\"",
-                             "vim"));
+    CHECK(executeSourceAndGetOutput("match jobs |> find (fun j -> j.id == 2) with\n"
+                                    "| Some j -> print j.command\n"
+                                    "| None -> print \"none\"")
+          == "vim");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_take")
 {
-    CHECK(executesWithOutput("let ids = jobs |> take 2 |> map _.id\nprint ids", "[1; 2]"));
+    CHECK(executeSourceAndGetOutput("let ids = jobs |> take 2 |> map _.id\nprint ids") == "[1; 2]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.jobs_chained")
 {
-    CHECK(executesWithOutput(
-        "let cmds = jobs |> filter (_.state == \"Running\") |> map _.command\nprint cmds", "[sleep 100]"));
+    CHECK(executeSourceAndGetOutput(
+              "let cmds = jobs |> filter (_.state == \"Running\") |> map _.command\nprint cmds")
+          == "[sleep 100]");
 }
 
 // =============================================================================
@@ -7038,13 +7133,13 @@ TEST_CASE("IRGenerator.FSharp.structured.bare_ls_with_string_path")
 TEST_CASE("IRGenerator.FSharp.structured.bare_ps_with_pipeline")
 {
     // ps with pipeline should route through F# path (mock PIDs: 1, 42, 100)
-    CHECK(executesWithOutput("let r = ps |> map (fun p -> p.pid)\nprint r", "[1; 42; 100]"));
+    CHECK(executeSourceAndGetOutput("let r = ps |> map (fun p -> p.pid)\nprint r") == "[1; 42; 100]");
 }
 
 TEST_CASE("IRGenerator.FSharp.structured.bare_jobs_with_pipeline")
 {
     // jobs with pipeline at statement level (mock IDs: 1, 2, 3)
-    CHECK(executesWithOutput("let r = jobs |> map (fun j -> j.id)\nprint r", "[1; 2; 3]"));
+    CHECK(executeSourceAndGetOutput("let r = jobs |> map (fun j -> j.id)\nprint r") == "[1; 2; 3]");
 }
 
 // =============================================================================

@@ -1384,12 +1384,6 @@ bool executesWithExitCode(std::string const& source, int64_t expectedExitCode)
     return result.has_value() && result->exitCode == expectedExitCode;
 }
 
-bool executesWithOutput(std::string const& source, std::string_view expectedOutput)
-{
-    auto result = executeSource(source);
-    return result.has_value() && result->output == expectedOutput;
-}
-
 bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput)
 {
     auto result = executeSource(source);

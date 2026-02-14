@@ -135,18 +135,18 @@ TEST_CASE("TypeInferencer.if_branches_unified", "[TypeInferencer]")
 
 TEST_CASE("TypeInferencer.e2e.untyped_add", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let add x y = x + y; print (add 3 4)", "7"));
+    CHECK(executeSourceAndGetOutput("let add x y = x + y; print (add 3 4)") == "7");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_factorial", "[TypeInferencer][e2e]")
 {
-    CHECK(
-        executesWithOutput("let rec fact n = if n <= 1 then 1 else n * fact (n - 1); print (fact 5)", "120"));
+    CHECK(executeSourceAndGetOutput("let rec fact n = if n <= 1 then 1 else n * fact (n - 1); print (fact 5)")
+          == "120");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_identity", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let id x = x; print (id 42)", "42"));
+    CHECK(executeSourceAndGetOutput("let id x = x; print (id 42)") == "42");
 }
 
 // NOTE: Higher-order function e2e test (let apply f x = f x) requires function-type parameters
@@ -155,42 +155,42 @@ TEST_CASE("TypeInferencer.e2e.untyped_identity", "[TypeInferencer][e2e]")
 
 TEST_CASE("TypeInferencer.e2e.untyped_subtraction", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let sub x y = x - y; print (sub 10 3)", "7"));
+    CHECK(executeSourceAndGetOutput("let sub x y = x - y; print (sub 10 3)") == "7");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_multiply", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let mul x y = x * y; print (mul 6 7)", "42"));
+    CHECK(executeSourceAndGetOutput("let mul x y = x * y; print (mul 6 7)") == "42");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_comparison", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let isZero x = x == 0; print (isZero 0)", "true"));
+    CHECK(executeSourceAndGetOutput("let isZero x = x == 0; print (isZero 0)") == "true");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_with_let_in", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let f x = let y = x + 1 in y * 2; print (f 3)", "8"));
+    CHECK(executeSourceAndGetOutput("let f x = let y = x + 1 in y * 2; print (f 3)") == "8");
 }
 
 TEST_CASE("TypeInferencer.e2e.untyped_bool_function", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let both a b = a && b; print (both true false)", "false"));
+    CHECK(executeSourceAndGetOutput("let both a b = a && b; print (both true false)") == "false");
 }
 
 TEST_CASE("TypeInferencer.e2e.lambda_inferred", "[TypeInferencer][e2e]")
 {
-    CHECK(executesWithOutput("let double = fun x -> x * 2; print (double 5)", "10"));
+    CHECK(executeSourceAndGetOutput("let double = fun x -> x * 2; print (double 5)") == "10");
 }
 
 TEST_CASE("TypeInferencer.e2e.typed_still_works", "[TypeInferencer][e2e]")
 {
     // Ensure explicitly typed functions still compile correctly
-    CHECK(executesWithOutput("let add (x: int) (y: int) = x + y; print (add 3 4)", "7"));
+    CHECK(executeSourceAndGetOutput("let add (x: int) (y: int) = x + y; print (add 3 4)") == "7");
 }
 
 TEST_CASE("TypeInferencer.e2e.mixed_annotations", "[TypeInferencer][e2e]")
 {
     // One param annotated, one inferred
-    CHECK(executesWithOutput("let add (x: int) y = x + y; print (add 3 4)", "7"));
+    CHECK(executeSourceAndGetOutput("let add (x: int) y = x + y; print (add 3 4)") == "7");
 }
