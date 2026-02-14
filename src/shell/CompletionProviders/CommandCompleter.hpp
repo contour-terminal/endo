@@ -2,7 +2,7 @@
 #pragma once
 
 #include <shell/CompletionProvider.hpp>
-#include <shell/Environment.hpp>
+#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <string>
 #include <vector>
@@ -16,7 +16,7 @@ class CommandCompleter: public CompletionProvider
   public:
     /// @brief Constructs a command completer with access to environment for PATH.
     /// @param env The environment to query for PATH.
-    explicit CommandCompleter(Environment const& env);
+    explicit CommandCompleter(EnvironmentProvider const& env);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -27,7 +27,7 @@ class CommandCompleter: public CompletionProvider
     void invalidateCache();
 
   private:
-    Environment const& _env;
+    EnvironmentProvider const& _env;
 
     // Cached PATH scan results
     mutable std::vector<std::string> _cachedCommands;

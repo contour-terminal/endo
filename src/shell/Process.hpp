@@ -93,13 +93,6 @@ class ProcessManager
     [[nodiscard]] virtual std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd,
                                                                             ProcessId pgid) = 0;
 
-    /// Changes the current working directory.
-    ///
-    /// @param path New working directory path
-    /// @return Success or an error
-    [[nodiscard]] virtual std::expected<void, ShellError> changeDirectory(
-        std::filesystem::path const& path) = 0;
-
     /// Opens a file with the specified flags and mode.
     ///
     /// @param path Path to the file
@@ -153,7 +146,6 @@ class PosixProcessManager final: public ProcessManager
     [[nodiscard]] std::expected<void, ShellError> sendSignal(ProcessId pid, int signal) override;
     [[nodiscard]] std::expected<ProcessId, ShellError> getForegroundPgrp(NativeHandle fd) override;
     [[nodiscard]] std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd, ProcessId pgid) override;
-    [[nodiscard]] std::expected<void, ShellError> changeDirectory(std::filesystem::path const& path) override;
     [[nodiscard]] std::expected<NativeHandle, ShellError> openFile(std::filesystem::path const& path,
                                                                    int flags,
                                                                    int mode = 0644) override;

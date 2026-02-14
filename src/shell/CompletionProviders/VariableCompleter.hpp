@@ -2,7 +2,7 @@
 #pragma once
 
 #include <shell/CompletionProvider.hpp>
-#include <shell/Environment.hpp>
+#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <string>
 #include <vector>
@@ -16,7 +16,7 @@ class VariableCompleter: public CompletionProvider
   public:
     /// @brief Constructs a variable completer with access to environment.
     /// @param env The environment to query for variable names.
-    explicit VariableCompleter(Environment const& env);
+    explicit VariableCompleter(EnvironmentProvider const& env);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -24,7 +24,7 @@ class VariableCompleter: public CompletionProvider
     [[nodiscard]] int priority() const override { return 80; }
 
   private:
-    Environment const& _env;
+    EnvironmentProvider const& _env;
 
     /// @brief Returns list of special shell variables.
     [[nodiscard]] static std::vector<CompletionItem> specialVariables();

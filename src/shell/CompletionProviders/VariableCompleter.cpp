@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "VariableCompleter.hpp"
 
-#include <algorithm>
-
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>
+
+#include <algorithm>
 
 namespace endo
 {
 
-VariableCompleter::VariableCompleter(Environment const& env): _env(env)
+VariableCompleter::VariableCompleter(EnvironmentProvider const& env): _env(env)
 {
 }
 

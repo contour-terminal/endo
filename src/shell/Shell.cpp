@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
 
+#include <endo-language/ASTPrinter.hpp>
+#include <endo-language/IRGenerator.hpp>
+#include <endo-language/Lexer.hpp>
+#include <endo-language/LogCategories.hpp>
+#include <endo-language/LogConfig.hpp>
+#include <endo-language/Parser.hpp>
+
+#include <tui/Theme.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -43,13 +52,7 @@
 #include "commands/PsCommand.hpp"
 #include "platform/LinuxFileInfoProvider.hpp"
 #include "platform/LinuxProcessProvider.hpp"
-#include <endo-language/ASTPrinter.hpp>
-#include <endo-language/IRGenerator.hpp>
-#include <endo-language/Lexer.hpp>
-#include <endo-language/LogCategories.hpp>
-#include <endo-language/LogConfig.hpp>
-#include <endo-language/Parser.hpp>
-#include <tui/Theme.hpp>
+#include "platform/PosixEnvironmentProvider.hpp"
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -354,115 +357,6 @@ std::string readLine(TTY& tty, std::string_view prompt)
 }
 
 // ========================================================================
-// Environment implementation
-// ========================================================================
-
-void Environment::setAndExport(std::string_view name, std::string_view value)
-{
-    set(name, value);
-    exportVariable(name);
-}
-
-// ========================================================================
-// TestEnvironment implementation
-// ========================================================================
-
-void TestEnvironment::set(std::string_view name, std::string_view value)
-{
-    _values[std::string(name)] = std::string(value);
-}
-
-std::optional<std::string_view> TestEnvironment::get(std::string_view name) const
-{
-    if (auto i = _values.find(name.data()); i != _values.end())
-        return i->second;
-    else if (auto const* value = getenv(name.data()))
-        return std::string_view { value };
-    else
-        return std::nullopt;
-}
-
-void TestEnvironment::unset(std::string_view name)
-{
-    _values.erase(std::string(name));
-    unsetenv(name.data());
-}
-
-void TestEnvironment::exportVariable(std::string_view name)
-{
-    if (auto i = _values.find(name.data()); i != _values.end())
-        setenv(name.data(), i->second.data(), 1);
-}
-
-std::vector<std::string> TestEnvironment::keys() const
-{
-    std::vector<std::string> result;
-    result.reserve(_values.size());
-    for (auto const& [key, _]: _values)
-        result.push_back(key);
-    return result;
-}
-
-// ========================================================================
-// SystemEnvironment implementation
-// ========================================================================
-
-void SystemEnvironment::set(std::string_view name, std::string_view value)
-{
-    _values[std::string(name)] = std::string(value);
-}
-
-std::optional<std::string_view> SystemEnvironment::get(std::string_view name) const
-{
-    if (auto i = _values.find(name.data()); i != _values.end())
-        return i->second;
-    else if (auto const* value = getenv(name.data()))
-        return std::string_view { value };
-    else
-        return std::nullopt;
-}
-
-void SystemEnvironment::unset(std::string_view name)
-{
-    _values.erase(std::string(name));
-    unsetenv(name.data());
-}
-
-void SystemEnvironment::exportVariable(std::string_view name)
-{
-    if (auto i = _values.find(name.data()); i != _values.end())
-        setenv(name.data(), i->second.data(), 1);
-}
-
-std::vector<std::string> SystemEnvironment::keys() const
-{
-    std::vector<std::string> result;
-
-    // First, collect from system environment
-    for (char** env = ::environ; *env != nullptr; ++env)
-    {
-        std::string_view entry(*env);
-        if (auto pos = entry.find('='); pos != std::string_view::npos)
-            result.emplace_back(entry.substr(0, pos));
-    }
-
-    // Add locally-set variables that might not be exported yet
-    for (auto const& [key, _]: _values)
-    {
-        if (std::find(result.begin(), result.end(), key) == result.end())
-            result.push_back(key);
-    }
-
-    return result;
-}
-
-SystemEnvironment& SystemEnvironment::instance()
-{
-    static SystemEnvironment env;
-    return env;
-}
-
-// ========================================================================
 // Shell::PipelineBuilder implementation
 // ========================================================================
 
@@ -605,11 +499,11 @@ void Shell::SubstitutionCapture::clear()
 // Shell implementation
 // ========================================================================
 
-Shell::Shell(): Shell(RealTTY::instance(), SystemEnvironment::instance())
+Shell::Shell(): Shell(RealTTY::instance(), PosixEnvironmentProvider::instance())
 {
 }
 
-Shell::Shell(TTY& tty, Environment& env):
+Shell::Shell(TTY& tty, EnvironmentProvider& env):
     _env { env }, _tty { tty }, _processManager { PosixProcessManager::instance() }
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
@@ -729,12 +623,12 @@ Shell::~Shell()
     SignalHandler::restore();
 }
 
-Environment& Shell::environment() noexcept
+EnvironmentProvider& Shell::environment() noexcept
 {
     return _env;
 }
 
-Environment const& Shell::environment() const noexcept
+EnvironmentProvider const& Shell::environment() const noexcept
 {
     return _env;
 }
@@ -787,7 +681,7 @@ void Shell::emitCurrentWorkingDirectory()
     if (!_interactive || !_tty.isTerminal())
         return;
 
-    auto const cwd = _env.get("PWD").value_or(std::filesystem::current_path().string());
+    auto const cwd = _env.get("PWD").value_or(_env.currentDirectory());
 
     // Percent-encode the path for the file:// URI
     auto encoded = std::string();
@@ -3720,16 +3614,34 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
 void Shell::builtinChDir(CoreVM::Params& context)
 {
-    std::string const& path = context.getString(1);
+    auto path = std::string(context.getString(1));
 
-    _env.set("OLDPWD", _env.get("PWD").value_or(""));
-    _env.set("PWD", path);
+    if (path == "-")
+    {
+        auto const oldpwd = _env.get("OLDPWD");
+        if (!oldpwd.has_value() || oldpwd->empty())
+        {
+            error("cd: OLDPWD not set");
+            _exitCode = 1;
+            context.setResult(false);
+            return;
+        }
+        path = std::string(*oldpwd);
+    }
 
-    auto const result = _processManager.changeDirectory(path);
+    auto const result = _env.changeDirectory(path);
     if (!result.has_value())
+    {
         error("Failed to change directory to '{}': {}", path, toString(result.error()));
+        _exitCode = 1;
+    }
     else
+    {
+        _env.set("OLDPWD", _env.get("PWD").value_or(""));
+        _env.set("PWD", path);
+        _exitCode = 0;
         emitCurrentWorkingDirectory();
+    }
 
     context.setResult(result.has_value());
 }
@@ -3737,14 +3649,20 @@ void Shell::builtinChDir(CoreVM::Params& context)
 void Shell::builtinChDirHome(CoreVM::Params& context)
 {
     auto const path = _env.get("HOME").value_or("/");
-    _env.set("OLDPWD", std::filesystem::current_path().string());
-    _env.set("PWD", path);
 
-    auto const result = _processManager.changeDirectory(std::filesystem::path(path));
+    auto const result = _env.changeDirectory(std::filesystem::path(path));
     if (!result.has_value())
+    {
         error("Failed to change directory to '{}': {}", path, toString(result.error()));
+        _exitCode = 1;
+    }
     else
+    {
+        _env.set("OLDPWD", _env.get("PWD").value_or(""));
+        _env.set("PWD", std::string(path));
+        _exitCode = 0;
         emitCurrentWorkingDirectory();
+    }
 
     context.setResult(result.has_value());
 }

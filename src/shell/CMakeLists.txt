@@ -26,7 +26,6 @@ add_library(endo-shell STATIC
     CompletionProviders/LetBindingCompleter.cpp
     CompletionProviders/VariableCompleter.hpp
     CompletionProviders/VariableCompleter.cpp
-    Environment.hpp
     Error.hpp
     Gradient.hpp
     Gradient.cpp
@@ -101,6 +100,10 @@ add_library(endo-shell STATIC
     OutputDefinitionRegistry.cpp
     OutputParser.hpp
     OutputParser.cpp
+    platform/EnvironmentProvider.hpp
+    platform/PosixEnvironmentProvider.hpp
+    platform/PosixEnvironmentProvider.cpp
+    platform/TestEnvironmentProvider.hpp
     TableFormatter.hpp
     TableFormatter.cpp
 )

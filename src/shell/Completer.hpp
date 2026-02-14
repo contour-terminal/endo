@@ -10,16 +10,16 @@
 #include <shell/CompletionProviders/LetBindingCompleter.hpp>
 #include <shell/CompletionProviders/OptionCompleter.hpp>
 #include <shell/CompletionProviders/VariableCompleter.hpp>
-#include <shell/Environment.hpp>
 #include <shell/History.hpp>
+#include <shell/platform/EnvironmentProvider.hpp>
+
+#include <endo-language/CompletionContext.hpp>
 
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <endo-language/CompletionContext.hpp>
 
 namespace endo
 {
@@ -42,7 +42,9 @@ class Completer
     /// @param env The environment for variable and command completion.
     /// @param history The history for history-based suggestions.
     /// @param fsharpState The persistent F# state for let binding completion.
-    Completer(Environment const& env, History const& history, FSharpPersistentState const& fsharpState);
+    Completer(EnvironmentProvider const& env,
+              History const& history,
+              FSharpPersistentState const& fsharpState);
 
     /// @brief Registers an additional completion provider.
     /// @param provider The provider to add.

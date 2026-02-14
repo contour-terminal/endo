@@ -3,18 +3,18 @@
 #include <shell/CompletionAdapter.hpp>
 #include <shell/Shell.hpp>
 
+#include <endo-language/CompletionCandidates.hpp>
+
 #include <crispy/utils.h>
 
 #include <algorithm>
 #include <filesystem>
 #include <set>
 
-#include <endo-language/CompletionCandidates.hpp>
-
 namespace endo
 {
 
-CommandCompleter::CommandCompleter(Environment const& env): _env(env)
+CommandCompleter::CommandCompleter(EnvironmentProvider const& env): _env(env)
 {
 }
 

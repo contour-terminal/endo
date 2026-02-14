@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Prompt.hpp"
 
+#include <tui/Screen.hpp>
+
 #include <unistd.h>
 
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
-#include "Environment.hpp"
 #include "PromptComponent.hpp"
-#include <tui/Screen.hpp>
+#include "platform/PosixEnvironmentProvider.hpp"
 
 namespace endo
 {
@@ -45,7 +46,7 @@ void Prompt::initialize()
     _terminal.output().flush();
 
     // Create CommandResolver for tooltip support
-    _commandResolver = std::make_unique<CommandResolver>(SystemEnvironment::instance());
+    _commandResolver = std::make_unique<CommandResolver>(PosixEnvironmentProvider::instance());
 
     // Create PromptComponent
     _promptComponent = std::make_unique<PromptComponent>();

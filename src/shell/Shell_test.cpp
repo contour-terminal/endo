@@ -13,12 +13,14 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
+#include <endo-language/CompletionContext.hpp>
+
 #include "CompletionProviders/FileCompleter.hpp"
 #include "CompletionProviders/LetBindingCompleter.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
-#include <endo-language/CompletionContext.hpp>
+#include "platform/TestEnvironmentProvider.hpp"
 
 namespace
 {
@@ -31,6 +33,16 @@ struct TestShell
     endo::Shell shell { pty, env };
 
     std::string_view output() const noexcept { return pty.output(); }
+
+    TestShell()
+    {
+        // Seed essential environment variables from the real environment
+        // so that external commands (echo, grep, etc.) can be resolved.
+        if (auto const* path = std::getenv("PATH"))
+            env.set("PATH", path);
+        if (auto const* home = std::getenv("HOME"))
+            env.set("HOME", home);
+    }
 
     TestShell& operator()(std::string_view cmd)
     {
@@ -50,6 +62,87 @@ TEST_CASE("shell.syntax.exit")
     CHECK(shell("exit").exitCode == 0);
     CHECK(shell("exit 1").exitCode == 1);
     CHECK(shell("exit 123").exitCode == 123);
+}
+
+// ============================================================================
+// cd builtin
+// ============================================================================
+
+TEST_CASE("shell.cd.basic")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell("cd /tmp");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+}
+
+TEST_CASE("shell.cd.home")
+{
+    TestShell shell;
+    shell.env.set("HOME", "/home/testuser");
+    shell.env.addValidPath("/home/testuser");
+    shell("cd");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
+}
+
+TEST_CASE("shell.cd.minus")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell.env.addValidPath("/var");
+
+    shell("cd /tmp");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+
+    shell("cd /var");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/var");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/tmp");
+
+    shell("cd -");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/var");
+}
+
+TEST_CASE("shell.cd.minus_swaps")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell.env.addValidPath("/var");
+
+    shell("cd /tmp");
+    shell("cd /var");
+
+    // First cd - -> /tmp
+    shell("cd -");
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+
+    // Second cd - -> /var
+    shell("cd -");
+    CHECK(shell.env.get("PWD").value_or("") == "/var");
+}
+
+TEST_CASE("shell.cd.minus_no_oldpwd")
+{
+    TestShell shell;
+    shell("cd -");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.cd.invalid_path")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp"); // only /tmp is valid
+    shell.env.set("PWD", "/home/testuser");
+
+    shell("cd /nonexistent");
+    CHECK(shell.exitCode == 1);
+    // PWD should remain unchanged on failure
+    CHECK(shell.env.get("PWD").value_or("") == "/home/testuser");
 }
 
 TEST_CASE("shell.syntax.pipes")

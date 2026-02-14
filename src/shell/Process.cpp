@@ -196,13 +196,6 @@ std::expected<void, ShellError> PosixProcessManager::setForegroundPgrp(NativeHan
     return {};
 }
 
-std::expected<void, ShellError> PosixProcessManager::changeDirectory(std::filesystem::path const& path)
-{
-    if (chdir(path.c_str()) != 0)
-        return std::unexpected(ShellError::FileNotFound);
-    return {};
-}
-
 std::expected<NativeHandle, ShellError> PosixProcessManager::openFile(std::filesystem::path const& path,
                                                                       int flags,
                                                                       int mode)

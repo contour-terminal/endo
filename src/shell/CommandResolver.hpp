@@ -9,7 +9,7 @@
 namespace endo
 {
 
-class Environment;
+class EnvironmentProvider;
 
 /// @brief Type of command resolved.
 enum class CommandType
@@ -40,7 +40,7 @@ class CommandResolver
 {
   public:
     /// @brief Constructs a resolver with access to the environment.
-    explicit CommandResolver(Environment const& env);
+    explicit CommandResolver(EnvironmentProvider const& env);
 
     /// @brief Resolves a command and returns its info.
     /// @param command The command name to resolve.
@@ -53,7 +53,7 @@ class CommandResolver
     void invalidateCache();
 
   private:
-    Environment const& _env;
+    EnvironmentProvider const& _env;
 
     // Cache for efficiency
     mutable std::string _cachedPath;

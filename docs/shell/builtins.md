@@ -40,10 +40,11 @@ Change the current working directory.
 
 ```
 cd [directory]
+cd -
 ```
 
 **Description:** Changes the shell's working directory. With no argument, changes to `$HOME`.
-Supports tilde expansion (`~`, `~user`).
+Supports tilde expansion (`~`, `~user`). Use `cd -` to switch to the previous working directory (`$OLDPWD`).
 
 **Example:**
 
@@ -51,6 +52,7 @@ Supports tilde expansion (`~`, `~user`).
 cd /tmp
 cd ~
 cd ~/projects/endo
+cd -          # returns to the previous directory
 ```
 
 ---

@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "Process.hpp"
-
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -9,6 +7,7 @@
 
 #include "Error.hpp"
 #include "Platform.hpp"
+#include "Process.hpp"
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -43,13 +42,6 @@ class WindowsProcessManager final: public ProcessManager
     {
         // TODO: Implement using WaitForSingleObject and GetExitCodeProcess
         return std::unexpected(ShellError::NotImplemented);
-    }
-
-    [[nodiscard]] std::expected<void, ShellError> changeDirectory(std::filesystem::path const& path) override
-    {
-        if (!SetCurrentDirectoryW(path.c_str()))
-            return std::unexpected(ShellError::FileNotFound);
-        return {};
     }
 
     [[nodiscard]] std::expected<NativeHandle, ShellError> openFile(

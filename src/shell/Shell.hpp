@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <shell/Environment.hpp>
 #include <shell/ProcessGroup.hpp>
+#include <shell/platform/EnvironmentProvider.hpp>
+
+#include <endo-language/IRGenerator.hpp>
+
+#include <http/HttpClient.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 
@@ -26,8 +30,6 @@
 #include "Prompt.hpp"
 #include "SignalHandler.hpp"
 #include "TTY.hpp"
-#include <endo-language/IRGenerator.hpp>
-#include <http/HttpClient.hpp>
 
 namespace endo
 {
@@ -52,10 +54,10 @@ class Shell final
     Shell();
     ~Shell();
 
-    Shell(TTY& tty, Environment& env);
+    Shell(TTY& tty, EnvironmentProvider& env);
 
-    [[nodiscard]] Environment& environment() noexcept;
-    [[nodiscard]] Environment const& environment() const noexcept;
+    [[nodiscard]] EnvironmentProvider& environment() noexcept;
+    [[nodiscard]] EnvironmentProvider const& environment() const noexcept;
 
     void setOptimize(bool optimize);
 
@@ -248,7 +250,7 @@ class Shell final
     std::vector<std::string>& cmdBuilderArgs();
 
     CoreVM::Runtime _runtime;
-    Environment& _env;
+    EnvironmentProvider& _env;
     TTY& _tty;
     FSharpPersistentState _fsharpState;          ///< F# function definitions persisted across REPL prompts
     OutputDefinitionRegistry _outputDefinitions; ///< Output definition registry for structured pipelines
