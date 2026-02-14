@@ -666,24 +666,6 @@ Shell::Shell(TTY& tty, Environment& env):
         mgr.setCurrent(scheme == tui::ColorScheme::Light ? tui::lightTheme() : tui::darkTheme());
     });
 
-    // Auto-execute init.endo if it exists
-    if (auto const* home = std::getenv("HOME"))
-    {
-        auto const initPath = std::filesystem::path(home) / ".config" / "endo" / "init.endo";
-        if (std::filesystem::exists(initPath))
-        {
-            try
-            {
-                auto ifs = std::ifstream(initPath);
-                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
-                execute(content);
-            }
-            catch (std::exception const& e)
-            {
-                std::println(std::cerr, "endo: warning: error loading {}: {}", initPath.string(), e.what());
-            }
-        }
-    }
 }
 
 Shell::~Shell()
@@ -776,6 +758,25 @@ int Shell::run()
     {
         std::cerr << "endo: interactive mode requires a terminal.\n";
         return EXIT_FAILURE;
+    }
+
+    // Auto-execute init.endo if it exists (only in interactive mode)
+    if (auto const* home = std::getenv("HOME"))
+    {
+        auto const initPath = std::filesystem::path(home) / ".config" / "endo" / "init.endo";
+        if (std::filesystem::exists(initPath))
+        {
+            try
+            {
+                auto ifs = std::ifstream(initPath);
+                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+                execute(content);
+            }
+            catch (std::exception const& e)
+            {
+                std::println(std::cerr, "endo: warning: error loading {}: {}", initPath.string(), e.what());
+            }
+        }
     }
 
 #if !defined(_WIN32)
@@ -927,8 +928,14 @@ int Shell::execute(std::string const& lineBuffer)
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
         {
             auto names = std::unordered_set<std::string> {};
-            for (auto const& [name, _]: _fsharpState.functions)
-                names.insert(name);
+            auto variadicNames = std::unordered_set<std::string> {};
+            for (auto const& [name, func]: _fsharpState.functions)
+            {
+                if (func.hasVariadicParam)
+                    variadicNames.insert(name);
+                else
+                    names.insert(name);
+            }
             for (auto const& binding: _fsharpState.valueBindings)
                 names.insert(binding.name);
             // Include runtime builtin functions whose names contain underscores,
@@ -938,6 +945,7 @@ int Shell::execute(std::string const& lineBuffer)
                 if (builtin->isFunction() && builtin->name().find('_') != std::string::npos)
                     names.insert(builtin->name());
             parser.setKnownFSharpFunctions(std::move(names));
+            parser.setKnownVariadicFunctions(std::move(variadicNames));
         }
         auto rootNode = parser.parse();
 
