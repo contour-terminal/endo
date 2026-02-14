@@ -167,4 +167,4 @@ print (sum [1; 2; 3; 4; 5])         # 15
 
 ## License
 
-Licensed under the Apache License 2.0. See [LICENSE](https://github.com/christianparpart/endo/blob/master/LICENSE) for details.
+Licensed under the Apache License 2.0. See [LICENSE](https://github.com/contour-terminal/endo/blob/master/LICENSE) for details.

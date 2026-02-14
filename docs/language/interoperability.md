@@ -28,16 +28,16 @@ ls -la
 # Function that wraps shell commands
 let backup dir =
     let timestamp = date +%Y%m%d_%H%M%S
-    let backupDir = "${dir}_backup_$timestamp"
+    let backupDir = $"{dir}_backup_{timestamp}"
     cp -r $dir $backupDir
     gzip -r $backupDir
-    echo "Backed up to $backupDir"
+    echo $"Backed up to {backupDir}"
     Ok backupDir
 
 # Shell commands using function results
 let files = findLargeFiles "/var/log" 100
 for file in $files do
-    echo "Compressing: $file"
+    echo $"Compressing: {file}"
     gzip $file
 end
 
@@ -52,7 +52,7 @@ if fileExists config then
         echo "Starting production..."
         npm run build && npm start
     | m ->
-        echo "Unknown mode: $m"
+        echo $"Unknown mode: {m}"
         exit 1
 else
     echo "No config found, using defaults"
@@ -66,7 +66,7 @@ let topContributors =
     |> map (fun (name, commits) -> { name = name; count = length commits })
     |> sortByDescending (fun c -> c.count)
     |> take 10
-    |> each (fun c -> echo "${c.name}: ${c.count} commits")
+    |> each (fun c -> echo $"{c.name}: {c.count} commits")
 ```
 
 ### 13.3 Automatic Type Coercion
@@ -94,7 +94,7 @@ curl -d ${toJson config} https://api.example.com
 
 # Numbers in strings
 let count = 42
-echo "Count: $count"              # int -> str automatically
+echo $"Count: {count}"              # int -> str automatically
 
 # String to number (explicit)
 let n = parseInt "42"             # str -> int
@@ -136,7 +136,7 @@ When you call something, endo resolves it in this order:
 ```endo
 # If you define 'echo', it shadows the builtin
 let echo msg =
-    builtin echo "[LOG] $msg"
+    builtin echo $"[LOG] {msg}"
 
 # Force specific resolution
 let result = builtin echo "using builtin"

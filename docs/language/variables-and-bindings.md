@@ -36,7 +36,7 @@ let mut name = "initial"
 # Reassign with <- operator
 counter <- counter + 1
 counter <- counter + 1
-echo "Counter: $counter"      # Counter: 2
+echo $"Counter: {counter}"      # Counter: 2
 
 name <- "updated"
 
@@ -45,7 +45,7 @@ let mut sum = 0
 for n in [1; 2; 3; 4; 5] do
     sum <- sum + n
 end
-echo "Sum: $sum"              # Sum: 15
+echo $"Sum: {sum}"              # Sum: 15
 
 # Mutable is required for accumulation patterns
 let mut result = []
@@ -113,7 +113,7 @@ let [first; second; _...] = items     # Ignore tail
 let { person = { name; age }; salary } = employee
 
 # In function parameters
-let greet { name; _ } = "Hello, $name"
+let greet { name; _ } = $"Hello, {name}"
 let addPair (a, b) = a + b
 let sumFirst [x; y; _...] = x + y
 ```
@@ -128,7 +128,7 @@ let result = {
     inner + outer
 }
 # 'inner' is not visible here
-echo "Result: $result"        # Result: 30
+echo $"Result: {result}"        # Result: 30
 
 # Block scope with indentation (in functions)
 let process x =

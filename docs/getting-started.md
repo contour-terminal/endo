@@ -26,7 +26,7 @@ Before building, ensure you have:
 ### Clone the Repository
 
 ```bash
-git clone https://github.com/christianparpart/endo.git
+git clone https://github.com/contour-terminal/endo.git
 cd endo
 ```
 

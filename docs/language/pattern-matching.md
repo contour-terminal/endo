@@ -14,7 +14,7 @@ match x with
 
 # Variable binding (captures the value)
 match x with
-| n -> "got $n"
+| n -> $"got {n}"
 
 # Wildcard (matches anything, discards)
 match x with
@@ -25,7 +25,7 @@ match command with
 | "start" -> startService
 | "stop" -> stopService
 | "restart" -> restartService
-| cmd -> echo "Unknown: $cmd"
+| cmd -> echo $"Unknown: {cmd}"
 ```
 
 ### 7.2 Compound Patterns
@@ -34,24 +34,24 @@ match command with
 # Tuple patterns
 match point with
 | (0, 0) -> "origin"
-| (x, 0) -> "on x-axis at $x"
-| (0, y) -> "on y-axis at $y"
-| (x, y) -> "at ($x, $y)"
+| (x, 0) -> $"on x-axis at {x}"
+| (0, y) -> $"on y-axis at {y}"
+| (x, y) -> $"at ({x}, {y})"
 
 # List patterns
 match items with
 | [] -> "empty list"
-| [x] -> "single element: $x"
-| [x; y] -> "pair: $x and $y"
-| [x; y; z] -> "triple: $x, $y, $z"
-| head :: tail -> "head is $head, ${length tail} more elements"
-| [first; second; rest...] -> "starts with $first, $second"
+| [x] -> $"single element: {x}"
+| [x; y] -> $"pair: {x} and {y}"
+| [x; y; z] -> $"triple: {x}, {y}, {z}"
+| head :: tail -> $"head is {head}, {length tail} more elements"
+| [first; second; rest...] -> $"starts with {first}, {second}"
 
 # Record patterns
 match person with
 | { name = "Alice"; _ } -> "Found Alice!"
 | { age = 0; _ } -> "Newborn"
-| { name; age } -> "$name is $age years old"
+| { name; age } -> $"{name} is {age} years old"
 
 # Union/variant patterns
 match shape with
@@ -61,13 +61,13 @@ match shape with
 
 # Option patterns
 match maybeValue with
-| Some x -> "Got: $x"
+| Some x -> $"Got: {x}"
 | None -> "Nothing"
 
 # Result patterns
 match result with
-| Ok value -> "Success: $value"
-| Error { code; message } -> "Error $code: $message"
+| Ok value -> $"Success: {value}"
+| Error { code; message } -> $"Error {code}: {message}"
 ```
 
 ### 7.3 Nested Patterns
@@ -76,18 +76,18 @@ match result with
 # Deeply nested destructuring
 match data with
 | { user = { name; role = "admin" }; _ } ->
-    "Admin user: $name"
+    $"Admin user: {name}"
 | { user = { name; _ }; active = true } ->
-    "Active user: $name"
+    $"Active user: {name}"
 | { user = { name; _ }; active = false } ->
-    "Inactive user: $name"
+    $"Inactive user: {name}"
 
 # List of records
 match users with
 | [] -> "No users"
-| [{ name; _ }] -> "Only user: $name"
+| [{ name; _ }] -> $"Only user: {name}"
 | { name = first; _ } :: rest ->
-    "First: $first, and ${length rest} others"
+    $"First: {first}, and {length rest} others"
 
 # Nested options
 match config with
@@ -128,7 +128,7 @@ match request with
 | { method = "POST"; _ } ->
     Error "Payload too large"
 | { method = m; _ } ->
-    Error "Method not allowed: $m"
+    Error $"Method not allowed: {m}"
 
 # Guards with captured variables
 match items with
@@ -158,7 +158,7 @@ match statusCode with
 | 301 | 302 | 307 | 308 -> "redirect"
 | 400 | 401 | 403 | 404 -> "client error"
 | 500 | 502 | 503 -> "server error"
-| code -> "unknown: $code"
+| code -> $"unknown: {code}"
 ```
 
 ### 7.6 As Patterns
@@ -169,10 +169,10 @@ Bind the entire matched value while also destructuring.
 # Bind whole record while extracting fields
 match item with
 | { name; price } as product when price > 100 ->
-    echo "Expensive product: $product"
+    echo $"Expensive product: {product}"
     applyDiscount product
 | product ->
-    echo "Affordable: ${product.name}"
+    echo $"Affordable: {product.name}"
     product
 
 # Useful for recursive structures

@@ -109,14 +109,14 @@ let files = ls | lines                 # list<str>
 let procs = ps aux | lines | drop 1    # Skip header line
 
 # Process each item
-files |> each (fun f -> echo "File: $f")
+files |> each (fun f -> echo $"File: {f}")
 
 # Filter and transform shell output
 ls -la
 |> lines
 |> filter (fun l -> contains l ".txt")
 |> map (fun l -> words l |> last)      # Get filename column
-|> each (fun f -> echo "Text file: $f")
+|> each (fun f -> echo $"Text file: {f}")
 
 # Combine shell commands with functional processing
 let largeLogFiles =

@@ -42,8 +42,8 @@ let today = date +%Y-%m-%d
 let name = echo "test"            # "test" not "test\n"
 
 # Capture in expressions
-let greeting = "Hello, $(whoami)!"
-let info = "Files: ${ls | wc -l}"
+let greeting = $"Hello, {whoami}!"
+let info = $"Files: {ls | wc -l}"
 
 # Captured output as list
 let fileList = ls | lines

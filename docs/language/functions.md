@@ -7,7 +7,7 @@ Functions in endo are curried by default, meaning multi-parameter functions are 
 ```endo
 # Simple single-parameter function
 let double x = x * 2
-let greet name = echo "Hello, $name"
+let greet name = echo $"Hello, {name}"
 
 # Multi-parameter functions (curried)
 let add x y = x + y
@@ -19,7 +19,7 @@ let product = multiply 2 3 4  # 24
 
 # With type annotations
 let add (x: int) (y: int): int = x + y
-let format (template: str) (value: int): str = "$template: $value"
+let format (template: str) (value: int): str = $"{template}: {value}"
 
 # Partial application (supply fewer arguments)
 let add5 = add 5              # add5: int -> int
@@ -60,7 +60,7 @@ let fibonacci n = {
 
 # Mixed shell and functional
 let findLargeFiles dir minSize =
-    find $dir -size +${minSize}M
+    find $dir -size +$"{minSize}M"
     |> lines
     |> filter (fun f -> test -f $f)
     |> map (fun f -> { path = f; size = stat -c%s $f })
@@ -68,9 +68,9 @@ let findLargeFiles dir minSize =
 # Multiple statements in function body
 let processAndLog input =
     let processed = transform input
-    log "Processed: $processed"
+    log $"Processed: {processed}"
     let validated = validate processed
-    log "Validated: $validated"
+    log $"Validated: {validated}"
     validated
 ```
 

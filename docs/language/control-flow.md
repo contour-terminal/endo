@@ -55,7 +55,7 @@ elif status == 404 then
 elif status >= 500 then
     echo "Server error"
 else
-    echo "Unknown: $status"
+    echo $"Unknown: {status}"
 
 # Single-line
 if test -f $file then cat $file else echo "missing"
@@ -83,7 +83,7 @@ match command with
 | "start" -> startServer
 | "stop" -> stopServer
 | "status" -> showStatus
-| cmd -> echo "Unknown command: $cmd"
+| cmd -> echo $"Unknown command: {cmd}"
 ```
 
 ### 9.3 Loops
@@ -91,27 +91,27 @@ match command with
 ```endo
 # For-in loop over list
 for item in [1; 2; 3; 4; 5] do
-    echo "Item: $item"
+    echo $"Item: {item}"
 end
 
 # For-in over range
 for i in 1..10 do
-    echo "Count: $i"
+    echo $"Count: {i}"
 end
 
 for i in 10..-1..1 do
-    echo "Countdown: $i"
+    echo $"Countdown: {i}"
 end
 
 # For-in over command output
 for file in $(ls *.txt) do
-    echo "Processing: $file"
+    echo $"Processing: {file}"
     wc -l $file
 end
 
 # For-in with destructuring
 for (name, value) in entries do
-    echo "$name = $value"
+    echo $"{name} = {value}"
 end
 
 for { host; port } in servers do
@@ -121,7 +121,7 @@ end
 # While loop
 let mut n = 10
 while n > 0 do
-    echo "Countdown: $n"
+    echo $"Countdown: {n}"
     n <- n - 1
 end
 

@@ -44,7 +44,7 @@ let double = fun x -> x * 2   # double: int -> int
 
 # Inference through usage
 let add x y = x + y           # add: int -> int -> int (inferred from +)
-let greet name = "Hi, $name"  # greet: str -> str
+let greet name = $"Hi, {name}"  # greet: str -> str
 
 # Explicit annotations when needed
 let count: int = 42

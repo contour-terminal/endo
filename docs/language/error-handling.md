@@ -9,8 +9,8 @@ Commands in expression context return a `result` type for explicit error handlin
 let result = cat nonexistent.txt
 
 match result with
-| Ok content -> echo "Content: $content"
-| Error e -> echo "Error (${e.code}): ${e.message}"
+| Ok content -> echo $"Content: {content}"
+| Error e -> echo $"Error ({e.code}): {e.message}"
 
 # Built-in Error type
 type Error = {
@@ -28,7 +28,7 @@ let result = fetchData url
 if isOk result then
     process (unwrap result)
 else
-    log "Failed: ${getError result}"
+    log $"Failed: {getError result}"
 ```
 
 ### 11.2 Error Propagation with `?`
@@ -81,7 +81,7 @@ with
 | { code = 404; _ } ->
     DefaultData.empty
 | { code = c; message = m } when c >= 500 ->
-    log "Server error: $m"
+    log $"Server error: {m}"
     Error { code = c; message = m }
 | e ->
     Error e
@@ -94,10 +94,10 @@ with
     echo "Config not found, using defaults"
     DefaultConfig
 | { message = m } when contains m "permission" ->
-    echo "Cannot read config: $m"
+    echo $"Cannot read config: {m}"
     exit 1
 | e ->
-    echo "Unexpected error: ${e.message}"
+    echo $"Unexpected error: {e.message}"
     exit 1
 
 # Try-finally for cleanup

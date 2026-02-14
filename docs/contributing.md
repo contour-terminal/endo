@@ -15,7 +15,7 @@ request -- every bit helps shape Endo into the shell it should be.
 ```bash
 git clone https://github.com/<your-username>/endo.git
 cd endo
-git remote add upstream https://github.com/christianparpart/endo.git
+git remote add upstream https://github.com/contour-terminal/endo.git
 ```
 
 ### 2. Create a Feature Branch
@@ -113,4 +113,4 @@ context. Ensure prerequisites are complete before starting work on dependent fea
 ## License
 
 By contributing, you agree that your contributions will be licensed under the
-[Apache License 2.0](https://github.com/christianparpart/endo/blob/master/LICENSE).
+[Apache License 2.0](https://github.com/contour-terminal/endo/blob/master/LICENSE).

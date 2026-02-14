@@ -85,7 +85,7 @@ ls -la
 |> lines
 |> filter (fun l -> endsWith l ".md")
 |> length
-|> fun n -> echo "Found $n markdown files"
+|> fun n -> echo $"Found {n} markdown files"
 ```
 
 ### 8.6 Shell Pipeline Operator `|`
@@ -121,7 +121,7 @@ ls -la
 | lines
 |> filter (fun l -> contains l ".rs")
 |> length
-|> fun n -> echo "Found $n Rust files"
+|> fun n -> echo $"Found {n} Rust files"
 
 # Function result into shell pipe
 ["Hello"; "World"; "From"; "Endo"]
@@ -136,7 +136,7 @@ find . -name "*.log"
     size > 1000000
 })
 |> each (fun f -> {
-    echo "Compressing $f"
+    echo $"Compressing {f}"
     gzip $f
 })
 

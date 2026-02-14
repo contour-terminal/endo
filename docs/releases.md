@@ -19,7 +19,7 @@ Pre-built binaries and package manager installs are planned for a future stable 
 The recommended way to obtain Endo today is to build from the Git repository:
 
 ```bash
-git clone https://github.com/christianparpart/endo.git
+git clone https://github.com/contour-terminal/endo.git
 cd endo
 cmake --preset clang-release
 cmake --build --preset clang-release
@@ -33,7 +33,7 @@ instructions.
 
 The source code, issue tracker, and development activity are hosted on GitHub:
 
-[**github.com/christianparpart/endo**](https://github.com/christianparpart/endo)
+[**github.com/contour-terminal/endo**](https://github.com/contour-terminal/endo)
 
 ## Package Managers
 
