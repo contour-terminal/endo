@@ -296,20 +296,11 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             if (binding.isObjectExpr)
                 generator.bindFSharpObjectVariable(binding.name, storage, binding.isMutable);
             else
-                generator.bindFSharpVariable(binding.name, storage, binding.isMutable);
+                generator.bindFSharpVariable(binding.name, storage, binding.isMutable, binding.isExported);
 
             // Re-export persisted exported bindings
             if (binding.isExported)
-            {
-                auto* loadedVal = generator._builder.createLoad(storage, binding.name + ".export.load");
-                auto* strVal = generator.convertToString(loadedVal, binding.name + ".export");
-                if (auto* exportCb = generator.findCallback("export(SS)V"))
-                {
-                    generator._builder.createCallFunction(generator._builder.getBuiltinFunction(*exportCb),
-                                                          { generator._builder.get(binding.name), strVal },
-                                                          "export");
-                }
-            }
+                generator.emitExportVariable(storage, binding.name);
         }
 
         // Re-compute captured bindings and compile persisted functions as handlers.
@@ -495,10 +486,13 @@ void IRGenerator::popFSharpScope()
     }
 }
 
-void IRGenerator::bindFSharpVariable(std::string const& name, CoreVM::Value* value, bool isMutable)
+void IRGenerator::bindFSharpVariable(std::string const& name,
+                                     CoreVM::Value* value,
+                                     bool isMutable,
+                                     bool isExported)
 {
     if (_currentFSharpScope)
-        _currentFSharpScope->bindings[name] = BindingInfo { value, isMutable };
+        _currentFSharpScope->bindings[name] = BindingInfo { value, isMutable, isExported };
 }
 
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
@@ -512,6 +506,15 @@ void IRGenerator::bindFSharpObjectVariable(std::string const& name,
         // Also bind as a regular variable
         _currentFSharpScope->bindings[name] = BindingInfo { storage, isMutable };
     }
+}
+
+void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
+{
+    auto* loadedVal = _builder.createLoad(storage, name + ".export.load");
+    auto* strVal = convertToString(loadedVal, name + ".export");
+    if (auto* exportCb = findCallback("export(SS)V"))
+        _builder.createCallFunction(
+            _builder.getBuiltinFunction(*exportCb), { _builder.get(name), strVal }, "export");
 }
 
 CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
@@ -4165,6 +4168,11 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
 
     // Store the new value
     _builder.createStore(binding->value, newValue, node.name + ".assign");
+
+    // Re-export if the variable was declared with `let export mut`
+    if (binding->isExported)
+        emitExportVariable(binding->value, node.name);
+
     _result = nullptr;
 }
 
@@ -4198,6 +4206,10 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
 
     // Store the new value
     _builder.createStore(binding->value, newValue, node.name + ".assign");
+
+    // Re-export if the variable was declared with `let export mut`
+    if (binding->isExported)
+        emitExportVariable(binding->value, node.name);
 
     // As an expression, mutation returns unit
     _result = _builder.get(CoreVM::CoreNumber(0));
@@ -4499,20 +4511,12 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     }
     else
     {
-        bindFSharpVariable(node.name, storage, node.isMutable);
+        bindFSharpVariable(node.name, storage, node.isMutable, node.isExported);
     }
 
     // Export the binding as an environment variable if requested
     if (node.isExported)
-    {
-        auto* loadedVal = _builder.createLoad(storage, node.name + ".export.load");
-        auto* strVal = convertToString(loadedVal, node.name + ".export");
-        if (auto* exportCb = findCallback("export(SS)V"))
-        {
-            _builder.createCallFunction(
-                _builder.getBuiltinFunction(*exportCb), { _builder.get(node.name), strVal }, "export");
-        }
-    }
+        emitExportVariable(storage, node.name);
 
     // Record for REPL persistence (re-evaluated at each subsequent prompt)
     _newValueBindings.push_back(

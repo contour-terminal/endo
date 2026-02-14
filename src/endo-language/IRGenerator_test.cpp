@@ -116,6 +116,41 @@ TEST_CASE("IRGenerator.FSharp.let_export_list_join")
           == "/bin:/usr/bin");
 }
 
+TEST_CASE("IRGenerator.FSharp.let_export_mut_updates_env_on_mutation")
+{
+    auto& testRuntime = endo::test::TestRuntime::instance();
+    CHECK(executeSourceAndGetOutput("let export mut X = 10; X <- 100; print X") == "100");
+    CHECK(testRuntime.env().at("X") == "100");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_mut_env_initial_value")
+{
+    auto& testRuntime = endo::test::TestRuntime::instance();
+    CHECK(executeSourceAndGetOutput("let export mut Y = 42; print Y") == "42");
+    CHECK(testRuntime.env().at("Y") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_mut_multiple_mutations")
+{
+    auto& testRuntime = endo::test::TestRuntime::instance();
+    CHECK(executeSourceAndGetOutput("let export mut Z = 1; Z <- 2; Z <- 3; print Z") == "3");
+    CHECK(testRuntime.env().at("Z") == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_immutable_env")
+{
+    auto& testRuntime = endo::test::TestRuntime::instance();
+    CHECK(executeSourceAndGetOutput("let export W = 99; print W") == "99");
+    CHECK(testRuntime.env().at("W") == "99");
+}
+
+TEST_CASE("IRGenerator.FSharp.let_export_mut_string_mutation")
+{
+    auto& testRuntime = endo::test::TestRuntime::instance();
+    CHECK(executeSourceAndGetOutput(R"(let export mut S = "hello"; S <- "world"; print S)") == "world");
+    CHECK(testRuntime.env().at("S") == "world");
+}
+
 TEST_CASE("IRGenerator.FSharp.list_multiline_join")
 {
     CHECK(executeSourceAndGetOutput("let r = [\n  \"a\";\n  \"b\";\n  \"c\"\n] |> join \",\"\nprint r")

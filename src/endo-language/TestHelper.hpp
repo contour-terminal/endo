@@ -88,6 +88,9 @@ struct TestRuntime
     /// Clears all mock environment variables.
     void clearMockEnvVars();
 
+    /// Returns the mock environment map (for verifying export behavior in tests).
+    [[nodiscard]] std::unordered_map<std::string, std::string> const& env() const { return mockEnv; }
+
     /// Clears any accumulated errors before a new test.
     void clearErrors();
 

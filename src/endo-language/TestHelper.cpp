@@ -985,6 +985,22 @@ TestRuntime::TestRuntime()
                 args.setResult(args.caller()->newString(""));
         });
 
+    // Register export builtins (two-param: name+value, one-param: name-only)
+    runtime.registerFunction("export")
+        .param<CoreVM::CoreString>("name")
+        .param<CoreVM::CoreString>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            mockEnv[std::string(args.getString(1))] = std::string(args.getString(2));
+        });
+
+    runtime.registerFunction("export")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([](CoreVM::Params&) {
+            // No-op in test: just marks the variable as exported
+        });
+
     // --- String standard library builtins ---
 
     // string_trim: removes leading/trailing whitespace

@@ -497,6 +497,12 @@ src/
     - [x] IR codegen: context-aware `ShellCommandExpr` — capture mode (expression context) vs normal I/O (statement context) via `_shellCommandCaptureMode`
     - [x] IR codegen: `ApplicationExpr` restores capture mode for argument evaluation (expression context)
     - [x] 9 test cases covering variadic params, shell aliases with splat, capture mode, IR generation
+  - [x] Fix: `let export mut` re-exports on mutation
+    - [x] `BindingInfo.isExported` flag tracks exported variables through scope chain
+    - [x] `emitExportVariable()` helper emits load → convertToString → export callback IR
+    - [x] `visit(MutAssignStmt)` and `visit(MutAssignExpr)` re-export after store when `isExported`
+    - [x] Test runtime registers `export(SS)V` callback updating `mockEnv` map
+    - [x] 5 new tests: initial export, mutation re-export, multiple mutations, immutable export, string mutation
 
 **Implementation Notes:**
 - See `docs/language/implementation-notes.md` for detailed parser implementation notes

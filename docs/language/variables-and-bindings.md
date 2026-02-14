@@ -68,9 +68,9 @@ let export X = 42
 # Export a computed value
 let export PATH_COUNT = length (split PATH ":")
 
-# Export with mutable binding
+# Export with mutable binding — mutations automatically re-export
 let export mut LEVEL = 1
-LEVEL <- LEVEL + 1            # Note: mutation does not re-export
+LEVEL <- LEVEL + 1            # Re-exports LEVEL="2" to the environment
 
 # String and boolean exports
 let export GREETING = "hello"
@@ -86,7 +86,7 @@ let export VERBOSE = true     # exports as "true"
 > ```
 >
 > `let export rec` is not allowed — functions cannot be exported.
-> Export happens at binding time only; subsequent mutations are not re-exported.
+> Mutations to `let export mut` variables automatically re-export the updated value.
 
 ### 4.4 Destructuring
 

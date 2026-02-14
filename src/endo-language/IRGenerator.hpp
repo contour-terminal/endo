@@ -251,6 +251,10 @@ class IRGenerator final: public ast::Visitor
     /// @return String-typed value, or nullptr on unsupported types.
     CoreVM::Value* convertToString(CoreVM::Value* value, std::string_view label);
 
+    /// Emits IR to export a variable's current value as a shell environment variable.
+    /// Loads the value from @p storage, converts to string, and calls the export callback.
+    void emitExportVariable(CoreVM::Value* storage, std::string const& name);
+
     /// Tries to generate IR for a builtin function call (string_length, etc.).
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
@@ -290,6 +294,7 @@ class IRGenerator final: public ast::Visitor
     {
         CoreVM::Value* value;
         bool isMutable;
+        bool isExported = false;
     };
 
     struct FSharpScope
@@ -304,7 +309,10 @@ class IRGenerator final: public ast::Visitor
 
     void pushFSharpScope();
     void popFSharpScope();
-    void bindFSharpVariable(std::string const& name, CoreVM::Value* value, bool isMutable = false);
+    void bindFSharpVariable(std::string const& name,
+                            CoreVM::Value* value,
+                            bool isMutable = false,
+                            bool isExported = false);
     void bindFSharpObjectVariable(std::string const& name,
                                   CoreVM::AllocaInstr* storage,
                                   bool isMutable = false);
