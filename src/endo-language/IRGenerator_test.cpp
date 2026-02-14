@@ -3321,6 +3321,50 @@ TEST_CASE("IRGenerator.FSharp.list_print_binding")
 }
 
 // =============================================================================
+// F# Type Tag Slot Tests (proper element type propagation in containers)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.type_tag.string_list")
+{
+    CHECK(executesWithOutput("println ['a', 'b', 'c']", "[\"a\"; \"b\"; \"c\"]\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.string_list_words")
+{
+    CHECK(executesWithOutput(R"(println ["hello", "world"])", "[\"hello\"; \"world\"]\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.nested_string_list")
+{
+    CHECK(executesWithOutput(R"(println [["a", "b"], ["c"]])", "[[\"a\"; \"b\"]; [\"c\"]]\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.option_with_string")
+{
+    CHECK(executesWithOutput(R"(println (Some "hello"))", "Some \"hello\"\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.result_with_string")
+{
+    CHECK(executesWithOutput(R"(println (Ok "success"))", "Ok \"success\"\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.tuple_with_string")
+{
+    CHECK(executesWithOutput(R"(println (42, "hello"))", "(42, \"hello\")\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.tuple3_mixed")
+{
+    CHECK(executesWithOutput(R"(println ("hello", 42, true))", "(\"hello\", 42, true)\n"));
+}
+
+TEST_CASE("IRGenerator.FSharp.type_tag.list_of_options")
+{
+    CHECK(executesWithOutput(R"(println [Some "a", None])", "[Some \"a\"; None]\n"));
+}
+
+// =============================================================================
 // F# Cons (::) Operator Tests
 // =============================================================================
 
@@ -4497,22 +4541,22 @@ TEST_CASE("IRGenerator.FSharp.list_replicate_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.char_range_basic")
 {
-    CHECK(executesWithOutput("print ['a'..'e']", "[a; b; c; d; e]"));
+    CHECK(executesWithOutput("print ['a'..'e']", "[\"a\"; \"b\"; \"c\"; \"d\"; \"e\"]"));
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_uppercase")
 {
-    CHECK(executesWithOutput("print ['A'..'E']", "[A; B; C; D; E]"));
+    CHECK(executesWithOutput("print ['A'..'E']", "[\"A\"; \"B\"; \"C\"; \"D\"; \"E\"]"));
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_digits")
 {
-    CHECK(executesWithOutput("print ['0'..'5']", "[0; 1; 2; 3; 4; 5]"));
+    CHECK(executesWithOutput("print ['0'..'5']", "[\"0\"; \"1\"; \"2\"; \"3\"; \"4\"; \"5\"]"));
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_single")
 {
-    CHECK(executesWithOutput("print ['x'..'x']", "[x]"));
+    CHECK(executesWithOutput("print ['x'..'x']", "[\"x\"]"));
 }
 
 TEST_CASE("IRGenerator.FSharp.char_range_empty")

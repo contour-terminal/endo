@@ -247,6 +247,59 @@ TypedObject* Runner::allocObject(uint16_t typeId)
     return obj;
 }
 
+TypedObject* Runner::makeNilList(LiteralType elemType)
+{
+    auto* obj = allocObject(BuiltinTypeId::List);
+    obj->tag = 0;                                     // Nil
+    obj->setSlot(2, static_cast<uint64_t>(elemType)); // type tag slot
+    return obj;
+}
+
+TypedObject* Runner::makeConsCell(uint64_t head, TypedObject* tail, LiteralType elemType)
+{
+    auto* obj = allocObject(BuiltinTypeId::List);
+    obj->tag = 1; // Cons
+    obj->setSlot(0, head);
+    obj->setSlot(1, reinterpret_cast<uint64_t>(tail));
+    obj->setSlot(2, static_cast<uint64_t>(elemType)); // type tag slot
+    return obj;
+}
+
+TypedObject* Runner::makeSomeOption(uint64_t value, LiteralType innerType)
+{
+    auto* obj = allocObject(BuiltinTypeId::Option);
+    obj->tag = 1; // Some
+    obj->setSlot(0, value);
+    obj->setSlot(1, static_cast<uint64_t>(innerType)); // type tag slot
+    return obj;
+}
+
+TypedObject* Runner::makeNoneOption()
+{
+    auto* obj = allocObject(BuiltinTypeId::Option);
+    obj->tag = 0; // None
+    // slot 1 (type tag) stays 0 = Void = unknown
+    return obj;
+}
+
+TypedObject* Runner::makeOkResult(uint64_t value, LiteralType innerType)
+{
+    auto* obj = allocObject(BuiltinTypeId::Result);
+    obj->tag = 1; // Ok
+    obj->setSlot(0, value);
+    obj->setSlot(1, static_cast<uint64_t>(innerType)); // type tag slot
+    return obj;
+}
+
+TypedObject* Runner::makeErrorResult(uint64_t value, LiteralType innerType)
+{
+    auto* obj = allocObject(BuiltinTypeId::Result);
+    obj->tag = 0; // Error
+    obj->setSlot(0, value);
+    obj->setSlot(1, static_cast<uint64_t>(innerType)); // type tag slot
+    return obj;
+}
+
 bool Runner::isKnownObject(uint64_t rawValue) const noexcept
 {
     if (rawValue == 0)

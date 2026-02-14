@@ -98,6 +98,24 @@ struct TypeDescriptor
     }
 };
 
+/// Packs two LiteralType values into a single uint64_t for Tuple2 type tag slots.
+constexpr uint64_t packTypeTag(LiteralType t0, LiteralType t1) noexcept
+{
+    return static_cast<uint64_t>(t0) | (static_cast<uint64_t>(t1) << 8);
+}
+
+/// Packs three LiteralType values into a single uint64_t for Tuple3 type tag slots.
+constexpr uint64_t packTypeTag(LiteralType t0, LiteralType t1, LiteralType t2) noexcept
+{
+    return static_cast<uint64_t>(t0) | (static_cast<uint64_t>(t1) << 8) | (static_cast<uint64_t>(t2) << 16);
+}
+
+/// Unpacks a LiteralType from a packed type tag at the given position (0, 1, or 2).
+constexpr LiteralType unpackTypeTag(uint64_t packed, uint8_t position) noexcept
+{
+    return static_cast<LiteralType>((packed >> (position * 8)) & 0xFF);
+}
+
 /// Well-known type IDs for built-in types.
 /// These are registered first and have fixed IDs.
 namespace BuiltinTypeId

@@ -19,7 +19,7 @@ void TypeRegistry::registerBuiltins()
     optionType->kind = TypeKind::Sum;
     optionType->id = BuiltinTypeId::Option;
     optionType->name = "Option";
-    optionType->slotCount = 1; // Maximum payload size (Some has 1 slot)
+    optionType->slotCount = 2; // 1 payload slot + 1 type tag slot
     optionType->variants = {
         { "None", 0 }, // tag 0: no payload
         { "Some", 1 }, // tag 1: 1 slot payload
@@ -31,7 +31,7 @@ void TypeRegistry::registerBuiltins()
     resultType->kind = TypeKind::Sum;
     resultType->id = BuiltinTypeId::Result;
     resultType->name = "Result";
-    resultType->slotCount = 1; // Both variants have 1 slot payload
+    resultType->slotCount = 2; // 1 payload slot + 1 type tag slot
     resultType->variants = {
         { "Error", 1 }, // tag 0: error payload
         { "Ok", 1 },    // tag 1: success payload
@@ -43,11 +43,11 @@ void TypeRegistry::registerBuiltins()
     tuple2Type->kind = TypeKind::Product;
     tuple2Type->id = BuiltinTypeId::Tuple2;
     tuple2Type->name = "Tuple2";
-    tuple2Type->slotCount = 2;
     tuple2Type->fields = {
         { "", 0 }, // slot 0 (unnamed positional)
         { "", 1 }, // slot 1
     };
+    tuple2Type->slotCount = 3; // 2 element slots + 1 packed type tag slot
     addType(std::move(tuple2Type));
 
     // Tuple3: 3-element product type
@@ -55,12 +55,12 @@ void TypeRegistry::registerBuiltins()
     tuple3Type->kind = TypeKind::Product;
     tuple3Type->id = BuiltinTypeId::Tuple3;
     tuple3Type->name = "Tuple3";
-    tuple3Type->slotCount = 3;
     tuple3Type->fields = {
         { "", 0 }, // slot 0
         { "", 1 }, // slot 1
         { "", 2 }, // slot 2
     };
+    tuple3Type->slotCount = 4; // 3 element slots + 1 packed type tag slot
     addType(std::move(tuple3Type));
 
     // List: Nil (tag=0, 0 payload slots) | Cons (tag=1, 2 slots: head + tail)
@@ -68,7 +68,7 @@ void TypeRegistry::registerBuiltins()
     listType->kind = TypeKind::Sum;
     listType->id = BuiltinTypeId::List;
     listType->name = "List";
-    listType->slotCount = 2; // Maximum payload size (Cons has 2 slots: head + tail)
+    listType->slotCount = 3; // 2 payload slots (head + tail) + 1 type tag slot
     listType->variants = {
         { "Nil", 0 },  // tag 0: empty list
         { "Cons", 2 }, // tag 1: head (slot 0) + tail (slot 1)

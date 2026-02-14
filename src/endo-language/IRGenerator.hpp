@@ -518,6 +518,50 @@ class IRGenerator final: public ast::Visitor
     void popFSharpFunctionContext();
     [[nodiscard]] FSharpFunctionContext* currentFSharpFunctionContext();
 
+    // IR emit helpers for container types with type tag slots.
+    // Each emits ObjAlloc → ObjSetTag → ObjSetSlot(payload) → ObjSetSlot(type tag).
+
+    /// Emits IR for an empty (Nil) list with the given element type tag.
+    CoreVM::Value* emitNilList(CoreVM::LiteralType elemType, std::string_view label);
+
+    /// Emits IR for a Cons cell (head :: tail) with the given element type tag.
+    CoreVM::Value* emitListCons(CoreVM::Value* head,
+                                CoreVM::Value* tail,
+                                CoreVM::LiteralType elemType,
+                                std::string_view label);
+
+    /// Emits IR for a Some(value) option with the given inner type tag.
+    CoreVM::Value* emitSomeOption(CoreVM::Value* value,
+                                  CoreVM::LiteralType innerType,
+                                  std::string_view label);
+
+    /// Emits IR for a None option.
+    CoreVM::Value* emitNoneOption(std::string_view label);
+
+    /// Emits IR for an Ok(value) result with the given inner type tag.
+    CoreVM::Value* emitOkResult(CoreVM::Value* value, CoreVM::LiteralType innerType, std::string_view label);
+
+    /// Emits IR for an Error(value) result with the given inner type tag.
+    CoreVM::Value* emitErrorResult(CoreVM::Value* value,
+                                   CoreVM::LiteralType innerType,
+                                   std::string_view label);
+
+    /// Emits IR for a Tuple2 with packed type tags in slot 2.
+    CoreVM::Value* emitTuple2(CoreVM::Value* fst,
+                              CoreVM::Value* snd,
+                              CoreVM::LiteralType fstType,
+                              CoreVM::LiteralType sndType,
+                              std::string_view label);
+
+    /// Emits IR for a Tuple3 with packed type tags in slot 3.
+    CoreVM::Value* emitTuple3(CoreVM::Value* e0,
+                              CoreVM::Value* e1,
+                              CoreVM::Value* e2,
+                              CoreVM::LiteralType t0,
+                              CoreVM::LiteralType t1,
+                              CoreVM::LiteralType t2,
+                              std::string_view label);
+
     /// Creates an alloca in the entry block of the current handler.
     /// This ensures allocas are always at the beginning, which is required
     /// for proper stack tracking in the TargetCodeGenerator.

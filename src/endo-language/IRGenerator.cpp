@@ -859,17 +859,10 @@ CoreVM::Value* IRGenerator::wrapInResultOrOption(CoreVM::Value* value, ReturnKin
     if (kind == ReturnKind::Plain)
         return value; // Should not happen, but safety fallback
 
-    auto typeId =
-        (kind == ReturnKind::Result) ? CoreVM::BuiltinTypeId::Result : CoreVM::BuiltinTypeId::Option;
-    auto const* typeName = (kind == ReturnKind::Result) ? "result" : "option";
-
-    CoreVM::Value* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)),
-                                                 std::format("autowrap.{}", typeName));
-    obj = _builder.createObjSetTag(
-        obj, _builder.get(CoreVM::CoreNumber(1)), std::format("autowrap.{}.tag", typeName)); // Ok=1 or Some=1
-    obj = _builder.createObjSetSlot(
-        obj, _builder.get(CoreVM::CoreNumber(0)), value, std::format("autowrap.{}.value", typeName));
-    return obj;
+    if (kind == ReturnKind::Result)
+        return emitOkResult(value, value->type(), "autowrap.result");
+    else
+        return emitSomeOption(value, value->type(), "autowrap.option");
 }
 
 std::string IRGenerator::generateLambdaName()
@@ -1148,6 +1141,163 @@ CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType t
     CoreVM::Instr* inserted = entryBlock->insertAfterAllocas(std::move(allocaInstr));
 
     return static_cast<CoreVM::AllocaInstr*>(inserted);
+}
+
+// ---------------------------------------------------------------------------
+// Container emit helpers (type tag slots)
+// ---------------------------------------------------------------------------
+
+CoreVM::Value* IRGenerator::emitNilList(CoreVM::LiteralType elemType, std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot2,
+                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(elemType))),
+                                    std::string(label) + ".etype");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitListCons(CoreVM::Value* head,
+                                         CoreVM::Value* tail,
+                                         CoreVM::LiteralType elemType,
+                                         std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj, slot0, head, std::string(label) + ".head");
+    obj = _builder.createObjSetSlot(obj, slot1, tail, std::string(label) + ".tail");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot2,
+                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(elemType))),
+                                    std::string(label) + ".etype");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitSomeOption(CoreVM::Value* value,
+                                           CoreVM::LiteralType innerType,
+                                           std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot1,
+                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
+                                    std::string(label) + ".itype");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitNoneOption(std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
+    // slot 1 (type tag) defaults to 0 = Void = unknown (from zero-initialization)
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitOkResult(CoreVM::Value* value,
+                                         CoreVM::LiteralType innerType,
+                                         std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot1,
+                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
+                                    std::string(label) + ".itype");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitErrorResult(CoreVM::Value* value,
+                                            CoreVM::LiteralType innerType,
+                                            std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj, slot0, value, std::string(label) + ".value");
+    obj = _builder.createObjSetSlot(obj,
+                                    slot1,
+                                    _builder.get(CoreVM::CoreNumber(static_cast<int>(innerType))),
+                                    std::string(label) + ".itype");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitTuple2(CoreVM::Value* fst,
+                                       CoreVM::Value* snd,
+                                       CoreVM::LiteralType fstType,
+                                       CoreVM::LiteralType sndType,
+                                       std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetSlot(obj, slot0, fst, std::string(label) + ".fst");
+    obj = _builder.createObjSetSlot(obj, slot1, snd, std::string(label) + ".snd");
+    obj = _builder.createObjSetSlot(
+        obj,
+        slot2,
+        _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(CoreVM::packTypeTag(fstType, sndType)))),
+        std::string(label) + ".ttag");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitTuple3(CoreVM::Value* e0,
+                                       CoreVM::Value* e1,
+                                       CoreVM::Value* e2,
+                                       CoreVM::LiteralType t0,
+                                       CoreVM::LiteralType t1,
+                                       CoreVM::LiteralType t2,
+                                       std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple3));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+    auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
+    auto* slot3 = _builder.get(CoreVM::CoreNumber(3));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetSlot(obj, slot0, e0, std::string(label) + ".e0");
+    obj = _builder.createObjSetSlot(obj, slot1, e1, std::string(label) + ".e1");
+    obj = _builder.createObjSetSlot(obj, slot2, e2, std::string(label) + ".e2");
+    obj = _builder.createObjSetSlot(
+        obj,
+        slot3,
+        _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(CoreVM::packTypeTag(t0, t1, t2)))),
+        std::string(label) + ".ttag");
+    return obj;
 }
 
 CoreVM::NativeCallback* IRGenerator::findCallback(std::string const& signature) const
@@ -2771,8 +2921,47 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
     }
     if (value->type() == CoreVM::LiteralType::Object)
     {
-        // Check inner type annotation first (e.g., record field with known primitive type).
-        // This takes priority over object type ID checks because it carries more specific info
+        // Check if value is a known typed object via annotation or IR chain analysis.
+        // This must come BEFORE getInnerType() because container types (Option, Result, Tuple)
+        // use annotateInnerType() to describe their payload type, not themselves.
+        bool isList = false;
+        bool isTypedObject = false;
+        if (auto objTypeId = getObjectTypeId(value))
+        {
+            isList = (*objTypeId == CoreVM::BuiltinTypeId::List);
+            if (!isList)
+            {
+                // Tuples, Options, Results, and records are all typed objects
+                isTypedObject = true;
+            }
+        }
+        else if (auto info = tryGetObjectInfo(value))
+        {
+            isList = (info->typeId == CoreVM::BuiltinTypeId::List);
+            if (!isList)
+                isTypedObject = true;
+        }
+
+        if (isList)
+        {
+            auto* callback = findCallback("list_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
+            }
+        }
+        if (isTypedObject)
+        {
+            auto* callback = findCallback("object_to_string(I)S");
+            if (callback)
+            {
+                return _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".obj2s");
+            }
+        }
+
+        // For non-container Object values, check inner type annotation
         // (e.g., a string field extracted from a record via pattern matching).
         if (auto innerType = getInnerType(value))
         {
@@ -2788,50 +2977,7 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                     return _builder.createN2S(value, std::string(label) + ".n2s");
                 case CoreVM::LiteralType::Float:
                     return _builder.createF2S(value, std::string(label) + ".f2s");
-                default: break; // Fall through to object type checks
-            }
-        }
-
-        // Check if value is a known typed object via annotation or IR chain analysis
-        bool isList = false;
-        bool isRecord = false;
-        if (auto objTypeId = getObjectTypeId(value))
-        {
-            isList = (*objTypeId == CoreVM::BuiltinTypeId::List);
-            if (!isList)
-            {
-                // Check if this is a record type (custom product type)
-                for (auto const& [name, info]: _recordTypes)
-                {
-                    if (info.typeId == *objTypeId)
-                    {
-                        isRecord = true;
-                        break;
-                    }
-                }
-            }
-        }
-        else if (auto info = tryGetObjectInfo(value))
-        {
-            isList = (info->typeId == CoreVM::BuiltinTypeId::List);
-        }
-
-        if (isList)
-        {
-            auto* callback = findCallback("list_to_string(I)S");
-            if (callback)
-            {
-                return _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".list2s");
-            }
-        }
-        if (isRecord)
-        {
-            auto* callback = findCallback("object_to_string(I)S");
-            if (callback)
-            {
-                return _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".rec2s");
+                default: break;
             }
         }
         // Fallback: assume numeric for unknown object types
@@ -3088,20 +3234,14 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         auto* getValue = _builder.createCallFunction(
             _builder.getBuiltinFunction(*envGetCallback), { keyReload2 }, "env.get");
 
-        // Construct Some(value): ObjAlloc Option -> ObjSetTag 1 -> ObjSetSlot 0 value
-        auto* typeIdSome = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-        CoreVM::Value* someObj = _builder.createObjAlloc(typeIdSome, "env.some.option");
-        someObj = _builder.createObjSetTag(someObj, _builder.get(CoreVM::CoreNumber(1)), "env.some.tag");
-        someObj = _builder.createObjSetSlot(
-            someObj, _builder.get(CoreVM::CoreNumber(0)), getValue, "env.some.value");
+        // Construct Some(value)
+        auto* someObj = emitSomeOption(getValue, CoreVM::LiteralType::String, "env.some.option");
         _builder.createStore(resultStorage, someObj);
         _builder.createBr(mergeBlock);
 
         // noneBlock: construct None
         _builder.setInsertPoint(noneBlock);
-        auto* typeIdNone = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-        CoreVM::Value* noneObj = _builder.createObjAlloc(typeIdNone, "env.none.option");
-        noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "env.none.tag");
+        auto* noneObj = emitNoneOption("env.none.option");
         _builder.createStore(resultStorage, noneObj);
         _builder.createBr(mergeBlock);
 
@@ -3904,9 +4044,6 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         return;
     }
 
-    // Determine the type ID
-    auto typeId = node.elements.size() == 2 ? CoreVM::BuiltinTypeId::Tuple2 : CoreVM::BuiltinTypeId::Tuple3;
-
     // Codegen all elements, storing each to an alloca immediately.
     // Elements like `env "X"` create control-flow blocks; storing before the next
     // element's codegen prevents block-boundary cleanup from discarding values.
@@ -3925,16 +4062,21 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         elemAllocas.push_back(alloca);
     }
 
-    // Allocate the tuple object and reload each element from its alloca
-    CoreVM::Value* obj = _builder.createObjAlloc(_builder.get(CoreVM::CoreNumber(typeId)), "tuple");
-
-    for (size_t i = 0; i < elemAllocas.size(); ++i)
+    // Reload each element from its alloca and emit the tuple
+    if (node.elements.size() == 2)
     {
-        auto* elemVal = _builder.createLoad(elemAllocas[i], "tuple.elem.reload." + std::to_string(i));
-        obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(i)), elemVal, "tuple.slot");
+        auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
+        auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
+        _result = emitTuple2(e0, e1, elemAllocas[0]->type(), elemAllocas[1]->type(), "tuple");
     }
-
-    _result = obj;
+    else
+    {
+        auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
+        auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
+        auto* e2 = _builder.createLoad(elemAllocas[2], "tuple.elem.reload.2");
+        _result = emitTuple3(
+            e0, e1, e2, elemAllocas[0]->type(), elemAllocas[1]->type(), elemAllocas[2]->type(), "tuple");
+    }
 }
 
 void IRGenerator::visit(ast::MutAssignStmt const& node)
@@ -4445,9 +4587,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
                 _shellCommandCaptureMode = false; // Statement level → normal I/O
 
                 // Build empty list for the variadic parameter
-                auto* nilTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-                CoreVM::Value* list = _builder.createObjAlloc(nilTypeId, "varargs.nil");
-                list = _builder.createObjSetTag(list, _builder.get(CoreVM::CoreNumber(0)), "varargs.nil.tag");
+                auto* list = emitNilList(CoreVM::LiteralType::Void, "varargs.nil");
                 std::vector<CoreVM::Value*> args = { list };
 
                 generateFSharpCall(func, ident->name, args);
@@ -5610,20 +5750,12 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
 
         // Build a list from the variadic arguments (args[fixedCount..])
         // Start with Nil (empty list)
-        auto* nilTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-        CoreVM::Value* list = _builder.createObjAlloc(nilTypeId, "varargs.nil");
-        list = _builder.createObjSetTag(list, _builder.get(CoreVM::CoreNumber(0)), "varargs.nil.tag"); // Nil
+        CoreVM::Value* list = emitNilList(CoreVM::LiteralType::Void, "varargs.nil");
 
         // Build Cons cells in reverse order so first extra arg is at the head
         for (auto i = static_cast<int>(args.size()) - 1; i >= static_cast<int>(fixedCount); --i)
         {
-            auto* consTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-            CoreVM::Value* cons = _builder.createObjAlloc(consTypeId, "varargs.cons");
-            cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "varargs.cons.tag");
-            cons =
-                _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), args[i], "varargs.head");
-            cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), list, "varargs.tail");
-            list = cons;
+            list = emitListCons(args[i], list, args[i]->type(), "varargs.cons");
         }
 
         // Annotate list element literal type if all variadic args share the same type
@@ -6723,13 +6855,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
     // which will overwrite _builder.sourceLocation() with their own locations.
     auto const listExprLocation = _builder.sourceLocation();
 
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-
     // Empty list: just allocate a Nil (tag=0)
     if (node.elements.empty())
     {
-        CoreVM::Value* obj = _builder.createObjAlloc(typeId, "list.nil");
-        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(0)), "list.nil.tag");
+        CoreVM::Value* obj = emitNilList(CoreVM::LiteralType::Void, "list.nil");
         _result = obj;
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
         return;
@@ -6783,8 +6912,8 @@ void IRGenerator::visit(ast::ListExpr const& node)
     }
 
     // Build the list right-to-left: start with Nil, then prepend elements
-    CoreVM::Value* acc = _builder.createObjAlloc(typeId, "list.nil");
-    acc = _builder.createObjSetTag(acc, _builder.get(CoreVM::CoreNumber(0)), "list.nil.tag");
+    auto commonElemType = determineCommonLiteralType(elemValues);
+    CoreVM::Value* acc = emitNilList(commonElemType.value_or(CoreVM::LiteralType::Void), "list.nil");
 
     for (int i = static_cast<int>(elemValues.size()) - 1; i >= 0; --i)
     {
@@ -6794,14 +6923,10 @@ void IRGenerator::visit(ast::ListExpr const& node)
         _builder.createStore(accStorage, acc);
 
         // Create a Cons cell: tag=1, slot[0]=head, slot[1]=tail
-        CoreVM::Value* cons = _builder.createObjAlloc(typeId, "list.cons." + std::to_string(i));
-        cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "list.cons.tag");
-
         auto* head = _builder.createLoad(elemAllocas[i], "list.head." + std::to_string(i));
-        cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), head, "list.cons.head");
-
         auto* tail = _builder.createLoad(accStorage, "list.tail." + std::to_string(i));
-        cons = _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), tail, "list.cons.tail");
+        CoreVM::Value* cons = emitListCons(
+            head, tail, commonElemType.value_or(CoreVM::LiteralType::Void), "list.cons." + std::to_string(i));
 
         acc = cons;
     }
@@ -6842,15 +6967,9 @@ void IRGenerator::visit(ast::ConsExpr const& node)
     _builder.createStore(tailStorage, tailVal);
 
     // Create a Cons cell: OALLOC List, OSETTAG 1, OSETSLOT 0 head, OSETSLOT 1 tail
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "cons");
-    obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "cons.tag");
-
     auto* head = _builder.createLoad(headStorage, "cons.head");
-    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), head, "cons.head.set");
-
     auto* tail = _builder.createLoad(tailStorage, "cons.tail");
-    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), tail, "cons.tail.set");
+    CoreVM::Value* obj = emitListCons(head, tail, headVal->type(), "cons");
 
     _result = obj;
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
@@ -6981,9 +7100,7 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
 
     // Accumulator: starts as Nil
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "range.acc");
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "range.nil");
-    nil = _builder.createObjSetTag(nil, _builder.get(CoreVM::CoreNumber(0)), "range.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Number, "range.nil");
     _builder.createStore(accStorage, nil);
 
     // Create loop blocks
@@ -7016,16 +7133,9 @@ void IRGenerator::visit(ast::ListRangeExpr const& node)
     _builder.createStore(accTemp, accBody);
 
     // Create Cons cell: tag=1, slot[0]=head(i), slot[1]=tail(acc)
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "range.cons");
-    cons = _builder.createObjSetTag(cons, _builder.get(CoreVM::CoreNumber(1)), "range.cons.tag");
-
     auto* headReload = _builder.createLoad(iTemp, "range.head.reload");
-    cons =
-        _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(0)), headReload, "range.cons.head");
-
     auto* tailReload = _builder.createLoad(accTemp, "range.tail.reload");
-    cons =
-        _builder.createObjSetSlot(cons, _builder.get(CoreVM::CoreNumber(1)), tailReload, "range.cons.tail");
+    auto* cons = emitListCons(headReload, tailReload, CoreVM::LiteralType::Number, "range.cons");
 
     // Store new acc
     _builder.createStore(accStorage, cons);
@@ -7068,8 +7178,7 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.createStore(srcStorage, sourceVal);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "comp.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "comp.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "comp.nil");
     _builder.createStore(accStorage, nil);
 
     auto const compElemType = getListElementLiteralType(sourceVal).value_or(CoreVM::LiteralType::Number);
@@ -7147,12 +7256,9 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.createStore(accTmp, accForCons);
 
     // Create Cons cell: tag=1, slot[0]=bodyResult, slot[1]=oldAcc
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "comp.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "comp.cons.tag");
     auto* bodyReload = _builder.createLoad(bodyTmp, "comp.body.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, bodyReload, "comp.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "comp.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "comp.cons.tail");
+    auto* cons = emitListCons(bodyReload, accReload, bodyReload->type(), "comp.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -7164,8 +7270,7 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "comp.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "comp.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "comp.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "comp.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -7191,12 +7296,9 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     auto* revAccForCons = _builder.createLoad(revAccStorage, "comp.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "comp.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "comp.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "comp.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "comp.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "comp.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "comp.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "comp.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -7350,10 +7452,6 @@ void IRGenerator::visit(ast::OptionExpr const& node)
     // - Tag 0 = None (no payload)
     // - Tag 1 = Some (1 slot payload)
 
-    // Allocate Option object
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "option");
-
     if (node.isSome)
     {
         // Some value - evaluate the inner expression
@@ -7366,10 +7464,8 @@ void IRGenerator::visit(ast::OptionExpr const& node)
         if (!innerValue)
             return;
 
-        // Set tag to 1 (Some) and store the value in slot 0
-        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(1)), "option.tag");
-        obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), innerValue, "option.value");
-        _result = obj;
+        // Create Some: tag=1, slot[0]=value
+        _result = emitSomeOption(innerValue, innerValue->type(), "option");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
         annotateInnerType(_result, innerValue->type());
         if (auto objTypeId = getObjectTypeId(innerValue))
@@ -7377,9 +7473,8 @@ void IRGenerator::visit(ast::OptionExpr const& node)
     }
     else
     {
-        // None - just set tag to 0, no payload needed
-        obj = _builder.createObjSetTag(obj, _builder.get(CoreVM::CoreNumber(0)), "option.tag");
-        _result = obj;
+        // None - tag=0, no payload
+        _result = emitNoneOption("option");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
     }
 }
@@ -7402,15 +7497,12 @@ void IRGenerator::visit(ast::ResultExpr const& node)
     if (!payloadValue)
         return;
 
-    // Allocate Result object
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Result));
-    CoreVM::Value* obj = _builder.createObjAlloc(typeId, "result");
+    // Create Result object: Ok (tag=1) or Error (tag=0), payload in slot 0
+    if (node.isOk)
+        _result = emitOkResult(payloadValue, payloadValue->type(), "result");
+    else
+        _result = emitErrorResult(payloadValue, payloadValue->type(), "result");
 
-    // Set tag (0=Error, 1=Ok) and store the payload in slot 0
-    CoreVM::Value* tag = _builder.get(CoreVM::CoreNumber(node.isOk ? 1 : 0));
-    obj = _builder.createObjSetTag(obj, tag, "result.tag");
-    obj = _builder.createObjSetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), payloadValue, "result.value");
-    _result = obj;
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
     if (node.isOk)
     {
@@ -7708,9 +7800,7 @@ void IRGenerator::generateOptionMapWithValue(ast::Expr const* funcExpr, CoreVM::
 
     // None path: create None option
     _builder.setInsertPoint(noneBlock);
-    auto* noneTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* noneObj = _builder.createObjAlloc(noneTypeId, "optmap.none");
-    noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "optmap.none.tag");
+    auto* noneObj = emitNoneOption("optmap.none");
     _builder.createStore(resultStorage, noneObj, "optmap.none.store");
     _builder.createBr(continueBlock);
 
@@ -7744,12 +7834,8 @@ void IRGenerator::generateOptionMapWithValue(ast::Expr const* funcExpr, CoreVM::
     _builder.createStore(mappedTmp, mapped, "optmap.mapped.store");
 
     // Wrap result in Some
-    auto* someTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* someObj = _builder.createObjAlloc(someTypeId, "optmap.some");
-    someObj = _builder.createObjSetTag(someObj, _builder.get(CoreVM::CoreNumber(1)), "optmap.some.tag");
     auto* mappedReload = _builder.createLoad(mappedTmp, "optmap.mapped.reload");
-    someObj = _builder.createObjSetSlot(
-        someObj, _builder.get(CoreVM::CoreNumber(0)), mappedReload, "optmap.some.value");
+    auto* someObj = emitSomeOption(mappedReload, mappedType, "optmap.some");
     _builder.createStore(resultStorage, someObj, "optmap.some.store");
     _builder.createBr(continueBlock);
 
@@ -7809,9 +7895,7 @@ void IRGenerator::generateOptionBindWithValue(ast::Expr const* funcExpr, CoreVM:
 
     // None path: create None option
     _builder.setInsertPoint(noneBlock);
-    auto* noneTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* noneObj = _builder.createObjAlloc(noneTypeId, "optbind.none");
-    noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "optbind.none.tag");
+    auto* noneObj = emitNoneOption("optbind.none");
     _builder.createStore(resultStorage, noneObj, "optbind.none.store");
     _builder.createBr(continueBlock);
 
@@ -8651,9 +8735,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
 
     // None path: build a None object
     _builder.setInsertPoint(noneBlock);
-    auto* noneTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    CoreVM::Value* noneObj = _builder.createObjAlloc(noneTypeId, "optchain.none.obj");
-    noneObj = _builder.createObjSetTag(noneObj, _builder.get(CoreVM::CoreNumber(0)), "optchain.none.tag");
+    auto* noneObj = emitNoneOption("optchain.none.obj");
     _builder.createStore(resultStorage, noneObj, "optchain.none.store");
     _builder.createBr(continueBlock);
 
@@ -8749,12 +8831,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
                 innerVal, _builder.get(CoreVM::CoreNumber(fieldDef.offset)), "optchain." + node.fieldName);
 
             // Wrap the field value in Some
-            auto* someTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-            CoreVM::Value* someObj = _builder.createObjAlloc(someTypeId, "optchain.some.obj");
-            someObj =
-                _builder.createObjSetTag(someObj, _builder.get(CoreVM::CoreNumber(1)), "optchain.some.tag");
-            someObj = _builder.createObjSetSlot(
-                someObj, _builder.get(CoreVM::CoreNumber(0)), fieldValue, "optchain.some.value");
+            auto* someObj = emitSomeOption(fieldValue, fieldValue->type(), "optchain.some.obj");
 
             // Annotate inner type for downstream use (e.g., ?| default value, or further ?. chaining)
             if (auto it = typeInfo->fieldTypes.find(node.fieldName); it != typeInfo->fieldTypes.end())
@@ -9027,8 +9104,6 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
 
 void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
@@ -9049,8 +9124,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     _builder.createStore(srcStorage, listValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "map.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "map.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "map.nil");
     _builder.createStore(accStorage, nil);
 
     auto const mapElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
@@ -9109,12 +9183,9 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     _builder.createStore(accTmp, accForCons);
 
     // Create Cons cell: tag=1, slot[0]=mapped, slot[1]=oldAcc
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "map.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "map.cons.tag");
     auto* mappedReload = _builder.createLoad(mappedTmp, "map.mapped.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, mappedReload, "map.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "map.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "map.cons.tail");
+    auto* cons = emitListCons(mappedReload, accReload, CoreVM::LiteralType::Void, "map.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -9126,8 +9197,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "map.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "map.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "map.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "map.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -9150,12 +9220,9 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     auto* revAccForCons = _builder.createLoad(revAccStorage, "map.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "map.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "map.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "map.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "map.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "map.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "map.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "map.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -9167,8 +9234,6 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
 
 void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
@@ -9189,8 +9254,7 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     _builder.createStore(srcStorage, listValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "filter.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "filter.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "filter.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "filter.nil");
     _builder.createStore(accStorage, nil);
 
     auto const filterElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
@@ -9258,12 +9322,9 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     auto* elemTmp = createAllocaInEntryBlock(filterElemType, "filter.elem.tmp");
     _builder.createStore(elemTmp, elemForCons);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "filter.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "filter.cons.tag");
     auto* elemReload = _builder.createLoad(elemTmp, "filter.elem.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "filter.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "filter.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "filter.cons.tail");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "filter.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -9275,8 +9336,7 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "filter.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "filter.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "filter.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "filter.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -9299,12 +9359,9 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     auto* revAccForCons = _builder.createLoad(revAccStorage, "filter.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "filter.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "filter.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "filter.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "filter.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "filter.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "filter.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "filter.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -9399,11 +9456,8 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
 
 void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* optionTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil / None
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons / Some
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / payload
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
     // Resolve the function to call
@@ -9450,8 +9504,7 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
 
     // Empty list → return None
     _builder.setInsertPoint(noneBlock);
-    CoreVM::Value* noneVal = _builder.createObjAlloc(optionTypeId, "reduce.none");
-    noneVal = _builder.createObjSetTag(noneVal, tag0, "reduce.none.tag");
+    auto* noneVal = emitNoneOption("reduce.none");
     _builder.createStore(resultStorage, noneVal);
     _builder.createBr(endBlock);
 
@@ -9504,10 +9557,8 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     auto* accTmp = createAllocaInEntryBlock(reduceElemType, "reduce.acc.tmp");
     _builder.createStore(accTmp, finalAcc);
 
-    CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "reduce.some");
-    someVal = _builder.createObjSetTag(someVal, tag1, "reduce.some.tag");
     auto* accReload = _builder.createLoad(accTmp, "reduce.acc.reload");
-    someVal = _builder.createObjSetSlot(someVal, slot0, accReload, "reduce.some.val");
+    auto* someVal = emitSomeOption(accReload, CoreVM::LiteralType::Void, "reduce.some");
 
     _builder.createStore(resultStorage, someVal);
     _builder.createBr(endBlock);
@@ -9520,8 +9571,6 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
 
 void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
@@ -9531,8 +9580,7 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
     _builder.createStore(srcStorage, listValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "rev.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "rev.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "rev.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "rev.nil");
     _builder.createStore(accStorage, nil);
 
     // Create blocks
@@ -9567,12 +9615,9 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
     _builder.createStore(accTmp, accForCons);
 
     // Create Cons cell: tag=1, slot[0]=head, slot[1]=oldAcc
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "rev.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "rev.cons.tag");
     auto* elemReload = _builder.createLoad(elemTmp, "rev.elem.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "rev.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "rev.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "rev.cons.tail");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "rev.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -9589,10 +9634,8 @@ void IRGenerator::generateReverseIR(CoreVM::Value* listValue)
 
 void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value* listValue)
 {
-    auto* optionTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Option));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil / None
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons / Some
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / payload
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
     // Resolve predicate function
@@ -9663,17 +9706,14 @@ void IRGenerator::generateFindIR(std::string const& predParamName, CoreVM::Value
     auto* elemTmp = createAllocaInEntryBlock(findElemType, "find.elem.tmp");
     _builder.createStore(elemTmp, foundElem);
 
-    CoreVM::Value* someVal = _builder.createObjAlloc(optionTypeId, "find.some");
-    someVal = _builder.createObjSetTag(someVal, tag1, "find.some.tag");
     auto* elemReload = _builder.createLoad(elemTmp, "find.elem.reload");
-    someVal = _builder.createObjSetSlot(someVal, slot0, elemReload, "find.some.val");
+    auto* someVal = emitSomeOption(elemReload, CoreVM::LiteralType::Void, "find.some");
     _builder.createStore(resultStorage, someVal);
     _builder.createBr(endBlock);
 
     // None: list exhausted
     _builder.setInsertPoint(noneBlock);
-    CoreVM::Value* noneVal = _builder.createObjAlloc(optionTypeId, "find.none");
-    noneVal = _builder.createObjSetTag(noneVal, tag0, "find.none.tag");
+    auto* noneVal = emitNoneOption("find.none");
     _builder.createStore(resultStorage, noneVal);
     _builder.createBr(endBlock);
 
@@ -9938,8 +9978,6 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
 
 void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listValue)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
@@ -9954,8 +9992,7 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     _builder.createStore(counterStorage, countValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "take.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "take.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "take.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "take.nil");
     _builder.createStore(accStorage, nil);
 
     // Create blocks
@@ -9997,12 +10034,9 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     auto* accForCons = _builder.createLoad(accStorage, "take.acc.for_cons");
     _builder.createStore(accTmp, accForCons);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "take.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "take.cons.tag");
     auto* elemReload = _builder.createLoad(elemTmp, "take.elem.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "take.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "take.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "take.cons.tail");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "take.cons");
     _builder.createStore(accStorage, cons);
 
     // Decrement counter
@@ -10019,8 +10053,7 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "take.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "take.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "take.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "take.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -10043,12 +10076,9 @@ void IRGenerator::generateTakeIR(CoreVM::Value* countValue, CoreVM::Value* listV
     auto* revAccForCons = _builder.createLoad(revAccStorage, "take.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "take.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "take.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "take.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "take.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "take.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "take.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "take.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -10120,9 +10150,6 @@ void IRGenerator::generateDropIR(CoreVM::Value* countValue, CoreVM::Value* listV
 
 void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
 {
-    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
@@ -10134,8 +10161,7 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
     _builder.createStore(srcBStorage, listB);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "zip.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "zip.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Object, "zip.nil");
     _builder.createStore(accStorage, nil);
 
     // Temp allocas for head values (must survive ObjAlloc for tuple + cons)
@@ -10197,11 +10223,10 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
     auto* headBTmp2 = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "zip.headB.tmp2");
     _builder.createStore(headBTmp2, headBReload);
 
-    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "zip.tuple");
     auto* headAFinal = _builder.createLoad(headATmp2, "zip.headA.final");
-    tuple = _builder.createObjSetSlot(tuple, slot0, headAFinal, "zip.tuple.fst");
     auto* headBFinal = _builder.createLoad(headBTmp2, "zip.headB.final");
-    tuple = _builder.createObjSetSlot(tuple, slot1, headBFinal, "zip.tuple.snd");
+    auto* tuple =
+        emitTuple2(headAFinal, headBFinal, CoreVM::LiteralType::Void, CoreVM::LiteralType::Void, "zip.tuple");
     _builder.createStore(tupleTmp, tuple);
 
     // Cons tuple onto reversed accumulator
@@ -10215,12 +10240,9 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
     auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "zip.acc.store.tmp");
     _builder.createStore(accStoreTmp, accReloadPre);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "zip.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "zip.cons.tag");
     auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "zip.tuple.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "zip.cons.head");
     auto* accForSlot = _builder.createLoad(accStoreTmp, "zip.acc.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "zip.cons.tail");
+    auto* cons = emitListCons(tupleForSlot, accForSlot, CoreVM::LiteralType::Object, "zip.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -10232,8 +10254,7 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "zip.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(listTypeId, "zip.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "zip.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Object, "zip.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -10256,12 +10277,9 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
     auto* revAccForCons = _builder.createLoad(revAccStorage, "zip.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(listTypeId, "zip.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "zip.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "zip.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "zip.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "zip.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "zip.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Object, "zip.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -10273,8 +10291,6 @@ void IRGenerator::generateZipIR(CoreVM::Value* listA, CoreVM::Value* listB)
 
 void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
@@ -10286,8 +10302,7 @@ void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
     auto* innerSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.inner.src");
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "flatten.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(typeId, "flatten.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "flatten.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "flatten.nil");
     _builder.createStore(accStorage, nil);
 
     // Create blocks
@@ -10344,12 +10359,9 @@ void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
     auto* accForCons = _builder.createLoad(accStorage, "flatten.acc.for_cons");
     _builder.createStore(accTmp, accForCons);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(typeId, "flatten.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "flatten.cons.tag");
     auto* elemReload = _builder.createLoad(elemTmp, "flatten.elem.reload");
-    cons = _builder.createObjSetSlot(cons, slot0, elemReload, "flatten.cons.head");
     auto* accReload = _builder.createLoad(accTmp, "flatten.acc.reload");
-    cons = _builder.createObjSetSlot(cons, slot1, accReload, "flatten.cons.tail");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "flatten.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(innerCondBlock);
@@ -10361,8 +10373,7 @@ void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
     _builder.setInsertPoint(revInitBlock);
     auto* revSrcInit = _builder.createLoad(accStorage, "flatten.rev.src.init");
     _builder.createStore(revSrcStorage, revSrcInit);
-    CoreVM::Value* revNil = _builder.createObjAlloc(typeId, "flatten.rev.nil");
-    revNil = _builder.createObjSetTag(revNil, tag0, "flatten.rev.nil.tag");
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "flatten.rev.nil");
     _builder.createStore(revAccStorage, revNil);
     _builder.createBr(revCondBlock);
 
@@ -10385,12 +10396,9 @@ void IRGenerator::generateFlattenIR(CoreVM::Value* listOfLists)
     auto* revAccForCons = _builder.createLoad(revAccStorage, "flatten.rev.acc.for_cons");
     _builder.createStore(revAccTmp, revAccForCons);
 
-    CoreVM::Value* revCons = _builder.createObjAlloc(typeId, "flatten.rev.cons");
-    revCons = _builder.createObjSetTag(revCons, tag1, "flatten.rev.cons.tag");
     auto* revElemReload = _builder.createLoad(revElemTmp, "flatten.rev.elem.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot0, revElemReload, "flatten.rev.cons.head");
     auto* revAccReload = _builder.createLoad(revAccTmp, "flatten.rev.acc.reload");
-    revCons = _builder.createObjSetSlot(revCons, slot1, revAccReload, "flatten.rev.cons.tail");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "flatten.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -10432,9 +10440,6 @@ void IRGenerator::generateDistinctIR(CoreVM::Value* listValue)
 
 void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
@@ -10456,8 +10461,7 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     _builder.createStore(srcStorage, listValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "sortBy.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "sortBy.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Object, "sortBy.nil");
     _builder.createStore(accStorage, nil);
 
     auto const sortByElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
@@ -10518,11 +10522,10 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     _builder.createStore(elemTmp2, elemReload);
 
     // Build Tuple2(key, elem)
-    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "sortBy.tuple");
     auto* keyReload = _builder.createLoad(keyTmp, "sortBy.key.reload");
-    tuple = _builder.createObjSetSlot(tuple, slot0, keyReload, "sortBy.tuple.key");
     auto* elemFinal = _builder.createLoad(elemTmp2, "sortBy.elem.final");
-    tuple = _builder.createObjSetSlot(tuple, slot1, elemFinal, "sortBy.tuple.elem");
+    auto* tuple = emitTuple2(
+        keyReload, elemFinal, CoreVM::LiteralType::Void, CoreVM::LiteralType::Void, "sortBy.tuple");
     _builder.createStore(tupleTmp, tuple);
 
     // Cons tuple onto accumulator
@@ -10536,12 +10539,9 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "sortBy.acc.store.tmp");
     _builder.createStore(accStoreTmp, accReloadPre);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "sortBy.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "sortBy.cons.tag");
     auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "sortBy.tuple.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "sortBy.cons.head");
     auto* accForSlot = _builder.createLoad(accStoreTmp, "sortBy.acc.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "sortBy.cons.tail");
+    auto* cons = emitListCons(tupleForSlot, accForSlot, CoreVM::LiteralType::Object, "sortBy.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -10566,9 +10566,6 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
 
 void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Value* listValue)
 {
-    auto* listTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tupleTypeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
     auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head / fst
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail / snd
@@ -10590,8 +10587,7 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     _builder.createStore(srcStorage, listValue);
 
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc");
-    CoreVM::Value* nil = _builder.createObjAlloc(listTypeId, "groupBy.nil");
-    nil = _builder.createObjSetTag(nil, tag0, "groupBy.nil.tag");
+    auto* nil = emitNilList(CoreVM::LiteralType::Object, "groupBy.nil");
     _builder.createStore(accStorage, nil);
 
     auto const groupByElemType = getListElementLiteralType(listValue).value_or(CoreVM::LiteralType::Number);
@@ -10652,11 +10648,10 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     _builder.createStore(elemTmp2, elemReload);
 
     // Build Tuple2(key, elem)
-    CoreVM::Value* tuple = _builder.createObjAlloc(tupleTypeId, "groupBy.tuple");
     auto* keyReload = _builder.createLoad(keyTmp, "groupBy.key.reload");
-    tuple = _builder.createObjSetSlot(tuple, slot0, keyReload, "groupBy.tuple.key");
     auto* elemFinal = _builder.createLoad(elemTmp2, "groupBy.elem.final");
-    tuple = _builder.createObjSetSlot(tuple, slot1, elemFinal, "groupBy.tuple.elem");
+    auto* tuple = emitTuple2(
+        keyReload, elemFinal, CoreVM::LiteralType::Void, CoreVM::LiteralType::Void, "groupBy.tuple");
     _builder.createStore(tupleTmp, tuple);
 
     // Cons tuple onto accumulator
@@ -10670,12 +10665,9 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     auto* accStoreTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "groupBy.acc.store.tmp");
     _builder.createStore(accStoreTmp, accReloadPre);
 
-    CoreVM::Value* cons = _builder.createObjAlloc(listTypeId, "groupBy.cons");
-    cons = _builder.createObjSetTag(cons, tag1, "groupBy.cons.tag");
     auto* tupleForSlot = _builder.createLoad(tupleStoreTmp, "groupBy.tuple.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot0, tupleForSlot, "groupBy.cons.head");
     auto* accForSlot = _builder.createLoad(accStoreTmp, "groupBy.acc.for_slot");
-    cons = _builder.createObjSetSlot(cons, slot1, accForSlot, "groupBy.cons.tail");
+    auto* cons = emitListCons(tupleForSlot, accForSlot, CoreVM::LiteralType::Object, "groupBy.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);

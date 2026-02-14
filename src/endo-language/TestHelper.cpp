@@ -22,6 +22,44 @@ namespace endo::test
 
 namespace
 {
+    // Forward declaration for mutual recursion.
+    std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner);
+
+    /// Converts a slot value to string using the known LiteralType from the type tag slot.
+    /// Strings inside containers are wrapped in double quotes.
+    std::string slotValueToString(uint64_t rawVal,
+                                  CoreVM::LiteralType type,
+                                  CoreVM::Runner* runner,
+                                  bool quoteStrings = true)
+    {
+        switch (type)
+        {
+            case CoreVM::LiteralType::String: {
+                auto const* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal));
+                if (!str)
+                    return "(null)";
+                if (quoteStrings)
+                    return "\"" + std::string(*str) + "\"";
+                return std::string(*str);
+            }
+            case CoreVM::LiteralType::Boolean: return rawVal ? "true" : "false";
+            case CoreVM::LiteralType::Float: {
+                auto const f = std::bit_cast<double>(rawVal);
+                auto s = std::to_string(f);
+                if (s.find('.') != std::string::npos)
+                {
+                    auto last = s.find_last_not_of('0');
+                    if (s[last] == '.')
+                        ++last;
+                    s.erase(last + 1);
+                }
+                return s;
+            }
+            default: break;
+        }
+        return valueToString(rawVal, runner);
+    }
+
     /// Recursively converts a runtime value (number, tuple, list, option, etc.) to a printable string.
     std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
     {
@@ -39,6 +77,7 @@ namespace
             auto const typeId = obj->type->id;
             if (typeId == CoreVM::BuiltinTypeId::List)
             {
+                auto const elemType = static_cast<CoreVM::LiteralType>(obj->getSlot(2));
                 std::string result = "[";
                 bool first = true;
                 while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
@@ -46,7 +85,7 @@ namespace
                     if (!first)
                         result += "; ";
                     first = false;
-                    result += valueToString(obj->getSlot(0), runner);
+                    result += slotValueToString(obj->getSlot(0), elemType, runner);
                     obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
                 }
                 result += "]";
@@ -54,26 +93,35 @@ namespace
             }
             if (typeId == CoreVM::BuiltinTypeId::Tuple2)
             {
-                return "(" + valueToString(obj->getSlot(0), runner) + ", "
-                       + valueToString(obj->getSlot(1), runner) + ")";
+                auto const packed = obj->getSlot(2);
+                auto const t0 = CoreVM::unpackTypeTag(packed, 0);
+                auto const t1 = CoreVM::unpackTypeTag(packed, 1);
+                return "(" + slotValueToString(obj->getSlot(0), t0, runner) + ", "
+                       + slotValueToString(obj->getSlot(1), t1, runner) + ")";
             }
             if (typeId == CoreVM::BuiltinTypeId::Tuple3)
             {
-                return "(" + valueToString(obj->getSlot(0), runner) + ", "
-                       + valueToString(obj->getSlot(1), runner) + ", "
-                       + valueToString(obj->getSlot(2), runner) + ")";
+                auto const packed = obj->getSlot(3);
+                auto const t0 = CoreVM::unpackTypeTag(packed, 0);
+                auto const t1 = CoreVM::unpackTypeTag(packed, 1);
+                auto const t2 = CoreVM::unpackTypeTag(packed, 2);
+                return "(" + slotValueToString(obj->getSlot(0), t0, runner) + ", "
+                       + slotValueToString(obj->getSlot(1), t1, runner) + ", "
+                       + slotValueToString(obj->getSlot(2), t2, runner) + ")";
             }
             if (typeId == CoreVM::BuiltinTypeId::Option)
             {
                 if (obj->tag == 0)
                     return "None";
-                return "Some " + valueToString(obj->getSlot(0), runner);
+                auto const innerType = static_cast<CoreVM::LiteralType>(obj->getSlot(1));
+                return "Some " + slotValueToString(obj->getSlot(0), innerType, runner);
             }
             if (typeId == CoreVM::BuiltinTypeId::Result)
             {
+                auto const innerType = static_cast<CoreVM::LiteralType>(obj->getSlot(1));
                 if (obj->tag == 0)
-                    return "Error " + valueToString(obj->getSlot(0), runner);
-                return "Ok " + valueToString(obj->getSlot(0), runner);
+                    return "Error " + slotValueToString(obj->getSlot(0), innerType, runner);
+                return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
             }
             if (obj->type->kind == CoreVM::TypeKind::Product)
             {
@@ -208,11 +256,7 @@ TestRuntime::TestRuntime()
             CoreVM::TypedObject* acc = right;
             for (auto it = elements.rbegin(); it != elements.rend(); ++it)
             {
-                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, *it);
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                acc = cons;
+                acc = args.caller()->makeConsCell(*it, acc);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
@@ -226,16 +270,13 @@ TestRuntime::TestRuntime()
             if (!list || list->tag == 0)
             {
                 // Nil → None
-                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                none->tag = 0;
+                auto* none = args.caller()->makeNoneOption();
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
             }
             else
             {
                 // Cons → Some(head)
-                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                some->tag = 1;
-                some->setSlot(0, list->getSlot(0));
+                auto* some = args.caller()->makeSomeOption(list->getSlot(0));
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
             }
         });
@@ -249,8 +290,7 @@ TestRuntime::TestRuntime()
             if (!list || list->tag == 0)
             {
                 // Nil → return new Nil
-                auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                nil->tag = 0;
+                auto* nil = args.caller()->makeNilList();
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
             }
             else
@@ -294,16 +334,10 @@ TestRuntime::TestRuntime()
             std::ranges::sort(elements);
 
             // Rebuild list right-to-left
-            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            acc->tag = 0; // Nil
+            auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
             for (auto it = elements.rbegin(); it != elements.rend(); ++it)
-            {
-                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, static_cast<uint64_t>(*it));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                acc = cons;
-            }
+                acc =
+                    args.caller()->makeConsCell(static_cast<uint64_t>(*it), acc, CoreVM::LiteralType::Number);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
@@ -326,16 +360,10 @@ TestRuntime::TestRuntime()
             }
 
             // Rebuild list right-to-left
-            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            acc->tag = 0; // Nil
+            auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::Number);
             for (auto it = elements.rbegin(); it != elements.rend(); ++it)
-            {
-                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, static_cast<uint64_t>(*it));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                acc = cons;
-            }
+                acc =
+                    args.caller()->makeConsCell(static_cast<uint64_t>(*it), acc, CoreVM::LiteralType::Number);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
@@ -362,16 +390,9 @@ TestRuntime::TestRuntime()
             std::ranges::stable_sort(pairs, {}, &std::pair<int64_t, uint64_t>::first);
 
             // Rebuild list of elements only, right-to-left
-            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            acc->tag = 0; // Nil
+            auto* acc = args.caller()->makeNilList();
             for (auto it = pairs.rbegin(); it != pairs.rend(); ++it)
-            {
-                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, it->second);
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                acc = cons;
-            }
+                acc = args.caller()->makeConsCell(it->second, acc);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
@@ -408,36 +429,27 @@ TestRuntime::TestRuntime()
             }
 
             // Build outer list right-to-left: List<Tuple2<key, List<elem>>>
-            auto* outerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            outerAcc->tag = 0; // Nil
+            auto* outerAcc = args.caller()->makeNilList(CoreVM::LiteralType::Object);
             for (auto it = groupOrder.rbegin(); it != groupOrder.rend(); ++it)
             {
                 auto key = *it;
                 auto const& elems = groups[key];
 
                 // Build inner list right-to-left
-                auto* innerAcc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                innerAcc->tag = 0; // Nil
+                auto* innerAcc = args.caller()->makeNilList();
                 for (auto eit = elems.rbegin(); eit != elems.rend(); ++eit)
-                {
-                    auto* innerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                    innerCons->tag = 1;
-                    innerCons->setSlot(0, *eit);
-                    innerCons->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
-                    innerAcc = innerCons;
-                }
+                    innerAcc = args.caller()->makeConsCell(*eit, innerAcc);
 
                 // Build Tuple2(key, innerList)
                 auto* tuple = args.caller()->allocObject(CoreVM::BuiltinTypeId::Tuple2);
                 tuple->setSlot(0, static_cast<uint64_t>(key));
                 tuple->setSlot(1, reinterpret_cast<uintptr_t>(innerAcc));
+                tuple->setSlot(2,
+                               CoreVM::packTypeTag(CoreVM::LiteralType::Number, CoreVM::LiteralType::Object));
 
                 // Cons tuple onto outer list
-                auto* outerCons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                outerCons->tag = 1;
-                outerCons->setSlot(0, reinterpret_cast<uintptr_t>(tuple));
-                outerCons->setSlot(1, reinterpret_cast<uintptr_t>(outerAcc));
-                outerAcc = outerCons;
+                outerAcc = args.caller()->makeConsCell(
+                    reinterpret_cast<uintptr_t>(tuple), outerAcc, CoreVM::LiteralType::Object);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(outerAcc)));
         });
@@ -467,15 +479,12 @@ TestRuntime::TestRuntime()
             }
             if (cur && cur->tag == 1 && i == index)
             {
-                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                some->tag = 1;
-                some->setSlot(0, cur->getSlot(0));
+                auto* some = args.caller()->makeSomeOption(cur->getSlot(0));
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
             }
             else
             {
-                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                none->tag = 0;
+                auto* none = args.caller()->makeNoneOption();
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
             }
         });
@@ -488,8 +497,7 @@ TestRuntime::TestRuntime()
             auto* cur = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
             if (!cur || cur->tag == 0)
             {
-                auto* none = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                none->tag = 0;
+                auto* none = args.caller()->makeNoneOption();
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
             }
             else
@@ -501,9 +509,7 @@ TestRuntime::TestRuntime()
                         break;
                     cur = next;
                 }
-                auto* some = args.caller()->allocObject(CoreVM::BuiltinTypeId::Option);
-                some->tag = 1;
-                some->setSlot(0, cur->getSlot(0));
+                auto* some = args.caller()->makeSomeOption(cur->getSlot(0));
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
             }
         });
@@ -516,16 +522,9 @@ TestRuntime::TestRuntime()
         .bind([](CoreVM::Params& args) {
             auto count = args.getInt(1);
             auto value = static_cast<uint64_t>(args.getInt(2));
-            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            acc->tag = 0; // Nil
+            auto* acc = args.caller()->makeNilList();
             for (int64_t i = 0; i < count; ++i)
-            {
-                auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, value);
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                acc = cons;
-            }
+                acc = args.caller()->makeConsCell(value, acc);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
         });
 
@@ -537,18 +536,14 @@ TestRuntime::TestRuntime()
         .bind([](CoreVM::Params& args) {
             auto startOrd = args.getInt(1);
             auto endOrd = args.getInt(2);
-            auto* acc = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-            acc->tag = 0; // Nil
+            auto* acc = args.caller()->makeNilList(CoreVM::LiteralType::String);
             if (startOrd <= endOrd)
             {
                 for (auto ord = endOrd; ord >= startOrd; --ord)
                 {
                     auto* str = args.caller()->newString(std::string(1, static_cast<char>(ord)));
-                    auto* cons = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-                    cons->tag = 1;
-                    cons->setSlot(0, reinterpret_cast<uintptr_t>(str));
-                    cons->setSlot(1, reinterpret_cast<uintptr_t>(acc));
-                    acc = cons;
+                    acc = args.caller()->makeConsCell(
+                        reinterpret_cast<uintptr_t>(str), acc, CoreVM::LiteralType::String);
                 }
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(acc)));
@@ -597,8 +592,7 @@ TestRuntime::TestRuntime()
             };
 
             // Build cons-cell list right-to-left
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0; // Nil
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
 
             for (int i = 2; i >= 0; --i)
             {
@@ -611,11 +605,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(4, static_cast<uint64_t>(p.mem));
                 record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(p.command)));
 
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1; // Cons
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
 
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
@@ -644,8 +635,7 @@ TestRuntime::TestRuntime()
             };
 
             // Build cons-cell list right-to-left
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0; // Nil
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
 
             for (int i = 2; i >= 0; --i)
             {
@@ -657,11 +647,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(3, static_cast<uint64_t>(f.mtime));
                 record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
 
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1; // Cons
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
 
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
@@ -688,8 +675,7 @@ TestRuntime::TestRuntime()
             };
 
             // Build cons-cell list right-to-left
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0; // Nil
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
 
             for (int i = 2; i >= 0; --i)
             {
@@ -700,11 +686,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(j.command)));
                 record->setSlot(3, static_cast<uint64_t>(j.pid));
 
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1; // Cons
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
 
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
@@ -863,8 +846,7 @@ TestRuntime::TestRuntime()
                   "",
                   "cache" },
             };
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0; // Nil
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
             for (int i = 2; i >= 0; --i)
             {
                 auto const& c = containers[i];
@@ -876,11 +858,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.status)));
                 record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(c.ports)));
                 record->setSlot(6, reinterpret_cast<uintptr_t>(runner->newString(c.names)));
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
@@ -903,8 +882,7 @@ TestRuntime::TestRuntime()
                 { "sha256:def", "postgres", "16", "2024-01-08", "412MB" },
                 { "sha256:ghi", "redis", "7", "2024-01-05", "130MB" },
             };
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0;
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
             for (int i = 2; i >= 0; --i)
             {
                 auto const& img = images[i];
@@ -915,11 +893,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(img.tag)));
                 record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(img.created)));
                 record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(img.size)));
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
@@ -942,8 +917,7 @@ TestRuntime::TestRuntime()
                 { "def456", "Bob", "bob@example.com", "2024-01-14", "fix: null check" },
                 { "ghi789", "Alice", "alice@example.com", "2024-01-13", "docs: update README" },
             };
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0;
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
             for (int i = 2; i >= 0; --i)
             {
                 auto const& c = commits[i];
@@ -954,11 +928,8 @@ TestRuntime::TestRuntime()
                 record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(c.email)));
                 record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(c.date)));
                 record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.message)));
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
@@ -978,8 +949,7 @@ TestRuntime::TestRuntime()
                 { "??", "README.md" },
                 { "A", ".gitignore" },
             };
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0;
+            auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
             for (int i = 2; i >= 0; --i)
             {
                 auto const& e = entries[i];
@@ -987,11 +957,8 @@ TestRuntime::TestRuntime()
                 auto* record = runner->allocObject(typeId);
                 record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(e.status)));
                 record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(e.path)));
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1;
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(record));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
             }
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
@@ -1129,16 +1096,10 @@ TestRuntime::TestRuntime()
             }
 
             // Build cons-cell list right-to-left
-            auto* list = runner->allocObject(CoreVM::BuiltinTypeId::List);
-            list->tag = 0; // Nil
+            auto* list = runner->makeNilList(CoreVM::LiteralType::String);
             for (auto it = parts.rbegin(); it != parts.rend(); ++it)
-            {
-                auto* cons = runner->allocObject(CoreVM::BuiltinTypeId::List);
-                cons->tag = 1; // Cons
-                cons->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(*it)));
-                cons->setSlot(1, reinterpret_cast<uintptr_t>(list));
-                list = cons;
-            }
+                list = runner->makeConsCell(
+                    reinterpret_cast<uintptr_t>(runner->newString(*it)), list, CoreVM::LiteralType::String);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
         });
 
@@ -1169,8 +1130,7 @@ TestRuntime::TestRuntime()
     // Data source wrapper stubs (open-json, open-csv, from-json, from-csv)
     auto dummyHandler = [](CoreVM::Params& args) {
         // Return an empty list (Nil)
-        auto* nil = args.caller()->allocObject(CoreVM::BuiltinTypeId::List);
-        nil->tag = 0;
+        auto* nil = args.caller()->makeNilList();
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
     };
     runtime.registerFunction("open_json")

@@ -511,6 +511,25 @@ class Runner
     /// Allocates a new typed object with the given type ID.
     TypedObject* allocObject(uint16_t typeId);
 
+    /// Creates a Nil (empty) list with the given element type tag.
+    /// @param elemType The LiteralType of list elements (default Void = unknown).
+    TypedObject* makeNilList(LiteralType elemType = LiteralType::Void);
+
+    /// Creates a Cons cell (head :: tail) with the given element type tag.
+    TypedObject* makeConsCell(uint64_t head, TypedObject* tail, LiteralType elemType = LiteralType::Void);
+
+    /// Creates a Some(value) option with the given inner type tag.
+    TypedObject* makeSomeOption(uint64_t value, LiteralType innerType = LiteralType::Void);
+
+    /// Creates a None option.
+    TypedObject* makeNoneOption();
+
+    /// Creates an Ok(value) result with the given inner type tag.
+    TypedObject* makeOkResult(uint64_t value, LiteralType innerType = LiteralType::Void);
+
+    /// Creates an Error(value) result with the given inner type tag.
+    TypedObject* makeErrorResult(uint64_t value, LiteralType innerType = LiteralType::Void);
+
     /// Checks if a raw value is a pointer to a known TypedObject allocated by this Runner.
     [[nodiscard]] bool isKnownObject(uint64_t rawValue) const noexcept;
 
