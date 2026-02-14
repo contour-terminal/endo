@@ -1,0 +1,109 @@
+site_name: Endo
+site_url: https://christianparpart.github.io/endo/
+site_description: "A modern shell where functional programming meets everyday productivity"
+repo_url: https://github.com/christianparpart/endo
+repo_name: christianparpart/endo
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.instant
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+      pygments_lang_class: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - toc:
+      permalink: true
+  - attr_list
+  - md_in_html
+  - pymdownx.inlinehilite
+  - def_list
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Language Reference:
+    - Overview: language/index.md
+    - Lexical Elements: language/lexical-elements.md
+    - Type System: language/type-system.md
+    - Variables & Bindings: language/variables-and-bindings.md
+    - Functions: language/functions.md
+    - Lists & Collections: language/lists-and-collections.md
+    - Pattern Matching: language/pattern-matching.md
+    - Operators & Pipelines: language/operators-and-pipelines.md
+    - Control Flow: language/control-flow.md
+    - Command Execution: language/command-execution.md
+    - Error Handling: language/error-handling.md
+    - Modules & Imports: language/modules-and-imports.md
+    - Interoperability: language/interoperability.md
+    - Implementation Notes: language/implementation-notes.md
+    - Grammar: language/grammar.md
+  - Examples:
+    - Overview: examples/index.md
+    - Basics: examples/basics.md
+    - Functions: examples/functions.md
+    - Pattern Matching: examples/pattern-matching.md
+    - Recursion: examples/recursion.md
+    - Options & Results: examples/options-and-results.md
+    - Records: examples/records.md
+    - Tuples: examples/tuples.md
+    - Calculator: examples/calculator.md
+    - FizzBuzz: examples/fizzbuzz.md
+    - Floats: examples/floats.md
+    - Type Annotations: examples/type-annotations.md
+    - Temperature: examples/temperature.md
+    - Validation: examples/validation.md
+    - Fetch: examples/fetch.md
+  - Shell:
+    - Overview: shell/index.md
+    - Configuration: shell/configuration.md
+    - Builtins: shell/builtins.md
+    - Structured Output: shell/structured-output.md
+  - Roadmap:
+    - Overview: roadmap/index.md
+    - Language Features: roadmap/language-features.md
+    - Structured Data: roadmap/structured-data.md
+    - WebAssembly: roadmap/wasm.md
+  - FAQ: FAQ.md
+  - Releases: releases.md
+  - Contributing: contributing.md

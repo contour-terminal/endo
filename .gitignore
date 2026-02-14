@@ -9,3 +9,6 @@ target/
 compile_commands.json
 /src/vtparser/
 /src/crispy/
+site/
+__pycache__/
+*.egg-info/

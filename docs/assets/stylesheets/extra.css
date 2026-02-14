@@ -1,0 +1,103 @@
+/* -- Code blocks: Tokyo Night inspired dark theme -- */
+
+:root {
+  --code-bg: #1a1b26;
+  --code-bg-inline: #24283b;
+}
+
+/* Dark code blocks regardless of site theme */
+.md-typeset pre > code {
+  background: var(--code-bg);
+  color: #a9b1d6;
+}
+
+.md-typeset pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+}
+
+/* Inline code */
+.md-typeset code {
+  background: var(--code-bg-inline);
+  color: #c0caf5;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+
+/* Light theme overrides for inline code readability */
+[data-md-color-scheme="default"] .md-typeset code {
+  background: #f0f0f4;
+  color: #383a42;
+}
+
+/* Copy button styling */
+.md-typeset .md-code__button {
+  color: #565f89;
+}
+
+/* -- Hero section -- */
+
+.hero {
+  text-align: center;
+  padding: 3rem 1rem;
+}
+
+.hero h1 {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.hero p {
+  font-size: 1.25rem;
+  opacity: 0.85;
+  max-width: 600px;
+  margin: 0 auto 1.5rem;
+}
+
+/* -- Feature grid -- */
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.25rem;
+  margin: 2rem 0;
+}
+
+.feature-grid .card {
+  background: var(--md-code-bg-color, #1e1e2e);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  padding: 1.5rem;
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.feature-grid .card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  transform: translateY(-2px);
+}
+
+.feature-grid .card h3 {
+  margin-top: 0;
+  font-size: 1.1rem;
+}
+
+.feature-grid .card p {
+  margin-bottom: 0;
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+/* -- Misc polish -- */
+
+/* Smooth scroll */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Tighter line numbers in code blocks */
+.md-typeset .linenodiv pre {
+  color: #565f89;
+  background: transparent;
+}

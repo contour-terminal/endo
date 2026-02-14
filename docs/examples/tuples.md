@@ -1,0 +1,53 @@
+# Tuples
+
+Shows how to create tuples, destructure them via pattern matching, and define utility functions like `fst`, `snd`, and `swap`.
+
+```endo
+// Tuples: fixed-size collections with pattern matching
+
+// Utility functions (user-defined via pattern matching)
+let fst t = match t with | (a, _) -> a
+let snd t = match t with | (_, b) -> b
+
+let pair = (1, 2)
+print "pair = ("; print (fst pair); print ", "; print (snd pair); println ")"
+
+print "fst (10, 20) = "; println (fst (10, 20))
+print "snd (10, 20) = "; println (snd (10, 20))
+
+// Destructure with pattern matching
+let sum_pair t =
+    match t with
+    | (a, b) -> a + b
+print "(3 + 4) = "; println (sum_pair (3, 4))
+
+// 3-element tuple (fst still gets the first element)
+let triple = (10, 20, 30)
+print "fst triple = "; println (fst triple)
+
+// Swap via pattern matching and reconstruction
+let swap t =
+    match t with
+    | (a, b) -> (b, a)
+
+let swapped = swap (1, 2)
+print "swap (1,2) = ("; print (fst swapped); print ", "; print (snd swapped); println ")"
+
+// Pipeline through a function that uses fst
+let get_first t = fst t
+print "(5, 10) |> fst = "; println ((5, 10) |> get_first)
+```
+
+## Key Techniques
+
+- **Tuple creation** uses `(a, b)` syntax with comma-separated elements. Tuples can hold two or more elements of any type.
+- **Tuple pattern matching** uses `| (a, b) -> body` to destructure a tuple into its components. The wildcard `_` can ignore elements you do not need.
+- **User-defined accessors** like `fst` and `snd` are defined through pattern matching rather than being built-in, reflecting Endo's philosophy of minimal built-ins with expressive pattern matching.
+- **Tuple reconstruction** creates new tuples from destructured components, as shown in the `swap` function.
+- Tuples work with **pipelines** just like any other value -- pass them through functions for transformation.
+- **3-element tuples** (and larger) are supported. The `fst` function still works on them by ignoring trailing elements via the wildcard pattern.
+
+## See Also
+
+- [Type System](../language/type-system.md)
+- [Pattern Matching](../language/pattern-matching.md)

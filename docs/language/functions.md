@@ -1,0 +1,212 @@
+# Functions
+
+### 5.1 Named Functions (Curried)
+
+Functions in endo are curried by default, meaning multi-parameter functions are actually chains of single-parameter functions.
+
+```endo
+# Simple single-parameter function
+let double x = x * 2
+let greet name = echo "Hello, $name"
+
+# Multi-parameter functions (curried)
+let add x y = x + y
+let multiply x y z = x * y * z
+
+# Call with all arguments
+let sum = add 3 5             # 8
+let product = multiply 2 3 4  # 24
+
+# With type annotations
+let add (x: int) (y: int): int = x + y
+let format (template: str) (value: int): str = "$template: $value"
+
+# Partial application (supply fewer arguments)
+let add5 = add 5              # add5: int -> int
+let result = add5 10          # 15
+
+let greetFormal = format "Dear"
+let msg = greetFormal 42      # "Dear: 42"
+
+# Partial application is powerful for pipelines
+let multiplyBy n = multiply n
+let times10 = multiplyBy 10
+
+[1; 2; 3] |> map (add 1)      # [2; 3; 4]
+[1; 2; 3] |> map times10      # [10; 20; 30]
+```
+
+### 5.2 Multi-line Functions
+
+```endo
+# Indentation-based body
+let factorial n =
+    match n with
+    | 0 -> 1
+    | 1 -> 1
+    | n -> n * factorial (n - 1)
+
+# Brace-based body
+let fibonacci n = {
+    let mut a = 0
+    let mut b = 1
+    for _ in 1..n do
+        let temp = a
+        a <- b
+        b <- temp + b
+    done
+    a
+}
+
+# Mixed shell and functional
+let findLargeFiles dir minSize =
+    find $dir -size +${minSize}M
+    |> lines
+    |> filter (fun f -> test -f $f)
+    |> map (fun f -> { path = f; size = stat -c%s $f })
+
+# Multiple statements in function body
+let processAndLog input =
+    let processed = transform input
+    log "Processed: $processed"
+    let validated = validate processed
+    log "Validated: $validated"
+    validated
+```
+
+### 5.3 Lambda Expressions
+
+Anonymous functions for inline use.
+
+```endo
+# Basic lambda syntax: fun params -> body
+let double = fun x -> x * 2
+let add = fun x y -> x + y
+
+# Lambdas in higher-order functions
+[1; 2; 3] |> map (fun x -> x * 2)              # [2; 4; 6]
+[1; 2; 3; 4] |> filter (fun x -> x % 2 == 0)   # [2; 4]
+[1; 2; 3] |> fold 0 (fun acc x -> acc + x)     # 6
+
+# Multi-line lambda with braces
+let process = fun x -> {
+    let temp = x * 2
+    let adjusted = temp + 1
+    adjusted
+}
+
+# Type-annotated lambda
+let typedFn: (int -> int) = fun x -> x * 2
+let annotatedLambda = fun (x: int) (y: int) -> x + y
+
+# Lambdas capturing outer scope
+let multiplier = 10
+let scale = fun x -> x * multiplier    # Captures 'multiplier'
+
+# Nested lambdas (currying manually)
+let curriedAdd = fun x -> fun y -> x + y
+let add5 = curriedAdd 5
+```
+
+### 5.4 Placeholder Lambda Sugar (`_`)
+
+The `_` token in expression position (not pattern position) creates an implicit single-parameter lambda. This is purely a parser-level desugaring — no changes to IR or runtime.
+
+```endo
+# Field accessor
+_.pid                         # -> fun __x -> __x.pid
+
+# Predicate
+_.name == "endo"              # -> fun __x -> __x.name == "endo"
+
+# Comparison
+_.cpu > 50.0                  # -> fun __x -> __x.cpu > 50.0
+
+# Arithmetic
+_ + 1                         # -> fun __x -> __x + 1
+
+# In pipelines (most common use)
+ps |> filter (_.name == "endo") |> map _.pid
+ps |> sortBy _.cpu |> groupBy _.user
+
+# Only one _ per expression (multiple would be ambiguous)
+# BAD: _ + _                  # Error: ambiguous placeholder lambda
+```
+
+**Rule:** Any expression containing `_` in expression position (outside of pattern context such as `match` arms or `let` destructuring) creates an implicit lambda. The `_` becomes the single parameter. This sugar works anywhere a function value is expected.
+
+### 5.5 Recursive Functions
+
+```endo
+# The 'rec' keyword enables recursion
+let rec gcd a b =
+    match b with
+    | 0 -> a
+    | _ -> gcd b (a % b)
+
+let rec sumList lst =
+    match lst with
+    | [] -> 0
+    | [x] -> x
+    | head :: tail -> head + sumList tail
+
+# Mutual recursion with 'and'
+let rec isEven n =
+    match n with
+    | 0 -> true
+    | n -> isOdd (n - 1)
+and isOdd n =
+    match n with
+    | 0 -> false
+    | n -> isEven (n - 1)
+
+# Tail-recursive with accumulator (efficient)
+let factorial n =
+    let rec loop acc n =
+        match n with
+        | 0 -> acc
+        | n -> loop (acc * n) (n - 1)
+    loop 1 n
+
+# Tree traversal
+type Tree<T> =
+    | Leaf of T
+    | Node of Tree<T> * Tree<T>
+
+let rec sumTree tree =
+    match tree with
+    | Leaf n -> n
+    | Node (left, right) -> sumTree left + sumTree right
+```
+
+### 5.6 Function Composition
+
+```endo
+# Forward composition operator >>
+let doubleAndAdd1 = double >> (add 1)
+let result = doubleAndAdd1 5           # (5*2)+1 = 11
+
+# Backward composition operator <<
+let add1AndDouble = (add 1) << double
+let result = add1AndDouble 5           # (5+1)*2 = 12
+
+# Building pipelines with composition
+let processNumbers =
+    filter isPositive
+    >> map double
+    >> fold 0 add
+
+let result = processNumbers [(-1); 2; (-3); 4; 5]    # 22
+
+# Point-free style
+let normalizeAndCount =
+    trim
+    >> toLower
+    >> words
+    >> length
+
+let wordCount = normalizeAndCount "  Hello World  "  # 2
+```
+
+---
+**See also:** [Variables & Bindings](variables-and-bindings.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Pattern Matching](pattern-matching.md)

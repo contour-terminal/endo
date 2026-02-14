@@ -1,6 +1,6 @@
 # Endo Language — F# Feature Implementation Status
 
-This document tracks the implementation status of F# language features as defined in `LANGUAGE.md`.
+This document tracks the implementation status of F# language features as defined in `docs/language/`.
 
 **Legend:** [x] Implemented | [~] Partial | [ ] Not yet implemented
 

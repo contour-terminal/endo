@@ -13,7 +13,7 @@
 
 ---
 
-[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Installation](#installation) · [Contributing](#contributing)
+[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Documentation](https://christianparpart.github.io/endo/) · [Installation](#installation) · [Contributing](#contributing)
 
 </div>
 

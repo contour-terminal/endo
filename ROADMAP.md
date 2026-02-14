@@ -23,7 +23,7 @@ the primary project; Endo development follows as resources permit.
 
 ### Language Specification
 
-The Endo language specification (`LANGUAGE.md`) is complete and defines a hybrid shell language
+The Endo language specification (`docs/language/`) is complete and defines a hybrid shell language
 combining F# functional programming with bash shell scripting. Key features include:
 
 - **F# style bindings**: `let x = 42`, `let mut counter = 0`, `let add x y = x + y`
@@ -268,7 +268,7 @@ programming ergonomics. This phase adds F#-inspired syntax for variable bindings
 pattern matching, and pipelines while maintaining full backward compatibility with existing
 bash-style syntax.
 
-**Specification:** See `LANGUAGE.md` for the complete language specification including:
+**Specification:** See `docs/language/` for the complete language specification including:
 - `let` bindings with type inference (immutable by default, `let mut` for mutable)
 - Curried functions with partial application (`let add x y = x + y`)
 - Lambda expressions (`fun x -> x * 2`)
@@ -305,7 +305,7 @@ src/
 ```
 
 **Tasks:**
-- [x] Complete language specification (`LANGUAGE.md`)
+- [x] Complete language specification (`docs/language/`)
 - [x] Reorganize project structure (separate `endo-language` library from `shell`)
 - [x] Add new tokens to Lexer (`let`, `mut`, `fun`, `match`, `with`, `when`, `type`, `of`, `rec`, `and`, `as`, `->`, `<-`, `|>`, `Some`, `None`, `Ok`)
 - [x] Implement type system foundation (`Type.hpp`, `TypeEnv.hpp`, `Unification.hpp` - TypeInference deferred until AST extensions)
@@ -500,7 +500,7 @@ src/
     - [x] 9 test cases covering variadic params, shell aliases with splat, capture mode, IR generation
 
 **Implementation Notes:**
-- See `LANGUAGE.md` Section 14 for detailed parser implementation notes
+- See `docs/language/implementation-notes.md` for detailed parser implementation notes
 - See `ROADMAP-Language.md` for F# feature implementation status
 - **Dual semantics**: `let` unambiguously starts F# style; `|>` (function pipe) and `|` (shell pipe) are distinct tokens; expression context captures output, statement context prints to terminal
 - **Type inference**: Hindley-Milner Algorithm W pre-pass (`TypeInferencer`) integrated into `IRGenerator::generate()`, enabling handler compilation without explicit annotations for primitive types
@@ -1073,7 +1073,7 @@ Milestone 5: Developer Tools
 - [ ] All Milestone 0, 1, 2, and 4 tasks complete
 - [ ] Milestone 3 Phase 3.1 and 3.2 complete (basic AI integration)
 - [ ] Passes comprehensive test suite on Linux and Windows
-- [ ] Documentation complete (user guide, configuration reference)
+- [x] Documentation complete (user guide, configuration reference) — MkDocs site in `docs/`
 - [ ] Performance acceptable for interactive use (< 50ms prompt latency)
 - [ ] No critical or high-severity bugs
 
