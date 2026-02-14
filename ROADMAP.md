@@ -624,6 +624,7 @@ The library includes:
 - [x] Fix inline history cycling (Up/Down with prefix) to use `History::search()` directly instead of `Completer::complete()` — fixes cycling for file paths, arguments, and options
 - [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
 - [x] Implement F# dot-access completion (`FSharpCompleter.cpp` — Option module methods, `_.field` record fields, `value.method`/`value.field` — 24 tests)
+- [x] Extend ghost text to all completion contexts (`Completer::suggest()` — two-phase matching: Phase 1 full-line prefix from Command-capable providers for history, Phase 2 word-level fallback from context-appropriate providers for variables, file paths, arguments — 8 tests)
 
 **Implementation Notes:**
 - Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`, `FuzzyMatch`) in `src/tui/completer/` as pure TUI model
@@ -647,6 +648,7 @@ The library includes:
 - Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.)
 - 39 completion-related tests covering Completer, CompletionPopup, and updateItems functionality
 - F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
+- Ghost text two-phase matching: Phase 1 queries Command-capable providers (History, Command, LetBinding, FSharp) with full-line prefix matching in reverse priority order (history preferred); Phase 2 falls back to word-level prefix matching from all context-appropriate providers via `gatherCompletions()`. Enables ghost text for variables (`$PA` → `TH`), file paths, arguments, and history recall in any position
 
 ### Phase 2.3.5: TUI Renderer Architecture
 

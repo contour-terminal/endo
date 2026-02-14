@@ -2,6 +2,7 @@
 #include "Completer.hpp"
 
 #include <algorithm>
+#include <ranges>
 
 #include <tui/completer/Completer.hpp>
 
@@ -50,35 +51,36 @@ std::vector<CompletionItem> Completer::complete(std::string_view input, size_t c
 
 std::optional<std::string> Completer::suggest(std::string_view input, size_t cursorPosition) const
 {
-    // Don't show ghost text when input is empty
     if (input.empty())
         return std::nullopt;
 
-    // Fish-style ghost text: only show suggestions for command context
-    // This prevents ghost text from appearing after string literals, arguments, etc.
-    // Users can still use Tab to trigger the completion popup in any context.
+    auto const ctx = analyzeContext(input, cursorPosition);
 
-    auto ctx = analyzeContext(input, cursorPosition);
-
-    // Ghost text is only shown for command context (fish-style behavior)
-    if (ctx.type != CompletionContextType::Command)
-        return std::nullopt;
-
-    // Check providers for history-based command suggestions
-    for (auto const& provider: _providers)
+    // Phase 1: Full-line prefix matching (fish-style).
+    // Query Command-capable providers for entries matching the entire input line.
+    // History entries are complete command lines and naturally match here.
+    // Iterate lowest-priority first so history is preferred over short completions.
+    for (auto const& provider: _providers | std::views::reverse)
     {
-        if (!provider->canHandle(ctx.type))
+        if (!provider->canHandle(CompletionContextType::Command))
             continue;
 
-        auto completions = provider->complete(ctx);
-        if (completions.empty())
-            continue;
-
-        // Find a completion that starts with the full input
+        auto const completions = provider->complete(ctx);
         for (auto const& item: completions)
         {
             if (item.text.starts_with(input) && item.text.size() > input.size())
                 return item.text.substr(input.size());
+        }
+    }
+
+    // Phase 2: Word-level prefix matching from context-appropriate providers.
+    if (!ctx.prefix.empty())
+    {
+        auto const completions = gatherCompletions(ctx);
+        for (auto const& item: completions)
+        {
+            if (item.text.starts_with(ctx.prefix) && item.text.size() > ctx.prefix.size())
+                return item.text.substr(ctx.prefix.size());
         }
     }
 

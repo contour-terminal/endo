@@ -145,6 +145,7 @@ target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
 
 add_executable(test-endo-shell
     test_main.cpp
+    Completer_test.cpp
     FSharpCompleter_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
