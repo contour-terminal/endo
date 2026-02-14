@@ -3839,6 +3839,49 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "rand")
+    {
+        if (argExprs.size() == 0)
+        {
+            // rand — no arguments, returns random positive integer
+            auto* callback = findCallback("rand()I");
+            if (!callback)
+            {
+                reportTypeError("rand builtin not available");
+                return true;
+            }
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), {}, "rand");
+            return true;
+        }
+        if (argExprs.size() == 2)
+        {
+            // rand A B — returns random integer in [A, B]
+            auto* minVal = codegen(argExprs[0]);
+            if (!minVal)
+            {
+                reportTypeError("Failed to evaluate rand min argument");
+                return true;
+            }
+            auto* maxVal = codegen(argExprs[1]);
+            if (!maxVal)
+            {
+                reportTypeError("Failed to evaluate rand max argument");
+                return true;
+            }
+            auto* callback = findCallback("rand(II)I");
+            if (!callback)
+            {
+                reportTypeError("rand builtin not available");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { minVal, maxVal }, "rand");
+            return true;
+        }
+        reportTypeError("rand requires 0 or 2 arguments, got {}", argExprs.size());
+        return true;
+    }
+
     return false;
 }
 
@@ -6467,8 +6510,8 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
             _result = _builder.get(node.name);
             return;
         }
-        // Zero-argument builtins (e.g., ps, ls) invoked as bare identifiers in F# context
-        if ((node.name == "ps" || node.name == "ls" || node.name == "jobs")
+        // Zero-argument builtins (e.g., ps, ls, rand) invoked as bare identifiers in F# context
+        if ((node.name == "ps" || node.name == "ls" || node.name == "jobs" || node.name == "rand")
             && tryGenerateBuiltinCall(node.name, {}))
             return;
         reportTypeError("Undefined F# identifier: {}", std::string_view(node.name));

@@ -200,6 +200,7 @@ This document tracks the implementation status of F# language features as define
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
+- [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
 - [ ] `File.read`, `File.write`, `File.list` — file operations
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
 

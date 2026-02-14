@@ -22,6 +22,7 @@
 #include <map>
 #include <memory>
 #include <print>
+#include <random>
 #include <set>
 #include <thread>
 #include <unordered_map>
@@ -2451,6 +2452,28 @@ void Shell::registerBuiltinFunctions()
             auto config = prompt.promptConfig();
             config.durationThresholdMs = args.getInt(1);
             prompt.setPromptConfig(std::move(config));
+        });
+
+    // F# rand builtin: returns a random positive integer > 0
+    _runtime.registerFunction("rand")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            static thread_local std::mt19937_64 rng { std::random_device {}() };
+            std::uniform_int_distribution<int64_t> dist(1, INT64_MAX);
+            args.setResult(static_cast<CoreVM::CoreNumber>(dist(rng)));
+        });
+
+    // F# rand builtin (range): returns a random integer in [min, max]
+    _runtime.registerFunction("rand")
+        .param<CoreVM::CoreNumber>("min")
+        .param<CoreVM::CoreNumber>("max")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            static thread_local std::mt19937_64 rng { std::random_device {}() };
+            auto const minVal = args.getInt(1);
+            auto const maxVal = args.getInt(2);
+            std::uniform_int_distribution<int64_t> dist(minVal, maxVal);
+            args.setResult(static_cast<CoreVM::CoreNumber>(dist(rng)));
         });
 
     // clang-format on

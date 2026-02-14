@@ -418,3 +418,35 @@ let getHome () =
     For shell-style access to environment variables, use `$VAR` or `${VAR}` substitution
     syntax instead. The `env` function is designed for F# expressions where you want
     type-safe `Option` handling.
+
+---
+
+## rand
+
+Generate a random integer.
+
+**Syntax:**
+
+```
+rand
+rand <min> <max>
+```
+
+**Description:** Generates a random integer. With no arguments, returns a random positive
+integer greater than zero. With two arguments, returns a random integer in the inclusive
+range [min, max].
+
+**Example:**
+
+```endo
+# Random positive integer
+let n = rand
+print n
+
+# Random integer between 1 and 6 (inclusive)
+let roll = rand 1 6
+print $"You rolled a {roll}"
+
+# Use in a pipeline
+rand 1 100 |> fun n -> print $"Random: {n}"
+```

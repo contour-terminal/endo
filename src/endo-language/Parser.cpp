@@ -225,6 +225,42 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     return nullptr;
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
+            else if (_lexer.currentLiteral() == "rand")
+            {
+                // F# style rand builtin - parse as F# expression with optional |> pipeline
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Check for trailing |> pipeline (e.g., rand 1 10 |> fun n -> ...)
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    // Continue chaining |> left-associatively
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken(); // consume |>
+                        step = parseFSharpComposition();
+                        if (!step)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    }
+                    _lexer.leaveFSharpExpr();
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
             else if ((_lexer.currentLiteral() == "ps" || _lexer.currentLiteral() == "ls"
                       || _lexer.currentLiteral() == "jobs")
                      && [this]() {

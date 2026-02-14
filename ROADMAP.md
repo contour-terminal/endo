@@ -368,6 +368,7 @@ src/
 - [x] Implement tuple pattern matching (full `TuplePattern` in `PatternIRGenerator` with slot extraction and sub-pattern chaining)
 - [x] Implement standard library builtins (`string_length`, `int_of_string`, `string_of_int`, `not`)
 - [x] Implement `env` builtin — returns `option<str>` for environment variables (13 test cases)
+- [x] Implement `rand` builtin — `rand` (no args) returns random positive integer > 0; `rand A B` returns random integer in [A, B] (6 test cases)
 - [x] Support `?` operator at top-level (global) scope — exits handler with code 1 on None/Error instead of requiring a function context
 - [x] Remove `fst`/`snd` builtins — now user-definable via pattern matching (simplifies compiler, proves language expressiveness)
 - [x] Add `ROADMAP-Language.md` for tracking F# feature implementation status

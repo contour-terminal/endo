@@ -415,6 +415,9 @@ TypeEnvPtr createStandardTypeEnv()
     // not: bool -> bool
     env->bindMono("not", types::function(types::boolType(), types::boolType()));
 
+    // rand: unit -> int (no-arg form; 2-arg form handled as overload in IRGenerator)
+    env->bindMono("rand", types::function(types::unitType(), types::intType()));
+
     // Cons operator (::): forall a. a -> list<a> -> list<a>
     auto y = env->freshTypeVar();
     env->bind("::",

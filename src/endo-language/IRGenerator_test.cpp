@@ -7241,3 +7241,47 @@ TEST_CASE("IRGenerator.FSharp.result_unwrapped_in_binary_ok")
     // Using unwrapped Result with ? should compile without type errors
     CHECK(generatesIRSuccessfully(R"(let r = (Ok 42)? + 1; print r)"));
 }
+
+// --- rand builtin tests ---
+
+TEST_CASE("IRGenerator.FSharp.rand_no_args")
+{
+    // rand with no arguments returns a random positive integer > 0
+    auto const output = executeSourceAndGetOutput("let x = rand; print (if x > 0 then 1 else 0)");
+    CHECK(output == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.rand_range")
+{
+    // rand A B returns a value in [A, B]; test with a tight range
+    auto const output = executeSourceAndGetOutput("let x = rand 5 5; print x");
+    CHECK(output == "5");
+}
+
+TEST_CASE("IRGenerator.FSharp.rand_range_bounds")
+{
+    // rand 1 10 should always produce a value in [1, 10]; test via match guard
+    auto const output = executeSourceAndGetOutput("let x = rand 1 10\n"
+                                                  "print (if x >= 1 && x <= 10 then 1 else 0)");
+    CHECK(output == "1");
+}
+
+TEST_CASE("IRGenerator.FSharp.rand_wrong_arity")
+{
+    // rand with 1 argument should produce a type error
+    CHECK(generatesIRWithError("let x = rand 5", "rand requires 0 or 2 arguments"));
+}
+
+TEST_CASE("IRGenerator.FSharp.rand_in_let_binding")
+{
+    // rand can be used in let bindings and arithmetic
+    CHECK(executesSuccessfully("let x = rand 1 100; let y = x + 1"));
+}
+
+TEST_CASE("IRGenerator.FSharp.rand_in_pipeline")
+{
+    // rand result can be piped to a function
+    auto const output =
+        executeSourceAndGetOutput("rand 1 10 |> fun n -> print (if n >= 1 && n <= 10 then 1 else 0)");
+    CHECK(output == "1");
+}

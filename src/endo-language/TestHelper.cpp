@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bit>
 #include <format>
+#include <random>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -1168,6 +1169,26 @@ TestRuntime::TestRuntime()
         .param<CoreVM::CoreNumber>("headers")
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
+
+    // rand builtin: returns a random positive integer > 0
+    runtime.registerFunction("rand").returnType(CoreVM::LiteralType::Number).bind([](CoreVM::Params& args) {
+        static thread_local std::mt19937_64 rng { std::random_device {}() };
+        std::uniform_int_distribution<int64_t> dist(1, INT64_MAX);
+        args.setResult(static_cast<CoreVM::CoreNumber>(dist(rng)));
+    });
+
+    // rand builtin (range): returns a random integer in [min, max]
+    runtime.registerFunction("rand")
+        .param<CoreVM::CoreNumber>("min")
+        .param<CoreVM::CoreNumber>("max")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([](CoreVM::Params& args) {
+            static thread_local std::mt19937_64 rng { std::random_device {}() };
+            auto const minVal = args.getInt(1);
+            auto const maxVal = args.getInt(2);
+            std::uniform_int_distribution<int64_t> dist(minVal, maxVal);
+            args.setResult(static_cast<CoreVM::CoreNumber>(dist(rng)));
+        });
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params&)

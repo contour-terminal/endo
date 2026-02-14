@@ -151,7 +151,7 @@ enum class TokenCategory
 /// @return True if the identifier is a known F# function.
 [[nodiscard]] constexpr bool isKnownFSharpFunction(std::string_view name) noexcept
 {
-    return name == "print" || name == "println" || name == "each";
+    return name == "print" || name == "println" || name == "each" || name == "rand";
 }
 
 /// @brief Checks whether an identifier is a known shell builtin command.
