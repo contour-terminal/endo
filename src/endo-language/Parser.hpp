@@ -111,7 +111,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseListComprehension(); ///< [for x in source -> body]
 
     // F# expression parser (precedence climbing)
-    // Precedence (low to high): |> || && comparisons +- */% ** unary application
+    // Precedence (low to high): |> || && comparisons .. +- */% ** unary application
     std::unique_ptr<ast::Expr> parseFSharpExpr();        // Entry point
     std::unique_ptr<ast::Expr> parseFSharpPipeline();    // |>
     std::unique_ptr<ast::Expr> parseFSharpComposition(); // >> <<
@@ -119,6 +119,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseFSharpAnd();         // &&
     std::unique_ptr<ast::Expr> parseFSharpCons();        // :: (right-associative)
     std::unique_ptr<ast::Expr> parseFSharpComparison();  // == != < <= > >=
+    std::unique_ptr<ast::Expr> parseFSharpRange();       // .. (range expression)
     std::unique_ptr<ast::Expr> parseFSharpAddSub();      // + -
     std::unique_ptr<ast::Expr> parseFSharpMulDivMod();   // * / %
     std::unique_ptr<ast::Expr> parseFSharpPow();         // **

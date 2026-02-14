@@ -985,14 +985,14 @@ struct LetInExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-/// If-then-else expression: `if cond then e1 else e2`
+/// If-then-else expression: `if cond then e1 else e2` or `if cond then e1` (returns unit).
 ///
-/// F# style conditional expression that evaluates to a value.
+/// F# style conditional expression. When `elseExpr` is null, the expression returns unit.
 struct IfExpr final: public Expr
 {
     std::unique_ptr<Expr> condition; ///< Boolean condition
     std::unique_ptr<Expr> thenExpr;  ///< Expression when condition is true
-    std::unique_ptr<Expr> elseExpr;  ///< Expression when condition is false
+    std::unique_ptr<Expr> elseExpr;  ///< Expression when condition is false (null = unit)
 
     IfExpr(std::unique_ptr<Expr> cond, std::unique_ptr<Expr> thenE, std::unique_ptr<Expr> elseE):
         condition(std::move(cond)), thenExpr(std::move(thenE)), elseExpr(std::move(elseE))
@@ -1023,6 +1023,20 @@ struct MutAssignStmt final: public Statement
     std::unique_ptr<Expr> value; ///< New value expression
 
     MutAssignStmt(std::string n, std::unique_ptr<Expr> val): name(std::move(n)), value(std::move(val)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Mutable variable assignment expression: `name <- value`
+///
+/// Same semantics as MutAssignStmt but usable in expression context (e.g., as the then-body
+/// of `if cond then name <- value`). Returns unit, like in F#.
+struct MutAssignExpr final: public Expr
+{
+    std::string name;            ///< Variable name
+    std::unique_ptr<Expr> value; ///< New value expression
+
+    MutAssignExpr(std::string n, std::unique_ptr<Expr> val): name(std::move(n)), value(std::move(val)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

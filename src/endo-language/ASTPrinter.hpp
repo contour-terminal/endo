@@ -60,6 +60,7 @@ class ASTPrinter: public Visitor
     void visit(IfExpr const& node) override;
     void visit(TupleExpr const& node) override;
     void visit(MutAssignStmt const& node) override;
+    void visit(MutAssignExpr const& node) override;
     void visit(LetBindingStmt const& node) override;
     void visit(LetInExpr const& node) override;
     void visit(ExprStmt const& node) override;

@@ -7,10 +7,9 @@
 | Data transformation | F# style | `data \|> map transform \|> filter valid` |
 | Process pipelines | Bash style | `ps aux \| grep nginx \| wc -l` |
 | Configuration | F# records | `{ host = "localhost"; port = 8080 }` |
-| Quick scripts | Bash style | `for f in *.txt; do cat $f; done` |
+| Quick scripts | Bash style | `for f in *.txt do cat $f end` |
 | Complex logic | F# match | `match result with \| Ok x -> ... \| Error e -> ...` |
-| Simple conditionals | Bash style | `test -f $file && cat $file` |
-| Complex conditionals | F# style | `if complex_expr then branch1 else branch2` |
+| Conditionals | F# style | `if complex_expr then branch1 else branch2` |
 | Error handling | F# style | `let result = operation?; match result with ...` |
 | One-off commands | Bash style | `ls -la; git status` |
 | Reusable functions | F# style | `let process x = x \|> transform \|> validate` |
@@ -40,9 +39,9 @@ let files = findLargeFiles "/var/log" 100
 for file in $files do
     echo "Compressing: $file"
     gzip $file
-done
+end
 
-# Conditional mixing F# and bash styles
+# Conditional mixing F# and shell commands
 if fileExists config then
     let cfg = loadConfig config
     match cfg.mode with
@@ -58,7 +57,6 @@ if fileExists config then
 else
     echo "No config found, using defaults"
     useDefaultConfig
-fi
 
 # Complex data pipeline with shell tools
 let topContributors =
@@ -147,13 +145,11 @@ export VAR = "value"
 
 # Bash: if [ -f "$file" ]; then cat "$file"; fi
 # Endo:
-if test -f $file then cat $file fi
-# or
-if fileExists file then cat $file fi
+if fileExists file then cat $file
 
 # Bash: for f in *.txt; do echo "$f"; done
 # Endo:
-for f in $(ls *.txt) do echo $f done
+for f in $(ls *.txt) do echo $f end
 # or
 ls *.txt | lines |> each echo
 
@@ -162,10 +158,8 @@ ls *.txt | lines |> each echo
 let result = command
 
 # Bash: command1 && command2 || command3
-# Endo (same):
-command1 && command2 || command3
-# or F# style:
-if command1 then command2 else command3 fi
+# Endo:
+if command1 then command2 else command3
 
 # Bash: arr=(1 2 3); echo ${arr[0]}
 # Endo:
@@ -180,6 +174,10 @@ var ?| "default"
 # Bash: function name() { ... }
 # Endo:
 let name args = ...
+
+# Bash: case $x in pattern) cmd;; esac
+# Endo:
+match x with | pattern -> cmd | _ -> ()
 ```
 
 ---

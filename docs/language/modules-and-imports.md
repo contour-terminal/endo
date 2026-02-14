@@ -21,7 +21,6 @@ if production then
     import "./config.prod.endo" as config
 else
     import "./config.dev.endo" as config
-fi
 ```
 
 ### 12.2 Standard Library

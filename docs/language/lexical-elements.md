@@ -4,8 +4,8 @@
 
 ```
 let       mut       fun       type      match     with
-when      if        then      else      elif      fi
-for       in        do        done      while     try
+when      if        then      else      elif      end
+for       in        do        while     try       finally
 return    break     continue  export    true      false
 Ok        Error     Some      None      rec       and
 of        as        global

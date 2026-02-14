@@ -29,7 +29,6 @@ if isOk result then
     process (unwrap result)
 else
     log "Failed: ${getError result}"
-fi
 ```
 
 ### 11.2 Error Propagation with `?`
@@ -176,7 +175,6 @@ if $? == 0 then
     echo "Success"
 else
     echo "Failed with code $?"
-fi
 
 # Exit with code
 exit 0                            # Success
@@ -185,21 +183,13 @@ exit 127                          # Command not found
 
 # Return from function with value
 let checkFile path =
-    if test -f $path then
-        return 0
-    else
-        return 1
-    fi
+    if test -f $path then return 0 else return 1
 
 # Check command success in conditions
-if grep -q pattern file.txt then
-    echo "Found"
-fi
+if grep -q pattern file.txt then echo "Found"
 
 # Boolean commands
-if test -f $file && test -r $file then
-    cat $file
-fi
+if test -f $file && test -r $file then cat $file
 ```
 
 ---

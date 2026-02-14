@@ -44,7 +44,7 @@ name <- "updated"
 let mut sum = 0
 for n in [1; 2; 3; 4; 5] do
     sum <- sum + n
-done
+end
 echo "Sum: $sum"              # Sum: 15
 
 # Mutable is required for accumulation patterns
@@ -52,8 +52,7 @@ let mut result = []
 for line in $(cat file.txt) | lines do
     if startsWith line "#" then
         result <- result @ [line]
-    fi
-done
+end
 ```
 
 ### 4.3 Export Bindings

@@ -174,6 +174,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::IfExpr const& node) override;
     void visit(ast::TupleExpr const& node) override;
     void visit(ast::MutAssignStmt const& node) override;
+    void visit(ast::MutAssignExpr const& node) override;
     void visit(ast::LetBindingStmt const& node) override;
     void visit(ast::LetInExpr const& node) override;
     void visit(ast::ExprStmt const& node) override;

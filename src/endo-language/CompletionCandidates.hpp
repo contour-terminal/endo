@@ -18,8 +18,8 @@ namespace endo
 /// Builtins: cd, exit, export, set, unset, read, echo, sleep, print, println, etc.
 [[nodiscard]] std::vector<CompletionCandidate> builtinCandidates();
 
-/// @brief Returns shell control flow keyword candidates.
-/// Keywords: if/then/else/elif/fi, for/while/do/done, case/esac/in, function, return, break, continue.
+/// @brief Returns control flow keyword candidates.
+/// Keywords: if/then/else/elif, for/while/do/end, in, return, break, continue.
 [[nodiscard]] std::vector<CompletionCandidate> shellKeywordCandidates();
 
 /// @brief Returns type constructor candidates.

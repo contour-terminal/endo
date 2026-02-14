@@ -16,10 +16,12 @@ let matrix = [
     [7; 8; 9]
 ]
 
-# Range syntax
+# Range syntax (brackets optional)
 let oneToTen = [1..10]                # [1; 2; 3; 4; 5; 6; 7; 8; 9; 10]
+let alsoOneToTen = 1..10              # Same — bare range works as standalone expression
 let evens = [2; 4..20]                # [2; 4; 6; 8; ... 20]
 let countdown = [10..-1..0]           # [10; 9; 8; ... 0]
+let countdown2 = 10..-1..0            # Same without brackets
 let letters = ['a'..'z']              # All lowercase letters
 
 # List comprehensions

@@ -5595,30 +5595,30 @@ TEST_CASE("IRGenerator.FSharp.option_chained_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.for_in_tuple_destructure")
 {
-    CHECK(executesWithOutput("for (x, y) in [(1, 2); (3, 4)] do\nprint x\ndone", "13"));
+    CHECK(executesWithOutput("for (x, y) in [(1, 2); (3, 4)] do\nprint x\nend", "13"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_tuple_both")
 {
-    CHECK(executesWithOutput(
-        "let mut r = 0\nfor (x, y) in [(1, 2); (3, 4)] do\nr <- r + x + y\ndone\nprint r", "10"));
+    CHECK(executesWithOutput("let mut r = 0\nfor (x, y) in [(1, 2); (3, 4)] do\nr <- r + x + y\nend\nprint r",
+                             "10"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_wildcard")
 {
-    CHECK(executesWithOutput("for (x, _) in [(1, 2); (3, 4)] do\nprint x\ndone", "13"));
+    CHECK(executesWithOutput("for (x, _) in [(1, 2); (3, 4)] do\nprint x\nend", "13"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_empty_list")
 {
     // Empty list — body never executes
-    CHECK(executesWithOutput("for (x, y) in [] do\nprint x\ndone", ""));
+    CHECK(executesWithOutput("for (x, y) in [] do\nprint x\nend", ""));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_accumulator")
 {
     CHECK(executesWithOutput(
-        "let mut sum = 0\nfor (x, _) in [(1, 10); (2, 20); (3, 30)] do\nsum <- sum + x\ndone\nprint sum",
+        "let mut sum = 0\nfor (x, _) in [(1, 10); (2, 20); (3, 30)] do\nsum <- sum + x\nend\nprint sum",
         "6"));
 }
 
@@ -5626,24 +5626,24 @@ TEST_CASE("IRGenerator.FSharp.for_in_three_elements")
 {
     // Iterates through all 3 elements
     CHECK(executesWithOutput(
-        "let mut sum = 0\nfor (x, _) in [(10, 0); (20, 0); (30, 0)] do\nsum <- sum + x\ndone\nprint sum",
+        "let mut sum = 0\nfor (x, _) in [(10, 0); (20, 0); (30, 0)] do\nsum <- sum + x\nend\nprint sum",
         "60"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_second_element")
 {
     // Access second tuple element
-    CHECK(executesWithOutput("for (_, y) in [(1, 2); (3, 4)] do\nprint y\ndone", "24"));
+    CHECK(executesWithOutput("for (_, y) in [(1, 2); (3, 4)] do\nprint y\nend", "24"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_single_element")
 {
-    CHECK(executesWithOutput("for (x, y) in [(42, 7)] do\nprint x\nprint y\ndone", "427"));
+    CHECK(executesWithOutput("for (x, y) in [(42, 7)] do\nprint x\nprint y\nend", "427"));
 }
 
 TEST_CASE("IRGenerator.FSharp.for_in_simple_variable")
 {
-    CHECK(executesWithOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\ndone", "102030"));
+    CHECK(executesWithOutput("for (x, _) in [(10, 0); (20, 0); (30, 0)] do\nprint x\nend", "102030"));
 }
 
 // ============================================================================
@@ -6696,41 +6696,74 @@ TEST_CASE("IRGenerator.FSharp.stmt_if_in_let")
     CHECK(executesWithOutput("let x = 5; if x > 3 then print x else print 0", "5"));
 }
 
+TEST_CASE("IRGenerator.FSharp.stmt_if_without_else")
+{
+    // if-then without else returns unit (F# style)
+    CHECK(executesWithOutput("if true then print 1", "1"));
+    CHECK(executesWithOutput("if false then print 1", ""));
+    CHECK(executesWithOutput("let mut x = 0\nif true then x <- 42\nprint x", "42"));
+    CHECK(executesWithOutput("let mut x = 0\nif false then x <- 42\nprint x", "0"));
+}
+
 TEST_CASE("IRGenerator.FSharp.stmt_while_basic")
 {
-    CHECK(generatesIRSuccessfully("while false do done"));
-    CHECK(generatesIRSuccessfully("while false do echo hi; done"));
-    CHECK(generatesIRSuccessfully("while true do break done"));
-    CHECK(executesWithOutput("let mut x = 3\nwhile x > 0 do\nprint x\nx <- x - 1\ndone", "321"));
-    CHECK(executesWithOutput("let mut x = 3; while x > 0 do print x; x <- x - 1; done", "321"));
+    CHECK(generatesIRSuccessfully("while false do end"));
+    CHECK(generatesIRSuccessfully("while false do echo hi; end"));
+    CHECK(generatesIRSuccessfully("while true do break end"));
+    CHECK(executesWithOutput("let mut x = 3\nwhile x > 0 do\nprint x\nx <- x - 1\nend", "321"));
+    CHECK(executesWithOutput("let mut x = 3; while x > 0 do print x; x <- x - 1; end", "321"));
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_while_break")
 {
     CHECK(executesWithOutput(
-        "let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; done", "12"));
+        "let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; end", "12"));
     CHECK(executesWithOutput(
-        "let mut x = 0\nwhile true do\nx <- x + 1\nif x == 3 then break else print x\ndone", "12"));
+        "let mut x = 0\nwhile true do\nx <- x + 1\nif x == 3 then break else print x\nend", "12"));
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_simple_variable")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3] do print x done", "123"));
+    CHECK(executesWithOutput("for x in [1; 2; 3] do print x end", "123"));
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_destructuring")
 {
-    CHECK(executesWithOutput("for (a, b) in [(1, 2); (3, 4)] do print a done", "13"));
+    CHECK(executesWithOutput("for (a, b) in [(1, 2); (3, 4)] do print a end", "13"));
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_break")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3; 4; 5] do\nif x == 3 then break else print x\ndone", "12"));
+    CHECK(executesWithOutput("for x in [1; 2; 3; 4; 5] do\nif x == 3 then break else print x\nend", "12"));
 }
 
 TEST_CASE("IRGenerator.FSharp.stmt_for_continue")
 {
-    CHECK(executesWithOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\ndone", "13"));
+    CHECK(executesWithOutput("for x in [1; 2; 3] do\nif x == 2 then continue else print x\nend", "13"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_bare_range")
+{
+    // Bare range expression (without brackets) in for-in loop
+    CHECK(executesWithOutput("for i in 1..5 do print i end", "12345"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_bare_range_step")
+{
+    // Bare range with step
+    CHECK(executesWithOutput("for i in 1..2..10 do print i end", "13579"));
+}
+
+TEST_CASE("IRGenerator.FSharp.stmt_for_bracketed_range")
+{
+    // Bracketed range still works
+    CHECK(executesWithOutput("for i in [1..5] do print i end", "12345"));
+}
+
+TEST_CASE("IRGenerator.FSharp.bare_range_let_binding")
+{
+    // Bare range as let binding
+    CHECK(generatesIRSuccessfully("let xs = 1..5"));
 }
 
 // ============================================================================

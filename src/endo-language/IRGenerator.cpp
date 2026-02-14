@@ -692,7 +692,7 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
         auto thenKind = determineReturnKind(ifExpr->thenExpr.get());
         if (thenKind != ReturnKind::Plain)
             return thenKind;
-        return determineReturnKind(ifExpr->elseExpr.get());
+        return ifExpr->elseExpr ? determineReturnKind(ifExpr->elseExpr.get()) : ReturnKind::Plain;
     }
 
     // Check match expression arms
@@ -757,7 +757,8 @@ bool IRGenerator::containsTryExpr(ast::Expr const* body) const
         return containsTryExpr(letIn->value.get()) || containsTryExpr(letIn->body.get());
 
     if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
-        return containsTryExpr(ifExpr->thenExpr.get()) || containsTryExpr(ifExpr->elseExpr.get());
+        return containsTryExpr(ifExpr->thenExpr.get())
+               || (ifExpr->elseExpr && containsTryExpr(ifExpr->elseExpr.get()));
 
     if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
     {
@@ -817,7 +818,8 @@ bool IRGenerator::needsAutoWrap(ast::Expr const* body) const
 
     // If expression: needs wrapping if either branch needs it
     if (auto* ifExpr = dynamic_cast<ast::IfExpr const*>(body))
-        return needsAutoWrap(ifExpr->thenExpr.get()) || needsAutoWrap(ifExpr->elseExpr.get());
+        return needsAutoWrap(ifExpr->thenExpr.get())
+               || (ifExpr->elseExpr && needsAutoWrap(ifExpr->elseExpr.get()));
 
     // Match expression: needs wrapping if any arm needs it
     if (auto* match = dynamic_cast<ast::MatchExpr const*>(body))
@@ -1107,7 +1109,8 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
             {
                 walk(ifExpr->condition.get(), bound);
                 walk(ifExpr->thenExpr.get(), bound);
-                walk(ifExpr->elseExpr.get(), bound);
+                if (ifExpr->elseExpr)
+                    walk(ifExpr->elseExpr.get(), bound);
                 return;
             }
 
@@ -1115,6 +1118,16 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
             {
                 for (auto const& elem: tupleExpr->elements)
                     walk(elem.get(), bound);
+                return;
+            }
+
+            if (auto const* mutExpr = dynamic_cast<ast::MutAssignExpr const*>(expr))
+            {
+                // The assigned variable itself is a free variable reference
+                if (std::ranges::find(bound, mutExpr->name) == bound.end())
+                    if (auto* storage = lookupFSharpVariable(mutExpr->name))
+                        freeVars[mutExpr->name] = storage;
+                walk(mutExpr->value.get(), bound);
                 return;
             }
 
@@ -4041,9 +4054,9 @@ void IRGenerator::visit(ast::IfExpr const& node)
         return;
     }
 
-    // Else branch
+    // Else branch (unit value when no else clause)
     _builder.setInsertPoint(elseBlock);
-    auto* elseResult = codegen(node.elseExpr.get());
+    auto* elseResult = node.elseExpr ? codegen(node.elseExpr.get()) : _builder.get(CoreVM::CoreNumber(0));
     if (elseResult)
     {
         if (resultStorage && thenResult && !typesCompatible(thenResult, elseResult))
@@ -4153,6 +4166,41 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
     // Store the new value
     _builder.createStore(binding->value, newValue, node.name + ".assign");
     _result = nullptr;
+}
+
+void IRGenerator::visit(ast::MutAssignExpr const& node)
+{
+    TRACE_SCOPE("visit(MutAssignExpr)");
+
+    // Look up the binding
+    auto const* binding = lookupFSharpBinding(node.name);
+    if (!binding)
+    {
+        reportTypeError("Undefined variable: {}", std::string_view(node.name));
+        return;
+    }
+
+    if (!binding->isMutable)
+    {
+        reportTypeError(
+            "Cannot assign to immutable variable '{}'. Use 'let mut' to declare mutable variables.",
+            std::string_view(node.name));
+        return;
+    }
+
+    // Codegen the new value
+    auto* newValue = codegen(node.value.get());
+    if (!newValue)
+    {
+        reportTypeError("Failed to generate code for assignment value");
+        return;
+    }
+
+    // Store the new value
+    _builder.createStore(binding->value, newValue, node.name + ".assign");
+
+    // As an expression, mutation returns unit
+    _result = _builder.get(CoreVM::CoreNumber(0));
 }
 
 // ============================================================================

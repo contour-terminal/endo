@@ -170,22 +170,18 @@ std::vector<CompletionCandidate> builtinCandidates()
 std::vector<CompletionCandidate> shellKeywordCandidates()
 {
     return {
-        { "if", "if", "Shell conditional", "", CompletionKind::Keyword },
-        { "then", "then", "Shell then clause", "", CompletionKind::Keyword },
-        { "else", "else", "Shell else clause", "", CompletionKind::Keyword },
-        { "elif", "elif", "Shell elif clause", "", CompletionKind::Keyword },
-        { "fi", "fi", "Shell end-if", "", CompletionKind::Keyword },
-        { "for", "for", "Shell for loop", "", CompletionKind::Keyword },
-        { "while", "while", "Shell while loop", "", CompletionKind::Keyword },
-        { "do", "do", "Shell loop body", "", CompletionKind::Keyword },
-        { "done", "done", "Shell end-loop", "", CompletionKind::Keyword },
-        { "case", "case", "Shell case statement", "", CompletionKind::Keyword },
-        { "esac", "esac", "Shell end-case", "", CompletionKind::Keyword },
-        { "in", "in", "Shell in clause", "", CompletionKind::Keyword },
-        { "function", "function", "Shell function definition", "", CompletionKind::Keyword },
-        { "return", "return", "Shell return statement", "", CompletionKind::Keyword },
-        { "break", "break", "Shell break statement", "", CompletionKind::Keyword },
-        { "continue", "continue", "Shell continue statement", "", CompletionKind::Keyword },
+        { "if", "if", "Conditional expression", "", CompletionKind::Keyword },
+        { "then", "then", "Then branch", "", CompletionKind::Keyword },
+        { "else", "else", "Else branch", "", CompletionKind::Keyword },
+        { "elif", "elif", "Elif branch", "", CompletionKind::Keyword },
+        { "for", "for", "For-in loop", "", CompletionKind::Keyword },
+        { "while", "while", "While loop", "", CompletionKind::Keyword },
+        { "do", "do", "Loop body", "", CompletionKind::Keyword },
+        { "end", "end", "End loop", "", CompletionKind::Keyword },
+        { "in", "in", "In clause", "", CompletionKind::Keyword },
+        { "return", "return", "Return statement", "", CompletionKind::Keyword },
+        { "break", "break", "Break statement", "", CompletionKind::Keyword },
+        { "continue", "continue", "Continue statement", "", CompletionKind::Keyword },
     };
 }
 

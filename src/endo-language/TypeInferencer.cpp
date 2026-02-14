@@ -159,6 +159,12 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             return thenResult;
         auto [thenType, s3] = *thenResult;
 
+        if (!ifExpr->elseExpr)
+        {
+            // No else branch — expression returns unit
+            return std::pair { thenType, s3 };
+        }
+
         auto elseResult = inferExpr(*ifExpr->elseExpr, env, s3);
         if (!elseResult)
             return elseResult;
@@ -759,6 +765,27 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
 
     if (dynamic_cast<ast::ArithExpansionExpr const*>(&expr))
         return std::pair { types::intType(), subst };
+
+    // Mutable assignment expression: `name <- value` returns unit
+    if (auto const* mutExpr = dynamic_cast<ast::MutAssignExpr const*>(&expr))
+    {
+        auto valResult = inferExpr(*mutExpr->value, env, subst);
+        if (!valResult)
+            return valResult;
+        auto [valType, s1] = *valResult;
+
+        // Unify with existing binding type if available
+        if (auto scheme = env->lookup(mutExpr->name))
+        {
+            auto existingType = env->instantiate(*scheme);
+            auto s2 = unifyAndCompose(valType, existingType, s1);
+            if (!s2)
+                return std::unexpected(s2.error());
+            return std::pair { types::unitType(), *s2 };
+        }
+
+        return std::pair { types::unitType(), s1 };
+    }
 
     // Unknown expression type — use fresh type variable to avoid blocking inference
     return std::pair { env->freshTypeVarType(), subst };

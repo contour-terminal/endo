@@ -24,9 +24,7 @@ let gt = a > b      # Greater than
 let ge = a >= b     # Greater than or equal
 
 # Comparisons return bool
-if count >= 10 then
-    echo "Enough items"
-fi
+if count >= 10 then echo "Enough items"
 ```
 
 ### 8.3 Logical Operators
@@ -38,9 +36,7 @@ let not_ = !a       # Logical NOT
 
 # Short-circuit evaluation
 if fileExists path && isReadable path then
-    # isReadable only called if fileExists returns true
-    cat $path
-fi
+    cat $path    # isReadable only called if fileExists returns true
 
 # In expressions
 let canProceed = isValid && hasPermission || isAdmin
@@ -166,11 +162,12 @@ From lowest to highest precedence:
 | 2 | `\|\|` | Left |
 | 3 | `&&` | Left |
 | 4 | `==` `!=` `<` `<=` `>` `>=` | Left |
-| 5 | `+` `-` | Left |
-| 6 | `*` `/` `%` | Left |
-| 7 | `**` | Right |
-| 8 | `!` `-` (unary) | Right |
-| 9 | `.` `[]` function application | Left |
+| 5 | `..` (range) | None |
+| 6 | `+` `-` | Left |
+| 7 | `*` `/` `%` | Left |
+| 8 | `**` | Right |
+| 9 | `!` `-` (unary) | Right |
+| 10 | `.` `[]` function application | Left |
 
 ---
 **See also:** [Functions](functions.md) | [Lists & Collections](lists-and-collections.md) | [Command Execution](command-execution.md)

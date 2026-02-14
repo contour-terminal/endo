@@ -1,11 +1,12 @@
 # Control Flow
 
-### 9.1 If Expression/Statement
+### 9.1 If Expression
 
-`if` can be used as an expression (returns value) or statement (for effects).
+`if` is an expression that returns a value. The `else` branch is optional — when
+omitted, the false branch returns unit (like F#).
 
 ```endo
-# If as EXPRESSION (returns value, requires else)
+# Simple if expression
 let status = if count > 0 then "has items" else "empty"
 let max = if a > b then a else b
 let sign = if n < 0 then -1 elif n > 0 then 1 else 0
@@ -21,25 +22,19 @@ let category =
     else
         "senior"
 
-# If as STATEMENT (for side effects, else optional)
+# If expression at statement level (for side effects)
 if fileExists path then
     echo "File found"
-    cat $path
-fi
-
-if hasErrors then
-    echo "Errors detected!"
-    exit 1
-fi
-
-# With else
-if fileExists path then
-    echo "File found"
-    cat $path
 else
     echo "File not found"
     exit 1
-fi
+
+# Optional else — if without else returns unit
+let mut x = 0
+if condition then x <- 42
+print x
+
+if verbose then print "debug info"
 
 # Elif chains
 if status == 200 then
@@ -50,15 +45,13 @@ elif status >= 500 then
     echo "Server error"
 else
     echo "Unknown: $status"
-fi
 
-# Single-line (semicolons optional because 'then' is keyword)
-if test -f $file then cat $file fi
-if test -f $file then cat $file else echo "missing" fi
+# Single-line
+if test -f $file then cat $file else echo "missing"
 
 # Parentheses optional around condition
-if (count > 0) then process fi
-if count > 0 then process fi        # Same thing
+if (count > 0) then process
+if count > 0 then process           # Same thing
 ```
 
 ### 9.2 Match Expression
@@ -88,104 +81,57 @@ match command with
 # For-in loop over list
 for item in [1; 2; 3; 4; 5] do
     echo "Item: $item"
-done
+end
 
 # For-in over range
 for i in 1..10 do
     echo "Count: $i"
-done
+end
 
 for i in 10..-1..1 do
     echo "Countdown: $i"
-done
+end
 
 # For-in over command output
 for file in $(ls *.txt) do
     echo "Processing: $file"
     wc -l $file
-done
+end
 
 # For-in with destructuring
 for (name, value) in entries do
     echo "$name = $value"
-done
+end
 
 for { host; port } in servers do
     ping $host
-done
+end
 
 # While loop
 let mut n = 10
 while n > 0 do
     echo "Countdown: $n"
     n <- n - 1
-done
+end
 
 # Infinite loop with break
 while true do
     let input = read
-    if input == "quit" then break fi
+    if input == "quit" then break
     process input
-done
+end
 
 # Break and continue
 for item in items do
-    if item == "skip" then continue fi
-    if item == "stop" then break fi
+    if item == "skip" then continue
+    if item == "stop" then break
     process item
-done
+end
 
 # While with complex condition
 while hasMoreData && !cancelled do
     processNextBatch
-done
-```
-
-### 9.4 Bash-Compatible Control Flow
-
-For compatibility, traditional bash syntax is also supported.
-
-```endo
-# Traditional if-then-else-fi with test
-if [ -f "$file" ]; then
-    cat "$file"
-elif [ -d "$file" ]; then
-    ls "$file"
-else
-    echo "Not found"
-fi
-
-# Brackets optional with endo conditions
-if test -f $file then
-    cat $file
-fi
-
-# Case statement (bash style)
-case $command in
-    start)
-        start_service
-        ;;
-    stop)
-        stop_service
-        ;;
-    restart)
-        stop_service
-        start_service
-        ;;
-    *)
-        echo "Unknown command"
-        ;;
-esac
-
-# Short-circuit operators as control flow
-test -f $file && cat $file
-test -f $file || echo "Not found"
-command1 && command2 || fallback
-
-# C-style for loop (coming soon)
-# for ((i = 0; i < 10; i++)) do
-#     echo $i
-# done
+end
 ```
 
 ---

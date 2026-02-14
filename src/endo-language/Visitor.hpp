@@ -49,6 +49,7 @@ struct WhileStmt;
 struct IfExpr;
 struct TupleExpr;
 struct MutAssignStmt;
+struct MutAssignExpr;
 struct LetBindingStmt;
 struct LetInExpr;
 struct ExprStmt;
@@ -140,6 +141,7 @@ struct Visitor
     virtual void visit(IfExpr const&) = 0;
     virtual void visit(TupleExpr const&) = 0;
     virtual void visit(MutAssignStmt const&) = 0;
+    virtual void visit(MutAssignExpr const&) = 0;
     virtual void visit(LetBindingStmt const&) = 0;
     virtual void visit(LetInExpr const&) = 0;
     virtual void visit(ExprStmt const&) = 0;

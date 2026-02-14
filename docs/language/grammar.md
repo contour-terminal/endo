@@ -13,7 +13,6 @@ program         = { statement } ;
 
 statement       = let_statement
                 | type_definition
-                | if_statement
                 | for_statement
                 | while_statement
                 | match_statement
@@ -41,13 +40,9 @@ field_def       = identifier ":" type ;
 union_type      = [ "|" ] union_case { "|" union_case } ;
 union_case      = identifier [ "of" type ] ;
 
-if_statement    = "if" expression [ ";" ] "then" block
-                  { "elif" expression [ ";" ] "then" block }
-                  [ "else" block ] "fi" ;
+for_statement   = "for" pattern "in" expression [ ";" ] "do" block "end" ;
 
-for_statement   = "for" pattern "in" expression [ ";" ] "do" block "done" ;
-
-while_statement = "while" expression [ ";" ] "do" block "done" ;
+while_statement = "while" expression [ ";" ] "do" block "end" ;
 
 match_statement = "match" expression "with" { match_arm } ;
 match_arm       = "|" pattern [ "when" expression ] "->" block_or_expr ;
@@ -93,7 +88,7 @@ lambda_expression = "fun" { pattern } "->" expression
                   | if_expression
                   ;
 
-if_expression   = "if" expression "then" expression "else" expression
+if_expression   = "if" expression "then" expression [ "else" expression ]
                 | match_expression
                 ;
 
@@ -105,7 +100,8 @@ pipeline_expression = logical_or { "|>" logical_or } ;
 
 logical_or      = logical_and { "||" logical_and } ;
 logical_and     = comparison { "&&" comparison } ;
-comparison      = additive { comparison_op additive } ;
+comparison      = range { comparison_op range } ;
+range           = additive [ ".." additive [ ".." additive ] ] ;
 additive        = multiplicative { ( "+" | "-" ) multiplicative } ;
 multiplicative  = power { ( "*" | "/" | "%" ) power } ;
 power           = unary [ "**" power ] ;
@@ -290,10 +286,9 @@ comment         = "#" { any_char } newline
 |   cmd | lines |> map f          Mixed                                |
 +----------------------------------------------------------------------+
 | CONTROL FLOW                                                         |
-|   if cond then a else b         If expression                        |
-|   if cond then block fi         If statement                         |
-|   for x in xs do block done     For loop                             |
-|   while cond do block done      While loop                           |
+|   if cond then a [else b]       If expression (else optional)         |
+|   for x in xs do block end      For loop                             |
+|   while cond do block end       While loop                           |
 +----------------------------------------------------------------------+
 | ERROR HANDLING                                                       |
 |   let x = cmd?                  Propagate error                      |

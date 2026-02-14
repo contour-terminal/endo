@@ -53,11 +53,9 @@ The specification serves as the design document for Phase 1.8 implementation.
 | Process substitution (`<(cmd)`, `>(cmd)`) | ✅ |
 | Logical operators (`&&`, `||`) | ✅ |
 | Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
-| If-then-else-elif-fi statements | ✅ |
-| While-do-done statements | ✅ |
-| For-in loops (`for var in list; do ...; done`) | ✅ |
-| Case statements (`case ... esac`) | ✅ |
-| Function definitions (`function name() {}`, `name() {}`) | ✅ |
+| If-then-else-elif expressions (else optional) | ✅ |
+| While-do-end statements | ✅ |
+| For-in loops (`for var in list do ... end`) | ✅ |
 | Break and continue statements | ✅ |
 | Return statement | ✅ |
 | TTY abstraction with raw mode | ✅ |
@@ -224,11 +222,10 @@ Windows support.
 **Dependency:** Phase 1.1 (variables for loop iteration)
 
 **Tasks:**
-- [x] Implement `for var in list; do ...; done`
-- [x] Implement `for ((init; cond; step)); do ...; done` → Deferred: requires arithmetic assignment expressions
-- [x] Implement `case ... esac` pattern matching
-- [ ] Implement `select` for menu generation → Deferred: requires TTY interaction
-- [x] Implement function definitions `function name() { ... }` and `name() { ... }`
+- [x] Implement `for var in list do ... end`
+- [x] Implement `for ((init; cond; step)) do ... end` → Deferred: requires arithmetic assignment expressions
+- [x] Match expression replaces bash `case...esac` (`match x with | pattern -> ...`)
+- [x] Function definitions via `let name args = ...` (replaced bash `function name() { }`)
 - [x] Implement `return` statement for functions
 - [x] Implement `break` and `continue` for loops
 - [x] Add control flow tests
@@ -503,6 +500,8 @@ src/
 **Implementation Notes:**
 - See `docs/language/implementation-notes.md` for detailed parser implementation notes
 - See `ROADMAP-Language.md` for F# feature implementation status
+- **Loop syntax**: `for ... do ... end` / `while ... do ... end` (replaced `done` with `end`)
+- **Bare range expressions**: `1..10` and `1..2..10` work as standalone expressions (not only inside `[...]`); `..` precedence between comparisons and arithmetic
 - **Dual semantics**: `let` unambiguously starts F# style; `|>` (function pipe) and `|` (shell pipe) are distinct tokens; expression context captures output, statement context prints to terminal
 - **Type inference**: Hindley-Milner Algorithm W pre-pass (`TypeInferencer`) integrated into `IRGenerator::generate()`, enabling handler compilation without explicit annotations for primitive types
 - **Handler compilation**: Functions with all typed parameters compile as separate IRHandlers (UCALL/URET/UTCALL); untyped functions fall back to AST inlining

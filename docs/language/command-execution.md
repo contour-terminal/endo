@@ -20,11 +20,11 @@ ps aux | grep nginx
 cat file.txt | sort | uniq
 
 # In blocks
-if needsUpdate then
+if needsUpdate then {
     echo "Updating..."
     git pull
     make build
-fi
+}
 ```
 
 ### 10.2 Expression Context (Capture Output)
@@ -52,7 +52,6 @@ let nonEmpty = cat file.txt | lines |> filter (fun l -> l != "")
 # In conditionals
 if $(grep -q pattern file.txt) then
     echo "Pattern found"
-fi
 
 # As function arguments
 process (cat config.txt)
@@ -143,7 +142,7 @@ diff <(sort file1) <(sort file2)
 # Use command output as input file
 while read line do
     process $line
-done < <(find . -name "*.txt")
+end < <(find . -name "*.txt")
 
 # Multiple process substitutions
 paste <(cut -f1 file1) <(cut -f2 file2)

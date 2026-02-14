@@ -15,7 +15,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Lambda expressions: `fun x -> x * 2`
 - [x] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc
 - [x] Let-in expressions: `let x = 5 in x + 1`
-- [x] If-then-else expressions: `if cond then a else b`
+- [x] If-then-else expressions: `if cond then a else b` (else optional, returns unit)
 - [x] Match expressions: `match x with | pattern -> result`
 - [x] List expressions: `[1; 2; 3]`
 - [x] List ranges: `[1..10]`, `[1..2..10]`, `[10..-1..7]`
@@ -179,7 +179,8 @@ This document tracks the implementation status of F# language features as define
 - [x] While loops
 - [x] For-in loops
 - [x] Break and continue
-- [x] For loops with destructuring: `for (name, value) in entries do ... done`
+- [x] For loops with destructuring: `for (name, value) in entries do ... end`
+- [x] Bare range expressions: `1..10` and `1..2..10` (standalone, not only inside `[...]`)
 
 ## Standard Library Builtins
 
@@ -319,7 +320,11 @@ Consult this section to determine what to work on next.
 - [x] Optional chaining `?.` — desugar to match on Option
 - [x] Option default `?|` — desugar to match with default value
 - [x] Option combinators: `Option.map`, `Option.bind`, `Option.defaultValue` (module-qualified + method-style + pipeline)
-- [x] For loop destructuring: `for (name, value) in entries do ... done`
+- [x] For loop destructuring: `for (name, value) in entries do ... end`
+- [x] Loop-closing keyword changed from `done` to `end`
+- [x] Bare range expressions: `1..10`, `1..2..10` as standalone expressions
+- [x] Optional else in if-expressions: `if cond then expr` returns unit when false
+- [x] Mutable assignment as expression (`MutAssignExpr`): `x <- 42` usable in expression context
 - [ ] Numeric literal suffixes: byte sizes (`kb`, `mb`, `gb`, `tb`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time
 
 ### Phase 6.3a — Output Recognition Files
