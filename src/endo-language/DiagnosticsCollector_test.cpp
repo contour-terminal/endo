@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <catch2/catch_test_macros.hpp>
-
 #include <endo-language/DiagnosticsCollector.hpp>
+
+#include <catch2/catch_test_macros.hpp>
 
 using namespace endo;
 
@@ -224,6 +224,14 @@ TEST_CASE("DiagnosticsCollector.option_unwrapped_no_type_error", "[diagnostics][
     auto diagnostics = collectDiagnostics(R"(let r = (env "HOME")? + "/.local/bin")");
     for (auto const& d: diagnostics)
         CHECK(d.message.find("must be unwrapped") == std::string::npos);
+}
+
+TEST_CASE("DiagnosticsCollector.cd_tilde_no_crash", "[diagnostics][builtins]")
+{
+    // Regression: cd ~ crashed interactive shell because StubRuntime
+    // was missing expand.tilde builtin
+    auto diagnostics = collectDiagnostics("cd ~");
+    CHECK(diagnostics.empty());
 }
 
 TEST_CASE("DiagnosticsCollector.heterogeneous_list_type_error", "[diagnostics][type-error]")

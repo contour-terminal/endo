@@ -361,6 +361,44 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreNumber>("ms")
         .returnType(CoreVM::LiteralType::Void)
         .bind(dummyHandler);
+
+    // Shell expansion stubs needed by IRGenerator
+    runtime.registerFunction("expand.tilde")
+        .param<CoreVM::CoreString>("suffix")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.tilde_user")
+        .param<CoreVM::CoreString>("user")
+        .param<CoreVM::CoreString>("suffix")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.glob")
+        .param<CoreVM::CoreString>("pattern")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.to_string")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.arith_to_string")
+        .param<CoreVM::CoreNumber>("value")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.arith_getvar")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("expand.arith_pow")
+        .param<CoreVM::CoreNumber>("left")
+        .param<CoreVM::CoreNumber>("right")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
 }
 
 } // namespace endo
