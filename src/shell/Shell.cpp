@@ -1444,6 +1444,18 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinDisplayResult, this);
 
+    // HTTP fetch builtins: fetch(url) and fetch(url, headers)
+    _runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinFetch, this);
+
+    _runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .param<CoreVM::CoreNumber>("headers")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(&Shell::builtinFetchWithHeaders, this);
+
     // Helper: converts a list TypedObject to string "[1; 2; 3]" (delegates to valueToString)
     auto listToString = [](CoreVM::TypedObject* obj, CoreVM::Runner* runner) -> std::string {
         return valueToString(reinterpret_cast<uintptr_t>(obj), runner);
@@ -6070,6 +6082,138 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     auto str = valueToString(rawVal, runner);
     str += '\n';
     [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+}
+
+namespace
+{
+
+    /// Performs the common fetch logic: downloads URL to a file, returns Result (Ok filename / Error msg).
+    void executeFetch(CoreVM::Params& args,
+                      std::string const& url,
+                      std::vector<std::string> headers,
+                      bool interactive)
+    {
+        auto* runner = args.caller();
+
+        // Determine output filename from URL, or generate a unique one
+        auto filename = http::extractFilenameFromUrl(url);
+        auto outputPath = std::filesystem::current_path();
+
+        if (filename)
+        {
+            outputPath /= *filename;
+        }
+        else
+        {
+            // Generate unique filename via mkstemp
+            auto pattern = (outputPath / "fetch_XXXXXX").string();
+            auto const fd = mkstemp(pattern.data());
+            if (fd == -1)
+            {
+                auto* resultObj = runner->allocObject(CoreVM::BuiltinTypeId::Result);
+                resultObj->tag = 0;
+                resultObj->setSlot(
+                    0, reinterpret_cast<uintptr_t>(runner->newString("Failed to create temporary file")));
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(resultObj)));
+                return;
+            }
+            close(fd);
+            outputPath = pattern;
+        }
+
+        http::HttpClient client;
+        http::HttpRequest request {
+            .url = url,
+            .headers = std::move(headers),
+        };
+
+        // Progress bar on stderr when interactive, stderr is a TTY, and not suppressed
+        bool const showProgress =
+            interactive && isatty(STDERR_FILENO) != 0 && getenv("ENDO_FETCH_QUIET") == nullptr;
+
+        if (showProgress)
+        {
+            request.progressCallback = [](size_t total, size_t now) -> bool {
+                if (total > 0)
+                {
+                    auto const pct = static_cast<int>((now * 100) / total);
+                    auto const barWidth = 30;
+                    auto const filled = (pct * barWidth) / 100;
+                    std::string bar(static_cast<size_t>(filled), '=');
+                    if (filled < barWidth)
+                    {
+                        bar += '>';
+                        bar.append(static_cast<size_t>(barWidth - filled - 1), ' ');
+                    }
+                    std::print(stderr, "\r[{}] {}%", bar, pct);
+                }
+                else if (now > 0)
+                {
+                    std::print(stderr, "\rfetch: {} bytes received", now);
+                }
+                return true;
+            };
+        }
+
+        auto result = client.download(request, outputPath);
+
+        // Clear progress bar
+        if (showProgress)
+            std::print(stderr, "\r{}\r", std::string(60, ' '));
+
+        auto* resultObj = runner->allocObject(CoreVM::BuiltinTypeId::Result);
+
+        if (result.has_value() && result->statusCode >= 200 && result->statusCode < 300)
+        {
+            // Ok(filename) — return the relative filename
+            resultObj->tag = 1;
+            resultObj->setSlot(
+                0, reinterpret_cast<uintptr_t>(runner->newString(outputPath.filename().string())));
+        }
+        else if (result.has_value())
+        {
+            // HTTP error (non-2xx): delete the file and return Error(message)
+            std::filesystem::remove(outputPath);
+            auto msg = std::format("HTTP {}", result->statusCode);
+            resultObj->tag = 0;
+            resultObj->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(msg)));
+        }
+        else
+        {
+            // Curl/transport error: partial file already deleted by download(), return Error(message)
+            resultObj->tag = 0;
+            resultObj->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(result.error().message)));
+        }
+
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(resultObj)));
+    }
+
+} // namespace
+
+void Shell::builtinFetch(CoreVM::Params& context)
+{
+    auto const& url = context.getString(1);
+    executeFetch(context, url, {}, _interactive);
+}
+
+void Shell::builtinFetchWithHeaders(CoreVM::Params& context)
+{
+    auto const& url = context.getString(1);
+    auto* headersList = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(context.getInt(2)));
+
+    // Walk the linked list to extract header strings
+    std::vector<std::string> headers;
+    auto* cur = headersList;
+    while (cur && cur->tag == 1) // tag 1 = Cons
+    {
+        auto const slot0 = cur->getSlot(0);
+        auto const* str = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slot0));
+        if (str)
+            headers.emplace_back(*str);
+        cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1));
+    }
+
+    executeFetch(context, url, std::move(headers), _interactive);
 }
 
 } // namespace endo

@@ -192,6 +192,17 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::String)
         .bind(dummyHandler);
 
+    // HTTP fetch builtin stubs
+    runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .param<CoreVM::CoreNumber>("headers")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
     // structured_ls builtin stub
     runtime.registerFunction("structured_ls")
         .param<CoreVM::CoreString>("path")

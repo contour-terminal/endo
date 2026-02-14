@@ -127,7 +127,7 @@ else()
     target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
 endif()
 
-target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json)
+target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
 
 target_compile_definitions(endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"

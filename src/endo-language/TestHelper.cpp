@@ -1197,6 +1197,17 @@ TestRuntime::TestRuntime()
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
+
+    // HTTP fetch builtin stubs (returns Result<string, string>)
+    runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+    runtime.registerFunction("fetch")
+        .param<CoreVM::CoreString>("url")
+        .param<CoreVM::CoreNumber>("headers")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params&)

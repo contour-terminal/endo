@@ -6957,3 +6957,44 @@ TEST_CASE("IRGenerator.FSharp.variadic.stmt_level_ampersand")
     // & at statement level generates IR successfully
     CHECK(generatesIRSuccessfully("& echo test"));
 }
+
+// =============================================================================
+// F# fetch builtin IR Generation Tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.fetch.single_arg")
+{
+    // fetch with URL string generates IR with Result annotation
+    REQUIRE(generatesIRSuccessfully(R"(let r = fetch "https://example.com")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.fetch.two_args")
+{
+    // fetch with URL and headers list generates IR
+    REQUIRE(generatesIRSuccessfully(R"(let r = fetch "https://example.com" ["Authorization: Bearer tok"])"));
+}
+
+TEST_CASE("IRGenerator.FSharp.fetch.match_on_result")
+{
+    // fetch result can be pattern matched as Ok/Error
+    REQUIRE(generatesIRSuccessfully(
+        R"(let r = match fetch "https://example.com" with | Ok body -> body | Error msg -> msg)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.fetch.question_mark_operator")
+{
+    // fetch result works with ? operator
+    REQUIRE(generatesIRSuccessfully(R"(let body = (fetch "https://example.com")?)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.fetch.non_string_url_error")
+{
+    // fetch with a non-string URL argument should be a type error
+    CHECK(generatesIRWithError("let r = fetch 42", "fetch url argument must be a string"));
+}
+
+TEST_CASE("IRGenerator.FSharp.fetch.three_args_error")
+{
+    // fetch with too many arguments should be a type error
+    CHECK(generatesIRWithError(R"(let r = fetch "a" "b" "c")", "fetch requires 1 or 2 arguments"));
+}

@@ -1,0 +1,8 @@
+// Downloading files with fetch
+//
+// fetch downloads a URL to a file in the current working directory
+// and returns result<str, str> where Ok contains the local filename.
+
+// Download a file
+let path = (fetch "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.19.tar.xz")?
+println ("Downloaded to: " + path)

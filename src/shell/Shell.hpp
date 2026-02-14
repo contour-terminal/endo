@@ -27,6 +27,7 @@
 #include "SignalHandler.hpp"
 #include "TTY.hpp"
 #include <endo-language/IRGenerator.hpp>
+#include <http/HttpClient.hpp>
 
 namespace endo
 {
@@ -169,6 +170,19 @@ class Shell final
     void builtinPrint(CoreVM::Params& context);
     void builtinPrintln(CoreVM::Params& context);
     void builtinDisplayResult(CoreVM::Params& context);
+    /// Downloads a URL to a file in the current working directory.
+    ///
+    /// The filename is derived from the URL path, or auto-generated if no filename can be extracted.
+    /// Returns Ok(filename) on success, Error(message) on failure.
+    /// @param context Params: (url: string) -> Number (Result object pointer)
+    void builtinFetch(CoreVM::Params& context);
+
+    /// Downloads a URL to a file with custom headers.
+    ///
+    /// Headers are passed as a List of "Key: Value" strings.
+    /// Returns Ok(filename) on success, Error(message) on failure.
+    /// @param context Params: (url: string, headers: Number/List) -> Number (Result object pointer)
+    void builtinFetchWithHeaders(CoreVM::Params& context);
 
     // Helper functions
     void cleanupProcSubst();

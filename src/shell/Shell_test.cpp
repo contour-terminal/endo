@@ -2254,3 +2254,23 @@ TEST_CASE("shell.partial_line_indicator.silent_on_failure")
 
     CHECK(output.empty());
 }
+
+// ============================================================================
+// Fetch Builtin Tests
+// ============================================================================
+
+TEST_CASE("shell.fsharp.fetch.invalid_url")
+{
+    // fetch with an invalid URL should return Error result
+    TestShell shell;
+    shell(R"(match fetch "not-a-valid-url" with | Ok b -> print "ok" | Error e -> print "error")");
+    CHECK(escape(shell.output()) == escape("error"));
+}
+
+TEST_CASE("shell.fsharp.fetch.connection_refused")
+{
+    // fetch to a port with no listener should return Error result
+    TestShell shell;
+    shell(R"(match fetch "http://localhost:1" with | Ok b -> print "ok" | Error e -> print "error")");
+    CHECK(escape(shell.output()) == escape("error"));
+}

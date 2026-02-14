@@ -1776,7 +1776,72 @@ let ext = Path.extension "file.txt"   # ".txt"
 let base_ = Path.basename "/a/b/c.txt" # "c.txt"
 ```
 
-### 12.3 Creating Modules
+### 12.3 HTTP: `fetch`
+
+The `fetch` builtin downloads a URL to a file in the current working directory,
+streaming the response directly to disk without holding the entire body in memory.
+The return type is `result<str, str>`:
+
+- **`Ok filename`** — the local filename where the response was saved (relative to CWD).
+- **`Error msg`** — a human-readable error message. This covers both transport-level
+  failures (DNS resolution, connection refused, timeout) and
+  HTTP-level errors (non-2xx status codes produce `"HTTP 404"`, `"HTTP 500"`, etc.).
+
+The filename is derived from the URL path (last non-empty segment, query/fragment stripped).
+If the URL has no filename (e.g. `https://example.com/`), a unique name is generated
+automatically (e.g. `fetch_a1b2c3`). Existing files with the same name are overwritten.
+
+```fsharp
+# Signature
+fetch : str -> result<str, str>
+fetch : str -> list<str> -> result<str, str>
+```
+
+**Basic download:**
+
+```fsharp
+# Downloads to ./data.json, returns Ok "data.json"
+let result = fetch "https://api.example.com/data.json"
+
+match result with
+| Ok path  -> println ("Saved to: " + path)
+| Error msg -> println ("Error: " + msg)
+```
+
+**Unwrap with `?` operator** — propagates `Error` automatically:
+
+```fsharp
+let path = (fetch "https://api.example.com/data.json")?
+println ("Downloaded: " + path)
+```
+
+**Custom request headers** — pass a list of `"Key: Value"` strings as the second argument:
+
+```fsharp
+let path = (fetch "https://example.com/file.tar.gz"
+                  ["Authorization: Bearer tok"; "Accept: application/octet-stream"])?
+```
+
+**Pipeline usage:**
+
+```fsharp
+fetch "https://api.example.com/data.json" |> print
+```
+
+**Progress bar:** When the shell is interactive and stderr is a TTY, `fetch` displays a
+progress bar on stderr. It is automatically suppressed when stdout is piped or when the
+environment variable `ENDO_FETCH_QUIET=1` is set.
+
+**Limits:**
+
+| Property | Value |
+|----------|-------|
+| HTTP method | GET only (POST/PUT/etc. planned) |
+| Response size | No limit (streams directly to disk) |
+| Redirects | Followed automatically (up to 10) |
+| Timeout | None by default (libcurl default) |
+
+### 12.4 Creating Modules
 
 ```fsharp
 # mymodule.endo
@@ -2603,6 +2668,10 @@ comment         = "#" { any_char } newline
 ║   Ok value, Error e             Result constructors                  ║
 ║   Some x, None                  Option constructors                  ║
 ║   try block with | e -> ...     Try-with                             ║
+╠══════════════════════════════════════════════════════════════════════╣
+║ HTTP                                                                  ║
+║   fetch url                       Download to file → result<str, str> ║
+║   fetch url headers               Download with custom headers        ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ SHELL FEATURES                                                       ║
 ║   $VAR, ${VAR}                  Variable expansion                   ║

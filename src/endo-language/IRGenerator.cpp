@@ -3600,6 +3600,61 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // fetch: 1 or 2 args, returns Result<string, string>
+    if (name == "fetch")
+    {
+        if (argExprs.empty() || argExprs.size() > 2)
+        {
+            reportTypeError("fetch requires 1 or 2 arguments (url [, headers]), got {}", argExprs.size());
+            return true;
+        }
+
+        auto* urlVal = codegen(argExprs[0]);
+        if (!urlVal)
+        {
+            reportTypeError("Failed to evaluate fetch url argument");
+            return true;
+        }
+        if (urlVal->type() != CoreVM::LiteralType::String)
+        {
+            reportTypeError("fetch url argument must be a string");
+            return true;
+        }
+
+        if (argExprs.size() == 1)
+        {
+            auto* callback = findCallback("fetch(S)I");
+            if (!callback)
+            {
+                reportTypeError("fetch builtin not registered");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { urlVal }, "fetch");
+        }
+        else
+        {
+            auto* headersVal = codegen(argExprs[1]);
+            if (!headersVal)
+            {
+                reportTypeError("Failed to evaluate fetch headers argument");
+                return true;
+            }
+            auto* callback = findCallback("fetch(SI)I");
+            if (!callback)
+            {
+                reportTypeError("fetch builtin not registered");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { urlVal, headersVal }, "fetch");
+        }
+
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+        annotateInnerType(_result, CoreVM::LiteralType::String);
+        return true;
+    }
+
     return false;
 }
 

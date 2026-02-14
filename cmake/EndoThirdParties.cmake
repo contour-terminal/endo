@@ -24,6 +24,7 @@ macro(EndoThirdPartiesSummary2)
     message(STATUS "boxed-cpp           ${THIRDPARTY_BUILTIN_boxed_cpp}")
     message(STATUS "reflection-cpp      ${THIRDPARTY_BUILTIN_reflection_cpp}")
     message(STATUS "nlohmann_json       ${THIRDPARTY_BUILTIN_nlohmann_json}")
+    message(STATUS "CURL                ${THIRDPARTY_BUILTIN_CURL}")
     message(STATUS "------------------------------------------------------------------------------")
 endmacro()
 
@@ -136,6 +137,26 @@ else()
         EXCLUDE_FROM_ALL YES
     )
     set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
+endif()
+
+# ==============================================================================
+# CURL - HTTP client library
+# ==============================================================================
+find_package(CURL QUIET)
+if(TARGET CURL::libcurl)
+    set(THIRDPARTY_BUILTIN_CURL "system package")
+else()
+    CPMAddPackage(
+        NAME CURL
+        GIT_TAG curl-8_9_1
+        GITHUB_REPOSITORY curl/curl
+        OPTIONS
+            "BUILD_TESTING OFF"
+            "BUILD_CURL_EXE OFF"
+            "BUILD_SHARED_LIBS OFF"
+        EXCLUDE_FROM_ALL YES
+    )
+    set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1)")
 endif()
 
 # ==============================================================================
