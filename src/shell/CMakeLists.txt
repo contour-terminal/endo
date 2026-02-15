@@ -134,6 +134,25 @@ endif()
 
 target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
 
+# C++23 std::stacktrace may require -lstdc++exp (GCC/Clang with libstdc++)
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles("
+#include <stacktrace>
+int main() { return int(std::stacktrace::current().size()); }
+" ENDO_STACKTRACE_NATIVE)
+
+if(NOT ENDO_STACKTRACE_NATIVE AND NOT MSVC)
+    set(CMAKE_REQUIRED_LIBRARIES stdc++exp)
+    check_cxx_source_compiles("
+    #include <stacktrace>
+    int main() { return int(std::stacktrace::current().size()); }
+    " ENDO_STACKTRACE_WITH_EXP)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    if(ENDO_STACKTRACE_WITH_EXP)
+        target_link_libraries(endo-shell PRIVATE stdc++exp)
+    endif()
+endif()
+
 target_compile_definitions(endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
 )

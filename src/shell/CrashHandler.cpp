@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CrashHandler.hpp"
 
+#if __has_include(<stacktrace>)
+    #include <stacktrace>
+    #include <string>
+    #define ENDO_HAS_STACKTRACE 1
+#endif
+
 #if !defined(_WIN32)
     #include <cstdio>
     #include <cstdlib>
@@ -8,7 +14,9 @@
 
     #include <sys/stat.h>
 
-    #include <execinfo.h>
+    #if !defined(ENDO_HAS_STACKTRACE)
+        #include <execinfo.h>
+    #endif
     #include <fcntl.h>
     #include <signal.h>
     #include <time.h>
@@ -248,9 +256,21 @@ namespace
         writeStr(fd, "\n");
 
         writeStr(fd, "\nBacktrace:\n");
+    #if defined(ENDO_HAS_STACKTRACE)
+        // std::stacktrace::current() allocates, which is not async-signal-safe.
+        // This is acceptable in a fatal crash handler — best-effort before termination.
+        auto const trace = std::stacktrace::current();
+        for (auto const& entry: trace)
+        {
+            auto const desc = std::to_string(entry);
+            write(fd, desc.c_str(), desc.size());
+            write(fd, "\n", 1);
+        }
+    #else
         void* frames[128];
         auto const frameCount = backtrace(frames, 128);
         backtrace_symbols_fd(frames, frameCount, fd);
+    #endif
 
         writeStr(fd, "\n=== End of Crash Report ===\n");
         close(fd);
@@ -324,10 +344,98 @@ void CrashHandler::initialize(char const* version)
 
 #else // _WIN32
 
+    #if defined(ENDO_HAS_STACKTRACE)
+        #include <cstdio>
+        #include <filesystem>
+
+        #include <dbghelp.h>
+        #include <windows.h>
+
+namespace
+{
+
+    char crashDirWin[4096] = {};
+    char const* crashVersionWin = "unknown";
+
+    /// @brief Writes a crash report using std::stacktrace on Windows.
+    LONG WINAPI unhandledExceptionFilter(EXCEPTION_POINTERS* exInfo)
+    {
+        char filename[4096 + 128];
+        SYSTEMTIME st;
+        GetSystemTime(&st);
+
+        std::snprintf(filename,
+                      sizeof(filename),
+                      "%s\\crash-%04d-%02d-%02d_%02d-%02d-%02d_%lu.log",
+                      crashDirWin,
+                      st.wYear,
+                      st.wMonth,
+                      st.wDay,
+                      st.wHour,
+                      st.wMinute,
+                      st.wSecond,
+                      GetCurrentProcessId());
+
+        auto* f = std::fopen(filename, "w");
+        if (!f)
+            return EXCEPTION_CONTINUE_SEARCH;
+
+        std::fprintf(f, "=== Endo Shell Crash Report ===\n");
+        std::fprintf(f, "Version: %s\n", crashVersionWin);
+        std::fprintf(f, "Exception code: 0x%08lX\n", exInfo ? exInfo->ExceptionRecord->ExceptionCode : 0UL);
+        std::fprintf(f, "PID: %lu\n", GetCurrentProcessId());
+        std::fprintf(f,
+                     "Time: %04d-%02d-%02d %02d:%02d:%02d UTC\n",
+                     st.wYear,
+                     st.wMonth,
+                     st.wDay,
+                     st.wHour,
+                     st.wMinute,
+                     st.wSecond);
+
+        std::fprintf(f, "\nBacktrace:\n");
+        auto const trace = std::stacktrace::current();
+        for (auto const& entry: trace)
+        {
+            auto const desc = std::to_string(entry);
+            std::fprintf(f, "%s\n", desc.c_str());
+        }
+
+        std::fprintf(f, "\n=== End of Crash Report ===\n");
+        std::fclose(f);
+
+        std::fprintf(stderr, "\nendo: crash report written to %s\n", filename);
+        return EXCEPTION_CONTINUE_SEARCH;
+    }
+
+} // namespace
+
+void CrashHandler::initialize(char const* version)
+{
+    crashVersionWin = version ? version : "unknown";
+
+    auto const* appdata = std::getenv("LOCALAPPDATA");
+    if (!appdata)
+        return;
+
+    auto const written = std::snprintf(crashDirWin, sizeof(crashDirWin), "%s\\endo\\crash", appdata);
+    if (written < 0 || static_cast<size_t>(written) >= sizeof(crashDirWin))
+        return;
+
+    // Create directory hierarchy.
+    std::filesystem::create_directories(crashDirWin);
+
+    SetUnhandledExceptionFilter(unhandledExceptionFilter);
+}
+
+    #else
+
 void CrashHandler::initialize(char const* /*version*/)
 {
-    // Windows: no-op for now.
+    // Windows without <stacktrace>: no-op.
 }
+
+    #endif
 
 #endif
 
