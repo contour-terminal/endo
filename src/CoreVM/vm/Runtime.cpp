@@ -16,12 +16,6 @@ bool Runtime::import(const std::string& /*name*/,
     return false;
 }
 
-NativeCallback& Runtime::registerHandler(const std::string& name)
-{
-    _builtins.push_back(std::make_unique<NativeCallback>(this, name));
-    return *_builtins[_builtins.size() - 1];
-}
-
 NativeCallback& Runtime::registerFunction(const std::string& name)
 {
     _builtins.push_back(std::make_unique<NativeCallback>(this, name, LiteralType::Void));
@@ -56,22 +50,15 @@ bool Runtime::verifyNativeCalls(IRProgram* program, IRBuilder* builder) const
 {
     std::list<std::pair<Instr*, NativeCallback*>> calls;
 
-    for (IRHandler* handler: program->handlers())
+    for (IRFunction* function: program->functions())
     {
-        for (BasicBlock* bb: handler->basicBlocks())
+        for (BasicBlock* bb: function->basicBlocks())
         {
             for (Instr* instr: bb->instructions())
             {
                 if (auto* ci = dynamic_cast<CallInstr*>(instr))
                 {
                     if (auto* native = find(ci->callee()->signature()))
-                    {
-                        calls.emplace_back(instr, native);
-                    }
-                }
-                else if (auto* hi = dynamic_cast<HandlerCallInstr*>(instr))
-                {
-                    if (auto* native = find(hi->callee()->signature()))
                     {
                         calls.emplace_back(instr, native);
                     }

@@ -10,9 +10,9 @@ namespace CoreVM::transform
  * Rewrites CONDBR (%foo, %foo) to BR (%foo) as both target branch pointers
  * point to the same branch.
  */
-bool rewriteCondBrToSameBranches(IRHandler* handler)
+bool rewriteCondBrToSameBranches(IRFunction* function)
 {
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         // attempt to eliminate useless condbr
         if (CondBrInstr* condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
@@ -36,9 +36,9 @@ bool rewriteCondBrToSameBranches(IRHandler* handler)
     return false;
 }
 
-bool eliminateUnusedInstr(IRHandler* handler)
+bool eliminateUnusedInstr(IRFunction* function)
 {
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         for (Instr* instr: bb->instructions())
         {
@@ -64,9 +64,9 @@ bool eliminateUnusedInstr(IRHandler* handler)
  * by eliminating the BR and merging the BR instructions target block at the end
  * of the current block.
  */
-bool eliminateLinearBr(IRHandler* handler)
+bool eliminateLinearBr(IRFunction* function)
 {
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         // attempt to eliminate useless linear br
         if (BrInstr* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
@@ -90,7 +90,7 @@ bool eliminateLinearBr(IRHandler* handler)
             bb->merge_back(nextBB);
 
             // destroy unused BB
-            // bb->getHandler()->erase(nextBB);
+            // bb->getFunction()->erase(nextBB);
 
             return true;
         }
@@ -99,9 +99,9 @@ bool eliminateLinearBr(IRHandler* handler)
     return false;
 }
 
-bool foldConstantCondBr(IRHandler* handler)
+bool foldConstantCondBr(IRFunction* function)
 {
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         if (auto condbr = dynamic_cast<CondBrInstr*>(bb->getTerminator()))
         {
@@ -139,9 +139,9 @@ bool foldConstantCondBr(IRHandler* handler)
  * This will highly increase the number of exit points but reduce
  * the number of executed instructions for each path.
  */
-bool rewriteBrToExit(IRHandler* handler)
+bool rewriteBrToExit(IRFunction* function)
 {
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         if (BrInstr* br = dynamic_cast<BrInstr*>(bb->getTerminator()))
         {

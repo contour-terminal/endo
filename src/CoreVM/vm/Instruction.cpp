@@ -141,9 +141,8 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(R2S, V, 0, String),
     IIDEF(S2N, V, 0, Number),
 
-    // invokation
+    // invocation
     IIDEF(CALL, III, 0, Void),
-    IIDEF(HANDLER, II, 0, Void),
 
     // object operations
     IIDEF(OALLOC, I, 1, Object),   // typeId → push new object
@@ -201,7 +200,6 @@ int getStackChange(Instruction instr)
     {
         case Opcode::ALLOCA: return operandA(instr);
         case Opcode::DISCARD: return -operandA(instr);
-        case Opcode::HANDLER: return -operandB(instr);
         case Opcode::CALL:
             // operandC is 1 for non-void (pushes return value) or 0 for void
             return operandC(instr) - operandB(instr);
@@ -402,11 +400,6 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
                 break;
             case Opcode::CALL:
                 word = cp->getNativeFunctionSignatures()[A];
-                line << word;
-                n += word.size();
-                break;
-            case Opcode::HANDLER:
-                word = cp->getNativeHandlerSignatures()[A];
                 line << word;
                 n += word.size();
                 break;

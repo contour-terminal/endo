@@ -105,10 +105,9 @@ enum Opcode : uint16_t
     R2S, // push(regex(pop()).toString()
     S2N, // push(atoi(pop()))
 
-    // invokation
+    // invocation
     // CALL A = id, B = argc
-    CALL,    // calls A with B arguments, always pushes result to stack
-    HANDLER, // calls A with B arguments (never leaves result on stack)
+    CALL, // calls A with B arguments, always pushes result to stack
 
     // object operations (for composite types: Option, Result, tuples, closures, etc.)
     OALLOC,   // OALLOC typeId       ; allocate object of type typeId, push pointer
@@ -152,9 +151,9 @@ enum Opcode : uint16_t
     S2F, // push(stod(pop()))
 
     // user-defined function calls (frame-pointer based)
-    UCALL,  // UCALL handler_id, argc  ; call user handler with argc args on stack
-    URET,   // URET                    ; return from user handler (top of stack = return value)
-    UTCALL, // UTCALL handler_id, argc ; tail-call user handler (reuse current frame)
+    UCALL,  // UCALL function_id, argc  ; call user function with argc args on stack
+    URET,   // URET                    ; return from user function (top of stack = return value)
+    UTCALL, // UTCALL function_id, argc ; tail-call user function (reuse current frame)
 };
 
 enum class MatchClass
@@ -249,7 +248,7 @@ enum class LiteralType
     IPAddress = 5,    // IPAddress*
     Cidr = 6,         // Cidr*
     RegExp = 7,       // RegExp*
-    Handler = 8,      // bool (*native_handler)(CoreContext*);
+    Function = 8,     // compiled function reference
     IntArray = 9,     // array<int>
     StringArray = 10, // array<string>
     IPAddrArray = 11, // array<IPAddress>
@@ -354,7 +353,6 @@ constexpr inline unsigned getPrice(Opcode opcode)
         case Opcode::GSTORE:
         case Opcode::STORE: return 4;
         case Opcode::CALL:
-        case Opcode::HANDLER:
         case Opcode::UCALL:
         case Opcode::UTCALL: return 8;
         case Opcode::URET: return 1;

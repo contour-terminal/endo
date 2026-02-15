@@ -18,8 +18,8 @@
 namespace CoreVM
 {
 
-BasicBlock::BasicBlock(const std::string& name, IRHandler* parent):
-    Value(LiteralType::Void, name), _handler(parent)
+BasicBlock::BasicBlock(const std::string& name, IRFunction* parent):
+    Value(LiteralType::Void, name), _function(parent)
 {
 }
 
@@ -201,23 +201,23 @@ void BasicBlock::merge_back(BasicBlock* bb)
     {
         unlinkSuccessor(succ);
     }
-    bb->getHandler()->erase(bb);
+    bb->getFunction()->erase(bb);
 #endif
 }
 
 void BasicBlock::moveAfter(const BasicBlock* otherBB)
 {
-    _handler->moveAfter(this, otherBB);
+    _function->moveAfter(this, otherBB);
 }
 
 void BasicBlock::moveBefore(const BasicBlock* otherBB)
 {
-    _handler->moveBefore(this, otherBB);
+    _function->moveBefore(this, otherBB);
 }
 
 bool BasicBlock::isAfter(const BasicBlock* otherBB) const
 {
-    return _handler->isAfter(this, otherBB);
+    return _function->isAfter(this, otherBB);
 }
 
 void BasicBlock::dump()
@@ -316,9 +316,6 @@ bool BasicBlock::isComplete() const
 
     if (getTerminator())
         return true;
-
-    if (auto* instr = dynamic_cast<HandlerCallInstr*>(back()))
-        return instr->callee()->getNative().isNeverReturning();
 
     if (auto* instr = dynamic_cast<CallInstr*>(back()))
         return instr->callee()->getNative().isNeverReturning();

@@ -289,34 +289,6 @@ void CallInstr::accept(InstructionVisitor& visitor)
 }
 
 // }}}
-// {{{ HandlerCallInstr
-HandlerCallInstr::HandlerCallInstr(const std::vector<Value*>& args): Instr(LiteralType::Void, args, "")
-{
-}
-
-HandlerCallInstr::HandlerCallInstr(IRBuiltinHandler* callee, const std::vector<Value*>& args):
-    Instr(LiteralType::Void, join(callee, args), "")
-{
-    // XXX a handler call actually returns a boolean, but that's never used except
-    // by the execution engine.
-}
-
-std::string HandlerCallInstr::to_string() const
-{
-    return formatOne("handler");
-}
-
-std::unique_ptr<Instr> HandlerCallInstr::clone()
-{
-    return std::make_unique<HandlerCallInstr>(operands());
-}
-
-void HandlerCallInstr::accept(InstructionVisitor& visitor)
-{
-    visitor.visit(*this);
-}
-
-// }}}
 // {{{ PhiNode
 PhiNode::PhiNode(const std::vector<Value*>& ops, const std::string& name): Instr(ops[0]->type(), ops, name)
 {
@@ -645,7 +617,7 @@ void VCmpGEInstr::accept(InstructionVisitor& v)
 // }}}
 
 // {{{ FunctionCallInstr
-FunctionCallInstr::FunctionCallInstr(IRHandler* callee,
+FunctionCallInstr::FunctionCallInstr(IRFunction* callee,
                                      std::vector<Value*> args,
                                      const std::string& name,
                                      LiteralType returnType):
@@ -693,7 +665,7 @@ void FunctionRetInstr::accept(InstructionVisitor& v)
 
 // }}}
 // {{{ TailCallInstr
-TailCallInstr::TailCallInstr(IRHandler* callee, std::vector<Value*> args, const std::string& name):
+TailCallInstr::TailCallInstr(IRFunction* callee, std::vector<Value*> args, const std::string& name):
     Instr(LiteralType::Void, std::move(args), name), _callee(callee)
 {
 }

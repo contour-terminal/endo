@@ -16,7 +16,7 @@ std::string tos(LiteralType type)
         case LiteralType::IPAddress: return "IPAddress";
         case LiteralType::Cidr: return "Cidr";
         case LiteralType::RegExp: return "RegExp";
-        case LiteralType::Handler: return "HandlerRef";
+        case LiteralType::Function: return "FunctionRef";
         case LiteralType::IntArray: return "IntArray";
         case LiteralType::StringArray: return "StringArray";
         case LiteralType::IPAddrArray: return "IPAddrArray";
@@ -53,7 +53,7 @@ LiteralType elementTypeOf(LiteralType type)
         case LiteralType::IPAddress:
         case LiteralType::Cidr:
         case LiteralType::RegExp:
-        case LiteralType::Handler: return type;
+        case LiteralType::Function: return type;
         case LiteralType::IntArray: return LiteralType::Number;
         case LiteralType::StringArray: return LiteralType::String;
         case LiteralType::IPAddrArray: return LiteralType::IPAddress;

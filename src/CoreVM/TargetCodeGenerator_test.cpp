@@ -23,27 +23,27 @@ class IRTestRunner
 
     IRBuilder& builder() { return _builder; }
 
-    // Create a handler and return it
-    IRHandler* createHandler(std::string const& name)
+    // Create a function and return it
+    IRFunction* createFunction(std::string const& name)
     {
-        auto* handler = _builder.getHandler(name);
-        _builder.setHandler(handler);
-        return handler;
+        auto* fn = _builder.getFunction(name);
+        _builder.setFunction(fn);
+        return fn;
     }
 
-    // Generate target code and run the handler
+    // Generate target code and run the function
     // Returns pair of (completed, exit_code_was_zero)
-    std::pair<bool, bool> run(std::string const& handlerName)
+    std::pair<bool, bool> run(std::string const& functionName)
     {
         TargetCodeGenerator codegen;
         auto targetProgram = codegen.generate(_builder.program());
 
-        Handler const* handler = targetProgram->findHandler(handlerName);
-        if (!handler)
+        Function const* fn = targetProgram->findFunction(functionName);
+        if (!fn)
             return { false, false };
 
         Runner::Globals globals;
-        Runner runner(handler, nullptr, &globals, RuntimeConfig::defaultConfig(), nullptr);
+        Runner runner(fn, nullptr, &globals, RuntimeConfig::defaultConfig(), nullptr);
         bool success = runner.run();
 
         // run() returns false if EXIT code was 0 (success in shell terms)
@@ -72,7 +72,7 @@ TEST_CASE("TargetCodeGenerator.single_block_alloca_store_ret")
     //   ret %1
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -93,7 +93,7 @@ TEST_CASE("TargetCodeGenerator.single_block_ret_zero")
 {
     // Simple test: ret 0
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -119,7 +119,7 @@ TEST_CASE("TargetCodeGenerator.single_block_multiple_allocas")
     //   ret %sum
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -156,7 +156,7 @@ TEST_CASE("TargetCodeGenerator.two_blocks_simple_branch")
     //   ret %v
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -195,7 +195,7 @@ TEST_CASE("TargetCodeGenerator.conditional_branch_true_path")
     //   ret %v
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -231,7 +231,7 @@ TEST_CASE("TargetCodeGenerator.conditional_branch_false_path")
     // Same as above but takes false path
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -287,7 +287,7 @@ TEST_CASE("TargetCodeGenerator.multiple_allocas_with_conditional")
     //   ret %r
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -335,7 +335,7 @@ TEST_CASE("TargetCodeGenerator.match_pattern_fallthrough")
     // Should fall through to default
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -381,7 +381,7 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_second_match")
     // default: -> arm3 (returns 3 - failure)
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -434,7 +434,7 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_first_match")
     // Same as above but scrutinee = 1 (matches first)
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -487,7 +487,7 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_default")
     // Same as above but scrutinee = 99 (matches default)
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -542,10 +542,10 @@ TEST_CASE("TargetCodeGenerator.three_way_branch_default")
 TEST_CASE("TargetCodeGenerator.source_location_propagation")
 {
     // Test that source locations from IR instructions are recorded
-    // in the Handler's sparse location table and can be looked up.
+    // in the Function's sparse location table and can be looked up.
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     // Create instructions with source locations
@@ -569,19 +569,19 @@ TEST_CASE("TargetCodeGenerator.source_location_propagation")
     TargetCodeGenerator codegen;
     auto targetProgram = codegen.generate(builder.program());
 
-    Handler const* handler = targetProgram->findHandler("test");
-    REQUIRE(handler != nullptr);
+    Function const* fn = targetProgram->findFunction("test");
+    REQUIRE(fn != nullptr);
 
-    // Verify that the handler has source locations recorded
+    // Verify that the function has source locations recorded
     // The exact offsets depend on code generation, but we can verify
     // that locations are properly recorded and lookup works
 
     // Find an offset that maps to loc1
     bool foundLoc1 = false;
     bool foundLoc2 = false;
-    for (size_t i = 0; i < handler->code().size(); ++i)
+    for (size_t i = 0; i < fn->code().size(); ++i)
     {
-        auto const& loc = handler->locationOf(i);
+        auto const& loc = fn->locationOf(i);
         if (!loc.filename.empty())
         {
             if (loc.begin.line == 1)
@@ -596,7 +596,7 @@ TEST_CASE("TargetCodeGenerator.source_location_propagation")
     CHECK((foundLoc1 || foundLoc2));
 
     // The file name should be correct
-    auto const& anyLoc = handler->locationOf(0);
+    auto const& anyLoc = fn->locationOf(0);
     if (!anyLoc.filename.empty())
     {
         CHECK(anyLoc.filename == "test.endo");
@@ -608,7 +608,7 @@ TEST_CASE("TargetCodeGenerator.empty_location_table")
     // Test that lookups work when no locations were set
 
     IRTestRunner testRunner;
-    testRunner.createHandler("test");
+    testRunner.createFunction("test");
     auto& builder = testRunner.builder();
 
     auto* entry = builder.createBlock("entry");
@@ -620,10 +620,10 @@ TEST_CASE("TargetCodeGenerator.empty_location_table")
     TargetCodeGenerator codegen;
     auto targetProgram = codegen.generate(builder.program());
 
-    Handler const* handler = targetProgram->findHandler("test");
-    REQUIRE(handler != nullptr);
+    Function const* fn = targetProgram->findFunction("test");
+    REQUIRE(fn != nullptr);
 
     // Location lookup should return empty location
-    auto const& loc = handler->locationOf(0);
+    auto const& loc = fn->locationOf(0);
     CHECK(loc.filename.empty());
 }

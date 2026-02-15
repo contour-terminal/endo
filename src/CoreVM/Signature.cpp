@@ -101,7 +101,7 @@ LiteralType typeSignature(char ch)
         case 'P': return LiteralType::IPAddress;
         case 'C': return LiteralType::Cidr;
         case 'R': return LiteralType::RegExp;
-        case 'H': return LiteralType::Handler;
+        case 'H': return LiteralType::Function;
         case 's': return LiteralType::StringArray;
         case 'i': return LiteralType::IntArray;
         case 'p': return LiteralType::IPAddrArray;
@@ -123,7 +123,7 @@ char signatureType(LiteralType t)
         case LiteralType::IPAddress: return 'P';
         case LiteralType::Cidr: return 'C';
         case LiteralType::RegExp: return 'R';
-        case LiteralType::Handler: return 'H';
+        case LiteralType::Function: return 'H';
         case LiteralType::StringArray: return 's';
         case LiteralType::IntArray: return 'i';
         case LiteralType::IPAddrArray: return 'p';

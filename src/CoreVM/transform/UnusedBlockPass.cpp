@@ -6,13 +6,13 @@
 namespace CoreVM::transform
 {
 
-bool eliminateUnusedBlocks(IRHandler* handler)
+bool eliminateUnusedBlocks(IRFunction* function)
 {
     std::list<BasicBlock*> unused;
 
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
-        if (bb == handler->getEntryBlock())
+        if (bb == function->getEntryBlock())
             continue;
 
         if (!bb->predecessors().empty())
@@ -24,7 +24,7 @@ bool eliminateUnusedBlocks(IRHandler* handler)
     for (BasicBlock* bb: unused)
     {
         // COREVM_TRACE("CoreVM: removing unused BasicBlock {}", bb->name());
-        handler->erase(bb);
+        function->erase(bb);
     }
 
     return !unused.empty();

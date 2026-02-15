@@ -34,25 +34,25 @@ namespace CoreVM
  */  // }}}
 
 Program::Program(ConstantPool&& cp):
-    _cp(std::move(cp)), _runtime(nullptr), _handlers(), _matches(), _nativeHandlers(), _nativeFunctions()
+    _cp(std::move(cp)), _runtime(nullptr), _functions(), _matches(), _nativeFunctions()
 {
     setup();
 }
 
-Handler* Program::handler(size_t index) const
+Function* Program::function(size_t index) const
 {
-    return _handlers[index].get();
+    return _functions[index].get();
 }
 
 void Program::setup()
 {
-    auto const& handlers = _cp.getHandlers();
-    for (size_t i = 0; i < handlers.size(); ++i)
+    auto const& functions = _cp.getFunctions();
+    for (size_t i = 0; i < functions.size(); ++i)
     {
-        Handler* h = createHandler(handlers[i].first, handlers[i].second);
-        auto const& locationTable = _cp.getHandlerLocationTable(i);
+        Function* fn = createFunction(functions[i].first, functions[i].second);
+        auto const& locationTable = _cp.getFunctionLocationTable(i);
         if (!locationTable.empty())
-            h->setLocationTable(locationTable);
+            fn->setLocationTable(locationTable);
     }
 
     const std::vector<MatchDef>& matches = _cp.getMatchDefs();
@@ -69,41 +69,41 @@ void Program::setup()
     }
 }
 
-Handler* Program::createHandler(const std::string& name)
+Function* Program::createFunction(const std::string& name)
 {
-    return createHandler(name, {});
+    return createFunction(name, {});
 }
 
-Handler* Program::createHandler(const std::string& name, const Code& code)
+Function* Program::createFunction(const std::string& name, const Code& code)
 {
-    _handlers.emplace_back(std::make_unique<Handler>(this, name, code));
-    return _handlers.back().get();
+    _functions.emplace_back(std::make_unique<Function>(this, name, code));
+    return _functions.back().get();
 }
 
-Handler* Program::findHandler(const std::string& name) const noexcept
+Function* Program::findFunction(const std::string& name) const noexcept
 {
-    for (auto& handler: _handlers)
-        if (handler->name() == name)
-            return handler.get();
+    for (auto& fn: _functions)
+        if (fn->name() == name)
+            return fn.get();
 
     return nullptr;
 }
 
-std::vector<std::string> Program::handlerNames() const
+std::vector<std::string> Program::functionNames() const
 {
     std::vector<std::string> result;
-    result.reserve(_handlers.size());
+    result.reserve(_functions.size());
 
-    for (auto& handler: _handlers)
-        result.emplace_back(handler->name());
+    for (auto& fn: _functions)
+        result.emplace_back(fn->name());
 
     return result;
 }
 
-int Program::indexOf(const Handler* that) const noexcept
+int Program::indexOf(const Function* that) const noexcept
 {
-    for (int i = 0, e = _handlers.size(); i != e; ++i)
-        if (_handlers[i].get() == that)
+    for (int i = 0, e = _functions.size(); i != e; ++i)
+        if (_functions[i].get() == that)
             return i;
 
     return -1;
@@ -120,7 +120,7 @@ std::string Program::dumpToString() const
 }
 
 /**
- * Maps all native functions/handlers to their implementations (report
+ * Maps all native functions to their implementations (report
  *unresolved symbols)
  *
  * \param runtime the runtime to link this program against, resolving any
@@ -143,28 +143,9 @@ bool Program::link(Runtime* runtime, diagnostics::Report* report)
         }
     }
 
-    // link nattive handlers
-    _nativeHandlers.resize(_cp.getNativeHandlerSignatures().size());
-    size_t i = 0;
-    for (const auto& signature: _cp.getNativeHandlerSignatures())
-    {
-        // map to _nativeHandlers[i]
-        if (NativeCallback* cb = runtime->find(signature))
-        {
-            _nativeHandlers[i] = cb;
-        }
-        else
-        {
-            _nativeHandlers[i] = nullptr;
-            report->linkError("Unresolved symbol to native handler signature: {}", signature);
-            errors++;
-        }
-        ++i;
-    }
-
-    // link nattive functions
+    // link native functions
     _nativeFunctions.resize(_cp.getNativeFunctionSignatures().size());
-    i = 0;
+    size_t i = 0;
     for (const auto& signature: _cp.getNativeFunctionSignatures())
     {
         if (NativeCallback* cb = runtime->find(signature))

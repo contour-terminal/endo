@@ -12,12 +12,12 @@
 namespace CoreVM
 {
 
-IRHandler::IRHandler(const std::string& name, IRProgram* program):
-    Constant(LiteralType::Handler, name), _program(program), _blocks()
+IRFunction::IRFunction(const std::string& name, IRProgram* program):
+    Constant(LiteralType::Function, name), _program(program), _blocks()
 {
 }
 
-IRHandler::~IRHandler()
+IRFunction::~IRFunction()
 {
     for (BasicBlock* bb: basicBlocks())
     {
@@ -49,32 +49,32 @@ IRHandler::~IRHandler()
     }
 }
 
-BasicBlock* IRHandler::createBlock(const std::string& name)
+BasicBlock* IRFunction::createBlock(const std::string& name)
 {
     _blocks.emplace_back(std::make_unique<BasicBlock>(name, this));
     return _blocks.back().get();
 }
 
-void IRHandler::setEntryBlock(BasicBlock* bb)
+void IRFunction::setEntryBlock(BasicBlock* bb)
 {
-    COREVM_ASSERT(bb->getHandler(), "BasicBlock must belong to this handler.");
+    COREVM_ASSERT(bb->getFunction(), "BasicBlock must belong to this function.");
 
     auto i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == bb; });
-    COREVM_ASSERT(i != _blocks.end(), "BasicBlock must belong to this handler.");
+    COREVM_ASSERT(i != _blocks.end(), "BasicBlock must belong to this function.");
     std::unique_ptr<BasicBlock> t = std::move(*i);
     _blocks.erase(i);
     _blocks.push_front(std::move(t));
 }
 
-void IRHandler::dump()
+void IRFunction::dump()
 {
     std::cerr << dumpToString();
 }
 
-std::string IRHandler::dumpToString() const
+std::string IRFunction::dumpToString() const
 {
     std::ostringstream sstr;
-    sstr << std::format(".handler {} {:>{}}; entryPoint = %{}\n",
+    sstr << std::format(".function {} {:>{}}; entryPoint = %{}\n",
                         name(),
                         "",
                         std::max(0, 10 - static_cast<int>(name().size())),
@@ -87,10 +87,10 @@ std::string IRHandler::dumpToString() const
     return sstr.str();
 }
 
-bool IRHandler::isAfter(const BasicBlock* bb, const BasicBlock* afterThat) const
+bool IRFunction::isAfter(const BasicBlock* bb, const BasicBlock* afterThat) const
 {
-    assert(bb->getHandler() == this);
-    assert(afterThat->getHandler() == this);
+    assert(bb->getFunction() == this);
+    assert(afterThat->getFunction() == this);
 
     auto i = std::find_if(_blocks.cbegin(), _blocks.cend(), [&](const auto& obj) { return obj.get() == bb; });
 
@@ -105,9 +105,9 @@ bool IRHandler::isAfter(const BasicBlock* bb, const BasicBlock* afterThat) const
     return i->get() == afterThat;
 }
 
-void IRHandler::moveAfter(const BasicBlock* moveable, const BasicBlock* after)
+void IRFunction::moveAfter(const BasicBlock* moveable, const BasicBlock* after)
 {
-    assert(moveable->getHandler() == this && after->getHandler() == this);
+    assert(moveable->getFunction() == this && after->getFunction() == this);
 
     auto i =
         std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == moveable; });
@@ -119,9 +119,9 @@ void IRHandler::moveAfter(const BasicBlock* moveable, const BasicBlock* after)
     _blocks.insert(i, std::move(m));
 }
 
-void IRHandler::moveBefore(const BasicBlock* moveable, const BasicBlock* before)
+void IRFunction::moveBefore(const BasicBlock* moveable, const BasicBlock* before)
 {
-    assert(moveable->getHandler() == this && before->getHandler() == this);
+    assert(moveable->getFunction() == this && before->getFunction() == this);
 
     auto i =
         std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == moveable; });
@@ -133,10 +133,10 @@ void IRHandler::moveBefore(const BasicBlock* moveable, const BasicBlock* before)
     _blocks.insert(i, std::move(m));
 }
 
-void IRHandler::erase(BasicBlock* bb)
+void IRFunction::erase(BasicBlock* bb)
 {
     auto i = std::find_if(_blocks.begin(), _blocks.end(), [&](const auto& obj) { return obj.get() == bb; });
-    COREVM_ASSERT(i != _blocks.end(), "Given basic block must be a member of this handler to be removed.");
+    COREVM_ASSERT(i != _blocks.end(), "Given basic block must be a member of this function to be removed.");
 
     for (Instr* instr: bb->instructions())
     {
@@ -151,7 +151,7 @@ void IRHandler::erase(BasicBlock* bb)
     _blocks.erase(i);
 }
 
-void IRHandler::verify()
+void IRFunction::verify()
 {
     for (std::unique_ptr<BasicBlock>& bb: _blocks)
     {

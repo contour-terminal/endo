@@ -11,7 +11,7 @@
 namespace CoreVM
 {
 
-IRBuilder::IRBuilder(): _program(nullptr), _handler(nullptr), _insertPoint(nullptr)
+IRBuilder::IRBuilder(): _program(nullptr), _function(nullptr), _insertPoint(nullptr)
 {
 }
 
@@ -39,15 +39,15 @@ std::string IRBuilder::makeName(std::string name)
 void IRBuilder::setProgram(std::unique_ptr<IRProgram> prog)
 {
     _program = std::move(prog);
-    _handler = nullptr;
+    _function = nullptr;
     _insertPoint = nullptr;
 }
 
-IRHandler* IRBuilder::setHandler(IRHandler* hn)
+IRFunction* IRBuilder::setFunction(IRFunction* hn)
 {
     assert(hn->getProgram() == _program.get());
 
-    _handler = hn;
+    _function = hn;
     _insertPoint = nullptr;
 
     return hn;
@@ -56,13 +56,13 @@ IRHandler* IRBuilder::setHandler(IRHandler* hn)
 BasicBlock* IRBuilder::createBlock(const std::string& name)
 {
     std::string n = makeName(name);
-    return _handler->createBlock(n);
+    return _function->createBlock(n);
 }
 
 void IRBuilder::setInsertPoint(BasicBlock* bb)
 {
     assert(bb != nullptr);
-    assert(bb->getHandler() == handler() && "insert point must belong to the current handler.");
+    assert(bb->getFunction() == function() && "insert point must belong to the current function.");
 
     _insertPoint = bb;
 }
@@ -79,18 +79,18 @@ Instr* IRBuilder::insert(std::unique_ptr<Instr> instr)
 }
 
 // }}}
-// {{{ handler pool
-IRHandler* IRBuilder::getHandler(const std::string& name)
+// {{{ function pool
+IRFunction* IRBuilder::getFunction(const std::string& name)
 {
-    if (IRHandler* h = _program->findHandler(name); h != nullptr)
+    if (IRFunction* h = _program->findFunction(name); h != nullptr)
         return h;
 
-    return _program->createHandler(name);
+    return _program->createFunction(name);
 }
 
-IRHandler* IRBuilder::findHandler(const std::string& name)
+IRFunction* IRBuilder::findFunction(const std::string& name)
 {
-    return _program->findHandler(name);
+    return _program->findFunction(name);
 }
 
 // }}}
@@ -893,12 +893,7 @@ Instr* IRBuilder::createCallFunction(IRBuiltinFunction* callee, std::vector<Valu
     return insert<CallInstr>(callee, std::move(args), makeName(std::move(name)));
 }
 
-Instr* IRBuilder::createInvokeHandler(IRBuiltinHandler* callee, const std::vector<Value*>& args)
-{
-    return insert<HandlerCallInstr>(callee, args);
-}
-
-FunctionCallInstr* IRBuilder::createFunctionCall(IRHandler* callee,
+FunctionCallInstr* IRBuilder::createFunctionCall(IRFunction* callee,
                                                  std::vector<Value*> args,
                                                  const std::string& name,
                                                  LiteralType returnType)
@@ -913,7 +908,9 @@ FunctionRetInstr* IRBuilder::createFunctionRet(Value* result, const std::string&
         insert<FunctionRetInstr>(result, makeName(name.empty() ? "uret" : name)));
 }
 
-TailCallInstr* IRBuilder::createTailCall(IRHandler* callee, std::vector<Value*> args, const std::string& name)
+TailCallInstr* IRBuilder::createTailCall(IRFunction* callee,
+                                         std::vector<Value*> args,
+                                         const std::string& name)
 {
     return static_cast<TailCallInstr*>(
         insert<TailCallInstr>(callee, std::move(args), makeName(name.empty() ? "utcall" : name)));

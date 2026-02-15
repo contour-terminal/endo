@@ -23,7 +23,7 @@
       - ConstantIP        <IPAddress>
       - ConstantCidr      <Cidr>
       - ConstantRegExp    <RegExp>
-      - IRHandler
+      - IRFunction
   - Instr
     - PhiNode             merge branched values 
     - AllocaInstr         field/array allocation

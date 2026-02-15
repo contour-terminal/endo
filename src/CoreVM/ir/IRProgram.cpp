@@ -18,19 +18,19 @@ IRProgram::IRProgram(): _trueLiteral(true, "trueLiteral"), _falseLiteral(false, 
 
 IRProgram::~IRProgram()
 {
-    // first reset all standard handlers and *then* the global-scope initialization handler
+    // first reset all standard functions and *then* the global-scope initialization function
     // in order to not cause confusion upon resource release
     {
-        std::unique_ptr<IRHandler> global;
-        auto gh = std::find_if(_handlers.begin(), _handlers.end(), [](auto& handler) {
-            return handler->name() == GLOBAL_SCOPE_INIT_NAME;
+        std::unique_ptr<IRFunction> global;
+        auto gh = std::find_if(_functions.begin(), _functions.end(), [](auto& function) {
+            return function->name() == GLOBAL_SCOPE_INIT_NAME;
         });
-        if (gh != _handlers.end())
+        if (gh != _functions.end())
         {
             global = std::move(*gh);
-            _handlers.erase(gh);
+            _functions.erase(gh);
         }
-        _handlers.clear();
+        _functions.clear();
         global.reset(nullptr);
     }
 
@@ -39,7 +39,6 @@ IRProgram::~IRProgram()
     _strings.clear();
     _ipaddrs.clear();
     _cidrs.clear();
-    _builtinHandlers.clear();
     _builtinFunctions.clear();
 }
 
@@ -53,21 +52,21 @@ std::string IRProgram::dumpToString() const
     std::ostringstream sstr;
     sstr << "; IRProgram\n";
 
-    for (auto const& handler: _handlers)
-        sstr << handler->dumpToString();
+    for (auto const& function: _functions)
+        sstr << function->dumpToString();
 
     return sstr.str();
 }
 
-IRHandler* IRProgram::createHandler(const std::string& name)
+IRFunction* IRProgram::createFunction(const std::string& name)
 {
-    _handlers.emplace_back(std::make_unique<IRHandler>(name, this));
-    return _handlers.back().get();
+    _functions.emplace_back(std::make_unique<IRFunction>(name, this));
+    return _functions.back().get();
 }
 
-void IRProgram::removeHandler(IRHandler* handler)
+void IRProgram::removeFunction(IRFunction* function)
 {
-    std::erase_if(_handlers, [handler](auto const& h) { return h.get() == handler; });
+    std::erase_if(_functions, [function](auto const& h) { return h.get() == function; });
 }
 
 // template ConstantInt* IRProgram::get<ConstantInt, int64_t>(std::vector<std::unique_ptr<ConstantInt>>&,

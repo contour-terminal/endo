@@ -153,13 +153,16 @@ void Runner::Stack::rotate(size_t fp, size_t n)
 // }}}
 static CoreString* t = nullptr;
 
-Runner::Runner(
-    const Handler* handler, void* userdata, Globals* globals, RuntimeConfig config, TraceLogger traceLogger):
-    Runner { handler, userdata, globals, NoQuota, std::move(config), std::move(traceLogger) }
+Runner::Runner(const Function* function,
+               void* userdata,
+               Globals* globals,
+               RuntimeConfig config,
+               TraceLogger traceLogger):
+    Runner { function, userdata, globals, NoQuota, std::move(config), std::move(traceLogger) }
 {
 }
 
-Runner::Runner(const Handler* handler,
+Runner::Runner(const Function* function,
                void* userdata,
                Globals* globals,
                Quota quota,
@@ -167,14 +170,14 @@ Runner::Runner(const Handler* handler,
                TraceLogger traceLogger):
     _quota { quota },
     _config { std::move(config) },
-    _handler(handler),
+    _function(function),
     _traceLogger { traceLogger ? std::move(traceLogger) : [](Instruction, size_t, size_t) {} },
-    _program(handler->program()),
+    _program(function->program()),
     _userdata(userdata),
     _regexpContext(),
     _state(Inactive),
     _ip(0),
-    _stack(_handler->stackSize()),
+    _stack(_function->stackSize()),
     _globals { *globals },
     _stringGarbage()
 {
@@ -367,7 +370,7 @@ Runner::RunResult Runner::runWithResult()
 
 RuntimeError Runner::makeError(std::string message) const
 {
-    return RuntimeError { std::move(message), _handler->locationOf(_ip) };
+    return RuntimeError { std::move(message), _function->locationOf(_ip) };
 }
 
 void Runner::suspend()
@@ -495,9 +498,8 @@ Runner::RunResult Runner::loopWithResult()
         label(R2S),
         label(S2N),
 
-        // invokation
+        // invocation
         label(CALL),
-        label(HANDLER),
 
         // object operations
         label(OALLOC),
@@ -549,10 +551,10 @@ Runner::RunResult Runner::loopWithResult()
 // }}}
 // {{{ direct threaded code initialization
 #if defined(COREVM_DIRECT_THREADED_VM)
-    std::vector<uint64_t>& code = const_cast<Handler*>(_handler)->directThreadedCode();
+    std::vector<uint64_t>& code = const_cast<Function*>(_function)->directThreadedCode();
     if (code.empty())
     {
-        const std::vector<Instruction>& source = _handler->code();
+        const std::vector<Instruction>& source = _function->code();
         code.resize(source.size() * 2);
 
         uint64_t* pc = code.data();
@@ -566,7 +568,7 @@ Runner::RunResult Runner::loopWithResult()
     }
     auto codeBase = code.data();
 #else
-    auto codeBase = _handler->code().data();
+    auto codeBase = _function->code().data();
 #endif
     // }}}
 
@@ -1125,9 +1127,9 @@ Runner::RunResult Runner::loopWithResult()
             for (int i = 1; i <= argc; i++)
                 args.setArg(i, SP(-(argc + 1) + i));
 
-            const Signature& signature = _handler->program()->nativeFunction(id)->signature();
+            const Signature& signature = _function->program()->nativeFunction(id)->signature();
 
-            _handler->program()->nativeFunction(id)->invoke(args);
+            _function->program()->nativeFunction(id)->invoke(args);
 
             discard(argc);
             if (signature.returnType() != LiteralType::Void)
@@ -1143,38 +1145,6 @@ Runner::RunResult Runner::loopWithResult()
         jump;
     }
 
-    instr(HANDLER)
-    {
-        {
-            size_t id = A;
-            int argc = B;
-
-            incr_pc();
-            _ip = get_pc();
-
-            Params args(this, argc);
-            for (int i = 1; i <= argc; i++)
-                args.setArg(i, SP(-(argc + 1) + i));
-
-            _handler->program()->nativeHandler(id)->invoke(args);
-            const bool handled = (bool) args[0];
-            discard(argc);
-
-            if (_state == Suspended)
-            {
-                COREVM_DEBUG("CoreVM: vm suspended in handler. returning (false)");
-                return false;
-            }
-
-            if (handled)
-            {
-                _state = Inactive;
-                return true;
-            }
-        }
-        set_pc(_ip);
-        jump;
-    }
     // }}}
     // {{{ object operations
     instr(OALLOC)
@@ -1518,9 +1488,9 @@ Runner::RunResult Runner::loopWithResult()
     // {{{ user-defined function calls (UCALL/URET/UTCALL)
     instr(UCALL)
     {
-        // A = handler index, B = argc
+        // A = function index, B = argc
         {
-            auto handlerId = A;
+            auto functionId = A;
             auto argc = B;
 
             if (_callStack.size() >= MaxCallDepth)
@@ -1537,7 +1507,7 @@ Runner::RunResult Runner::loopWithResult()
 
             _callStack.push_back(CallFrame {
                 .ip = _ip,
-                .handler = _handler,
+                .function = _function,
                 .fp = _fp,
                 .argsBase = argsBase,
             });
@@ -1545,16 +1515,16 @@ Runner::RunResult Runner::loopWithResult()
             // Set up callee frame: args are already on the stack
             _fp = argsBase;
 
-            // Switch to the target handler
-            _handler = _program->handler(handlerId);
+            // Switch to the target function
+            _function = _program->function(functionId);
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
-        // Re-initialize code reference for new handler
-        // (direct threaded code needs special handling per handler)
+        // Re-initialize code reference for new function
+        // (direct threaded code needs special handling per function)
         COREVM_ASSERT(false, "UCALL not yet supported with direct-threaded VM");
 #else
         {
-            codeBase = _handler->code().data();
+            codeBase = _function->code().data();
             pc = codeBase;
         }
 #endif
@@ -1577,7 +1547,7 @@ Runner::RunResult Runner::loopWithResult()
             // Restore caller frame
             auto const& frame = _callStack.back();
             _ip = frame.ip;
-            _handler = frame.handler;
+            _function = frame.function;
             _fp = frame.fp;
             auto argsBase = frame.argsBase;
             _callStack.pop_back();
@@ -1592,7 +1562,7 @@ Runner::RunResult Runner::loopWithResult()
         COREVM_ASSERT(false, "URET not yet supported with direct-threaded VM");
 #else
         {
-            codeBase = _handler->code().data();
+            codeBase = _function->code().data();
             pc = codeBase + _ip;
         }
 #endif
@@ -1601,9 +1571,9 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(UTCALL)
     {
-        // Tail call: reuse current frame. A = handler index, B = argc
+        // Tail call: reuse current frame. A = function index, B = argc
         {
-            auto handlerId = A;
+            auto functionId = A;
             auto argc = B;
 
             // Copy new args to frame base (overwriting old args/locals)
@@ -1614,14 +1584,14 @@ Runner::RunResult Runner::loopWithResult()
             // Discard everything above the new args
             _stack.discard(_stack.size() - _fp - argc);
 
-            // Switch to target handler (could be same handler for self-recursion)
-            _handler = _program->handler(handlerId);
+            // Switch to target function (could be same function for self-recursion)
+            _function = _program->function(functionId);
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "UTCALL not yet supported with direct-threaded VM");
 #else
         {
-            codeBase = _handler->code().data();
+            codeBase = _function->code().data();
             pc = codeBase;
         }
 #endif

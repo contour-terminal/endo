@@ -16,7 +16,7 @@ LiteralType ConstantArray::makeArrayType(LiteralType elementType)
         case LiteralType::Cidr: return LiteralType::CidrArray;
         case LiteralType::Boolean:
         case LiteralType::RegExp:
-        case LiteralType::Handler:
+        case LiteralType::Function:
         case LiteralType::IntArray:
         case LiteralType::StringArray:
         case LiteralType::IPAddrArray:

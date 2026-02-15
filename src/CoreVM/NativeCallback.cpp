@@ -7,30 +7,11 @@
 namespace CoreVM
 {
 
-// constructs a handler callback
-NativeCallback::NativeCallback(Runtime* runtime, std::string name):
-    _runtime(runtime), _isHandler(true), _verifier(), _function(), _signature(), _attributes(0)
-{
-    _signature.setName(std::move(name));
-    _signature.setReturnType(LiteralType::Boolean);
-}
-
-// constructs a function callback
 NativeCallback::NativeCallback(Runtime* runtime, std::string name, LiteralType returnType):
-    _runtime(runtime), _isHandler(false), _verifier(), _function(), _signature(), _attributes(0)
+    _runtime(runtime), _verifier(), _function(), _signature(), _attributes(0)
 {
     _signature.setName(std::move(name));
     _signature.setReturnType(returnType);
-}
-
-bool NativeCallback::isHandler() const noexcept
-{
-    return _isHandler;
-}
-
-bool NativeCallback::isFunction() const noexcept
-{
-    return !_isHandler;
 }
 
 std::string const& NativeCallback::name() const noexcept

@@ -30,11 +30,11 @@ static bool isSameSuccessors(BasicBlock* a, BasicBlock* b)
     return true;
 }
 
-bool mergeSameBlocks(IRHandler* handler)
+bool mergeSameBlocks(IRFunction* function)
 {
     std::list<std::list<BasicBlock*>> uniques;
 
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         bool found = false;
         // check if we already have a BB that is equal

@@ -20,7 +20,7 @@ target_sources(CoreVM
     ir/ConstantArray.cpp
     ir/ConstantValue.cpp
     ir/IRBuilder.cpp
-    ir/IRHandler.cpp
+    ir/IRFunction.cpp
     ir/IRProgram.cpp
     ir/Instr.cpp
     ir/InstructionVisitor.cpp
@@ -34,7 +34,7 @@ target_sources(CoreVM
     util/Cidr.cpp
     util/RegExp.cpp
     vm/ConstantPool.cpp
-    vm/Handler.cpp
+    vm/Function.cpp
     vm/Instruction.cpp
     vm/Match.cpp
     vm/Program.cpp

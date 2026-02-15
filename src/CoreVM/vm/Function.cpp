@@ -8,7 +8,7 @@
 namespace CoreVM
 {
 
-Handler::Handler(Program* program, std::string name, std::vector<Instruction> code):
+Function::Function(Program* program, std::string name, std::vector<Instruction> code):
     _program(program),
     _name(std::move(name)),
     _stackSize(),
@@ -21,7 +21,7 @@ Handler::Handler(Program* program, std::string name, std::vector<Instruction> co
     setCode(std::move(code));
 }
 
-void Handler::setCode(std::vector<Instruction> code)
+void Function::setCode(std::vector<Instruction> code)
 {
     _code = std::move(code);
 
@@ -35,21 +35,21 @@ void Handler::setCode(std::vector<Instruction> code)
 #endif
 }
 
-void Handler::disassemble() const noexcept
+void Function::disassemble() const noexcept
 {
-    printf("\n.handler %-27s ; (%zu stack size, %zu instructions)\n",
+    printf("\n.function %-27s ; (%zu stack size, %zu instructions)\n",
            name().c_str(),
            stackSize(),
            code().size());
     printf("%s", CoreVM::disassemble(_code.data(), _code.size(), "  ", &_program->constants()).c_str());
 }
 
-void Handler::setLocationTable(std::vector<std::pair<size_t, SourceLocation>> table)
+void Function::setLocationTable(std::vector<std::pair<size_t, SourceLocation>> table)
 {
     _locationTable = std::make_unique<std::vector<std::pair<size_t, SourceLocation>>>(std::move(table));
 }
 
-SourceLocation const& Handler::locationOf(size_t offset) const
+SourceLocation const& Function::locationOf(size_t offset) const
 {
     static SourceLocation empty;
     if (!_locationTable || _locationTable->empty())

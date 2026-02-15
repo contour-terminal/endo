@@ -169,8 +169,6 @@ std::string Instr::formatOne(std::string mnemonic) const
                 sstr << cidr->get().str();
             else if (auto* re = dynamic_cast<ConstantRegExp*>(arg))
                 sstr << '/' << re->get().pattern() << '/';
-            else if (auto* bh = dynamic_cast<IRBuiltinHandler*>(arg))
-                sstr << bh->signature().to_s();
             else if (auto* bf = dynamic_cast<IRBuiltinFunction*>(arg))
                 sstr << bf->signature().to_s();
             else if (auto* ar = dynamic_cast<ConstantArray*>(arg))

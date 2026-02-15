@@ -52,17 +52,16 @@ class NativeCallback;
 class Value;
 class Constant;
 class BasicBlock;
-class IRHandler;
+class IRFunction;
 class IRProgram;
 class IRBuilder;
-class IRBuiltinHandler;
 class IRBuiltinFunction;
 class AllocaInstr;
 class MatchInstr;
 class InstructionVisitor;
 class ConstantPool;
 class Program;
-class Handler;
+class Function;
 class Runner;
 struct SourceLocation;
 struct RuntimeError;
@@ -72,7 +71,6 @@ class AllocaInstr;
 class StoreInstr;
 class LoadInstr;
 class CallInstr;
-class HandlerCallInstr;
 class PhiNode;
 class CondBrInstr;
 class BrInstr;
@@ -157,7 +155,6 @@ class InstructionVisitor
 
     // calls
     virtual void visit(CallInstr& instr) = 0;
-    virtual void visit(HandlerCallInstr& instr) = 0;
 
     // user-defined function calls
     virtual void visit(FunctionCallInstr& instr) = 0;
@@ -385,9 +382,9 @@ class Runner
   public:
     enum State
     {
-        Inactive,  //!< No handler running nor suspended.
-        Running,   //!< Active handler is currently running.
-        Suspended, //!< Active handler is currently suspended.
+        Inactive,  //!< No function running nor suspended.
+        Running,   //!< Active function is currently running.
+        Suspended, //!< Active function is currently suspended.
     };
 
     class QuotaExceeded: public std::runtime_error
@@ -465,8 +462,8 @@ class Runner
     using RunResult = std::expected<bool, RuntimeError>;
 
     Runner(
-        const Handler* handler, void* userdata, Globals* globals, RuntimeConfig config, TraceLogger logger);
-    Runner(const Handler* handler,
+        const Function* function, void* userdata, Globals* globals, RuntimeConfig config, TraceLogger logger);
+    Runner(const Function* function,
            void* userdata,
            Globals* globals,
            Quota quota,
@@ -477,17 +474,17 @@ class Runner
     /// Access the runtime configuration
     const RuntimeConfig& config() const noexcept { return _config; }
 
-    const Handler* handler() const noexcept { return _handler; }
+    const Function* function() const noexcept { return _function; }
 
     const Program* program() const noexcept { return _program; }
 
     void* userdata() const noexcept { return _userdata; }
 
-    /// Run the handler. Returns true if exit code was non-zero.
+    /// Run the function. Returns true if exit code was non-zero.
     /// On runtime error, prints error and returns true (non-zero exit).
     bool run();
 
-    /// Run the handler with full error reporting.
+    /// Run the function with full error reporting.
     /// Returns expected with bool (true if exit non-zero) or RuntimeError on failure.
     RunResult runWithResult();
 
@@ -588,12 +585,12 @@ class Runner
   private:
     Quota _quota;
     RuntimeConfig _config;
-    const Handler* _handler;
+    const Function* _function;
     TraceLogger _traceLogger;
 
     /**
-     * We especially keep this ref to prevent ensure handler has
-     * access to the program until the end, which is not garranteed
+     * We especially keep this ref to prevent ensure function has
+     * access to the program until the end, which is not guaranteed
      * as it is only having a weak reference to the program (to avoid cycling
      * references).
      */
@@ -618,16 +615,16 @@ class Runner
     size_t _objectAllocCount = 0; //!< Allocation counter for GC threshold
 
     // Frame pointer for user-defined function calls (UCALL/URET/UTCALL).
-    // For the main handler, _fp is always 0, so LOAD/STORE remain backward-compatible.
+    // For the main function, _fp is always 0, so LOAD/STORE remain backward-compatible.
     size_t _fp = 0;
 
     /// Saved call frame for returning from UCALL via URET.
     struct CallFrame
     {
-        size_t ip;              //!< Saved instruction pointer (resume position in caller)
-        const Handler* handler; //!< Caller's handler
-        size_t fp;              //!< Caller's frame pointer
-        size_t argsBase;        //!< Stack position where callee's args start (for cleanup on return)
+        size_t ip;                //!< Saved instruction pointer (resume position in caller)
+        const Function* function; //!< Caller's function
+        size_t fp;                //!< Caller's frame pointer
+        size_t argsBase;          //!< Stack position where callee's args start (for cleanup on return)
     };
 
     /// Call stack for UCALL/URET (user-defined function call frames).
@@ -641,7 +638,7 @@ struct MatchCaseDef
 {
     //!< offset into the string pool (or regexp pool) of the associated program.
     uint64_t label;
-    //!< program offset into the associated handler
+    //!< program offset into the associated function
     uint64_t pc;
 
     MatchCaseDef() = default;
@@ -654,7 +651,7 @@ struct MatchCaseDef
 class MatchDef
 {
   public:
-    size_t handlerId;
+    size_t functionId;
     MatchClass op; // == =^ =$ =~
     uint64_t elsePC;
     std::vector<MatchCaseDef> cases;
@@ -713,13 +710,11 @@ class ConstantPool
 
     MatchDef& getMatchDef(size_t id) { return _matchDefs[id]; }
 
-    size_t makeNativeHandler(const std::string& sig);
-    size_t makeNativeHandler(const IRBuiltinHandler* handler);
     size_t makeNativeFunction(const std::string& sig);
     size_t makeNativeFunction(const IRBuiltinFunction* function);
 
-    size_t makeHandler(const std::string& handlerName);
-    size_t makeHandler(const IRHandler* handler);
+    size_t makeFunction(const std::string& functionName);
+    size_t makeFunction(const IRFunction* function);
 
     void setModules(const std::vector<std::pair<std::string, std::string>>& modules) { _modules = modules; }
 
@@ -752,14 +747,14 @@ class ConstantPool
 
     [[nodiscard]] const MatchDef& getMatchDef(size_t id) const { return _matchDefs[id]; }
 
-    [[nodiscard]] const std::pair<std::string, Code>& getHandler(size_t id) const { return _handlers[id]; }
+    [[nodiscard]] const std::pair<std::string, Code>& getFunction(size_t id) const { return _functions[id]; }
 
-    std::pair<std::string, Code>& getHandler(size_t id) { return _handlers[id]; }
+    std::pair<std::string, Code>& getFunction(size_t id) { return _functions[id]; }
 
-    size_t setHandler(const std::string& name, Code&& code)
+    size_t setFunction(const std::string& name, Code&& code)
     {
-        auto id = makeHandler(name);
-        _handlers[id].second = std::move(code);
+        auto id = makeFunction(name);
+        _functions[id].second = std::move(code);
         return id;
     }
 
@@ -769,31 +764,26 @@ class ConstantPool
         return _modules;
     }
 
-    [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getHandlers() const { return _handlers; }
+    [[nodiscard]] const std::vector<std::pair<std::string, Code>>& getFunctions() const { return _functions; }
 
-    /// Location table for each handler (parallel to _handlers).
+    /// Location table for each function (parallel to _functions).
     /// Each entry is a sparse list of (instructionOffset, SourceLocation) pairs.
     using LocationTable = std::vector<std::pair<size_t, SourceLocation>>;
 
-    void setHandlerLocationTable(size_t handlerId, LocationTable table)
+    void setFunctionLocationTable(size_t functionId, LocationTable table)
     {
-        if (_handlerLocationTables.size() <= handlerId)
-            _handlerLocationTables.resize(handlerId + 1);
-        _handlerLocationTables[handlerId] = std::move(table);
+        if (_functionLocationTables.size() <= functionId)
+            _functionLocationTables.resize(functionId + 1);
+        _functionLocationTables[functionId] = std::move(table);
     }
 
-    [[nodiscard]] LocationTable const& getHandlerLocationTable(size_t handlerId) const
+    [[nodiscard]] LocationTable const& getFunctionLocationTable(size_t functionId) const
     {
         static LocationTable const empty;
-        return handlerId < _handlerLocationTables.size() ? _handlerLocationTables[handlerId] : empty;
+        return functionId < _functionLocationTables.size() ? _functionLocationTables[functionId] : empty;
     }
 
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
-
-    [[nodiscard]] const std::vector<std::string>& getNativeHandlerSignatures() const
-    {
-        return _nativeHandlerSignatures;
-    }
 
     [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const
     {
@@ -825,10 +815,9 @@ class ConstantPool
 
     // code data
     std::vector<std::pair<std::string, std::string>> _modules;
-    std::vector<std::pair<std::string, Code>> _handlers;
-    std::vector<LocationTable> _handlerLocationTables;
+    std::vector<std::pair<std::string, Code>> _functions;
+    std::vector<LocationTable> _functionLocationTables;
     std::vector<MatchDef> _matchDefs;
-    std::vector<std::string> _nativeHandlerSignatures;
     std::vector<std::string> _nativeFunctionSignatures;
 
     // type registry for composite types (Option, Result, etc.)
@@ -850,56 +839,53 @@ class Program
     // accessors to linked data
     const Match* match(size_t index) const { return _matches[index].get(); }
 
-    Handler* handler(size_t index) const;
-
-    NativeCallback* nativeHandler(size_t index) const { return _nativeHandlers[index]; }
+    Function* function(size_t index) const;
 
     NativeCallback* nativeFunction(size_t index) const { return _nativeFunctions[index]; }
 
     // bulk accessors
     auto matches() { return util::unbox(_matches); }
 
-    std::vector<std::string> handlerNames() const;
-    int indexOf(const Handler* handler) const noexcept;
-    Handler* findHandler(const std::string& name) const noexcept;
+    std::vector<std::string> functionNames() const;
+    int indexOf(const Function* function) const noexcept;
+    Function* findFunction(const std::string& name) const noexcept;
 
     bool link(Runtime* runtime, diagnostics::Report* report);
 
     void dump();
     [[nodiscard]] std::string dumpToString() const;
 
-    /// Creates a handler with the given name and bytecode.
-    /// Useful for dynamically adding pre-compiled function handlers.
+    /// Creates a function with the given name and bytecode.
+    /// Useful for dynamically adding pre-compiled functions.
     using Code = ConstantPool::Code;
-    Handler* createHandler(const std::string& name, const Code& instructions);
+    Function* createFunction(const std::string& name, const Code& instructions);
 
   private:
     void setup();
 
     // builders
-    Handler* createHandler(const std::string& name);
+    Function* createFunction(const std::string& name);
 
   private:
     ConstantPool _cp;
 
     // linked data
     Runtime* _runtime;
-    mutable std::vector<std::unique_ptr<Handler>> _handlers;
+    mutable std::vector<std::unique_ptr<Function>> _functions;
     std::vector<std::unique_ptr<Match>> _matches;
-    std::vector<NativeCallback*> _nativeHandlers;
     std::vector<NativeCallback*> _nativeFunctions;
 };
 
-class Handler
+class Function
 {
   public:
-    Handler(Program* program, std::string name, std::vector<Instruction> instructions);
-    Handler() = default;
-    Handler(const Handler& handler) = delete;
-    Handler(Handler&& handler) noexcept = default;
-    Handler& operator=(const Handler& handler) = delete;
-    Handler& operator=(Handler&& handler) noexcept = default;
-    ~Handler() = default;
+    Function(Program* program, std::string name, std::vector<Instruction> instructions);
+    Function() = default;
+    Function(const Function&) = delete;
+    Function(Function&&) noexcept = default;
+    Function& operator=(const Function&) = delete;
+    Function& operator=(Function&&) noexcept = default;
+    ~Function() = default;
 
     [[nodiscard]] Program* program() const noexcept { return _program; }
 
@@ -958,7 +944,7 @@ class Params
 
     void setResult(CoreNumber value) { _argv[0] = (Value) value; }
 
-    void setResult(const Handler* handler) { _argv[0] = _caller->program()->indexOf(handler); }
+    void setResult(const Function* fn) { _argv[0] = _caller->program()->indexOf(fn); }
 
     void setResult(const char* str) { _argv[0] = (Value) _caller->newString(str); }
 
@@ -986,9 +972,9 @@ class Params
 
     [[nodiscard]] const CoreString& getString(size_t offset) const { return *(CoreString*) at(offset); }
 
-    [[nodiscard]] Handler* getHandler(size_t offset) const
+    [[nodiscard]] Function* getFunction(size_t offset) const
     {
-        return _caller->program()->handler(static_cast<size_t>(at(offset)));
+        return _caller->program()->function(static_cast<size_t>(at(offset)));
     }
 
     [[nodiscard]] const util::IPAddress& getIPAddress(size_t offset) const
@@ -1122,7 +1108,6 @@ class NativeCallback
 
   private:
     Runtime* _runtime;
-    bool _isHandler;
     Verifier _verifier;
     Functor _function;
     Signature _signature;
@@ -1135,12 +1120,9 @@ class NativeCallback
     std::vector<DefaultValue> _defaults;
 
   public:
-    NativeCallback(Runtime* runtime, std::string name);
-    NativeCallback(Runtime* runtime, std::string name, LiteralType returnType);
+    NativeCallback(Runtime* runtime, std::string name, LiteralType returnType = LiteralType::Void);
     ~NativeCallback() = default;
 
-    [[nodiscard]] bool isHandler() const noexcept;
-    [[nodiscard]] bool isFunction() const noexcept;
     [[nodiscard]] std::string const& name() const noexcept;
     [[nodiscard]] Signature const& signature() const noexcept;
 
@@ -1226,27 +1208,27 @@ struct RuntimeError
 class PassManager
 {
   public:
-    using HandlerPass = std::function<bool(IRHandler* handler)>;
+    using FunctionPass = std::function<bool(IRFunction* function)>;
 
     PassManager() = default;
     ~PassManager() = default;
 
     /** registers given pass to the pass manager.
      *
-     * @param name uniquely identifyable name of the handler pass
-     * @param handler callback to invoke to handle the transformation pass
+     * @param name uniquely identifiable name of the function pass
+     * @param functionPass callback to invoke to handle the transformation pass
      *
-     * The handler must return @c true if it modified its input, @c false otherwise.
+     * The callback must return @c true if it modified its input, @c false otherwise.
      */
-    void registerPass(std::string name, HandlerPass handlerPass);
+    void registerPass(std::string name, FunctionPass functionPass);
 
     /** runs passes on a complete program.
      */
     void run(IRProgram* program);
 
-    /** runs passes on given handler.
+    /** runs passes on given function.
      */
-    void run(IRHandler* handler);
+    void run(IRFunction* function);
 
     template <typename... Args>
     void logDebug(std::format_string<Args...> msg, Args... args)
@@ -1257,7 +1239,7 @@ class PassManager
     void logDebug(const std::string& msg);
 
   private:
-    std::list<std::pair<std::string, HandlerPass>> _handlerPasses;
+    std::list<std::pair<std::string, FunctionPass>> _functionPasses;
 };
 
 /**
@@ -1409,7 +1391,7 @@ using ConstantRegExp = ConstantValue<util::RegExp, LiteralType::RegExp>;
  *
  * @see IRBuilder
  * @see BasicBlock
- * @see IRHandler
+ * @see IRFunction
  */
 class Instr: public Value
 {
@@ -1620,37 +1602,24 @@ class CallInstr: public Instr
     void accept(InstructionVisitor& v) override;
 };
 
-class HandlerCallInstr: public Instr
-{
-  public:
-    explicit HandlerCallInstr(const std::vector<Value*>& args);
-    HandlerCallInstr(IRBuiltinHandler* callee, const std::vector<Value*>& args);
-
-    [[nodiscard]] IRBuiltinHandler* callee() const { return (IRBuiltinHandler*) operand(0); }
-
-    [[nodiscard]] std::string to_string() const override;
-    [[nodiscard]] std::unique_ptr<Instr> clone() override;
-    void accept(InstructionVisitor& v) override;
-};
-
 // =============================================================================
 // User-Defined Function Call Instructions (UCALL/URET/UTCALL)
 // =============================================================================
 
-/// Calls a user-defined function compiled as a separate IRHandler.
+/// Calls a user-defined function compiled as a separate IRFunction.
 /// Operands: [arg0, arg1, ...]. Return type reflects the callee's body result type.
 class FunctionCallInstr: public Instr
 {
   public:
-    FunctionCallInstr(IRHandler* callee,
+    FunctionCallInstr(IRFunction* callee,
                       std::vector<Value*> args,
                       const std::string& name,
                       LiteralType returnType = LiteralType::Void);
 
-    /// The target handler to call.
-    [[nodiscard]] IRHandler* callee() const { return _callee; }
+    /// The target function to call.
+    [[nodiscard]] IRFunction* callee() const { return _callee; }
 
-    /// Number of arguments (excluding the handler operand).
+    /// Number of arguments (excluding the function operand).
     [[nodiscard]] size_t argc() const { return operands().size(); }
 
     [[nodiscard]] std::string to_string() const override;
@@ -1658,11 +1627,11 @@ class FunctionCallInstr: public Instr
     void accept(InstructionVisitor& v) override;
 
   private:
-    IRHandler* _callee;
+    IRFunction* _callee;
 };
 
-/// Returns from a user-defined function handler back to the caller.
-/// Not a TerminateInstr because it doesn't branch within the handler's CFG—
+/// Returns from a user-defined function back to the caller.
+/// Not a TerminateInstr because it doesn't branch within the function's CFG--
 /// the VM handles control transfer.
 class FunctionRetInstr: public Instr
 {
@@ -1677,15 +1646,15 @@ class FunctionRetInstr: public Instr
     void accept(InstructionVisitor& v) override;
 };
 
-/// Tail-calls a user-defined function handler, reusing the current call frame.
+/// Tail-calls a user-defined function, reusing the current call frame.
 /// Operands: [arg0, arg1, ...]. Must be in tail position.
 class TailCallInstr: public Instr
 {
   public:
-    TailCallInstr(IRHandler* callee, std::vector<Value*> args, const std::string& name);
+    TailCallInstr(IRFunction* callee, std::vector<Value*> args, const std::string& name);
 
-    /// The target handler to tail-call.
-    [[nodiscard]] IRHandler* callee() const { return _callee; }
+    /// The target function to tail-call.
+    [[nodiscard]] IRFunction* callee() const { return _callee; }
 
     /// Number of arguments.
     [[nodiscard]] size_t argc() const { return operands().size(); }
@@ -1695,7 +1664,7 @@ class TailCallInstr: public Instr
     void accept(InstructionVisitor& v) override;
 
   private:
-    IRHandler* _callee;
+    IRFunction* _callee;
 };
 
 class CastInstr: public Instr
@@ -1828,7 +1797,7 @@ class BrInstr: public TerminateInstr
 };
 
 /**
- * handler-return instruction.
+ * Function-return instruction.
  */
 class RetInstr: public TerminateInstr
 {
@@ -2156,7 +2125,7 @@ class IsSameInstruction: public InstructionVisitor
 
     // calls
     void visit(CallInstr& instr) override;
-    void visit(HandlerCallInstr& instr) override;
+
     void visit(FunctionCallInstr& instr) override;
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
@@ -2254,14 +2223,14 @@ class IsSameInstruction: public InstructionVisitor
     void visit(FCmpGTInstr& instr) override;
 };
 
-class IRHandler: public Constant
+class IRFunction: public Constant
 {
   public:
-    IRHandler(const std::string& name, IRProgram* parent);
-    ~IRHandler() override;
+    IRFunction(const std::string& name, IRProgram* parent);
+    ~IRFunction() override;
 
-    IRHandler(IRHandler&&) = delete;
-    IRHandler& operator=(IRHandler&&) = delete;
+    IRFunction(IRFunction&&) = delete;
+    IRFunction& operator=(IRFunction&&) = delete;
 
     BasicBlock* createBlock(const std::string& name = "");
 
@@ -2274,8 +2243,8 @@ class IRHandler: public Constant
 
     [[nodiscard]] bool empty() const noexcept { return _blocks.empty(); }
 
-    /// Number of parameters expected by this handler (for UCALL frame setup).
-    /// Zero for the main handler, >0 for compiled F# function handlers.
+    /// Number of parameters expected by this function (for UCALL frame setup).
+    /// Zero for the main function, >0 for compiled F# functions.
     [[nodiscard]] size_t parameterCount() const noexcept { return _parameterCount; }
 
     void setParameterCount(size_t count) { _parameterCount = count; }
@@ -2287,7 +2256,7 @@ class IRHandler: public Constant
     void setEntryBlock(BasicBlock* bb);
 
     /**
-     * Unlinks and deletes given basic block \p bb from handler.
+     * Unlinks and deletes given basic block \p bb from function.
      *
      * @note \p bb will be a dangling pointer after this call.
      */
@@ -2298,12 +2267,12 @@ class IRHandler: public Constant
     void moveBefore(const BasicBlock* moveable, const BasicBlock* beforeThat);
 
     /**
-     * Performs given transformation on this handler.
+     * Performs given transformation on this function.
      */
-    template <typename TheHandlerPass, typename... Args>
+    template <typename TheFunctionPass, typename... Args>
     size_t transform(Args&&... args)
     {
-        return TheHandlerPass(std::forward(args)...).run(this);
+        return TheFunctionPass(std::forward(args)...).run(this);
     }
 
     /**
@@ -2313,7 +2282,7 @@ class IRHandler: public Constant
      * considered fatal and will cause the program to exit with diagnostics
      * as this is most likely caused by an application programming error.
      *
-     * @note Always call this on completely defined handlers and never on
+     * @note Always call this on completely defined functions and never on
      * half-contructed ones.
      */
     void verify();
@@ -2321,25 +2290,9 @@ class IRHandler: public Constant
   private:
     IRProgram* _program;
     std::list<std::unique_ptr<BasicBlock>> _blocks;
-    size_t _parameterCount = 0; ///< Number of parameters (0 for main handler)
+    size_t _parameterCount = 0; ///< Number of parameters (0 for main function)
 
     friend class IRBuilder;
-};
-
-class IRBuiltinHandler: public Constant
-{
-  public:
-    explicit IRBuiltinHandler(const NativeCallback& cb):
-        Constant(LiteralType::Boolean, cb.signature().name()), _native(cb)
-    {
-    }
-
-    [[nodiscard]] const Signature& signature() const { return _native.signature(); }
-
-    [[nodiscard]] const NativeCallback& getNative() const { return _native; }
-
-  private:
-    const NativeCallback& _native;
 };
 
 class IRProgram
@@ -2370,25 +2323,6 @@ class IRProgram
         return get<ConstantArray>(_constantArrays, elems);
     }
 
-    [[nodiscard]] IRBuiltinHandler* findBuiltinHandler(const Signature& sig) const
-    {
-        for (const auto& builtinHandler: _builtinHandlers)
-            if (builtinHandler->signature() == sig)
-                return builtinHandler.get();
-
-        return nullptr;
-    }
-
-    IRBuiltinHandler* getBuiltinHandler(const NativeCallback& cb)
-    {
-        for (const auto& builtinHandler: _builtinHandlers)
-            if (builtinHandler->signature() == cb.signature())
-                return builtinHandler.get();
-
-        _builtinHandlers.emplace_back(std::make_unique<IRBuiltinHandler>(cb));
-        return _builtinHandlers.back().get();
-    }
-
     IRBuiltinFunction* getBuiltinFunction(const NativeCallback& cb)
     {
         for (const auto& builtinFunction: _builtinFunctions)
@@ -2410,32 +2344,32 @@ class IRProgram
 
     [[nodiscard]] const std::vector<std::pair<std::string, std::string>>& modules() const { return _modules; }
 
-    auto handlers() { return util::unbox(_handlers); }
+    auto functions() { return util::unbox(_functions); }
 
-    IRHandler* findHandler(const std::string& name)
+    IRFunction* findFunction(const std::string& name)
     {
-        for (IRHandler* handler: handlers())
-            if (handler->name() == name)
-                return handler;
+        for (IRFunction* fn: functions())
+            if (fn->name() == name)
+                return fn;
 
         return nullptr;
     }
 
-    IRHandler* createHandler(const std::string& name);
+    IRFunction* createFunction(const std::string& name);
 
-    /// Removes the given handler from the program. The pointer becomes invalid after this call.
-    void removeHandler(IRHandler* handler);
+    /// Removes the given function from the program. The pointer becomes invalid after this call.
+    void removeFunction(IRFunction* function);
 
     /**
-     * Performs given transformation on all handlers by given type.
+     * Performs given transformation on all functions by given type.
      */
-    template <typename TheHandlerPass, typename... Args>
+    template <typename TheFunctionPass, typename... Args>
     size_t transform(Args&&... args)
     {
         size_t count = 0;
-        for (IRHandler* handler: handlers())
+        for (IRFunction* fn: functions())
         {
-            count += handler->transform<TheHandlerPass>(args...);
+            count += fn->transform<TheFunctionPass>(args...);
         }
         return count;
     }
@@ -2486,8 +2420,7 @@ class IRProgram
     std::vector<std::unique_ptr<ConstantCidr>> _cidrs;
     std::vector<std::unique_ptr<ConstantRegExp>> _regexps;
     std::vector<std::unique_ptr<IRBuiltinFunction>> _builtinFunctions;
-    std::vector<std::unique_ptr<IRBuiltinHandler>> _builtinHandlers;
-    std::vector<std::unique_ptr<IRHandler>> _handlers;
+    std::vector<std::unique_ptr<IRFunction>> _functions;
     std::vector<CustomProductType> _customProductTypes;
     std::vector<CustomSumType> _customSumTypes;
     uint16_t _nextCustomTypeId = BuiltinTypeId::JobInfo + 1; ///< Next type ID for custom types
@@ -2499,7 +2432,7 @@ class IRBuilder
 {
   private:
     std::unique_ptr<IRProgram> _program;
-    IRHandler* _handler;
+    IRFunction* _function;
     BasicBlock* _insertPoint;
     std::unordered_map<std::string, unsigned long> _nameStore;
     SourceLocation _currentLocation;
@@ -2524,9 +2457,9 @@ class IRBuilder
     /// After calling this, program() will return nullptr.
     std::unique_ptr<IRProgram> takeProgram() { return std::move(_program); }
 
-    IRHandler* setHandler(IRHandler* hn);
+    IRFunction* setFunction(IRFunction* hn);
 
-    IRHandler* handler() const { return _handler; }
+    IRFunction* function() const { return _function; }
 
     BasicBlock* createBlock(const std::string& name);
 
@@ -2542,8 +2475,8 @@ class IRBuilder
         return static_cast<T*>(insert(std::make_unique<T>(std::forward<Args>(args)...)));
     }
 
-    IRHandler* getHandler(const std::string& name);
-    IRHandler* findHandler(const std::string& name);
+    IRFunction* getFunction(const std::string& name);
+    IRFunction* findFunction(const std::string& name);
 
     // literals
     ConstantBoolean* getBoolean(bool literal) { return _program->getBoolean(literal); }
@@ -2559,10 +2492,6 @@ class IRBuilder
     ConstantCidr* get(const util::Cidr& literal) { return _program->get(literal); }
 
     ConstantRegExp* get(const util::RegExp& literal) { return _program->get(literal); }
-
-    IRBuiltinHandler* findBuiltinHandler(const Signature& sig) { return _program->findBuiltinHandler(sig); }
-
-    IRBuiltinHandler* getBuiltinHandler(const NativeCallback& cb) { return _program->getBuiltinHandler(cb); }
 
     IRBuiltinFunction* getBuiltinFunction(const NativeCallback& cb)
     {
@@ -2682,15 +2611,13 @@ class IRBuilder
 
     // calls
     Instr* createCallFunction(IRBuiltinFunction* callee, std::vector<Value*> args, std::string name = "");
-    Instr* createInvokeHandler(IRBuiltinHandler* callee, const std::vector<Value*>& args);
-
     // user-defined function calls
-    FunctionCallInstr* createFunctionCall(IRHandler* callee,
+    FunctionCallInstr* createFunctionCall(IRFunction* callee,
                                           std::vector<Value*> args,
                                           const std::string& name = "",
                                           LiteralType returnType = LiteralType::Void);
     FunctionRetInstr* createFunctionRet(Value* result, const std::string& name = "");
-    TailCallInstr* createTailCall(IRHandler* callee, std::vector<Value*> args, const std::string& name = "");
+    TailCallInstr* createTailCall(IRFunction* callee, std::vector<Value*> args, const std::string& name = "");
 
     // termination instructions
     Instr* createRet(Value* result);
@@ -2728,23 +2655,23 @@ class IRBuilder
 /**
  * An SSA based instruction basic block.
  *
- * @see Instr, IRHandler, IRBuilder
+ * @see Instr, IRFunction, IRBuilder
  */
 class BasicBlock: public Value
 {
   public:
-    BasicBlock(const std::string& name, IRHandler* parent);
+    BasicBlock(const std::string& name, IRFunction* parent);
     ~BasicBlock() override;
 
-    [[nodiscard]] IRHandler* getHandler() const { return _handler; }
+    [[nodiscard]] IRFunction* getFunction() const { return _function; }
 
-    void setParent(IRHandler* handler) { _handler = handler; }
+    void setParent(IRFunction* function) { _function = function; }
 
     /*!
      * Retrieves the last terminating instruction in this basic block.
      *
      * This instruction must be a termination instruction, such as
-     * a branching instruction or a handler terminating instruction.
+     * a branching instruction or a function terminating instruction.
      *
      * @see BrInstr, CondBrInstr, MatchInstr, RetInstr
      */
@@ -2907,9 +2834,9 @@ class BasicBlock: public Value
      * considered fatal and will cause the program to exit with diagnostics
      * as this is most likely caused by an application programming error.
      *
-     * @note This function is automatically invoked by IRHandler::verify()
+     * @note This function is automatically invoked by IRFunction::verify()
      *
-     * @see IRHandler::verify()
+     * @see IRFunction::verify()
      */
     void verify();
 
@@ -2917,7 +2844,7 @@ class BasicBlock: public Value
     void collectIDom(std::vector<BasicBlock*>& output);
 
   private:
-    IRHandler* _handler;
+    IRFunction* _function;
     std::vector<std::unique_ptr<Instr>> _code;
     std::vector<BasicBlock*> _predecessors;
     std::vector<BasicBlock*> _successors;
@@ -2942,7 +2869,6 @@ class Runtime
 
     [[nodiscard]] auto builtins() { return util::unbox(_builtins); }
 
-    NativeCallback& registerHandler(const std::string& name);
     NativeCallback& registerFunction(const std::string& name);
     NativeCallback& registerFunction(const std::string& name, LiteralType returnType);
 
@@ -3246,7 +3172,7 @@ class TargetCodeGenerator: public InstructionVisitor
     std::unique_ptr<Program> generate(IRProgram* program);
 
   protected:
-    void generate(IRHandler* handler);
+    void generate(IRFunction* function);
 
     void dumpCurrentStack();
 
@@ -3335,7 +3261,7 @@ class TargetCodeGenerator: public InstructionVisitor
 
     // calls
     void visit(CallInstr& instr) override;
-    void visit(HandlerCallInstr& instr) override;
+
     void visit(FunctionCallInstr& instr) override;
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
@@ -3452,10 +3378,10 @@ class TargetCodeGenerator: public InstructionVisitor
     std::unordered_map<BasicBlock*, std::list<UnconditionalJump>> _unconditionalJumps;
     std::list<std::pair<MatchInstr*, size_t /*matchId*/>> _matchHints;
 
-    size_t _handlerId;              //!< current handler's ID
-    std::vector<Instruction> _code; //!< current handler's code
+    size_t _functionId;             //!< current function's ID
+    std::vector<Instruction> _code; //!< current function's code
 
-    /** Location table for current handler (sparse: only records when location changes) */
+    /** Location table for current function (sparse: only records when location changes) */
     ConstantPool::LocationTable _locationTable;
     SourceLocation _lastRecordedLocation;
 
@@ -3537,24 +3463,24 @@ namespace CoreVM::transform
 /**
  * Eliminates empty blocks, that are just jumping to the next block.
  */
-bool emptyBlockElimination(IRHandler* handler);
-bool rewriteCondBrToSameBranches(IRHandler* handler);
-bool eliminateUnusedInstr(IRHandler* handler);
-bool eliminateLinearBr(IRHandler* handler);
-bool foldConstantCondBr(IRHandler* handler);
-bool rewriteBrToExit(IRHandler* handler);
+bool emptyBlockElimination(IRFunction* function);
+bool rewriteCondBrToSameBranches(IRFunction* function);
+bool eliminateUnusedInstr(IRFunction* function);
+bool eliminateLinearBr(IRFunction* function);
+bool foldConstantCondBr(IRFunction* function);
+bool rewriteBrToExit(IRFunction* function);
 
 /**
  * Merges equal blocks into one, eliminating duplicated blocks.
  *
  * A block is equal if their instructions and their successors are equal.
  */
-bool mergeSameBlocks(IRHandler* handler);
+bool mergeSameBlocks(IRFunction* function);
 
 /**
  * Eliminates empty blocks, that are just jumping to the next block.
  */
-bool eliminateUnusedBlocks(IRHandler* handler);
+bool eliminateUnusedBlocks(IRFunction* function);
 
 } // namespace CoreVM::transform
 
@@ -3877,7 +3803,7 @@ struct std::formatter<CoreVM::LiteralType>: std::formatter<std::string_view>
             case CoreVM::LiteralType::IPAddress: name = "IPAddress"; break;
             case CoreVM::LiteralType::Cidr: name = "Cidr"; break;
             case CoreVM::LiteralType::RegExp: name = "RegExp"; break;
-            case CoreVM::LiteralType::Handler: name = "Handler"; break;
+            case CoreVM::LiteralType::Function: name = "Function"; break;
             case CoreVM::LiteralType::IntArray: name = "IntArray"; break;
             case CoreVM::LiteralType::StringArray: name = "StringArray"; break;
             case CoreVM::LiteralType::IPAddrArray: name = "IPAddrArray"; break;

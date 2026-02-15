@@ -149,16 +149,6 @@ size_t ConstantPool::makeMatchDef()
     return _matchDefs.size() - 1;
 }
 
-size_t ConstantPool::makeNativeHandler(const IRBuiltinHandler* handler)
-{
-    return makeNativeHandler(handler->signature().to_s());
-}
-
-size_t ConstantPool::makeNativeHandler(const std::string& sig)
-{
-    return ensureValue(_nativeHandlerSignatures, sig);
-}
-
 size_t ConstantPool::makeNativeFunction(const IRBuiltinFunction* function)
 {
     return makeNativeFunction(function->signature().to_s());
@@ -169,19 +159,19 @@ size_t ConstantPool::makeNativeFunction(const std::string& sig)
     return ensureValue(_nativeFunctionSignatures, sig);
 }
 
-size_t ConstantPool::makeHandler(const IRHandler* handler)
+size_t ConstantPool::makeFunction(const IRFunction* function)
 {
-    return makeHandler(handler->name());
+    return makeFunction(function->name());
 }
 
-size_t ConstantPool::makeHandler(const std::string& name)
+size_t ConstantPool::makeFunction(const std::string& name)
 {
     size_t i = 0;
-    size_t e = _handlers.size();
+    size_t e = _functions.size();
 
     while (i != e)
     {
-        if (_handlers[i].first == name)
+        if (_functions[i].first == name)
         {
             return i;
         }
@@ -189,8 +179,8 @@ size_t ConstantPool::makeHandler(const std::string& name)
         ++i;
     }
 
-    _handlers.resize(i + 1);
-    _handlers[i].first = name;
+    _functions.resize(i + 1);
+    _functions[i].first = name;
     return i;
 }
 
@@ -243,15 +233,6 @@ std::string ConstantPool::dumpToString() const
         for (size_t i = 0, e = _nativeFunctionSignatures.size(); i != e; ++i)
         {
             sstr << std::format(".extern function {:3} = {:<20}\n", i, _nativeFunctionSignatures[i]);
-        }
-    }
-
-    if (!_nativeHandlerSignatures.empty())
-    {
-        sstr << "\n; External Handlers\n";
-        for (size_t i = 0, e = _nativeHandlerSignatures.size(); i != e; ++i)
-        {
-            sstr << std::format(".extern handler {:4} = {:<20}\n", i, _nativeHandlerSignatures[i]);
         }
     }
 
@@ -336,12 +317,12 @@ std::string ConstantPool::dumpToString() const
         for (size_t i = 0, e = _matchDefs.size(); i != e; ++i)
         {
             const MatchDef& def = _matchDefs[i];
-            sstr << std::format(".const match {:7} = handler {}, op {}, elsePC {} ; {}\n",
+            sstr << std::format(".const match {:7} = function {}, op {}, elsePC {} ; {}\n",
                                 i,
-                                def.handlerId,
+                                def.functionId,
                                 tos(def.op),
                                 def.elsePC,
-                                _handlers[def.handlerId].first);
+                                _functions[def.functionId].first);
 
             for (size_t k = 0, m = def.cases.size(); k != m; ++k)
             {
@@ -362,12 +343,12 @@ std::string ConstantPool::dumpToString() const
         }
     }
 
-    for (const auto& handler: getHandlers())
+    for (const auto& function: getFunctions())
     {
-        const auto& name = handler.first;
-        const auto& code = handler.second;
+        const auto& name = function.first;
+        const auto& code = function.second;
 
-        sstr << std::format("\n.handler {:<27} ; ({} stack size, {} instructions)\n",
+        sstr << std::format("\n.function {:<27} ; ({} stack size, {} instructions)\n",
                             name,
                             computeStackSize(code.data(), code.size()),
                             code.size());

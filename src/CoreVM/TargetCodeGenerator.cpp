@@ -28,7 +28,7 @@ std::vector<T> convert(const std::vector<Constant*>& source)
     return target;
 }
 
-TargetCodeGenerator::TargetCodeGenerator(): _handlerId(0)
+TargetCodeGenerator::TargetCodeGenerator(): _functionId(0)
 {
 }
 
@@ -58,27 +58,27 @@ std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
     }
 
     // generate target code for global scope initialization, if any
-    IRHandler* init = programIR->findHandler(GLOBAL_SCOPE_INIT_NAME);
+    IRFunction* init = programIR->findFunction(GLOBAL_SCOPE_INIT_NAME);
     if (init != nullptr)
         generate(init);
 
-    for (IRHandler* handler: programIR->handlers())
-        if (handler != init)
-            generate(handler);
+    for (IRFunction* function: programIR->functions())
+        if (function != init)
+            generate(function);
 
     _cp.setModules(programIR->modules());
 
     return std::make_unique<Program>(std::move(_cp));
 }
 
-void TargetCodeGenerator::generate(IRHandler* handler)
+void TargetCodeGenerator::generate(IRFunction* function)
 {
-    // explicitely forward-declare handler, so we can use its ID internally.
-    _handlerId = _cp.makeHandler(handler);
+    // explicitely forward-declare function, so we can use its ID internally.
+    _functionId = _cp.makeFunction(function);
 
     std::unordered_map<BasicBlock*, size_t> basicBlockEntryPoints;
 
-    // Reset stack, alloca, and location tracking for this handler
+    // Reset stack, alloca, and location tracking for this function
     _stack.clear();
     _allocaIndices.clear();
     _allocaCount = 0;
@@ -86,20 +86,20 @@ void TargetCodeGenerator::generate(IRHandler* handler)
     _locationTable.clear();
     _lastRecordedLocation = {};
 
-    // Number of parameters for this handler (>0 for compiled F# function handlers).
+    // Number of parameters for this function (>0 for compiled F# functions).
     // Parameter allocas are already on the stack from the caller (via UCALL),
     // so we skip ALLOC emission for them but still track them in _allocaIndices.
-    size_t const paramCount = handler->parameterCount();
+    size_t const paramCount = function->parameterCount();
 
     // First pass: assign fixed indices to all allocas.
     // This ensures allocas have consistent indices regardless of instruction order.
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         for (Instr* instr: bb->instructions())
         {
             if (auto* allocaInstr = dynamic_cast<AllocaInstr*>(instr))
             {
-                if (allocaInstr->getBasicBlock()->getHandler()->name() != GLOBAL_SCOPE_INIT_NAME)
+                if (allocaInstr->getBasicBlock()->getFunction()->name() != GLOBAL_SCOPE_INIT_NAME)
                 {
                     _allocaIndices[allocaInstr] = _allocaCount++;
                 }
@@ -107,7 +107,7 @@ void TargetCodeGenerator::generate(IRHandler* handler)
         }
     }
 
-    // For function handlers, pre-populate the stack tracking with parameter slots.
+    // For compiled functions, pre-populate the stack tracking with parameter slots.
     // These slots are already on the physical stack from the UCALL instruction,
     // so we add them to _stack without emitting ALLOC opcodes.
     if (paramCount > 0)
@@ -116,7 +116,7 @@ void TargetCodeGenerator::generate(IRHandler* handler)
         // We need to find those allocas and push them onto our tracking stack,
         // and record them so visit(AllocaInstr) skips ALLOC emission.
         size_t paramsPushed = 0;
-        for (BasicBlock* bb: handler->basicBlocks())
+        for (BasicBlock* bb: function->basicBlocks())
         {
             for (Instr* instr: bb->instructions())
             {
@@ -141,7 +141,7 @@ void TargetCodeGenerator::generate(IRHandler* handler)
     bool isFirstBlock = true;
 
     // generate code for all basic blocks, sequentially
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         if (isFirstBlock)
         {
@@ -220,14 +220,14 @@ void TargetCodeGenerator::generate(IRHandler* handler)
     }
     _matchHints.clear();
 
-    _cp.getHandler(_handlerId).second = std::move(_code);
+    _cp.getFunction(_functionId).second = std::move(_code);
 
-    // Store the sparse location table for this handler
+    // Store the sparse location table for this function
     if (!_locationTable.empty())
-        _cp.setHandlerLocationTable(_handlerId, std::move(_locationTable));
+        _cp.setFunctionLocationTable(_functionId, std::move(_locationTable));
 
-    // cleanup remaining handler-local work vars
-    // COREVM_TRACE("CoreVM: stack depth after handler code generation: {}", _stack.size());
+    // cleanup remaining function-local work vars
+    // COREVM_TRACE("CoreVM: stack depth after function code generation: {}", _stack.size());
     _stack.clear();
 }
 
@@ -327,7 +327,7 @@ void TargetCodeGenerator::visit(NopInstr& /*nopInstr*/)
 
 void TargetCodeGenerator::visit(AllocaInstr& allocaInstr)
 {
-    if (allocaInstr.getBasicBlock()->getHandler()->name() == GLOBAL_SCOPE_INIT_NAME)
+    if (allocaInstr.getBasicBlock()->getFunction()->name() == GLOBAL_SCOPE_INIT_NAME)
     {
         emitInstr(Opcode::GALLOCA, 1);
         _globals.push_back(&allocaInstr);
@@ -426,20 +426,6 @@ void TargetCodeGenerator::visit(CallInstr& callInstr)
     }
 }
 
-void TargetCodeGenerator::visit(HandlerCallInstr& handlerCallInstr)
-{
-    int argc = static_cast<int>(handlerCallInstr.operands().size()) - 1;
-    for (int i = 1; i <= argc; ++i)
-        emitLoad(handlerCallInstr.operand(i));
-
-    emitInstr(Opcode::HANDLER,
-              _cp.makeNativeHandler(handlerCallInstr.callee()),
-              handlerCallInstr.operands().size() - 1);
-
-    if (argc)
-        pop(argc);
-}
-
 void TargetCodeGenerator::visit(FunctionCallInstr& instr)
 {
     // Push all arguments onto the stack
@@ -447,9 +433,9 @@ void TargetCodeGenerator::visit(FunctionCallInstr& instr)
     for (size_t i = 0; i < instr.argc(); ++i)
         emitLoad(instr.operand(i));
 
-    // Emit UCALL handler_id, argc
-    auto handlerId = static_cast<Operand>(_cp.makeHandler(instr.callee()));
-    emitInstr(Opcode::UCALL, handlerId, argc);
+    // Emit UCALL function_id, argc
+    auto functionId = static_cast<Operand>(_cp.makeFunction(instr.callee()));
+    emitInstr(Opcode::UCALL, functionId, argc);
 
     // UCALL pops argc args and pushes 1 return value
     pop(argc);
@@ -479,9 +465,9 @@ void TargetCodeGenerator::visit(TailCallInstr& instr)
     for (size_t i = 0; i < instr.argc(); ++i)
         emitLoad(instr.operand(i));
 
-    // Emit UTCALL handler_id, argc
-    auto handlerId = static_cast<Operand>(_cp.makeHandler(instr.callee()));
-    emitInstr(Opcode::UTCALL, handlerId, argc);
+    // Emit UTCALL function_id, argc
+    auto functionId = static_cast<Operand>(_cp.makeFunction(instr.callee()));
+    emitInstr(Opcode::UTCALL, functionId, argc);
 
     // UTCALL transfers control — no stack tracking adjustment needed
 }
@@ -734,9 +720,9 @@ void TargetCodeGenerator::visit(MatchInstr& matchInstr)
     const size_t matchId = _cp.makeMatchDef();
     MatchDef& matchDef = _cp.getMatchDef(matchId);
 
-    matchDef.handlerId = _cp.makeHandler(matchInstr.getBasicBlock()->getHandler());
+    matchDef.functionId = _cp.makeFunction(matchInstr.getBasicBlock()->getFunction());
     matchDef.op = matchInstr.op();
-    matchDef.elsePC = 0; // XXX to be filled in post-processing the handler
+    matchDef.elsePC = 0; // XXX to be filled in post-processing the function
 
     _matchHints.emplace_back(&matchInstr, matchId);
 

@@ -6,11 +6,11 @@
 namespace CoreVM::transform
 {
 
-bool emptyBlockElimination(IRHandler* handler)
+bool emptyBlockElimination(IRFunction* function)
 {
     std::list<BasicBlock*> eliminated;
 
-    for (BasicBlock* bb: handler->basicBlocks())
+    for (BasicBlock* bb: function->basicBlocks())
     {
         if (bb->size() != 1)
             continue;
@@ -19,9 +19,9 @@ bool emptyBlockElimination(IRHandler* handler)
         {
             BasicBlock* newSuccessor = br->targetBlock();
             eliminated.push_back(bb);
-            if (bb == handler->getEntryBlock())
+            if (bb == function->getEntryBlock())
             {
-                handler->setEntryBlock(bb);
+                function->setEntryBlock(bb);
                 break;
             }
             else
@@ -36,7 +36,7 @@ bool emptyBlockElimination(IRHandler* handler)
 
     for (BasicBlock* bb: eliminated)
     {
-        bb->getHandler()->erase(bb);
+        bb->getFunction()->erase(bb);
     }
 
     return eliminated.size() > 0;

@@ -20,32 +20,32 @@ auto& passManagerLog()
 namespace CoreVM
 {
 
-void PassManager::registerPass(std::string name, HandlerPass handlerPass)
+void PassManager::registerPass(std::string name, FunctionPass functionPass)
 {
-    _handlerPasses.emplace_back(std::move(name), std::move(handlerPass));
+    _functionPasses.emplace_back(std::move(name), std::move(functionPass));
 }
 
 void PassManager::run(IRProgram* program)
 {
-    for (IRHandler* handler: program->handlers())
+    for (IRFunction* function: program->functions())
     {
-        logDebug("optimizing handler {}", handler->name());
-        run(handler);
+        logDebug("optimizing function {}", function->name());
+        run(function);
     }
 }
 
-void PassManager::run(IRHandler* handler)
+void PassManager::run(IRFunction* function)
 {
     for (;;)
     {
         int changes = 0;
-        for (const std::pair<std::string, HandlerPass>& pass: _handlerPasses)
+        for (const std::pair<std::string, FunctionPass>& pass: _functionPasses)
         {
             logDebug("executing pass {}:", pass.first);
-            if (pass.second(handler))
+            if (pass.second(function))
             {
                 logDebug("pass {}: changes detected", pass.first);
-                handler->verify();
+                function->verify();
                 changes++;
             }
         }
