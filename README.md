@@ -13,7 +13,7 @@
 
 ---
 
-[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Documentation](https://christianparpart.github.io/endo/) · [Installation](#installation) · [Contributing](#contributing)
+[Getting Started](#getting-started) · [Features](#features) · [Examples](#examples) · [Documentation](https://contour-terminal.github.io/endo/) · [Installation](#installation) · [Contributing](#contributing)
 
 </div>
 
@@ -153,7 +153,7 @@ mkdir -p $config_dir
 
 ```bash
 # Clone and build
-git clone https://github.com/christianparpart/endo.git
+git clone https://github.com/contour-terminal/endo.git
 cd endo
 cmake --preset clang-release
 cmake --build --preset clang-release
@@ -167,7 +167,7 @@ cmake --build --preset clang-release
 ### From Source
 
 ```bash
-git clone https://github.com/christianparpart/endo.git
+git clone https://github.com/contour-terminal/endo.git
 cd endo
 cmake --preset clang-release
 cmake --build --preset clang-release
