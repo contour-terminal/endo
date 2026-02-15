@@ -347,16 +347,16 @@ class IRGenerator final: public ast::Visitor
         /// Captured variable bindings from the enclosing scope at function creation time.
         /// Maps variable names to their storage (entry-block allocas).
         std::unordered_map<std::string, CoreVM::Value*> capturedBindings;
-        /// Deterministic ordering of captured variable names for handler compilation.
-        /// Populated by compileFunctionAsHandler; used at both definition and call sites.
+        /// Deterministic ordering of captured variable names for function compilation.
+        /// Populated by compileFunctionBody; used at both definition and call sites.
         std::vector<std::string> captureOrder;
         /// Maps captured variable names to source function names (HOF support).
         /// Preserves function reference info through closures and partial application.
         std::unordered_map<std::string, std::string> capturedFunctionRefs;
-        /// Pre-compiled IR handler (set when closure-based compilation is active).
+        /// Pre-compiled IR function (set when closure-based compilation is active).
         /// When non-null, calls emit FunctionCallInstr instead of AST inlining.
-        CoreVM::IRHandler* compiledHandler = nullptr;
-        /// IR return type of the compiled handler body (valid when compiledHandler != nullptr).
+        CoreVM::IRFunction* compiledFunction = nullptr;
+        /// IR return type of the compiled function body (valid when compiledFunction != nullptr).
         CoreVM::LiteralType compiledReturnType = CoreVM::LiteralType::Void;
         /// Builtin higher-order function marker. Empty = normal function,
         /// otherwise "map"/"filter"/"fold"/"reduce"/"reverse".
@@ -486,9 +486,9 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `Option.defaultValue` with a pre-evaluated option value.
     void generateOptionDefaultValueWithValue(ast::Expr const* defaultExpr, CoreVM::Value* optionValue);
 
-    /// Compiles a function definition as a separate IRHandler for closure-based calls.
-    /// Sets func->compiledHandler to the new handler on success.
-    void compileFunctionAsHandler(std::string const& name, FSharpFunction& func);
+    /// Compiles a function definition as a separate IRFunction for closure-based calls.
+    /// Sets func->compiledFunction to the new function on success.
+    void compileFunctionBody(std::string const& name, FSharpFunction& func);
 
     /// Maps a high-level TypePtr to the corresponding CoreVM::LiteralType for validation.
     [[nodiscard]] static std::optional<CoreVM::LiteralType> mapTypeToLiteralType(TypePtr const& type);
@@ -580,7 +580,7 @@ class IRGenerator final: public ast::Visitor
                               CoreVM::LiteralType t2,
                               std::string_view label);
 
-    /// Creates an alloca in the entry block of the current handler.
+    /// Creates an alloca in the entry block of the current function.
     /// This ensures allocas are always at the beginning, which is required
     /// for proper stack tracking in the TargetCodeGenerator.
     CoreVM::AllocaInstr* createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name);
@@ -660,9 +660,9 @@ class IRGenerator final: public ast::Visitor
     /// (i.e., its value is the function's return value). Used to decide UCALL vs UTCALL.
     bool _inTailPosition = false;
 
-    /// The handler currently being compiled by compileFunctionAsHandler, or nullptr.
-    /// Used to detect that we're inside a function handler compilation (not the main handler).
-    CoreVM::IRHandler* _compilingHandler = nullptr;
+    /// The function currently being compiled by compileFunctionBody, or nullptr.
+    /// Used to detect that we're inside a function body compilation (not the main function).
+    CoreVM::IRFunction* _compilingFunction = nullptr;
 
     /// Value bindings created during this codegen pass, to be persisted back.
     std::vector<FSharpPersistentState::PersistedValueBinding> _newValueBindings;

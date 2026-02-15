@@ -371,63 +371,63 @@ TEST_CASE("IRGenerator.FSharp.function_with_complex_body")
 }
 
 // =============================================================================
-// F# Handler-Compiled Function Tests (UCALL/URET)
+// F# Function-Compiled Tests (UCALL/URET)
 // =============================================================================
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_identity")
+TEST_CASE("IRGenerator.FSharp.function_typed_identity")
 {
-    // Identity function with type annotation compiles as handler (UCALL/URET)
+    // Identity function with type annotation compiles as function (UCALL/URET)
     CHECK(executeSourceAndGetOutput("let id (x: int) = x; print (id 42)") == "42");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_arithmetic")
+TEST_CASE("IRGenerator.FSharp.function_typed_arithmetic")
 {
-    // Integer arithmetic with typed params compiles as handler
+    // Integer arithmetic with typed params compiles as function
     CHECK(executeSourceAndGetOutput("let add (x: int) (y: int) = x + y; print (add 3 4)") == "7");
     CHECK(executeSourceAndGetOutput("let sq (x: int) = x * x; print (sq 5)") == "25");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_if_then_else")
+TEST_CASE("IRGenerator.FSharp.function_typed_if_then_else")
 {
-    // Branching with typed params in handler
+    // Branching with typed params in compiled function
     CHECK(executeSourceAndGetOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs (0 - 7))")
           == "7");
     CHECK(executeSourceAndGetOutput("let abs (x: int) = if x < 0 then 0 - x else x; print (abs 3)") == "3");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_string_concat")
+TEST_CASE("IRGenerator.FSharp.function_typed_string_concat")
 {
-    // String concat with typed string param compiles as handler
+    // String concat with typed string param compiles as function
     CHECK(executeSourceAndGetOutput(R"(let greet (name: str) = "hello " + name; print (greet "world"))")
           == "hello world");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_multiple_calls")
+TEST_CASE("IRGenerator.FSharp.function_typed_multiple_calls")
 {
-    // Multiple calls to the same handler
+    // Multiple calls to the same function
     CHECK(executeSourceAndGetOutput("let inc (x: int) = x + 1; print (inc (inc (inc 0)))") == "3");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_float")
+TEST_CASE("IRGenerator.FSharp.function_typed_float")
 {
-    // Float function with type annotations compiles as handler
+    // Float function with type annotations compiles as function
     CHECK(executeSourceAndGetOutput("let double (x: float) = x * 2.0; print (double 3.5)") == "7");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_typed_bool")
+TEST_CASE("IRGenerator.FSharp.function_typed_bool")
 {
     // Boolean parameter with type annotation
     CHECK(executeSourceAndGetOutput(R"(let show (b: bool) = if b then "yes" else "no"; print (show true))")
           == "yes");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_zero_params")
+TEST_CASE("IRGenerator.FSharp.function_zero_params")
 {
-    // Zero-parameter function compiles as handler
+    // Zero-parameter function compiles as function
     CHECK(executeSourceAndGetOutput("let answer = 42; print answer") == "42");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_fallback_untyped")
+TEST_CASE("IRGenerator.FSharp.function_fallback_untyped")
 {
     // Functions without type annotations fall back to AST inlining but still work
     CHECK(executeSourceAndGetOutput("let id x = x; print (id 42)") == "42");
@@ -439,7 +439,7 @@ TEST_CASE("IRGenerator.FSharp.handler_fallback_untyped")
 }
 
 // =============================================================================
-// F# Closure Tests (Handler-compiled functions with captured variables)
+// F# Closure Tests (Function-compiled with captured variables)
 // =============================================================================
 
 TEST_CASE("IRGenerator.FSharp.closure_capture_int")
@@ -500,7 +500,7 @@ TEST_CASE("IRGenerator.FSharp.closure_capture_untyped_fallback")
 // F# Recursive Function Tests (UCALL/UTCALL-based with type annotations)
 // =============================================================================
 
-TEST_CASE("IRGenerator.FSharp.handler_recursive_countdown")
+TEST_CASE("IRGenerator.FSharp.function_recursive_countdown")
 {
     // Tail-recursive countdown using UTCALL
     CHECK(executeSourceAndGetOutput(
@@ -508,7 +508,7 @@ TEST_CASE("IRGenerator.FSharp.handler_recursive_countdown")
           == "0");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_recursive_factorial_tail")
+TEST_CASE("IRGenerator.FSharp.function_recursive_factorial_tail")
 {
     // Tail-recursive factorial with accumulator
     CHECK(executeSourceAndGetOutput(
@@ -517,7 +517,7 @@ TEST_CASE("IRGenerator.FSharp.handler_recursive_factorial_tail")
           == "120");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_recursive_sum")
+TEST_CASE("IRGenerator.FSharp.function_recursive_sum")
 {
     // Tail-recursive sum using match
     CHECK(executeSourceAndGetOutput(
@@ -526,7 +526,7 @@ TEST_CASE("IRGenerator.FSharp.handler_recursive_sum")
           == "55");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_recursive_multiple_calls")
+TEST_CASE("IRGenerator.FSharp.function_recursive_multiple_calls")
 {
     // Recursive function called multiple times
     CHECK(executeSourceAndGetOutput("let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1);"
@@ -534,7 +534,7 @@ TEST_CASE("IRGenerator.FSharp.handler_recursive_multiple_calls")
           == "00");
 }
 
-TEST_CASE("IRGenerator.FSharp.handler_recursive_with_capture")
+TEST_CASE("IRGenerator.FSharp.function_recursive_with_capture")
 {
     // Recursive function that captures a variable
     CHECK(
@@ -942,7 +942,7 @@ TEST_CASE("IRGenerator.FSharp.try_with_multiple_handlers")
 // F# Option/Result Execution Tests
 // =============================================================================
 // These tests verify that the generated IR actually executes correctly,
-// not just that it compiles. Note: The main handler always returns 0
+// not just that it compiles. Note: The main function always returns 0
 // (shell success convention), so we test that execution completes without error.
 
 TEST_CASE("IRGenerator.FSharp.exec_match_option_some")
@@ -1805,7 +1805,7 @@ TEST_CASE("IRGenerator.FSharp.exec_rec_pipeline")
 
 TEST_CASE("IRGenerator.FSharp.exec_rec_non_tail_error")
 {
-    // Non-tail recursive calls now work via UCALL (handler compilation).
+    // Non-tail recursive calls now work via UCALL (function compilation).
     // Previously this was an error when using AST inlining.
     CHECK(
         executeSourceAndGetOutput("let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); "
@@ -3045,24 +3045,24 @@ TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_persistence")
     CHECK(sessionProducesOutput({ "let add (x: int) (y: int): int = x + y", "print (add 10 20)" }, "30"));
 }
 
-TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_recursive")
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_function_recursive")
 {
-    // Typed recursive function defined in one prompt, called in the next (compiled as handler)
+    // Typed recursive function defined in one prompt, called in the next (compiled as function)
     CHECK(sessionProducesOutput({ "let rec countdown (n: int): int = if n <= 0 then 0 else countdown (n - 1)",
                                   "print (countdown 5)" },
                                 "0"));
 }
 
-TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_with_closure")
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_function_with_closure")
 {
-    // Typed function capturing a persisted value binding (closure via handler)
+    // Typed function capturing a persisted value binding (closure via function)
     CHECK(sessionProducesOutput(
         { "let offset = 10", "let addOffset (x: int): int = x + offset", "print (addOffset 5)" }, "15"));
 }
 
-TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_handler_multiple_calls")
+TEST_CASE("IRGenerator.FSharp.TypeAnnotation.session_function_multiple_calls")
 {
-    // Typed handler function called across multiple prompts
+    // Typed compiled function called across multiple prompts
     CHECK(sessionProducesOutput(
         { "let square (x: int): int = x * x", "print (square 4)", "print (square 7)" }, "49"));
 }
@@ -7496,9 +7496,9 @@ TEST_CASE("IRGenerator.FSharp.list_if_then_else_elements")
           == "[1; 4]");
 }
 
-TEST_CASE("IRGenerator.FSharp.list_handler_function_calls")
+TEST_CASE("IRGenerator.FSharp.list_compiled_function_calls")
 {
-    // Handler-compiled (UCALL) function calls as list elements
+    // Function-compiled (UCALL) function calls as list elements
     CHECK(executeSourceAndGetOutput("let f (x: int) : int = x * 2\nlet r = [f 1; f 2; f 3]\nprint r")
           == "[2; 4; 6]");
 }
@@ -7518,7 +7518,7 @@ TEST_CASE("IRGenerator.FSharp.list_builtin_function_calls")
 
 TEST_CASE("IRGenerator.FSharp.list_mixed_custom_and_builtin")
 {
-    // Mix of handler function (string) + block-creating builtin (option<string>) is heterogeneous
+    // Mix of compiled function (string) + block-creating builtin (option<string>) is heterogeneous
     CHECK(generatesIRWithError(R"(let f (x: string) : string = x; let r = [f "test"; env "HOME"]; print r)",
                                "List elements must have the same type"));
 }

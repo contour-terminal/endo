@@ -893,7 +893,7 @@ int Shell::execute(std::string const& lineBuffer)
             // so the parser routes them as F# calls (e.g., set_prompt_preset).
             // Names without underscores (exit, cd, fg, export, ...) are shell commands.
             for (auto const* builtin: _runtime.builtins())
-                if (builtin->isFunction() && builtin->name().find('_') != std::string::npos)
+                if (builtin->name().find('_') != std::string::npos)
                     names.insert(builtin->name());
             parser.setKnownFSharpFunctions(std::move(names));
             parser.setKnownVariadicFunctions(std::move(variadicNames));
@@ -962,7 +962,7 @@ int Shell::execute(std::string const& lineBuffer)
             irLog()()("{}", _currentProgram->dumpToString());
         }
 
-        CoreVM::Handler* main = _currentProgram->findHandler("@main");
+        CoreVM::Function* main = _currentProgram->findFunction("@main");
         assert(main != nullptr);
         auto runner = CoreVM::Runner(main,
                                      nullptr,
@@ -2894,8 +2894,8 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
     {
-        CoreVM::Handler* handler = _currentProgram->findHandler(program);
-        if (!handler)
+        CoreVM::Function* fn = _currentProgram->findFunction(program);
+        if (!fn)
         {
             error("{}: function not found (was it defined in a previous command?)", program);
             _exitCode = 127;
@@ -2909,7 +2909,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         for (size_t i = 1; i < args.size(); ++i)
             _positionalParameters.push_back(args.at(i));
 
-        auto runner = CoreVM::Runner(handler,
+        auto runner = CoreVM::Runner(fn,
                                      nullptr,
                                      &_globals,
                                      CoreVM::RuntimeConfig::defaultConfig(),
@@ -5134,8 +5134,8 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
         return;
     }
 
-    CoreVM::Handler* handler = _currentProgram->findHandler(name);
-    if (!handler)
+    CoreVM::Function* fn = _currentProgram->findFunction(name);
+    if (!fn)
     {
         error("{}: function not found (was it defined in a previous command?)", name);
         _exitCode = 127;
@@ -5143,7 +5143,7 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
         return;
     }
 
-    auto runner = CoreVM::Runner(handler,
+    auto runner = CoreVM::Runner(fn,
                                  nullptr,
                                  &_globals,
                                  CoreVM::RuntimeConfig::defaultConfig(),

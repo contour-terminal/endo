@@ -142,7 +142,7 @@ namespace
     [[nodiscard]] bool typesCompatible(CoreVM::Value* a, CoreVM::Value* b)
     {
         // Void acts as a wildcard (unknown type) — compatible with anything.
-        // This occurs for function handler parameters whose concrete types aren't
+        // This occurs for function parameters whose concrete types aren't
         // known until call time.
         if (a->type() == CoreVM::LiteralType::Void || b->type() == CoreVM::LiteralType::Void)
             return true;
@@ -198,7 +198,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     generator._persistentState = persistentState;
 
     generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
-    generator._builder.setHandler(generator._builder.getHandler(GLOBAL_SCOPE_INIT_NAME));
+    generator._builder.setFunction(generator._builder.getFunction(GLOBAL_SCOPE_INIT_NAME));
     generator._builder.setInsertPoint(generator._builder.createBlock("EntryPoint"));
 
     // Initialize F# root scope
@@ -303,7 +303,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                 generator.emitExportVariable(storage, binding.name);
         }
 
-        // Re-compute captured bindings and compile persisted functions as handlers.
+        // Re-compute captured bindings and compile persisted functions.
         // Value bindings are now in scope, so closures can resolve their captures.
         for (auto& [name, func]: generator._fsharpFunctions)
         {
@@ -312,7 +312,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                 auto boundNames = func.parameters;
                 func.capturedBindings = generator.collectFreeVariables(func.body, boundNames);
             }
-            generator.compileFunctionAsHandler(name, func);
+            generator.compileFunctionBody(name, func);
         }
     }
 
@@ -645,7 +645,7 @@ void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& fu
     }
 
     // NOTE: We intentionally do NOT apply inferred return types here.
-    // The return type is determined from the actual body result during handler compilation
+    // The return type is determined from the actual body result during function compilation
     // (compiledReturnType), and applying it here causes false validation errors in the
     // AST inlining path (e.g., print returns Number(0) but unit maps to Void).
 }
@@ -1167,8 +1167,8 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
 
 CoreVM::AllocaInstr* IRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name)
 {
-    // Get the entry block of the current handler
-    CoreVM::BasicBlock* entryBlock = _builder.handler()->getEntryBlock();
+    // Get the entry block of the current function
+    CoreVM::BasicBlock* entryBlock = _builder.function()->getEntryBlock();
 
     // Create the alloca instruction
     auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
@@ -3972,13 +3972,11 @@ bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<Cor
     // Search runtime builtins for a function matching by name and argument count.
     for (auto const* builtin: _runtime.builtins())
     {
-        if (!builtin->isFunction())
-            continue;
         if (builtin->signature().name() != name)
             continue;
 
         auto const& sig = builtin->signature();
-        // Function signatures list only user-visible parameters (no hidden handler context).
+        // Function signatures list only user-visible parameters (no hidden function context).
         if (sig.args().size() != args.size())
             continue;
 
@@ -4112,7 +4110,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, thenResult, "if.then.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler
+    else if (_activeRecursion || _activeMutualRecursion || _compilingFunction
              || (_builder.getInsertPoint() && _builder.getInsertPoint()->getTerminator()))
     {
         // Tail call or break/continue in then branch — no merge needed from this path
@@ -4140,7 +4138,7 @@ void IRGenerator::visit(ast::IfExpr const& node)
         _builder.createStore(resultStorage, elseResult, "if.else.store");
         _builder.createBr(mergeBlock);
     }
-    else if (_activeRecursion || _activeMutualRecursion || _compilingHandler
+    else if (_activeRecursion || _activeMutualRecursion || _compilingFunction
              || (_builder.getInsertPoint() && _builder.getInsertPoint()->getTerminator()))
     {
         // Tail call or break/continue in else branch — no merge needed from this path
@@ -4419,11 +4417,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
             registerFSharpFunction(node.name, std::move(func));
 
-            // Compile functions as separate IRHandlers (with captures as extra params).
-            // For recursive functions, compiledHandler is set before body codegen so that
+            // Compile functions as separate IRFunctions (with captures as extra params).
+            // For recursive functions, compiledFunction is set before body codegen so that
             // recursive references emit UCALL/UTCALL instead of infinite AST inlining.
             if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
-                compileFunctionAsHandler(node.name, *registered);
+                compileFunctionBody(node.name, *registered);
         }
 
         // Register 'and' bindings (mutual recursion partners)
@@ -4447,13 +4445,13 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             registerFSharpFunction(ab.name, std::move(func));
         }
 
-        // Compile mutual recursion 'and' bindings as handlers (after ALL are registered)
+        // Compile mutual recursion 'and' bindings as functions (after ALL are registered)
         if (isMutual)
         {
             for (auto const& ab: node.andBindings)
             {
                 if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(ab.name)))
-                    compileFunctionAsHandler(ab.name, *registered);
+                    compileFunctionBody(ab.name, *registered);
             }
         }
 
@@ -4480,9 +4478,9 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
         registerFSharpFunction(node.name, std::move(func));
 
-        // Compile lambda-as-variable as separate IRHandler (with captures as extra params)
+        // Compile lambda-as-variable as separate IRFunction (with captures as extra params)
         if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
-            compileFunctionAsHandler(node.name, *registered);
+            compileFunctionBody(node.name, *registered);
 
         _result = nullptr;
         return;
@@ -4690,9 +4688,9 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
         registerFSharpFunction(node.name, std::move(func));
 
-        // Compile as handler (same pattern as LetBindingStmt)
+        // Compile as function (same pattern as LetBindingStmt)
         if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
-            compileFunctionAsHandler(node.name, *registered);
+            compileFunctionBody(node.name, *registered);
     }
     else
     {
@@ -5972,9 +5970,9 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         }
     }
 
-    // If the function was compiled as a handler (UCALL/UTCALL), use that path
+    // If the function was compiled as a separate IRFunction (UCALL/UTCALL), use that path
     // regardless of whether it's recursive or not.
-    if (func->compiledHandler)
+    if (func->compiledFunction)
     {
         generateFSharpCall(func, funcName, args);
         return;
@@ -6223,7 +6221,7 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
     auto* entryBlock = _builder.createBlock("rec.entry");
     auto* exitBlock = _builder.createBlock("rec.exit");
 
-    // Create parameter allocas and result storage in the handler entry block
+    // Create parameter allocas and result storage in the function entry block
     std::vector<CoreVM::AllocaInstr*> paramAllocas;
     for (size_t i = 0; i < func->parameters.size(); ++i)
     {
@@ -6299,8 +6297,8 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
                                      std::string const& funcName,
                                      std::vector<CoreVM::Value*> const& args)
 {
-    // If this function was compiled as a separate IRHandler, emit a function call instruction
-    if (func->compiledHandler)
+    // If this function was compiled as a separate IRFunction, emit a function call instruction
+    if (func->compiledFunction)
     {
         // Validate parameter type annotations before the call
         for (size_t i = 0; i < func->parameters.size(); ++i)
@@ -6316,43 +6314,43 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         }
 
         // Build full argument list: captured variables first, then explicit arguments.
-        // When inside a handler compilation (recursive call), load captures from the
-        // handler's own scope variables (not from the outer scope's capturedBindings).
+        // When inside a function compilation (recursive call), load captures from the
+        // function's own scope variables (not from the outer scope's capturedBindings).
         std::vector<CoreVM::Value*> fullArgs;
         fullArgs.reserve(func->captureOrder.size() + args.size());
         for (auto const& capName: func->captureOrder)
         {
             CoreVM::Value* capStorage = nullptr;
-            if (_compilingHandler)
+            if (_compilingFunction)
             {
-                // Inside a handler: look up capture in the current scope
+                // Inside a function: look up capture in the current scope
                 capStorage = lookupFSharpVariable(capName);
             }
             if (!capStorage)
             {
-                // Outside handler or not found in scope: use outer capturedBindings
+                // Outside function or not found in scope: use outer capturedBindings
                 capStorage = func->capturedBindings.at(capName);
             }
             fullArgs.push_back(_builder.createLoad(capStorage, "cap." + capName));
         }
         fullArgs.insert(fullArgs.end(), args.begin(), args.end());
 
-        // Emit tail call (UTCALL) when in tail position inside a handler compilation,
+        // Emit tail call (UTCALL) when in tail position inside a function compilation,
         // otherwise emit regular function call (UCALL).
-        if (_inTailPosition && _compilingHandler)
+        if (_inTailPosition && _compilingFunction)
         {
-            _builder.createTailCall(func->compiledHandler, fullArgs, funcName + ".tailcall");
+            _builder.createTailCall(func->compiledFunction, fullArgs, funcName + ".tailcall");
 
             // Create unreachable continuation block (code after tail call is dead)
             auto* unreachable = _builder.createBlock("tailcall.unreachable");
             _builder.setInsertPoint(unreachable);
 
-            _result = nullptr; // Tail call doesn't produce a value in the current handler
+            _result = nullptr; // Tail call doesn't produce a value in the current function
         }
         else
         {
             _result = _builder.createFunctionCall(
-                func->compiledHandler, fullArgs, funcName + ".call", func->compiledReturnType);
+                func->compiledFunction, fullArgs, funcName + ".call", func->compiledReturnType);
         }
         return;
     }
@@ -6458,9 +6456,9 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     popFSharpScope();
 }
 
-void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFunction& func)
+void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& func)
 {
-    // Builtin HOFs have no AST body — they use custom IR generators, not handler compilation.
+    // Builtin HOFs have no AST body — they use custom IR generators, not function compilation.
     if (!func.builtinHOF.empty())
         return;
 
@@ -6478,8 +6476,8 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
     if (std::ranges::any_of(func.parameterTypes, [](auto const& t) { return t && (*t)->isFunction(); }))
         return;
 
-    // Functions whose body is a lambda cannot be handler-compiled because the inner
-    // lambda's captures reference handler-local allocas that are destroyed after URET.
+    // Functions whose body is a lambda cannot be compiled as separate IRFunctions because the inner
+    // lambda's captures reference function-local allocas that are destroyed after URET.
     // Unwrap ParenExpr wrappers to detect parenthesized lambdas like `fun x -> (fun y -> ...)`.
     {
         auto const* actualBody = func.body;
@@ -6496,19 +6494,19 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
     std::ranges::sort(func.captureOrder);
 
     // Save current state so we can revert if compilation fails
-    auto* savedHandler = _builder.handler();
+    auto* savedFunction = _builder.function();
     auto* savedInsertPoint = _builder.getInsertPoint();
     auto savedHasErrors = _hasErrors;
     auto* bufferedReport = dynamic_cast<CoreVM::diagnostics::BufferedReport*>(&_report);
     auto const savedReportSize = bufferedReport ? bufferedReport->size() : size_t { 0 };
 
-    // Create a new IRHandler for this function
+    // Create a new IRFunction for this function
     // Parameter count includes captured variables (prepended) + explicit parameters
-    auto* handler = _builder.program()->createHandler("fsharp." + name);
-    handler->setParameterCount(func.captureOrder.size() + func.parameters.size());
+    auto* irFunction = _builder.program()->createFunction("fsharp." + name);
+    irFunction->setParameterCount(func.captureOrder.size() + func.parameters.size());
 
-    // Switch builder to the new handler
-    _builder.setHandler(handler);
+    // Switch builder to the new function
+    _builder.setFunction(irFunction);
     auto* entryBlock = _builder.createBlock("entry");
     _builder.setInsertPoint(entryBlock);
 
@@ -6547,22 +6545,22 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
         pushFSharpFunctionContext(returnBlock, returnStorage, func.returnKind);
     }
 
-    // Pre-set compiledHandler so that recursive references during body codegen
+    // Pre-set compiledFunction so that recursive references during body codegen
     // emit FunctionCallInstr/TailCallInstr instead of trying to inline (which would infinite-loop).
-    func.compiledHandler = handler;
+    func.compiledFunction = irFunction;
 
-    // Track tail position and compiling handler for UCALL/UTCALL decisions
+    // Track tail position and compiling function for UCALL/UTCALL decisions
     auto savedTailPosition = _inTailPosition;
-    auto* savedCompilingHandler = _compilingHandler;
+    auto* savedCompilingFunction = _compilingFunction;
     _inTailPosition = true;
-    _compilingHandler = handler;
+    _compilingFunction = irFunction;
 
     // Codegen the function body
     auto* bodyResult = codegen(func.body);
 
-    // Restore tail position and compiling handler
+    // Restore tail position and compiling function
     _inTailPosition = savedTailPosition;
-    _compilingHandler = savedCompilingHandler;
+    _compilingFunction = savedCompilingFunction;
 
     // Validate return type annotation if present
     if (bodyResult && func.returnType)
@@ -6592,12 +6590,12 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
 
     // Helper to revert compilation state when falling back to AST inlining
     auto const revertToInlining = [&] {
-        func.compiledHandler = nullptr; // Reset so fallback path (AST inlining) is used
+        func.compiledFunction = nullptr; // Reset so fallback path (AST inlining) is used
         _hasErrors = savedHasErrors;
         if (bufferedReport)
             bufferedReport->truncate(savedReportSize);
-        _builder.program()->removeHandler(handler);
-        _builder.setHandler(savedHandler);
+        _builder.program()->removeFunction(irFunction);
+        _builder.setFunction(savedFunction);
         _builder.setInsertPoint(savedInsertPoint);
     };
 
@@ -6609,7 +6607,7 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
     }
 
     // If bodyResult is null and no errors, all code paths end with tail calls (valid).
-    // If bodyResult is null and we're not in a recursive/handler context, it's unexpected.
+    // If bodyResult is null and we're not in a recursive/function context, it's unexpected.
     if (!bodyResult && !func.isRecursive)
     {
         revertToInlining();
@@ -6621,7 +6619,7 @@ void IRGenerator::compileFunctionAsHandler(std::string const& name, FSharpFuncti
         func.compiledReturnType = bodyResult->type();
 
     // Restore builder state
-    _builder.setHandler(savedHandler);
+    _builder.setFunction(savedFunction);
     _builder.setInsertPoint(savedInsertPoint);
 }
 
@@ -7002,7 +7000,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             // A null result inside an active recursion means a tail call was made.
             // The branch back to the entry block has already been emitted, so skip
             // the store-and-branch-to-merge for this arm.
-            if (_activeRecursion || _activeMutualRecursion || _compilingHandler)
+            if (_activeRecursion || _activeMutualRecursion || _compilingFunction)
                 continue;
 
             reportTypeError("Failed to evaluate match arm body");
@@ -7580,10 +7578,10 @@ void IRGenerator::visit(ast::SplatExpr const& node)
     }
 
     // Build a while loop: while list tag == 1 (Cons), extract head, call cmd_arg, advance to tail
-    auto* handler = _builder.handler();
-    auto* condBlock = handler->createBlock("splat.cond");
-    auto* bodyBlock = handler->createBlock("splat.body");
-    auto* endBlock = handler->createBlock("splat.end");
+    auto* currentFn = _builder.function();
+    auto* condBlock = currentFn->createBlock("splat.cond");
+    auto* bodyBlock = currentFn->createBlock("splat.body");
+    auto* endBlock = currentFn->createBlock("splat.end");
 
     // Store list pointer in an alloca for the loop
     auto* cursorStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "splat.cursor");
@@ -7766,7 +7764,7 @@ void IRGenerator::visit(ast::TryExpr const& node)
     _builder.createStore(resultStorage, innerValue, "try.result.store");
     _builder.createBr(continueBlock);
 
-    // Error path: propagate (early return from function or exit handler)
+    // Error path: propagate (early return from function or exit program)
     _builder.setInsertPoint(errorBlock);
     if (returnBlock)
     {
@@ -7777,7 +7775,7 @@ void IRGenerator::visit(ast::TryExpr const& node)
     }
     else
     {
-        // Top-level: exit handler with non-zero exit code
+        // Top-level: exit program with non-zero exit code
         _builder.createRet(_builder.get(CoreVM::CoreNumber(1)));
     }
 
@@ -8487,7 +8485,7 @@ void IRGenerator::visit(ast::TryFinallyExpr const& node)
     // The ? operator needs this pointer for its returnBlock redirect.
     // Other blocks are created AFTER body codegen so that body blocks
     // (try.success, try.error, try.continue, func.return, etc.)
-    // appear before finally blocks in the handler's block list.
+    // appear before finally blocks in the function's block list.
     // The TargetCodeGenerator processes blocks in list order, so this
     // ordering ensures the forward pass stack tracking is correct.
     auto* finallyFromError = _builder.createBlock("tryfinally.from_error");

@@ -99,9 +99,9 @@ struct TestParserRuntime
             builder.program()->addCustomProductType(std::move(customType));
         }
 
-        auto* handler = builder.program()->createHandler("@test");
-        builder.setHandler(handler);
-        builder.setInsertPoint(handler->createBlock("entry"));
+        auto* fn = builder.program()->createFunction("@test");
+        builder.setFunction(fn);
+        builder.setInsertPoint(fn->createBlock("entry"));
         builder.createRet(builder.get(CoreVM::CoreNumber(0)));
 
         irProgram = builder.takeProgram();
@@ -113,9 +113,9 @@ struct TestParserRuntime
 
     CoreVM::Runner createRunner()
     {
-        auto* handler = compiledProgram->findHandler("@test");
+        auto* fn = compiledProgram->findFunction("@test");
         CoreVM::Runner::Globals globals;
-        return CoreVM::Runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+        return CoreVM::Runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
     }
 };
 } // namespace

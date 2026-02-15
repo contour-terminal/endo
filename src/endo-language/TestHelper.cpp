@@ -1194,7 +1194,7 @@ TestRuntime::TestRuntime()
         });
 
     // Data source wrapper stubs (open-json, open-csv, from-json, from-csv)
-    auto dummyHandler = [](CoreVM::Params& args) {
+    auto dummyCallback = [](CoreVM::Params& args) {
         // Return an empty list (Nil)
         auto* nil = args.caller()->makeNilList();
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(nil)));
@@ -1204,36 +1204,36 @@ TestRuntime::TestRuntime()
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("open_csv")
         .param<CoreVM::CoreString>("path")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("from_json")
         .param<CoreVM::CoreString>("source_cmd")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("from_csv")
         .param<CoreVM::CoreString>("source_cmd")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // HTTP fetch builtin stubs (returns Result<string, string>)
     runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")
         .param<CoreVM::CoreNumber>("headers")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // rand builtin: returns a random positive integer > 0
     runtime.registerFunction("rand").returnType(CoreVM::LiteralType::Number).bind([](CoreVM::Params& args) {
@@ -1423,14 +1423,14 @@ ExecutionResult executeSource(std::string const& source)
     if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
         return std::unexpected(TestError::LinkFailed);
 
-    // Find the main handler
-    CoreVM::Handler const* handler = targetProgram->findHandler("@main");
-    if (!handler)
-        return std::unexpected(TestError::HandlerNotFound);
+    // Find the main function
+    CoreVM::Function const* fn = targetProgram->findFunction("@main");
+    if (!fn)
+        return std::unexpected(TestError::FunctionNotFound);
 
     // Execute
     CoreVM::Runner::Globals globals;
-    CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+    CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
 
     // Runner::run() returns true if exit code was non-zero, false if it was 0
     bool exitNonZero = runner.run();
@@ -1514,14 +1514,14 @@ ExecutionResult executeSession(std::vector<std::string> const& prompts)
         if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
             return std::unexpected(TestError::LinkFailed);
 
-        // Find main handler
-        CoreVM::Handler const* handler = targetProgram->findHandler("@main");
-        if (!handler)
-            return std::unexpected(TestError::HandlerNotFound);
+        // Find main function
+        CoreVM::Function const* fn = targetProgram->findFunction("@main");
+        if (!fn)
+            return std::unexpected(TestError::FunctionNotFound);
 
         // Execute
         CoreVM::Runner::Globals globals;
-        CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+        CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
         bool exitNonZero = runner.run();
         int64_t exitCode = exitNonZero ? 1 : 0;
 
@@ -1686,12 +1686,12 @@ ExecutionResult executeSourceWithStructuredState(std::string const& source)
     if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
         return std::unexpected(TestError::LinkFailed);
 
-    CoreVM::Handler const* handler = targetProgram->findHandler("@main");
-    if (!handler)
-        return std::unexpected(TestError::HandlerNotFound);
+    CoreVM::Function const* fn = targetProgram->findFunction("@main");
+    if (!fn)
+        return std::unexpected(TestError::FunctionNotFound);
 
     CoreVM::Runner::Globals globals;
-    CoreVM::Runner runner(handler, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+    CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
     bool exitNonZero = runner.run();
 
     return TestExecutionSuccess { .exitCode = exitNonZero ? 1 : 0, .output = testRuntime.output() };

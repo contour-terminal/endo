@@ -30,7 +30,7 @@ enum class TestError
     IRGenerationFailed,
     CodeGenerationFailed,
     LinkFailed,
-    HandlerNotFound,
+    FunctionNotFound,
     ExecutionFailed,
 };
 
@@ -43,7 +43,7 @@ enum class TestError
         case TestError::IRGenerationFailed: return "IR generation failed";
         case TestError::CodeGenerationFailed: return "code generation failed";
         case TestError::LinkFailed: return "link failed";
-        case TestError::HandlerNotFound: return "handler not found";
+        case TestError::FunctionNotFound: return "function not found";
         case TestError::ExecutionFailed: return "execution failed";
     }
     return "unknown error";
@@ -75,7 +75,7 @@ struct TestRuntime
 
     TestRuntime();
 
-    // Dummy handlers for shell command execution
+    // Dummy callbacks for shell command execution
     void dummyCallProc(CoreVM::Params&);
     void dummyCallProcPiped(CoreVM::Params&);
 

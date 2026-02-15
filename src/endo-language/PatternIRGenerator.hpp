@@ -100,7 +100,7 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     void visit(pattern::OrPattern const& pat) override;
     void visit(pattern::GuardedPattern const& pat) override;
 
-    /// Creates an alloca in the entry block of the current handler.
+    /// Creates an alloca in the entry block of the current function.
     /// Required for allocas that must survive across basic blocks.
     CoreVM::AllocaInstr* createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name);
 

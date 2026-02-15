@@ -12,29 +12,29 @@ namespace endo
 /// @param runtime The CoreVM runtime to register builtins with
 inline void registerStubRuntime(CoreVM::Runtime& runtime)
 {
-    auto dummyHandler = [](CoreVM::Params&) {
+    auto dummyCallback = [](CoreVM::Params&) {
     };
 
     runtime.registerFunction("callproc")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("callproc")
         .param<bool>("last_in_chain")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("print")
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("println")
         .param<CoreVM::CoreString>("text")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("env.has")
         .param<CoreVM::CoreString>("key")
@@ -50,162 +50,162 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
     runtime.registerFunction("exit")
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("export")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("export")
         .param<std::string>("name")
         .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("set")
         .param<std::string>("name")
         .param<std::string>("value")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("cd").returnType(CoreVM::LiteralType::Boolean).bind(dummyHandler);
+    runtime.registerFunction("cd").returnType(CoreVM::LiteralType::Boolean).bind(dummyCallback);
 
     runtime.registerFunction("cd")
         .param<std::string>("path")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("unset")
         .param<std::string>("name")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("read").returnType(CoreVM::LiteralType::String).bind(dummyHandler);
+    runtime.registerFunction("read").returnType(CoreVM::LiteralType::String).bind(dummyCallback);
 
     runtime.registerFunction("read")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("jobs").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("jobs").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
-    runtime.registerFunction("fg").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("fg").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     runtime.registerFunction("fg")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("bg").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("bg").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     runtime.registerFunction("bg")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("wait").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("wait").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     runtime.registerFunction("wait")
         .param<CoreVM::CoreNumber>("job_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("bind").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("bind").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     runtime.registerFunction("bind")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
-    runtime.registerFunction("which").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("which").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     runtime.registerFunction("which")
         .param<std::vector<std::string>>("args")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("internal.cmd_start")
         .param<CoreVM::CoreString>("cmd")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("internal.cmd_arg")
         .param<CoreVM::CoreString>("arg")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("internal.cmd_exec_piped")
         .param<bool>("last_in_chain")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("setvar.exitstatus")
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_to_string")
         .param<CoreVM::CoreNumber>("obj")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("object_to_string")
         .param<CoreVM::CoreNumber>("obj")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_concat")
         .param<CoreVM::CoreNumber>("left")
         .param<CoreVM::CoreNumber>("right")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_head")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_tail")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_length")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_isEmpty")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_sort")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_distinct")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_sort_pairs")
         .param<CoreVM::CoreNumber>("pairs")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_group_pairs")
         .param<CoreVM::CoreNumber>("pairs")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("string_repeat")
         .param<CoreVM::CoreString>("str")
         .param<CoreVM::CoreNumber>("count")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // String operation stubs needed by IRGenerator
     runtime.registerFunction("string_replace")
@@ -213,101 +213,101 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreString>("old_val")
         .param<CoreVM::CoreString>("new_val")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("string_split")
         .param<CoreVM::CoreString>("str")
         .param<CoreVM::CoreString>("sep")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("string_join")
         .param<CoreVM::CoreString>("sep")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // List operation stubs needed by IRGenerator
     runtime.registerFunction("list_nth")
         .param<CoreVM::CoreNumber>("list")
         .param<CoreVM::CoreNumber>("index")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_last")
         .param<CoreVM::CoreNumber>("list")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_replicate")
         .param<CoreVM::CoreNumber>("count")
         .param<CoreVM::CoreNumber>("value")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_char_range")
         .param<CoreVM::CoreNumber>("start")
         .param<CoreVM::CoreNumber>("end")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("list_range")
         .param<CoreVM::CoreNumber>("start")
         .param<CoreVM::CoreNumber>("step")
         .param<CoreVM::CoreNumber>("end")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Display result stub needed by IRGenerator
     runtime.registerFunction("display_result")
         .param<CoreVM::CoreNumber>("value")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Structured PS stub
-    runtime.registerFunction("structured_ps").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("structured_ps").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     // HTTP fetch builtin stubs
     runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")
         .param<CoreVM::CoreNumber>("headers")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // structured_ls builtin stub
     runtime.registerFunction("structured_ls")
         .param<CoreVM::CoreString>("path")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // structured_jobs builtin stub
-    runtime.registerFunction("structured_jobs").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+    runtime.registerFunction("structured_jobs").returnType(CoreVM::LiteralType::Number).bind(dummyCallback);
 
     // Helper builtins for FileInfo mode/mtime formatting and testing
     runtime.registerFunction("format_datetime")
         .param<CoreVM::CoreNumber>("epoch")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("format_mode")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("mode_isReadable")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("mode_isWritable")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("mode_isExecutable")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Data source wrapper stubs (open-json, open-csv, from-json, from-csv)
     runtime.registerFunction("open_json")
@@ -315,105 +315,111 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("open_csv")
         .param<CoreVM::CoreString>("path")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("from_json")
         .param<CoreVM::CoreString>("source_cmd")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("from_csv")
         .param<CoreVM::CoreString>("source_cmd")
         .param<CoreVM::CoreString>("schema_desc")
         .param<CoreVM::CoreNumber>("type_id")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Output definition structured command stubs
     runtime.registerFunction("structured_docker_ps")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("structured_docker_images")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
-    runtime.registerFunction("structured_git_log").returnType(CoreVM::LiteralType::Number).bind(dummyHandler);
+        .bind(dummyCallback);
+    runtime.registerFunction("structured_git_log")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyCallback);
     runtime.registerFunction("structured_git_status")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Command substitution builtins (needed for structured pipeline fallback)
-    runtime.registerFunction("internal.subst_start").returnType(CoreVM::LiteralType::Void).bind(dummyHandler);
-    runtime.registerFunction("internal.subst_end").returnType(CoreVM::LiteralType::String).bind(dummyHandler);
+    runtime.registerFunction("internal.subst_start")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyCallback);
+    runtime.registerFunction("internal.subst_end")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(dummyCallback);
 
     // Prompt configuration builtins
     runtime.registerFunction("set_prompt_preset")
         .param<CoreVM::CoreString>("name")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("set_prompt_indicator")
         .param<CoreVM::CoreString>("chars")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("set_prompt_layout")
         .param<CoreVM::CoreString>("kind")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("set_prompt_separator")
         .param<CoreVM::CoreString>("style")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("set_prompt_transient")
         .param<CoreVM::CoreString>("mode")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
     runtime.registerFunction("set_prompt_duration_threshold")
         .param<CoreVM::CoreNumber>("ms")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     // Shell expansion stubs needed by IRGenerator
     runtime.registerFunction("expand.tilde")
         .param<CoreVM::CoreString>("suffix")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.tilde_user")
         .param<CoreVM::CoreString>("user")
         .param<CoreVM::CoreString>("suffix")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.glob")
         .param<CoreVM::CoreString>("pattern")
         .returnType(CoreVM::LiteralType::Void)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.to_string")
         .param<CoreVM::CoreNumber>("value")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.arith_to_string")
         .param<CoreVM::CoreNumber>("value")
         .returnType(CoreVM::LiteralType::String)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.arith_getvar")
         .param<CoreVM::CoreString>("name")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 
     runtime.registerFunction("expand.arith_pow")
         .param<CoreVM::CoreNumber>("left")
         .param<CoreVM::CoreNumber>("right")
         .returnType(CoreVM::LiteralType::Number)
-        .bind(dummyHandler);
+        .bind(dummyCallback);
 }
 
 } // namespace endo

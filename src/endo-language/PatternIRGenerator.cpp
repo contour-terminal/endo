@@ -14,7 +14,7 @@ PatternIRGenerator::PatternIRGenerator(CoreVM::IRBuilder& builder): _builder(bui
 CoreVM::AllocaInstr* PatternIRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type,
                                                                   std::string const& name)
 {
-    auto* entryBlock = _builder.handler()->getEntryBlock();
+    auto* entryBlock = _builder.function()->getEntryBlock();
     auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
         type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
     auto* inserted = entryBlock->insertAfterAllocas(std::move(allocaInstr));
