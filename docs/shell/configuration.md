@@ -127,6 +127,18 @@ set_prompt_transient "enabled"
 set_prompt_transient "disabled"
 ```
 
+### Prompt Spacing
+
+Control the number of blank lines above and below the prompt:
+
+```endo
+# Add a blank line above and below the prompt (default)
+set_prompt_spacing 1
+
+# No blank lines around the prompt
+set_prompt_spacing 0
+```
+
 ### Command Duration Threshold
 
 Control when the command duration module appears:

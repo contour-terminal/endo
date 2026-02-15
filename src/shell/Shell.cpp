@@ -2371,6 +2371,16 @@ void Shell::registerBuiltinFunctions()
             prompt.setPromptConfig(std::move(config));
         });
 
+    _runtime.registerFunction("set_prompt_spacing")
+        .param<CoreVM::CoreNumber>("lines")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto config = prompt.promptConfig();
+            config.promptSpacing =
+                static_cast<int>(std::clamp(args.getInt(1), int64_t { 0 }, int64_t { 1 }));
+            prompt.setPromptConfig(std::move(config));
+        });
+
     // F# rand builtin: returns a random positive integer > 0
     _runtime.registerFunction("rand")
         .returnType(CoreVM::LiteralType::Number)

@@ -155,8 +155,14 @@ void PromptComponent::render(tui::Canvas& canvas)
     ghostStyle.bg = pc.background;
     ghostStyle.dim = true;
 
-    // Calculate chrome height (info lines above input)
+    // Calculate padding and chrome height
+    auto const topPad = topPadding();
+    auto const botPad = bottomPadding();
     auto const chrome = chromeHeight();
+
+    // Mark top padding rows for content height detection (NBSP at column 0)
+    for (int i = 0; i < topPad; ++i)
+        canvas.put(i, 0, "\xC2\xA0", {});
 
     // Render info line chrome above input
     if (chrome > 0)
@@ -166,15 +172,15 @@ void PromptComponent::render(tui::Canvas& canvas)
         _nextModuleRefresh = computeModuleRefreshDeadline();
 
         // Info line background
-        canvas.fill(tui::Rect { HorizontalMargin, 0, contentWidth, 1 }, ' ', bgStyle);
+        canvas.fill(tui::Rect { HorizontalMargin, topPad, contentWidth, 1 }, ' ', bgStyle);
 
         auto col = HorizontalMargin;
 
         // Info line separator
         if (_config.separator == SeparatorStyle::Bar)
         {
-            col += canvas.putString(0, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
-            canvas.put(0, col, " ", bgStyle);
+            col += canvas.putString(topPad, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
+            canvas.put(topPad, col, " ", bgStyle);
             ++col;
         }
         else if (_config.separator == SeparatorStyle::Rounded)
@@ -182,9 +188,9 @@ void PromptComponent::render(tui::Canvas& canvas)
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
             sepStyle.bg = pc.background;
-            col += canvas.putString(0, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
-            col += canvas.putString(0, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
-            canvas.put(0, col, " ", bgStyle);
+            col += canvas.putString(topPad, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+            col += canvas.putString(topPad, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
+            canvas.put(topPad, col, " ", bgStyle);
             ++col;
         }
 
@@ -200,15 +206,15 @@ void PromptComponent::render(tui::Canvas& canvas)
                     dimPipeStyle.fg = pc.separator;
                     dimPipeStyle.bg = pc.background;
                     dimPipeStyle.dim = true;
-                    canvas.put(0, col, " ", bgStyle);
+                    canvas.put(topPad, col, " ", bgStyle);
                     ++col;
-                    col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
-                    canvas.put(0, col, " ", bgStyle);
+                    col += canvas.putString(topPad, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
+                    canvas.put(topPad, col, " ", bgStyle);
                     ++col;
                 }
                 else
                 {
-                    canvas.put(0, col, " ", bgStyle);
+                    canvas.put(topPad, col, " ", bgStyle);
                     ++col;
                 }
             }
@@ -216,7 +222,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             {
                 auto segStyle = seg.style;
                 segStyle.bg = pc.background;
-                col += canvas.putString(0, col, seg.text, segStyle);
+                col += canvas.putString(topPad, col, seg.text, segStyle);
             }
         }
 
@@ -240,14 +246,14 @@ void PromptComponent::render(tui::Canvas& canvas)
                 {
                     if (i > 0)
                     {
-                        canvas.put(0, rightCol, " ", bgStyle);
+                        canvas.put(topPad, rightCol, " ", bgStyle);
                         ++rightCol;
                     }
                     for (auto const& seg: rightModules[i])
                     {
                         auto segStyle = seg.style;
                         segStyle.bg = pc.background;
-                        rightCol += canvas.putString(0, rightCol, seg.text, segStyle);
+                        rightCol += canvas.putString(topPad, rightCol, seg.text, segStyle);
                     }
                 }
             }
@@ -280,10 +286,11 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Render each input line (offset by chrome height)
-    for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + chrome) < canvas.height(); ++lineIndex)
+    // Render each input line (offset by top padding + chrome height)
+    for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + topPad + chrome) < canvas.height();
+         ++lineIndex)
     {
-        auto const row = lineIndex + chrome;
+        auto const row = lineIndex + topPad + chrome;
         auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Fill content area with background (with margins)
@@ -405,10 +412,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Position cursor (add chrome height offset)
+    // Position cursor (add top padding + chrome height offset)
     auto const cursorLine = _inputField.cursorLine();
     auto const cursorColumn = _inputField.cursorColumn();
-    auto const cursorRow = cursorLine + chrome;
+    auto const cursorRow = cursorLine + topPad + chrome;
 
     // Calculate cursor display position (including left margin)
     auto const lineContent = _inputField.lineAt(cursorLine);
@@ -464,6 +471,12 @@ void PromptComponent::render(tui::Canvas& canvas)
             _completionPopup.render(popupCanvas);
         }
     }
+
+    // Mark bottom padding rows for content height detection (NBSP at column 0)
+    for (int i = 0; i < botPad; ++i)
+        canvas.put(topPad + chrome + totalLines + i, 0, "\xC2\xA0", {});
+
+    _firstDisplay = false;
 }
 
 tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
@@ -490,8 +503,8 @@ tui::Size PromptComponent::preferredSize() const
         maxWidth = std::max(maxWidth, pw + displayWidth(lineContent));
     }
 
-    // Total height = chrome lines (info/box above) + input lines
-    int totalHeight = inputLineCount + chromeHeight();
+    // Total height = top padding + chrome lines (info/box above) + input lines + bottom padding
+    int totalHeight = topPadding() + inputLineCount + chromeHeight() + bottomPadding();
 
     // If completion popup is visible, add space for it below the input
     if (_completionPopup.visible())
@@ -521,6 +534,16 @@ int PromptComponent::chromeHeight() const noexcept
     if (_config.layout == PromptLayoutKind::Boxed)
         return 3;
     return 0;
+}
+
+int PromptComponent::topPadding() const noexcept
+{
+    return _firstDisplay ? 0 : _config.promptSpacing;
+}
+
+int PromptComponent::bottomPadding() const noexcept
+{
+    return _config.promptSpacing;
 }
 
 int PromptComponent::displayWidth(std::string_view text)
@@ -869,7 +892,7 @@ void PromptComponent::onHoverConfirmed(int x, int y)
     }
 
     // Priority 3: Fall through to existing command hover logic (first input line only)
-    if (y == chromeHeight() && _commandResolver)
+    if (y == topPadding() + chromeHeight() && _commandResolver)
     {
         auto const cmd = getCommandAtColumn(x);
         if (cmd)
@@ -974,8 +997,8 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
     if (x < totalPromptWidth)
         return std::nullopt;
 
-    // Convert screen y to input line index (subtract chrome offset)
-    auto const inputLine = y - chromeHeight();
+    // Convert screen y to input line index (subtract top padding + chrome offset)
+    auto const inputLine = y - topPadding() - chromeHeight();
     auto const totalLines = _inputField.lineCount();
     if (inputLine < 0 || inputLine >= totalLines)
         return std::nullopt;

@@ -136,6 +136,12 @@ class PromptComponent: public tui::Component
     /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
     [[nodiscard]] int chromeHeight() const noexcept;
 
+    /// @brief Returns the number of top padding rows (0 on first display).
+    [[nodiscard]] int topPadding() const noexcept;
+
+    /// @brief Returns the number of bottom padding rows.
+    [[nodiscard]] int bottomPadding() const noexcept;
+
     /// @brief Returns the CompletionPopup for direct access.
     [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
@@ -165,6 +171,7 @@ class PromptComponent: public tui::Component
 
     // Prompt theming
     PromptConfig _config;             ///< Layout and module configuration.
+    bool _firstDisplay = true;        ///< Suppresses top padding on the very first render.
     PromptContext _context;           ///< Current shell context for module evaluation.
     PromptLayoutEngine _layoutEngine; ///< Layout rendering engine.
     std::unordered_map<std::string, std::unique_ptr<PromptModule>> _modules; ///< Module registry.

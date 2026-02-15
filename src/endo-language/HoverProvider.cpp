@@ -149,6 +149,9 @@ namespace
             { "set_prompt_duration_threshold",
               "`set_prompt_duration_threshold` : `int -> unit`\n\nSet minimum command duration (ms) before "
               "showing elapsed time." },
+            { "set_prompt_spacing",
+              "`set_prompt_spacing` : `int -> unit`\n\nSet the number of blank lines above and below the "
+              "prompt (0 or 1, default 1)." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

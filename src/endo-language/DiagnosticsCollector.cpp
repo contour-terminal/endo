@@ -82,6 +82,7 @@ namespace
             "set_prompt_separator",
             "set_prompt_transient",
             "set_prompt_duration_threshold",
+            "set_prompt_spacing",
         };
         return names;
     }

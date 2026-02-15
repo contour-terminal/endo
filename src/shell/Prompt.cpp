@@ -185,10 +185,11 @@ std::string Prompt::read()
                     }
                     else
                     {
-                        // Move cursor past the editor region before returning
+                        // Move cursor past the editor region (including bottom padding)
                         auto const totalLines = _promptComponent->inputField().lineCount();
                         auto const cursorLine = _promptComponent->inputField().cursorLine();
-                        auto const linesToMoveDown = totalLines - cursorLine;
+                        auto const linesToMoveDown =
+                            totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
                         if (linesToMoveDown > 0)
                             out.moveDown(linesToMoveDown);
                     }
@@ -291,7 +292,8 @@ std::optional<std::string> Prompt::processInput()
                 {
                     auto const totalLines = _promptComponent->inputField().lineCount();
                     auto const cursorLine = _promptComponent->inputField().cursorLine();
-                    auto const linesToMoveDown = totalLines - cursorLine;
+                    auto const linesToMoveDown =
+                        totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                 }
@@ -493,17 +495,27 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         return;
 
     auto& out = _terminal.output();
+    auto const topPad = _promptComponent->topPadding();
     auto const chrome = _promptComponent->chromeHeight();
     auto const totalInputLines = _promptComponent->inputField().lineCount();
     auto const cursorLine = _promptComponent->inputField().cursorLine();
-    auto const totalHeight = chrome + totalInputLines;
-    auto const currentRow = chrome + cursorLine;
+    auto const botPad = _promptComponent->bottomPadding();
+    auto const totalHeight = topPad + chrome + totalInputLines + botPad;
+    auto const currentRow = topPad + chrome + cursorLine;
 
     // Move cursor up to the top of the prompt region
     if (currentRow > 0)
         out.moveUp(currentRow);
 
-    // Write transient content on the first line
+    // Clear top padding rows to preserve vertical spacing
+    for (auto i = 0; i < topPad; ++i)
+    {
+        out.writeRaw("\r");
+        out.clearLine();
+        out.moveDown(1);
+    }
+
+    // Write transient content at row topPad (after the padding)
     out.writeRaw("\r");
     out.clearLine();
 
@@ -522,13 +534,18 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         out.writeRaw(inputText);
     }
 
-    // Clear remaining rows
-    for (auto i = 1; i < totalHeight; ++i)
+    // Clear remaining rows (including padding rows with NBSP markers)
+    for (auto i = topPad + 1; i < totalHeight; ++i)
     {
         out.moveDown(1);
         out.writeRaw("\r");
         out.clearLine();
     }
+
+    // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
+    // \r\n in the submit handler preserves exactly the configured spacing.
+    if (auto const excessRows = totalHeight - 1 - topPad - botPad; excessRows > 0)
+        out.moveUp(excessRows);
 }
 
 void emitPartialLineIndicator(int fd, int cursorColumn)

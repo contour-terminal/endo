@@ -164,6 +164,11 @@ std::vector<CompletionCandidate> builtinCandidates()
           "Set duration display threshold (ms)",
           "",
           CompletionKind::Builtin },
+        { "set_prompt_spacing",
+          "set_prompt_spacing",
+          "Set blank lines above/below prompt (0 or 1)",
+          "",
+          CompletionKind::Builtin },
     };
 }
 

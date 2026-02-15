@@ -50,6 +50,7 @@ struct PromptConfig
     std::string indicator = "> ";                        ///< Indicator character(s) on the input line.
     std::vector<std::string> infoLineModules = { "path", "git" }; ///< Modules for the info line.
     std::vector<std::string> rightPromptModules;                  ///< Modules for the right-aligned section.
+    int promptSpacing = 1;              ///< Number of blank lines above and below the prompt (0 or 1).
     int64_t durationThresholdMs = 2000; ///< Min duration (ms) to show duration module.
     bool useGradientPath = false;       ///< Enable gradient coloring for path module.
     tui::RgbColor gradientStart {};     ///< Gradient start color.
