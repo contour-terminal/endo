@@ -382,7 +382,7 @@ Consult this section to determine what to work on next.
 
 ### Phase 10 — Planned Language Enhancements
 - [x] Placeholder lambdas: `_ > 10` desugaring to `fun x -> x > 10` (concise pipelines like `filter (_ > 10)`)
-- [ ] Unit parameter in function definitions: `let f () = 42` for side-effecting functions
+- [x] Unit parameter in function definitions: `let f () = 42` for side-effecting functions
 - [ ] Named union fields: `Circle of radius: float` for self-documenting discriminated unions
 - [ ] Non-tail recursion support: lift tail-position restriction via IR rewriting (CPS or loop transformation)
 - [ ] `$(...)` command substitution in F# expression context: `let user = $(whoami)` bridging shell and F#

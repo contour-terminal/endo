@@ -2888,6 +2888,13 @@ std::optional<ast::TypedParameter> Parser::parseTypedParameter()
         // We need to look ahead: ( Identifier : means annotated parameter
         _lexer.nextToken(); // consume '('
 
+        // Unit parameter: ()
+        if (_lexer.currentToken() == Token::RndClose)
+        {
+            _lexer.nextToken(); // consume ')'
+            return ast::TypedParameter::unitParam();
+        }
+
         if (_lexer.currentToken() != Token::Identifier)
         {
             // Not a parameter — push back '(' and return nullopt

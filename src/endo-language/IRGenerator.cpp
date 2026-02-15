@@ -599,6 +599,10 @@ bool IRGenerator::validateTypeAnnotation(TypePtr const& annotated,
     if (actual == CoreVM::LiteralType::Object || actual == CoreVM::LiteralType::Void)
         return true;
 
+    // Unit (Void) expected accepts any value — unit means "no meaningful value"
+    if (*expected == CoreVM::LiteralType::Void)
+        return true;
+
     if (actual != *expected)
     {
         reportTypeError(

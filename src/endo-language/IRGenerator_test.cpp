@@ -3431,6 +3431,55 @@ TEST_CASE("IRGenerator.FSharp.unit_let_binding")
 }
 
 // ============================================================================
+// Phase 10: Unit parameter in function definitions
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.basic")
+{
+    CHECK(executeSourceAndGetOutput("let f () = 42; print (f ())") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.side_effect")
+{
+    CHECK(executeSourceAndGetOutput(R"(let greet () = print "hello"; greet ())") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.with_return_type")
+{
+    CHECK(executeSourceAndGetOutput("let f (): int = 42; print (f ())") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.lambda")
+{
+    CHECK(executeSourceAndGetOutput("let f = fun () -> 42; print (f ())") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.let_in")
+{
+    CHECK(executeSourceAndGetOutput("print (let f () = 42 in f ())") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.closure")
+{
+    CHECK(executeSourceAndGetOutput("let x = 10; let f () = x; print (f ())") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.mixed_params")
+{
+    CHECK(executeSourceAndGetOutput("let f () (x: int) = x + 1; print (f () 5)") == "6");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.pipeline")
+{
+    CHECK(executeSourceAndGetOutput("let f () = 42; f () |> print") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.unit_parameter.ir_gen_only")
+{
+    CHECK(generatesIRSuccessfully("let f () = 42"));
+}
+
+// ============================================================================
 // Phase 1 Foundation: String repetition
 // ============================================================================
 

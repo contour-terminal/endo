@@ -832,12 +832,22 @@ struct TypedParameter
     std::string name;                      ///< Parameter name
     std::optional<TypePtr> typeAnnotation; ///< Optional type annotation
     bool isVariadic = false;               ///< True for variadic parameter: `...args`
+    bool isUnit = false;                   ///< True for unit parameter: `()`
 
     explicit TypedParameter(std::string n): name(std::move(n)) {}
 
     TypedParameter(std::string n, TypePtr t): name(std::move(n)), typeAnnotation(std::move(t)) {}
 
     TypedParameter(std::string n, bool variadic): name(std::move(n)), isVariadic(variadic) {}
+
+    /// Creates a unit parameter representing `()`.
+    static TypedParameter unitParam()
+    {
+        TypedParameter p("_");
+        p.typeAnnotation = types::unitType();
+        p.isUnit = true;
+        return p;
+    }
 };
 
 /// Extracts parameter names from a vector of TypedParameter.
