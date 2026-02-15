@@ -101,8 +101,8 @@ jobs:
       timeout-minutes: 1
 
     - name: Check documentation code snippets
-      run: >
-        python3 scripts/check-doc-snippets.py
-        --endo-path ${{ steps.strings.outputs.build-output-dir }}/src/shell/endo
-        --allow-failures
+      run: |
+        python3 \
+            scripts/check-doc-snippets.py \
+            --endo-path "${{ steps.strings.outputs.build-output-dir }}/src/shell/endo"
       timeout-minutes: 2
