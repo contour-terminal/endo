@@ -173,6 +173,9 @@ class Parser
     /// Check if looking at start of F# primary expression
     [[nodiscard]] bool isFSharpPrimary() const noexcept;
 
+    /// Check if the current token is a binary operator (for placeholder lambda wrapping decisions).
+    [[nodiscard]] bool isBinaryOperatorToken() const noexcept;
+
     /// Get current token column (1-based, for indentation tracking)
     [[nodiscard]] size_t currentTokenColumn() const noexcept;
 

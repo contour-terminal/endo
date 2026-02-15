@@ -5693,6 +5693,30 @@ TEST_CASE("IRGenerator.FSharp.placeholder_subtraction")
     CHECK(executeSourceAndGetOutput("let f = (_ - 3); print (f 10)") == "7");
 }
 
+TEST_CASE("IRGenerator.FSharp.placeholder_unparenthesized_multiply")
+{
+    // _ * 2 (no parens) desugars to fun __x -> __x * 2
+    CHECK(executeSourceAndGetOutput("let double = _ * 2; print (double 5)") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_unparenthesized_add")
+{
+    // _ + 1 (no parens) desugars to fun __x -> __x + 1
+    CHECK(executeSourceAndGetOutput("let incr = _ + 1; print (incr 41)") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_unparenthesized_comparison")
+{
+    // _ > 0 (no parens) desugars to fun __x -> __x > 0
+    CHECK(executeSourceAndGetOutput("let isPositive = _ > 0; print (isPositive 5)") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.placeholder_unparenthesized_filter")
+{
+    // filter (_ > 2) with list — tests unparenthesized placeholder in pipeline context
+    CHECK(executeSourceAndGetOutput("let pred = _ > 2; print (filter pred [1; 2; 3; 4; 5])") == "[3; 4; 5]");
+}
+
 // ============================================================================
 // Placeholder Lambda Sugar with Structured Records (ps)
 // ============================================================================

@@ -133,8 +133,8 @@ _ + 1                         # -> fun __x -> __x + 1
 ps |> filter (_.name == "endo") |> map _.pid
 ps |> sortBy _.cpu |> groupBy _.user
 
-# Only one _ per expression (multiple would be ambiguous)
-# BAD: _ + _                  # Error: ambiguous placeholder lambda
+# Multiple _ refers to the same parameter
+_ + _                         # -> fun __x -> __x + __x
 ```
 
 **Rule:** Any expression containing `_` in expression position (outside of pattern context such as `match` arms or `let` destructuring) creates an implicit lambda. The `_` becomes the single parameter. This sugar works anywhere a function value is expected.

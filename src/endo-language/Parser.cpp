@@ -2598,6 +2598,33 @@ bool Parser::isFSharpPrimary() const noexcept
     }
 }
 
+bool Parser::isBinaryOperatorToken() const noexcept
+{
+    switch (_lexer.currentToken())
+    {
+        case Token::Plus:
+        case Token::Minus:
+        case Token::Star:
+        case Token::Slash:
+        case Token::Percent:
+        case Token::StarStar:
+        case Token::EqualEqual:
+        case Token::NotEqual:
+        case Token::Less:
+        case Token::LessEqual:
+        case Token::Greater:
+        case Token::GreaterEqual:
+        case Token::AmpAmp:
+        case Token::PipePipe:
+        case Token::ColonColon:
+        case Token::At:
+        case Token::GreaterGreater:
+        case Token::LessLess:
+        case Token::DotDot: return true;
+        default: return false;
+    }
+}
+
 TypePtr Parser::parseType()
 {
     TRACE_SCOPE("parseType");
@@ -3414,12 +3441,16 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
 std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
 {
     TRACE_SCOPE("parseFSharpComposition");
+    auto const savedPlaceholderCount = _placeholderCount;
+
     auto left = parseFSharpOr();
     if (!left)
         return nullptr;
 
+    auto hadComposition = false;
     while (_lexer.currentToken() == Token::GreaterGreater || _lexer.currentToken() == Token::LessLess)
     {
+        hadComposition = true;
         auto const isForward = _lexer.currentToken() == Token::GreaterGreater;
         _lexer.nextToken(); // consume '>>' or '<<'
         auto right = parseFSharpOr();
@@ -3458,6 +3489,22 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
         params.emplace_back(paramName);
         left = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(outerApp));
     }
+
+    // Unparenthesized placeholder lambda wrapping: _ + 1 → fun __x -> __x + 1
+    auto const newPlaceholders = _placeholderCount - savedPlaceholderCount;
+    if (newPlaceholders > 0 && !_placeholderScopeActive && !hadComposition)
+    {
+        // Don't wrap bare _ (identity function) — preserve existing behavior
+        auto* ident = dynamic_cast<ast::IdentifierExpr*>(left.get());
+        if (!ident || ident->name != "__x")
+        {
+            _placeholderCount = savedPlaceholderCount;
+            std::vector<ast::TypedParameter> params;
+            params.emplace_back("__x");
+            left = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(left));
+        }
+    }
+
     return left;
 }
 
@@ -3845,7 +3892,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
 
     // Bare postfix placeholder wrapping: _.field → fun __x -> __x.field
     auto const newPlaceholders = _placeholderCount - savedPlaceholderCount;
-    if (newPlaceholders > 0 && hasPostfixOps && !_placeholderScopeActive)
+    if (newPlaceholders > 0 && hasPostfixOps && !_placeholderScopeActive && !isBinaryOperatorToken())
     {
         _placeholderCount = savedPlaceholderCount;
         std::vector<ast::TypedParameter> params;

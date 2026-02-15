@@ -2067,6 +2067,42 @@ TEST_CASE("Parser.FSharp.placeholder_no_parens_no_postfix")
     CHECK(parseAndPrintAST("let f = _") == "let f = __x");
 }
 
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_add")
+{
+    // _ + 1 → fun __x -> __x + 1 (no parens needed)
+    CHECK(parseAndPrintAST("let f = _ + 1") == "let f = fun __x -> (__x + 1)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_comparison")
+{
+    // _ > 10 → fun __x -> __x > 10
+    CHECK(parseAndPrintAST("let f = _ > 10") == "let f = fun __x -> (__x > 10)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_complex")
+{
+    // _ * 2 + 1 → fun __x -> __x * 2 + 1
+    CHECK(parseAndPrintAST("let f = _ * 2 + 1") == "let f = fun __x -> ((__x * 2) + 1)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_string_eq")
+{
+    // _ == "hello" → fun __x -> __x == "hello"
+    CHECK(parseAndPrintAST(R"(let f = _ == "hello")") == R"(let f = fun __x -> (__x == "hello"))");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_field_binop")
+{
+    // _.name > 10 → fun __x -> __x.name > 10 (deferred postfix wrapping)
+    CHECK(parseAndPrintAST("let f = _.name > 10") == "let f = fun __x -> (__x.name > 10)");
+}
+
+TEST_CASE("Parser.FSharp.placeholder_unparenthesized_logical")
+{
+    // _ && true → fun __x -> __x && true
+    CHECK(parseAndPrintAST("let f = _ && true") == "let f = fun __x -> (__x && true)");
+}
+
 // =============================================================================
 // exec keyword tests
 // =============================================================================
