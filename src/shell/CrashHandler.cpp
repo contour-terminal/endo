@@ -282,6 +282,16 @@ namespace
         writeStr(STDERR_FILENO, filename);
         writeStr(STDERR_FILENO, "\n");
 
+        // OSC 99 desktop notification (kitty protocol).
+        // Title: signal name
+        writeStr(STDERR_FILENO, "\033]99;i=endo-crash:d=0:p=title;endo: fatal signal ");
+        writeStr(STDERR_FILENO, signalName(sig));
+        writeStr(STDERR_FILENO, "\033\\");
+        // Body: crash log path (completes the notification with d=1)
+        writeStr(STDERR_FILENO, "\033]99;i=endo-crash:d=1:p=body;Crash report: ");
+        writeStr(STDERR_FILENO, filename);
+        writeStr(STDERR_FILENO, "\033\\");
+
         // Re-raise for default handler (core dump).
         // SA_RESETHAND already restored SIG_DFL.
         raise(sig);
