@@ -649,13 +649,14 @@ The library includes:
 - Visibility state is properly synced between `CompletionPopup` and `Component` base class
 - Dynamic filtering: typing while popup is visible filters the list in real-time; `updateItems()` preserves selection when the selected item still matches, otherwise selects best match; auto-closes on 0 matches
 - Popup positioning: In inline mode (primary screen), always renders below cursor - Screen creates space by emitting newlines to use scrollback buffer; in fullscreen/fixed mode, renders above cursor when not enough space below (< 3 rows)
+- Tab with multiple completions sharing a common prefix inserts the longest common prefix (LCP) before cycling — matches standard shell behavior (bash, zsh, fish)
 - Completion menu appears below cursor with Up/Down/Ctrl+J/Ctrl+K/Tab/Shift+Tab navigation, Enter to accept, Escape to dismiss
 - Single completion matches are inserted directly without showing menu
 - `Environment` class extracted to `Environment.hpp` for cleaner dependency management
 - Shell class creates `Completer` with environment and history, connects to Prompt via `setCompleter()`
 - Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
 - Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.)
-- 39 completion-related tests covering Completer, CompletionPopup, and updateItems functionality
+- 44 completion-related tests covering Completer, CompletionPopup, items accessor, LCP integration, and updateItems functionality
 - F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
 - Ghost text two-phase matching: Phase 1 queries Command-capable providers (History, Command, LetBinding, FSharp) with full-line prefix matching in reverse priority order (history preferred); Phase 2 falls back to word-level prefix matching from all context-appropriate providers via `gatherCompletions()`. Enables ghost text for variables (`$PA` → `TH`), file paths, arguments, and history recall in any position
 - Git branch completion (`GitBranchCompleter.cpp`): Priority 85 (above FileCompleter 50, below CommandCompleter 100). Parses `fullInput` to extract git subcommand since `context.command` only stores `"git"`. Subcommand dispatch table: always-branch (`checkout`, `switch`, `merge`, `rebase`, `reset`, `revert`, `cherry-pick`, `log`, `diff`, `show`), remote-first (`push`, `pull`, `fetch` — need remote arg before branch), flag-gated (`branch` — only with `-d`/`-D`/`--delete`/`-m`/`-M`/`--move`). Handles git global options (`-C`, `-c`, `--git-dir`, `--work-tree`) that consume the next token. Queries local and remote branches via `git branch --format`, deduplicates remote branches by stripping `origin/` prefix.

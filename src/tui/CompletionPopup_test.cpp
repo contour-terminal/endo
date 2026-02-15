@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/CompletionPopup.hpp>
 #include <tui/TestHelpers.hpp>
+#include <tui/completer/Completer.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -405,4 +406,56 @@ TEST_CASE("CompletionPopup.updateItems_from_hidden_state")
     CHECK(popup.itemCount() == 2);
     REQUIRE(popup.selectedItem() != nullptr);
     CHECK(popup.selectedItem()->text == "apple"); // First item selected
+}
+
+// ============================================================================
+// items() accessor tests
+// ============================================================================
+
+TEST_CASE("CompletionPopup.items_accessor_empty")
+{
+    CompletionPopup popup;
+
+    auto const& items = popup.items();
+    CHECK(items.empty());
+}
+
+TEST_CASE("CompletionPopup.items_accessor_with_items")
+{
+    CompletionPopup popup;
+    popup.show(makeItems({ "foo", "foobar", "food" }));
+
+    auto const& items = popup.items();
+    REQUIRE(items.size() == 3);
+    CHECK(items[0].text == "foo");
+    CHECK(items[1].text == "foobar");
+    CHECK(items[2].text == "food");
+}
+
+TEST_CASE("CompletionPopup.items_lcp_integration")
+{
+    CompletionPopup popup;
+    popup.show(makeItems({ "foobar", "food", "football" }));
+
+    // Verify findCommonPrefix works with items from popup
+    auto const prefix = Completer::findCommonPrefix(popup.items());
+    CHECK(prefix == "foo");
+}
+
+TEST_CASE("CompletionPopup.items_lcp_no_common_prefix")
+{
+    CompletionPopup popup;
+    popup.show(makeItems({ "apple", "banana", "cherry" }));
+
+    auto const prefix = Completer::findCommonPrefix(popup.items());
+    CHECK(prefix.empty());
+}
+
+TEST_CASE("CompletionPopup.items_lcp_full_match")
+{
+    CompletionPopup popup;
+    popup.show(makeItems({ "hello", "hello" }));
+
+    auto const prefix = Completer::findCommonPrefix(popup.items());
+    CHECK(prefix == "hello");
 }

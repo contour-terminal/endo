@@ -367,6 +367,11 @@ bool CompletionPopup::empty() const noexcept
     return _items.empty();
 }
 
+std::vector<CompletionItem> const& CompletionPopup::items() const noexcept
+{
+    return _items;
+}
+
 // ============================================================================
 // Selection
 // ============================================================================

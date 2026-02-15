@@ -98,6 +98,9 @@ class CompletionPopup: public Component
     /// @brief Returns true if the popup has no items.
     [[nodiscard]] bool empty() const noexcept;
 
+    /// @brief Returns a const reference to the completion items.
+    [[nodiscard]] std::vector<CompletionItem> const& items() const noexcept;
+
     // ========================================================================
     // Selection
     // ========================================================================

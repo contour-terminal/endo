@@ -7,6 +7,7 @@
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
+#include <tui/completer/Completer.hpp>
 
 #include <algorithm>
 
@@ -586,6 +587,24 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     // Handle completion popup events first
     if (_completionPopup.visible())
     {
+        // Intercept Tab for partial completion (longest common prefix)
+        if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && key->key == tui::KeyCode::Tab
+                                                                  && key->modifiers == tui::Modifier::None
+                                                                  && _completionPopup.itemCount() > 1)
+        {
+            auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
+            if (!commonPrefix.empty())
+            {
+                auto const ctx = _completer->analyzeContext(_inputField.text(), _inputField.cursor());
+                if (commonPrefix.size() > ctx.prefix.size())
+                {
+                    insertCompletion(commonPrefix);
+                    _completionPopupDirty = true;
+                    return Action::Changed;
+                }
+            }
+        }
+
         auto completionResult = _completionPopup.processEvent(event);
         switch (completionResult)
         {
