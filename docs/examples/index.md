@@ -23,6 +23,7 @@ Explore Endo's functional programming features.
 | [Pattern Matching](pattern-matching.md) | Match expressions and destructuring |
 | [Tuples](tuples.md) | Tuple creation and destructuring |
 | [Records](records.md) | Record types and field access |
+| [Union Fields](union-fields.md) | Named union fields with dot-access |
 | [Type Annotations](type-annotations.md) | Optional type annotations |
 
 ## Advanced

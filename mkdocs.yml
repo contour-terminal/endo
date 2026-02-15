@@ -89,6 +89,7 @@ nav:
     - Recursion: examples/recursion.md
     - Options & Results: examples/options-and-results.md
     - Records: examples/records.md
+    - Union Fields: examples/union-fields.md
     - Tuples: examples/tuples.md
     - Calculator: examples/calculator.md
     - FizzBuzz: examples/fizzbuzz.md
