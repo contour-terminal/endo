@@ -826,6 +826,7 @@ Component (base class)
 - [x] Fix endo-signature prompt rendering (rounded separators ╭─/╰─, dim │ between modules, gradient path, structured output command filter)
 - [x] Implement auto-refresh for live prompt modules (clock 1s, battery 30s) via `refreshInterval()` virtual method
 - [x] Implement transient prompt rendering (replace full prompt with compact indicator on submit)
+- [x] Add syntax highlighting to transient prompt (reuses `computeHighlightMap` / `categoryColor` from `SyntaxHighlighter`)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests

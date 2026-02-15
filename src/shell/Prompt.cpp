@@ -8,6 +8,7 @@
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
 #include "PromptComponent.hpp"
+#include "SyntaxHighlighter.hpp"
 #include "platform/PosixEnvironmentProvider.hpp"
 
 namespace endo
@@ -490,6 +491,31 @@ tui::KeyBindings& Prompt::keyBindings()
     return _promptComponent->inputField().keyBindings();
 }
 
+/// @brief Writes text to the terminal output with per-byte syntax highlighting.
+/// @param out The terminal output to write to.
+/// @param text The source text to highlight and write.
+static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view text)
+{
+    auto const highlights = computeHighlightMap(text);
+    if (highlights.empty())
+        return;
+
+    size_t segStart = 0;
+    auto currentCat = highlights[0];
+    for (size_t i = 1; i <= text.size(); ++i)
+    {
+        if (i == text.size() || highlights[i] != currentCat)
+        {
+            out.write(text.substr(segStart, i - segStart), tui::Style { .fg = categoryColor(currentCat) });
+            if (i < text.size())
+            {
+                currentCat = highlights[i];
+                segStart = i;
+            }
+        }
+    }
+}
+
 void Prompt::emitTransientPrompt(std::string_view inputText)
 {
     if (_promptConfig.transient == TransientMode::Off)
@@ -527,12 +553,12 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     auto const firstNewline = inputText.find('\n');
     if (firstNewline != std::string_view::npos)
     {
-        out.writeRaw(inputText.substr(0, firstNewline));
+        writeSyntaxHighlighted(out, inputText.substr(0, firstNewline));
         out.write("\u2026", tui::Style { .dim = true });
     }
     else
     {
-        out.writeRaw(inputText);
+        writeSyntaxHighlighted(out, inputText);
     }
 
     // Clear remaining rows (including padding rows with NBSP markers)
