@@ -2771,6 +2771,10 @@ CoreVM::Value* IRGenerator::toBool(CoreVM::Value* value)
 {
     if (value->type() == CoreVM::LiteralType::Boolean)
         return value;
+    if (value->type() == CoreVM::LiteralType::Float)
+        return _builder.createFCmpEQ(value, _builder.getFloat(0.0));
+    if (value->type() == CoreVM::LiteralType::String)
+        return _builder.createSCmpEQ(value, _builder.get(std::string("")));
     return _builder.createNCmpEQ(value, _builder.get(CoreVM::CoreNumber(0)));
 }
 

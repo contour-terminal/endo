@@ -133,6 +133,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `&&` (AND, short-circuit)
 - [x] `||` (OR, short-circuit)
 - [x] `!` (NOT)
+- [x] `toBool` handles Float (`FCmpEQ(v, 0.0)`) and String (`SCmpEQ(v, "")`) types (fixes SIGABRT crash in HOF predicates during diagnostics)
 
 ### String
 - [x] Concatenation: `"hello" + " world"`

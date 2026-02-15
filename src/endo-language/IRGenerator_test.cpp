@@ -5055,6 +5055,45 @@ TEST_CASE("IRGenerator.FSharp.list_filter_placeholder")
     CHECK(executeSourceAndGetOutput("print (filter (_ > 2) [1; 2; 3; 4; 5])") == "[3; 4; 5]");
 }
 
+// toBool uses shell semantics: 0/empty = truthy (exit code 0 = success)
+// These tests verify toBool handles Float and String without crashing (SIGABRT).
+
+TEST_CASE("IRGenerator.FSharp.toBool_float_nonzero")
+{
+    // non-zero float is falsy in shell semantics (1.5 != 0.0)
+    CHECK(executeSourceAndGetOutput("if 1.5 then print \"yes\" else print \"no\"") == "no");
+}
+
+TEST_CASE("IRGenerator.FSharp.toBool_float_zero")
+{
+    // zero float is truthy in shell semantics (0.0 == 0.0)
+    CHECK(executeSourceAndGetOutput("if 0.0 then print \"yes\" else print \"no\"") == "yes");
+}
+
+TEST_CASE("IRGenerator.FSharp.toBool_string_nonempty")
+{
+    // non-empty string is falsy in shell semantics ("hello" != "")
+    CHECK(executeSourceAndGetOutput(R"(if "hello" then print "yes" else print "no")") == "no");
+}
+
+TEST_CASE("IRGenerator.FSharp.toBool_string_empty")
+{
+    // empty string is truthy in shell semantics ("" == "")
+    CHECK(executeSourceAndGetOutput(R"(if "" then print "yes" else print "no")") == "yes");
+}
+
+TEST_CASE("IRGenerator.FSharp.toBool_not_float")
+{
+    // not(1.5): toBool(1.5) = false (falsy), BNot(false) = true
+    CHECK(executeSourceAndGetOutput("print (not 1.5)") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.toBool_not_string")
+{
+    // not("hello"): toBool("hello") = false (falsy), BNot(false) = true
+    CHECK(executeSourceAndGetOutput(R"(print (not "hello"))") == "true");
+}
+
 // =============================================================================
 // Higher-Order List Functions: fold
 // =============================================================================
