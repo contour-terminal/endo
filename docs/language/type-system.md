@@ -132,6 +132,10 @@ let area shape =
     | Rectangle (w, h) -> w * h
     | Point -> 0.0
 
+# Access named fields directly with dot notation
+c.radius         # 5.0
+r.width          # 10.0
+
 # More complex union
 type JsonValue =
     | JsonNull

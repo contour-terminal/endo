@@ -38,7 +38,9 @@ record_type     = "{" field_def { ";" field_def } [ ";" ] "}" ;
 field_def       = identifier ":" type ;
 
 union_type      = [ "|" ] union_case { "|" union_case } ;
-union_case      = identifier [ "of" type ] ;
+union_case      = identifier [ "of" union_fields ] ;
+union_fields    = union_field { "*" union_field } ;
+union_field     = [ identifier ":" ] type ;
 
 for_statement   = "for" pattern "in" expression [ ";" ] "do" block "end" ;
 

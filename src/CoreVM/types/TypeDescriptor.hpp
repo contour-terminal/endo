@@ -19,19 +19,20 @@ enum class TypeKind : uint8_t
     Array,    ///< Homogeneous dynamic arrays
 };
 
-/// Information about a variant in a sum type.
-struct VariantInfo
-{
-    std::string name;     ///< Variant name ("Some", "None", "Ok", "Error", etc.)
-    uint8_t payloadSlots; ///< Number of Value slots for payload (0 for unit variants)
-};
-
-/// Information about a field in a product type.
+/// Information about a field in a product type or named union variant.
 struct FieldInfo
 {
     std::string name;                       ///< Field name (empty string for tuple positions)
     uint8_t offset;                         ///< Slot offset within the object's data area
     LiteralType type = LiteralType::Number; ///< The VM type of this field's value
+};
+
+/// Information about a variant in a sum type.
+struct VariantInfo
+{
+    std::string name;              ///< Variant name ("Some", "None", "Ok", "Error", etc.)
+    uint8_t payloadSlots;          ///< Number of Value slots for payload (0 for unit variants)
+    std::vector<FieldInfo> fields; ///< Named fields (empty if positional or unit variant)
 };
 
 /// Describes a composite type's structure.

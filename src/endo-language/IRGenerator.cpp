@@ -8868,12 +8868,57 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
 
     if (!typeInfo)
     {
-        reportTypeError("Field access requires a known record type, got unknown object for '.{}'",
+        // Try union type field access: look up field name in union types
+        UnionTypeInfo const* unionInfo = nullptr;
+        if (auto objTypeId = getObjectTypeId(obj))
+        {
+            for (auto const& [name, uInfo]: _unionTypes)
+            {
+                if (uInfo.typeId == *objTypeId)
+                {
+                    unionInfo = &uInfo;
+                    break;
+                }
+            }
+        }
+        if (!unionInfo)
+        {
+            // Try to resolve via IR chain analysis
+            if (auto info = tryGetObjectInfo(obj))
+            {
+                for (auto const& [name, uInfo]: _unionTypes)
+                {
+                    if (uInfo.typeId == info->typeId)
+                    {
+                        unionInfo = &uInfo;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (unionInfo)
+        {
+            // Look up the field name in the union's field lookup map
+            if (auto it = unionInfo->fieldLookup.find(node.fieldName); it != unionInfo->fieldLookup.end())
+            {
+                auto const& [variantTag, slotOffset] = it->second;
+                _result = _builder.createObjGetSlot(
+                    obj, _builder.get(CoreVM::CoreNumber(slotOffset)), "union." + node.fieldName);
+                return;
+            }
+            reportTypeError("Union type '{}' has no field '{}'",
+                            std::string_view(unionInfo->name),
+                            std::string_view(node.fieldName));
+            return;
+        }
+
+        reportTypeError("Field access requires a known record or union type, got unknown object for '.{}'",
                         std::string_view(node.fieldName));
         return;
     }
 
-    // Find the field by name
+    // Find the field by name in the record type
     bool found = false;
     for (auto const& fieldDef: typeInfo->fields)
     {
@@ -9085,10 +9130,28 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
 
     // Build variant info list
     std::vector<CoreVM::VariantInfo> variants;
+    // Maps field name → (variant_tag, slot_offset) for field access
+    std::unordered_map<std::string, std::pair<int, uint8_t>> fieldLookup;
+
     for (size_t i = 0; i < node.variants.size(); ++i)
     {
         auto const& variant = node.variants[i];
-        variants.push_back({ variant.name, static_cast<uint8_t>(variant.payloadTypes.size()) });
+
+        // Build FieldInfo entries from named fields
+        std::vector<CoreVM::FieldInfo> fields;
+        for (size_t j = 0; j < variant.fieldNames.size(); ++j)
+        {
+            if (!variant.fieldNames[j].empty())
+            {
+                fields.push_back({ variant.fieldNames[j],
+                                   static_cast<uint8_t>(j),
+                                   CoreVM::LiteralType::Number }); // TODO: derive from payloadTypes
+                fieldLookup[variant.fieldNames[j]] = { static_cast<int>(i), static_cast<uint8_t>(j) };
+            }
+        }
+
+        variants.push_back(
+            { variant.name, static_cast<uint8_t>(variant.payloadTypes.size()), std::move(fields) });
 
         // Register each constructor in the constructor registry
         ConstructorInfo ctorInfo;
@@ -9096,6 +9159,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
         ctorInfo.typeId = typeId;
         ctorInfo.tag = static_cast<int>(i);
         ctorInfo.payloadSlots = static_cast<uint8_t>(variant.payloadTypes.size());
+        ctorInfo.fieldNames = variant.fieldNames;
         _constructorRegistry[variant.name] = ctorInfo;
     }
 
@@ -9104,6 +9168,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
     info.typeId = typeId;
     info.name = node.name;
     info.variants = variants;
+    info.fieldLookup = std::move(fieldLookup);
     _unionTypes[node.name] = std::move(info);
 
     // Register as a custom sum type on the IR program so TargetCodeGenerator

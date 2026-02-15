@@ -317,6 +317,27 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
             result += " }";
             return result;
         }
+        if (obj->type->kind == CoreVM::TypeKind::Sum)
+        {
+            auto const* variantInfo = obj->type->getVariant(obj->tag);
+            std::string result = variantInfo ? variantInfo->name : "?";
+            if (variantInfo && variantInfo->payloadSlots > 0)
+            {
+                auto const hasNamedFields = !variantInfo->fields.empty();
+                result += hasNamedFields ? "(" : " ";
+                for (uint8_t i = 0; i < variantInfo->payloadSlots; ++i)
+                {
+                    if (i > 0)
+                        result += ", ";
+                    if (hasNamedFields && i < variantInfo->fields.size())
+                        result += variantInfo->fields[i].name + ": ";
+                    result += slotValueToString(obj->getSlot(i), CoreVM::LiteralType::Number, runner, false);
+                }
+                if (hasNamedFields)
+                    result += ")";
+            }
+            return result;
+        }
         return std::to_string(static_cast<int64_t>(rawVal));
     }
     return std::to_string(static_cast<int64_t>(rawVal));

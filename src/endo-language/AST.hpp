@@ -1592,8 +1592,9 @@ struct RecordTypeDefStmt final: public Statement
 /// and `Point` has none.
 struct UnionVariantDef
 {
-    std::string name;                  ///< Variant constructor name (e.g., "Circle")
-    std::vector<TypePtr> payloadTypes; ///< Payload types (empty for unit constructors)
+    std::string name;                    ///< Variant constructor name (e.g., "Circle")
+    std::vector<TypePtr> payloadTypes;   ///< Payload types (empty for unit constructors)
+    std::vector<std::string> fieldNames; ///< Named fields, parallel to payloadTypes (empty string = unnamed)
 };
 
 /// Discriminated union type definition statement: `type Shape = | Circle of float | Rectangle of float *

@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <unordered_set>
 
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
@@ -4218,29 +4219,71 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
             std::vector<TypePtr> payloadTypes;
 
             // Check for 'of' keyword (payload types)
+            std::vector<std::string> fieldNames;
             if (_lexer.currentToken() == Token::Of)
             {
                 _lexer.nextToken(); // consume 'of'
 
-                // Parse payload types separated by '*'
-                auto payloadType = parseBaseType();
-                if (!payloadType)
+                // Parse payload types separated by '*', optionally with field names
+                // Syntax: "of name: type * name: type" or "of type * type" (no mixing within a variant)
+                auto parseOneField = [&]() -> bool {
+                    std::string fieldName;
+                    // Lookahead: if we see Identifier followed by Colon, it's a named field
+                    if (_lexer.currentToken() == Token::Identifier)
+                    {
+                        auto savedLit = _lexer.currentLiteral();
+                        auto savedRange = _lexer.currentRange();
+                        _lexer.nextToken();
+                        if (_lexer.currentToken() == Token::Colon)
+                        {
+                            // Named field: consume the colon
+                            fieldName = std::move(savedLit);
+                            _lexer.nextToken();
+                        }
+                        else
+                        {
+                            // Not a named field — push back the identifier
+                            _lexer.pushBackToken(Token::Identifier, std::move(savedLit), savedRange);
+                        }
+                    }
+                    auto payloadType = parseBaseType();
+                    if (!payloadType)
+                        return false;
+                    payloadTypes.push_back(std::move(payloadType));
+                    fieldNames.push_back(std::move(fieldName));
+                    return true;
+                };
+
+                if (!parseOneField())
                 {
                     _lexer.leaveFSharpExpr();
                     return nullptr;
                 }
-                payloadTypes.push_back(std::move(payloadType));
 
                 while (_lexer.currentToken() == Token::Star)
                 {
                     _lexer.nextToken(); // consume '*'
-                    payloadType = parseBaseType();
-                    if (!payloadType)
+                    if (!parseOneField())
                     {
                         _lexer.leaveFSharpExpr();
                         return nullptr;
                     }
-                    payloadTypes.push_back(std::move(payloadType));
+                }
+
+                // Validate: all fields must be either all named or all unnamed within a variant
+                auto const hasNamed =
+                    std::ranges::any_of(fieldNames, [](auto const& n) { return !n.empty(); });
+                auto const hasUnnamed =
+                    std::ranges::any_of(fieldNames, [](auto const& n) { return n.empty(); });
+                if (hasNamed && hasUnnamed)
+                {
+                    _lexer.leaveFSharpExpr();
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Either name all fields or leave all unnamed" },
+                                                       currentContextSnippet(),
+                                                       "Cannot mix named and unnamed fields in variant '{}'",
+                                                       ctorName);
+                    return nullptr;
                 }
             }
 
@@ -4248,10 +4291,33 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
             _constructorLookup[ctorName] = { typeName, variants.size() };
             _constructorPayloadSlots[ctorName] = static_cast<uint8_t>(payloadTypes.size());
 
-            variants.push_back(ast::UnionVariantDef { std::move(ctorName), std::move(payloadTypes) });
+            variants.push_back(
+                ast::UnionVariantDef { std::move(ctorName), std::move(payloadTypes), std::move(fieldNames) });
 
             // Consume newlines between variants
             consumeNewlines();
+        }
+
+        // Validate field name uniqueness across the entire union type
+        std::unordered_set<std::string> allFieldNames;
+        for (auto const& variant: variants)
+        {
+            for (auto const& fn: variant.fieldNames)
+            {
+                if (fn.empty())
+                    continue;
+                if (!allFieldNames.insert(fn).second)
+                {
+                    _lexer.leaveFSharpExpr();
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       { "Use a different field name" },
+                                                       currentContextSnippet(),
+                                                       "Duplicate field name '{}' in union type '{}'",
+                                                       fn,
+                                                       typeName);
+                    return nullptr;
+                }
+            }
         }
 
         _lexer.leaveFSharpExpr();

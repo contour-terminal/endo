@@ -763,15 +763,19 @@ class IRGenerator final: public ast::Visitor
         uint16_t typeId;                           ///< Assigned type ID
         std::string name;                          ///< Type name (e.g., "Shape")
         std::vector<CoreVM::VariantInfo> variants; ///< Variant definitions
+
+        /// Maps field name to (variant_tag, slot_offset) for field access on union values.
+        std::unordered_map<std::string, std::pair<int, uint8_t>> fieldLookup;
     };
 
     /// Information about a single constructor of a discriminated union.
     struct ConstructorInfo
     {
-        std::string typeName; ///< Parent union type name
-        uint16_t typeId;      ///< Assigned type ID of the parent union
-        int tag;              ///< Tag value for this constructor variant
-        uint8_t payloadSlots; ///< Number of payload slots (0 for unit constructors)
+        std::string typeName;                ///< Parent union type name
+        uint16_t typeId;                     ///< Assigned type ID of the parent union
+        int tag;                             ///< Tag value for this constructor variant
+        uint8_t payloadSlots;                ///< Number of payload slots (0 for unit constructors)
+        std::vector<std::string> fieldNames; ///< Named fields (parallel to payload slots, empty if unnamed)
     };
 
     /// Maps union type names to their metadata.

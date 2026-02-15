@@ -4633,6 +4633,143 @@ TEST_CASE("IRGenerator.FSharp.union_type_unit_constructor_match")
 }
 
 // =============================================================================
+// Named union fields
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_parsing")
+{
+    // Named fields parse correctly and match still works
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of radius: int\n"
+                                    "    | Point\n"
+                                    "let s = Circle 42\n"
+                                    "let r = match s with\n"
+                                    "    | Circle r -> r\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_multi")
+{
+    // Multi-field named variant with tuple-style construction
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Rect of w: int * h: int\n"
+                                    "    | Point\n"
+                                    "let s = Rect (3, 4)\n"
+                                    "let r = match s with\n"
+                                    "    | Rect (w, h) -> w * h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "12");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_field_access")
+{
+    // Field access via dot notation on union values
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of radius: int\n"
+                                    "    | Point\n"
+                                    "let c = Circle 42\n"
+                                    "print c.radius")
+          == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_multi_field_access")
+{
+    // Field access on multi-field variant
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Rect of w: int * h: int\n"
+                                    "    | Point\n"
+                                    "let r = Rect (10, 20)\n"
+                                    "print r.w")
+          == "10");
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Rect of w: int * h: int\n"
+                                    "    | Point\n"
+                                    "let r = Rect (10, 20)\n"
+                                    "print r.h")
+          == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_mixed_variants")
+{
+    // Mix of named and unnamed variants in the same union (different variants can differ)
+    CHECK(executeSourceAndGetOutput("type Foo =\n"
+                                    "    | A of x: int\n"
+                                    "    | B of int\n"
+                                    "    | C\n"
+                                    "let a = A 10\n"
+                                    "let r = match a with\n"
+                                    "    | A v -> v\n"
+                                    "    | B v -> v\n"
+                                    "    | C -> 0\n"
+                                    "print r")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_let_binding_propagation")
+{
+    // Field access works through let binding propagation
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of radius: int\n"
+                                    "    | Point\n"
+                                    "let c = Circle 7\n"
+                                    "let x = c\n"
+                                    "print x.radius")
+          == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_named_fields_pretty_print")
+{
+    // Pretty printing shows field names for named-field variants
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of radius: int\n"
+                                    "    | Point\n"
+                                    "let c = Circle 42\n"
+                                    "print c")
+          == "Circle(radius: 42)");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_unnamed_fields_pretty_print")
+{
+    // Pretty printing shows positional values for unnamed-field variants
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Point\n"
+                                    "let c = Circle 42\n"
+                                    "print c")
+          == "Circle 42");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_unit_variant_pretty_print")
+{
+    // Pretty printing shows just the constructor name for unit variants
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Point\n"
+                                    "let p = Point\n"
+                                    "print p")
+          == "Point");
+}
+
+TEST_CASE("IRGenerator.FSharp.union_backward_compat_unnamed")
+{
+    // Unnamed fields still work exactly as before (no regression)
+    CHECK(executeSourceAndGetOutput("type Shape =\n"
+                                    "    | Circle of int\n"
+                                    "    | Rectangle of int * int\n"
+                                    "    | Point\n"
+                                    "let s = Rectangle (5, 6)\n"
+                                    "let r = match s with\n"
+                                    "    | Circle r -> r * r\n"
+                                    "    | Rectangle (w, h) -> w * h\n"
+                                    "    | Point -> 0\n"
+                                    "print r")
+          == "30");
+}
+
+// =============================================================================
 // List standard library: head, tail, length, isEmpty
 // =============================================================================
 
