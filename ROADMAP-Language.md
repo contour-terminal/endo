@@ -13,7 +13,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Export bindings: `let export X = expr` — binds value and exports as environment variable (scalar types only)
 - [x] Mutation operator: `x <- x + 1`
 - [x] Lambda expressions: `fun x -> x * 2`
-- [x] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, or `_.field ...` → `fun __x -> __x.field ...` etc
+- [x] Lambda expression sugar: `_ + 1` → `fun __x -> __x + 1`, `_.field ...` → `fun __x -> __x.field ...` etc
 - [x] Let-in expressions: `let x = 5 in x + 1`
 - [x] If-then-else expressions: `if cond then a else b` (else optional, returns unit)
 - [x] Match expressions: `match x with | pattern -> result`
@@ -253,6 +253,7 @@ This document tracks the implementation status of F# language features as define
 - [x] F# operator tokens: `+`, `-`, `*`, `/`, `%`, `**`, `|>`, `->`, `<-`
 - [x] Nested parentheses in F# expressions (fixed: `))` no longer merges to `DblRndClose`)
 - [x] `in`, `then`, `else` excluded from `isFSharpPrimary()` to prevent argument consumption
+- [x] `let-in` expressions inside multi-line function bodies: `parseFSharpExprSequence` converts statement-level `let` to `LetInExpr` when `in` follows
 - [x] Comma tokenization in F# mode for tuples
 - [x] Negative number literals: `-42`
 - [x] Float literals with decimal: `3.14` (distinct `Float` type with arithmetic, comparisons, and promotion)
@@ -377,3 +378,11 @@ Consult this section to determine what to work on next.
 - [ ] Type variable introduction in annotations (`'a` syntax)
 - [ ] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
 - [ ] Monomorphization or type erasure at codegen time
+
+### Phase 10 — Planned Language Enhancements
+- [ ] Placeholder lambdas: `_ > 10` desugaring to `fun x -> x > 10` (concise pipelines like `filter (_ > 10)`)
+- [ ] Unit parameter in function definitions: `let f () = 42` for side-effecting functions
+- [ ] Named union fields: `Circle of radius: float` for self-documenting discriminated unions
+- [ ] Non-tail recursion support: lift tail-position restriction via IR rewriting (CPS or loop transformation)
+- [ ] `$(...)` command substitution in F# expression context: `let user = $(whoami)` bridging shell and F#
+- [ ] Nested list comprehensions: `[for x in xs -> for y in ys -> (x, y)]`
