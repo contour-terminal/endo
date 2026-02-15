@@ -367,7 +367,7 @@ src/
 - [x] Implement standard library builtins (`string_length`, `int_of_string`, `string_of_int`, `not`)
 - [x] Implement `env` builtin — returns `option<str>` for environment variables (13 test cases)
 - [x] Implement `rand` builtin — `rand` (no args) returns random positive integer > 0; `rand A B` returns random integer in [A, B] (6 test cases)
-- [x] Support `?` operator at top-level (global) scope — exits handler with code 1 on None/Error instead of requiring a function context
+- [x] Support `?` operator at top-level (global) scope — exits program with code 1 on None/Error instead of requiring a function context
 - [x] Remove `fst`/`snd` builtins — now user-definable via pattern matching (simplifies compiler, proves language expressiveness)
 - [x] Add `ROADMAP-Language.md` for tracking F# feature implementation status
 - [x] Implement float (double) primitive type — 18 opcodes, constant folding, auto-promotion, pattern matching, 17 test cases
@@ -401,38 +401,38 @@ src/
   - [x] Phase 0: Extract function call methods from `visit(ApplicationExpr)` into named helpers (`generateFSharpCall`, `generateRecursiveCall`, `generateMutualRecursiveCall`, `generatePartialApplication`)
   - [x] Phase 1: Add UCALL/URET/UTCALL opcodes and frame pointer to VM Runner
     - [x] `_fp` (frame pointer), `CallFrame`, `_callStack` for proper function call isolation
-    - [x] LOAD/STORE/STACKROT made FP-relative for handler-local stack access
-    - [x] `_fp=0` initialization maintains backward compatibility with existing shell/main handler code
+    - [x] LOAD/STORE/STACKROT made FP-relative for function-local stack access
+    - [x] `_fp=0` initialization maintains backward compatibility with existing shell/main function code
   - [x] Phase 2: Add `FunctionCallInstr`/`FunctionRetInstr`/`TailCallInstr` IR instructions
     - [x] New instruction classes, IRBuilder methods, TargetCodeGenerator visitors
-    - [x] `parameterCount` property on `IRHandler` for parameter alloca skip logic
-  - [x] Phase 3: Compile non-recursive F# functions as separate IRHandlers
-    - [x] `compileFunctionAsHandler()` creates IRHandler, parameter allocas, codegens body, emits FunctionRet
-    - [x] Functions with ALL parameters type-annotated compile as handlers (UCALL/URET)
+    - [x] `parameterCount` property on `IRFunction` for parameter alloca skip logic
+  - [x] Phase 3: Compile non-recursive F# functions as separate IRFunctions
+    - [x] `compileFunctionBody()` creates IRFunction, parameter allocas, codegens body, emits FunctionRet
+    - [x] Functions with ALL parameters type-annotated compile as functions (UCALL/URET)
     - [x] Functions without annotations fall back to AST inlining (backward compatible)
-    - [x] Error recovery: removes malformed handler and truncates report on compilation failure
+    - [x] Error recovery: removes malformed function and truncates report on compilation failure
     - [x] Return type propagated through `FunctionCallInstr` for correct `convertToString` dispatch
-    - [x] 15 handler-specific tests (typed arithmetic, float, string, bool, if-then-else, fallback)
+    - [x] 15 function-specific tests (typed arithmetic, float, string, bool, if-then-else, fallback)
   - [x] Phase 4: Closures (captured variables as extra arguments)
     - [x] Deterministic capture ordering (sorted alphabetically) stored in `captureOrder`
-    - [x] Captures become extra parameters prepended before explicit params in handler
+    - [x] Captures become extra parameters prepended before explicit params in function
     - [x] Call site loads captured values and prepends to args for `FunctionCallInstr`
     - [x] Capture types derived from source alloca types (no annotation needed for captures)
     - [x] 8 closure-specific tests (int, multiple captures, string, float, nested lets, thunk, fallback)
   - [x] Phase 5: Recursive functions (unified tail calls via UTCALL)
-    - [x] `compileFunctionAsHandler` now compiles recursive functions (removed `!isRecursive` guard)
-    - [x] `compiledHandler` pre-set before body codegen so recursive references emit UCALL/UTCALL
-    - [x] Tail position tracking (`_inTailPosition`, `_compilingHandler`) for UCALL vs UTCALL decisions
+    - [x] `compileFunctionBody` now compiles recursive functions (removed `!isRecursive` guard)
+    - [x] `compiledFunction` pre-set before body codegen so recursive references emit UCALL/UTCALL
+    - [x] Tail position tracking (`_inTailPosition`, `_compilingFunction`) for UCALL vs UTCALL decisions
     - [x] Tail position propagation: IfExpr (condition=false, branches=inherit), BinaryExpr (operands=false), ApplicationExpr (args=false, call=inherit), MatchExpr (scrutinee=false, arms=inherit), LetInExpr (value=false, body=inherit)
-    - [x] Recursive capture loads use handler scope (not outer scope) to avoid cross-handler alloca references
-    - [x] Null-result handling for tail calls in IfExpr, MatchExpr (check `_compilingHandler`)
+    - [x] Recursive capture loads use function scope (not outer scope) to avoid cross-function alloca references
+    - [x] Null-result handling for tail calls in IfExpr, MatchExpr (check `_compilingFunction`)
     - [x] Old loop-based TCO and dispatch-loop remain as fallback for untyped recursive functions
-    - [x] 5 recursive handler tests (countdown, factorial, sum, multiple calls, capture)
-  - [x] Phase 6: Cleanup and REPL handler persistence
-    - [x] Removed `_useClosureCalls` feature flag — handler compilation is always attempted
-    - [x] REPL-persisted functions now re-compute captures and compile as handlers at prompt start
+    - [x] 5 recursive function tests (countdown, factorial, sum, multiple calls, capture)
+  - [x] Phase 6: Cleanup and REPL function persistence
+    - [x] Removed `_useClosureCalls` feature flag — function compilation is always attempted
+    - [x] REPL-persisted functions now re-compute captures and compile as functions at prompt start
     - [x] Closure captures from previous prompts now work correctly (persisted values in scope)
-    - [x] 3 session handler tests (recursive, closure, multiple calls)
+    - [x] 3 session function tests (recursive, closure, multiple calls)
     - [x] Old AST inlining paths retained as fallback for functions without type annotations or with non-primitive inferred types
   - [x] Hindley-Milner type inference (Algorithm W) as separate pre-pass
     - [x] `TypeInferencer` class runs before IR generation, producing `InferenceResult` map
@@ -442,8 +442,8 @@ src/
     - [x] Ad-hoc overloading: `+` with string/float detection, comparison ops, logical ops
     - [x] Recursive and mutual recursive function inference
     - [x] Let-polymorphism via `generalize`/`instantiate`
-    - [x] Integration: primitive types (int, float, bool, str, unit) applied to function parameters, enabling handler compilation without explicit annotations
-    - [x] Complex types (list, option, result, function, tuple) inferred but not applied (handler compilation limitations)
+    - [x] Integration: primitive types (int, float, bool, str, unit) applied to function parameters, enabling function compilation without explicit annotations
+    - [x] Complex types (list, option, result, function, tuple) inferred but not applied (function compilation limitations)
     - [x] Extended `createStandardTypeEnv()` with print, println, string_length, int_of_string, string_of_int, not, ::, @, ~-
     - [x] 20 type inference tests (12 unit + 8 e2e) covering literals, operators, recursion, partial annotations, lambda, option, if-branches, factorial, identity, add, subtract, multiply, comparison, let-in, bool functions, typed-still-works, mixed annotations
   - [x] Higher-order functions (passing functions as arguments)
@@ -451,7 +451,7 @@ src/
     - [x] `capturedFunctionRefs` on `FSharpFunction` preserves function reference info through closures and partial application
     - [x] `lookupFSharpFunctionRef()` walks scope chain for function reference resolution
     - [x] Fallback in `visit(ApplicationExpr)` and `visit(PipelineExpr)`: when `lookupFSharpFunction` fails, resolves via `lookupFSharpFunctionRef`
-    - [x] Functions with function-typed parameters skip handler compilation (forced to AST inlining for functionRefs tracking)
+    - [x] Functions with function-typed parameters skip function compilation (forced to AST inlining for functionRefs tracking)
     - [x] `IdentifierExpr` returns constant function name for variables with function reference mappings
     - [x] 11 HOF tests: basic, lambda arg, twice, compose, partial application, closure capture, multiple function args, pipeline, string function, nested partial application, function alias
   - [x] Record types (Phase 4)
@@ -510,11 +510,11 @@ src/
 - **Loop syntax**: `for ... do ... end` / `while ... do ... end` (replaced `done` with `end`)
 - **Bare range expressions**: `1..10` and `1..2..10` work as standalone expressions (not only inside `[...]`); `..` precedence between comparisons and arithmetic
 - **Dual semantics**: `let` unambiguously starts F# style; `|>` (function pipe) and `|` (shell pipe) are distinct tokens; expression context captures output, statement context prints to terminal
-- **Type inference**: Hindley-Milner Algorithm W pre-pass (`TypeInferencer`) integrated into `IRGenerator::generate()`, enabling handler compilation without explicit annotations for primitive types
-- **Handler compilation**: Functions with all typed parameters compile as separate IRHandlers (UCALL/URET/UTCALL); untyped functions fall back to AST inlining
+- **Type inference**: Hindley-Milner Algorithm W pre-pass (`TypeInferencer`) integrated into `IRGenerator::generate()`, enabling function compilation without explicit annotations for primitive types
+- **Function compilation**: Functions with all typed parameters compile as separate IRFunctions (UCALL/URET/UTCALL); untyped functions fall back to AST inlining
 - **Records**: Compiled to TypedObject product types (OALLOC/OSETSLOT/OGETSLOT); update expressions use alloca-protected storage
 - **Discriminated unions**: Compiled to TypedObject sum types (OALLOC/OSETTAG/OSETSLOT/OGETTAG/OGETSLOT)
-- **Closures**: Captures sorted alphabetically, prepended as extra handler parameters; REPL-persisted functions re-compute captures at prompt start
+- **Closures**: Captures sorted alphabetically, prepended as extra function parameters; REPL-persisted functions re-compute captures at prompt start
 - **Mutual recursion**: Dispatch-loop optimization with integer tag selecting function body; separate from self-recursion's single-function loop
 - **Lists**: Cons-cell linked list via TypedObject; comprehension codegen uses two-phase approach (forward iteration + reverse pass)
 - **Shell command expressions**: `& command` temporarily leaves F# mode, reuses `SubstitutionExpr` logic for output capture; statement-level `& cmd` runs with normal I/O (no capture)
