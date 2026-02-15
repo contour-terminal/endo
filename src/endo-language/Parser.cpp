@@ -4822,7 +4822,29 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
         auto let = parseLet();
         if (!let)
             return nullptr;
-        statements.push_back(std::move(let));
+        // Check if this is a let-in expression (let x = ... in body) inside a sequence
+        if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "in")
+        {
+            _lexer.nextToken(); // consume 'in'
+            consumeNewlines();
+            auto body = parseFSharpExpr();
+            if (!body)
+                return nullptr;
+            if (let->destructurePattern)
+                lastExpr = std::make_unique<ast::LetInExpr>(
+                    std::move(let->destructurePattern), std::move(let->value), std::move(body));
+            else
+                lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
+                                                            std::move(let->name),
+                                                            std::move(let->parameters),
+                                                            std::move(let->returnType),
+                                                            std::move(let->value),
+                                                            std::move(body));
+        }
+        else
+        {
+            statements.push_back(std::move(let));
+        }
     }
     else
     {
@@ -4889,7 +4911,29 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
             auto let = parseLet();
             if (!let)
                 return nullptr;
-            statements.push_back(std::move(let));
+            // Check if this is a let-in expression (let x = ... in body) inside a sequence
+            if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "in")
+            {
+                _lexer.nextToken(); // consume 'in'
+                consumeNewlines();
+                auto body = parseFSharpExpr();
+                if (!body)
+                    return nullptr;
+                if (let->destructurePattern)
+                    lastExpr = std::make_unique<ast::LetInExpr>(
+                        std::move(let->destructurePattern), std::move(let->value), std::move(body));
+                else
+                    lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
+                                                                std::move(let->name),
+                                                                std::move(let->parameters),
+                                                                std::move(let->returnType),
+                                                                std::move(let->value),
+                                                                std::move(body));
+            }
+            else
+            {
+                statements.push_back(std::move(let));
+            }
         }
         else
         {
