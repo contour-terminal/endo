@@ -17,6 +17,7 @@ Completer::Completer(EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
     _providers.push_back(std::make_unique<CommandCompleter>(env));
     _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
+    _providers.push_back(std::make_unique<GitBranchCompleter>());
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
     _providers.push_back(std::make_unique<VariableCompleter>(env));
     _providers.push_back(std::make_unique<OptionCompleter>());

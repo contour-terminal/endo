@@ -633,6 +633,7 @@ The library includes:
 - [x] Add comprehensive completion tests (`Completer_test.cpp`, `CompletionPopup_test.cpp` - 35 tests)
 - [x] Implement F# dot-access completion (`FSharpCompleter.cpp` — Option module methods, `_.field` record fields, `value.method`/`value.field` — 24 tests)
 - [x] Extend ghost text to all completion contexts (`Completer::suggest()` — two-phase matching: Phase 1 full-line prefix from Command-capable providers for history, Phase 2 word-level fallback from context-appropriate providers for variables, file paths, arguments — 8 tests)
+- [x] Implement git branch name completion (`GitBranchCompleter.cpp` — completes branch names for `checkout`, `switch`, `merge`, `rebase`, `push` (after remote), `branch -d`/`-m`, etc. — parses `fullInput` for subcommand context, queries `git branch` for local/remote branches — 16 tests)
 
 **Implementation Notes:**
 - Core completion types (`CompletionItem`, `CompletionProvider`, `Completer`, `SmartCaseMatch`, `FuzzyMatch`) in `src/tui/completer/` as pure TUI model
@@ -657,6 +658,7 @@ The library includes:
 - 39 completion-related tests covering Completer, CompletionPopup, and updateItems functionality
 - F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
 - Ghost text two-phase matching: Phase 1 queries Command-capable providers (History, Command, LetBinding, FSharp) with full-line prefix matching in reverse priority order (history preferred); Phase 2 falls back to word-level prefix matching from all context-appropriate providers via `gatherCompletions()`. Enables ghost text for variables (`$PA` → `TH`), file paths, arguments, and history recall in any position
+- Git branch completion (`GitBranchCompleter.cpp`): Priority 85 (above FileCompleter 50, below CommandCompleter 100). Parses `fullInput` to extract git subcommand since `context.command` only stores `"git"`. Subcommand dispatch table: always-branch (`checkout`, `switch`, `merge`, `rebase`, `reset`, `revert`, `cherry-pick`, `log`, `diff`, `show`), remote-first (`push`, `pull`, `fetch` — need remote arg before branch), flag-gated (`branch` — only with `-d`/`-D`/`--delete`/`-m`/`-M`/`--move`). Handles git global options (`-C`, `-c`, `--git-dir`, `--work-tree`) that consume the next token. Queries local and remote branches via `git branch --format`, deduplicates remote branches by stripping `origin/` prefix.
 
 ### Phase 2.3.5: TUI Renderer Architecture
 

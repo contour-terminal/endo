@@ -20,6 +20,8 @@ add_library(endo-shell STATIC
     CompletionProviders/FSharpCompleter.cpp
     CompletionProviders/FileCompleter.hpp
     CompletionProviders/FileCompleter.cpp
+    CompletionProviders/GitBranchCompleter.hpp
+    CompletionProviders/GitBranchCompleter.cpp
     CompletionProviders/HistoryCompleter.hpp
     CompletionProviders/HistoryCompleter.cpp
     CompletionProviders/OptionCompleter.hpp
@@ -172,6 +174,7 @@ add_executable(test-endo-shell
     CrashHandler_test.cpp
     Completer_test.cpp
     FSharpCompleter_test.cpp
+    GitBranchCompleter_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
     PersistentHistory_test.cpp
