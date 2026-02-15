@@ -205,8 +205,12 @@ void PersistentHistory::markLastResult(int exitCode)
         _dirty = true;
         flush();
     }
-    // Non-zero: entry stays in session but persisted flag unchanged
-    // (false for new commands, true for previously saved ones)
+    else if (entry.persisted)
+    {
+        entry.persisted = false;
+        _dirty = true;
+        flush();
+    }
 }
 
 std::vector<std::string> const& PersistentHistory::entries() const

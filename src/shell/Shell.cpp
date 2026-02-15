@@ -952,6 +952,8 @@ int Shell::execute(std::string const& lineBuffer)
             return EXIT_FAILURE;
         }
         _currentProgram->link(&_runtime, &report);
+        if (report.containsFailures())
+            return EXIT_FAILURE;
 
         if (irLog().is_enabled())
         {
@@ -2925,6 +2927,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     if (!programPath.has_value())
     {
         error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -2952,6 +2955,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
     if (!fgResult.has_value())
     {
         error("Failed to run {}: {}", program, toString(fgResult.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3518,6 +3522,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     if (!programPath.has_value())
     {
         error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3541,6 +3546,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     if (!spawnResult.has_value())
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3767,6 +3773,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     if (cmdBuilderArgs().empty())
     {
         error("No command to execute");
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3777,6 +3784,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     if (!programPath.has_value())
     {
         error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3804,6 +3812,7 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
     if (!fgResult.has_value())
     {
         error("Failed to run {}: {}", program, toString(fgResult.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3828,6 +3837,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     if (cmdBuilderArgs().empty())
     {
         error("No command to execute");
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3838,6 +3848,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     if (!programPath.has_value())
     {
         error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -3861,6 +3872,7 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
     if (!spawnResult.has_value())
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -5392,6 +5404,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     if (cmdBuilderArgs().empty())
     {
         error("No command to execute");
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -5402,6 +5415,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     if (!programPath.has_value())
     {
         error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }
@@ -5424,6 +5438,7 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     if (!spawnResult.has_value())
     {
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
     }

@@ -17,6 +17,7 @@ using crispy::escape;
 
 #include "CompletionProviders/FileCompleter.hpp"
 #include "CompletionProviders/LetBindingCompleter.hpp"
+#include "PersistentHistory.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
@@ -2366,4 +2367,40 @@ TEST_CASE("shell.fsharp.fetch.connection_refused")
     TestShell shell;
     shell(R"(match fetch "http://localhost:1" with | Ok b -> print "ok" | Error e -> print "error")");
     CHECK(escape(shell.output()) == escape("error"));
+}
+
+// ============================================================================
+// Invalid command exit code
+// ============================================================================
+
+TEST_CASE("shell.exec.program_not_found_exit_code")
+{
+    // An invalid command (program not found) must produce a non-zero exit code
+    // so that history persistence correctly rejects it.
+    TestShell shell;
+    shell("blurb_nonexistent_command_12345");
+    CHECK(shell.exitCode != 0);
+}
+
+TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
+{
+    // Invalid commands must not be persisted to history.
+    auto dir = std::filesystem::current_path() / "tmp" / "shell_history_test";
+    std::filesystem::create_directories(dir);
+
+    auto history = endo::PersistentHistory {};
+    history.setFilePath(dir / "history.yml");
+
+    // Simulate the shell flow: add command, then mark with exit code
+    history.add("blurb_nonexistent_command_12345");
+    CHECK(!history.richEntries().back().persisted); // not yet persisted
+
+    // Simulate what happens when Shell::execute() returns non-zero for program-not-found
+    history.markLastResult(EXIT_FAILURE);
+    CHECK(!history.richEntries().back().persisted); // must remain unpersisted
+
+    // Verify it does not survive a roundtrip to disk
+    CHECK(!std::filesystem::exists(dir / "history.yml"));
+
+    std::filesystem::remove_all(dir);
 }

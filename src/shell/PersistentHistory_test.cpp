@@ -115,7 +115,7 @@ TEST_CASE("PersistentHistory.markLastResult_does_not_persist_new_on_failure", "[
     CHECK(!std::filesystem::exists(dir.path / "history.yml"));
 }
 
-TEST_CASE("PersistentHistory.previously_persisted_survives_failure", "[history]")
+TEST_CASE("PersistentHistory.previously_persisted_unpersisted_on_failure", "[history]")
 {
     auto dir = TempDir {};
     auto history = endo::PersistentHistory {};
@@ -130,8 +130,47 @@ TEST_CASE("PersistentHistory.previously_persisted_survives_failure", "[history]"
     history.add("git status");
     history.markLastResult(1);
 
-    // Should still be persisted (was already saved)
-    CHECK(history.richEntries().back().persisted);
+    // Should no longer be persisted after failure
+    CHECK(!history.richEntries().back().persisted);
+}
+
+TEST_CASE("PersistentHistory.failure_removes_from_disk_on_roundtrip", "[history]")
+{
+    auto dir = TempDir {};
+    auto const filePath = dir.path / "history.yml";
+
+    // Persist two commands successfully
+    {
+        auto history = endo::PersistentHistory {};
+        history.setFilePath(filePath);
+
+        history.add("git status");
+        history.markLastResult(0);
+
+        history.add("cmake --build");
+        history.markLastResult(0);
+    }
+
+    // Re-run "git status" with failure — should un-persist it
+    {
+        auto history = endo::PersistentHistory {};
+        history.setFilePath(filePath);
+        history.load();
+        REQUIRE(history.size() == 2);
+
+        history.add("git status");
+        history.markLastResult(1);
+    }
+
+    // Reload and verify only "cmake --build" survives
+    {
+        auto history = endo::PersistentHistory {};
+        history.setFilePath(filePath);
+        history.load();
+
+        REQUIRE(history.size() == 1);
+        CHECK(history.entries()[0] == "cmake --build");
+    }
 }
 
 TEST_CASE("PersistentHistory.load_save_roundtrip", "[history]")
