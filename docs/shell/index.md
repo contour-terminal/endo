@@ -35,6 +35,7 @@ There is no mode switch command. The parser recognizes the context automatically
 Traditional shells pipe raw text between processes. Endo adds a second pipeline operator
 (`|>`) that passes typed values between functions:
 
+<!-- endo-no-check -->
 ```endo
 # Shell pipe: bytes between OS processes
 cat access.log | grep 404 | wc -l

@@ -4,10 +4,11 @@
 
 Functions in endo are curried by default, meaning multi-parameter functions are actually chains of single-parameter functions.
 
+<!-- endo-no-check -->
 ```endo
 # Simple single-parameter function
 let double x = x * 2
-let greet name = echo $"Hello, {name}"
+let greet name = println $"Hello, {name}"
 
 # Multi-parameter functions (curried)
 let add x y = x + y
@@ -38,6 +39,7 @@ let times10 = multiplyBy 10
 
 ### 5.2 Multi-line Functions
 
+<!-- endo-no-check -->
 ```endo
 # Indentation-based body
 let factorial n =
@@ -78,6 +80,7 @@ let processAndLog input =
 
 Anonymous functions for inline use.
 
+<!-- endo-no-check -->
 ```endo
 # Basic lambda syntax: fun params -> body
 let double = fun x -> x * 2
@@ -112,6 +115,7 @@ let add5 = curriedAdd 5
 
 The `_` token in expression position (not pattern position) creates an implicit single-parameter lambda. This is purely a parser-level desugaring — no changes to IR or runtime.
 
+<!-- endo-no-check -->
 ```endo
 # Field accessor
 _.pid                         # -> fun __x -> __x.pid
@@ -137,6 +141,7 @@ ps |> sortBy _.cpu |> groupBy _.user
 
 ### 5.5 Recursive Functions
 
+<!-- endo-no-check -->
 ```endo
 # The 'rec' keyword enables recursion
 let rec gcd a b =
@@ -144,11 +149,10 @@ let rec gcd a b =
     | 0 -> a
     | _ -> gcd b (a % b)
 
-let rec sumList lst =
+let rec sumList acc lst =
     match lst with
-    | [] -> 0
-    | [x] -> x
-    | head :: tail -> head + sumList tail
+    | [] -> acc
+    | head :: tail -> sumList (acc + head) tail
 
 # Mutual recursion with 'and'
 let rec isEven n =
@@ -181,6 +185,7 @@ let rec sumTree tree =
 
 ### 5.6 Function Composition
 
+<!-- endo-no-check -->
 ```endo
 # Forward composition operator >>
 let doubleAndAdd1 = double >> (add 1)

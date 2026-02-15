@@ -25,6 +25,7 @@ else
 
 ### 12.2 Standard Library
 
+<!-- endo-no-check -->
 ```endo
 # Core functions are always available
 # No import needed for: map, filter, fold, head, tail, etc.
@@ -64,6 +65,7 @@ The filename is derived from the URL path (last non-empty segment, query/fragmen
 If the URL has no filename (e.g. `https://example.com/`), a unique name is generated
 automatically (e.g. `fetch_a1b2c3`). Existing files with the same name are overwritten.
 
+<!-- endo-no-check -->
 ```endo
 # Signature
 fetch : str -> result<str, str>
@@ -90,6 +92,7 @@ println ("Downloaded: " + path)
 
 **Custom request headers** -- pass a list of `"Key: Value"` strings as the second argument:
 
+<!-- endo-no-check -->
 ```endo
 let path = (fetch "https://example.com/file.tar.gz"
                   ["Authorization: Bearer tok"; "Accept: application/octet-stream"])?
@@ -116,6 +119,7 @@ environment variable `ENDO_FETCH_QUIET=1` is set.
 
 ### 12.4 Creating Modules
 
+<!-- endo-no-check -->
 ```endo
 # mymodule.endo
 

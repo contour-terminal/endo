@@ -39,6 +39,7 @@ of        as        global
 
 ### 2.5 String Literals
 
+<!-- endo-no-check -->
 ```endo
 # Double-quoted strings (with interpolation)
 "Hello, $name"

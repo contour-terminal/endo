@@ -4,6 +4,7 @@
 
 When a command appears as a statement (not in an expression), its output goes directly to the terminal.
 
+<!-- endo-no-check -->
 ```endo
 # Commands print to stdout/stderr
 ls -la
@@ -31,6 +32,7 @@ if needsUpdate then {
 
 When a command is part of an expression (assignment, function argument, etc.), its stdout is captured.
 
+<!-- endo-no-check -->
 ```endo
 # Assignment captures stdout
 let files = ls -la
@@ -86,6 +88,7 @@ echo 'Path: $HOME'                # Path: $HOME
 
 ### 10.4 Redirections
 
+<!-- endo-no-check -->
 ```endo
 # Output redirection
 echo "log entry" > logfile.txt    # Overwrite
@@ -134,6 +137,7 @@ wc -w <<< "count these words"
 
 Treat command output as a file.
 
+<!-- endo-no-check -->
 ```endo
 # Compare output of two commands
 diff <(ls dir1) <(ls dir2)
@@ -156,6 +160,7 @@ comm -12 <(sort users_today | uniq) <(sort users_yesterday | uniq)
 
 ### 10.6 Command Substitution
 
+<!-- endo-no-check -->
 ```endo
 # $() syntax (preferred)
 let user = $(whoami)

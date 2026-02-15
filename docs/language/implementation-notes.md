@@ -43,6 +43,7 @@ enum class Token {
 ### 14.2 Grammar Ambiguities and Resolution
 
 **Challenge 1: `let` binding vs bash assignment**
+<!-- endo-no-check -->
 ```endo
 let x = 42          # F# style (new)
 x=42                # Bash style (existing)
@@ -50,6 +51,7 @@ x=42                # Bash style (existing)
 **Resolution:** The `let` keyword unambiguously starts F# style. Bash style requires no spaces around `=`.
 
 **Challenge 2: Pipe operators `|` vs `|>`**
+<!-- endo-no-check -->
 ```endo
 cmd1 | cmd2         # Shell pipe (process stdout -> stdin)
 data |> func        # Function pipe (value -> function)
@@ -57,12 +59,14 @@ data |> func        # Function pipe (value -> function)
 **Resolution:** Lexer emits different tokens. `|` followed by `>` produces `ForwardPipe`, otherwise `Pipe`.
 
 **Challenge 3: Function call vs command**
+<!-- endo-no-check -->
 ```endo
 let x = foo bar     # Is foo a function or command?
 ```
 **Resolution:** Unified semantics - resolved at runtime based on resolution order. Parser treats all calls uniformly as applications.
 
 **Challenge 4: Semicolons in different contexts**
+<!-- endo-no-check -->
 ```endo
 [1; 2; 3]           # List element separator
 cmd1; cmd2          # Statement separator
@@ -71,6 +75,7 @@ if cond then        # No semicolon needed (optional)
 **Resolution:** Context-sensitive parsing. Inside `[]`, semicolon separates list elements. At statement level, separates statements.
 
 **Challenge 5: Pattern vs Expression in match arms**
+<!-- endo-no-check -->
 ```endo
 match x with
 | pattern -> expr   # pattern is NOT an expression

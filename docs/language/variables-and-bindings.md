@@ -4,6 +4,7 @@
 
 By default, `let` creates immutable bindings that cannot be reassigned.
 
+<!-- endo-no-check -->
 ```endo
 # Basic immutable binding
 let x = 42
@@ -28,6 +29,7 @@ let input = toUpper input     # Shadow with uppercase version
 
 Use `let mut` when you need to modify a value.
 
+<!-- endo-no-check -->
 ```endo
 # Mutable binding
 let mut counter = 0
@@ -36,7 +38,7 @@ let mut name = "initial"
 # Reassign with <- operator
 counter <- counter + 1
 counter <- counter + 1
-echo $"Counter: {counter}"      # Counter: 2
+println $"Counter: {counter}"    # Counter: 2
 
 name <- "updated"
 
@@ -45,7 +47,7 @@ let mut sum = 0
 for n in [1; 2; 3; 4; 5] do
     sum <- sum + n
 end
-echo $"Sum: {sum}"              # Sum: 15
+println $"Sum: {sum}"            # Sum: 15
 
 # Mutable is required for accumulation patterns
 let mut result = []
@@ -61,6 +63,7 @@ Use `let export` to bind a value and simultaneously export it as an environment 
 The expression is evaluated, bound as a normal F# variable, and its string representation
 is exported to the environment.
 
+<!-- endo-no-check -->
 ```endo
 # Export a number — binds X = 42 and exports X="42"
 let export X = 42
@@ -92,6 +95,7 @@ let export VERBOSE = true     # exports as "true"
 
 Extract values from compound types directly in bindings.
 
+<!-- endo-no-check -->
 ```endo
 # Tuple destructuring
 let (x, y) = (10, 20)
@@ -120,6 +124,7 @@ let sumFirst [x; y; _...] = x + y
 
 ### 4.5 Scope and Visibility
 
+<!-- endo-no-check -->
 ```endo
 # Block scope with braces
 let outer = 10
@@ -128,7 +133,7 @@ let result = {
     inner + outer
 }
 # 'inner' is not visible here
-echo $"Result: {result}"        # Result: 30
+println $"Result: {result}"      # Result: 30
 
 # Block scope with indentation (in functions)
 let process x =

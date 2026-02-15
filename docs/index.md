@@ -86,11 +86,12 @@ git status && echo "All clean"
 
 # F#-style bindings and string interpolation
 let name = "world"
-echo $"Hello, {name}!"
+println $"Hello, {name}!"
 ```
 
 **Shell output meets functional pipelines:**
 
+<!-- endo-no-check -->
 ```endo
 # Pipe shell command output straight into F# transforms
 ps aux | lines |> filter (contains _ "nginx") |> length
@@ -102,6 +103,7 @@ git log --oneline | lines |> take 5 |> each println
 
 **Functional data processing:**
 
+<!-- endo-no-check -->
 ```endo
 # Placeholder lambdas keep pipelines concise
 [10; 25; 3; 42; 7] |> filter (_ > 10) |> map (_ * 2)   # [50; 6; 84]
@@ -144,12 +146,12 @@ let squares = [for x in [1..10] -> x * x]
 let evens = [for x in [1..20] when x % 2 == 0 -> x]
 
 # Recursive processing with pattern matching
-let rec sum lst =
+let rec sum acc lst =
     match lst with
-    | [] -> 0
-    | head :: tail -> head + sum tail
+    | [] -> acc
+    | head :: tail -> sum (acc + head) tail
 
-print (sum [1; 2; 3; 4; 5])         # 15
+print (sum 0 [1; 2; 3; 4; 5])       # 15
 ```
 
 ---

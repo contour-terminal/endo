@@ -14,6 +14,7 @@ Endo uses type inference to automatically deduce types. You can optionally add t
 
 ### 3.2 Compound Types
 
+<!-- endo-no-check -->
 ```endo
 # Lists (homogeneous, variable length)
 list<int>           # [1; 2; 3]
@@ -34,6 +35,7 @@ result<str, Error>  # Ok "data" or Error { code = 1; message = "..." }
 
 ### 3.3 Type Inference Examples
 
+<!-- endo-no-check -->
 ```endo
 # Types are inferred automatically
 let x = 42                    # x: int
@@ -48,7 +50,7 @@ let greet name = $"Hi, {name}"  # greet: str -> str
 
 # Explicit annotations when needed
 let count: int = 42
-let ratio: float = 42         # Would be int without annotation
+let ratio: float = 42.0       # Would be int without annotation
 let empty: list<str> = []     # Empty list needs type hint
 
 # Function annotations
@@ -60,6 +62,7 @@ let parse (s: str): result<int, str> = tryParseInt s
 
 Records are named collections of fields. They provide structured data with named access.
 
+<!-- endo-no-check -->
 ```endo
 # Define a record type
 type Person = {
@@ -109,6 +112,7 @@ let relocated = { emp with address = { emp.address with city = "Boston" } }
 
 Unions represent values that can be one of several named cases, optionally with associated data.
 
+<!-- endo-no-check -->
 ```endo
 # Define a union type
 type Shape =

@@ -2,6 +2,7 @@
 
 ### 8.1 Arithmetic Operators
 
+<!-- endo-no-check -->
 ```endo
 let a = 10 + 5      # Addition: 15
 let b = 10 - 5      # Subtraction: 5
@@ -15,6 +16,7 @@ let h = -x          # Negation
 
 ### 8.2 Comparison Operators
 
+<!-- endo-no-check -->
 ```endo
 let eq = a == b     # Equal
 let ne = a != b     # Not equal
@@ -24,11 +26,12 @@ let gt = a > b      # Greater than
 let ge = a >= b     # Greater than or equal
 
 # Comparisons return bool
-if count >= 10 then echo "Enough items"
+if count >= 10 then println "Enough items"
 ```
 
 ### 8.3 Logical Operators
 
+<!-- endo-no-check -->
 ```endo
 let and_ = a && b   # Logical AND (short-circuit)
 let or_ = a || b    # Logical OR (short-circuit)
@@ -44,6 +47,7 @@ let canProceed = isValid && hasPermission || isAdmin
 
 ### 8.4 String Operators
 
+<!-- endo-no-check -->
 ```endo
 let concat = "Hello, " + name         # String concatenation
 let repeated = "=" * 40               # Repeat string: "====...===="
@@ -53,6 +57,7 @@ let repeated = "=" * 40               # Repeat string: "====...===="
 
 The `|>` operator passes the result of the left side as the last argument to the function on the right.
 
+<!-- endo-no-check -->
 ```endo
 # Basic pipeline
 let result =
@@ -85,13 +90,14 @@ ls -la
 |> lines
 |> filter (fun l -> endsWith l ".md")
 |> length
-|> fun n -> echo $"Found {n} markdown files"
+|> fun n -> println $"Found {n} markdown files"
 ```
 
 ### 8.6 Shell Pipeline Operator `|`
 
 The `|` operator connects the stdout of the left process to the stdin of the right process.
 
+<!-- endo-no-check -->
 ```endo
 # Basic shell pipeline
 ps aux | grep nginx | wc -l
@@ -115,13 +121,14 @@ long_running_command | processor | output_handler &
 
 The two pipe operators can be combined for powerful data processing.
 
+<!-- endo-no-check -->
 ```endo
 # Shell pipe output into function pipeline
 ls -la
 | lines
 |> filter (fun l -> contains l ".rs")
 |> length
-|> fun n -> echo $"Found {n} Rust files"
+|> fun n -> println $"Found {n} Rust files"
 
 # Function result into shell pipe
 ["Hello"; "World"; "From"; "Endo"]

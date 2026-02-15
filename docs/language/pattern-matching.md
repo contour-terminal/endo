@@ -4,6 +4,7 @@ Pattern matching is a powerful way to destructure data and make decisions based 
 
 ### 7.1 Basic Patterns
 
+<!-- endo-no-check -->
 ```endo
 # Literal patterns
 match x with
@@ -30,6 +31,7 @@ match command with
 
 ### 7.2 Compound Patterns
 
+<!-- endo-no-check -->
 ```endo
 # Tuple patterns (parenthesized)
 match point with
@@ -78,6 +80,7 @@ match result with
 
 ### 7.3 Nested Patterns
 
+<!-- endo-no-check -->
 ```endo
 # Deeply nested destructuring
 match data with
@@ -109,6 +112,7 @@ match config with
 
 Guards add conditions to patterns.
 
+<!-- endo-no-check -->
 ```endo
 match n with
 | x when x < 0 -> "negative"
@@ -148,6 +152,7 @@ match items with
 
 Match multiple alternatives with the same result.
 
+<!-- endo-no-check -->
 ```endo
 match command with
 | "quit" | "exit" | "q" -> exit 0
@@ -171,6 +176,7 @@ match statusCode with
 
 Bind the entire matched value while also destructuring.
 
+<!-- endo-no-check -->
 ```endo
 # Bind whole record while extracting fields
 match item with

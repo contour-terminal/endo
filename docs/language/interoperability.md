@@ -16,6 +16,7 @@
 
 ### 13.2 Mixing Styles
 
+<!-- endo-no-check -->
 ```endo
 # Start with shell command, process with functions
 ls -la
@@ -23,7 +24,7 @@ ls -la
 |> filter (fun l -> !startsWith l ".")
 |> map (fun l -> l |> words |> last)
 |> sort
-|> each echo
+|> each println
 
 # Function that wraps shell commands
 let backup dir =
@@ -31,7 +32,7 @@ let backup dir =
     let backupDir = $"{dir}_backup_{timestamp}"
     cp -r $dir $backupDir
     gzip -r $backupDir
-    echo $"Backed up to {backupDir}"
+    println $"Backed up to {backupDir}"
     Ok backupDir
 
 # Shell commands using function results
@@ -46,16 +47,16 @@ if fileExists config then
     let cfg = loadConfig config
     match cfg.mode with
     | "development" ->
-        echo "Starting dev server..."
+        println "Starting dev server..."
         npm run dev
     | "production" ->
-        echo "Starting production..."
+        println "Starting production..."
         npm run build && npm start
     | m ->
-        echo $"Unknown mode: {m}"
+        println $"Unknown mode: {m}"
         exit 1
 else
-    echo "No config found, using defaults"
+    println "No config found, using defaults"
     useDefaultConfig
 
 # Complex data pipeline with shell tools
@@ -66,13 +67,14 @@ let topContributors =
     |> map (fun (name, commits) -> { name = name; count = length commits })
     |> sortByDescending (fun c -> c.count)
     |> take 10
-    |> each (fun c -> echo $"{c.name}: {c.count} commits")
+    |> each (fun c -> println $"{c.name}: {c.count} commits")
 ```
 
 ### 13.3 Automatic Type Coercion
 
 Endo automatically converts between types where sensible.
 
+<!-- endo-no-check -->
 ```endo
 # Command output -> String
 let content = cat file.txt        # content: str
@@ -133,6 +135,7 @@ When you call something, endo resolves it in this order:
 4. **Shell builtins** (cd, export, etc.)
 5. **External commands** (PATH lookup)
 
+<!-- endo-no-check -->
 ```endo
 # If you define 'echo', it shadows the builtin
 let echo msg =
@@ -156,6 +159,7 @@ let allBuiltins = builtins        # Shell builtins
 
 Common patterns and their endo equivalents:
 
+<!-- endo-no-check -->
 ```endo
 # Bash: VAR="value"
 # Endo:

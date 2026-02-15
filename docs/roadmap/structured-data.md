@@ -20,7 +20,7 @@ Instead of parsing text with `awk`, `sed`, and `grep`:
 
 ```endo
 # Instead of: ps aux | grep 'endo' | awk '{print $2}'
-ps |> filter (_.name == "endo") |> map _.pid
+ps |> filter (_.command == "endo") |> map _.pid
 ```
 
 ## Phase 6.1: Core Infrastructure -- Complete

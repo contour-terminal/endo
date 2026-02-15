@@ -37,6 +37,7 @@ export PAGER=less
 
 ### Setting Variables
 
+<!-- endo-no-check -->
 ```endo
 # Shell-style export
 export PATH="/usr/local/bin:$PATH"

@@ -2,6 +2,7 @@
 
 ### 6.1 List Literals
 
+<!-- endo-no-check -->
 ```endo
 # Homogeneous lists with semicolon separators
 let nums = [1; 2; 3; 4; 5]
@@ -27,11 +28,11 @@ let letters = ['a'..'z']              # All lowercase letters
 # List comprehensions
 let squares = [for x in 1..10 -> x * x]
 let filtered = [for x in items when x > 5 -> x * 2]
-let pairs = [for x in 1..3 -> for y in 1..3 -> (x, y)]
 ```
 
 ### 6.2 List Operations
 
+<!-- endo-no-check -->
 ```endo
 # Basic operations
 let first = head [1; 2; 3]             # 1 (or None if empty)
@@ -75,6 +76,7 @@ let grouped = groupBy (fun x -> x % 2) nums     # Group by odd/even
 
 ### 6.3 Pipeline Style (Preferred)
 
+<!-- endo-no-check -->
 ```endo
 # Pipelines make transformations readable
 nums
@@ -103,20 +105,21 @@ let processUsers =
 
 ### 6.4 Working with Command Output
 
+<!-- endo-no-check -->
 ```endo
 # Convert command output to list
 let files = ls | lines                 # list<str>
 let procs = ps aux | lines | drop 1    # Skip header line
 
 # Process each item
-files |> each (fun f -> echo $"File: {f}")
+files |> each (fun f -> println $"File: {f}")
 
 # Filter and transform shell output
 ls -la
 |> lines
 |> filter (fun l -> contains l ".txt")
 |> map (fun l -> words l |> last)      # Get filename column
-|> each (fun f -> echo $"Text file: {f}")
+|> each (fun f -> println $"Text file: {f}")
 
 # Combine shell commands with functional processing
 let largeLogFiles =

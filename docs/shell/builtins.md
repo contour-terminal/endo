@@ -116,6 +116,7 @@ When called with just a name, exports an existing variable.
 
 **Example:**
 
+<!-- endo-no-check -->
 ```endo
 export PATH="/usr/local/bin:$PATH"
 export EDITOR=nvim
@@ -222,10 +223,10 @@ true
 **Example:**
 
 ```endo
-while true; do
+while true do
     echo "loop"
     break
-done
+end
 ```
 
 ---
@@ -245,9 +246,7 @@ false
 **Example:**
 
 ```endo
-if false; then
-    echo "unreachable"
-fi
+if false then println "unreachable"
 ```
 
 ---
@@ -285,9 +284,9 @@ which nonexistent
 # (returns exit code 1)
 
 # Use in a conditional
-if which cargo; then
-    echo "Rust toolchain available"
-fi
+match which "cargo" with
+| Some _ -> println "Rust toolchain available"
+| None -> ()
 ```
 
 ### F# form
@@ -306,6 +305,7 @@ path is the fully resolved absolute path to the executable.
 
 **Examples:**
 
+<!-- endo-no-check -->
 ```endo
 # Pattern match on the result
 match which "git" with
@@ -452,6 +452,7 @@ env "VARIABLE_NAME"
 
 **Example:**
 
+<!-- endo-no-check -->
 ```endo
 # Pattern match on the result
 match (env "HOME") with

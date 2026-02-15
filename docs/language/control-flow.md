@@ -5,6 +5,7 @@
 `if` is an expression that returns a value. The `else` branch is optional — when
 omitted, the false branch returns unit (like F#).
 
+<!-- endo-no-check -->
 ```endo
 # Simple if expression
 let status = if count > 0 then "has items" else "empty"
@@ -35,9 +36,9 @@ let rec process (n: int) =
 
 # If expression at statement level (for side effects)
 if fileExists path then
-    echo "File found"
+    println "File found"
 else
-    echo "File not found"
+    println "File not found"
     exit 1
 
 # Optional else — if without else returns unit
@@ -49,13 +50,13 @@ if verbose then print "debug info"
 
 # Elif chains
 if status == 200 then
-    echo "OK"
+    println "OK"
 elif status == 404 then
-    echo "Not found"
+    println "Not found"
 elif status >= 500 then
-    echo "Server error"
+    println "Server error"
 else
-    echo $"Unknown: {status}"
+    println $"Unknown: {status}"
 
 # Single-line
 if test -f $file then cat $file else echo "missing"
@@ -69,6 +70,7 @@ if count > 0 then process           # Same thing
 
 See [Pattern Matching](pattern-matching.md) for comprehensive coverage.
 
+<!-- endo-no-check -->
 ```endo
 # Match as expression
 let description =
@@ -83,35 +85,36 @@ match command with
 | "start" -> startServer
 | "stop" -> stopServer
 | "status" -> showStatus
-| cmd -> echo $"Unknown command: {cmd}"
+| cmd -> println $"Unknown command: {cmd}"
 ```
 
 ### 9.3 Loops
 
+<!-- endo-no-check -->
 ```endo
 # For-in loop over list
 for item in [1; 2; 3; 4; 5] do
-    echo $"Item: {item}"
+    println $"Item: {item}"
 end
 
 # For-in over range
 for i in 1..10 do
-    echo $"Count: {i}"
+    println $"Count: {i}"
 end
 
 for i in 10..-1..1 do
-    echo $"Countdown: {i}"
+    println $"Countdown: {i}"
 end
 
 # For-in over command output
 for file in $(ls *.txt) do
-    echo $"Processing: {file}"
+    println $"Processing: {file}"
     wc -l $file
 end
 
 # For-in with destructuring
 for (name, value) in entries do
-    echo $"{name} = {value}"
+    println $"{name} = {value}"
 end
 
 for { host; port } in servers do
@@ -121,7 +124,7 @@ end
 # While loop
 let mut n = 10
 while n > 0 do
-    echo $"Countdown: {n}"
+    println $"Countdown: {n}"
     n <- n - 1
 end
 

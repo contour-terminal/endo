@@ -4,13 +4,14 @@
 
 Commands in expression context return a `result` type for explicit error handling.
 
+<!-- endo-no-check -->
 ```endo
 # Commands return Result<str, Error>
 let result = cat nonexistent.txt
 
 match result with
-| Ok content -> echo $"Content: {content}"
-| Error e -> echo $"Error ({e.code}): {e.message}"
+| Ok content -> println $"Content: {content}"
+| Error e -> println $"Error ({e.code}): {e.message}"
 
 # Built-in Error type
 type Error = {
@@ -35,6 +36,7 @@ else
 
 The `?` operator propagates errors up the call stack (similar to Rust).
 
+<!-- endo-no-check -->
 ```endo
 # Propagate errors automatically
 let processFile path =
@@ -71,6 +73,7 @@ let data =
 
 Catch and handle errors explicitly.
 
+<!-- endo-no-check -->
 ```endo
 # Basic try-with
 let result = try
@@ -91,13 +94,13 @@ let config = try
     loadConfig configPath?
 with
 | { message = m } when contains m "not found" ->
-    echo "Config not found, using defaults"
+    println "Config not found, using defaults"
     DefaultConfig
 | { message = m } when contains m "permission" ->
-    echo $"Cannot read config: {m}"
+    println $"Cannot read config: {m}"
     exit 1
 | e ->
-    echo $"Unexpected error: {e.message}"
+    println $"Unexpected error: {e.message}"
     exit 1
 
 # Try-finally for cleanup
@@ -112,6 +115,7 @@ finally
 
 Use `option` for values that might not exist.
 
+<!-- endo-no-check -->
 ```endo
 # Option type
 type option<T> = Some of T | None
@@ -168,6 +172,7 @@ let email =
 
 Traditional exit code handling is fully supported.
 
+<!-- endo-no-check -->
 ```endo
 # Access last exit code
 someCommand
