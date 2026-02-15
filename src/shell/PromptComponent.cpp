@@ -122,6 +122,7 @@ void PromptComponent::setPromptConfig(PromptConfig config)
 void PromptComponent::setPromptContext(PromptContext context)
 {
     _context = std::move(context);
+    _moduleCacheValid = false; // Invalidate module cache on context change
 }
 
 void PromptComponent::render(tui::Canvas& canvas)
@@ -167,9 +168,17 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Render info line chrome above input
     if (chrome > 0)
     {
-        auto infoModules = evaluateModules(_config.infoLineModules);
-        auto rightModules = evaluateModules(_config.rightPromptModules);
-        _nextModuleRefresh = computeModuleRefreshDeadline();
+        // Use cached module results, re-evaluate only when cache is invalid or refresh deadline passed
+        if (!_moduleCacheValid
+            || (_nextModuleRefresh && std::chrono::steady_clock::now() >= *_nextModuleRefresh))
+        {
+            _cachedInfoModules = evaluateModules(_config.infoLineModules);
+            _cachedRightModules = evaluateModules(_config.rightPromptModules);
+            _nextModuleRefresh = computeModuleRefreshDeadline();
+            _moduleCacheValid = true;
+        }
+        auto const& infoModules = _cachedInfoModules;
+        auto const& rightModules = _cachedRightModules;
 
         // Info line background
         canvas.fill(tui::Rect { HorizontalMargin, topPad, contentWidth, 1 }, ' ', bgStyle);
@@ -265,9 +274,14 @@ void PromptComponent::render(tui::Canvas& canvas)
     auto const selStart = _inputField.selectionStart();
     auto const selEnd = _inputField.selectionEnd();
 
-    // Compute syntax highlighting for the full input text
+    // Compute syntax highlighting for the full input text (cached)
     auto const fullText = _inputField.text();
-    auto const highlightMap = computeHighlightMap(fullText);
+    if (fullText != _highlightCacheText)
+    {
+        _highlightCacheText = std::string(fullText);
+        _highlightCacheMap = computeHighlightMap(fullText);
+    }
+    auto const& highlightMap = _highlightCacheMap;
 
     // Compute diagnostics and build per-byte error map
     updateDiagnostics();
@@ -484,6 +498,7 @@ tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
     auto action = processInput(event);
     if (action != Action::None)
     {
+        flushDeferredUpdates();
         invalidate();
         return tui::EventResult::Handled;
     }
@@ -706,10 +721,12 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             return Action::Eof;
         case tui::InputFieldAction::Changed:
             resetHistoryCycling();
-            updateGhostText();
+            _inputField.clearGhostText(); // Remove stale suggestion immediately
+            _ghostTextDirty = true;
+            _ghostTextPendingSince = std::chrono::steady_clock::now();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
             if (popupWasVisible && popupDismissedByTyping)
-                updateCompletionPopup();
+                _completionPopupDirty = true;
             return Action::Changed;
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
@@ -742,8 +759,21 @@ void PromptComponent::updateGhostText()
         return;
     }
 
-    // Get suggestion from completer
+    // Check suggest cache — skip expensive completer call if text unchanged
+    if (text == _suggestCacheText)
+    {
+        if (_suggestCacheResult)
+            _inputField.setGhostText(*_suggestCacheResult);
+        else
+            _inputField.clearGhostText();
+        return;
+    }
+
+    // Cache miss — call completer and store result
     auto suggestion = _completer->suggest(text, cursor);
+    _suggestCacheText = std::string(text);
+    _suggestCacheResult = suggestion;
+
     if (suggestion)
         _inputField.setGhostText(*suggestion);
     else
@@ -827,6 +857,27 @@ void PromptComponent::updateCompletionPopup()
 
     // Update with selection preservation
     _completionPopup.updateItems(std::move(popupItems));
+}
+
+void PromptComponent::flushDeferredUpdates()
+{
+    if (_ghostTextDirty)
+    {
+        // Only flush once debounce period has elapsed
+        if (!_ghostTextPendingSince
+            || (std::chrono::steady_clock::now() - *_ghostTextPendingSince) >= GhostTextDebounceMs)
+        {
+            _ghostTextDirty = false;
+            _ghostTextPendingSince.reset();
+            updateGhostText();
+        }
+        // else: debounce not expired — keep dirty flag for next flush
+    }
+    if (_completionPopupDirty)
+    {
+        _completionPopupDirty = false;
+        updateCompletionPopup();
+    }
 }
 
 void PromptComponent::insertCompletion(std::string_view text)
@@ -965,10 +1016,50 @@ void PromptComponent::updateDiagnostics()
 {
     auto const text = std::string(_inputField.text());
     if (text == _diagnosticsContent)
+    {
+        // Text unchanged — check if debounce timer has fired
+        if (_diagnosticsPendingSince)
+        {
+            auto const elapsed = std::chrono::steady_clock::now() - *_diagnosticsPendingSince;
+            if (elapsed >= DiagnosticsDebounceMs)
+            {
+                _diagnosticsPendingSince.reset();
+                _diagnostics = endo::collectDiagnostics(text, _knownFSharpNames);
+            }
+        }
         return;
+    }
 
+    // Text changed — clear stale diagnostics and start debounce timer
     _diagnosticsContent = text;
-    _diagnostics = endo::collectDiagnostics(text, _knownFSharpNames);
+    _diagnostics.clear();
+    _diagnosticsPendingSince = std::chrono::steady_clock::now();
+}
+
+int PromptComponent::diagnosticsTimeoutMs() const
+{
+    if (!_diagnosticsPendingSince)
+        return -1;
+
+    auto const elapsed = std::chrono::steady_clock::now() - *_diagnosticsPendingSince;
+    auto const remaining = DiagnosticsDebounceMs - elapsed;
+    if (remaining <= std::chrono::milliseconds::zero())
+        return 0;
+
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+}
+
+int PromptComponent::ghostTextTimeoutMs() const
+{
+    if (!_ghostTextPendingSince)
+        return -1;
+
+    auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
+    auto const remaining = GhostTextDebounceMs - elapsed;
+    if (remaining <= std::chrono::milliseconds::zero())
+        return 0;
+
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
 }
 
 std::optional<endo::DiagnosticMessage> PromptComponent::diagnosticAt(int line, int character) const

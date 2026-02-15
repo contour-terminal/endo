@@ -7,6 +7,7 @@
 
 #include <endo-language/DiagnosticsCollector.hpp>
 #include <endo-language/HoverInfo.hpp>
+#include <endo-language/TokenClassification.hpp>
 
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
@@ -68,8 +69,20 @@ class PromptComponent: public tui::Component
     /// @brief Returns the current input text.
     [[nodiscard]] std::string_view text() const noexcept { return _inputField.text(); }
 
-    /// @brief Clears the input field.
-    void clear() { _inputField.clear(); }
+    /// @brief Clears the input field and invalidates caches.
+    void clear()
+    {
+        _inputField.clear();
+        _moduleCacheValid = false;
+        _highlightCacheText.clear();
+        _highlightCacheMap.clear();
+        _diagnosticsPendingSince.reset();
+        _ghostTextDirty = false;
+        _completionPopupDirty = false;
+        _ghostTextPendingSince.reset();
+        _suggestCacheText.clear();
+        _suggestCacheResult.reset();
+    }
 
     /// @brief Adds an entry to the command history.
     void addHistory(std::string entry) { _inputField.addHistory(std::move(entry)); }
@@ -127,6 +140,16 @@ class PromptComponent: public tui::Component
 
     /// @brief Returns ms until next module refresh, or -1 if no module needs refresh.
     [[nodiscard]] int moduleRefreshTimeoutMs() const;
+
+    /// @brief Returns ms until diagnostics debounce fires, or -1 if no diagnostics pending.
+    [[nodiscard]] int diagnosticsTimeoutMs() const;
+
+    /// @brief Returns ms until ghost text debounce fires, or -1 if not pending.
+    [[nodiscard]] int ghostTextTimeoutMs() const;
+
+    /// @brief Flushes deferred ghost text and completion popup updates.
+    /// Call once per event batch, before drawing.
+    void flushDeferredUpdates();
 
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
@@ -216,10 +239,35 @@ class PromptComponent: public tui::Component
     /// @return Pair of (start, end) columns in screen coordinates.
     [[nodiscard]] std::pair<int, int> getCommandBounds() const;
 
+    // Module evaluation cache (avoids popen calls during typing)
+    std::vector<PromptSegments> _cachedInfoModules;  ///< Cached info line module results.
+    std::vector<PromptSegments> _cachedRightModules; ///< Cached right prompt module results.
+    bool _moduleCacheValid = false;                  ///< Whether cached module results are current.
+
+    // Syntax highlighting cache (avoids re-tokenizing on every render)
+    std::string _highlightCacheText;               ///< Input text that _highlightCacheMap corresponds to.
+    std::vector<TokenCategory> _highlightCacheMap; ///< Cached per-byte highlight map.
+
+    // Deferred update flags (set during batch, flushed once before draw)
+    bool _ghostTextDirty = false;       ///< Ghost text needs recomputation.
+    bool _completionPopupDirty = false; ///< Completion popup needs re-filtering.
+
+    // Ghost text debounce timer
+    std::optional<std::chrono::steady_clock::time_point> _ghostTextPendingSince;
+    static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
+
+    // suggest() result cache (avoids repeated filesystem/history lookups)
+    std::string _suggestCacheText;                  ///< Input text the cache corresponds to.
+    std::optional<std::string> _suggestCacheResult; ///< Cached suggestion (nullopt = no suggestion).
+
     // Diagnostics cache for parse error underlines
     std::vector<endo::DiagnosticMessage> _diagnostics;
     std::string _diagnosticsContent;         ///< Input text that _diagnostics corresponds to.
     std::set<std::string> _knownFSharpNames; ///< Persisted F# names from prior REPL prompts.
+
+    // Diagnostics debounce timer
+    std::optional<std::chrono::steady_clock::time_point> _diagnosticsPendingSince;
+    static constexpr auto DiagnosticsDebounceMs = std::chrono::milliseconds(300);
 
     /// @brief Recomputes diagnostics if the input text has changed.
     void updateDiagnostics();

@@ -127,38 +127,38 @@ std::string Prompt::read()
     // Event loop
     while (ready())
     {
-        // Combine hover timeout with module auto-refresh timeout
+        // Combine hover, module auto-refresh, diagnostics debounce, and ghost text debounce timeouts
         auto const hoverTimeout = _screen->pollTimeoutMs();
         auto const moduleTimeout = _promptComponent->moduleRefreshTimeoutMs();
-        int timeout;
-        if (hoverTimeout < 0 && moduleTimeout < 0)
-            timeout = -1;
-        else if (hoverTimeout < 0)
-            timeout = moduleTimeout;
-        else if (moduleTimeout < 0)
-            timeout = hoverTimeout;
-        else
-            timeout = std::min(hoverTimeout, moduleTimeout);
+        auto const diagTimeout = _promptComponent->diagnosticsTimeoutMs();
+        auto const ghostTimeout = _promptComponent->ghostTextTimeoutMs();
+        auto timeout = -1;
+        for (auto const t: { hoverTimeout, moduleTimeout, diagTimeout, ghostTimeout })
+        {
+            if (t >= 0)
+                timeout = (timeout < 0) ? t : std::min(timeout, t);
+        }
         auto events = _terminal.poll(timeout);
 
-        // If no events received (timeout), process hover timer
+        // If no events received (timeout), process hover timer, pending diagnostics, and ghost text
         if (events.empty())
         {
             _screen->tickHover();
-            _screen->draw(); // Redraw in case tooltip was shown
+            _promptComponent->flushDeferredUpdates();
+            auto pSize = _promptComponent->preferredSize();
+            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _screen->draw(); // Redraw in case tooltip was shown or diagnostics/modules/ghost text updated
             continue;
         }
 
+        auto needsRedraw = false;
         for (auto const& event: events)
         {
             // Handle resize events
             if (std::holds_alternative<tui::ResizeEvent>(event))
             {
                 onResize();
-                // Update component area
-                auto pSize = _promptComponent->preferredSize();
-                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
-                _screen->draw();
+                needsRedraw = true;
                 continue;
             }
 
@@ -212,13 +212,7 @@ std::string Prompt::read()
                     _terminal.output().flush();
                     _aborted = true;
                     return {};
-                case PromptComponent::Action::Changed: {
-                    // Update component area for potential size change
-                    auto pSize = _promptComponent->preferredSize();
-                    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
-                    _screen->draw();
-                    break;
-                }
+                case PromptComponent::Action::Changed: needsRedraw = true; break;
                 case PromptComponent::Action::ClearScreen: {
                     // Clear screen and move prompt to top
                     auto& out = _terminal.output();
@@ -226,14 +220,19 @@ std::string Prompt::read()
                     out.flush();
                     // Reset cursor tracking since screen was cleared and cursor moved to top
                     _screen->releaseCursor();
-                    // Update component area and redraw
-                    auto pSize = _promptComponent->preferredSize();
-                    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
-                    _screen->draw();
+                    needsRedraw = true;
                     break;
                 }
                 case PromptComponent::Action::None: break;
             }
+        }
+
+        if (needsRedraw)
+        {
+            _promptComponent->flushDeferredUpdates();
+            auto pSize = _promptComponent->preferredSize();
+            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _screen->draw();
         }
     }
 
@@ -316,6 +315,7 @@ std::optional<std::string> Prompt::processInput()
                 _aborted = true;
                 return std::string {};
             case PromptComponent::Action::Changed: {
+                _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
                 _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
                 _screen->draw();
@@ -329,6 +329,7 @@ std::optional<std::string> Prompt::processInput()
                 // Reset cursor tracking since screen was cleared and cursor moved to top
                 _screen->releaseCursor();
                 // Update component area and redraw
+                _promptComponent->flushDeferredUpdates();
                 auto pSize = _promptComponent->preferredSize();
                 _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
                 _screen->draw();
