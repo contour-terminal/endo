@@ -37,6 +37,43 @@ let times10 = multiplyBy 10
 [1; 2; 3] |> map times10      # [10; 20; 30]
 ```
 
+### 5.1.1 Unit Parameter
+
+Functions that take no meaningful input use the unit parameter `()` to indicate they are called for their side effects.
+
+```endo
+# Side-effecting function with unit parameter
+let greet () = print "hello"
+greet ()
+```
+
+```endo
+# Unit parameter with return type annotation
+let answer (): int = 42
+print (answer ())
+```
+
+```endo
+# Unit parameter with closures
+let x = 10
+let getX () = x
+print (getX ())
+```
+
+```endo
+# Unit parameter in lambdas
+let f = fun () -> 42
+print (f ())
+```
+
+Unit parameters can be mixed with regular parameters — the `()` simply occupies one parameter position:
+
+<!-- endo-no-check -->
+```endo
+let greetAndAdd () (x: int) = x + 1
+let result = greetAndAdd () 5     # 6
+```
+
 ### 5.2 Multi-line Functions
 
 <!-- endo-no-check -->
