@@ -7577,3 +7577,102 @@ TEST_CASE("IRGenerator.FSharp.rand_in_pipeline")
         executeSourceAndGetOutput("rand 1 10 |> fun n -> print (if n >= 1 && n <= 10 then 1 else 0)");
     CHECK(output == "1");
 }
+
+// =============================================================================
+// exec keyword — dynamic command execution with pipe support
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.exec_single_command")
+{
+    // Single exec with literal program path and argument
+    CHECK(executeSourceAndGetOutput(R"(exec "/bin/echo" "hello")") == "hello\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_multiple_args")
+{
+    // exec with multiple arguments
+    CHECK(executeSourceAndGetOutput(R"(exec "/bin/echo" "hello" "world")") == "hello world\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_variable_program_path")
+{
+    // Variable program path
+    CHECK(executeSourceAndGetOutput(R"(let p = "/bin/echo"; exec p "hi")") == "hi\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_variable_argument")
+{
+    // Variable arguments
+    CHECK(executeSourceAndGetOutput(R"(let arg = "hello"; exec "/bin/echo" arg)") == "hello\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_ir_generation")
+{
+    // IR generation succeeds for exec
+    CHECK(generatesIRSuccessfully(R"(exec "/bin/echo" "hello")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_pipeline_ir_generation")
+{
+    // IR generation succeeds for piped exec
+    CHECK(generatesIRSuccessfully(R"(exec "/bin/echo" "hello" | exec "/bin/cat")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_three_stage_pipeline_ir")
+{
+    // IR generation succeeds for three-stage pipeline
+    CHECK(generatesIRSuccessfully(
+        R"(exec "/bin/echo" "hello" | exec "/bin/tr" "a-z" "A-Z" | exec "/bin/cat")"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_in_match_arm")
+{
+    // exec inside match arm (parenthesized to disambiguate from |)
+    CHECK(generatesIRSuccessfully(R"(
+let x = Some "/bin/echo"
+match x with
+| Some p -> (exec p "test")
+| None -> ()
+)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_with_which")
+{
+    // The motivating use case: which + match + exec
+    CHECK(generatesIRSuccessfully(R"(
+match which "echo" with
+| Some p -> (exec p "found it")
+| None -> println "not found"
+)"));
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_with_tuple_pattern_match")
+{
+    // exec with pattern-matched variables from tuple scrutinee.
+    // The bindings get Object/Void-typed allocas from tuple extraction,
+    // but are strings at runtime. ensureString must cast them correctly.
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("echo", "/bin/echo");
+    rt.setMockWhichPath("cat", "/bin/cat");
+    CHECK(executeSourceAndGetOutput(R"(
+match (which "echo", which "cat") with
+| (Some f, Some l) -> exec f "hello"
+| (Some f, None) -> exec f "hello"
+| (None, Some l) -> exec l
+| (None, None) -> println "none"
+)") == "hello\n");
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.FSharp.exec_with_tuple_pattern_match_ir")
+{
+    // IR generation for exec with tuple pattern-matched variables
+    CHECK(generatesIRSuccessfully(R"(
+match (which "echo", which "cat") with
+| (Some f, Some l) -> exec f "tuple test" | exec l
+| (Some f, None) -> exec f "only first"
+| (None, Some l) -> exec "/bin/echo" "fallback" | exec l
+| (None, None) -> println "none found"
+)"));
+}

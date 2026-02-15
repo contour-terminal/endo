@@ -125,6 +125,21 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
         .returnType(CoreVM::LiteralType::Number)
         .bind(dummyHandler);
 
+    runtime.registerFunction("internal.cmd_start")
+        .param<CoreVM::CoreString>("cmd")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("internal.cmd_arg")
+        .param<CoreVM::CoreString>("arg")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(dummyHandler);
+
+    runtime.registerFunction("internal.cmd_exec_piped")
+        .param<bool>("last_in_chain")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(dummyHandler);
+
     runtime.registerFunction("setvar.exitstatus")
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void)

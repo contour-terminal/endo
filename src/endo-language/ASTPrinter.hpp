@@ -100,6 +100,7 @@ class ASTPrinter: public Visitor
     void visit(OptionalChainExpr const& node) override;
     void visit(UnionTypeDefStmt const& node) override;
     void visit(UnionConstructorExpr const& node) override;
+    void visit(ExecPipelineExpr const& node) override;
 
   private:
     void printArithExpr(ArithExpr const* expr);

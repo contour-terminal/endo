@@ -138,6 +138,7 @@ class Parser
         size_t referenceColumn, std::optional<std::string_view> terminatorKeyword = std::nullopt);
     std::unique_ptr<ast::Expr> parseShellCommandExpr(); // & git status (shell command in F# context)
     std::unique_ptr<ast::Expr> parseTryWith();          // try expr with ... | try expr finally ...
+    std::unique_ptr<ast::Expr> parseExecPipeline();     // exec prog args | exec prog args
 
     // Type definitions (records and discriminated unions)
     std::unique_ptr<ast::Statement> parseTypeDefinition(); // type T = { ... } or type T = | A | B of int

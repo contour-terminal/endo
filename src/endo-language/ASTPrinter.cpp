@@ -1064,4 +1064,20 @@ void ASTPrinter::visit(UnionConstructorExpr const& node)
     }
 }
 
+void ASTPrinter::visit(ExecPipelineExpr const& node)
+{
+    for (size_t i = 0; i < node.commands.size(); ++i)
+    {
+        if (i > 0)
+            _result += " | ";
+        _result += "exec ";
+        node.commands[i].program->accept(*this);
+        for (auto const& arg: node.commands[i].arguments)
+        {
+            _result += ' ';
+            arg->accept(*this);
+        }
+    }
+}
+
 } // namespace endo::ast

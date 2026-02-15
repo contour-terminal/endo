@@ -3076,6 +3076,23 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
     return nullptr; // Unsupported type
 }
 
+CoreVM::Value* IRGenerator::ensureString(CoreVM::Value* value, std::string_view label)
+{
+    if (value->type() == CoreVM::LiteralType::String)
+        return value;
+
+    // For Number-typed values, use convertToString which handles N2S correctly
+    if (value->type() == CoreVM::LiteralType::Number)
+        return convertToString(value, label);
+
+    // For Object/Void-typed values (e.g., from pattern matching on tuples),
+    // the runtime value is a string but the IR type is wrong.
+    // Reinterpret via typed alloca store/load to get a String-typed IR value.
+    auto* storage = createAllocaInEntryBlock(CoreVM::LiteralType::String, std::string(label) + ".cast");
+    _builder.createStore(storage, value);
+    return _builder.createLoad(storage, std::string(label) + ".str");
+}
+
 void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewline)
 {
     TRACE_SCOPE("generatePrintCall");
@@ -9096,6 +9113,55 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
 
     _result = obj;
     annotateObjectTypeId(_result, ctorInfo->typeId);
+}
+
+void IRGenerator::visit(ast::ExecPipelineExpr const& node)
+{
+    TRACE_SCOPE("visit(ExecPipelineExpr)");
+
+    auto* cmdStartCb = findCallback("internal.cmd_start(S)V");
+    auto* cmdArgCb = findCallback("internal.cmd_arg(S)V");
+
+    if (!cmdStartCb || !cmdArgCb)
+    {
+        reportTypeError("Internal error: command execution builtins not found");
+        return;
+    }
+
+    for (size_t i = 0; i < node.commands.size(); ++i)
+    {
+        auto const& cmd = node.commands[i];
+        bool const lastInChain = (i == node.commands.size() - 1);
+
+        // Emit cmd_start with dynamic program value (F# expression)
+        auto* progValue = codegen(cmd.program.get());
+        if (!progValue)
+        {
+            reportTypeError("Failed to evaluate exec program expression");
+            return;
+        }
+        // exec arguments are always strings at runtime. If the IR type is wrong
+        // (Object/Void from pattern matching), reinterpret as String via typed alloca.
+        // This avoids convertToString's N2S fallback which corrupts string pointers.
+        auto* progStr = ensureString(progValue, "exec.prog");
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cmdStartCb), { progStr }, "cmd_start");
+
+        // Emit cmd_arg for each argument (F# expressions)
+        for (auto const& arg: cmd.arguments)
+        {
+            auto* argValue = codegen(arg.get());
+            if (!argValue)
+            {
+                reportTypeError("Failed to evaluate exec argument expression");
+                return;
+            }
+            auto* argStr = ensureString(argValue, "exec.arg");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCb), { argStr }, "cmd_arg");
+        }
+
+        // Emit piped execution
+        _result = execBuiltCommandPiped(lastInChain);
+    }
 }
 
 // {{{ Builtin Higher-Order Function IR Generators

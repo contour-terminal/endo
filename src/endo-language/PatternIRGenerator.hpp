@@ -100,6 +100,10 @@ class PatternIRGenerator final: public pattern::PatternVisitor
     void visit(pattern::OrPattern const& pat) override;
     void visit(pattern::GuardedPattern const& pat) override;
 
+    /// Creates an alloca in the entry block of the current handler.
+    /// Required for allocas that must survive across basic blocks.
+    CoreVM::AllocaInstr* createAllocaInEntryBlock(CoreVM::LiteralType type, std::string const& name);
+
     CoreVM::IRBuilder& _builder;
     CoreVM::Value* _scrutinee = nullptr;
     CoreVM::AllocaInstr* _scrutineeStorage = nullptr; ///< Storage for reloading scrutinee across blocks

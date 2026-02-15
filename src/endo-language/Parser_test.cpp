@@ -1909,3 +1909,36 @@ TEST_CASE("Parser.FSharp.placeholder_no_parens_no_postfix")
     // Bare _ without postfix or parens is just IdentifierExpr("__x") — no lambda wrapping
     CHECK(parseAndPrintAST("let f = _") == "let f = __x");
 }
+
+// =============================================================================
+// exec keyword tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.exec_single_command")
+{
+    CHECK(parseAndPrintAST(R"(exec "/bin/echo" "hello")") == R"(exec "/bin/echo" "hello")");
+}
+
+TEST_CASE("Parser.FSharp.exec_piped_commands")
+{
+    CHECK(parseAndPrintAST(R"(exec "/bin/echo" "hello" | exec "/bin/cat")")
+          == R"(exec "/bin/echo" "hello" | exec "/bin/cat")");
+}
+
+TEST_CASE("Parser.FSharp.exec_variable_program")
+{
+    CHECK(parseAndPrintAST(R"(let p = "/bin/echo"; exec p "hi")") == R"(let p = "/bin/echo"; exec p "hi")");
+}
+
+TEST_CASE("Parser.FSharp.exec_three_stage_pipeline")
+{
+    CHECK(parseAndPrintAST(R"(exec "/bin/echo" "hello" | exec "/bin/tr" "a-z" "A-Z" | exec "/bin/cat")")
+          == R"(exec "/bin/echo" "hello" | exec "/bin/tr" "a-z" "A-Z" | exec "/bin/cat")");
+}
+
+TEST_CASE("Parser.FSharp.exec_in_parens")
+{
+    // Inside parentheses (e.g., match arms)
+    CHECK(parseAndPrintAST(R"(let r = (exec "/bin/echo" "hello" | exec "/bin/cat"))")
+          == R"(let r = (exec "/bin/echo" "hello" | exec "/bin/cat"))");
+}

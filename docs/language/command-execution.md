@@ -175,5 +175,46 @@ let next = $((counter + 1))
 echo "Result: $((a * b + c))"
 ```
 
+### 10.7 Dynamic Command Execution (`exec`)
+
+The `exec` keyword executes a dynamically-resolved program path with F# expression arguments.
+Unlike shell commands where the program name is a compile-time literal, `exec` takes runtime string
+values — enabling conditional command dispatch via `which` and pattern matching.
+
+```endo
+# Single command with literal path
+exec "/usr/bin/fortune"
+
+# With arguments
+exec "/usr/bin/fortune" "-s"
+
+# Pipeline via | — true OS-level streaming pipes
+exec "/usr/bin/fortune" | exec "/usr/bin/lolcat"
+
+# Three-stage pipeline
+exec "/bin/echo" "hello" | exec "/usr/bin/tr" "a-z" "A-Z" | exec "/bin/cat"
+
+# Variable program paths (the main use case)
+let f = "/usr/bin/fortune"
+let l = "/usr/bin/lolcat"
+exec f | exec l
+
+# F# expression arguments
+let flags = "-s"
+exec f flags
+
+# The motivating use case: which + match + exec
+match which "fortune", which "lolcat" with
+| Some f, Some l -> (exec f | exec l)
+| Some f, None   -> exec f
+| _              -> println "Commands not found"
+```
+
+**Key differences from shell `|` pipes:**
+- Program paths and arguments are F# expressions (variables, function calls, string literals)
+- True OS-level pipe semantics (stdout→stdin streaming)
+- Inside `match` arms, parentheses are needed: `(exec f | exec l)` to disambiguate `|` from arm separators
+- Returns the exit code of the last command in the pipeline
+
 ---
 **See also:** [Operators & Pipelines](operators-and-pipelines.md) | [Error Handling](error-handling.md) | [Interoperability](interoperability.md)

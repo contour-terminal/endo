@@ -261,6 +261,41 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
+            else if (_lexer.currentLiteral() == "exec")
+            {
+                // F# style exec — dynamic command execution with optional | piping
+                _lexer.enterFSharpExpr();
+                auto expr = parseExecPipeline();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Check for trailing |> pipeline (e.g., exec "/bin/echo" "hi" |> ...)
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken(); // consume |>
+                        step = parseFSharpComposition();
+                        if (!step)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    }
+                    _lexer.leaveFSharpExpr();
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
             else if ((_lexer.currentLiteral() == "ps" || _lexer.currentLiteral() == "ls"
                       || _lexer.currentLiteral() == "jobs")
                      && [this]() {
@@ -2552,7 +2587,7 @@ bool Parser::isFSharpPrimary() const noexcept
                 return false;
             // Contextual keywords that should not be treated as primary expressions
             if (lit == "in" || lit == "then" || lit == "else" || lit == "do" || lit == "end" || lit == "break"
-                || lit == "continue")
+                || lit == "continue" || lit == "exec")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -3999,6 +4034,65 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                            typeName,
                                            _lexer.currentLiteral());
         return nullptr;
+std::unique_ptr<ast::Expr> Parser::parseExecPipeline()
+{
+    TRACE_SCOPE("parseExecPipeline");
+
+    std::vector<ast::ExecPipelineExpr::Command> commands;
+
+    // Parse the first command (we're already positioned at "exec")
+    for (;;)
+    {
+        _lexer.nextToken(); // consume "exec"
+
+        // Parse program expression (F# primary)
+        auto program = parseFSharpPrimary();
+        if (!program)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add a program path after 'exec'" },
+                                               currentContextSnippet(),
+                                               "Expected program expression after 'exec'");
+            return nullptr;
+        }
+
+        // Parse argument expressions (while we have F# primaries)
+        std::vector<std::unique_ptr<ast::Expr>> arguments;
+        while (isFSharpPrimary())
+        {
+            auto arg = parseFSharpPrimary();
+            if (!arg)
+                break;
+            arguments.push_back(std::move(arg));
+        }
+
+        commands.push_back(ast::ExecPipelineExpr::Command { std::move(program), std::move(arguments) });
+
+        // Check for | followed by "exec" for piped exec commands.
+        // Two-token lookahead: save state, consume |, check next token.
+        if (_lexer.currentToken() != Token::Pipe)
+            break;
+
+        // Save current state to restore if | is not followed by "exec"
+        auto const pipeTok = _lexer.currentToken();
+        auto const pipeLit = std::string(_lexer.currentLiteral());
+        auto const pipeRange = _lexer.currentRange();
+        _lexer.nextToken(); // consume |
+
+        if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "exec")
+        {
+            // This is a piped exec — continue the loop (will consume "exec" at top)
+            continue;
+        }
+
+        // Not "exec" after | — push back both tokens (current → deferred, | → current)
+        _lexer.pushBackToken(pipeTok, pipeLit, pipeRange);
+        break;
+    }
+
+    return std::make_unique<ast::ExecPipelineExpr>(std::move(commands));
+}
+
     }
     _lexer.enterFSharpExpr();
     _lexer.nextToken(); // consume '='
@@ -4974,6 +5068,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
                 std::vector<std::unique_ptr<ast::Expr>> args;
                 std::optional<SourceLocationRange> lastArgLoc;
+            // exec expression: exec prog args | exec prog args
+            if (lit == "exec")
+                return parseExecPipeline();
+
                 if (payloadSlots > 0 && isFSharpPrimary())
                 {
                     auto arg = parseFSharpPrimary();

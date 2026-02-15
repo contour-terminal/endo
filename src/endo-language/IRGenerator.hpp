@@ -214,6 +214,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::OptionalChainExpr const& node) override;
     void visit(ast::UnionTypeDefStmt const& node) override;
     void visit(ast::UnionConstructorExpr const& node) override;
+    void visit(ast::ExecPipelineExpr const& node) override;
 
     /// Generates code for an arithmetic expression, returning an integer value.
     CoreVM::Value* codegenArith(ast::ArithExpr const* expr);
@@ -250,6 +251,14 @@ class IRGenerator final: public ast::Visitor
     /// Handles Number, Float, Boolean, Void/Object, and String types.
     /// @return String-typed value, or nullptr on unsupported types.
     CoreVM::Value* convertToString(CoreVM::Value* value, std::string_view label);
+
+    /// Ensures a value is String-typed for use in exec commands.
+    ///
+    /// For values that are already String-typed, returns them directly.
+    /// For values with non-String IR types (Object/Void from pattern matching)
+    /// that are strings at runtime, reinterprets via typed alloca store/load.
+    /// This avoids convertToString's N2S fallback which corrupts string pointers.
+    CoreVM::Value* ensureString(CoreVM::Value* value, std::string_view label);
 
     /// Emits IR to export a variable's current value as a shell environment variable.
     /// Loads the value from @p storage, converts to string, and calls the export callback.

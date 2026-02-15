@@ -11,6 +11,16 @@ PatternIRGenerator::PatternIRGenerator(CoreVM::IRBuilder& builder): _builder(bui
 {
 }
 
+CoreVM::AllocaInstr* PatternIRGenerator::createAllocaInEntryBlock(CoreVM::LiteralType type,
+                                                                  std::string const& name)
+{
+    auto* entryBlock = _builder.handler()->getEntryBlock();
+    auto allocaInstr = std::make_unique<CoreVM::AllocaInstr>(
+        type, _builder.get(CoreVM::CoreNumber(1)), _builder.makeName(name));
+    auto* inserted = entryBlock->insertAfterAllocas(std::move(allocaInstr));
+    return static_cast<CoreVM::AllocaInstr*>(inserted);
+}
+
 void PatternIRGenerator::compile(pattern::Pattern const& pattern,
                                  CoreVM::Value* scrutinee,
                                  CoreVM::AllocaInstr* scrutineeStorage,
@@ -259,9 +269,24 @@ void PatternIRGenerator::visit(pattern::TuplePattern const& pat)
                                ? _builder.createBlock("tuple.match." + std::to_string(i + 1))
                                : finalSuccess;
 
+        // For sub-patterns that create new basic blocks (ConstructorPattern, ConsPattern,
+        // ListPattern), we need scrutinee storage so they can reload across block boundaries.
+        // Simple patterns (Variable, Wildcard, Literal) don't need this.
+        CoreVM::AllocaInstr* slotStorage = nullptr;
+        auto const* elem = pat.elements[i].get();
+        if (dynamic_cast<pattern::ConstructorPattern const*>(elem)
+            || dynamic_cast<pattern::ConsPattern const*>(elem)
+            || dynamic_cast<pattern::ListPattern const*>(elem)
+            || dynamic_cast<pattern::AsPattern const*>(elem))
+        {
+            slotStorage =
+                createAllocaInEntryBlock(slotValue->type(), "tuple.slot." + std::to_string(i) + ".storage");
+            _builder.createStore(slotStorage, slotValue);
+        }
+
         // Compile the sub-pattern against the extracted slot
         _scrutinee = slotValue;
-        _scrutineeStorage = nullptr; // Sub-patterns don't need to reload from storage
+        _scrutineeStorage = slotStorage;
         _successBlock = subSuccess;
         // _failureBlock stays the same — any failure goes to the overall failure
 

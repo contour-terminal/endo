@@ -1691,4 +1691,29 @@ struct OptionalChainExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Pipeline of one or more dynamically-resolved exec commands connected by OS-level pipes.
+///
+/// Each command consists of a program path (F# expression evaluating to a string)
+/// and zero or more argument expressions.
+///
+/// Examples:
+/// - `exec "/bin/echo" "hello"` — single command
+/// - `exec f "-s" | exec l` — piped commands with dynamic program paths
+/// - `exec "/bin/cat" "/etc/hostname" | exec "/bin/tr" "a-z" "A-Z"` — multi-stage pipeline
+struct ExecPipelineExpr final: public Expr
+{
+    /// A single exec command: program path and arguments, all F# expressions.
+    struct Command
+    {
+        std::unique_ptr<Expr> program;                ///< F# expression evaluating to the command path
+        std::vector<std::unique_ptr<Expr>> arguments; ///< F# expressions evaluating to argument strings
+    };
+
+    std::vector<Command> commands; ///< Commands in the pipeline (connected by OS-level pipes)
+
+    explicit ExecPipelineExpr(std::vector<Command> cmds): commands(std::move(cmds)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 } // namespace endo::ast

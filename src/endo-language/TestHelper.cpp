@@ -805,6 +805,35 @@ TestRuntime::TestRuntime()
             }
             args.setResult(CoreVM::CoreNumber(0));
         });
+    runtime.registerFunction("internal.cmd_exec_piped")
+        .param<bool>("last_in_chain")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const lastInChain = args.getBool(1);
+            // Mock piped exec: simulate "echo" by writing args to output buffer
+            if (mockCmdName == "echo" || mockCmdName == "/bin/echo")
+            {
+                std::string output;
+                for (size_t i = 0; i < mockCmdArgs.size(); ++i)
+                {
+                    if (i > 0)
+                        output += ' ';
+                    output += mockCmdArgs[i];
+                }
+                output += '\n';
+                if (mockSubstActive)
+                    mockSubstBuffer += output;
+                else
+                    capturedOutput += output;
+            }
+            else if (mockCmdName == "cat" || mockCmdName == "/bin/cat")
+            {
+                // cat in a pipe context: pass through (output stays from previous command)
+                // For single-command cat with args, simulate reading
+            }
+            (void) lastInChain;
+            args.setResult(CoreVM::CoreNumber(0));
+        });
     runtime.registerFunction("getvar.exitstatus")
         .returnType(CoreVM::LiteralType::Number)
         .bind([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); });

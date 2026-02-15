@@ -86,6 +86,7 @@ struct FieldAccessExpr;
 struct OptionalChainExpr;
 struct UnionTypeDefStmt;
 struct UnionConstructorExpr;
+struct ExecPipelineExpr;
 
 struct Visitor
 {
@@ -185,6 +186,9 @@ struct Visitor
     // Discriminated unions
     virtual void visit(UnionTypeDefStmt const&) = 0;
     virtual void visit(UnionConstructorExpr const&) = 0;
+
+    // Dynamic command execution
+    virtual void visit(ExecPipelineExpr const&) = 0;
 };
 
 } // namespace endo::ast
