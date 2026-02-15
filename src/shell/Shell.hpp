@@ -61,6 +61,9 @@ class Shell final
 
     void setOptimize(bool optimize);
 
+    /// Set check-only mode (compile without executing).
+    void setCheckOnly(bool checkOnly) noexcept { _checkOnly = checkOnly; }
+
     /// Set interactive mode (controls prompts, job notifications, etc.)
     void setInteractive(bool interactive);
 
@@ -261,6 +264,7 @@ class Shell final
     CoreVM::Runner::Globals _globals;
 
     bool _optimize = false;
+    bool _checkOnly = false;
 
     struct PipelineBuilder
     {

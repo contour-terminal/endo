@@ -164,6 +164,23 @@ target_compile_definitions(test-endo-shell PRIVATE
 
 add_test(NAME test-endo-shell COMMAND test-endo-shell)
 
+# Documentation snippet validation test
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_FOUND)
+    add_test(
+        NAME check-doc-snippets
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/scripts/check-doc-snippets.py
+            --endo-path $<TARGET_FILE:endo-bin>
+            --allow-failures
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(check-doc-snippets PROPERTIES
+        TIMEOUT 120
+        LABELS "docs"
+    )
+endif()
+
 # Enable sanitizers for all targets
 enable_sanitizers(endo-shell)
 enable_sanitizers(endo-bin)

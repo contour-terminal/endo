@@ -941,6 +941,29 @@ and user muscle memory. Backslashes remain valid in user input but are normalize
 **Priority:** Medium
 **Rationale:** Enables debugging and profiling of shell scripts; differentiator for power users.
 
+### Phase 5.0: Documentation Snippet Validation ✅
+
+**Status:** Complete
+
+**Dependency:** None
+
+**Rationale:** As the language evolves, code snippets in documentation can silently break. Automated
+validation catches these regressions early. The `--check` flag also enables external tools and editors
+to perform syntax/semantic validation without executing code.
+
+**Tasks:**
+- [x] Add `--check` CLI flag to endo (compile without executing — early return after link)
+- [x] Create `scripts/check-doc-snippets.py` to extract and validate ` ```endo ` blocks from markdown files
+- [x] Support `<!-- endo-no-check -->` skip markers for illustrative/incomplete snippets
+- [x] Integrate as ctest target (`check-doc-snippets` with `docs` label)
+- [x] Add GitHub Actions step for CI validation
+
+**Implementation Notes:**
+- `--check` reuses `Shell::execute()` with a single `_checkOnly` early-return guard after link — zero code duplication
+- Python script uses stdlib only (no pip dependencies), 10s timeout per block, project-local `tmp/` for temp files
+- Currently 73 of 144 blocks fail (illustrative fragments, unimplemented features) — fixing these is tracked separately
+- ctest runs with `--allow-failures` to report without blocking the build
+
 ### Phase 5.1: Debug Adapter Protocol (DAP) Server
 
 **Dependency:** Milestone 1 (complete language), Phase 1.6 (functions)

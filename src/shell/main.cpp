@@ -36,6 +36,7 @@ Options:
   -h, --help         Show this help message and exit
   -v, --version      Show version information and exit
   -c <COMMAND>       Execute COMMAND and exit
+  --check            Compile without executing (syntax and semantic check)
   --lsp              Launch Language Server Protocol server over stdio
   --log=<PATTERNS>   Enable logging for categories matching PATTERNS
                      (comma-separated, supports wildcards)
@@ -106,6 +107,7 @@ struct ParsedArgs
     bool showVersion = false;
     bool showLogList = false;
     bool launchLsp = false;
+    bool checkOnly = false;
     std::string_view logPatterns;
     std::string_view command;
     std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
@@ -136,6 +138,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg == "--lsp")
         {
             result.launchLsp = true;
+        }
+        else if (arg == "--check")
+        {
+            result.checkOnly = true;
         }
         else if (arg.starts_with("--log="))
         {
@@ -259,7 +265,17 @@ int main(int argc, char const* argv[])
     if (parsed.launchLsp)
         return endo::lsp::LspServer {}.run();
 
+    // Validate --check requires -c or script file
+    if (parsed.checkOnly && parsed.command.empty() && parsed.scriptFile.empty())
+    {
+        std::print(stderr, "endo: --check requires -c <command> or a script file\n");
+        return EXIT_FAILURE;
+    }
+
     auto shell = endo::Shell {};
+
+    if (parsed.checkOnly)
+        shell.setCheckOnly(true);
 
     // Handle -c command with optional arguments
     if (!parsed.command.empty())

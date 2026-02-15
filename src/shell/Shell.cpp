@@ -955,6 +955,9 @@ int Shell::execute(std::string const& lineBuffer)
         if (report.containsFailures())
             return EXIT_FAILURE;
 
+        if (_checkOnly)
+            return EXIT_SUCCESS;
+
         if (irLog().is_enabled())
         {
             irLog()()("================================================\n");
