@@ -16,6 +16,7 @@
 #include <string>
 #include <string_view>
 
+#include "CrashHandler.hpp"
 #include "Shell.hpp"
 
 using namespace std::string_view_literals;
@@ -227,6 +228,8 @@ int executeScript(endo::Shell& shell,
 
 int main(int argc, char const* argv[])
 {
+    endo::CrashHandler::initialize(Version.data());
+
     auto const args = std::span(argv, static_cast<size_t>(argc));
     auto const programName = args.empty() ? "endo"sv : std::string_view(args[0]);
 

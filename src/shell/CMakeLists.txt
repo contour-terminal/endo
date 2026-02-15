@@ -3,6 +3,8 @@
 # It depends on the endo language library for parsing and IR generation.
 
 add_library(endo-shell STATIC
+    CrashHandler.hpp
+    CrashHandler.cpp
     CommandResolver.hpp
     CommandResolver.cpp
     Completer.hpp
@@ -148,6 +150,7 @@ target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
 
 add_executable(test-endo-shell
     test_main.cpp
+    CrashHandler_test.cpp
     Completer_test.cpp
     FSharpCompleter_test.cpp
     OutputDefinitionRegistry_test.cpp

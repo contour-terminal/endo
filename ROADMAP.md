@@ -67,6 +67,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | Arithmetic expansion (`$((expr))`) | ✅ |
 | Pathname expansion (globbing) `*`, `?`, `[...]`, `**` | ✅ |
 | Job management (`&`, `jobs`, `fg`, `bg`, `wait`) | ✅ |
+| Crash handler (SEGV/ABRT/BUS/ILL/FPE → backtrace log in `~/.local/state/endo/crash/`) | ✅ |
 
 ### Not Yet Implemented
 
