@@ -7730,3 +7730,86 @@ match (which "echo", which "cat") with
 | (None, None) -> println "none found"
 )"));
 }
+
+// ============================================================================
+// Nested Recursive Functions with Multi-Statement Bodies
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_simple")
+{
+    // Simple nested recursive function
+    CHECK(executeSourceAndGetOutput(
+              "let f (n: int) =\n  let rec g (i: int) = if i <= 0 then 0 else g (i - 1)\n  print (g n)\nf 3")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_with_outer_capture")
+{
+    // Nested recursive function captures outer parameter
+    CHECK(executeSourceAndGetOutput("let f (n: int) =\n  let rec count (i: int) = if i >= n then i else "
+                                    "count (i + 1)\n  print (count "
+                                    "0)\nf 5")
+          == "5");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_multi_statement_body")
+{
+    // Multi-statement function body with println followed by computation
+    CHECK(executeSourceAndGetOutput("let f (n: int) =\n  println \"start\"\n  print n\nf 42") == "start\n42");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_non_recursive_function")
+{
+    // Nested non-recursive function
+    CHECK(executeSourceAndGetOutput("let f (x: int) =\n  let g (y: int) = y + 1\n  print (g x)\nf 10")
+          == "11");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_with_println_and_if")
+{
+    // Exact user script pattern: nested let rec with println + if-then-else
+    CHECK(executeSourceAndGetOutput(R"(
+let process (n: int) =
+    let rec step (i: int) =
+        println $"step {i}"
+        if i >= n then
+            println "done"
+        else
+            step (i + 1)
+    step 1
+process 3
+)") == "step 1\nstep 2\nstep 3\ndone\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_explicit_in_syntax")
+{
+    // Explicit 'in' syntax still works for recursive functions
+    CHECK(executeSourceAndGetOutput(
+              "let r = let rec f (x: int) = if x <= 0 then 0 else f (x - 1) in f 5; print r")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.deeply_nested_functions")
+{
+    // Function inside function inside function
+    CHECK(executeSourceAndGetOutput("let a (x: int) =\n  let b (y: int) =\n    let c (z: int) = z + y + x\n  "
+                                    "  c 1\n  print (b 10)\na "
+                                    "100")
+          == "111");
+}
+
+TEST_CASE("IRGenerator.FSharp.nested_rec_ir_generation")
+{
+    // IR generation for nested recursive function
+    CHECK(generatesIRSuccessfully(R"(
+let process (n: int) =
+    let rec step (i: int) =
+        println $"step {i}"
+        if i >= n then
+            println "done"
+        else
+            step (i + 1)
+    step 1
+process 3
+)"));
+}

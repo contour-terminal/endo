@@ -68,6 +68,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Closures (capturing outer scope variables)
 - [x] Recursive functions: `let rec gcd a b = ...`
 - [x] Mutual recursion: `let rec isEven n = ... and isOdd n = ...`
+- [x] Nested recursive functions with multi-statement bodies (indentation-based)
 - [x] Tail-call optimization
 - [x] Function composition: `>>` and `<<` operators
 - [x] Type-annotated functions

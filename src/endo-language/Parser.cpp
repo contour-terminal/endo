@@ -2905,6 +2905,9 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 {
     TRACE_SCOPE("parseLet");
 
+    auto const letColumn = currentTokenColumn();
+    auto const letLine = _lexer.currentRange().begin.line;
+
     // Enter F# expression mode BEFORE consuming 'let' so that the next token
     // (the binding name) is tokenized with F# reserved symbols (including ':')
     _lexer.enterFSharpExpr();
@@ -3046,8 +3049,12 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     _lexer.nextToken(); // consume '='
     consumeNewlines();
 
-    // Parse the value expression
-    auto value = parseFSharpExpr();
+    // Parse the value expression.
+    // Function bodies that start on a new line use sequence parsing for multi-statement support
+    // (indentation-based). Single-line bodies use parseFSharpExpr() to avoid consuming tokens
+    // beyond the function body (e.g., match arm's consumeNewlines() can eat ';' separators).
+    auto const bodyOnNewLine = !parameters.empty() && _lexer.currentRange().begin.line > letLine;
+    auto value = bodyOnNewLine ? parseFSharpExprSequence(letColumn) : parseFSharpExpr();
     if (!value)
     {
         _lexer.leaveFSharpExpr();
@@ -3133,7 +3140,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume '='
         consumeNewlines();
 
-        auto andValue = parseFSharpExpr();
+        auto const andBodyOnNewLine = !andParams.empty() && _lexer.currentRange().begin.line > letLine;
+        auto andValue = andBodyOnNewLine ? parseFSharpExprSequence(letColumn) : parseFSharpExpr();
         if (!andValue)
         {
             _lexer.leaveFSharpExpr();
@@ -3177,6 +3185,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
 {
     TRACE_SCOPE("parseLetInExpr");
+    auto const letColumn = currentTokenColumn();
+    auto const letLine = _lexer.currentRange().begin.line;
     auto const letLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'let'
 
@@ -3293,8 +3303,12 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     _lexer.nextToken(); // consume '='
     consumeNewlines();
 
-    // Parse the value expression
-    auto value = parseFSharpExpr();
+    // Parse the value expression.
+    // Function bodies that start on a new line use sequence parsing for multi-statement support
+    // (indentation-based). Single-line bodies use parseFSharpExpr() to avoid consuming tokens
+    // beyond the function body.
+    auto const bodyOnNewLine = !parameters.empty() && _lexer.currentRange().begin.line > letLine;
+    auto value = bodyOnNewLine ? parseFSharpExprSequence(letColumn) : parseFSharpExpr();
     if (!value)
         return nullptr;
 

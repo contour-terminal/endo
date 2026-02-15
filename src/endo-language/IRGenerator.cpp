@@ -655,6 +655,10 @@ ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
     if (!body)
         return ReturnKind::Plain;
 
+    // Block expression: return kind is determined by the result expression
+    if (auto const* block = dynamic_cast<ast::BlockExpr const*>(body))
+        return determineReturnKind(block->result.get());
+
     // Direct Result/Option constructors
     if (dynamic_cast<ast::ResultExpr const*>(body))
         return ReturnKind::Result;
@@ -1131,6 +1135,25 @@ std::unordered_map<std::string, CoreVM::Value*> IRGenerator::collectFreeVariable
                     if (auto* storage = lookupFSharpVariable(mutExpr->name))
                         freeVars[mutExpr->name] = storage;
                 walk(mutExpr->value.get(), bound);
+                return;
+            }
+
+            if (auto const* block = dynamic_cast<ast::BlockExpr const*>(expr))
+            {
+                auto innerBound = bound;
+                for (auto const& stmt: block->statements)
+                {
+                    if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(stmt.get()))
+                    {
+                        walk(letStmt->value.get(), innerBound);
+                        innerBound.push_back(letStmt->name);
+                    }
+                    else if (auto const* exprStmt = dynamic_cast<ast::ExprStmt const*>(stmt.get()))
+                    {
+                        walk(exprStmt->expr.get(), innerBound);
+                    }
+                }
+                walk(block->result.get(), innerBound);
                 return;
             }
 
@@ -4658,9 +4681,18 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
         func.isRecursive = node.isRecursive;
-        func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+
+        // Include function name as bound for recursive functions (prevents self-capture)
+        auto allBound = func.parameters;
+        if (node.isRecursive)
+            allBound.push_back(node.name);
+        func.capturedBindings = collectFreeVariables(func.body, allBound);
 
         registerFSharpFunction(node.name, std::move(func));
+
+        // Compile as handler (same pattern as LetBindingStmt)
+        if (auto* registered = const_cast<FSharpFunction*>(lookupFSharpFunction(node.name)))
+            compileFunctionAsHandler(node.name, *registered);
     }
     else
     {
