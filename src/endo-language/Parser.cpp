@@ -3352,6 +3352,33 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
     return expr;
 }
 
+std::unique_ptr<ast::Expr> Parser::parseFSharpTupleExpr()
+{
+    TRACE_SCOPE("parseFSharpTupleExpr");
+    auto first = parseFSharpExpr();
+    if (!first)
+        return nullptr;
+
+    if (_lexer.currentToken() != Token::Comma)
+        return first;
+
+    std::vector<std::unique_ptr<ast::Expr>> elements;
+    elements.push_back(std::move(first));
+    while (_lexer.currentToken() == Token::Comma)
+    {
+        _lexer.nextToken(); // consume ','
+        auto elem = parseFSharpExpr();
+        if (!elem)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(), {}, currentContextSnippet(), "Expected expression after ',' in tuple");
+            return nullptr;
+        }
+        elements.push_back(std::move(elem));
+    }
+    return std::make_unique<ast::TupleExpr>(std::move(elements));
+}
+
 std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
 {
     TRACE_SCOPE("parseFSharpPipeline");
@@ -4007,33 +4034,6 @@ std::unique_ptr<ast::Expr> Parser::parseShellCommandExpr()
     return std::make_unique<ast::ShellCommandExpr>(std::move(command));
 }
 
-std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
-{
-    TRACE_SCOPE("parseTypeDefinition");
-
-    _lexer.nextToken(); // consume 'type'
-
-    if (_lexer.currentToken() != Token::Identifier)
-    {
-        _report.syntaxErrorWithSuggestions(currentLocation(),
-                                           { "Provide a type name" },
-                                           currentContextSnippet(),
-                                           "Expected type name after 'type', got '{}'",
-                                           _lexer.currentLiteral());
-        return nullptr;
-    }
-    auto typeName = _lexer.currentLiteral();
-    _lexer.nextToken(); // consume type name
-
-    if (_lexer.currentToken() != Token::Equal)
-    {
-        _report.syntaxErrorWithSuggestions(currentLocation(),
-                                           { "Add '=' after type name" },
-                                           currentContextSnippet(),
-                                           "Expected '=' after type name '{}', got '{}'",
-                                           typeName,
-                                           _lexer.currentLiteral());
-        return nullptr;
 std::unique_ptr<ast::Expr> Parser::parseExecPipeline()
 {
     TRACE_SCOPE("parseExecPipeline");
@@ -4093,6 +4093,33 @@ std::unique_ptr<ast::Expr> Parser::parseExecPipeline()
     return std::make_unique<ast::ExecPipelineExpr>(std::move(commands));
 }
 
+std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
+{
+    TRACE_SCOPE("parseTypeDefinition");
+
+    _lexer.nextToken(); // consume 'type'
+
+    if (_lexer.currentToken() != Token::Identifier)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Provide a type name" },
+                                           currentContextSnippet(),
+                                           "Expected type name after 'type', got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    auto typeName = _lexer.currentLiteral();
+    _lexer.nextToken(); // consume type name
+
+    if (_lexer.currentToken() != Token::Equal)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add '=' after type name" },
+                                           currentContextSnippet(),
+                                           "Expected '=' after type name '{}', got '{}'",
+                                           typeName,
+                                           _lexer.currentLiteral());
+        return nullptr;
     }
     _lexer.enterFSharpExpr();
     _lexer.nextToken(); // consume '='
@@ -5041,6 +5068,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 return node;
             }
 
+            // exec expression: exec prog args | exec prog args
+            if (lit == "exec")
+                return parseExecPipeline();
+
             // Check for list literal starting with '[' (in non-F# mode, [ is part of identifier)
             if (!lit.empty() && lit[0] == '[')
             {
@@ -5068,10 +5099,6 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
                 std::vector<std::unique_ptr<ast::Expr>> args;
                 std::optional<SourceLocationRange> lastArgLoc;
-            // exec expression: exec prog args | exec prog args
-            if (lit == "exec")
-                return parseExecPipeline();
-
                 if (payloadSlots > 0 && isFSharpPrimary())
                 {
                     auto arg = parseFSharpPrimary();
@@ -6233,7 +6260,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
     _lexer.nextToken();
 
     // Parse scrutinee expression
-    auto scrutinee = parseFSharpExpr();
+    auto scrutinee = parseFSharpTupleExpr();
     if (!scrutinee)
     {
         _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -6273,8 +6300,30 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
 
         _lexer.nextToken(); // consume '|'
 
-        // Parse first pattern of this arm
-        auto pattern = parseAsPattern();
+        // Lambda: parse a pattern element that may be a bare tuple (comma-separated).
+        // Comma binds tighter than '|', so `Some f, Some l | None, None` parses as
+        // `(Some f, Some l) | (None, None)`.
+        auto parseArmPattern = [this]() -> pattern::PatternPtr {
+            auto pat = parseAsPattern();
+            if (!pat)
+                return nullptr;
+            if (_lexer.currentToken() != Token::Comma)
+                return pat;
+            std::vector<pattern::PatternPtr> elements;
+            elements.push_back(std::move(pat));
+            while (_lexer.currentToken() == Token::Comma)
+            {
+                _lexer.nextToken(); // consume ','
+                auto elem = parseAsPattern();
+                if (!elem)
+                    return nullptr;
+                elements.push_back(std::move(elem));
+            }
+            return pattern::patterns::tuple(std::move(elements));
+        };
+
+        // Parse first pattern of this arm (may be a bare tuple)
+        auto pattern = parseArmPattern();
         if (!pattern)
         {
             _report.syntaxErrorWithSuggestions(
@@ -6283,7 +6332,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
         }
 
         // Check for or-pattern alternatives: | pat1 | pat2 | pat3 -> expr
-        // If we see '|' before '->' or 'when', it's an or-pattern within this arm
+        // Each alternative may itself be a bare tuple pattern.
         if (_lexer.currentToken() == Token::Pipe)
         {
             std::vector<pattern::PatternPtr> alternatives;
@@ -6291,7 +6340,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
             while (_lexer.currentToken() == Token::Pipe)
             {
                 _lexer.nextToken(); // consume '|'
-                auto alt = parseAsPattern();
+                auto alt = parseArmPattern();
                 if (!alt)
                 {
                     _report.syntaxErrorWithSuggestions(

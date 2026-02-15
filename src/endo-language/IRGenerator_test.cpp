@@ -2526,6 +2526,60 @@ TEST_CASE("IRGenerator.FSharp.tuple_snd_via_function")
           == "42");
 }
 
+// --- Bare tuple syntax in match expressions ---
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_numeric")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 3, 4 with | a, b -> a + b; print r") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_wildcard")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 1, 2 with | _, b -> b; print r") == "2");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_constructor")
+{
+    CHECK(executeSourceAndGetOutput(
+              "let r = match Some 1, Some 2 with | Some a, Some b -> a + b | _, _ -> 0; print r")
+          == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_or_pattern")
+{
+    CHECK(
+        executeSourceAndGetOutput(
+            R"(let r = match None, Some 5 with | None, _ | _, None -> "miss" | Some a, Some b -> "hit"; print r)")
+        == "miss");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_3_elements")
+{
+    CHECK(executeSourceAndGetOutput("let r = match 1, 2, 3 with | a, b, c -> a + b + c; print r") == "6");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_backward_compat")
+{
+    // Parenthesized form still works
+    CHECK(executeSourceAndGetOutput("let r = match (3, 4) with | (a, b) -> a + b; print r") == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.match_bare_tuple_with_which")
+{
+    auto& rt = TestRuntime::instance();
+    rt.clearMockWhichPaths();
+    rt.setMockWhichPath("echo", "/bin/echo");
+    rt.setMockWhichPath("cat", "/bin/cat");
+    CHECK(executeSourceAndGetOutput(R"(
+match which "echo", which "cat" with
+| Some f, Some l -> exec f "hello"
+| Some f, None -> exec f "hello"
+| None, Some l -> exec l
+| None, None -> println "none"
+)") == "hello\n");
+    rt.clearMockWhichPaths();
+}
+
 // =============================================================================
 // Phase 2 — Standard Library Builtins
 // =============================================================================

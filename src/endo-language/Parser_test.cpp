@@ -632,6 +632,163 @@ TEST_CASE("Parser.FSharp.match_tuple_pattern")
     CHECK(yPattern->name == "y");
 }
 
+TEST_CASE("Parser.FSharp.match_bare_tuple_scrutinee")
+{
+    // Bare tuple scrutinee: match a, b with | (x, y) -> x + y
+    auto ast = parse("let r = match a, b with | (x, y) -> x + y");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+
+    // Scrutinee should be a TupleExpr
+    auto* tupleScrutinee = dynamic_cast<endo::ast::TupleExpr*>(matchExpr->scrutinee.get());
+    REQUIRE(tupleScrutinee != nullptr);
+    CHECK(tupleScrutinee->elements.size() == 2);
+
+    REQUIRE(matchExpr->arms.size() == 1);
+    auto* tuplePattern = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(tuplePattern != nullptr);
+    CHECK(tuplePattern->elements.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.match_bare_tuple_pattern")
+{
+    // Bare tuple pattern: match p with | 0, 0 -> true | x, y -> false
+    auto ast = parse("let r = match p with | 0, 0 -> true | x, y -> false");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm: 0, 0 -> parsed as TuplePattern
+    auto* tp1 = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(tp1 != nullptr);
+    CHECK(tp1->elements.size() == 2);
+
+    // Second arm: x, y -> parsed as TuplePattern
+    auto* tp2 = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[1].pattern.get());
+    REQUIRE(tp2 != nullptr);
+    CHECK(tp2->elements.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.match_bare_tuple_scrutinee_and_pattern")
+{
+    // Both scrutinee and pattern bare: match 3, 4 with | a, b -> a + b
+    auto ast = parse("let r = match 3, 4 with | a, b -> a + b");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+
+    auto* tupleScrutinee = dynamic_cast<endo::ast::TupleExpr*>(matchExpr->scrutinee.get());
+    REQUIRE(tupleScrutinee != nullptr);
+    CHECK(tupleScrutinee->elements.size() == 2);
+
+    REQUIRE(matchExpr->arms.size() == 1);
+    auto* tp = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(tp != nullptr);
+    CHECK(tp->elements.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.match_bare_tuple_constructor_pattern")
+{
+    // Constructor patterns inside bare tuple: | Some f, Some l -> ...
+    auto ast = parse("let r = match p with | Some f, Some l -> f + l");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 1);
+
+    auto* tp = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(tp != nullptr);
+    CHECK(tp->elements.size() == 2);
+
+    // Each element should be a ConstructorPattern
+    auto* ctor1 = dynamic_cast<endo::pattern::ConstructorPattern*>(tp->elements[0].get());
+    REQUIRE(ctor1 != nullptr);
+    CHECK(ctor1->name == "Some");
+
+    auto* ctor2 = dynamic_cast<endo::pattern::ConstructorPattern*>(tp->elements[1].get());
+    REQUIRE(ctor2 != nullptr);
+    CHECK(ctor2->name == "Some");
+}
+
+TEST_CASE("Parser.FSharp.match_bare_tuple_or_pattern")
+{
+    // Or-pattern with bare tuples: | None, _ | _, None -> 0 | Some a, Some b -> a + b
+    auto ast = parse("let r = match p with | None, _ | _, None -> 0 | Some a, Some b -> a + b");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+    REQUIRE(matchExpr->arms.size() == 2);
+
+    // First arm should be an OrPattern
+    auto* orPat = dynamic_cast<endo::pattern::OrPattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(orPat != nullptr);
+    CHECK(orPat->alternatives.size() == 2);
+
+    // Each alternative should be a TuplePattern
+    auto* alt1 = dynamic_cast<endo::pattern::TuplePattern*>(orPat->alternatives[0].get());
+    REQUIRE(alt1 != nullptr);
+    CHECK(alt1->elements.size() == 2);
+
+    auto* alt2 = dynamic_cast<endo::pattern::TuplePattern*>(orPat->alternatives[1].get());
+    REQUIRE(alt2 != nullptr);
+    CHECK(alt2->elements.size() == 2);
+
+    // Second arm: Some a, Some b -> TuplePattern
+    auto* tp = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[1].pattern.get());
+    REQUIRE(tp != nullptr);
+    CHECK(tp->elements.size() == 2);
+}
+
+TEST_CASE("Parser.FSharp.match_bare_tuple_3_elements")
+{
+    // 3-element bare tuple: match a, b, c with | x, y, z -> x + y + z
+    auto ast = parse("let r = match a, b, c with | x, y, z -> x + y + z");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* matchExpr = dynamic_cast<endo::ast::MatchExpr*>(letStmt->value.get());
+    REQUIRE(matchExpr != nullptr);
+
+    auto* tupleScrutinee = dynamic_cast<endo::ast::TupleExpr*>(matchExpr->scrutinee.get());
+    REQUIRE(tupleScrutinee != nullptr);
+    CHECK(tupleScrutinee->elements.size() == 3);
+
+    REQUIRE(matchExpr->arms.size() == 1);
+    auto* tp = dynamic_cast<endo::pattern::TuplePattern*>(matchExpr->arms[0].pattern.get());
+    REQUIRE(tp != nullptr);
+    CHECK(tp->elements.size() == 3);
+}
+
 TEST_CASE("Parser.FSharp.match_as_pattern")
 {
     auto ast = parse("let r = match p with | x as point -> point");

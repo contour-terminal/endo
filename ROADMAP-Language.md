@@ -116,6 +116,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Guards (when clauses): `| x when x > 0 -> "positive"`
 - [x] Nested record patterns
 - [x] Nested list patterns (recursive cons matching with accumulator-style recursion)
+- [x] Bare tuple syntax in match expressions: `match a, b with | x, y -> ...` (F#-style, no parens required)
 
 ## Operators
 
@@ -218,10 +219,10 @@ This document tracks the implementation status of F# language features as define
 - [x] Job management: `&`, `jobs`, `fg`, `bg`
 - [x] Statement-level `& cmd`: shell-first execution bypassing F# bindings
 - [x] Context-aware shell commands: capture mode in expression context, normal I/O at statement level
-
 - [x] `exec` keyword: dynamic command execution with F# expression arguments and OS-level pipe support
 - [x] Fix `exec` with pattern-matched tuple variables: `ensureString()` bypasses `convertToString` N2S corruption for Object/Void-typed strings from `ObjGetSlot`
 - [x] Fix `TuplePattern` with `ConstructorPattern` sub-patterns: create scrutinee storage allocas so `ConstructorPattern` can reload across block boundaries
+
 ## Completion System
 
 - [x] Shared completion infrastructure in `endo-language` (context analysis, candidate generators, orchestrator)

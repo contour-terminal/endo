@@ -31,12 +31,18 @@ match command with
 ### 7.2 Compound Patterns
 
 ```endo
-# Tuple patterns
+# Tuple patterns (parenthesized)
 match point with
 | (0, 0) -> "origin"
 | (x, 0) -> $"on x-axis at {x}"
 | (0, y) -> $"on y-axis at {y}"
 | (x, y) -> $"at ({x}, {y})"
+
+# Tuple patterns (bare — F#-style, no parens required)
+match which "fortune", which "lolcat" with
+| Some f, Some l -> exec f | exec l
+| Some f, None -> exec f
+| None, _ | _, None -> println "not found"
 
 # List patterns
 match items with
