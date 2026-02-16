@@ -4,11 +4,22 @@
 #include <tui/Cell.hpp>
 #include <tui/Rect.hpp>
 
+#include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
 namespace tui
 {
+
+/// @brief An image region stored in the buffer.
+///
+/// Represents a pre-encoded sixel image covering a rectangular region of terminal cells.
+struct ImageRegion
+{
+    Rect cellArea;            ///< Which cells this image covers (buffer coordinates).
+    std::string encodedSixel; ///< Pre-encoded sixel data (without DCS framing).
+};
 
 /// A 2D grid of terminal cells representing a virtual screen buffer.
 ///
@@ -112,12 +123,26 @@ class Buffer
     /// Raw access to cell data (for diffing).
     [[nodiscard]] std::vector<Cell> const& cells() const noexcept { return _cells; }
 
+    // --- Image Regions ---
+
+    /// @brief Adds an image region to the buffer.
+    /// @param cellArea The cell area the image covers (in buffer coordinates).
+    /// @param encodedSixel Pre-encoded sixel data (without DCS framing).
+    void addImage(Rect cellArea, std::string encodedSixel);
+
+    /// @brief Returns all image regions.
+    [[nodiscard]] std::span<ImageRegion const> images() const noexcept;
+
+    /// @brief Clears all image regions.
+    void clearImages() noexcept;
+
   private:
     std::vector<Cell> _cells;
     int _rows = 0;
     int _cols = 0;
     Point _cursor { 0, 0 };
     bool _cursorVisible = true;
+    std::vector<ImageRegion> _images;
 
     /// Converts (row, col) to a linear index.
     [[nodiscard]] size_t index(int row, int col) const noexcept

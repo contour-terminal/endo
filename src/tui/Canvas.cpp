@@ -145,6 +145,14 @@ void Canvas::drawVLine(int col, int startRow, int height, std::string_view ch, S
     }
 }
 
+void Canvas::drawImage(int row, int col, int columnSpan, int lineSpan, std::string_view encodedSixel)
+{
+    auto const bufRow = toBufferRow(row);
+    auto const bufCol = toBufferCol(col);
+    auto const cellArea = Rect { bufCol, bufRow, columnSpan, lineSpan };
+    _buffer.addImage(cellArea, std::string(encodedSixel));
+}
+
 void Canvas::setCursor(int row, int col)
 {
     if (inBounds(row, col))

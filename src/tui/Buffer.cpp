@@ -63,6 +63,7 @@ void Buffer::resize(int rows, int cols)
     _cells = std::move(newCells);
     _rows = rows;
     _cols = cols;
+    clearImages();
 
     // Clamp cursor to new bounds
     _cursor.x = std::min(_cursor.x, _cols - 1);
@@ -105,6 +106,7 @@ void Buffer::clear(Style const& style)
 {
     for (auto& cell: _cells)
         cell.reset(style);
+    clearImages();
 }
 
 void Buffer::clearRect(Rect area, Style const& style)
@@ -203,6 +205,24 @@ void Buffer::setCursor(int row, int col) noexcept
 {
     _cursor.x = col;
     _cursor.y = row;
+}
+
+void Buffer::addImage(Rect cellArea, std::string encodedSixel)
+{
+    _images.push_back(ImageRegion {
+        .cellArea = cellArea,
+        .encodedSixel = std::move(encodedSixel),
+    });
+}
+
+std::span<ImageRegion const> Buffer::images() const noexcept
+{
+    return _images;
+}
+
+void Buffer::clearImages() noexcept
+{
+    _images.clear();
 }
 
 } // namespace tui

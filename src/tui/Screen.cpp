@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <unordered_map>
 
 namespace tui
 {
@@ -614,9 +615,44 @@ void Screen::flushInline()
 
     out.hideCursor();
 
+    // Build image row coverage: for each row, the image (if any) that starts there
+    auto imageAtRow = std::unordered_map<int, ImageRegion const*> {};
+    for (auto const& img: _current.images())
+        imageAtRow[img.cellArea.y] = &img;
+
     for (int row = 0; row < contentHeight; ++row)
     {
         out.writeRaw("\r"); // Move to start of line
+
+        // Check if an image starts at this row
+        if (auto it = imageAtRow.find(row); it != imageAtRow.end())
+        {
+            auto const& img = *it->second;
+            if (!img.encodedSixel.empty())
+            {
+                // Save cursor before sixel — the terminal may advance the cursor
+                // below the image (DECSIXEL mode 80 set), which would corrupt
+                // our cursor tracking. DECSC/DECRC restores the exact position.
+                out.saveCursor();
+                if (img.cellArea.x > 0)
+                    out.moveRight(img.cellArea.x);
+                out.writeSixel(img.encodedSixel);
+                out.restoreCursor();
+            }
+
+            // Skip cell rendering for all rows covered by this image.
+            // Don't clearToEndOfLine — the sixel covers the visual area and
+            // clearing might erase the pixel data in some terminals.
+            auto const skipRows = img.cellArea.height - 1;
+            for (int s = 0; s < skipRows && row + 1 < contentHeight; ++s)
+            {
+                out.writeRaw("\n");
+                ++row;
+            }
+            if (row < contentHeight - 1)
+                out.writeRaw("\n");
+            continue;
+        }
 
         if (_config.inhibitReflow)
             out.disableReflow();

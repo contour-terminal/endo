@@ -95,6 +95,20 @@ class Canvas
     /// @param style Style to apply.
     void drawVLine(int col, int startRow, int height, std::string_view ch, Style const& style);
 
+    // --- Image Rendering ---
+
+    /// @brief Draws a pre-encoded sixel image covering the specified cell region.
+    ///
+    /// The sixel data is stored in the buffer and will be emitted during screen flush.
+    /// Cell content in the covered area is not rendered (the image takes precedence).
+    ///
+    /// @param row Top-left row (canvas-local, 0-based).
+    /// @param col Top-left column (canvas-local, 0-based).
+    /// @param columnSpan Number of terminal columns the image covers.
+    /// @param lineSpan Number of terminal lines the image covers.
+    /// @param encodedSixel Pre-encoded sixel data (without DCS framing).
+    void drawImage(int row, int col, int columnSpan, int lineSpan, std::string_view encodedSixel);
+
     // --- Cursor ---
 
     /// Sets the cursor position (relative to this canvas).
