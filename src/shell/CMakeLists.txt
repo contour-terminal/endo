@@ -168,6 +168,7 @@ add_executable(endo-bin
 )
 set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
 target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
+enable_static_linking(endo-bin)
 
 add_executable(test-endo-shell
     test_main.cpp

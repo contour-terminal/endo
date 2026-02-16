@@ -36,9 +36,12 @@ endif()
 
 
 include(EnableCcache)
+include(StaticLinking)
 include(EndoThirdParties)
 include(PedanticCompiler)
 include(Sanitizers)
+
+check_static_system_requirements()
 
 if((CMAKE_CXX_COMPILER_ID STREQUAL "Clang") OR (CMAKE_CXX_COMPILER_ID STREQUAL "GNU"))
     set(CMAKE_CXX_FLAGS_DEBUG "-Og -g")
@@ -64,6 +67,7 @@ message(STATUS "----------------------------------------------------------------
 message(STATUS "endo trace vm       ${ENDO_TRACE_VM}")
 message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
 message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
+message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
 message(STATUS "Address Sanitizer   ${ENABLE_ASAN}")
 message(STATUS "UB Sanitizer        ${ENABLE_UBSAN}")
 message(STATUS "Thread Sanitizer    ${ENABLE_TSAN}")
