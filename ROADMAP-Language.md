@@ -381,7 +381,7 @@ Consult this section to determine what to work on next.
 - [ ] Generic type definitions: `type Tree<'a> = Leaf of 'a | Node of Tree<'a> * Tree<'a>`
 - [ ] Monomorphization or type erasure at codegen time
 
-### Phase 10 — Planned Language Enhancements
+### Phase 10 — Planned Language Enhancements ✅
 - [x] Placeholder lambdas: `_ > 10` desugaring to `fun x -> x > 10` (concise pipelines like `filter (_ > 10)`)
 - [x] Unit parameter in function definitions: `let f () = 42` for side-effecting functions
 - [x] Named union fields: `Circle of radius: float` for self-documenting discriminated unions
