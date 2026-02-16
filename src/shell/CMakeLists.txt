@@ -196,12 +196,9 @@ add_executable(test-endo-shell
     PersistentHistory_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp
+    Shell_test.cpp
 )
 
-# Shell_test.cpp requires TestPTY which uses POSIX PTY primitives
-if(NOT WIN32)
-    target_sources(test-endo-shell PRIVATE Shell_test.cpp)
-endif()
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 target_compile_definitions(test-endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
