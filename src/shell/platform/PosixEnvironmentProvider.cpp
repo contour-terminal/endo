@@ -6,22 +6,10 @@
 
 #include <unistd.h>
 
-#include "EnvironmentProvider.hpp"
-
 extern char** environ;
 
 namespace endo
 {
-
-// ========================================================================
-// EnvironmentProvider base implementation
-// ========================================================================
-
-void EnvironmentProvider::setAndExport(std::string_view name, std::string_view value)
-{
-    set(name, value);
-    exportVariable(name);
-}
 
 // ========================================================================
 // PosixEnvironmentProvider implementation
