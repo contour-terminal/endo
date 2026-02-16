@@ -1,0 +1,50 @@
+name: Windows Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-clangcl:
+    runs-on: windows-latest
+    name: "Windows clang-cl Release"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: "Get library crispy & vtparser"
+      shell: bash
+      run: ./get_contour_dirs.sh
+
+    - name: Setup MSVC environment
+      uses: ilammy/msvc-dev-cmd@v1
+
+    - name: Configure CMake
+      run: cmake --preset clangcl-release
+
+    - name: Build
+      run: cmake --build build/clangcl-release --config Release
+
+    - name: Test
+      working-directory: build/clangcl-release
+      run: ctest --output-on-failure --build-config Release
+      timeout-minutes: 2
+
+    - name: Upload Windows binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-windows-x86_64
+        path: build/clangcl-release/src/shell/endo.exe
+        retention-days: 30
