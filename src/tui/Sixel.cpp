@@ -162,27 +162,48 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
 
     maxColors = std::clamp(maxColors, 1, 256);
 
-    // Extract RGB pixels (ignore alpha)
-    auto pixels = std::vector<RgbPixel>(pixelCount);
+    // Extract RGB pixels, marking transparent ones (alpha < 128) as index -1
+    auto opaquePixels = std::vector<RgbPixel> {};
+    opaquePixels.reserve(pixelCount);
+    auto indexed = std::vector<int>(pixelCount, -1);
+
     for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
     {
+        auto const alpha = image.pixels[i * 4 + 3];
+        if (alpha < 128)
+            continue; // Transparent — leave indexed[i] = -1
+
         auto pixel = RgbPixel {};
         pixel.r = image.pixels[i * 4];
         pixel.g = image.pixels[i * 4 + 1];
         pixel.b = image.pixels[i * 4 + 2];
-        pixels[i] = pixel;
+        opaquePixels.push_back(pixel);
+        indexed[i] = 0; // Placeholder — will be mapped to palette after quantization
     }
 
-    // Quantize colors
-    auto const palette = medianCut(pixels, maxColors);
+    if (opaquePixels.empty())
+        return std::string {}; // Fully transparent image
 
-    // Map each pixel to a palette index
-    auto indexed = std::vector<int>(pixelCount);
+    // Quantize colors (only opaque pixels)
+    auto const palette = medianCut(opaquePixels, maxColors);
+
+    // Map each opaque pixel to a palette index
     for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
-        indexed[i] = closestColor(pixels[i], palette);
+    {
+        if (indexed[i] < 0)
+            continue; // Transparent
+        auto pixel = RgbPixel {};
+        pixel.r = image.pixels[i * 4];
+        pixel.g = image.pixels[i * 4 + 1];
+        pixel.b = image.pixels[i * 4 + 2];
+        indexed[i] = closestColor(pixel, palette);
+    }
 
     // Build sixel output
     auto result = std::string {};
+
+    // Raster attributes: "Pan;Pad;Ph;Pv — tells terminal exact image dimensions
+    result += std::format("\"1;1;{};{}", image.width, image.height);
 
     // Define palette: #idx;2;r%;g%;b% (percentage 0-100)
     for (auto i = 0; i < static_cast<int>(palette.size()); ++i)
@@ -210,7 +231,7 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
                     {
                         auto const pixelIdx = static_cast<std::size_t>(y) * static_cast<std::size_t>(width)
                                               + static_cast<std::size_t>(x);
-                        if (indexed[pixelIdx] == colorIdx)
+                        if (indexed[pixelIdx] >= 0 && indexed[pixelIdx] == colorIdx)
                         {
                             sixelByte |= static_cast<std::uint8_t>(1 << bit);
                             hasPixels = true;

@@ -372,7 +372,7 @@ void TerminalOutput::resetScrollRegion()
 
 void TerminalOutput::writeSixel(std::string_view sixelData)
 {
-    _buffer += "\033Pq";
+    _buffer += "\033P0;1q";
     _buffer.append(sixelData);
     _buffer += "\033\\";
 }
