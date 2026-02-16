@@ -206,5 +206,46 @@ let name args = ...
 match x with | pattern -> cmd | _ -> ()
 ```
 
+### 13.7 Bare Expression Evaluation
+
+Typing an expression at the shell prompt automatically evaluates and displays the result.
+
+```endo
+42                        # prints: 42
+Some "hello"              # prints: Some(hello)
+[1; 2; 3]                 # prints: [1; 2; 3]
+(1, "two")                # prints: (1, two)
+```
+
+Lists of records are rendered as formatted tables:
+
+<!-- endo-no-check -->
+```endo
+type Person = { name: str; age: int }
+[{ name = "Alice"; age = 30 }; { name = "Bob"; age = 25 }]
+```
+
+Output (in terminal):
+```
+╭───────┬─────╮
+│ name  │ age │
+├───────┼─────┤
+│ Alice │  30 │
+│ Bob   │  25 │
+╰───────┴─────╯
+```
+
+The display style adapts automatically: bordered with color in terminals, plain text when piped.
+
+Trailing `|>` pipelines work on bare expressions:
+
+<!-- endo-no-check -->
+```endo
+[1; 2; 3] |> map (_ * 2)   # prints: [2; 4; 6]
+```
+
+> **Note:** `print` and `println` are not affected — they always produce plain text output
+> for scripting reliability. Table rendering only applies to bare expression display.
+
 ---
 **See also:** [Command Execution](command-execution.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Functions](functions.md) | [Error Handling](error-handling.md)

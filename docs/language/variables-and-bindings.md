@@ -57,6 +57,14 @@ for line in $(cat file.txt) | lines do
 end
 ```
 
+The `<-` operator can also be used in expression context, returning unit:
+
+```endo
+let mut x = 0
+if true then x <- 42
+print x
+```
+
 ### 4.3 Export Bindings
 
 Use `let export` to bind a value and simultaneously export it as an environment variable.

@@ -220,6 +220,11 @@ let rec sumTree tree =
     | Node (left, right) -> sumTree left + sumTree right
 ```
 
+> **Note:** Endo supports both tail-recursive and non-tail-recursive functions.
+> Non-tail calls like `n * factorial (n - 1)` work correctly — the compiler
+> uses type inference to determine parameter types and compiles recursive
+> functions with proper call stack support.
+
 ### 5.6 Function Composition
 
 <!-- endo-no-check -->
