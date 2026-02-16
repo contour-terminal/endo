@@ -129,7 +129,7 @@ else()
     CPMAddPackage(
         NAME libunicode
         GITHUB_REPOSITORY contour-terminal/libunicode
-        GIT_TAG feature/casing_and_normalization
+        GIT_TAG v0.8.0
         OPTIONS
             "LIBUNICODE_TESTING OFF"
             "LIBUNICODE_BENCHMARK OFF"
@@ -138,7 +138,7 @@ else()
             "BUILD_SHARED_LIBS OFF"
         EXCLUDE_FROM_ALL YES
     )
-    set(THIRDPARTY_BUILTIN_libunicode "CPM (feature/casing_and_normalization, static)")
+    set(THIRDPARTY_BUILTIN_libunicode "CPM (v0.8.0, static)")
 endif()
 
 # ==============================================================================
