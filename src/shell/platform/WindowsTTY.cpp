@@ -1,102 +1,169 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <chrono>
 #include <cstring>
 #include <expected>
-#include <format>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
-#include "Error.hpp"
-#include "Platform.hpp"
-#include "TTY.hpp"
+#include <shell/Error.hpp>
+#include <shell/Platform.hpp>
+#include <shell/TTY.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>
-#endif
 
 namespace endo
 {
 
-#if defined(_WIN32)
-
-/// Windows implementation of the TTY interface using ConPTY.
-///
-/// This is a stub implementation that will be completed when Windows support is needed.
-class WindowsTTY final: public TTY
+WindowsTTY::WindowsTTY()
 {
-  public:
-    WindowsTTY()
+    _hStdin = GetStdHandle(STD_INPUT_HANDLE);
+    _hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if (_hStdin == INVALID_HANDLE_VALUE || _hStdout == INVALID_HANDLE_VALUE)
+        throw std::runtime_error("Failed to get console handles");
+
+    // Save original console modes
+    DWORD inputMode = 0;
+    if (!GetConsoleMode(_hStdin, &inputMode))
+        throw std::runtime_error("Failed to get console input mode");
+    _originalInputMode = inputMode;
+
+    DWORD outputMode = 0;
+    if (GetConsoleMode(_hStdout, &outputMode))
+        _originalOutputMode = outputMode;
+}
+
+WindowsTTY::~WindowsTTY()
+{
+    restoreMode();
+}
+
+WindowsTTY& WindowsTTY::instance()
+{
+    static WindowsTTY inst;
+    return inst;
+}
+
+NativeHandle WindowsTTY::inputFd() const noexcept
+{
+    return _hStdin;
+}
+
+NativeHandle WindowsTTY::outputFd() const noexcept
+{
+    return _hStdout;
+}
+
+bool WindowsTTY::isTerminal() const noexcept
+{
+    DWORD mode;
+    return GetConsoleMode(_hStdin, &mode) != 0;
+}
+
+std::expected<TerminalSize, ShellError> WindowsTTY::getSize() const
+{
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    if (!GetConsoleScreenBufferInfo(_hStdout, &csbi))
+        return std::unexpected(ShellError::IoError);
+
+    return TerminalSize { .rows = static_cast<uint16_t>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1),
+                          .cols = static_cast<uint16_t>(csbi.srWindow.Right - csbi.srWindow.Left + 1) };
+}
+
+void WindowsTTY::setRawMode()
+{
+    // Enable virtual terminal input - disables line input, echo, processed input
+    DWORD const inputMode = ENABLE_VIRTUAL_TERMINAL_INPUT;
+    SetConsoleMode(_hStdin, inputMode);
+
+    // Enable virtual terminal processing for output with newline control
+    DWORD const outputMode =
+        ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
+    SetConsoleMode(_hStdout, outputMode);
+}
+
+void WindowsTTY::restoreMode()
+{
+    SetConsoleMode(_hStdin, static_cast<DWORD>(_originalInputMode));
+    if (_originalOutputMode != 0)
+        SetConsoleMode(_hStdout, static_cast<DWORD>(_originalOutputMode));
+}
+
+void WindowsTTY::setEchoEnabled(bool enabled)
+{
+    DWORD mode = 0;
+    if (GetConsoleMode(_hStdin, &mode))
     {
-        _hStdin = GetStdHandle(STD_INPUT_HANDLE);
-        _hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-
-        if (_hStdin == INVALID_HANDLE_VALUE || _hStdout == INVALID_HANDLE_VALUE)
-            throw std::runtime_error("Failed to get console handles");
-
-        // Save original console mode
-        if (!GetConsoleMode(_hStdin, &_originalInputMode))
-            throw std::runtime_error("Failed to get console mode");
-    }
-
-    ~WindowsTTY() override { restoreMode(); }
-
-    [[nodiscard]] static WindowsTTY& instance()
-    {
-        static WindowsTTY instance;
-        return instance;
-    }
-
-    [[nodiscard]] NativeHandle inputFd() const noexcept override { return _hStdin; }
-
-    [[nodiscard]] NativeHandle outputFd() const noexcept override { return _hStdout; }
-
-    [[nodiscard]] bool isTerminal() const noexcept override
-    {
-        DWORD mode;
-        return GetConsoleMode(_hStdin, &mode) != 0;
-    }
-
-    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override
-    {
-        CONSOLE_SCREEN_BUFFER_INFO csbi;
-        if (!GetConsoleScreenBufferInfo(_hStdout, &csbi))
-            return std::unexpected(ShellError::IoError);
-
-        return TerminalSize { .rows = static_cast<uint16_t>(csbi.srWindow.Bottom - csbi.srWindow.Top + 1),
-                              .cols = static_cast<uint16_t>(csbi.srWindow.Right - csbi.srWindow.Left + 1) };
-    }
-
-    void setRawMode() override
-    {
-        // Enable virtual terminal processing and disable line input
-        DWORD mode = ENABLE_VIRTUAL_TERMINAL_INPUT;
+        if (enabled)
+            mode |= ENABLE_ECHO_INPUT;
+        else
+            mode &= ~ENABLE_ECHO_INPUT;
         SetConsoleMode(_hStdin, mode);
-
-        // Enable virtual terminal processing for output
-        DWORD outMode = ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        SetConsoleMode(_hStdout, outMode);
     }
+}
 
-    void restoreMode() override { SetConsoleMode(_hStdin, _originalInputMode); }
+std::optional<char> WindowsTTY::readCharWithTimeout(std::chrono::milliseconds timeout)
+{
+    auto const timeoutMs = (timeout.count() == 0) ? INFINITE : static_cast<DWORD>(timeout.count());
 
-    void writeToStdout(std::string_view str) const override
+    while (true)
     {
-        DWORD written;
-        WriteConsoleA(_hStdout, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
-    }
+        auto const result = WaitForSingleObject(_hStdin, timeoutMs);
+        if (result != WAIT_OBJECT_0)
+            return std::nullopt; // Timeout or error
 
-    void writeToStdin(std::string_view str) const override
+        // Read console input records looking for a key event
+        DWORD numEvents = 0;
+        if (!GetNumberOfConsoleInputEvents(_hStdin, &numEvents) || numEvents == 0)
+            return std::nullopt;
+
+        INPUT_RECORD rec {};
+        DWORD eventsRead = 0;
+        if (!ReadConsoleInputW(_hStdin, &rec, 1, &eventsRead) || eventsRead == 0)
+            return std::nullopt;
+
+        if (rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown)
+        {
+            auto const ch = rec.Event.KeyEvent.uChar.AsciiChar;
+            if (ch != 0)
+                return ch;
+        }
+        // Skip non-key events and key-up events, keep waiting
+    }
+}
+
+void WindowsTTY::writeToStdout(std::string_view str) const
+{
+    DWORD written = 0;
+    WriteFile(_hStdout, str.data(), static_cast<DWORD>(str.size()), &written, nullptr);
+}
+
+void WindowsTTY::writeToStdin(std::string_view str) const
+{
+    // Inject characters as INPUT_RECORDs into the console input buffer
+    std::vector<INPUT_RECORD> records;
+    records.reserve(str.size());
+
+    for (auto const ch: str)
     {
-        // Writing to stdin is not directly supported on Windows
-        // This would typically involve input record injection
-        (void) str;
+        INPUT_RECORD rec {};
+        rec.EventType = KEY_EVENT;
+        rec.Event.KeyEvent.bKeyDown = TRUE;
+        rec.Event.KeyEvent.wRepeatCount = 1;
+        rec.Event.KeyEvent.uChar.AsciiChar = ch;
+        records.push_back(rec);
     }
 
-  private:
-    NativeHandle _hStdin = InvalidHandle;
-    NativeHandle _hStdout = InvalidHandle;
-    DWORD _originalInputMode = 0;
-};
-
-#endif // _WIN32
+    if (!records.empty())
+    {
+        DWORD written = 0;
+        WriteConsoleInputW(_hStdin, records.data(), static_cast<DWORD>(records.size()), &written);
+    }
+}
 
 } // namespace endo
+
+#endif // _WIN32
