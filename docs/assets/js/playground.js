@@ -333,7 +333,7 @@
         },
         {
             name: 'Pattern Match',
-            code: 'let fizzbuzz n =\n  match (n % 3, n % 5) with\n  | (0, 0) -> "FizzBuzz"\n  | (0, _) -> "Fizz"\n  | (_, 0) -> "Buzz"\n  | _ -> string n\n\nfor i in [1;2;3;4;5;6;7;8;9;10;11;12;13;14;15] do\n  println (fizzbuzz i)\ndone'
+            code: 'let fizzbuzz n =\n  match (n % 3, n % 5) with\n  | (0, 0) -> "FizzBuzz"\n  | (0, _) -> "Fizz"\n  | (_, 0) -> "Buzz"\n  | _ -> string n\n\nfor i in [1;2;3;4;5;6;7;8;9;10;11;12;13;14;15] do\n  println (fizzbuzz i)\nend'
         },
         {
             name: 'Recursion',
