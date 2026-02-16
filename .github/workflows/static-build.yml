@@ -1,0 +1,69 @@
+name: Static Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+concurrency:
+  group: static-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-build:
+    runs-on: ubuntu-latest
+    name: "Linux static x86_64"
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libc6-dev ninja-build
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install clang
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 21
+
+    - name: "Get library crispy & vtparser"
+      run: ./get_contour_dirs.sh
+
+    - name: Configure CMake
+      run: >
+        cmake -B build/static
+        -DCMAKE_CXX_COMPILER=clang++-21
+        -DCMAKE_C_COMPILER=clang-21
+        -DCMAKE_BUILD_TYPE=Release
+        -DENABLE_STATIC_LINKING=ON
+        -GNinja
+        -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build build/static --config Release
+
+    - name: Verify static binary
+      run: |
+        set -e
+        echo "--- file output ---"
+        file build/static/src/shell/endo
+        echo "--- ldd output ---"
+        ldd build/static/src/shell/endo 2>&1 && echo "ERROR: binary is dynamically linked" && exit 1 || echo "OK: binary is statically linked"
+
+    - name: Test
+      working-directory: build/static
+      run: ctest --output-on-failure --build-config Release
+      timeout-minutes: 2
+
+    - name: Upload static binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: endo-linux-x86_64-static
+        path: build/static/src/shell/endo
+        retention-days: 30
