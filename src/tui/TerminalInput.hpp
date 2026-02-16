@@ -7,7 +7,11 @@
 
 #include <vector>
 
-#include <termios.h>
+#if defined(_WIN32)
+    #include <windows.h>
+#else
+    #include <termios.h>
+#endif
 
 namespace tui
 {
@@ -16,7 +20,8 @@ namespace tui
 ///
 /// Manages raw mode, enables Kitty keyboard protocol, SGR mouse reporting,
 /// and bracketed paste. Uses poll() for non-blocking reads with timeout.
-/// SIGWINCH is handled via a self-pipe pattern for thread-safe resize notification.
+/// On POSIX, SIGWINCH is handled via a self-pipe pattern for thread-safe resize notification.
+/// On Windows, WINDOW_BUFFER_SIZE_EVENT is used for resize detection.
 class TerminalInput
 {
   public:
@@ -42,12 +47,14 @@ class TerminalInput
 
     /// @brief Injects a synthetic resize event.
     ///
-    /// Writes to the self-pipe to wake poll(). Typically called from a SIGWINCH handler.
+    /// On POSIX, writes to the self-pipe to wake poll().
+    /// On Windows, signals a manual-reset event.
     /// @param cols New column count.
     /// @param rows New row count.
     void notifyResize(int cols, int rows);
 
     /// @brief Returns the file descriptor for the resize notification pipe (read end).
+    /// On Windows, returns -1 (resize is event-based).
     [[nodiscard]] auto resizePipeReadFd() const noexcept -> int;
 
     /// @brief Suspends terminal protocols and raw mode for external command execution.
@@ -67,11 +74,20 @@ class TerminalInput
 
   private:
     VtParser _parser;
+    bool _rawMode = false;
+    bool _suspended = false; ///< True when suspended for external command execution.
+
+#if defined(_WIN32)
+    HANDLE _hStdin = INVALID_HANDLE_VALUE;
+    HANDLE _hStdout = INVALID_HANDLE_VALUE;
+    DWORD _originalInputMode = 0;
+    DWORD _originalOutputMode = 0;
+    HANDLE _resizeEvent = nullptr; ///< Manual-reset event for resize notification.
+#else
     int _fd = 0; // STDIN_FILENO
     struct termios _origTermios {};
-    bool _rawMode = false;
-    bool _suspended = false;         ///< True when suspended for external command execution.
     int _resizePipe[2] = { -1, -1 }; ///< Self-pipe for SIGWINCH.
+#endif
 
     void enableRawMode();
     void disableRawMode();
