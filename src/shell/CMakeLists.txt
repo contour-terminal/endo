@@ -20,8 +20,16 @@ add_library(endo-shell STATIC
     CompletionProviders/FSharpCompleter.cpp
     CompletionProviders/FileCompleter.hpp
     CompletionProviders/FileCompleter.cpp
-    CompletionProviders/GitBranchCompleter.hpp
-    CompletionProviders/GitBranchCompleter.cpp
+    CompletionProviders/CommandLineParser.hpp
+    CompletionProviders/CommandLineParser.cpp
+    CompletionProviders/CommandQueryProvider.hpp
+    CompletionProviders/CommandSpec.hpp
+    CompletionProviders/CommandSpecCompleter.hpp
+    CompletionProviders/CommandSpecCompleter.cpp
+    CompletionProviders/GitSpec.hpp
+    CompletionProviders/GitSpec.cpp
+    CompletionProviders/QueryCache.hpp
+    CompletionProviders/QueryCache.cpp
     CompletionProviders/HistoryCompleter.hpp
     CompletionProviders/HistoryCompleter.cpp
     CompletionProviders/OptionCompleter.hpp
@@ -189,7 +197,7 @@ add_executable(test-endo-shell
     CrashHandler_test.cpp
     Completer_test.cpp
     FSharpCompleter_test.cpp
-    GitBranchCompleter_test.cpp
+    CommandSpecCompleter_test.cpp
     Gradient_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp

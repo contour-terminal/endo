@@ -6,7 +6,7 @@
 #include <shell/CompletionProviders/CommandCompleter.hpp>
 #include <shell/CompletionProviders/FSharpCompleter.hpp>
 #include <shell/CompletionProviders/FileCompleter.hpp>
-#include <shell/CompletionProviders/GitBranchCompleter.hpp>
+#include <shell/CompletionProviders/CommandSpecCompleter.hpp>
 #include <shell/CompletionProviders/HistoryCompleter.hpp>
 #include <shell/CompletionProviders/LetBindingCompleter.hpp>
 #include <shell/CompletionProviders/OptionCompleter.hpp>
