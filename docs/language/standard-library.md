@@ -8,12 +8,12 @@ by category. Each example is executable and verified by the documentation test s
 - [15.1 Output](#151-output) -- `print`, `println`
 - [15.2 Type Conversion](#152-type-conversion) -- `string_length`, `int_of_string`, `string_of_int`, `not`
 - [15.3 String Operations](#153-string-operations) -- `trim`, `toLower`, `toUpper`, `contains`, `startsWith`, `endsWith`, `replace`, `split`, `join`, `*`
-- [15.4 List -- Basic Operations](#154-list----basic-operations) -- `head`, `tail`, `length`, `isEmpty`, `nth`, `last`, `replicate`
-- [15.5 List -- Higher-Order Functions](#155-list----higher-order-functions) -- `map`, `filter`, `fold`, `reduce`, `find`, `exists`, `forall`, `each`
-- [15.6 List -- Transformations](#156-list----transformations) -- `sort`, `reverse`, `distinct`, `sortBy`, `groupBy`, `take`, `drop`, `zip`, `flatten`
-- [15.7 List -- Operators](#157-list----operators) -- `::`, `@`
+- [15.4 List -- Basic Operations](#154-list-basic-operations) -- `head`, `tail`, `length`, `isEmpty`, `nth`, `last`, `replicate`
+- [15.5 List -- Higher-Order Functions](#155-list-higher-order-functions) -- `map`, `filter`, `fold`, `reduce`, `find`, `exists`, `forall`, `each`
+- [15.6 List -- Transformations](#156-list-transformations) -- `sort`, `reverse`, `distinct`, `sortBy`, `groupBy`, `take`, `drop`, `zip`, `flatten`
+- [15.7 List -- Operators](#157-list-operators) -- `::`, `@`
 - [15.8 Option Combinators](#158-option-combinators) -- `Option.map`, `Option.bind`, `Option.defaultValue`
-- [15.9 Environment & System](#159-environment--system) -- `env`, `which`
+- [15.9 Environment & System](#159-environment-system) -- `env`, `which`
 - [15.10 Random](#1510-random) -- `rand`
 - [15.11 Composition Examples](#1511-composition-examples)
 
