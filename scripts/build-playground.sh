@@ -16,9 +16,8 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Check for Emscripten
 if ! command -v emcmake &> /dev/null; then
     echo "Error: Emscripten not found. Please install and activate the Emscripten SDK:"
-    echo "  git clone https://github.com/emscripten-core/emsdk.git"
-    echo "  cd emsdk && ./emsdk install latest && ./emsdk activate latest"
-    echo "  source emsdk_env.sh"
+    echo "  ./scripts/install-emscripten.sh"
+    echo "  source ~/emsdk/emsdk_env.sh"
     exit 1
 fi
 

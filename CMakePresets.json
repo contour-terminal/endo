@@ -183,7 +183,8 @@
                 "ENABLE_CLANG_TIDY": "OFF",
                 "ENDO_TRACE_VM": "OFF",
                 "ENDO_TRACE_PARSER": "OFF",
-                "ENDO_TRACE_LEXER": "OFF"
+                "ENDO_TRACE_LEXER": "OFF",
+                "CMAKE_CXX_SCAN_FOR_MODULES": "OFF"
             }
         }
     ],

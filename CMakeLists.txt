@@ -61,6 +61,27 @@ endif()
 
 enable_testing()
 
+# Apply Emscripten compatibility patches to vendored sources.
+# crispy is symlinked from contour, so we use sed for in-place patching
+# (GNU patch does not follow symlinked directories).
+if(EMSCRIPTEN)
+    file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.h" _BUFOBJ_H)
+    if(EXISTS "${_BUFOBJ_H}")
+        file(READ "${_BUFOBJ_H}" _BUFOBJ_CONTENT)
+        string(FIND "${_BUFOBJ_CONTENT}" "buffer_object_ptr<T> buffer_object<T>::create(" _PATCH_POS)
+        if(NOT _PATCH_POS EQUAL -1)
+            string(REPLACE
+                "buffer_object_ptr<T> buffer_object<T>::create(size_t capacity, buffer_object_release<T> release)"
+                "auto buffer_object<T>::create(size_t capacity, buffer_object_release<T> release) -> buffer_object_ptr<T>"
+                _BUFOBJ_CONTENT "${_BUFOBJ_CONTENT}")
+            file(WRITE "${_BUFOBJ_H}" "${_BUFOBJ_CONTENT}")
+            message(STATUS "Applied Emscripten patch to BufferObject.h (trailing return type)")
+        else()
+            message(STATUS "BufferObject.h already patched or signature changed")
+        endif()
+    endif()
+endif()
+
 add_subdirectory(src)
 EndoThirdPartiesSummary2()
 message(STATUS "==============================================================================")
