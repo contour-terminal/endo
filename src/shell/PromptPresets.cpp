@@ -95,6 +95,13 @@ static std::vector<PromptConfig> presets = {
         .useGradientPath = true,
         .gradientStart = 0x5078FF_rgb, // Blue
         .gradientEnd = 0x00DCC8_rgb,   // Teal
+        .auroraBackground = {
+            0x252545_rgb, // deep indigo
+            0x1E3840_rgb, // dark teal
+            0x1E3828_rgb, // dark emerald
+            0x352040_rgb, // dark purple
+            0x252545_rgb, // deep indigo (wrap)
+        },
     },
 };
 

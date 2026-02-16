@@ -15,22 +15,31 @@
 namespace endo
 {
 
+tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) noexcept
+{
+    if (stops.empty())
+        return { 0, 0, 0 };
+
+    if (stops.size() == 1)
+        return stops[0];
+
+    // Clamp t to [0, 1]
+    t = std::clamp(t, 0.0f, 1.0f);
+
+    auto const segments = static_cast<float>(stops.size() - 1);
+    auto const scaled = t * segments;
+    auto const idx = static_cast<std::size_t>(scaled);
+    auto const frac = scaled - static_cast<float>(idx);
+
+    // At t=1.0, idx might equal stops.size()-1, return last stop
+    if (idx >= stops.size() - 1)
+        return stops.back();
+
+    return lerpColor(stops[idx], stops[idx + 1], frac);
+}
+
 namespace
 {
-
-    /// @brief Linearly interpolates between two uint8_t values.
-    [[nodiscard]] constexpr auto lerp(std::uint8_t a, std::uint8_t b, float t) noexcept -> std::uint8_t
-    {
-        return static_cast<std::uint8_t>(std::clamp(
-            static_cast<float>(a) + (static_cast<float>(b) - static_cast<float>(a)) * t, 0.0f, 255.0f));
-    }
-
-    /// @brief Interpolates between two RGB colors.
-    [[nodiscard]] constexpr auto lerpColor(tui::RgbColor a, tui::RgbColor b, float t) noexcept
-        -> tui::RgbColor
-    {
-        return { .r = lerp(a.r, b.r, t), .g = lerp(a.g, b.g, t), .b = lerp(a.b, b.b, t) };
-    }
 
     /// @brief Returns the number of UTF-8 bytes for a codepoint.
     [[nodiscard]] constexpr auto utf8ByteLength(char32_t cp) noexcept -> std::size_t

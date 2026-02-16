@@ -140,6 +140,27 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Use theme-based colors
     auto const& pc = theme.promptColors;
 
+    // Build aurora background color cache when configured
+    auto const hasAurora = !_config.auroraBackground.empty();
+    auto bgColors = std::vector<tui::RgbColor> {};
+    if (hasAurora && contentWidth > 0)
+    {
+        bgColors.resize(static_cast<std::size_t>(contentWidth));
+        for (int c = 0; c < contentWidth; ++c)
+        {
+            auto const t = static_cast<float>(c) / static_cast<float>(std::max(contentWidth - 1, 1));
+            bgColors[static_cast<std::size_t>(c)] = multiStopGradient(_config.auroraBackground, t);
+        }
+    }
+    /// @brief Returns the aurora background color at the given absolute column,
+    /// or falls back to the flat theme background.
+    auto const bgAt = [&](int col) -> tui::RgbColor {
+        auto const idx = col - HorizontalMargin;
+        if (!bgColors.empty() && idx >= 0 && idx < static_cast<int>(bgColors.size()))
+            return bgColors[static_cast<std::size_t>(idx)];
+        return pc.background;
+    };
+
     // Create styles
     tui::Style bgStyle;
     bgStyle.bg = pc.background;
@@ -182,25 +203,43 @@ void PromptComponent::render(tui::Canvas& canvas)
         auto const& rightModules = _cachedRightModules;
 
         // Info line background
-        canvas.fill(tui::Rect { HorizontalMargin, topPad, contentWidth, 1 }, ' ', bgStyle);
+        if (hasAurora)
+        {
+            for (int c = 0; c < contentWidth; ++c)
+            {
+                tui::Style cellStyle;
+                cellStyle.bg = bgColors[static_cast<std::size_t>(c)];
+                canvas.put(topPad, HorizontalMargin + c, " ", cellStyle);
+            }
+        }
+        else
+        {
+            canvas.fill(tui::Rect { HorizontalMargin, topPad, contentWidth, 1 }, ' ', bgStyle);
+        }
 
         auto col = HorizontalMargin;
 
         // Info line separator
         if (_config.separator == SeparatorStyle::Bar)
         {
+            leftBarStyle.bg = bgAt(col);
             col += canvas.putString(topPad, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
-            canvas.put(topPad, col, " ", bgStyle);
+            tui::Style spStyle;
+            spStyle.bg = bgAt(col);
+            canvas.put(topPad, col, " ", spStyle);
             ++col;
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
-            sepStyle.bg = pc.background;
+            sepStyle.bg = bgAt(col);
             col += canvas.putString(topPad, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+            sepStyle.bg = bgAt(col);
             col += canvas.putString(topPad, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
-            canvas.put(topPad, col, " ", bgStyle);
+            tui::Style spStyle;
+            spStyle.bg = bgAt(col);
+            canvas.put(topPad, col, " ", spStyle);
             ++col;
         }
 
@@ -212,26 +251,31 @@ void PromptComponent::render(tui::Canvas& canvas)
                 if (_config.separator == SeparatorStyle::Rounded)
                 {
                     // Dim │ pipe separator between module groups
+                    tui::Style spStyle;
+                    spStyle.bg = bgAt(col);
+                    canvas.put(topPad, col, " ", spStyle);
+                    ++col;
                     tui::Style dimPipeStyle;
                     dimPipeStyle.fg = pc.separator;
-                    dimPipeStyle.bg = pc.background;
+                    dimPipeStyle.bg = bgAt(col);
                     dimPipeStyle.dim = true;
-                    canvas.put(topPad, col, " ", bgStyle);
-                    ++col;
                     col += canvas.putString(topPad, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
-                    canvas.put(topPad, col, " ", bgStyle);
+                    spStyle.bg = bgAt(col);
+                    canvas.put(topPad, col, " ", spStyle);
                     ++col;
                 }
                 else
                 {
-                    canvas.put(topPad, col, " ", bgStyle);
+                    tui::Style spStyle;
+                    spStyle.bg = bgAt(col);
+                    canvas.put(topPad, col, " ", spStyle);
                     ++col;
                 }
             }
             for (auto const& seg: infoModules[i])
             {
                 auto segStyle = seg.style;
-                segStyle.bg = pc.background;
+                segStyle.bg = bgAt(col);
                 col += canvas.putString(topPad, col, seg.text, segStyle);
             }
         }
@@ -256,13 +300,15 @@ void PromptComponent::render(tui::Canvas& canvas)
                 {
                     if (i > 0)
                     {
-                        canvas.put(topPad, rightCol, " ", bgStyle);
+                        tui::Style spStyle;
+                        spStyle.bg = bgAt(rightCol);
+                        canvas.put(topPad, rightCol, " ", spStyle);
                         ++rightCol;
                     }
                     for (auto const& seg: rightModules[i])
                     {
                         auto segStyle = seg.style;
-                        segStyle.bg = pc.background;
+                        segStyle.bg = bgAt(rightCol);
                         rightCol += canvas.putString(topPad, rightCol, seg.text, segStyle);
                     }
                 }
@@ -309,21 +355,35 @@ void PromptComponent::render(tui::Canvas& canvas)
         auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Fill content area with background (with margins)
-        canvas.fill(tui::Rect { HorizontalMargin, row, contentWidth, 1 }, ' ', bgStyle);
+        if (hasAurora)
+        {
+            for (int c = 0; c < contentWidth; ++c)
+            {
+                tui::Style cellStyle;
+                cellStyle.bg = bgColors[static_cast<std::size_t>(c)];
+                canvas.put(row, HorizontalMargin + c, " ", cellStyle);
+            }
+        }
+        else
+        {
+            canvas.fill(tui::Rect { HorizontalMargin, row, contentWidth, 1 }, ' ', bgStyle);
+        }
 
         // Draw separator on input lines
         if (_config.separator == SeparatorStyle::Bar)
         {
+            leftBarStyle.bg = bgAt(HorizontalMargin);
             canvas.put(row, HorizontalMargin, "\xe2\x96\x8e", leftBarStyle); // U+258E
         }
         else if (_config.separator == SeparatorStyle::Rounded)
         {
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
-            sepStyle.bg = pc.background;
+            sepStyle.bg = bgAt(HorizontalMargin);
             if (lineIndex == 0)
             {
-                canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle);     // U+2570 ╰
+                canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
+                sepStyle.bg = bgAt(HorizontalMargin + 1);
                 canvas.putString(row, HorizontalMargin + 1, "\xe2\x94\x80", sepStyle); // U+2500 ─
             }
             else
@@ -331,23 +391,36 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
         else if (_config.separator == SeparatorStyle::None)
         {
-            canvas.put(row, HorizontalMargin, " ", bgStyle);
+            tui::Style spStyle;
+            spStyle.bg = bgAt(HorizontalMargin);
+            canvas.put(row, HorizontalMargin, " ", spStyle);
         }
 
         // Padding after separator
-        canvas.put(row, HorizontalMargin + leftBarWidth(), " ", bgStyle);
+        {
+            auto const padCol = HorizontalMargin + leftBarWidth();
+            tui::Style padStyle;
+            padStyle.bg = bgAt(padCol);
+            canvas.put(row, padCol, " ", padStyle);
+        }
 
         // Prompt or continuation indicator
         auto col = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
         if (lineIndex == 0)
         {
+            promptStyle.bg = bgAt(col);
             col += canvas.putString(row, col, _promptStr, promptStyle);
         }
         else
         {
             // Continuation indicator: spaces + middle dots
             for (int i = 0; i < promptTextWidth - 2; ++i)
-                canvas.put(row, col++, " ", bgStyle);
+            {
+                tui::Style spStyle;
+                spStyle.bg = bgAt(col);
+                canvas.put(row, col++, " ", spStyle);
+            }
+            promptStyle.bg = bgAt(col);
             col += canvas.putString(row, col, "\xc2\xb7\xc2\xb7", promptStyle); // ··
         }
 
@@ -404,7 +477,7 @@ void PromptComponent::render(tui::Canvas& canvas)
                 // Build style for this segment
                 tui::Style segStyle;
                 segStyle.fg = categoryColor(cat);
-                segStyle.bg = pc.background;
+                segStyle.bg = bgAt(col);
                 segStyle.inverse = selected;
 
                 // Apply curly red underline for error regions
@@ -423,6 +496,7 @@ void PromptComponent::render(tui::Canvas& canvas)
         // Ghost text on last line
         if (!_inputField.ghostText().empty() && lineIndex == totalLines - 1)
         {
+            ghostStyle.bg = bgAt(col);
             canvas.putString(row, col, _inputField.ghostText(), ghostStyle);
         }
     }

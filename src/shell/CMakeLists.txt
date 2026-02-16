@@ -176,6 +176,7 @@ add_executable(test-endo-shell
     Completer_test.cpp
     FSharpCompleter_test.cpp
     GitBranchCompleter_test.cpp
+    Gradient_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
     PersistentHistory_test.cpp

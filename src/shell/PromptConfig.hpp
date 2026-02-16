@@ -55,6 +55,7 @@ struct PromptConfig
     bool useGradientPath = false;       ///< Enable gradient coloring for path module.
     tui::RgbColor gradientStart {};     ///< Gradient start color.
     tui::RgbColor gradientEnd {};       ///< Gradient end color.
+    std::vector<tui::RgbColor> auroraBackground {}; ///< Multi-stop background gradient (empty = flat bg).
 };
 
 } // namespace endo
