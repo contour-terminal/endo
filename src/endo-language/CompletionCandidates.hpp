@@ -66,6 +66,10 @@ namespace endo
 [[nodiscard]] std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& commandName,
                                                                          std::string const& prefix);
 
+/// @brief Returns standard library function completion candidates.
+/// Includes type conversion, string operations, list operations, HOFs, transforms, and system functions.
+[[nodiscard]] std::vector<CompletionCandidate> standardLibraryCandidates();
+
 /// @brief Returns symbol-based completion candidates from the given definitions.
 ///
 /// Formats function signatures (e.g., "add(x, y)") and value binding descriptions

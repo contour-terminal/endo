@@ -63,8 +63,22 @@ std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext cons
     // Generate candidates using shared engine
     auto candidates = symbolCandidates(symbols);
 
-    // Apply fuzzy scoring
+    // Apply fuzzy scoring for user symbols (higher base score)
     auto results = applyFuzzyScoring(candidates, prefix, 80);
+
+    // Add standard library candidates at slightly lower base score
+    // so user-defined functions rank higher
+    auto stdlibCandidates = standardLibraryCandidates();
+    auto stdlibResults = applyFuzzyScoring(stdlibCandidates, prefix, 75);
+
+    // Deduplicate: user-defined symbols shadow stdlib
+    for (auto& item: stdlibResults)
+    {
+        auto const isDuplicate =
+            std::ranges::any_of(results, [&](auto const& existing) { return existing.text == item.text; });
+        if (!isDuplicate)
+            results.push_back(std::move(item));
+    }
 
     // Sort by score (descending), then alphabetically
     std::sort(results.begin(), results.end(), [](auto const& a, auto const& b) {

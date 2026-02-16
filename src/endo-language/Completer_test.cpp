@@ -372,3 +372,64 @@ TEST_CASE("Completer.quoted_set_prompt_layout_offers_values", "[completion][comp
     CHECK(hasCandidate(results, "two-line"));
     CHECK(hasCandidate(results, "boxed"));
 }
+
+// =============================================================================
+// Standard library completion integration tests
+// =============================================================================
+
+TEST_CASE("Completer.stdlib.ma_prefix_returns_map_and_match", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("ma", 2, dataSource);
+    CHECK(hasCandidate(results, "map"));
+    CHECK(hasCandidate(results, "match"));
+}
+
+TEST_CASE("Completer.stdlib.fil_prefix_returns_filter_not_map", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("fil", 3, dataSource);
+    CHECK(hasCandidate(results, "filter"));
+    CHECK(!hasCandidate(results, "map"));
+}
+
+TEST_CASE("Completer.stdlib.user_symbol_deduplicates_with_stdlib", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    dataSource.symbols = { {
+        .name = "map",
+        .isFunction = true,
+        .parameterNames = { "f", "xs" },
+    } };
+    auto results = computeCompletions("ma", 2, dataSource);
+    // User-defined "map" should appear, stdlib "map" should be deduplicated away
+    auto mapCount = std::ranges::count_if(results, [](auto const& c) { return c.text == "map"; });
+    CHECK(mapCount == 1);
+}
+
+TEST_CASE("Completer.stdlib.set_prompt_preset_does_not_show_stdlib", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    CHECK(!hasCandidate(results, "map"));
+    CHECK(!hasCandidate(results, "filter"));
+    CHECK(!hasCandidate(results, "fold"));
+}
+
+TEST_CASE("Completer.stdlib.argument_position_returns_stdlib", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("echo len", 8, dataSource);
+    CHECK(hasCandidate(results, "length"));
+}
+
+TEST_CASE("Completer.stdlib.empty_input_includes_stdlib", "[completion][completer][stdlib]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("", 0, dataSource);
+    CHECK(hasCandidate(results, "map"));
+    CHECK(hasCandidate(results, "filter"));
+    CHECK(hasCandidate(results, "fold"));
+    CHECK(hasCandidate(results, "head"));
+    CHECK(hasCandidate(results, "trim"));
+}

@@ -63,6 +63,64 @@ namespace
         EnumValueEntry { "arrow", "Arrow transient prompt" },
     };
 
+    /// @brief Standard library function entry with name and signature description.
+    struct StdLibEntry
+    {
+        std::string_view name;
+        std::string_view description;
+    };
+
+    // clang-format off
+    constexpr std::array stdLibFunctions = {
+        // Type Conversion
+        StdLibEntry { "string_length", "string_length s -> int" },
+        StdLibEntry { "int_of_string", "int_of_string s -> int" },
+        StdLibEntry { "string_of_int", "string_of_int n -> string" },
+        StdLibEntry { "not", "not b -> bool" },
+        // String Operations
+        StdLibEntry { "trim", "trim s -> string" },
+        StdLibEntry { "toLower", "toLower s -> string" },
+        StdLibEntry { "toUpper", "toUpper s -> string" },
+        StdLibEntry { "contains", "contains substr s -> bool" },
+        StdLibEntry { "startsWith", "startsWith prefix s -> bool" },
+        StdLibEntry { "endsWith", "endsWith suffix s -> bool" },
+        StdLibEntry { "replace", "replace old new s -> string" },
+        StdLibEntry { "split", "split delim s -> list<string>" },
+        StdLibEntry { "join", "join delim lst -> string" },
+        // List Basic
+        StdLibEntry { "head", "head lst -> 'a" },
+        StdLibEntry { "tail", "tail lst -> list<'a>" },
+        StdLibEntry { "length", "length lst -> int" },
+        StdLibEntry { "isEmpty", "isEmpty lst -> bool" },
+        StdLibEntry { "nth", "nth n lst -> 'a" },
+        StdLibEntry { "last", "last lst -> 'a" },
+        StdLibEntry { "replicate", "replicate n x -> list<'a>" },
+        // List HOFs
+        StdLibEntry { "map", "map f lst -> list<'b>" },
+        StdLibEntry { "filter", "filter pred lst -> list<'a>" },
+        StdLibEntry { "fold", "fold f init lst -> 'b" },
+        StdLibEntry { "reduce", "reduce f lst -> 'a" },
+        StdLibEntry { "find", "find pred lst -> option<'a>" },
+        StdLibEntry { "exists", "exists pred lst -> bool" },
+        StdLibEntry { "forall", "forall pred lst -> bool" },
+        StdLibEntry { "each", "each f lst -> unit" },
+        // List Transforms
+        StdLibEntry { "sort", "sort lst -> list<'a>" },
+        StdLibEntry { "reverse", "reverse lst -> list<'a>" },
+        StdLibEntry { "distinct", "distinct lst -> list<'a>" },
+        StdLibEntry { "sortBy", "sortBy f lst -> list<'a>" },
+        StdLibEntry { "groupBy", "groupBy f lst -> list<list<'a>>" },
+        StdLibEntry { "take", "take n lst -> list<'a>" },
+        StdLibEntry { "drop", "drop n lst -> list<'a>" },
+        StdLibEntry { "zip", "zip lst1 lst2 -> list<'a * 'b>" },
+        StdLibEntry { "flatten", "flatten lst -> list<'a>" },
+        // Environment/System
+        StdLibEntry { "env", "env name -> string" },
+        StdLibEntry { "rand", "rand min max -> int" },
+        StdLibEntry { "fetch", "fetch url -> string" },
+    };
+    // clang-format on
+
     /// @brief Helper to check if a name starts with a given prefix (case-sensitive).
     [[nodiscard]] bool startsWith(std::string_view name, std::string_view prefix)
     {
@@ -327,6 +385,21 @@ std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& co
         return collectValues(transientValues);
 
     return {};
+}
+
+std::vector<CompletionCandidate> standardLibraryCandidates()
+{
+    std::vector<CompletionCandidate> results;
+    results.reserve(stdLibFunctions.size());
+    for (auto const& entry: stdLibFunctions)
+        results.push_back(CompletionCandidate {
+            .text = std::string(entry.name),
+            .displayText = std::string(entry.name),
+            .description = std::string(entry.description),
+            .detail = {},
+            .kind = CompletionKind::Function,
+        });
+    return results;
 }
 
 std::vector<CompletionCandidate> symbolCandidates(std::vector<SymbolDefinitionInfo> const& symbols)

@@ -401,3 +401,121 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
     CHECK_FALSE(isBuiltinWithArgumentCompletion("cd"));
     CHECK_FALSE(isBuiltinWithArgumentCompletion("set_prompt"));
 }
+
+// =============================================================================
+// standardLibraryCandidates tests
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_40_entries", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(stdlib.size() == 40);
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    for (auto const& entry: stdlib)
+        CHECK(entry.kind == CompletionKind::Function);
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_descriptions", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    for (auto const& entry: stdlib)
+        CHECK(!entry.description.empty());
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.type_conversion_functions", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "string_length"));
+    CHECK(hasCandidate(stdlib, "int_of_string"));
+    CHECK(hasCandidate(stdlib, "string_of_int"));
+    CHECK(hasCandidate(stdlib, "not"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.string_operations", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "trim"));
+    CHECK(hasCandidate(stdlib, "toLower"));
+    CHECK(hasCandidate(stdlib, "toUpper"));
+    CHECK(hasCandidate(stdlib, "contains"));
+    CHECK(hasCandidate(stdlib, "startsWith"));
+    CHECK(hasCandidate(stdlib, "endsWith"));
+    CHECK(hasCandidate(stdlib, "replace"));
+    CHECK(hasCandidate(stdlib, "split"));
+    CHECK(hasCandidate(stdlib, "join"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.list_basic_operations", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "head"));
+    CHECK(hasCandidate(stdlib, "tail"));
+    CHECK(hasCandidate(stdlib, "length"));
+    CHECK(hasCandidate(stdlib, "isEmpty"));
+    CHECK(hasCandidate(stdlib, "nth"));
+    CHECK(hasCandidate(stdlib, "last"));
+    CHECK(hasCandidate(stdlib, "replicate"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.list_hofs", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "map"));
+    CHECK(hasCandidate(stdlib, "filter"));
+    CHECK(hasCandidate(stdlib, "fold"));
+    CHECK(hasCandidate(stdlib, "reduce"));
+    CHECK(hasCandidate(stdlib, "find"));
+    CHECK(hasCandidate(stdlib, "exists"));
+    CHECK(hasCandidate(stdlib, "forall"));
+    CHECK(hasCandidate(stdlib, "each"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.list_transforms", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "sort"));
+    CHECK(hasCandidate(stdlib, "reverse"));
+    CHECK(hasCandidate(stdlib, "distinct"));
+    CHECK(hasCandidate(stdlib, "sortBy"));
+    CHECK(hasCandidate(stdlib, "groupBy"));
+    CHECK(hasCandidate(stdlib, "take"));
+    CHECK(hasCandidate(stdlib, "drop"));
+    CHECK(hasCandidate(stdlib, "zip"));
+    CHECK(hasCandidate(stdlib, "flatten"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.env_system_functions", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "env"));
+    CHECK(hasCandidate(stdlib, "rand"));
+    CHECK(hasCandidate(stdlib, "fetch"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(!hasCandidate(stdlib, "print"));
+    CHECK(!hasCandidate(stdlib, "println"));
+    CHECK(!hasCandidate(stdlib, "which"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.signature_descriptions", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    auto const* mapEntry = findCandidate(stdlib, "map");
+    REQUIRE(mapEntry != nullptr);
+    CHECK(mapEntry->description == "map f lst -> list<'b>");
+
+    auto const* filterEntry = findCandidate(stdlib, "filter");
+    REQUIRE(filterEntry != nullptr);
+    CHECK(filterEntry->description == "filter pred lst -> list<'a>");
+
+    auto const* foldEntry = findCandidate(stdlib, "fold");
+    REQUIRE(foldEntry != nullptr);
+    CHECK(foldEntry->description == "fold f init lst -> 'b");
+}

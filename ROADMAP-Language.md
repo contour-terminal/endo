@@ -238,6 +238,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Variable-specific record field completion: `alice.` completes only `Person` fields when variable type is known
 - [x] `collectRecordInfo()` extracts record types and variable-type associations from source for LSP
 - [x] Record-aware hover: hovering over record variable shows detected type name (e.g., `Person`) and type definition
+- [x] Standard library function autocompletion: 40 functions (type conversion, string ops, list ops, HOFs, transforms, env/system) in both shell prompt and LSP
 
 ## Modules & Imports
 

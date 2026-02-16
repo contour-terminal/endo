@@ -134,6 +134,7 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
             deduplicateInto(results, filterByPrefix(shellKeywordCandidates(), prefix));
             deduplicateInto(results, filterByPrefix(constructorCandidates(), prefix));
             deduplicateInto(results, filterByPrefix(symbolCandidates(dataSource.symbols), prefix));
+            deduplicateInto(results, filterByPrefix(standardLibraryCandidates(), prefix));
             deduplicateInto(results, filterByPrefix(dataSource.additionalCandidates, prefix));
             break;
         }
@@ -146,6 +147,7 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
             {
                 deduplicateInto(results, filterByPrefix(constructorCandidates(), prefix));
                 deduplicateInto(results, filterByPrefix(symbolCandidates(dataSource.symbols), prefix));
+                deduplicateInto(results, filterByPrefix(standardLibraryCandidates(), prefix));
             }
             deduplicateInto(results, filterByPrefix(dataSource.additionalCandidates, prefix));
             break;
