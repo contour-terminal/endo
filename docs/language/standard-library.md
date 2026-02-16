@@ -96,10 +96,10 @@ print r   # => 2
 Universal conversion to string. Works with integers, floats, booleans, and strings (passthrough).
 
 ```endo
-print (string 42)      # => 42
-print (string 3.14)    # => 3.14
-print (string true)    # => true
-print (string "hi")    # => hi
+println (string 42)      # => 42
+println (string 3.14)    # => 3.14
+println (string true)    # => true
+println (string "hi")    # => hi
 ```
 
 ```endo
