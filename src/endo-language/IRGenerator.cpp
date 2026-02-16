@@ -7442,109 +7442,36 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
 {
     TRACE_SCOPE("visit(ListComprehensionExpr)");
 
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::List));
-    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));  // Nil
-    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
-    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
-    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1)); // Cons
 
-    // Evaluate the source collection
-    auto* sourceVal = codegen(node.source.get());
-    if (!sourceVal)
-    {
-        reportTypeError("Failed to evaluate list comprehension source");
-        return;
-    }
-
-    // Allocas for phase 1 (forward iteration building reversed accumulator)
-    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.src");
-    _builder.createStore(srcStorage, sourceVal);
-
+    // Shared accumulator for all nesting levels (produces flat list)
     auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc");
     auto* nil = emitNilList(CoreVM::LiteralType::Void, "comp.nil");
     _builder.createStore(accStorage, nil);
 
-    auto const compElemType = getListElementLiteralType(sourceVal).value_or(CoreVM::LiteralType::Number);
-    auto* elemAlloca = createAllocaInEntryBlock(compElemType, "comp.elem");
-
-    // Create blocks for phase 1
-    auto* condBlock = _builder.createBlock("comp.cond");
-    auto* bodyEntryBlock = _builder.createBlock("comp.body.entry");
-    auto* filterBlock = node.filter ? _builder.createBlock("comp.filter") : nullptr;
-    auto* consBlock = _builder.createBlock("comp.cons");
-    // Create blocks for phase 2 (reverse)
+    // Create revInitBlock early (needed as doneBlock pointer for outermost condBr).
+    // After emitComprehensionLevel creates all forward blocks, we move revInitBlock
+    // to the end of the block list to preserve execution order for TargetCodeGenerator.
     auto* revInitBlock = _builder.createBlock("comp.rev.init");
+
+    // Phase 1: Forward iteration building reversed accumulator (recursive for nesting).
+    // Source codegen runs before block creation at each level, ensuring source-generated
+    // blocks (e.g., ListRangeExpr) appear before the comprehension blocks they feed.
+    emitComprehensionLevel(node, accStorage, revInitBlock, 0);
+
+    // Move revInitBlock to end of block list (after all forward-phase blocks).
+    // emitComprehensionLevel created blocks after revInitBlock; move it past them.
+    auto* currentFn = _builder.function();
+    CoreVM::BasicBlock* lastBlock = nullptr;
+    for (auto* bb: currentFn->basicBlocks())
+        lastBlock = bb;
+    if (lastBlock && lastBlock != revInitBlock)
+        currentFn->moveAfter(revInitBlock, lastBlock);
+
+    // Create reverse-phase blocks (they now appear after all forward blocks)
     auto* revCondBlock = _builder.createBlock("comp.rev.cond");
     auto* revBodyBlock = _builder.createBlock("comp.rev.body");
     auto* endBlock = _builder.createBlock("comp.end");
-
-    _builder.createBr(condBlock);
-
-    // Phase 1: Condition block — check if source list is Cons (tag == 1)
-    _builder.setInsertPoint(condBlock);
-    auto* srcLoad = _builder.createLoad(srcStorage, "comp.src.load");
-    auto* srcTag = _builder.createObjGetTag(srcLoad, "comp.src.tag");
-    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "comp.is_cons");
-    _builder.createCondBr(isCons, bodyEntryBlock, revInitBlock);
-
-    // Phase 1: Body entry — extract head element and bind iteration variable
-    _builder.setInsertPoint(bodyEntryBlock);
-    auto* srcForHead = _builder.createLoad(srcStorage, "comp.src.for_head");
-    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "comp.head");
-    _builder.createStore(elemAlloca, head);
-
-    // Advance source cursor to tail (separate load to avoid multi-use of a single load result)
-    auto* srcForTail = _builder.createLoad(srcStorage, "comp.src.for_tail");
-    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "comp.tail");
-    _builder.createStore(srcStorage, tail);
-
-    if (filterBlock)
-        _builder.createBr(filterBlock);
-    else
-        _builder.createBr(consBlock);
-
-    // Phase 1: Optional filter block
-    if (filterBlock)
-    {
-        _builder.setInsertPoint(filterBlock);
-        pushFSharpScope();
-        bindFSharpVariable(node.variable, elemAlloca);
-        auto* filterVal = codegen(node.filter.get());
-        popFSharpScope();
-        if (!filterVal)
-        {
-            reportTypeError("Failed to evaluate list comprehension filter");
-            return;
-        }
-        _builder.createCondBr(filterVal, consBlock, condBlock);
-    }
-
-    // Phase 1: Cons block — evaluate body and prepend to accumulator
-    _builder.setInsertPoint(consBlock);
-    pushFSharpScope();
-    bindFSharpVariable(node.variable, elemAlloca);
-    auto* bodyVal = codegen(node.body.get());
-    popFSharpScope();
-    if (!bodyVal)
-    {
-        reportTypeError("Failed to evaluate list comprehension body");
-        return;
-    }
-
-    // Store body result and accumulator in temp allocas to survive ObjAlloc
-    auto* bodyTmp = createAllocaInEntryBlock(bodyVal->type(), "comp.body.tmp");
-    _builder.createStore(bodyTmp, bodyVal);
-    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.acc.tmp");
-    auto* accForCons = _builder.createLoad(accStorage, "comp.acc.for_cons");
-    _builder.createStore(accTmp, accForCons);
-
-    // Create Cons cell: tag=1, slot[0]=bodyResult, slot[1]=oldAcc
-    auto* bodyReload = _builder.createLoad(bodyTmp, "comp.body.reload");
-    auto* accReload = _builder.createLoad(accTmp, "comp.acc.reload");
-    auto* cons = emitListCons(bodyReload, accReload, bodyReload->type(), "comp.cons");
-
-    _builder.createStore(accStorage, cons);
-    _builder.createBr(condBlock);
 
     // Phase 2: Reverse — initialize reverse cursor and output accumulator
     auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "comp.rev.src");
@@ -7565,6 +7492,9 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
 
     // Phase 2: Body — extract head, advance cursor, cons onto output
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
+
     _builder.setInsertPoint(revBodyBlock);
     auto* revSrcForHead = _builder.createLoad(revSrcStorage, "comp.rev.src.for_head");
     auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "comp.rev.head");
@@ -7590,6 +7520,119 @@ void IRGenerator::visit(ast::ListComprehensionExpr const& node)
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "comp.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::emitComprehensionLevel(ast::ListComprehensionExpr const& node,
+                                         CoreVM::AllocaInstr* accStorage,
+                                         CoreVM::BasicBlock* doneBlock,
+                                         int level)
+{
+    auto const prefix = std::format("comp{}", level);
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1)); // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
+
+    // Evaluate source collection FIRST — source codegen may create blocks (e.g., ListRangeExpr)
+    // that must appear before this level's blocks in the block list.
+    auto* sourceVal = codegen(node.source.get());
+    if (!sourceVal)
+    {
+        reportTypeError("Failed to evaluate list comprehension source");
+        return;
+    }
+
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, std::format("{}.src", prefix));
+    _builder.createStore(srcStorage, sourceVal);
+
+    auto const compElemType = getListElementLiteralType(sourceVal).value_or(CoreVM::LiteralType::Number);
+    auto* elemAlloca = createAllocaInEntryBlock(compElemType, std::format("{}.elem", prefix));
+
+    // Determine whether body is a nested comprehension
+    auto* innerComp = dynamic_cast<ast::ListComprehensionExpr const*>(node.body.get());
+
+    // Create blocks AFTER source codegen to ensure correct block ordering
+    auto* condBlock = _builder.createBlock(std::format("{}.cond", prefix));
+    auto* bodyEntryBlock = _builder.createBlock(std::format("{}.body.entry", prefix));
+    auto* filterBlock = node.filter ? _builder.createBlock(std::format("{}.filter", prefix)) : nullptr;
+    auto* actionBlock = _builder.createBlock(std::format("{}.{}", prefix, innerComp ? "action" : "cons"));
+
+    _builder.createBr(condBlock);
+
+    // Condition block — check if source list is Cons (tag == 1)
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, std::format("{}.src.load", prefix));
+    auto* srcTag = _builder.createObjGetTag(srcLoad, std::format("{}.src.tag", prefix));
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, std::format("{}.is_cons", prefix));
+    _builder.createCondBr(isCons, bodyEntryBlock, doneBlock);
+
+    // Body entry — extract head and advance tail (separate loads per MEMORY.md)
+    _builder.setInsertPoint(bodyEntryBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, std::format("{}.src.for_head", prefix));
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, std::format("{}.head", prefix));
+    _builder.createStore(elemAlloca, head);
+
+    auto* srcForTail = _builder.createLoad(srcStorage, std::format("{}.src.for_tail", prefix));
+    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, std::format("{}.tail", prefix));
+    _builder.createStore(srcStorage, tail);
+
+    _builder.createBr(filterBlock ? filterBlock : actionBlock);
+
+    // Optional filter block
+    if (filterBlock)
+    {
+        _builder.setInsertPoint(filterBlock);
+        pushFSharpScope();
+        bindFSharpVariable(node.variable, elemAlloca);
+        auto* filterVal = codegen(node.filter.get());
+        popFSharpScope();
+        if (!filterVal)
+        {
+            reportTypeError("Failed to evaluate list comprehension filter");
+            return;
+        }
+        _builder.createCondBr(filterVal, actionBlock, condBlock);
+    }
+
+    // Action block — either recurse into nested comprehension or evaluate leaf body
+    _builder.setInsertPoint(actionBlock);
+
+    if (innerComp)
+    {
+        // Nested: bind outer variable, recurse with shared accumulator.
+        // When inner source exhausts, inner doneBlock → this level's condBlock.
+        pushFSharpScope();
+        bindFSharpVariable(node.variable, elemAlloca);
+        emitComprehensionLevel(*innerComp, accStorage, condBlock, level + 1);
+        popFSharpScope();
+    }
+    else
+    {
+        // Leaf: evaluate body, cons onto shared accumulator
+        pushFSharpScope();
+        bindFSharpVariable(node.variable, elemAlloca);
+        auto* bodyVal = codegen(node.body.get());
+        popFSharpScope();
+        if (!bodyVal)
+        {
+            reportTypeError("Failed to evaluate list comprehension body");
+            return;
+        }
+
+        // Store body result and accumulator in temp allocas to survive ObjAlloc
+        auto* bodyTmp = createAllocaInEntryBlock(bodyVal->type(), std::format("{}.body.tmp", prefix));
+        _builder.createStore(bodyTmp, bodyVal);
+        auto* accTmp =
+            createAllocaInEntryBlock(CoreVM::LiteralType::Object, std::format("{}.acc.tmp", prefix));
+        auto* accForCons = _builder.createLoad(accStorage, std::format("{}.acc.for_cons", prefix));
+        _builder.createStore(accTmp, accForCons);
+
+        auto* bodyReload = _builder.createLoad(bodyTmp, std::format("{}.body.reload", prefix));
+        auto* accReload = _builder.createLoad(accTmp, std::format("{}.acc.reload", prefix));
+        auto* cons = emitListCons(bodyReload, accReload, bodyReload->type(), std::format("{}.cons", prefix));
+
+        _builder.createStore(accStorage, cons);
+        _builder.createBr(condBlock);
+    }
 }
 
 void IRGenerator::visit(ast::ShellCommandExpr const& node)

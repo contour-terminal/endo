@@ -4088,6 +4088,55 @@ TEST_CASE("IRGenerator.FSharp.list_comprehension_preserves_order")
     CHECK(executeSourceAndGetOutput("print [for x in [5;4;3;2;1] -> x]") == "[5; 4; 3; 2; 1]");
 }
 
+// --- Nested list comprehensions ---
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_cartesian")
+{
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2] -> for y in [3;4] -> x * 10 + y]")
+          == "[13; 14; 23; 24]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_with_filters")
+{
+    // x=1 filtered out; x=2 → y=3; x=3 → no y satisfies y>3
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3] when x > 1 -> for y in [1;2;3] when y > x -> y]")
+          == "[3]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_empty_inner")
+{
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2] -> for y in [] -> x + y]") == "[]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_empty_outer")
+{
+    CHECK(executeSourceAndGetOutput("print [for x in [] -> for y in [1;2] -> x + y]") == "[]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_inner_refs_outer")
+{
+    CHECK(executeSourceAndGetOutput("print [for x in [1;2;3] -> for y in [1;2;3] when y == x -> y]")
+          == "[1; 2; 3]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_triple_nested")
+{
+    CHECK(executeSourceAndGetOutput(
+              "print [for x in [1;2] -> for y in [1;2] -> for z in [1;2] -> x * 100 + y * 10 + z]")
+          == "[111; 112; 121; 122; 211; 212; 221; 222]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_let_binding")
+{
+    CHECK(executeSourceAndGetOutput("let pairs = [for x in [1;2] -> for y in [3;4] -> x + y]\nprint pairs")
+          == "[4; 5; 5; 6]");
+}
+
+TEST_CASE("IRGenerator.FSharp.list_comprehension_nested_single_elements")
+{
+    CHECK(executeSourceAndGetOutput("print [for x in [1] -> for y in [2] -> x + y]") == "[3]");
+}
+
 // =============================================================================
 // Compile-time error tests (should fail IR generation)
 // =============================================================================

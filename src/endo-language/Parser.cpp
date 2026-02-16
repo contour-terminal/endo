@@ -5814,6 +5814,29 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehensionTokenized()
 {
     TRACE_SCOPE("parseListComprehensionTokenized");
 
+    auto result = parseComprehensionGenerator();
+    if (!result)
+        return nullptr;
+
+    // Expect ']'
+    if (_lexer.currentToken() != Token::BracketClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ']'" },
+                                           currentContextSnippet(),
+                                           "Expected ']' after list comprehension, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ']'
+
+    return result;
+}
+
+std::unique_ptr<ast::Expr> Parser::parseComprehensionGenerator()
+{
+    TRACE_SCOPE("parseComprehensionGenerator");
+
     // Expect 'for'
     if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != "for")
     {
@@ -5900,22 +5923,14 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehensionTokenized()
     }
     _lexer.nextToken(); // consume '->'
 
-    // Parse body expression
-    auto body = parseFSharpExpr();
+    // Parse body — if next token is 'for', recursively parse nested comprehension
+    std::unique_ptr<ast::Expr> body;
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "for")
+        body = parseComprehensionGenerator();
+    else
+        body = parseFSharpExpr();
     if (!body)
         return nullptr;
-
-    // Expect ']'
-    if (_lexer.currentToken() != Token::BracketClose)
-    {
-        _report.syntaxErrorWithSuggestions(currentLocation(),
-                                           { "Add closing ']'" },
-                                           currentContextSnippet(),
-                                           "Expected ']' after list comprehension, got '{}'",
-                                           _lexer.currentLiteral());
-        return nullptr;
-    }
-    _lexer.nextToken(); // consume ']'
 
     return std::make_unique<ast::ListComprehensionExpr>(
         std::move(varName), std::move(source), std::move(filter), std::move(body));
@@ -6270,154 +6285,28 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
     }
     _lexer.nextToken(); // consume '->'
 
-    // Parse body expression - need to stop at ']'
-    // The challenge is that ']' is embedded in the last token (e.g., "x]" or "2]")
-    // We need to collect tokens and parse them as an expression, stripping the final ']'
-
-    // Collect all tokens until we find one ending with ']'
-    std::vector<std::string> bodyTokens;
-    bool foundClosingBracket = false;
-    int bracketDepth = 1; // We're inside one '[' already
-
-    while (!foundClosingBracket && _lexer.currentToken() != Token::EndOfInput
-           && _lexer.currentToken() != Token::LineFeed && _lexer.currentToken() != Token::Semicolon)
-    {
-        if (_lexer.currentToken() == Token::Identifier || _lexer.currentToken() == Token::Number)
-        {
-            std::string tokenLit = _lexer.currentLiteral();
-
-            // Count brackets in this token
-            for (char c: tokenLit)
-            {
-                if (c == '[')
-                    ++bracketDepth;
-                else if (c == ']')
-                {
-                    --bracketDepth;
-                    if (bracketDepth == 0)
-                    {
-                        foundClosingBracket = true;
-                        // Strip trailing ']' from this token
-                        size_t bracketPos = tokenLit.rfind(']');
-                        if (bracketPos != std::string::npos)
-                            tokenLit = tokenLit.substr(0, bracketPos);
-                        break;
-                    }
-                }
-            }
-
-            if (!tokenLit.empty())
-                bodyTokens.push_back(tokenLit);
-            _lexer.nextToken();
-        }
-        else if (_lexer.currentToken() == Token::Arrow)
-        {
-            // Nested comprehension? For now, error
-            _report.syntaxErrorWithSuggestions(currentLocation(),
-                                               {},
-                                               currentContextSnippet(),
-                                               "Nested list comprehensions are not yet supported");
-            return nullptr;
-        }
-        else
-        {
-            // Other tokens (operators become identifiers in shell mode)
-            bodyTokens.push_back(_lexer.currentLiteral());
-            _lexer.nextToken();
-        }
-    }
-
-    if (!foundClosingBracket)
-    {
-        _report.syntaxErrorWithSuggestions(
-            currentLocation(), { "Add closing ']'" }, currentContextSnippet(), "Unclosed list comprehension");
-        return nullptr;
-    }
-
-    // Now parse the collected tokens as an expression
-    // For simple cases like "x" or "x * x", we can handle directly
+    // Parse body expression using F# parser for proper expression handling (including nesting)
+    _lexer.enterFSharpExpr();
     std::unique_ptr<ast::Expr> body;
-
-    if (bodyTokens.empty())
-    {
-        _report.syntaxErrorWithSuggestions(
-            currentLocation(), {}, currentContextSnippet(), "Empty body in list comprehension");
-        return nullptr;
-    }
-
-    if (bodyTokens.size() == 1)
-    {
-        // Simple body: single identifier or literal
-        body = parseListElementFromString(bodyTokens[0]);
-    }
-    else if (bodyTokens.size() == 3)
-    {
-        // Binary expression like "x * x" or "x + 1"
-        auto left = parseListElementFromString(bodyTokens[0]);
-        auto right = parseListElementFromString(bodyTokens[2]);
-        std::string const& opStr = bodyTokens[1];
-
-        if (!left || !right)
-            return nullptr;
-
-        // Convert operator string to BinaryOp
-        ast::BinaryOp op;
-        if (opStr == "+")
-            op = ast::BinaryOp::Add;
-        else if (opStr == "-")
-            op = ast::BinaryOp::Sub;
-        else if (opStr == "*")
-            op = ast::BinaryOp::Mul;
-        else if (opStr == "/")
-            op = ast::BinaryOp::Div;
-        else if (opStr == "%")
-            op = ast::BinaryOp::Mod;
-        else if (opStr == "**")
-            op = ast::BinaryOp::Pow;
-        else if (opStr == "==")
-            op = ast::BinaryOp::Eq;
-        else if (opStr == "!=")
-            op = ast::BinaryOp::Ne;
-        else if (opStr == "<")
-            op = ast::BinaryOp::Lt;
-        else if (opStr == "<=")
-            op = ast::BinaryOp::Le;
-        else if (opStr == ">")
-            op = ast::BinaryOp::Gt;
-        else if (opStr == ">=")
-            op = ast::BinaryOp::Ge;
-        else if (opStr == "&&")
-            op = ast::BinaryOp::And;
-        else if (opStr == "||")
-            op = ast::BinaryOp::Or;
-        else
-        {
-            _report.syntaxErrorWithSuggestions(currentLocation(),
-                                               {},
-                                               currentContextSnippet(),
-                                               "Unknown operator '{}' in list comprehension",
-                                               opStr);
-            return nullptr;
-        }
-
-        body = std::make_unique<ast::BinaryExpr>(op, std::move(left), std::move(right));
-    }
+    if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "for")
+        body = parseComprehensionGenerator();
     else
-    {
-        // More complex expression - for now, try to parse as a sequence of binary ops
-        // This is a simplified approach; a full parser would handle precedence properly
-        // For now, we'll report that complex expressions need parentheses
-        _report.syntaxErrorWithSuggestions(
-            currentLocation(),
-            { "Use parentheses for complex expressions: [for x in items -> (x * x + 1)]" },
-            currentContextSnippet(),
-            "Complex expressions in list comprehension body require parentheses (found {} tokens)",
-            bodyTokens.size());
-        return nullptr;
-    }
-
+        body = parseFSharpExpr();
+    _lexer.leaveFSharpExpr();
     if (!body)
         return nullptr;
+
+    // Expect ']'
+    if (_lexer.currentToken() != Token::BracketClose)
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Add closing ']'" },
+                                           currentContextSnippet(),
+                                           "Expected ']' after list comprehension, got '{}'",
+                                           _lexer.currentLiteral());
+        return nullptr;
+    }
+    _lexer.nextToken(); // consume ']'
 
     return std::make_unique<ast::ListComprehensionExpr>(
         std::move(variable), std::move(source), std::move(filter), std::move(body));

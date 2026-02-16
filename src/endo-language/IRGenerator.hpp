@@ -547,6 +547,14 @@ class IRGenerator final: public ast::Visitor
     // IR emit helpers for container types with type tag slots.
     // Each emits ObjAlloc → ObjSetTag → ObjSetSlot(payload) → ObjSetSlot(type tag).
 
+    /// Emits one nesting level of a list comprehension (forward phase).
+    /// All levels share the same accumulator for flat output.
+    /// Creates blocks inline after source codegen to preserve execution order.
+    void emitComprehensionLevel(ast::ListComprehensionExpr const& node,
+                                CoreVM::AllocaInstr* accStorage,
+                                CoreVM::BasicBlock* doneBlock,
+                                int level = 0);
+
     /// Emits IR for an empty (Nil) list with the given element type tag.
     CoreVM::Value* emitNilList(CoreVM::LiteralType elemType, std::string_view label);
 

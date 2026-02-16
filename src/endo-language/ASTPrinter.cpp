@@ -854,6 +854,12 @@ void ASTPrinter::visit(ListRangeExpr const& node)
 void ASTPrinter::visit(ListComprehensionExpr const& node)
 {
     _result += "[for ";
+    printComprehensionGenerator(node);
+    _result += ']';
+}
+
+void ASTPrinter::printComprehensionGenerator(ListComprehensionExpr const& node)
+{
     _result += node.variable;
     _result += " in ";
     if (node.source)
@@ -864,9 +870,15 @@ void ASTPrinter::visit(ListComprehensionExpr const& node)
         node.filter->accept(*this);
     }
     _result += " -> ";
-    if (node.body)
+    if (auto const* inner = dynamic_cast<ListComprehensionExpr const*>(node.body.get()))
+    {
+        _result += "for ";
+        printComprehensionGenerator(*inner);
+    }
+    else if (node.body)
+    {
         node.body->accept(*this);
-    _result += ']';
+    }
 }
 
 void ASTPrinter::visit(ShellCommandExpr const& node)

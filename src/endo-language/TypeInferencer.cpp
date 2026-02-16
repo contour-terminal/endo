@@ -738,6 +738,10 @@ TypeInferencer::InferResult TypeInferencer::inferExpr(ast::Expr const& expr,
             return bodyResult;
         auto [bodyType, s3] = *bodyResult;
 
+        // Nested comprehension body already returns list(T) — don't double-wrap
+        if (dynamic_cast<ast::ListComprehensionExpr const*>(comp->body.get()))
+            return std::pair { bodyType, s3 };
+
         return std::pair { types::list(s3.apply(bodyType)), s3 };
     }
 

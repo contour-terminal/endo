@@ -103,6 +103,7 @@ class ASTPrinter: public Visitor
     void visit(ExecPipelineExpr const& node) override;
 
   private:
+    void printComprehensionGenerator(ListComprehensionExpr const& node);
     void printArithExpr(ArithExpr const* expr);
 };
 

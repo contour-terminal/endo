@@ -104,6 +104,7 @@ class Parser
     std::unique_ptr<ast::Expr> parseListLiteral();          ///< [1; 2; 3], [1..10], [for x in items -> x * 2]
     std::unique_ptr<ast::Expr> parseListLiteralTokenized(); ///< List literal when [ is BracketOpen token
     std::unique_ptr<ast::Expr> parseListComprehensionTokenized(); ///< List comprehension when [ is consumed
+    std::unique_ptr<ast::Expr> parseComprehensionGenerator(); ///< Recursive: for VAR in SRC [when C] -> BODY
     std::unique_ptr<ast::Expr> parseListRangeFromContent(
         std::string_view content); ///< Helper for range expressions
     std::unique_ptr<ast::Expr> parseListElementFromString(

@@ -28,6 +28,11 @@ let letters = ['a'..'z']              # All lowercase letters
 # List comprehensions
 let squares = [for x in 1..10 -> x * x]
 let filtered = [for x in items when x > 5 -> x * 2]
+
+# Nested comprehensions (cartesian product, flat result)
+let pairs = [for x in [1;2] -> for y in [3;4] -> x * 10 + y]   # [13; 14; 23; 24]
+let grid = [for x in [1;2] -> for y in [1;2] -> for z in [1;2] -> x * 100 + y * 10 + z]
+let diag = [for x in [1;2;3] -> for y in [1;2;3] when y == x -> y]   # [1; 2; 3]
 ```
 
 ### 6.2 List Operations
