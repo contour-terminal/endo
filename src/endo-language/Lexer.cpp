@@ -74,6 +74,8 @@ Token Lexer::nextToken()
     {
         _pushedBack = false;
         _currentToken = _pushedBackToken;
+        _atStatementStart =
+            (_currentToken.token == Token::Semicolon || _currentToken.token == Token::LineFeed);
         return _currentToken.token;
     }
 
@@ -325,7 +327,7 @@ Token Lexer::nextToken()
                 return consumeCharAndConfirmToken(Token::Comma);
             return consumeIdentifier();
         case '[':
-            if (_fsharpDepth > 0)
+            if (_fsharpDepth > 0 || _atStatementStart)
                 return consumeCharAndConfirmToken(Token::BracketOpen);
             return consumeIdentifier();
         case ']':
@@ -1151,6 +1153,8 @@ Token Lexer::confirmToken(Token token)
     _nextToken.literal = {};
     _nextToken.location.name = _source->currentSourceLocation().name;
     _nextToken.location.begin = _nextToken.location.end;
+
+    _atStatementStart = (token == Token::Semicolon || token == Token::LineFeed);
 
     return token;
 }

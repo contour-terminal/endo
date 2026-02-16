@@ -636,6 +636,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
         // Bare F# expression evaluation: tokens that unambiguously start F# expressions
         case Token::Number:
         case Token::RndOpen:
+        case Token::BracketOpen:
         case Token::Fun:
         case Token::OptionSome:
         case Token::OptionNone:

@@ -360,7 +360,7 @@ Consult this section to determine what to work on next.
 - [x] Fix `convertToString` Object branch: check typed objects before `getInnerType()` (innerType describes payload, not container)
 
 ### Phase 6.4 — Bare Expression Evaluation & Table Display
-- [x] Bare expression evaluation at shell prompt: `42`, `Some 42`, `(1, 2)`, `Ok 5`, etc.
+- [x] Bare expression evaluation at shell prompt: `42`, `Some 42`, `(1, 2)`, `Ok 5`, `[1; 2; 3]`, etc.
 - [x] `display_result` builtin for runtime value display dispatch
 - [x] Table rendering for lists of records: Bordered (Unicode box-drawing), Compact, Plain styles
 - [x] Auto-style selection: Bordered with color for terminals, Plain for pipes/non-terminal

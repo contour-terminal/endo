@@ -7243,7 +7243,13 @@ TEST_CASE("IRGenerator.BareExpr.arithmetic")
 
 TEST_CASE("IRGenerator.BareExpr.list")
 {
-    // List literals at shell prompt need parentheses since [ is a shell identifier char
+    // List literals at statement start — [ is recognized as BracketOpen
+    CHECK(executeSourceAndGetOutput("[1; 2; 3]") == "[1; 2; 3]\n");
+}
+
+TEST_CASE("IRGenerator.BareExpr.list_parenthesized")
+{
+    // Parenthesized list should still work
     CHECK(executeSourceAndGetOutput("([1; 2; 3])") == "[1; 2; 3]\n");
 }
 

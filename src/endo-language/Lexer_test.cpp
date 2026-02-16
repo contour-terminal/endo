@@ -1034,6 +1034,28 @@ TEST_CASE("Lexer.shell_glob_patterns_preserved")
     CHECK(lexer.currentLiteral() == "[a-z]*.txt");
 }
 
+TEST_CASE("Lexer.bracket_at_statement_start_is_list")
+{
+    // [ at statement start should produce BracketOpen (list literal), not shell identifier
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("[1; 2; 3]"));
+    CHECK(lexer.currentToken() == endo::Token::BracketOpen);
+}
+
+TEST_CASE("Lexer.bracket_after_newline_is_list")
+{
+    // [ after newline (statement start) should produce BracketOpen
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("echo hello\n[1; 2]"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "echo");
+
+    lexer.nextToken(); // hello
+    lexer.nextToken(); // LineFeed
+    CHECK(lexer.currentToken() == endo::Token::LineFeed);
+
+    lexer.nextToken(); // [ at statement start
+    CHECK(lexer.currentToken() == endo::Token::BracketOpen);
+}
+
 TEST_CASE("Lexer.shell_redirect_append")
 {
     // >> should still work for redirect append

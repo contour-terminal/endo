@@ -356,6 +356,7 @@ class Lexer
     std::string _fragmentBuffer;   // Buffer for accumulating string fragments
     bool _pushedBack = false;      // True if a token has been pushed back
     TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
+    bool _atStatementStart = true; // True when next token starts a new statement (for [ disambiguation)
 };
 
 /// Converts a Token to its string representation.
