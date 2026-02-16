@@ -2,6 +2,7 @@
 #include "Completer.hpp"
 #include <shell/CompletionProviders/CmakeSpec.hpp>
 #include <shell/CompletionProviders/GitSpec.hpp>
+#include <shell/CompletionProviders/SshSpec.hpp>
 
 #include <tui/completer/Completer.hpp>
 
@@ -25,6 +26,8 @@ Completer::Completer(EnvironmentProvider const& env,
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
     specCompleter->registerCommand(createCmakeSpec(), std::make_unique<CmakeQueryProvider>());
     specCompleter->registerCommand(createCtestSpec(), std::make_unique<CmakeQueryProvider>());
+    specCompleter->registerCommand(createSshSpec(), std::make_unique<SshQueryProvider>());
+    specCompleter->registerCommand(createScpSpec(), std::make_unique<SshQueryProvider>());
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));

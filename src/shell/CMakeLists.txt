@@ -30,6 +30,8 @@ add_library(endo-shell STATIC
     CompletionProviders/CommandSpecCompleter.cpp
     CompletionProviders/GitSpec.hpp
     CompletionProviders/GitSpec.cpp
+    CompletionProviders/SshSpec.hpp
+    CompletionProviders/SshSpec.cpp
     CompletionProviders/QueryCache.hpp
     CompletionProviders/QueryCache.cpp
     CompletionProviders/HistoryCompleter.hpp

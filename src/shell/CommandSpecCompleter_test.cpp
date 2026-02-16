@@ -10,6 +10,7 @@
 #include "CompletionProviders/CommandSpecCompleter.hpp"
 #include "CompletionProviders/GitSpec.hpp"
 #include "CompletionProviders/QueryCache.hpp"
+#include "CompletionProviders/SshSpec.hpp"
 
 using namespace std::string_literals;
 
@@ -1192,4 +1193,369 @@ TEST_CASE("CmakeSpec.live_cmake_filters_platform_conditions")
     CHECK(std::ranges::find(names, "cl-debug") == names.end());
     CHECK(std::ranges::find(names, "clangcl-debug") == names.end());
 #endif
+}
+
+// ============================================================================
+// ssh / scp completion tests
+// ============================================================================
+
+namespace
+{
+
+/// @brief Helper to create a CompletionContext for ssh/scp commands.
+endo::CompletionContext makeSshContext(std::string fullInput,
+                                       std::string prefix = "",
+                                       std::string command = "ssh")
+{
+    auto const cursor = fullInput.size();
+    return endo::CompletionContext {
+        .type = endo::CompletionContextType::Argument,
+        .prefix = std::move(prefix),
+        .prefixStart = cursor - prefix.size(),
+        .cursorPosition = cursor,
+        .command = std::move(command),
+        .fullInput = std::move(fullInput),
+    };
+}
+
+/// @brief Helper to create an Option-type CompletionContext for ssh/scp.
+endo::CompletionContext makeSshOptionContext(std::string fullInput,
+                                             std::string prefix,
+                                             std::string command = "ssh")
+{
+    auto const cursor = fullInput.size();
+    return endo::CompletionContext {
+        .type = endo::CompletionContextType::Option,
+        .prefix = std::move(prefix),
+        .prefixStart = cursor - prefix.size(),
+        .cursorPosition = cursor,
+        .command = std::move(command),
+        .fullInput = std::move(fullInput),
+    };
+}
+
+/// @brief Mock query provider returning host names for ssh/scp tests.
+class MockSshQueryProvider: public endo::CommandQueryProvider
+{
+  public:
+    std::vector<endo::QueryResult> query(std::string_view queryTag) override
+    {
+        if (queryTag == "hosts")
+            return { { "darkleon", "192.168.1.10" },
+                     { "webserver", "web.example.com" },
+                     { "devbox", "dev.internal" },
+                     { "database", "" },
+                     { "jumphost", "jump.example.com" } };
+        return {};
+    }
+};
+
+/// @brief Creates a CommandSpecCompleter with ssh + scp specs and mock provider.
+endo::CommandSpecCompleter createMockSshCompleter()
+{
+    auto completer = endo::CommandSpecCompleter {};
+    completer.registerCommand(endo::createSshSpec(), std::make_unique<MockSshQueryProvider>());
+    completer.registerCommand(endo::createScpSpec(), std::make_unique<MockSshQueryProvider>());
+    return completer;
+}
+
+} // namespace
+
+TEST_CASE("SshSpec.host_completion")
+{
+    auto completer = createMockSshCompleter();
+    auto ctx = makeSshContext("ssh ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "darkleon"));
+    CHECK(hasCompletion(results, "webserver"));
+    CHECK(hasCompletion(results, "devbox"));
+    CHECK(hasCompletion(results, "database"));
+    CHECK(hasCompletion(results, "jumphost"));
+}
+
+TEST_CASE("SshSpec.host_prefix_filters")
+{
+    auto completer = createMockSshCompleter();
+    auto ctx = makeSshContext("ssh dar", "dar");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "darkleon"));
+    CHECK_FALSE(hasCompletion(results, "webserver"));
+    CHECK_FALSE(hasCompletion(results, "devbox"));
+}
+
+TEST_CASE("SshSpec.ssh_options")
+{
+    auto completer = createMockSshCompleter();
+    auto ctx = makeSshOptionContext("ssh -", "-");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "-p"));
+    CHECK(hasCompletion(results, "-i"));
+    CHECK(hasCompletion(results, "-v"));
+    CHECK(hasCompletion(results, "-A"));
+    CHECK(hasCompletion(results, "-C"));
+    CHECK(hasCompletion(results, "-N"));
+}
+
+TEST_CASE("SshSpec.scp_host_completion")
+{
+    auto completer = createMockSshCompleter();
+    auto ctx = makeSshContext("scp ", "", "scp");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "darkleon"));
+    CHECK(hasCompletion(results, "webserver"));
+}
+
+TEST_CASE("SshSpec.scp_options")
+{
+    auto completer = createMockSshCompleter();
+    auto ctx = makeSshOptionContext("scp -", "-", "scp");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "-r"));
+    CHECK(hasCompletion(results, "-P"));
+    CHECK(hasCompletion(results, "-v"));
+    CHECK(hasCompletion(results, "-C"));
+}
+
+// ============================================================================
+// SSH config parsing tests (temp files)
+// ============================================================================
+
+TEST_CASE("SshSpec.parse_ssh_config")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    writeFile(sshDir / "config",
+              "Host myserver\n"
+              "    HostName 10.0.0.1\n"
+              "    User admin\n"
+              "\n"
+              "Host devbox\n"
+              "    HostName dev.example.com\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    CHECK(results.size() == 2);
+
+    auto hasHost = [&](std::string const& name) {
+        return std::ranges::find(results, name, &endo::QueryResult::text) != results.end();
+    };
+    CHECK(hasHost("myserver"));
+    CHECK(hasHost("devbox"));
+}
+
+TEST_CASE("SshSpec.parse_multihost_line")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    writeFile(sshDir / "config", "Host foo bar baz\n    HostName shared.example.com\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    CHECK(results.size() == 3);
+
+    auto hasHost = [&](std::string const& name) {
+        return std::ranges::find(results, name, &endo::QueryResult::text) != results.end();
+    };
+    CHECK(hasHost("foo"));
+    CHECK(hasHost("bar"));
+    CHECK(hasHost("baz"));
+
+    // All three should share the same HostName description
+    for (auto const& r: results)
+        CHECK(r.description == "shared.example.com");
+}
+
+TEST_CASE("SshSpec.skip_wildcard_hosts")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    writeFile(sshDir / "config",
+              "Host *\n"
+              "    ServerAliveInterval 60\n"
+              "\n"
+              "Host *.example.com\n"
+              "    User deploy\n"
+              "\n"
+              "Host realhost\n"
+              "    HostName 10.0.0.5\n"
+              "\n"
+              "Host test-?\n"
+              "    User test\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    // Only "realhost" should be present — wildcard patterns are skipped
+    CHECK(results.size() == 1);
+    CHECK(results[0].text == "realhost");
+}
+
+TEST_CASE("SshSpec.parse_hostname_description")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    writeFile(sshDir / "config",
+              "Host myalias\n"
+              "    HostName real.server.example.com\n"
+              "    Port 2222\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].text == "myalias");
+    CHECK(results[0].description == "real.server.example.com");
+}
+
+TEST_CASE("SshSpec.include_resolution")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+    std::filesystem::create_directories(sshDir / "config.d");
+
+    // Main config includes a subdirectory file
+    writeFile(sshDir / "config",
+              "Host mainhost\n"
+              "    HostName main.example.com\n"
+              "\n"
+              "Include config.d/extra.conf\n");
+
+    writeFile(sshDir / "config.d" / "extra.conf",
+              "Host extrahost\n"
+              "    HostName extra.example.com\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    auto hasHost = [&](std::string const& name) {
+        return std::ranges::find(results, name, &endo::QueryResult::text) != results.end();
+    };
+    CHECK(hasHost("mainhost"));
+    CHECK(hasHost("extrahost"));
+}
+
+TEST_CASE("SshSpec.include_cycle_protection")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    // a.conf includes b.conf, b.conf includes a.conf
+    writeFile(sshDir / "a.conf",
+              "Host host-a\n"
+              "    HostName a.example.com\n"
+              "\n"
+              "Include b.conf\n");
+
+    writeFile(sshDir / "b.conf",
+              "Host host-b\n"
+              "    HostName b.example.com\n"
+              "\n"
+              "Include a.conf\n");
+
+    // Should not hang — cycle is detected
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "a.conf", results, visited);
+
+    auto hasHost = [&](std::string const& name) {
+        return std::ranges::find(results, name, &endo::QueryResult::text) != results.end();
+    };
+    CHECK(hasHost("host-a"));
+    CHECK(hasHost("host-b"));
+}
+
+TEST_CASE("SshSpec.case_insensitive_directives")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    // SSH config directives are case-insensitive
+    writeFile(sshDir / "config",
+              "host myserver\n"
+              "    hostname 10.0.0.1\n"
+              "\n"
+              "HOST uppercasehost\n"
+              "    HOSTNAME upper.example.com\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    auto hasHost = [&](std::string const& name) {
+        return std::ranges::find(results, name, &endo::QueryResult::text) != results.end();
+    };
+    CHECK(hasHost("myserver"));
+    CHECK(hasHost("uppercasehost"));
+}
+
+TEST_CASE("SshSpec.comments_and_empty_lines")
+{
+    auto const tmp = TmpDir {};
+    auto const sshDir = tmp.path / ".ssh";
+    std::filesystem::create_directories(sshDir);
+
+    writeFile(sshDir / "config",
+              "# This is a comment\n"
+              "\n"
+              "   # Indented comment\n"
+              "\n"
+              "Host realhost\n"
+              "    HostName real.example.com\n"
+              "\n"
+              "# Another comment\n");
+
+    auto results = std::vector<endo::QueryResult> {};
+    auto visited = std::set<std::string> {};
+    endo::SshQueryProvider::parseConfigFile(sshDir / "config", results, visited);
+
+    REQUIRE(results.size() == 1);
+    CHECK(results[0].text == "realhost");
+}
+
+TEST_CASE("SshSpec.live_ssh_host_completion")
+{
+    auto const home = std::getenv("HOME");
+    if (!home)
+        SKIP("HOME not set");
+
+    auto const configPath = std::filesystem::path(home) / ".ssh" / "config";
+    if (!std::filesystem::exists(configPath))
+        SKIP("~/.ssh/config not found");
+
+    auto completer = endo::CommandSpecCompleter {};
+    completer.registerCommand(endo::createSshSpec(), std::make_unique<endo::SshQueryProvider>());
+
+    auto ctx = makeSshContext("ssh ");
+    auto results = completer.complete(ctx);
+
+    // If user has a non-trivial ssh config, we should get at least one host
+    CHECK_FALSE(results.empty());
 }
