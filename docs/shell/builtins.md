@@ -55,6 +55,20 @@ cd ~/projects/endo
 cd -          # returns to the previous directory
 ```
 
+**Tilde expansion for other users:**
+
+```endo
+cd ~alice              # go to alice's home directory
+cd ~bob/Documents      # go to bob's Documents folder
+echo ~alice            # prints the resolved path
+```
+
+On POSIX systems, `~username` is resolved via the system user database (`getpwnam`). On
+Windows, Endo derives the path from the current user's `USERPROFILE` parent directory --
+for example, if `USERPROFILE` is `C:\Users\chris`, then `~alice` resolves to
+`C:\Users\alice` (if that directory exists). See
+[Platform Differences](platform-differences.md#tilde-expansion-username) for details.
+
 ---
 
 ## pwd

@@ -158,6 +158,12 @@ tee >(gzip > backup.gz) < input.txt
 comm -12 <(sort users_today | uniq) <(sort users_yesterday | uniq)
 ```
 
+!!! note "Windows"
+    Process substitution is not yet available on Windows. On Linux and macOS, it is
+    implemented using `/dev/fd` paths. A future release may add Windows support via named
+    pipes. See [Platform Differences](../shell/platform-differences.md#process-substitution)
+    for details.
+
 ### 10.6 Command Substitution
 
 <!-- endo-no-check -->

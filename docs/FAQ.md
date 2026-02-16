@@ -329,3 +329,86 @@ This works via two mechanisms:
 The `|>` operator is the same in all three layers — it always passes a value to a
 function. What changes is how rich the value is: a raw string, a list of strings, or a
 list of typed records.
+
+---
+
+## Windows-Specific Questions
+
+### Why doesn't Ctrl+Z suspend the shell on Windows?
+
+On POSIX systems, Ctrl+Z sends the `SIGTSTP` signal to the foreground process group, which
+suspends it and returns control to the parent shell. Windows has no equivalent mechanism:
+
+- There is no `SIGTSTP` signal.
+- There are no POSIX-style process groups.
+- There is no `tcsetpgrp()` to transfer terminal foreground control.
+
+As a result, pressing Ctrl+Z in Endo on Windows has no effect on the shell itself.
+
+**What still works on Windows:**
+
+- **Ctrl+C** interrupts the foreground child process.
+- **bg**, **fg**, and **jobs** manage child processes normally.
+- Child processes can be suspended and resumed using Endo's built-in job control, which
+  uses `SuspendThread` / `ResumeThread` under the hood.
+
+**Workaround:** Use multiple terminal tabs or windows instead of suspending and resuming
+the shell.
+
+See [Platform Differences](shell/platform-differences.md#shell-suspension-ctrlz) for the
+full explanation.
+
+---
+
+### How does signal handling work on Windows?
+
+Windows does not have POSIX signals (`SIGCHLD`, `SIGTSTP`, `SIGCONT`, etc.). Endo maps
+each signal to its closest Windows API equivalent:
+
+| Action | POSIX | Windows |
+|--------|-------|---------|
+| Interrupt a process | `SIGINT` | `GenerateConsoleCtrlEvent(CTRL_C_EVENT)` |
+| Terminate a process | `SIGTERM` / `SIGKILL` | `TerminateProcess()` |
+| Suspend a process | `SIGTSTP` | `SuspendThread()` on all threads |
+| Resume a process | `SIGCONT` | `ResumeThread()` on all threads |
+| Detect child exit | `SIGCHLD` | `WaitForSingleObject()` polling |
+
+This translation layer is built into Endo's platform abstraction, so shell commands like
+`bg`, `fg`, and pipeline management work the same way on both platforms.
+
+See [Platform Differences](shell/platform-differences.md#signal-handling) for details.
+
+---
+
+### Are there any Windows-specific limitations?
+
+Most Endo features work identically on Linux, macOS, and Windows. The known differences
+are:
+
+1. **Ctrl+Z does not suspend the shell** -- only child processes can be suspended.
+2. **Process substitution (`<(cmd)`, `>(cmd)`) is not yet available** -- this feature
+   requires a future implementation using Windows named pipes.
+3. **`~username` expansion uses a heuristic** -- on POSIX, user home directories are
+   looked up via `getpwnam()`. On Windows, Endo derives the path from the `USERPROFILE`
+   parent directory and checks if `C:\Users\<username>` exists.
+4. **Environment variable names are case-insensitive** on Windows, matching native Windows
+   behavior (`$PATH` and `$Path` refer to the same variable).
+
+See [Platform Differences](shell/platform-differences.md) for the complete comparison.
+
+---
+
+### Does process substitution work on Windows?
+
+Not yet. Process substitution (`<(command)` and `>(command)`) is fully implemented on
+Linux and macOS using `/dev/fd` paths, but is not yet available on Windows. A future
+release may implement this using Windows named pipes.
+
+As a workaround, capture command output into a temporary file:
+
+```endo
+# Instead of: diff <(ls dir1) <(ls dir2)
+ls dir1 > /tmp/list1.txt
+ls dir2 > /tmp/list2.txt
+diff /tmp/list1.txt /tmp/list2.txt
+```
