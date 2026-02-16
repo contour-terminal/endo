@@ -133,4 +133,5 @@ Use the [`bind`](builtins.md#bind) builtin to customize key bindings at runtime.
 - [Configuration](configuration.md) -- Prompt, aliases, key bindings, and environment
 - [Built-in Commands](builtins.md) -- Reference for all shell builtins
 - [Structured Output](structured-output.md) -- Automatic parsing of command output
+- [Platform Differences](platform-differences.md) -- Windows vs POSIX differences
 - [FAQ](../FAQ.md) -- Common questions about pipes, lambdas, and patterns
