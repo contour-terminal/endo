@@ -902,6 +902,11 @@ Component (base class)
 **Dependency:** Milestone 0.2 (platform abstraction design)
 
 **Tasks:**
+- [x] Static linking support (`ENABLE_STATIC_LINKING` option, `cmake/StaticLinking.cmake`)
+  - [x] System requirement check (glibc-static, libstdc++-static detection with distro-specific hints)
+  - [x] CPM-built dependencies when static: yaml-cpp, libunicode, CURL with mbedTLS backend
+  - [x] Guard `-rdynamic` when static (incompatible with `-static`)
+  - [x] CI workflow for static build artifact (`static-build.yml`)
 - [ ] Add Windows CMake preset
 - [ ] Configure MSVC and Clang-cl support
 - [ ] Set up Windows CI pipeline
