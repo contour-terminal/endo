@@ -192,6 +192,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `string_length` — length of string
 - [x] `int_of_string` — string to integer conversion
 - [x] `string_of_int` — integer to string conversion
+- [x] `string` — universal to-string conversion (int, float, bool, string passthrough)
 - [x] `not` — boolean negation
 - [x] `env` — returns `option<str>` for environment variables (`Some value` if set, `None` if not)
 - [x] `which` — returns `option<str>` for program lookup (`Some path` if found in `$PATH`, `None` if not)

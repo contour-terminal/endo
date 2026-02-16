@@ -3305,6 +3305,28 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "string")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("string requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate string argument");
+            return true;
+        }
+        _result = convertToString(argVal, "string");
+        if (!_result)
+        {
+            reportTypeError("Cannot convert value to string");
+            return true;
+        }
+        return true;
+    }
+
     if (name == "not")
     {
         if (argExprs.size() != 1)
@@ -5256,6 +5278,16 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         if (funcIdent->name == "string_of_int")
         {
             _result = _builder.createN2S(value, "n2s");
+            return;
+        }
+        if (funcIdent->name == "string")
+        {
+            _result = convertToString(value, "string");
+            if (!_result)
+            {
+                reportTypeError("Cannot convert value to string in pipeline");
+                return;
+            }
             return;
         }
         if (funcIdent->name == "not")

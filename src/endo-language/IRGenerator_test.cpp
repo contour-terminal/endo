@@ -2594,6 +2594,31 @@ TEST_CASE("IRGenerator.FSharp.builtin_string_of_int")
     CHECK(executeSourceAndGetOutput(R"(print (string_of_int 42))") == "42");
 }
 
+TEST_CASE("IRGenerator.FSharp.builtin_string_from_int")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (string 42))") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_from_float")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (string 3.14))") == "3.14");
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_from_bool")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (string true))") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_passthrough")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (string "hello"))") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.builtin_string_pipeline")
+{
+    CHECK(executeSourceAndGetOutput("42 |> string |> println") == "42\n");
+}
+
 TEST_CASE("IRGenerator.FSharp.builtin_int_of_string")
 {
     CHECK(executeSourceAndGetOutput(R"(let n = int_of_string "7"; print (n + 3))") == "10");

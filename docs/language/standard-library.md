@@ -6,7 +6,7 @@ by category. Each example is executable and verified by the documentation test s
 ### Contents
 
 - [15.1 Output](#151-output) -- `print`, `println`
-- [15.2 Type Conversion](#152-type-conversion) -- `string_length`, `int_of_string`, `string_of_int`, `not`
+- [15.2 Type Conversion](#152-type-conversion) -- `string_length`, `int_of_string`, `string_of_int`, `string`, `not`
 - [15.3 String Operations](#153-string-operations) -- `trim`, `toLower`, `toUpper`, `contains`, `startsWith`, `endsWith`, `replace`, `split`, `join`, `*`
 - [15.4 List -- Basic Operations](#154-list-basic-operations) -- `head`, `tail`, `length`, `isEmpty`, `nth`, `last`, `replicate`
 - [15.5 List -- Higher-Order Functions](#155-list-higher-order-functions) -- `map`, `filter`, `fold`, `reduce`, `find`, `exists`, `forall`, `each`
@@ -87,6 +87,23 @@ print (string_of_int 42)   # => 42
 ```endo
 let r = 42 |> string_of_int |> string_length
 print r   # => 2
+```
+
+#### `string`
+
+**Signature:** `string value : str`
+
+Universal conversion to string. Works with integers, floats, booleans, and strings (passthrough).
+
+```endo
+print (string 42)      # => 42
+print (string 3.14)    # => 3.14
+print (string true)    # => true
+print (string "hi")    # => hi
+```
+
+```endo
+42 |> string |> println   # => 42
 ```
 
 #### `not`

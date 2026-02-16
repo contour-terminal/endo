@@ -341,7 +341,7 @@
         },
         {
             name: 'Pipelines',
-            code: 'let xs = [1; 2; 3; 4; 5]\nxs |> List.map (fun x -> x * x) |> List.filter (fun x -> x > 5) |> println'
+            code: '[1; 2; 3; 4; 5] |> List.map (fun x -> x * x) |> List.filter (fun x -> x > 5) |> println'
         }
     ];
 
