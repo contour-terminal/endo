@@ -95,6 +95,7 @@ if(ENDO_TESTING)
         IRGenerator_test.cpp
         TypeInferencer_test.cpp
         CompletionCandidates_test.cpp
+        CompletionContext_test.cpp
         Completer_test.cpp
     )
     target_link_libraries(test-endo-language endo Catch2::Catch2)

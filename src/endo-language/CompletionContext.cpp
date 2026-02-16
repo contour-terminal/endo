@@ -113,13 +113,6 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
         return ctx;
     }
 
-    // Check for file path context
-    if (looksLikeFilePath(ctx.prefix))
-    {
-        ctx.type = CompletionContextType::FilePath;
-        return ctx;
-    }
-
     // Tokenize to determine if we're in command or argument position
     try
     {
@@ -133,7 +126,9 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
 
         if (tokens.empty())
         {
-            ctx.type = CompletionContextType::Command;
+            // In command position, file-path-like prefixes trigger file completion
+            ctx.type = looksLikeFilePath(ctx.prefix) ? CompletionContextType::FilePath
+                                                     : CompletionContextType::Command;
             return ctx;
         }
 
@@ -161,7 +156,8 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
         // If last token was a command boundary, next is a command
         if (isCommandBoundary(lastToken))
         {
-            ctx.type = CompletionContextType::Command;
+            ctx.type = looksLikeFilePath(ctx.prefix) ? CompletionContextType::FilePath
+                                                     : CompletionContextType::Command;
             return ctx;
         }
 
@@ -179,7 +175,12 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
 
         if (!hasCommand)
         {
-            ctx.type = CompletionContextType::Command;
+            // In command position, file-path-like prefixes (./script, ~/bin, path/to/cmd)
+            // should trigger file completion rather than command completion
+            if (looksLikeFilePath(ctx.prefix))
+                ctx.type = CompletionContextType::FilePath;
+            else
+                ctx.type = CompletionContextType::Command;
         }
         else
         {
