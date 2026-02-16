@@ -666,6 +666,76 @@ void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& fu
     // AST inlining path (e.g., print returns Number(0) but unit maps to Void).
 }
 
+bool IRGenerator::isUnitProducingExpr(ast::Expr const* expr) const
+{
+    std::unordered_set<std::string> visited;
+    return isUnitProducingExprImpl(expr, visited);
+}
+
+bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
+                                          std::unordered_set<std::string>& visited) const
+{
+    if (!expr)
+        return false;
+
+    // Unwrap parentheses
+    if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(expr))
+        return isUnitProducingExprImpl(paren->inner.get(), visited);
+
+    // Unit literal ()
+    if (dynamic_cast<ast::UnitExpr const*>(expr))
+        return true;
+
+    // Function application: check if the called function returns void
+    if (auto const* app = dynamic_cast<ast::ApplicationExpr const*>(expr))
+    {
+        // Walk to the leftmost function in curried application chain
+        auto const* fn = app->function.get();
+        while (auto const* innerApp = dynamic_cast<ast::ApplicationExpr const*>(fn))
+            fn = innerApp->function.get();
+
+        if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(fn))
+        {
+            auto const& name = ident->name;
+
+            // Cycle detection for recursive functions
+            if (visited.contains(name))
+                return false;
+
+            // Check builtins: any overload with this name that returns Void
+            for (auto const* cb: _runtime.builtins())
+                if (cb->signature().name() == name
+                    && cb->signature().returnType() == CoreVM::LiteralType::Void)
+                    return true;
+
+            // Check user-defined F# functions
+            if (auto const* func = lookupFSharpFunction(name))
+            {
+                visited.insert(name);
+                auto result = isUnitProducingExprImpl(func->body, visited);
+                visited.erase(name);
+                return result;
+            }
+        }
+    }
+
+    // Match where ALL arms produce unit
+    if (auto const* match = dynamic_cast<ast::MatchExpr const*>(expr))
+        return !match->arms.empty() && std::ranges::all_of(match->arms, [this, &visited](auto const& arm) {
+            return isUnitProducingExprImpl(arm.body.get(), visited);
+        });
+
+    // If-then-else where both branches produce unit
+    if (auto const* ifE = dynamic_cast<ast::IfExpr const*>(expr))
+    {
+        if (!isUnitProducingExprImpl(ifE->thenExpr.get(), visited))
+            return false;
+        return ifE->elseExpr ? isUnitProducingExprImpl(ifE->elseExpr.get(), visited) : true;
+    }
+
+    return false;
+}
+
 ReturnKind IRGenerator::determineReturnKind(ast::Expr const* body) const
 {
     if (!body)
@@ -4804,7 +4874,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         }
     }
 
-    if (node.displayResult && value)
+    if (node.displayResult && value && !isUnitProducingExpr(node.expr.get()))
     {
         // Bare expression evaluation: auto-display the result
         auto const type = value->type();

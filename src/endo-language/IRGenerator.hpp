@@ -8,6 +8,7 @@
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "AST.hpp"
 #include "CompletionItem.hpp"
@@ -502,6 +503,13 @@ class IRGenerator final: public ast::Visitor
     /// into the FSharpFunction fields.
     static void extractTypedParameters(std::vector<ast::TypedParameter> const& typedParams,
                                        FSharpFunction& func);
+
+    /// Returns true if the expression produces a unit (void) result that should not be auto-displayed.
+    [[nodiscard]] bool isUnitProducingExpr(ast::Expr const* expr) const;
+
+    /// Implementation helper for isUnitProducingExpr with cycle detection for recursive functions.
+    [[nodiscard]] bool isUnitProducingExprImpl(ast::Expr const* expr,
+                                               std::unordered_set<std::string>& visited) const;
 
     /// Analyzes a function body to determine if it returns Result, Option, or plain type.
     [[nodiscard]] ReturnKind determineReturnKind(ast::Expr const* body) const;

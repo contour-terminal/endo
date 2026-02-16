@@ -8085,3 +8085,26 @@ let process (n: int) =
 process 3
 )"));
 }
+
+TEST_CASE("IRGenerator.FSharp.parenthesized_println_no_extra_output")
+{
+    CHECK(executeSourceAndGetOutput(R"((println "hi"))") == "hi\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.parenthesized_match_println_no_extra_output")
+{
+    CHECK(executeSourceAndGetOutput(
+              R"((match Some 42 with | Some x -> println "found" | None -> println "none"))")
+          == "found\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.parenthesized_user_function_unit_no_extra_output")
+{
+    // User-defined function that returns unit via println
+    CHECK(executeSourceAndGetOutput("let greet name = println name\n(greet \"hello\")") == "hello\n");
+}
+
+TEST_CASE("IRGenerator.FSharp.parenthesized_number_still_displays")
+{
+    CHECK(executeSourceAndGetOutput("(5 + 3)") == "8\n");
+}

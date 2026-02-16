@@ -364,6 +364,7 @@ Consult this section to determine what to work on next.
 - [x] Auto-style selection: Bordered with color for terminals, Plain for pipes/non-terminal
 - [x] `print`/`println` remain unaffected (always plain text for scripting)
 - [x] Trailing `|>` pipeline support on bare expressions
+- [x] Suppress spurious "0" from parenthesized unit-producing expressions (e.g., `(println "hi")`)
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
