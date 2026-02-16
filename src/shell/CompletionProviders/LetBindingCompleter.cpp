@@ -92,7 +92,7 @@ std::vector<CompletionItem> LetBindingCompleter::complete(CompletionContext cons
 
 bool LetBindingCompleter::canHandle(CompletionContextType type) const
 {
-    return type == CompletionContextType::Command || type == CompletionContextType::Argument;
+    return type == CompletionContextType::Command;
 }
 
 std::string LetBindingCompleter::formatFunctionDescription(

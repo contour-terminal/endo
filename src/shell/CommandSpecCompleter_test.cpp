@@ -601,6 +601,23 @@ TEST_CASE("CommandSpecCompleter.multiple_commands")
 }
 
 // ============================================================================
+// Regression: stdlib pollution in subcommand completions
+// ============================================================================
+
+TEST_CASE("CommandSpecCompleter.git_subcommand_no_stdlib_pollution")
+{
+    // Verify that F# stdlib functions like "startsWith" don't leak
+    // into git subcommand completions for prefix "sta"
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git sta", "sta");
+    auto results = completer.complete(ctx);
+
+    CHECK(hasCompletion(results, "stash"));
+    CHECK(hasCompletion(results, "status"));
+    CHECK_FALSE(hasCompletion(results, "startsWith"));
+}
+
+// ============================================================================
 // Restore: tracked files
 // ============================================================================
 
