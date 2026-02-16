@@ -22,7 +22,7 @@ jobs:
 
       # Build WASM playground
       - name: Get vendored libraries
-        run: ./get_contour_dirs.sh
+        run: ./scripts/get_contour_dirs.sh
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:

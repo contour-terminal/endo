@@ -50,7 +50,7 @@ jobs:
     - name: "Get library crispy & vtparser"
       run: |
         set -ex
-        ./get_contour_dirs.sh
+        ./scripts/get_contour_dirs.sh
 
     - name: Install CMake
       uses: ssrobins/install-cmake@v1

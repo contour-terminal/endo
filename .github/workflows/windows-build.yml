@@ -26,7 +26,7 @@ jobs:
 
     - name: "Get library crispy & vtparser"
       shell: bash
-      run: ./get_contour_dirs.sh
+      run: ./scripts/get_contour_dirs.sh
 
     - name: Setup MSVC environment
       uses: ilammy/msvc-dev-cmd@v1

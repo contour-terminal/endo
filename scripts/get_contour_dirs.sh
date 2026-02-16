@@ -1,4 +1,6 @@
-#!/usr/bin/env sh
+#!/usr/bin/env bash
+
+cd "$(git rev-parse --show-toplevel)" || exit 1
 
 rm -rf ./src/crispy ./src/vtparser ./contour
 git clone -n --depth=1 --filter=tree:0 https://github.com/contour-terminal/contour.git
