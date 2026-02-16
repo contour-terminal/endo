@@ -21,6 +21,14 @@
     #include <signal.h>
     #include <time.h>
     #include <unistd.h>
+#else
+    #if defined(ENDO_HAS_STACKTRACE)
+        #include <cstdio>
+        #include <filesystem>
+
+        #include <windows.h>
+        #include <dbghelp.h>
+    #endif
 #endif
 
 namespace endo
@@ -355,11 +363,6 @@ void CrashHandler::initialize(char const* version)
 #else // _WIN32
 
     #if defined(ENDO_HAS_STACKTRACE)
-        #include <cstdio>
-        #include <filesystem>
-
-        #include <dbghelp.h>
-        #include <windows.h>
 
 namespace
 {

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <array>
+
 #include "Gradient.hpp"
 
 using tui::operator""_rgb;
@@ -16,7 +18,7 @@ TEST_CASE("multiStopGradient.empty_stops_returns_black", "[gradient]")
 TEST_CASE("multiStopGradient.single_stop_returns_that_stop", "[gradient]")
 {
     auto const stop = 0xFF8040_rgb;
-    auto const stops = std::array { stop };
+    auto const stops = std::array<tui::RgbColor, 1> { stop };
     CHECK(endo::multiStopGradient(stops, 0.0f).r == stop.r);
     CHECK(endo::multiStopGradient(stops, 0.5f).g == stop.g);
     CHECK(endo::multiStopGradient(stops, 1.0f).b == stop.b);
@@ -26,7 +28,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 {
     auto const a = 0x000000_rgb;
     auto const b = 0xFF00FF_rgb;
-    auto const stops = std::array { a, b };
+    auto const stops = std::array<tui::RgbColor, 2> { a, b };
 
     // t=0 → a
     auto const r0 = endo::multiStopGradient(stops, 0.0f);
@@ -50,7 +52,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 
 TEST_CASE("multiStopGradient.five_stops_boundaries", "[gradient]")
 {
-    auto const stops = std::array {
+    auto const stops = std::array<tui::RgbColor, 5> {
         0x252545_rgb, // 0
         0x1E3840_rgb, // 1
         0x1E3828_rgb, // 2
@@ -91,7 +93,7 @@ TEST_CASE("multiStopGradient.five_stops_boundaries", "[gradient]")
 
 TEST_CASE("multiStopGradient.five_stops_midpoint", "[gradient]")
 {
-    auto const stops = std::array {
+    auto const stops = std::array<tui::RgbColor, 5> {
         0x252545_rgb, 0x1E3840_rgb, 0x1E3828_rgb, 0x352040_rgb, 0x252545_rgb,
     };
 
@@ -107,7 +109,7 @@ TEST_CASE("multiStopGradient.clamps_out_of_range", "[gradient]")
 {
     auto const a = 0x102030_rgb;
     auto const b = 0x405060_rgb;
-    auto const stops = std::array { a, b };
+    auto const stops = std::array<tui::RgbColor, 2> { a, b };
 
     // t < 0 → clamps to first stop
     auto const rNeg = endo::multiStopGradient(stops, -1.0f);

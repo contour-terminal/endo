@@ -723,7 +723,11 @@ TestRuntime::TestRuntime()
         .bind([](CoreVM::Params& args) {
             auto const epoch = static_cast<time_t>(args.getInt(1));
             struct tm tm {};
+#if defined(_WIN32)
+            gmtime_s(&tm, &epoch);
+#else
             gmtime_r(&epoch, &tm);
+#endif
             auto result = std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
                                       tm.tm_year + 1900,
                                       tm.tm_mon + 1,
