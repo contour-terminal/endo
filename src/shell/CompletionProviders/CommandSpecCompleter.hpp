@@ -30,6 +30,12 @@ class CommandSpecCompleter: public CompletionProvider
     /// @brief Priority 85 — higher than FileCompleter (50), lower than CommandCompleter (100).
     [[nodiscard]] int priority() const override { return 85; }
 
+    /// @brief Returns true when completing option values that aren't file paths.
+    ///
+    /// Suppresses FileCompleter from adding directory suggestions when completing
+    /// DynamicQuery or Enum option values (e.g., `cmake --preset <TAB>`).
+    [[nodiscard]] bool isExclusiveFor(CompletionContext const& context) const override;
+
     /// @brief Registers a command spec with an optional dynamic query provider.
     /// @param spec The command specification.
     /// @param queryProvider Optional provider for dynamic data (branches, containers, etc.).

@@ -89,6 +89,8 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
     auto expectingSubcommand = !spec.subcommands.empty();
     auto skipNext = false;
     auto unmatchedTokenWasSubcommandCandidate = false;
+    auto pendingOptionName = std::string {};   ///< Option awaiting its value (set when skipNext=true).
+    auto lastValueOptionName = std::string {}; ///< Option that consumed the most recent skipNext token.
 
     // Current context: which options are valid
     auto const* currentOptions = &spec.globalOptions;
@@ -99,8 +101,11 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
         if (skipNext)
         {
             skipNext = false;
+            lastValueOptionName = std::move(pendingOptionName);
+            pendingOptionName.clear();
             continue;
         }
+        lastValueOptionName.clear();
 
         auto const& tok = tokens[i];
 
@@ -125,6 +130,7 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
                 else
                 {
                     skipNext = true;
+                    pendingOptionName = tok;
                 }
             }
             continue;
@@ -169,6 +175,14 @@ std::optional<CommandLineState> parseCommandLine(CommandSpec const& spec,
     {
         // We skipped the value but there was no next token — we're completing the option value
         state.optionExpectingValue = tokens.back();
+        state.phase = CompletionPhase::OptionValue;
+        return state;
+    }
+
+    // If the last token was consumed as an option value and we're still typing it
+    if (!endsWithSpace && !lastValueOptionName.empty())
+    {
+        state.optionExpectingValue = lastValueOptionName;
         state.phase = CompletionPhase::OptionValue;
         return state;
     }

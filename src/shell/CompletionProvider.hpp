@@ -36,6 +36,20 @@ class CompletionProvider
     /// @brief Returns the priority of this provider (higher = checked first).
     /// @return Priority value (default: 0).
     [[nodiscard]] virtual int priority() const { return 0; }
+
+    /// @brief Returns true if this provider's results should suppress lower-priority providers.
+    ///
+    /// When a provider returns non-empty results and isExclusiveFor() returns true,
+    /// the Completer stops querying lower-priority providers. This prevents e.g.
+    /// FileCompleter from adding directory suggestions when CommandSpecCompleter
+    /// is completing option values (like preset names).
+    /// @param context The completion context.
+    /// @return true if results are exclusive for this context (default: false).
+    [[nodiscard]] virtual bool isExclusiveFor(CompletionContext const& context) const
+    {
+        (void) context;
+        return false;
+    }
 };
 
 } // namespace endo

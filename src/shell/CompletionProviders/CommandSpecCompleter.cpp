@@ -23,6 +23,50 @@ bool CommandSpecCompleter::canHandle(CompletionContextType type) const
     return type == CompletionContextType::Argument || type == CompletionContextType::Option;
 }
 
+bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) const
+{
+    if (!context.command.has_value())
+        return false;
+
+    auto it = _commands.find(*context.command);
+    if (it == _commands.end())
+        return false;
+
+    auto const& cmd = it->second;
+    auto const state = parseCommandLine(
+        cmd.spec, context.fullInput, context.cursorPosition, context.prefix, cmd.aliasResolver);
+    if (!state.has_value())
+        return false;
+
+    // Exclusive when completing option values that aren't file paths
+    if (state->phase == CompletionPhase::OptionValue)
+    {
+        // Find the option to check if it's a Path type (which should still allow FileCompleter)
+        auto findOpt = [&](std::vector<OptionDef> const& options) -> OptionDef const* {
+            for (auto const& opt: options)
+            {
+                if ((!opt.longName.empty() && state->optionExpectingValue == opt.longName)
+                    || (!opt.shortName.empty() && state->optionExpectingValue == opt.shortName))
+                    return &opt;
+            }
+            return nullptr;
+        };
+
+        OptionDef const* optDef = findOpt(cmd.spec.globalOptions);
+        if (!optDef)
+        {
+            auto const* sub = resolveSubcommand(cmd.spec, state->subcommandChain);
+            if (sub)
+                optDef = findOpt(sub->options);
+        }
+
+        // Path options should still allow FileCompleter, all others are exclusive
+        return !optDef || optDef->valueKind != OptionValueKind::Path;
+    }
+
+    return false;
+}
+
 std::vector<CompletionItem> CommandSpecCompleter::complete(CompletionContext const& context)
 {
     if (!context.command.has_value())

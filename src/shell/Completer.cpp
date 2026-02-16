@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
-
+#include <shell/CompletionProviders/CmakeSpec.hpp>
 #include <shell/CompletionProviders/GitSpec.hpp>
 
 #include <tui/completer/Completer.hpp>
@@ -23,6 +23,8 @@ Completer::Completer(EnvironmentProvider const& env,
     // Generic command spec completer (replaces GitBranchCompleter)
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
+    specCompleter->registerCommand(createCmakeSpec(), std::make_unique<CmakeQueryProvider>());
+    specCompleter->registerCommand(createCtestSpec(), std::make_unique<CmakeQueryProvider>());
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));
@@ -138,6 +140,10 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
             if (!isDuplicate)
                 allResults.push_back(std::move(item));
         }
+
+        // If this provider claims exclusivity and returned results, stop querying others
+        if (!results.empty() && provider->isExclusiveFor(ctx))
+            break;
     }
 
     // Sort by score (descending), then alphabetically

@@ -24,6 +24,8 @@ add_library(endo-shell STATIC
     CompletionProviders/CommandLineParser.cpp
     CompletionProviders/CommandQueryProvider.hpp
     CompletionProviders/CommandSpec.hpp
+    CompletionProviders/CmakeSpec.hpp
+    CompletionProviders/CmakeSpec.cpp
     CompletionProviders/CommandSpecCompleter.hpp
     CompletionProviders/CommandSpecCompleter.cpp
     CompletionProviders/GitSpec.hpp
