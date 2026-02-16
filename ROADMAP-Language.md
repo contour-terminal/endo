@@ -386,5 +386,5 @@ Consult this section to determine what to work on next.
 - [x] Unit parameter in function definitions: `let f () = 42` for side-effecting functions
 - [x] Named union fields: `Circle of radius: float` for self-documenting discriminated unions
 - [x] Non-tail recursion support: complex-typed parameters now compile via UCALL, enabling non-tail recursive calls
-- [ ] `$(...)` command substitution in F# expression context: `let user = $(whoami)` bridging shell and F#
+- [x] `$(...)` command substitution in F# expression context: `let user = $(whoami)` bridging shell and F#
 - [x] Nested list comprehensions: `[for x in xs -> for y in ys -> (x, y)]`

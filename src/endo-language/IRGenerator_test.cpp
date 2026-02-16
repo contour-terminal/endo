@@ -7758,6 +7758,41 @@ TEST_CASE("IRGenerator.FSharp.list.each_print_numbers")
 }
 
 // =============================================================================
+// F# command substitution in expression context: $(...)
+// =============================================================================
+
+TEST_CASE("IRGenerator.FSharp.command_substitution_in_expr")
+{
+    // Basic command substitution in F# expression context
+    CHECK(executeSourceAndGetOutput("print $(echo hello)") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.command_substitution_let_binding")
+{
+    // Command substitution as a let binding value
+    CHECK(executeSourceAndGetOutput("let x = $(echo world)\nprint x") == "world");
+}
+
+TEST_CASE("IRGenerator.FSharp.command_substitution_string_concat")
+{
+    // Self-delimiting: composes with + operator without parentheses
+    CHECK(executeSourceAndGetOutput(R"(let r = $(echo hello) + " " + $(echo world); print r)")
+          == "hello world");
+}
+
+TEST_CASE("IRGenerator.FSharp.command_substitution_in_pipeline")
+{
+    // Command substitution as pipeline source
+    CHECK(executeSourceAndGetOutput("$(echo 42) |> string_length |> print") == "2");
+}
+
+TEST_CASE("IRGenerator.FSharp.command_substitution_in_if")
+{
+    // Command substitution in if condition
+    CHECK(executeSourceAndGetOutput(R"(if $(echo "yes") == "yes" then print "ok" else print "no")") == "ok");
+}
+
+// =============================================================================
 // F# fetch builtin IR Generation Tests
 // =============================================================================
 

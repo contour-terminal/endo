@@ -166,6 +166,53 @@ The `&` prefix is used to explicitly invoke an external command in expression co
 
 ---
 
+## What is the difference between `& command` and `$(command)`?
+
+Both run a shell command and capture its stdout as a string, but they differ in
+**delimiting** and **composability**.
+
+### `$(...)` — Self-delimiting substitution
+
+The parentheses make the boundaries explicit, so `$(...)` composes naturally
+with other expressions:
+
+```fsharp
+let greeting = $(whoami) + "@" + $(hostname)
+let is_clean = $(git status --porcelain) == ""
+```
+
+This is the familiar POSIX `$(...)` syntax — it works everywhere a value is
+expected.
+
+### `& command` — Greedy shell expression
+
+The `&` prefix switches into shell mode and consumes everything up to the
+statement boundary (newline, `;`, `|>`). It's best for full pipelines and
+multi-word commands that stand alone:
+
+```fsharp
+let log = & tail -n 100 /var/log/syslog | grep error
+```
+
+When you need to embed a shell command in a larger expression, `& command`
+requires parentheses to delimit it:
+
+```fsharp
+let greeting = (& whoami) + "@" + (& hostname)   # parens needed
+```
+
+### When to use which?
+
+| Scenario | Preferred | Example |
+|----------|-----------|---------|
+| Inline in expressions | `$(...)` | `$(whoami) + "@" + $(hostname)` |
+| Standalone capture | Either | `let user = $(whoami)` or `let user = & whoami` |
+| Full shell pipeline | `& ...` | `let log = & cat file \| grep pattern` |
+| Inside if-conditions | `$(...)` | `if $(cmd) == "ok" then ...` |
+| String interpolation | `$(...)` | `$"Hello $(whoami)"` |
+
+---
+
 ## Can shell pipes run in the background?
 
 Yes. Append `&` to run the entire shell pipeline in the background:

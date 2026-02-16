@@ -180,6 +180,27 @@ let next = $((counter + 1))
 echo "Result: $((a * b + c))"
 ```
 
+#### `$(...)` in F# Expressions
+
+`$(...)` also works as a self-delimiting F# expression that captures stdout as a
+string. Unlike `& command` which is greedy (consumes up to a statement boundary),
+`$(...)` composes naturally inline:
+
+<!-- endo-no-check -->
+```endo
+# Self-delimiting — composes with operators
+let greeting = $(whoami) + "@" + $(hostname)
+
+# In if-conditions
+if $(git status --porcelain) == "" then print "clean" else print "dirty"
+
+# As pipeline source
+$(echo 42) |> string_length |> print   # prints 2
+
+# Compare with & command (needs parentheses for inline use)
+let greeting = (& whoami) + "@" + (& hostname)
+```
+
 ### 10.7 Dynamic Command Execution (`exec`)
 
 The `exec` keyword executes a dynamically-resolved program path with F# expression arguments.

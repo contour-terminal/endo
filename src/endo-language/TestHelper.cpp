@@ -1278,12 +1278,48 @@ TestRuntime::TestRuntime()
         });
 }
 
-void TestRuntime::dummyCallProc(CoreVM::Params&)
+void TestRuntime::dummyCallProc(CoreVM::Params& params)
 {
+    auto const& args = params.getStringArray(1);
+    if (!args.empty() && args[0] == "echo")
+    {
+        std::string output;
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            if (i > 1)
+                output += ' ';
+            output += args[i];
+        }
+        output += '\n';
+        if (mockSubstActive)
+            mockSubstBuffer += output;
+        else
+            capturedOutput += output;
+    }
+    params.setResult(CoreVM::CoreNumber(0));
 }
 
-void TestRuntime::dummyCallProcPiped(CoreVM::Params&)
+void TestRuntime::dummyCallProcPiped(CoreVM::Params& params)
 {
+    auto const lastInChain = params.getBool(1);
+    auto const& args = params.getStringArray(2);
+    if (!args.empty() && args[0] == "echo")
+    {
+        std::string output;
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            if (i > 1)
+                output += ' ';
+            output += args[i];
+        }
+        output += '\n';
+        if (mockSubstActive)
+            mockSubstBuffer += output;
+        else
+            capturedOutput += output;
+    }
+    (void) lastInChain;
+    params.setResult(CoreVM::CoreNumber(0));
 }
 
 void TestRuntime::builtinPrint(CoreVM::Params& params)

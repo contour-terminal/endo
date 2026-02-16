@@ -183,6 +183,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return nullptr;
             return std::make_unique<ast::ExprStmt>(std::move(expr));
         }
+        case Token::DollarRndOpen: {
+            // Command substitution at statement level: $(whoami) |> string_length |> print
+            _lexer.enterFSharpExpr();
+            auto expr = parseFSharpExpr();
+            _lexer.leaveFSharpExpr();
+            if (!expr)
+                return nullptr;
+            return std::make_unique<ast::ExprStmt>(std::move(expr));
+        }
         case Token::Type:
             // Record type definition: type Person = { name: str; age: int }
             return parseTypeDefinition();
@@ -2570,17 +2579,18 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::RndOpen:
         case Token::Fun:
         case Token::Match:
-        case Token::True:         // Boolean literal: true
-        case Token::False:        // Boolean literal: false
-        case Token::BracketOpen:  // List literal: [1; 2; 3]
-        case Token::BraceOpen:    // Block expression: { ... }
-        case Token::Ampersand:    // Shell command expression: & git status
-        case Token::OptionSome:   // Some expr
-        case Token::OptionNone:   // None
-        case Token::ResultOk:     // Ok expr
-        case Token::ResultError:  // Error expr
-        case Token::Try:          // try expr with ...
-        case Token::FStringStart: // F# interpolated string: $"..."
+        case Token::True:          // Boolean literal: true
+        case Token::False:         // Boolean literal: false
+        case Token::BracketOpen:   // List literal: [1; 2; 3]
+        case Token::BraceOpen:     // Block expression: { ... }
+        case Token::Ampersand:     // Shell command expression: & git status
+        case Token::DollarRndOpen: // Command substitution: $(whoami)
+        case Token::OptionSome:    // Some expr
+        case Token::OptionNone:    // None
+        case Token::ResultOk:      // Ok expr
+        case Token::ResultError:   // Error expr
+        case Token::Try:           // try expr with ...
+        case Token::FStringStart:  // F# interpolated string: $"..."
             return true;
         case Token::Identifier: {
             auto const& lit = _lexer.currentLiteral();
@@ -5425,6 +5435,30 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         case Token::Ampersand: {
             // Shell command expression: & git status
             return parseShellCommandExpr();
+        }
+
+        case Token::DollarRndOpen: {
+            // Command substitution in F# expression context: $(whoami)
+            // We must leave F# mode for the shell command inside $(...), then
+            // re-enter F# mode BEFORE consuming ')' so that the token after ')'
+            // is lexed in F# mode (e.g., '+' as Token::Plus, not a shell word).
+            _lexer.leaveFSharpExpr();
+            _lexer.nextToken(); // consume $(, lex next token in shell mode
+            auto command = parseLogicalExpr();
+            if (!command)
+                return nullptr;
+            _lexer.enterFSharpExpr(); // switch back to F# mode before consuming ')'
+            if (_lexer.currentToken() != Token::RndClose)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Add a closing ')' after the command" },
+                                                   currentContextSnippet(),
+                                                   "Expected ')' after command substitution, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume ), lex next token in F# mode
+            return std::make_unique<ast::SubstitutionExpr>(std::move(command), false);
         }
 
         case Token::OptionSome: {
