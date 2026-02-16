@@ -4717,6 +4717,18 @@ void Shell::builtinExpandTildeUser(CoreVM::Params& context)
     else
         context.setResult("~" + user + suffix);
 #else
+    // Heuristic: derive the users base directory from USERPROFILE and append the requested username.
+    if (auto const userProfile = _env.get("USERPROFILE"); userProfile.has_value())
+    {
+        auto const usersDir = std::filesystem::path(*userProfile).parent_path();
+        auto const targetHome = usersDir / user;
+        if (std::filesystem::exists(targetHome))
+        {
+            context.setResult(targetHome.string() + suffix);
+            return;
+        }
+    }
+    // Fallback: return the literal ~username string when expansion fails.
     context.setResult("~" + user + suffix);
 #endif
 }
