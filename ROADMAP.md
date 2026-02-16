@@ -832,6 +832,7 @@ Component (base class)
 - [x] Implement transient prompt rendering (replace full prompt with compact indicator on submit)
 - [x] Add syntax highlighting to transient prompt (reuses `computeHighlightMap` / `categoryColor` from `SyntaxHighlighter`)
 - [x] Implement aurora background gradient for endo-signature preset (multi-stop horizontal color interpolation via `multiStopGradient()`)
+- [x] Implement sixel aurora fade effect above prompt (pixel-level gradient via `Canvas::drawImage()`, CSI 16t cell size query, pre-encoded sixel caching in `PromptComponent`; transparent alpha for terminal background bleed-through)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests
