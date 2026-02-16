@@ -115,6 +115,7 @@ if(WIN32)
     target_sources(endo-shell PRIVATE
         platform/WindowsPipe.cpp
         platform/WindowsTTY.cpp
+        platform/WindowsTestPTY.cpp
         platform/WindowsProcess.cpp
         platform/WindowsEnvironmentProvider.hpp
         platform/WindowsEnvironmentProvider.cpp
