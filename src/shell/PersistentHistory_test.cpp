@@ -19,7 +19,7 @@ struct TempDir
 
     TempDir()
     {
-        path = std::filesystem::current_path() / "tmp" / "history_test";
+        path = std::filesystem::temp_directory_path() / "endo_history_test";
         std::filesystem::create_directories(path);
     }
 

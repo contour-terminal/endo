@@ -2290,18 +2290,22 @@ TEST_CASE("table.terminalWidth.minimum_column_width")
 // Partial-line indicator
 // ============================================================================
 
+#include "Pipe.hpp"
 #include "Prompt.hpp"
 
 namespace
 {
 
-std::string readAllFromPipe(int readFd)
+/// @brief Reads all available data from a pipe handle until EOF.
+/// @param handle The read end of the pipe (platform-native handle).
+/// @return The collected output as a string.
+std::string readAllFromPipe(endo::NativeHandle handle)
 {
     std::string result;
     char buf[256];
     for (;;)
     {
-        auto const n = ::read(readFd, buf, sizeof(buf));
+        auto const n = endo::platformRead(handle, buf, sizeof(buf));
         if (n <= 0)
             break;
         result.append(buf, static_cast<size_t>(n));
@@ -2313,14 +2317,14 @@ std::string readAllFromPipe(int readFd)
 
 TEST_CASE("shell.partial_line_indicator.emits_when_not_at_col1")
 {
-    int fds[2];
-    REQUIRE(::pipe(fds) == 0);
+    auto pipe = endo::createPipe();
+    REQUIRE(pipe.has_value());
 
-    endo::emitPartialLineIndicator(fds[1], 5);
-    ::close(fds[1]);
+    endo::emitPartialLineIndicator(pipe.value()->writer(), 5);
+    pipe.value()->closeWriter();
 
-    auto const output = readAllFromPipe(fds[0]);
-    ::close(fds[0]);
+    auto const output = readAllFromPipe(pipe.value()->reader());
+    pipe.value()->closeReader();
 
     // Must contain the return symbol U+23CE (UTF-8: E2 8F 8E)
     CHECK(output.find("\u23CE") != std::string::npos);
@@ -2333,28 +2337,28 @@ TEST_CASE("shell.partial_line_indicator.emits_when_not_at_col1")
 
 TEST_CASE("shell.partial_line_indicator.silent_at_col1")
 {
-    int fds[2];
-    REQUIRE(::pipe(fds) == 0);
+    auto pipe = endo::createPipe();
+    REQUIRE(pipe.has_value());
 
-    endo::emitPartialLineIndicator(fds[1], 1);
-    ::close(fds[1]);
+    endo::emitPartialLineIndicator(pipe.value()->writer(), 1);
+    pipe.value()->closeWriter();
 
-    auto const output = readAllFromPipe(fds[0]);
-    ::close(fds[0]);
+    auto const output = readAllFromPipe(pipe.value()->reader());
+    pipe.value()->closeReader();
 
     CHECK(output.empty());
 }
 
 TEST_CASE("shell.partial_line_indicator.silent_on_failure")
 {
-    int fds[2];
-    REQUIRE(::pipe(fds) == 0);
+    auto pipe = endo::createPipe();
+    REQUIRE(pipe.has_value());
 
-    endo::emitPartialLineIndicator(fds[1], 0);
-    ::close(fds[1]);
+    endo::emitPartialLineIndicator(pipe.value()->writer(), 0);
+    pipe.value()->closeWriter();
 
-    auto const output = readAllFromPipe(fds[0]);
-    ::close(fds[0]);
+    auto const output = readAllFromPipe(pipe.value()->reader());
+    pipe.value()->closeReader();
 
     CHECK(output.empty());
 }

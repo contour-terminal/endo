@@ -4,6 +4,8 @@
 #include <shell/PromptConfig.hpp>
 #include <shell/PromptModule.hpp>
 
+#include "Platform.hpp"
+
 #include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
@@ -181,8 +183,8 @@ class Prompt
 ///
 /// Called when a command's output did not end with a newline, to visually mark the
 /// incomplete line before the next prompt.
-/// @param fd File descriptor to write to (typically STDOUT_FILENO).
+/// @param handle Native handle to write to (typically standardOutput()).
 /// @param cursorColumn Current cursor column (1-based). No-op if <= 1.
-void emitPartialLineIndicator(int fd, int cursorColumn);
+void emitPartialLineIndicator(NativeHandle handle, int cursorColumn);
 
 } // namespace endo

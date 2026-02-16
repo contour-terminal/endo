@@ -3,13 +3,8 @@
 
 #include <tui/Screen.hpp>
 
-#if !defined(_WIN32)
-    #include <unistd.h>
-#endif
-
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
-#include "Platform.hpp"
 #include "PromptComponent.hpp"
 #include "SyntaxHighlighter.hpp"
 #if defined(_WIN32)
@@ -396,7 +391,7 @@ void Prompt::resume()
         // indicating output that didn't end with a newline. Show a dim indicator
         // (like fish shell) and move to a fresh line.
         if (auto const [row, col] = _terminal.queryCursorPosition(); col > 1)
-            emitPartialLineIndicator(1 /*STDOUT_FILENO*/, col);
+            emitPartialLineIndicator(standardOutput(), col);
 
         if (_screen)
         {
@@ -594,19 +589,14 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         out.moveUp(excessRows);
 }
 
-void emitPartialLineIndicator([[maybe_unused]] int fd, int cursorColumn)
+void emitPartialLineIndicator(NativeHandle handle, int cursorColumn)
 {
     if (cursorColumn <= 1)
         return;
 
     // SGR 2 (dim) + U+23CE (return symbol) + SGR 0 (reset) + CSI K (clear to EOL) + CR LF
     static constexpr std::string_view indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
-#if defined(_WIN32)
-    auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
-    endo::platformWrite(hStdout, indicator.data(), indicator.size());
-#else
-    static_cast<void>(::write(fd, indicator.data(), indicator.size()));
-#endif
+    platformWrite(handle, indicator.data(), indicator.size());
 }
 
 } // namespace endo
