@@ -3,7 +3,7 @@ name: Deploy Documentation
 on:
   push:
     branches: [master]
-    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml']
+    paths: ['docs/**', 'mkdocs.yml', 'requirements-docs.txt', '.github/workflows/docs.yml', 'src/**', 'CMakeLists.txt', 'CMakePresets.json', 'cmake/**']
   workflow_dispatch:
 
 permissions:
@@ -14,10 +14,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install dependencies
+
+      # Build WASM playground
+      - name: Setup Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: '3.1.51'
+      - name: Configure WASM build
+        run: emcmake cmake --preset emscripten-release
+      - name: Build WASM playground
+        run: cmake --build --preset emscripten-release --target endo-wasm
+      - name: Copy WASM artifacts to docs
+        run: |
+          mkdir -p docs/assets/js
+          cp build/emscripten-release/src/endo-language/endo-playground.js docs/assets/js/
+          cp build/emscripten-release/src/endo-language/endo-playground.wasm docs/assets/js/
+
+      # Build and deploy documentation
+      - name: Install Python dependencies
         run: |
           pip install -r requirements-docs.txt
           pip install -e ./docs/pygments_endo
