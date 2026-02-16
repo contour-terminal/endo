@@ -79,7 +79,7 @@ if(ENDO_TRACE_LEXER)
     target_compile_definitions(endo PUBLIC ENDO_TRACE_LEXER)
 endif()
 
-if(NOT EMSCRIPTEN)
+if(ENDO_TESTING)
     # Tests
     add_executable(test-endo-language
         test_main.cpp

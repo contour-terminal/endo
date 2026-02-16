@@ -60,7 +60,7 @@ target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
 enable_sanitizers(CoreVM)
 
 # Tests
-if(NOT EMSCRIPTEN)
+if(ENDO_TESTING)
     add_executable(test-corevm
         test_main.cpp
         TargetCodeGenerator_test.cpp

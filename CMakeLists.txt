@@ -59,7 +59,18 @@ if(NOT EMSCRIPTEN AND CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_definitions(-D_GLIBCXX_ASSERTIONS)
 endif()
 
-enable_testing()
+if(EMSCRIPTEN)
+    set(ENDO_TESTING OFF)
+else()
+    option(ENDO_TESTING "Build unit tests [default: ON]" ON)
+endif()
+
+if(ENDO_TESTING)
+    enable_testing()
+endif()
+
+# crispy is vendored from contour — pass through its testing flag
+set(CONTOUR_TESTING ${ENDO_TESTING})
 
 # Apply Emscripten compatibility patches to vendored sources.
 # crispy is symlinked from contour, so we use sed for in-place patching
@@ -91,6 +102,7 @@ message(STATUS "----------------------------------------------------------------
 message(STATUS "endo trace vm       ${ENDO_TRACE_VM}")
 message(STATUS "endo trace parser   ${ENDO_TRACE_PARSER}")
 message(STATUS "endo trace lexer    ${ENDO_TRACE_LEXER}")
+message(STATUS "Testing             ${ENDO_TESTING}")
 message(STATUS "Static linking      ${ENABLE_STATIC_LINKING}")
 if(NOT EMSCRIPTEN)
     message(STATUS "Address Sanitizer   ${ENABLE_ASAN}")
