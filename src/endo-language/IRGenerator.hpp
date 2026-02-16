@@ -333,6 +333,13 @@ class IRGenerator final: public ast::Visitor
     /// Returns the actual function name if found, or std::nullopt.
     [[nodiscard]] std::optional<std::string> lookupFSharpFunctionRef(std::string const& name) const;
 
+    /// Describes whether a function produces a displayable result or unit (side-effect only).
+    enum class ResultKind : uint8_t
+    {
+        Value, ///< Function produces a displayable result.
+        Unit,  ///< Function produces unit (side-effect only, no auto-display).
+    };
+
     // F# function management
     struct FSharpFunction
     {
@@ -362,6 +369,8 @@ class IRGenerator final: public ast::Visitor
         /// Builtin higher-order function marker. Empty = normal function,
         /// otherwise "map"/"filter"/"fold"/"reduce"/"reverse".
         std::string builtinHOF;
+        /// Whether this function produces a displayable result or unit (side-effect only).
+        ResultKind resultKind = ResultKind::Value;
 
         size_t arity() const { return parameters.size(); }
     };

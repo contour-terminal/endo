@@ -210,31 +210,35 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     // These are registered as FSharpFunction entries with body=nullptr and builtinHOF set,
     // which leverages existing partial application and pipeline infrastructure.
     {
-        auto registerHOF = [&](std::string name, std::vector<std::string> params, std::string hofName) {
+        auto registerHOF = [&](std::string name,
+                               std::vector<std::string> params,
+                               std::string hofName,
+                               ResultKind resultKind) {
             FSharpFunction func;
             func.parameters = std::move(params);
             func.parameterTypes.resize(func.parameters.size()); // all nullopt (untyped)
             func.body = nullptr;
             func.builtinHOF = std::move(hofName);
+            func.resultKind = resultKind;
             generator.registerFSharpFunction(std::move(name), std::move(func));
         };
-        registerHOF("map", { "__f", "__xs" }, "map");
-        registerHOF("filter", { "__pred", "__xs" }, "filter");
-        registerHOF("fold", { "__init", "__f", "__xs" }, "fold");
-        registerHOF("reduce", { "__f", "__xs" }, "reduce");
-        registerHOF("reverse", { "__xs" }, "reverse");
-        registerHOF("find", { "__pred", "__xs" }, "find");
-        registerHOF("exists", { "__pred", "__xs" }, "exists");
-        registerHOF("forall", { "__pred", "__xs" }, "forall");
-        registerHOF("each", { "__f", "__xs" }, "each");
-        registerHOF("take", { "__n", "__xs" }, "take");
-        registerHOF("drop", { "__n", "__xs" }, "drop");
-        registerHOF("zip", { "__xs", "__ys" }, "zip");
-        registerHOF("flatten", { "__xss" }, "flatten");
-        registerHOF("sortBy", { "__f", "__xs" }, "sortBy");
-        registerHOF("groupBy", { "__f", "__xs" }, "groupBy");
-        registerHOF("sort", { "__xs" }, "sort");
-        registerHOF("distinct", { "__xs" }, "distinct");
+        registerHOF("map", { "__f", "__xs" }, "map", ResultKind::Value);
+        registerHOF("filter", { "__pred", "__xs" }, "filter", ResultKind::Value);
+        registerHOF("fold", { "__init", "__f", "__xs" }, "fold", ResultKind::Value);
+        registerHOF("reduce", { "__f", "__xs" }, "reduce", ResultKind::Value);
+        registerHOF("reverse", { "__xs" }, "reverse", ResultKind::Value);
+        registerHOF("find", { "__pred", "__xs" }, "find", ResultKind::Value);
+        registerHOF("exists", { "__pred", "__xs" }, "exists", ResultKind::Value);
+        registerHOF("forall", { "__pred", "__xs" }, "forall", ResultKind::Value);
+        registerHOF("each", { "__f", "__xs" }, "each", ResultKind::Unit);
+        registerHOF("take", { "__n", "__xs" }, "take", ResultKind::Value);
+        registerHOF("drop", { "__n", "__xs" }, "drop", ResultKind::Value);
+        registerHOF("zip", { "__xs", "__ys" }, "zip", ResultKind::Value);
+        registerHOF("flatten", { "__xss" }, "flatten", ResultKind::Value);
+        registerHOF("sortBy", { "__f", "__xs" }, "sortBy", ResultKind::Value);
+        registerHOF("groupBy", { "__f", "__xs" }, "groupBy", ResultKind::Value);
+        registerHOF("sort", { "__xs" }, "sort", ResultKind::Value);
+        registerHOF("distinct", { "__xs" }, "distinct", ResultKind::Value);
     }
 
     // Pre-populate function table from persistent state (REPL session continuity)
@@ -712,6 +716,10 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
             // Check user-defined F# functions
             if (auto const* func = lookupFSharpFunction(name))
             {
+                // Builtin HOFs with no AST body: check the resultKind flag
+                if (!func->builtinHOF.empty())
+                    return func->resultKind == ResultKind::Unit;
+
                 visited.insert(name);
                 auto result = isUnitProducingExprImpl(func->body, visited);
                 visited.erase(name);
@@ -719,6 +727,10 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
             }
         }
     }
+
+    // Pipeline: result type is determined by the rightmost function
+    if (auto const* pipeline = dynamic_cast<ast::PipelineExpr const*>(expr))
+        return isUnitProducingExprImpl(pipeline->function.get(), visited);
 
     // Match where ALL arms produce unit
     if (auto const* match = dynamic_cast<ast::MatchExpr const*>(expr))
@@ -6160,6 +6172,7 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
     partialFunc.returnKind = func->returnKind;
     partialFunc.isRecursive = false;
     partialFunc.builtinHOF = func->builtinHOF;
+    partialFunc.resultKind = func->resultKind;
     partialFunc.capturedBindings = std::move(newCaptures);
 
     // Carry over existing captured function refs from the parent function

@@ -368,6 +368,7 @@ Consult this section to determine what to work on next.
 - [x] `print`/`println` remain unaffected (always plain text for scripting)
 - [x] Trailing `|>` pipeline support on bare expressions
 - [x] Suppress spurious "0" from parenthesized unit-producing expressions (e.g., `(println "hi")`)
+- [x] Suppress spurious "0" from pipelines ending in unit-producing HOFs (e.g., `list |> each println`)
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
