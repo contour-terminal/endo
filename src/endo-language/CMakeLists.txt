@@ -79,28 +79,53 @@ if(ENDO_TRACE_LEXER)
     target_compile_definitions(endo PUBLIC ENDO_TRACE_LEXER)
 endif()
 
-# Tests
-add_executable(test-endo-language
-    test_main.cpp
-    TestHelper.hpp
-    TestHelper.cpp
-    Lexer_test.cpp
-    Diagnostics_test.cpp
-    DiagnosticsCollector_test.cpp
-    HoverProvider_test.cpp
-    Type_test.cpp
-    Pattern_test.cpp
-    Parser_test.cpp
-    IRGenerator_test.cpp
-    TypeInferencer_test.cpp
-    CompletionCandidates_test.cpp
-    Completer_test.cpp
-)
-target_link_libraries(test-endo-language endo Catch2::Catch2)
-target_compile_definitions(test-endo-language PRIVATE
-    ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
-)
-add_test(NAME test-endo-language COMMAND test-endo-language)
+if(NOT EMSCRIPTEN)
+    # Tests
+    add_executable(test-endo-language
+        test_main.cpp
+        TestHelper.hpp
+        TestHelper.cpp
+        Lexer_test.cpp
+        Diagnostics_test.cpp
+        DiagnosticsCollector_test.cpp
+        HoverProvider_test.cpp
+        Type_test.cpp
+        Pattern_test.cpp
+        Parser_test.cpp
+        IRGenerator_test.cpp
+        TypeInferencer_test.cpp
+        CompletionCandidates_test.cpp
+        Completer_test.cpp
+    )
+    target_link_libraries(test-endo-language endo Catch2::Catch2)
+    target_compile_definitions(test-endo-language PRIVATE
+        ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+    )
+    add_test(NAME test-endo-language COMMAND test-endo-language)
 
-enable_sanitizers(endo)
-enable_sanitizers(test-endo-language)
+    enable_sanitizers(endo)
+    enable_sanitizers(test-endo-language)
+endif()
+
+# WASM playground target (Emscripten only)
+if(EMSCRIPTEN)
+    add_executable(endo-wasm wasm_bridge.cpp)
+    target_link_libraries(endo-wasm PRIVATE endo)
+    set_target_properties(endo-wasm PROPERTIES
+        OUTPUT_NAME "endo-playground"
+        SUFFIX ".js"
+    )
+    target_link_options(endo-wasm PRIVATE
+        "SHELL:-s MODULARIZE=1"
+        "SHELL:-s EXPORT_NAME='EndoModule'"
+        "SHELL:-s EXPORTED_FUNCTIONS=['_endo_eval','_endo_reset','_endo_version','_malloc','_free']"
+        "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap','UTF8ToString']"
+        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+        "SHELL:-s INITIAL_MEMORY=16777216"
+        "SHELL:-s MAXIMUM_MEMORY=268435456"
+        "SHELL:-s ENVIRONMENT='web,worker'"
+        "SHELL:-s DISABLE_EXCEPTION_CATCHING=0"
+        "SHELL:-s NO_EXIT_RUNTIME=1"
+    )
+    target_compile_options(endo-wasm PRIVATE -Os)
+endif()

@@ -164,6 +164,27 @@
                 "CMAKE_C_COMPILER": "clang-cl",
                 "CMAKE_CXX_COMPILER": "clang-cl"
             }
+        },
+        {
+            "name": "emscripten-release",
+            "inherits": "base",
+            "displayName": "Emscripten Release (WASM)",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_TOOLCHAIN_FILE": "$env{EMSDK}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake",
+                "ENABLE_ASAN": "OFF",
+                "ENABLE_UBSAN": "OFF",
+                "ENABLE_TSAN": "OFF",
+                "ENABLE_COVERAGE": "OFF",
+                "ENABLE_NATIVE_ARCH": "OFF",
+                "ENABLE_STATIC_LINKING": "OFF",
+                "ENABLE_PGO_INSTRUMENT": "OFF",
+                "ENABLE_PGO_OPTIMIZE": "OFF",
+                "ENABLE_CLANG_TIDY": "OFF",
+                "ENDO_TRACE_VM": "OFF",
+                "ENDO_TRACE_PARSER": "OFF",
+                "ENDO_TRACE_LEXER": "OFF"
+            }
         }
     ],
     "buildPresets": [
@@ -218,6 +239,10 @@
         {
             "name": "clangcl-release",
             "configurePreset": "clangcl-release"
+        },
+        {
+            "name": "emscripten-release",
+            "configurePreset": "emscripten-release"
         }
     ],
     "testPresets": [

@@ -1,6 +1,10 @@
 ## Adds sanitizer support to a target.
 
 function(enable_sanitizers target)
+    if(EMSCRIPTEN)
+        return()
+    endif()
+
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         return()
     endif()

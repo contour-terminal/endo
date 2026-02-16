@@ -18,16 +18,22 @@ macro(EndoThirdPartiesSummary2)
     message(STATUS "==============================================================================")
     message(STATUS "    Endo Shell ThirdParties")
     message(STATUS "------------------------------------------------------------------------------")
-    message(STATUS "Catch2              ${THIRDPARTY_BUILTIN_Catch2}")
+    if(NOT EMSCRIPTEN)
+        message(STATUS "Catch2              ${THIRDPARTY_BUILTIN_Catch2}")
+    endif()
     message(STATUS "GSL                 ${THIRDPARTY_BUILTIN_GSL}")
-    message(STATUS "yaml-cpp            ${THIRDPARTY_BUILTIN_yaml_cpp}")
+    if(NOT EMSCRIPTEN)
+        message(STATUS "yaml-cpp            ${THIRDPARTY_BUILTIN_yaml_cpp}")
+    endif()
     message(STATUS "libunicode          ${THIRDPARTY_BUILTIN_libunicode}")
     message(STATUS "boxed-cpp           ${THIRDPARTY_BUILTIN_boxed_cpp}")
     message(STATUS "reflection-cpp      ${THIRDPARTY_BUILTIN_reflection_cpp}")
-    message(STATUS "nlohmann_json       ${THIRDPARTY_BUILTIN_nlohmann_json}")
-    message(STATUS "CURL                ${THIRDPARTY_BUILTIN_CURL}")
-    if(ENABLE_STATIC_LINKING)
-        message(STATUS "mbedTLS             ${THIRDPARTY_BUILTIN_mbedtls}")
+    if(NOT EMSCRIPTEN)
+        message(STATUS "nlohmann_json       ${THIRDPARTY_BUILTIN_nlohmann_json}")
+        message(STATUS "CURL                ${THIRDPARTY_BUILTIN_CURL}")
+        if(ENABLE_STATIC_LINKING)
+            message(STATUS "mbedTLS             ${THIRDPARTY_BUILTIN_mbedtls}")
+        endif()
     endif()
     message(STATUS "------------------------------------------------------------------------------")
 endmacro()
@@ -35,17 +41,19 @@ endmacro()
 # ==============================================================================
 # Catch2 v3 - Unit testing framework
 # ==============================================================================
-find_package(Catch2 3 QUIET)
-if(TARGET Catch2::Catch2)
-    set(THIRDPARTY_BUILTIN_Catch2 "system package")
-else()
-    CPMAddPackage(
-        NAME Catch2
-        VERSION 3.8.0
-        GITHUB_REPOSITORY catchorg/Catch2
-        EXCLUDE_FROM_ALL YES
-    )
-    set(THIRDPARTY_BUILTIN_Catch2 "CPM (v3.8.0)")
+if(NOT EMSCRIPTEN)
+    find_package(Catch2 3 QUIET)
+    if(TARGET Catch2::Catch2)
+        set(THIRDPARTY_BUILTIN_Catch2 "system package")
+    else()
+        CPMAddPackage(
+            NAME Catch2
+            VERSION 3.8.0
+            GITHUB_REPOSITORY catchorg/Catch2
+            EXCLUDE_FROM_ALL YES
+        )
+        set(THIRDPARTY_BUILTIN_Catch2 "CPM (v3.8.0)")
+    endif()
 endif()
 
 # ==============================================================================
@@ -71,24 +79,26 @@ endif()
 # ==============================================================================
 # yaml-cpp - YAML parser and emitter
 # ==============================================================================
-if(NOT ENABLE_STATIC_LINKING)
-    find_package(yaml-cpp QUIET)
-endif()
-if(TARGET yaml-cpp::yaml-cpp OR TARGET yaml-cpp)
-    set(THIRDPARTY_BUILTIN_yaml_cpp "system package")
-else()
-    CPMAddPackage(
-        NAME yaml-cpp
-        GIT_TAG yaml-cpp-0.9.0
-        GITHUB_REPOSITORY jbeder/yaml-cpp
-        OPTIONS
-            "YAML_CPP_BUILD_TESTS OFF"
-            "YAML_CPP_BUILD_TOOLS OFF"
-            "YAML_CPP_BUILD_CONTRIB OFF"
-            "BUILD_SHARED_LIBS OFF"
-        EXCLUDE_FROM_ALL YES
-    )
-    set(THIRDPARTY_BUILTIN_yaml_cpp "CPM (v0.9.0, static)")
+if(NOT EMSCRIPTEN)
+    if(NOT ENABLE_STATIC_LINKING)
+        find_package(yaml-cpp QUIET)
+    endif()
+    if(TARGET yaml-cpp::yaml-cpp OR TARGET yaml-cpp)
+        set(THIRDPARTY_BUILTIN_yaml_cpp "system package")
+    else()
+        CPMAddPackage(
+            NAME yaml-cpp
+            GIT_TAG yaml-cpp-0.9.0
+            GITHUB_REPOSITORY jbeder/yaml-cpp
+            OPTIONS
+                "YAML_CPP_BUILD_TESTS OFF"
+                "YAML_CPP_BUILD_TOOLS OFF"
+                "YAML_CPP_BUILD_CONTRIB OFF"
+                "BUILD_SHARED_LIBS OFF"
+            EXCLUDE_FROM_ALL YES
+        )
+        set(THIRDPARTY_BUILTIN_yaml_cpp "CPM (v0.9.0, static)")
+    endif()
 endif()
 
 # ==============================================================================
@@ -134,87 +144,61 @@ endif()
 # ==============================================================================
 # nlohmann/json - JSON library for LSP protocol
 # ==============================================================================
-find_package(nlohmann_json 3.11.0 QUIET)
-if(TARGET nlohmann_json::nlohmann_json)
-    set(THIRDPARTY_BUILTIN_nlohmann_json "system package")
-else()
-    CPMAddPackage(
-        NAME nlohmann_json
-        VERSION 3.11.3
-        GITHUB_REPOSITORY nlohmann/json
-        OPTIONS
-            "JSON_BuildTests OFF"
-        EXCLUDE_FROM_ALL YES
-    )
-    set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
+if(NOT EMSCRIPTEN)
+    find_package(nlohmann_json 3.11.0 QUIET)
+    if(TARGET nlohmann_json::nlohmann_json)
+        set(THIRDPARTY_BUILTIN_nlohmann_json "system package")
+    else()
+        CPMAddPackage(
+            NAME nlohmann_json
+            VERSION 3.11.3
+            GITHUB_REPOSITORY nlohmann/json
+            OPTIONS
+                "JSON_BuildTests OFF"
+            EXCLUDE_FROM_ALL YES
+        )
+        set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
+    endif()
 endif()
 
 # ==============================================================================
 # Static-only dependency: mbedTLS (TLS backend for CURL, avoids system OpenSSL)
 # ==============================================================================
-if(ENABLE_STATIC_LINKING)
-    CPMAddPackage(
-        NAME mbedtls
-        VERSION 3.6.2
-        GITHUB_REPOSITORY Mbed-TLS/mbedtls
-        GIT_TAG mbedtls-3.6.2
-        EXCLUDE_FROM_ALL YES
-        OPTIONS
-            "ENABLE_TESTING OFF"
-            "ENABLE_PROGRAMS OFF"
-            "USE_STATIC_MBEDTLS_LIBRARY ON"
-            "USE_SHARED_MBEDTLS_LIBRARY OFF"
-            "MBEDTLS_FATAL_WARNINGS OFF"
-    )
-    # Set variables that CURL's FindMbedTLS.cmake expects, since the CPM-built
-    # targets aren't discoverable via find_package().
-    if(mbedtls_ADDED)
-        set(MBEDTLS_FOUND TRUE CACHE BOOL "" FORCE)
-        set(MBEDTLS_INCLUDE_DIRS "${mbedtls_SOURCE_DIR}/include" CACHE PATH "" FORCE)
-        set(MBEDTLS_LIBRARY mbedtls CACHE STRING "" FORCE)
-        set(MBEDX509_LIBRARY mbedx509 CACHE STRING "" FORCE)
-        set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "" FORCE)
+if(NOT EMSCRIPTEN)
+    if(ENABLE_STATIC_LINKING)
+        CPMAddPackage(
+            NAME mbedtls
+            VERSION 3.6.2
+            GITHUB_REPOSITORY Mbed-TLS/mbedtls
+            GIT_TAG mbedtls-3.6.2
+            EXCLUDE_FROM_ALL YES
+            OPTIONS
+                "ENABLE_TESTING OFF"
+                "ENABLE_PROGRAMS OFF"
+                "USE_STATIC_MBEDTLS_LIBRARY ON"
+                "USE_SHARED_MBEDTLS_LIBRARY OFF"
+                "MBEDTLS_FATAL_WARNINGS OFF"
+        )
+        # Set variables that CURL's FindMbedTLS.cmake expects, since the CPM-built
+        # targets aren't discoverable via find_package().
+        if(mbedtls_ADDED)
+            set(MBEDTLS_FOUND TRUE CACHE BOOL "" FORCE)
+            set(MBEDTLS_INCLUDE_DIRS "${mbedtls_SOURCE_DIR}/include" CACHE PATH "" FORCE)
+            set(MBEDTLS_LIBRARY mbedtls CACHE STRING "" FORCE)
+            set(MBEDX509_LIBRARY mbedx509 CACHE STRING "" FORCE)
+            set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "" FORCE)
+        endif()
+        set(THIRDPARTY_BUILTIN_mbedtls "CPM (v3.6.2, static)")
     endif()
-    set(THIRDPARTY_BUILTIN_mbedtls "CPM (v3.6.2, static)")
 endif()
 
 # ==============================================================================
 # CURL - HTTP client library
 # ==============================================================================
-if(ENABLE_STATIC_LINKING)
-    # Build CURL from source with mbedTLS backend, no optional deps.
-    # Note: USE_LIBIDN2 has no CURL_ prefix in CURL 8.9.x.
-    CPMAddPackage(
-        NAME CURL
-        GIT_TAG curl-8_9_1
-        GITHUB_REPOSITORY curl/curl
-        OPTIONS
-            "BUILD_TESTING OFF"
-            "BUILD_CURL_EXE OFF"
-            "BUILD_SHARED_LIBS OFF"
-            "CURL_USE_MBEDTLS ON"
-            "CURL_USE_OPENSSL OFF"
-            "CURL_USE_LIBSSH2 OFF"
-            "USE_LIBIDN2 OFF"
-            "CURL_USE_LIBPSL OFF"
-            "CURL_DISABLE_LDAP ON"
-            "CURL_DISABLE_LDAPS ON"
-            "CURL_DISABLE_NTLM ON"
-            "CURL_ZLIB OFF"
-            "CURL_ENABLE_EXPORT_TARGET OFF"
-            "HTTP_ONLY ON"
-        EXCLUDE_FROM_ALL YES
-    )
-    # Ensure mbedTLS static libraries are linked transitively through CURL
-    if(TARGET libcurl_static)
-        target_link_libraries(libcurl_static INTERFACE mbedtls mbedx509 mbedcrypto)
-    endif()
-    set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1, static, mbedTLS)")
-else()
-    find_package(CURL QUIET)
-    if(TARGET CURL::libcurl)
-        set(THIRDPARTY_BUILTIN_CURL "system package")
-    else()
+if(NOT EMSCRIPTEN)
+    if(ENABLE_STATIC_LINKING)
+        # Build CURL from source with mbedTLS backend, no optional deps.
+        # Note: USE_LIBIDN2 has no CURL_ prefix in CURL 8.9.x.
         CPMAddPackage(
             NAME CURL
             GIT_TAG curl-8_9_1
@@ -223,9 +207,41 @@ else()
                 "BUILD_TESTING OFF"
                 "BUILD_CURL_EXE OFF"
                 "BUILD_SHARED_LIBS OFF"
+                "CURL_USE_MBEDTLS ON"
+                "CURL_USE_OPENSSL OFF"
+                "CURL_USE_LIBSSH2 OFF"
+                "USE_LIBIDN2 OFF"
+                "CURL_USE_LIBPSL OFF"
+                "CURL_DISABLE_LDAP ON"
+                "CURL_DISABLE_LDAPS ON"
+                "CURL_DISABLE_NTLM ON"
+                "CURL_ZLIB OFF"
+                "CURL_ENABLE_EXPORT_TARGET OFF"
+                "HTTP_ONLY ON"
             EXCLUDE_FROM_ALL YES
         )
-        set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1)")
+        # Ensure mbedTLS static libraries are linked transitively through CURL
+        if(TARGET libcurl_static)
+            target_link_libraries(libcurl_static INTERFACE mbedtls mbedx509 mbedcrypto)
+        endif()
+        set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1, static, mbedTLS)")
+    else()
+        find_package(CURL QUIET)
+        if(TARGET CURL::libcurl)
+            set(THIRDPARTY_BUILTIN_CURL "system package")
+        else()
+            CPMAddPackage(
+                NAME CURL
+                GIT_TAG curl-8_9_1
+                GITHUB_REPOSITORY curl/curl
+                OPTIONS
+                    "BUILD_TESTING OFF"
+                    "BUILD_CURL_EXE OFF"
+                    "BUILD_SHARED_LIBS OFF"
+                EXCLUDE_FROM_ALL YES
+            )
+            set(THIRDPARTY_BUILTIN_CURL "CPM (v8.9.1)")
+        endif()
     endif()
 endif()
 
