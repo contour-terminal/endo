@@ -558,6 +558,17 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         return;
     }
 
+    // Handle cell size report: CSI 6 ; height ; width t (response to CSI 16 t)
+    if (finalByte == 't')
+    {
+        auto const params = parseCsiParams(_paramBuf);
+        if (params.size() >= 3 && params[0] == 6)
+        {
+            events.emplace_back(CellSizeReport { .height = params[1], .width = params[2] });
+            return;
+        }
+    }
+
     // Handle color scheme report: CSI ? 997 ; N n
     // N: 1 = dark, 2 = light
     if (finalByte == 'n' && _paramBuf.starts_with("?"))

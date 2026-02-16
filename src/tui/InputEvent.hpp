@@ -69,8 +69,24 @@ struct ColorSchemeReport
     int mode; ///< 1 = dark, 2 = light.
 };
 
+/// @brief Cell size report from the terminal (response to CSI 16 t).
+///
+/// Reports the cell dimensions in pixels. This is an internal event
+/// consumed by Terminal during initialization and not propagated to
+/// application code.
+struct CellSizeReport
+{
+    int height; ///< Cell height in pixels.
+    int width;  ///< Cell width in pixels.
+};
+
 /// @brief Discriminated union of all possible terminal input events.
-using InputEvent =
-    std::variant<KeyEvent, MouseEvent, ResizeEvent, PasteEvent, CursorPositionReport, ColorSchemeReport>;
+using InputEvent = std::variant<KeyEvent,
+                                MouseEvent,
+                                ResizeEvent,
+                                PasteEvent,
+                                CursorPositionReport,
+                                ColorSchemeReport,
+                                CellSizeReport>;
 
 } // namespace tui

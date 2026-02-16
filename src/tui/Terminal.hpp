@@ -79,6 +79,16 @@ class Terminal
     /// @return Pair of (row, column), both 1-based, or (0, 0) on failure.
     [[nodiscard]] auto queryCursorPosition() -> std::pair<int, int>;
 
+    /// @brief Queries the cell size in pixels from the terminal via CSI 16 t.
+    /// @return Pair of (width, height) in pixels, or (0, 0) on failure/timeout.
+    [[nodiscard]] auto queryCellSize() -> std::pair<int, int>;
+
+    /// @brief Returns the cached cell pixel width (0 if unknown).
+    [[nodiscard]] auto cellPixelWidth() const noexcept -> int;
+
+    /// @brief Returns the cached cell pixel height (0 if unknown).
+    [[nodiscard]] auto cellPixelHeight() const noexcept -> int;
+
     /// @brief Returns the cached color scheme (dark or light mode).
     [[nodiscard]] auto colorScheme() const noexcept -> ColorScheme;
 
@@ -100,6 +110,8 @@ class Terminal
     bool _initialized = false;
     ColorScheme _colorScheme = ColorScheme::Unknown;
     std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
+    int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
+    int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).
 };
 
 } // namespace tui

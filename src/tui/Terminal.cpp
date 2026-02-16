@@ -51,6 +51,11 @@ auto Terminal::initialize() -> VoidResult
     sigemptyset(&sa.sa_mask);
     sigaction(SIGWINCH, &sa, &gPrevSigwinch);
 
+    // Query cell pixel dimensions (best-effort, non-fatal)
+    auto const [cellWidth, cellHeight] = queryCellSize();
+    _cellPixelWidth = cellWidth;
+    _cellPixelHeight = cellHeight;
+
     _initialized = true;
     return {};
 }
@@ -163,6 +168,55 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
     // Failed to get response within timeout
     return { 0, 0 };
+}
+
+auto Terminal::queryCellSize() -> std::pair<int, int>
+{
+    // Send CSI 16 t to query cell pixel dimensions.
+    // Response will be: CSI 6 ; height ; width t
+    _output.writeRaw("\033[16t");
+    _output.flush();
+
+    auto constexpr totalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+
+    while (true)
+    {
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+            break;
+
+        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        auto events = _input.poll(static_cast<int>(remaining));
+
+        if (events.empty())
+            break;
+
+        for (auto const& event: events)
+        {
+            if (auto const* csr = std::get_if<CellSizeReport>(&event))
+                return { csr->width, csr->height };
+
+            // Handle ColorSchemeReport inline so it isn't dropped
+            if (auto const* cs = std::get_if<ColorSchemeReport>(&event))
+            {
+                auto const scheme = (cs->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
+                handleColorSchemeReport(scheme);
+            }
+        }
+    }
+
+    return { 0, 0 };
+}
+
+auto Terminal::cellPixelWidth() const noexcept -> int
+{
+    return _cellPixelWidth;
+}
+
+auto Terminal::cellPixelHeight() const noexcept -> int
+{
+    return _cellPixelHeight;
 }
 
 auto Terminal::colorScheme() const noexcept -> ColorScheme
