@@ -159,6 +159,9 @@ class PromptComponent: public tui::Component
     /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
     [[nodiscard]] int chromeHeight() const noexcept;
 
+    /// @brief Returns the number of rows reserved for the aurora sixel fade (0 or 1).
+    [[nodiscard]] int auroraFadeHeight() const noexcept;
+
     /// @brief Returns the number of top padding rows (0 on first display).
     [[nodiscard]] int topPadding() const noexcept;
 
@@ -302,6 +305,23 @@ class PromptComponent: public tui::Component
 
     /// @brief Resets inline history cycling state.
     void resetHistoryCycling();
+
+    // Aurora sixel fade cache
+    std::string _auroraFadeSixelCache;        ///< Pre-encoded sixel string.
+    int _auroraFadeCacheWidth = 0;            ///< Content width (cols) for which cache is valid.
+    int _auroraFadeCacheCellW = 0;            ///< Cell pixel width for which cache is valid.
+    int _auroraFadeCacheCellH = 0;            ///< Cell pixel height for which cache is valid.
+    tui::RgbColor _auroraFadeCacheBgColor {}; ///< Background color for which cache is valid.
+
+    /// @brief Generates a pre-encoded sixel string for the aurora fade effect.
+    /// @param cellPixelWidth Pixel width per cell.
+    /// @param cellPixelHeight Pixel height per cell.
+    /// @param contentWidthCols Content width in columns (excluding margins).
+    /// @return Pre-encoded sixel string, or empty on failure.
+    [[nodiscard]] std::string generateAuroraFadeSixel(int cellPixelWidth,
+                                                      int cellPixelHeight,
+                                                      int contentWidthCols,
+                                                      tui::RgbColor bgColor) const;
 };
 
 } // namespace endo

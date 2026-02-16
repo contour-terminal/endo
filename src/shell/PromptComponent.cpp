@@ -5,6 +5,7 @@
 
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>
+#include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 #include <tui/completer/Completer.hpp>
@@ -104,6 +105,7 @@ std::vector<PromptSegments> PromptComponent::evaluateModules(
 void PromptComponent::setPromptConfig(PromptConfig config)
 {
     _config = std::move(config);
+    _auroraFadeCacheWidth = 0; // Invalidate sixel fade cache
 
     // Update indicator module
     if (auto it = _modules.find("indicator"); it != _modules.end())
@@ -122,6 +124,11 @@ void PromptComponent::setPromptConfig(PromptConfig config)
 
 void PromptComponent::setPromptContext(PromptContext context)
 {
+    // Invalidate sixel fade cache if cell pixel dimensions changed
+    if (context.cellPixelWidth != _context.cellPixelWidth
+        || context.cellPixelHeight != _context.cellPixelHeight)
+        _auroraFadeCacheWidth = 0;
+
     _context = std::move(context);
     _moduleCacheValid = false; // Invalidate module cache on context change
 }
@@ -178,14 +185,40 @@ void PromptComponent::render(tui::Canvas& canvas)
     ghostStyle.bg = pc.background;
     ghostStyle.dim = true;
 
-    // Calculate padding and chrome height
+    // Calculate padding, aurora, and chrome height
     auto const topPad = topPadding();
+    auto const auroraHeight = auroraFadeHeight();
     auto const botPad = bottomPadding();
     auto const chrome = chromeHeight();
+    auto const infoLineRow = topPad + auroraHeight;  // Row where info line starts.
+    auto const inputStartRow = infoLineRow + chrome; // Row where input lines start.
 
     // Mark top padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < topPad; ++i)
         canvas.put(i, 0, "\xC2\xA0", {});
+
+    // Render sixel aurora fade on its dedicated row (between padding and info line)
+    if (auroraHeight > 0)
+    {
+        // Mark aurora row for content height detection
+        canvas.put(topPad, 0, "\xC2\xA0", {});
+
+        auto const cw = _context.cellPixelWidth;
+        auto const ch = _context.cellPixelHeight;
+        auto const termBg = theme.colors.background;
+        if (_auroraFadeCacheWidth != contentWidth || _auroraFadeCacheCellW != cw
+            || _auroraFadeCacheCellH != ch || _auroraFadeCacheBgColor.r != termBg.r
+            || _auroraFadeCacheBgColor.g != termBg.g || _auroraFadeCacheBgColor.b != termBg.b)
+        {
+            _auroraFadeSixelCache = generateAuroraFadeSixel(cw, ch, contentWidth, termBg);
+            _auroraFadeCacheCellW = cw;
+            _auroraFadeCacheCellH = ch;
+            _auroraFadeCacheWidth = contentWidth;
+            _auroraFadeCacheBgColor = termBg;
+        }
+        if (!_auroraFadeSixelCache.empty())
+            canvas.drawImage(topPad, HorizontalMargin, contentWidth, 1, _auroraFadeSixelCache);
+    }
 
     // Render info line chrome above input
     if (chrome > 0)
@@ -209,12 +242,12 @@ void PromptComponent::render(tui::Canvas& canvas)
             {
                 tui::Style cellStyle;
                 cellStyle.bg = bgColors[static_cast<std::size_t>(c)];
-                canvas.put(topPad, HorizontalMargin + c, " ", cellStyle);
+                canvas.put(infoLineRow, HorizontalMargin + c, " ", cellStyle);
             }
         }
         else
         {
-            canvas.fill(tui::Rect { HorizontalMargin, topPad, contentWidth, 1 }, ' ', bgStyle);
+            canvas.fill(tui::Rect { HorizontalMargin, infoLineRow, contentWidth, 1 }, ' ', bgStyle);
         }
 
         auto col = HorizontalMargin;
@@ -223,10 +256,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         if (_config.separator == SeparatorStyle::Bar)
         {
             leftBarStyle.bg = bgAt(col);
-            col += canvas.putString(topPad, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
+            col += canvas.putString(infoLineRow, col, "\xe2\x96\x8e", leftBarStyle); // U+258E
             tui::Style spStyle;
             spStyle.bg = bgAt(col);
-            canvas.put(topPad, col, " ", spStyle);
+            canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
         }
         else if (_config.separator == SeparatorStyle::Rounded)
@@ -234,12 +267,12 @@ void PromptComponent::render(tui::Canvas& canvas)
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
             sepStyle.bg = bgAt(col);
-            col += canvas.putString(topPad, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
+            col += canvas.putString(infoLineRow, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
             sepStyle.bg = bgAt(col);
-            col += canvas.putString(topPad, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
+            col += canvas.putString(infoLineRow, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
             tui::Style spStyle;
             spStyle.bg = bgAt(col);
-            canvas.put(topPad, col, " ", spStyle);
+            canvas.put(infoLineRow, col, " ", spStyle);
             ++col;
         }
 
@@ -253,22 +286,22 @@ void PromptComponent::render(tui::Canvas& canvas)
                     // Dim │ pipe separator between module groups
                     tui::Style spStyle;
                     spStyle.bg = bgAt(col);
-                    canvas.put(topPad, col, " ", spStyle);
+                    canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                     tui::Style dimPipeStyle;
                     dimPipeStyle.fg = pc.separator;
                     dimPipeStyle.bg = bgAt(col);
                     dimPipeStyle.dim = true;
-                    col += canvas.putString(topPad, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
+                    col += canvas.putString(infoLineRow, col, "\xe2\x94\x82", dimPipeStyle); // U+2502 │
                     spStyle.bg = bgAt(col);
-                    canvas.put(topPad, col, " ", spStyle);
+                    canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                 }
                 else
                 {
                     tui::Style spStyle;
                     spStyle.bg = bgAt(col);
-                    canvas.put(topPad, col, " ", spStyle);
+                    canvas.put(infoLineRow, col, " ", spStyle);
                     ++col;
                 }
             }
@@ -276,7 +309,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             {
                 auto segStyle = seg.style;
                 segStyle.bg = bgAt(col);
-                col += canvas.putString(topPad, col, seg.text, segStyle);
+                col += canvas.putString(infoLineRow, col, seg.text, segStyle);
             }
         }
 
@@ -302,14 +335,14 @@ void PromptComponent::render(tui::Canvas& canvas)
                     {
                         tui::Style spStyle;
                         spStyle.bg = bgAt(rightCol);
-                        canvas.put(topPad, rightCol, " ", spStyle);
+                        canvas.put(infoLineRow, rightCol, " ", spStyle);
                         ++rightCol;
                     }
                     for (auto const& seg: rightModules[i])
                     {
                         auto segStyle = seg.style;
                         segStyle.bg = bgAt(rightCol);
-                        rightCol += canvas.putString(topPad, rightCol, seg.text, segStyle);
+                        rightCol += canvas.putString(infoLineRow, rightCol, seg.text, segStyle);
                     }
                 }
             }
@@ -347,11 +380,11 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Render each input line (offset by top padding + chrome height)
-    for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + topPad + chrome) < canvas.height();
+    // Render each input line (offset by top padding + aurora + chrome height)
+    for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + inputStartRow) < canvas.height();
          ++lineIndex)
     {
-        auto const row = lineIndex + topPad + chrome;
+        auto const row = lineIndex + inputStartRow;
         auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Fill content area with background (with margins)
@@ -501,10 +534,10 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Position cursor (add top padding + chrome height offset)
+    // Position cursor (add top padding + aurora + chrome height offset)
     auto const cursorLine = _inputField.cursorLine();
     auto const cursorColumn = _inputField.cursorColumn();
-    auto const cursorRow = cursorLine + topPad + chrome;
+    auto const cursorRow = cursorLine + inputStartRow;
 
     // Calculate cursor display position (including left margin)
     auto const lineContent = _inputField.lineAt(cursorLine);
@@ -563,7 +596,7 @@ void PromptComponent::render(tui::Canvas& canvas)
 
     // Mark bottom padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < botPad; ++i)
-        canvas.put(topPad + chrome + totalLines + i, 0, "\xC2\xA0", {});
+        canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
 
     _firstDisplay = false;
 }
@@ -593,8 +626,8 @@ tui::Size PromptComponent::preferredSize() const
         maxWidth = std::max(maxWidth, pw + displayWidth(lineContent));
     }
 
-    // Total height = top padding + chrome lines (info/box above) + input lines + bottom padding
-    int totalHeight = topPadding() + inputLineCount + chromeHeight() + bottomPadding();
+    // Total height = top padding + aurora fade + chrome lines (info/box above) + input lines + bottom padding
+    int totalHeight = topPadding() + auroraFadeHeight() + chromeHeight() + inputLineCount + bottomPadding();
 
     // If completion popup is visible, add space for it below the input
     if (_completionPopup.visible())
@@ -624,6 +657,12 @@ int PromptComponent::chromeHeight() const noexcept
     if (_config.layout == PromptLayoutKind::Boxed)
         return 3;
     return 0;
+}
+
+int PromptComponent::auroraFadeHeight() const noexcept
+{
+    return (_config.enableSixelFade && !_config.auroraBackground.empty() && _context.cellPixelHeight > 0) ? 1
+                                                                                                          : 0;
 }
 
 int PromptComponent::topPadding() const noexcept
@@ -1036,7 +1075,7 @@ void PromptComponent::onHoverConfirmed(int x, int y)
     }
 
     // Priority 3: Fall through to existing command hover logic (first input line only)
-    if (y == topPadding() + chromeHeight() && _commandResolver)
+    if (y == topPadding() + auroraFadeHeight() + chromeHeight() && _commandResolver)
     {
         auto const cmd = getCommandAtColumn(x);
         if (cmd)
@@ -1055,6 +1094,58 @@ void PromptComponent::onHoverLeave()
     {
         scr->hideTooltip();
     }
+}
+
+std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
+                                                     int cellPixelHeight,
+                                                     int contentWidthCols,
+                                                     tui::RgbColor bgColor) const
+{
+    auto const imgWidth = contentWidthCols * cellPixelWidth;
+    auto const imgHeight = cellPixelHeight;
+
+    if (imgWidth <= 0 || imgHeight <= 0)
+        return {};
+
+    // Generate RGBA pixels with alpha pre-multiplied against terminal background.
+    // Sixel has no per-pixel alpha; without pre-multiplication the binary alpha threshold
+    // (< 128 = transparent, >= 128 = opaque) creates a hard edge instead of a smooth fade.
+    auto pixels = std::vector<std::uint8_t>(static_cast<std::size_t>(imgWidth) * imgHeight * 4, 0);
+
+    for (int y = 0; y < imgHeight; ++y)
+    {
+        // Vertical fade: 0 at top → 1 at bottom, with cubic ease-in for a perceptually
+        // smooth transition. Linear ramps look abrupt because brightness perception is
+        // non-linear; t³ keeps the top ~70% close to background and concentrates the
+        // color ramp near the bottom where it meets the info line.
+        auto const t = (imgHeight > 1) ? static_cast<float>(y) / static_cast<float>(imgHeight - 1) : 1.0f;
+        auto const alpha = t * t * t;
+        auto const a = static_cast<unsigned>(static_cast<std::uint8_t>(alpha * 255.0f));
+
+        for (int x = 0; x < imgWidth; ++x)
+        {
+            auto const idx = (static_cast<std::size_t>(y) * imgWidth + x) * 4;
+
+            // Horizontal gradient position
+            auto const t = (imgWidth > 1) ? static_cast<float>(x) / static_cast<float>(imgWidth - 1) : 0.0f;
+            auto const color = multiStopGradient(_config.auroraBackground, t);
+
+            // Pre-multiply alpha: blend aurora color with terminal background
+            pixels[idx + 0] = static_cast<std::uint8_t>((color.r * a + bgColor.r * (255 - a)) / 255);
+            pixels[idx + 1] = static_cast<std::uint8_t>((color.g * a + bgColor.g * (255 - a)) / 255);
+            pixels[idx + 2] = static_cast<std::uint8_t>((color.b * a + bgColor.b * (255 - a)) / 255);
+            pixels[idx + 3] = 255; // Fully opaque — fade is baked into RGB
+        }
+    }
+
+    // Encode to sixel
+    auto const imageData = tui::ImageData {
+        .pixels = std::span<const std::uint8_t>(pixels),
+        .width = imgWidth,
+        .height = imgHeight,
+    };
+    auto result = tui::encodeSixel(imageData, 64);
+    return result.has_value() ? std::move(*result) : std::string {};
 }
 
 std::optional<std::string> PromptComponent::getCommandAtColumn(int screenColumn) const
@@ -1181,8 +1272,8 @@ std::optional<endo::SourcePosition> PromptComponent::screenToSourcePosition(int 
     if (x < totalPromptWidth)
         return std::nullopt;
 
-    // Convert screen y to input line index (subtract top padding + chrome offset)
-    auto const inputLine = y - topPadding() - chromeHeight();
+    // Convert screen y to input line index (subtract top padding + aurora + chrome offset)
+    auto const inputLine = y - topPadding() - auroraFadeHeight() - chromeHeight();
     auto const totalLines = _inputField.lineCount();
     if (inputLine < 0 || inputLine >= totalLines)
         return std::nullopt;

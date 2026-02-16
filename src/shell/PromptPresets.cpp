@@ -102,6 +102,7 @@ static std::vector<PromptConfig> presets = {
             0x352040_rgb, // dark purple
             0x252545_rgb, // deep indigo (wrap)
         },
+        .enableSixelFade = false,
     },
 };
 
