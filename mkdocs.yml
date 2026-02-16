@@ -79,6 +79,7 @@ nav:
     - Error Handling: language/error-handling.md
     - Modules & Imports: language/modules-and-imports.md
     - Interoperability: language/interoperability.md
+    - Standard Library: language/standard-library.md
     - Implementation Notes: language/implementation-notes.md
     - Grammar: language/grammar.md
   - Examples:

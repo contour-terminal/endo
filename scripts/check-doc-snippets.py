@@ -8,12 +8,20 @@ Options:
     --endo-path PATH   Path to endo binary (auto-detected if omitted)
     -v, --verbose      Show all blocks (not just failures)
     FILES              Specific .md files (default: all docs/**/*.md)
+
+Markers:
+    <!-- endo-no-check -->  Skip the following code block entirely
+
+Output verification:
+    Lines containing '# => expected' are used to verify execution output.
+    Blocks with # => comments are executed and their stdout is compared
+    against the expected values. Blocks without # => comments are
+    syntax-checked only (endo --check).
 """
 
 import argparse
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 
@@ -46,6 +54,40 @@ def find_endo_binary(root: Path) -> Path | None:
         if candidate.is_file() and candidate.stat().st_mode & 0o111:
             return candidate
     return None
+
+
+def has_expected_output(source: str) -> bool:
+    """Check whether source contains any # => output comments."""
+    return any("# =>" in line for line in source.splitlines())
+
+
+def extract_expected_output(source: str) -> list[str]:
+    """Parse # => comments from source lines to build expected output.
+
+    Each line containing '# => value' contributes 'value' to expected output.
+    """
+    expected = []
+    for line in source.splitlines():
+        idx = line.find("# =>")
+        if idx != -1:
+            expected.append(line[idx + 4:].strip())
+    return expected
+
+
+def strip_output_comments(source: str) -> str:
+    """Strip # => comments from source for cleaner execution.
+
+    The comments are after # so endo treats them as comments anyway,
+    but stripping keeps the temp file clean.
+    """
+    cleaned = []
+    for line in source.splitlines():
+        idx = line.find("# =>")
+        if idx != -1:
+            cleaned.append(line[:idx].rstrip())
+        else:
+            cleaned.append(line)
+    return "\n".join(cleaned)
 
 
 def extract_code_blocks(filepath: Path) -> list[dict]:
@@ -102,6 +144,43 @@ def check_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]
         return result.returncode == 0, result.stderr.strip()
     except subprocess.TimeoutExpired:
         return False, "timeout (10s)"
+
+
+def run_block(source: str, endo_path: Path, tmp_dir: Path) -> tuple[bool, str]:
+    """Execute an endo block and verify its output against # => comments.
+
+    Returns (success, error_message).
+    """
+    expected = extract_expected_output(source)
+    clean_source = strip_output_comments(source)
+
+    tmp_file = tmp_dir / "snippet.endo"
+    tmp_file.write_text(clean_source, encoding="utf-8")
+    try:
+        result = subprocess.run(
+            [str(endo_path), str(tmp_file)],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except subprocess.TimeoutExpired:
+        return False, "timeout (10s)"
+
+    if result.returncode != 0:
+        return False, f"exit code {result.returncode}\n{result.stderr.strip()}"
+
+    actual_lines = result.stdout.rstrip("\n").splitlines() if result.stdout.strip() else []
+
+    if actual_lines != expected:
+        actual_str = "\n".join(f"       {line}" for line in actual_lines) or "       (empty)"
+        expected_str = "\n".join(f"       {line}" for line in expected)
+        return False, (
+            f"output mismatch:\n"
+            f"     expected:\n{expected_str}\n"
+            f"     actual:\n{actual_str}"
+        )
+
+    return True, ""
 
 
 def main() -> int:
@@ -175,6 +254,26 @@ def main() -> int:
                     print(f"  SKIP {rel_path}:{block['line']}")
                 continue
 
+            # Auto-detect: blocks with # => comments are executed and output-verified
+            if has_expected_output(block["source"]):
+                success, error = run_block(block["source"], endo, tmp_dir)
+                if success:
+                    passed += 1
+                    if args.verbose:
+                        print(f"  PASS {rel_path}:{block['line']} (run)")
+                else:
+                    failed += 1
+                    msg = f"  FAIL {rel_path}:{block['line']} (run)"
+                    if error:
+                        indent_error = "\n".join(
+                            f"       {line}" for line in error.splitlines()
+                        )
+                        msg += f"\n{indent_error}"
+                    failures.append(msg)
+                    print(msg)
+                continue
+
+            # Default: syntax check only
             success, stderr = check_block(block["source"], endo, tmp_dir)
             if success:
                 passed += 1

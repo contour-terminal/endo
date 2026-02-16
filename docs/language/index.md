@@ -43,6 +43,7 @@ Endo combines both, letting you choose the right style for each task.
 - [Error Handling](error-handling.md)
 - [Modules & Imports](modules-and-imports.md)
 - [Interoperability: F# Style vs Bash Style](interoperability.md)
+- [Standard Library Reference](standard-library.md)
 - [Implementation Notes](implementation-notes.md)
 - [EBNF Grammar](grammar.md)
 
