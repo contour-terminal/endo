@@ -88,7 +88,7 @@ void Value::replaceAllUsesWith(Value* newUse)
 
 std::string Value::to_string() const
 {
-    return std::format("Value {} of type {}", _name, _type);
+    return "Value " + _name + " of type " + tos(_type);
 }
 
 } // namespace CoreVM

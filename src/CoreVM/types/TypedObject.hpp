@@ -89,9 +89,9 @@ struct TypedObject
     }
 };
 
-// Ensure the layout is as expected
-static_assert(sizeof(TypedObject) == 16, "TypedObject header size mismatch");
-static_assert(alignof(TypedObject) == 8, "TypedObject alignment mismatch");
+// Ensure the layout is as expected (WASM uses 32-bit pointers → sizeof=12, alignof=4)
+static_assert(sizeof(TypedObject) == (sizeof(void*) == 8 ? 16 : 12), "TypedObject header size mismatch");
+static_assert(alignof(TypedObject) == (sizeof(void*) == 8 ? 8 : 4), "TypedObject alignment mismatch");
 
 /// Increments the reference count of an object.
 /// Safe to call with nullptr.

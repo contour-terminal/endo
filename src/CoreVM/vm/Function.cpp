@@ -2,6 +2,7 @@
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/sysconfig.h>
 
+#include <algorithm>
 #include <string>
 #include <vector>
 

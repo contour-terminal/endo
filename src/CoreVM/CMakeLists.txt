@@ -1,13 +1,10 @@
 option(COREVM_DIRECT_THREADED_VM "CoreVM using direct threaded mode [default: OFF]" OFF)
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sysconfig.h.cmake
-               ${CMAKE_CURRENT_BINARY_DIR}/sysconfig.h)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sysconfig.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/sysconfig.h)
 
-add_library(CoreVM STATIC
-)
+add_library(CoreVM STATIC)
 
-target_sources(CoreVM
-    PRIVATE
+target_sources(CoreVM PRIVATE
     Diagnostics.cpp
     LiteralType.cpp
     MatchClass.cpp
@@ -41,7 +38,7 @@ target_sources(CoreVM
     vm/Runner.cpp
     vm/Runtime.cpp
     types/TypeRegistry.cpp
-  )
+)
 
 target_compile_definitions(CoreVM PUBLIC
     $<$<BOOL:${COREVM_DIRECT_THREADED_VM}>:COREVM_DIRECT_THREADED_VM>
@@ -63,11 +60,13 @@ target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
 enable_sanitizers(CoreVM)
 
 # Tests
-add_executable(test-corevm
-    test_main.cpp
-    TargetCodeGenerator_test.cpp
-    types/TypeSystem_test.cpp
-)
-target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
-add_test(NAME test-corevm COMMAND test-corevm)
-enable_sanitizers(test-corevm)
+if(NOT EMSCRIPTEN)
+    add_executable(test-corevm
+        test_main.cpp
+        TargetCodeGenerator_test.cpp
+        types/TypeSystem_test.cpp
+    )
+    target_link_libraries(test-corevm CoreVM crispy::core Catch2::Catch2)
+    add_test(NAME test-corevm COMMAND test-corevm)
+    enable_sanitizers(test-corevm)
+endif()

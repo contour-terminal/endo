@@ -137,6 +137,12 @@ std::string disassemble(Instruction pc, size_t ip, size_t sp, const ConstantPool
 
 std::string tos(LiteralType type);
 
+namespace diagnostics
+{
+    enum class Type;
+    std::string_view tos(Type type);
+} // namespace diagnostics
+
 bool isArrayType(LiteralType type);
 LiteralType elementTypeOf(LiteralType type);
 
@@ -329,6 +335,9 @@ inline size_t operator-(const FilePos& a, const FilePos& b)
     else
         return 1 + a.offset - b.offset;
 }
+
+/// Converts a FilePos to string (e.g. "1:5").
+std::string tos(FilePos const& pos);
 
 // }}}
 
@@ -1368,7 +1377,21 @@ class ConstantValue: public Constant
 
     [[nodiscard]] std::string to_string() const override
     {
-        return std::format("Constant '{}': {} = {}", name(), type(), _value);
+        auto valueStr = [&]() -> std::string {
+            if constexpr (std::is_same_v<T, std::string>)
+                return _value;
+            else if constexpr (std::is_same_v<T, bool>)
+                return _value ? "true" : "false";
+            else if constexpr (std::is_arithmetic_v<T>)
+                return std::to_string(_value);
+            else if constexpr (requires { _value.str(); })
+                return _value.str();
+            else if constexpr (requires { _value.pattern(); })
+                return _value.pattern();
+            else
+                return "?";
+        }();
+        return "Constant '" + std::string(name()) + "': " + tos(type()) + " = " + valueStr;
     }
 
   private:
@@ -2902,7 +2925,8 @@ T* IRProgram::get(std::vector<std::unique_ptr<T>>& table, U&& literal)
 template <typename T, typename U>
 T* IRProgram::get(std::vector<T>& table, U&& literal)
 {
-    if (auto i = std::ranges::find_if(table, [&](T const& elem) { return elem.get() == literal; });
+    if (auto i =
+            std::find_if(table.begin(), table.end(), [&](T const& elem) { return elem.get() == literal; });
         i != table.end())
     {
         return &*i;
@@ -3823,7 +3847,7 @@ struct std::formatter<CoreVM::FilePos>: std::formatter<std::string>
 {
     auto format(const CoreVM::FilePos& value, std::format_context& ctx) const -> std::format_context::iterator
     {
-        return std::formatter<std::string>::format(std::format("{}:{}", value.line, value.column), ctx);
+        return std::formatter<std::string>::format(CoreVM::tos(value), ctx);
     }
 };
 
@@ -3834,9 +3858,8 @@ struct std::formatter<CoreVM::SourceLocation>: std::formatter<std::string>
         -> std::format_context::iterator
     {
         if (!value.filename.empty())
-            return std::formatter<std::string>::format(std::format("{}:{}", value.filename, value.begin),
-                                                       ctx);
+            return std::formatter<std::string>::format(value.filename + ":" + CoreVM::tos(value.begin), ctx);
         else
-            return std::formatter<std::string>::format(std::format("{}", value.begin), ctx);
+            return std::formatter<std::string>::format(CoreVM::tos(value.begin), ctx);
     }
 };

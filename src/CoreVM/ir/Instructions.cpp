@@ -119,7 +119,7 @@ void NopInstr::accept(InstructionVisitor& v)
 // {{{ CastInstr
 std::string CastInstr::to_string() const
 {
-    return formatOne(std::format("cast {}", type()));
+    return formatOne("cast " + tos(type()));
 }
 
 std::unique_ptr<Instr> CastInstr::clone()

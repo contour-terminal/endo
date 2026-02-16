@@ -12,6 +12,11 @@
 namespace CoreVM
 {
 
+std::string tos(FilePos const& pos)
+{
+    return std::to_string(pos.line) + ":" + std::to_string(pos.column);
+}
+
 std::string SourceLocation::str() const
 {
     return std::format("{{ {}:{}.{} - {}:{}.{} }}",

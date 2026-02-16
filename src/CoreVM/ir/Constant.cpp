@@ -8,7 +8,7 @@ namespace CoreVM
 
 std::string Constant::to_string() const
 {
-    return std::format("Constant '{}': {}", name(), type());
+    return "Constant '" + std::string(name()) + "': " + tos(type());
 }
 
 } // namespace CoreVM

@@ -21,14 +21,27 @@ auto& diagnosticsLog()
 namespace CoreVM::diagnostics
 {
 
+std::string_view tos(Type type)
+{
+    switch (type)
+    {
+        case Type::TokenError: return "TokenError";
+        case Type::SyntaxError: return "SyntaxError";
+        case Type::TypeError: return "TypeError";
+        case Type::Warning: return "Warning";
+        case Type::LinkError: return "LinkError";
+    }
+    return "Unknown";
+}
+
 // {{{ Message
 std::string Message::string() const
 {
     switch (type)
     {
-        case Type::Warning: return std::format("[{}] {}", sourceLocation, text);
-        case Type::LinkError: return std::format("{}: {}", type, text);
-        default: return std::format("[{}] {}: {}", sourceLocation, type, text);
+        case Type::Warning: return "[" + sourceLocation.str() + "] " + text;
+        case Type::LinkError: return std::string(tos(type)) + ": " + text;
+        default: return "[" + sourceLocation.str() + "] " + std::string(tos(type)) + ": " + text;
     }
 }
 
@@ -128,8 +141,8 @@ void BufferedReport::log() const
     {
         switch (message.type)
         {
-            case Type::Warning: diagnosticsLog()()("Warning: {}\n", message); break;
-            default: diagnosticsLog()()("Error: {}\n", message); break;
+            case Type::Warning: diagnosticsLog()()("Warning: {}\n", message.string()); break;
+            default: diagnosticsLog()()("Error: {}\n", message.string()); break;
         }
     }
 }
@@ -176,8 +189,8 @@ std::ostream& operator<<(std::ostream& os, const BufferedReport& report)
     {
         switch (message.type)
         {
-            case Type::Warning: os << std::format("Warning: {}\n", message); break;
-            default: os << std::format("Error: {}\n", message); break;
+            case Type::Warning: os << "Warning: " + message.string() + "\n"; break;
+            default: os << "Error: " + message.string() + "\n"; break;
         }
     }
     return os;

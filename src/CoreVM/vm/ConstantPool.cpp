@@ -199,7 +199,10 @@ void dumpArrays(std::ostream& out, const std::vector<std::vector<T>>& vv, const 
         {
             if (k)
                 out << ", ";
-            out << std::format("{}", array[k]);
+            if constexpr (std::is_arithmetic_v<T>)
+                out << array[k];
+            else
+                out << array[k].str();
         }
         out << "];\n";
     }
