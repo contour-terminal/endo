@@ -80,7 +80,7 @@ class MockQueryProvider: public endo::CommandQueryProvider
         if (queryTag == "config-keys")
             return { { "user.name", "config key" }, { "user.email", "config key" } };
         if (queryTag == "aliases")
-            return { { "co", "alias: checkout" }, { "st", "alias: status" } };
+            return { { "co", "alias: checkout" }, { "br", "alias: branch" }, { "st", "alias: status" } };
         if (queryTag == "recent-commits")
             return { { "abc1234", "Fix the bug" }, { "def5678", "Add feature" } };
         if (queryTag == "tracked-files")
@@ -1578,4 +1578,83 @@ TEST_CASE("SshSpec.live_ssh_host_completion")
 
     // If user has a non-trivial ssh config, we should get at least one host
     CHECK_FALSE(results.empty());
+}
+
+// ============================================================================
+// Git alias resolution tests
+// ============================================================================
+
+TEST_CASE("CommandSpecCompleter.alias_br_completes_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git br ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+    CHECK(hasCompletion(results, "feature/test"));
+}
+
+TEST_CASE("CommandSpecCompleter.alias_br_completes_branch_options")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeOptionContext("git br --", "--");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "--delete"));
+    CHECK(hasCompletion(results, "--move"));
+    CHECK(hasCompletion(results, "--all"));
+    CHECK(hasCompletion(results, "--remotes"));
+}
+
+TEST_CASE("CommandSpecCompleter.alias_br_delete_completes_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git br -d ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+}
+
+TEST_CASE("CommandSpecCompleter.alias_co_completes_branches")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git co ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
+    CHECK(hasCompletion(results, "feature/test"));
+}
+
+TEST_CASE("CommandLineParser.alias_resolver_resolves_subcommand")
+{
+    auto const spec = endo::createGitSpec();
+    auto resolver = [](std::string_view alias) -> std::optional<std::string> {
+        if (alias == "br")
+            return "branch";
+        return std::nullopt;
+    };
+    auto const state = endo::parseCommandLine(spec, "git br ", 7, "", resolver);
+
+    REQUIRE(state.has_value());
+    CHECK(state->subcommandChain.size() == 1);
+    CHECK(state->subcommandChain[0] == "branch");
+    CHECK(state->phase == endo::CompletionPhase::Argument);
+}
+
+TEST_CASE("CommandSpecCompleter.worktree_add_branch_completion")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git worktree add /tmp/wt ");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "develop"));
 }

@@ -16,6 +16,33 @@ void CommandSpecCompleter::registerCommand(CommandSpec spec,
     if (queryProvider)
         entry.cache.emplace(std::move(queryProvider));
     _commands[name] = std::move(entry);
+
+    // Wire up alias resolver: resolves git aliases (e.g., "br" → "branch") to canonical subcommand names.
+    auto& stored = _commands[name];
+    if (stored.cache)
+    {
+        stored.aliasResolver = [&cache =
+                                    *stored.cache](std::string_view alias) -> std::optional<std::string> {
+            auto const aliases = cache.query("aliases");
+            for (auto const& entry: aliases)
+            {
+                if (entry.text != alias)
+                    continue;
+                // Description format: "alias: <command> [args...]"
+                static constexpr std::string_view prefix = "alias: ";
+                if (!entry.description.starts_with(prefix))
+                    return std::nullopt;
+                auto const rest = std::string_view(entry.description).substr(prefix.size());
+                // Shell aliases (starting with '!') are not subcommand mappings
+                if (rest.starts_with('!'))
+                    return std::nullopt;
+                // Extract the first word as the canonical subcommand name
+                auto const space = rest.find(' ');
+                return std::string(rest.substr(0, space));
+            }
+            return std::nullopt;
+        };
+    }
 }
 
 bool CommandSpecCompleter::canHandle(CompletionContextType type) const
