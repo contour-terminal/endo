@@ -176,6 +176,9 @@ endif()
 add_executable(endo-bin
     main.cpp
 )
+if(MSVC)
+    target_sources(endo-bin PRIVATE endo.manifest)
+endif()
 set_target_properties(endo-bin PROPERTIES OUTPUT_NAME endo)
 target_link_libraries(endo-bin PUBLIC endo-shell endo-lsp)
 enable_static_linking(endo-bin)

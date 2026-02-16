@@ -7,6 +7,7 @@
 #include <crispy/logstore.h>
 
 #include <cerrno>
+#include <clocale>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -15,6 +16,10 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+
+#if defined(_WIN32)
+    #include <windows.h>
+#endif
 
 #include "CrashHandler.hpp"
 #include "Shell.hpp"
@@ -224,10 +229,28 @@ int executeScript(endo::Shell& shell,
     return shell.execute(content);
 }
 
+#if defined(_WIN32)
+/// @brief Configures the Windows console and C runtime for UTF-8 encoding.
+///
+/// Sets both input and output console code pages to CP_UTF8 so that multi-byte
+/// UTF-8 sequences are correctly interpreted. Also aligns the C/C++ locale.
+/// Must be called before any I/O operations.
+void setupWindowsUtf8()
+{
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+    std::setlocale(LC_ALL, ".UTF-8");
+}
+#endif
+
 } // namespace
 
 int main(int argc, char const* argv[])
 {
+#if defined(_WIN32)
+    setupWindowsUtf8();
+#endif
+
     endo::CrashHandler::initialize(Version.data());
 
     auto const args = std::span(argv, static_cast<size_t>(argc));

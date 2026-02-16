@@ -20,6 +20,30 @@ namespace
         DWORD written = 0;
         WriteFile(hStdout, data.data(), static_cast<DWORD>(data.size()), &written, nullptr);
     }
+
+    /// @brief Appends a UTF-16 code unit as UTF-8 bytes to a string.
+    ///
+    /// Handles BMP characters (U+0000..U+FFFF). Surrogate pairs are not handled
+    /// here since Windows console input events deliver one code unit at a time.
+    void appendUtf16AsUtf8(std::string& output, wchar_t codeUnit)
+    {
+        auto const cp = static_cast<uint32_t>(codeUnit);
+        if (cp < 0x80)
+        {
+            output += static_cast<char>(cp);
+        }
+        else if (cp < 0x800)
+        {
+            output += static_cast<char>(0xC0 | (cp >> 6));
+            output += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else
+        {
+            output += static_cast<char>(0xE0 | (cp >> 12));
+            output += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            output += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+    }
 } // namespace
 
 TerminalInput::TerminalInput() = default;
@@ -98,7 +122,8 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
         {
             auto const cols = csbi.srWindow.Right - csbi.srWindow.Left + 1;
             auto const rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-            events.emplace_back(ResizeEvent { .columns = static_cast<int>(cols), .rows = static_cast<int>(rows) });
+            events.emplace_back(
+                ResizeEvent { .columns = static_cast<int>(cols), .rows = static_cast<int>(rows) });
         }
     }
 
@@ -122,9 +147,9 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
 
         if (rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown)
         {
-            auto const ch = rec.Event.KeyEvent.uChar.AsciiChar;
-            if (ch != 0)
-                vtData += ch;
+            auto const wc = rec.Event.KeyEvent.uChar.UnicodeChar;
+            if (wc != 0)
+                appendUtf16AsUtf8(vtData, wc);
         }
         else if (rec.EventType == WINDOW_BUFFER_SIZE_EVENT)
         {
@@ -144,7 +169,8 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     if (!vtData.empty())
     {
         auto parsed = _parser.feed(vtData);
-        events.insert(events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
+        events.insert(
+            events.end(), std::make_move_iterator(parsed.begin()), std::make_move_iterator(parsed.end()));
     }
 
     return events;
@@ -195,8 +221,8 @@ void TerminalInput::enableRawMode()
     SetConsoleMode(_hStdin, inputMode);
 
     // Enable VT output processing and disable automatic newline translation
-    DWORD const outputMode = ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING
-                             | DISABLE_NEWLINE_AUTO_RETURN;
+    DWORD const outputMode =
+        ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING | DISABLE_NEWLINE_AUTO_RETURN;
     SetConsoleMode(_hStdout, outputMode);
 
     _rawMode = true;

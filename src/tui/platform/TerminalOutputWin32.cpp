@@ -18,6 +18,27 @@ namespace tui
 
 namespace
 {
+    /// @brief Appends a UTF-16 code unit as UTF-8 bytes to a string.
+    void appendUtf16AsUtf8(std::string& output, wchar_t codeUnit)
+    {
+        auto const cp = static_cast<uint32_t>(codeUnit);
+        if (cp < 0x80)
+        {
+            output += static_cast<char>(cp);
+        }
+        else if (cp < 0x800)
+        {
+            output += static_cast<char>(0xC0 | (cp >> 6));
+            output += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+        else
+        {
+            output += static_cast<char>(0xE0 | (cp >> 12));
+            output += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            output += static_cast<char>(0x80 | (cp & 0x3F));
+        }
+    }
+
     /// @brief Queries the terminal for XTVERSION and returns the response.
     ///
     /// Sends CSI > q and reads the DCS response with a short timeout.
@@ -75,9 +96,9 @@ namespace
             {
                 if (records[i].EventType == KEY_EVENT && records[i].Event.KeyEvent.bKeyDown)
                 {
-                    auto const ch = records[i].Event.KeyEvent.uChar.AsciiChar;
-                    if (ch != 0)
-                        response += ch;
+                    auto const wc = records[i].Event.KeyEvent.uChar.UnicodeChar;
+                    if (wc != 0)
+                        appendUtf16AsUtf8(response, wc);
                 }
             }
 
@@ -337,12 +358,14 @@ void TerminalOutput::hideCursor()
 
 void TerminalOutput::saveCursor()
 {
-    _buffer += "\x1b" "7";
+    _buffer += "\x1b"
+               "7";
 }
 
 void TerminalOutput::restoreCursor()
 {
-    _buffer += "\x1b" "8";
+    _buffer += "\x1b"
+               "8";
 }
 
 void TerminalOutput::setCursorShape(CursorShape shape)

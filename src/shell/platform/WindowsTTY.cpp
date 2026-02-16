@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <shell/Error.hpp>
+#include <shell/Platform.hpp>
+#include <shell/TTY.hpp>
+
 #include <chrono>
 #include <cstring>
 #include <expected>
@@ -6,10 +10,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-#include <shell/Error.hpp>
-#include <shell/Platform.hpp>
-#include <shell/TTY.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>
@@ -127,9 +127,19 @@ std::optional<char> WindowsTTY::readCharWithTimeout(std::chrono::milliseconds ti
 
         if (rec.EventType == KEY_EVENT && rec.Event.KeyEvent.bKeyDown)
         {
-            auto const ch = rec.Event.KeyEvent.uChar.AsciiChar;
-            if (ch != 0)
-                return ch;
+            auto const wc = rec.Event.KeyEvent.uChar.UnicodeChar;
+            if (wc != 0)
+            {
+                // Convert UTF-16 code unit to its first UTF-8 byte.
+                // This function returns std::optional<char>, so we can only
+                // return one byte — sufficient for ASCII and the lead byte of
+                // multi-byte sequences (used for single-key reads like `read -n 1`).
+                if (wc < 0x80)
+                    return static_cast<char>(wc);
+                if (wc < 0x800)
+                    return static_cast<char>(0xC0 | (wc >> 6));
+                return static_cast<char>(0xE0 | (wc >> 12));
+            }
         }
         // Skip non-key events and key-up events, keep waiting
     }
@@ -153,7 +163,7 @@ void WindowsTTY::writeToStdin(std::string_view str) const
         rec.EventType = KEY_EVENT;
         rec.Event.KeyEvent.bKeyDown = TRUE;
         rec.Event.KeyEvent.wRepeatCount = 1;
-        rec.Event.KeyEvent.uChar.AsciiChar = ch;
+        rec.Event.KeyEvent.uChar.UnicodeChar = static_cast<wchar_t>(static_cast<unsigned char>(ch));
         records.push_back(rec);
     }
 
