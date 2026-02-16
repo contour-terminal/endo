@@ -101,3 +101,76 @@ html {
   color: #565f89;
   background: transparent;
 }
+
+/* -- Playground -- */
+
+#endo-playground {
+  min-height: 400px;
+  max-height: 600px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  margin: 1rem 0;
+}
+
+#endo-playground .xterm {
+  padding: 12px;
+}
+
+.playground-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.playground-toolbar-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--md-default-fg-color--light);
+  margin-right: 0.25rem;
+}
+
+.playground-example-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  border: 1px solid var(--md-primary-fg-color);
+  border-radius: 1rem;
+  background: transparent;
+  color: var(--md-primary-fg-color);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.playground-example-btn:hover:not(:disabled) {
+  background: var(--md-primary-fg-color);
+  color: var(--md-primary-bg-color);
+}
+
+.playground-example-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading state */
+#endo-playground.loading::after {
+  content: 'Loading Endo...';
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.9rem;
+}
+
+/* Responsive: smaller terminal on mobile */
+@media (max-width: 768px) {
+  #endo-playground {
+    min-height: 300px;
+    max-height: 450px;
+  }
+}
