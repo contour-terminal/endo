@@ -26,8 +26,8 @@
         #include <cstdio>
         #include <filesystem>
 
-        #include <windows.h>
         #include <dbghelp.h>
+        #include <windows.h>
     #endif
 #endif
 
@@ -313,6 +313,8 @@ void CrashHandler::initialize(char const* version)
     crashVersion = version ? version : "unknown";
 
     auto const* home = std::getenv("HOME");
+    if (!home)
+        home = std::getenv("USERPROFILE");
     if (!home)
         return;
 
