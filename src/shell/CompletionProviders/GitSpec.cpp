@@ -1060,6 +1060,10 @@ std::vector<QueryResult> GitQueryProvider::queryBranches(bool localOnly, bool re
                 stripped = branch.substr(slash + 1);
             if (stripped == "HEAD")
                 continue;
+            // Always include the full remote ref (e.g., "origin/master")
+            if (seen.insert(branch).second)
+                results.push_back(QueryResult { .text = branch, .description = "remote branch" });
+            // Also include the short name if it doesn't collide with a local branch
             if (seen.insert(stripped).second)
                 results.push_back(QueryResult { .text = stripped, .description = "remote branch" });
         }

@@ -64,6 +64,18 @@ bool CommandSpecCompleter::isExclusiveFor(CompletionContext const& context) cons
         return !optDef || optDef->valueKind != OptionValueKind::Path;
     }
 
+    // Exclusive when completing DynamicQuery positional arguments (no file paths)
+    if (state->phase == CompletionPhase::Argument)
+    {
+        auto const* sub = resolveSubcommand(cmd.spec, state->subcommandChain);
+        if (sub && !sub->positionalArgs.empty())
+        {
+            auto argIdx = std::min(state->positionalArgIndex, sub->positionalArgs.size() - 1);
+            auto const& argDef = sub->positionalArgs[argIdx];
+            return argDef.kind == ArgKind::DynamicQuery || argDef.kind == ArgKind::Subcommand;
+        }
+    }
+
     return false;
 }
 

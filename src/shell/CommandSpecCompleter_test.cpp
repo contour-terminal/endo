@@ -67,6 +67,7 @@ class MockQueryProvider: public endo::CommandQueryProvider
         if (queryTag == "branches")
             return { { "main", "local branch" },
                      { "develop", "local branch" },
+                     { "origin/develop", "remote branch" },
                      { "feature/test", "remote branch" } };
         if (queryTag == "remotes")
             return { { "origin", "remote" }, { "upstream", "remote" } };
@@ -276,6 +277,25 @@ TEST_CASE("CommandSpecCompleter.rebase_suggests_branches")
 
     CHECK_FALSE(results.empty());
     CHECK(hasCompletion(results, "main"));
+    CHECK(hasCompletion(results, "origin/develop"));
+}
+
+// ============================================================================
+// isExclusiveFor: DynamicQuery args suppress FileCompleter
+// ============================================================================
+
+TEST_CASE("CommandSpecCompleter.rebase_exclusive_suppresses_files")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git rebase ");
+    CHECK(completer.isExclusiveFor(ctx));
+}
+
+TEST_CASE("CommandSpecCompleter.commit_path_arg_not_exclusive_allows_files")
+{
+    auto completer = createMockGitCompleter();
+    auto ctx = makeGitContext("git commit ");
+    CHECK_FALSE(completer.isExclusiveFor(ctx));
 }
 
 // ============================================================================
