@@ -19,4 +19,4 @@ Try Endo directly in your browser. This runs the real Endo interpreter compiled 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/css/xterm.css">
 <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5/lib/xterm.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0/lib/addon-fit.js"></script>
-<script src="assets/js/playground.js"></script>
+<script src="../assets/js/playground.js"></script>
