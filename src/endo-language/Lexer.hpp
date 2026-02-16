@@ -358,6 +358,110 @@ class Lexer
     TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
 };
 
+/// Converts a Token to its string representation.
+inline std::string_view tos(Token token)
+{
+    using enum Token;
+    switch (token)
+    {
+        case AmpNumber: return "AmpNumber";
+        case Backslash: return "\\";
+        case DollarDollar: return "$$";
+        case DollarName: return "DollarName";
+        case DollarNot: return "$!";
+        case DollarQuestion: return "$?";
+        case DollarNumber: return "DollarNumber";
+        case DollarBraceName: return "DollarBraceName";
+        case EndOfInput: return "EndOfInput";
+        case Equal: return "=";
+        case Greater: return ">";
+        case GreaterEqual: return ">=";
+        case GreaterGreater: return ">>";
+        case GreaterAmp: return ">&";
+        case Identifier: return "Identifier";
+        case Invalid: return "Invalid";
+        case Less: return "<";
+        case LessEqual: return "<=";
+        case LessLess: return "<<";
+        case LessLessDash: return "<<-";
+        case LessLessLess: return "<<<";
+        case LessRndOpen: return "<(";
+        case LineFeed: return "LineFeed";
+        case Not: return "!";
+        case Number: return "Number";
+        case Pipe: return "|";
+        case RndClose: return ")";
+        case RndOpen: return "(";
+        case Semicolon: return ";";
+        case String: return "String";
+        case AmpAmp: return "&&";
+        case PipePipe: return "||";
+        case DollarRndOpen: return "$(";
+        case DollarDblRndOpen: return "$((";
+        case DblRndClose: return "))";
+        case DblRndOpen: return "((";
+        case DblSemicolon: return ";;";
+        case GreaterRndOpen: return ">(";
+        case Backtick: return "`";
+        case Tilde: return "~";
+        case DollarBraceParam: return "DollarBraceParam";
+        case Ampersand: return "&";
+        case DblQuoteStart: return "DblQuoteStart";
+        case DblQuoteEnd: return "DblQuoteEnd";
+        case StringFragment: return "StringFragment";
+        case FStringStart: return "FStringStart";
+        case FStringEnd: return "FStringEnd";
+        case FStringExprStart: return "FStringExprStart";
+        case FStringExprEnd: return "FStringExprEnd";
+        case Let: return "let";
+        case Mut: return "mut";
+        case Fun: return "fun";
+        case Match: return "match";
+        case With: return "with";
+        case When: return "when";
+        case Type: return "type";
+        case Of: return "of";
+        case Rec: return "rec";
+        case And: return "and";
+        case As: return "as";
+        case True: return "true";
+        case False: return "false";
+        case OptionSome: return "Some";
+        case OptionNone: return "None";
+        case ResultOk: return "Ok";
+        case ResultError: return "Error";
+        case Try: return "try";
+        case Finally: return "finally";
+        case Arrow: return "->";
+        case LeftArrow: return "<-";
+        case ForwardPipe: return "|>";
+        case DotDot: return "..";
+        case EqualEqual: return "==";
+        case NotEqual: return "!=";
+        case Plus: return "+";
+        case Minus: return "-";
+        case Star: return "*";
+        case Slash: return "/";
+        case Percent: return "%";
+        case StarStar: return "**";
+        case Caret: return "^";
+        case ColonColon: return "::";
+        case At: return "@";
+        case Comma: return ",";
+        case Colon: return ":";
+        case BracketOpen: return "[";
+        case BracketClose: return "]";
+        case BraceOpen: return "{";
+        case BraceClose: return "}";
+        case Question: return "?";
+        case QuestionPipe: return "?|";
+        case QuestionDot: return "?.";
+        case Dot: return ".";
+        case Ellipsis: return "...";
+    }
+    return "?";
+}
+
 } // namespace endo
 
 template <>
@@ -384,8 +488,11 @@ struct std::formatter<endo::SourceLocationRange>: std::formatter<std::string>
 {
     auto format(const endo::SourceLocationRange range, format_context& ctx) const -> format_context::iterator
     {
-        return formatter<std::string>::format(std::format("{}({} - {})", range.name, range.begin, range.end),
-                                              ctx);
+        auto lc = [](endo::LineColumn const& v) {
+            return std::to_string(v.line) + ":" + std::to_string(v.column);
+        };
+        return formatter<std::string>::format(
+            std::string(range.name) + "(" + lc(range.begin) + " - " + lc(range.end) + ")", ctx);
     }
 };
 
@@ -394,113 +501,7 @@ struct std::formatter<endo::Token>: std::formatter<std::string_view>
 {
     auto format(const endo::Token token, format_context& ctx) const -> format_context::iterator
     {
-        std::string_view name;
-        using enum endo::Token;
-        switch (token)
-        {
-            case AmpNumber: name = "AmpNumber"; break;
-            case Backslash: name = "\\"; break;
-            case DollarDollar: name = "$$"; break;
-            case DollarName: name = "DollarName"; break;
-            case DollarNot: name = "$!"; break;
-            case DollarQuestion: name = "$?"; break;
-            case DollarNumber: name = "DollarNumber"; break;
-            case DollarBraceName: name = "DollarBraceName"; break;
-            case EndOfInput: name = "EndOfInput"; break;
-            case Equal: name = "="; break;
-            case Greater: name = ">"; break;
-            case GreaterEqual: name = ">="; break;
-            case GreaterGreater: name = ">>"; break;
-            case GreaterAmp: name = ">&"; break;
-            case Identifier: name = "Identifier"; break;
-            case Invalid: name = "Invalid"; break;
-            case Less: name = "<"; break;
-            case LessEqual: name = "<="; break;
-            case LessLess: name = "<<"; break;
-            case LessLessDash: name = "<<-"; break;
-            case LessLessLess: name = "<<<"; break;
-            case LessRndOpen: name = "<("; break;
-            case LineFeed: name = "LineFeed"; break;
-            case Not: name = "!"; break;
-            case Number: name = "Number"; break;
-            case Pipe: name = "|"; break;
-            case RndClose: name = ")"; break;
-            case RndOpen: name = "("; break;
-            case Semicolon: name = ";"; break;
-            case String: name = "String"; break;
-            case AmpAmp: name = "&&"; break;
-            case PipePipe: name = "||"; break;
-            case DollarRndOpen: name = "$("; break;
-            case DollarDblRndOpen: name = "$(("; break;
-            case DblRndClose: name = "))"; break;
-            case DblRndOpen: name = "(("; break;
-            case DblSemicolon: name = ";;"; break;
-            case GreaterRndOpen: name = ">("; break;
-            case Backtick: name = "`"; break;
-            case Tilde: name = "~"; break;
-            case DollarBraceParam: name = "DollarBraceParam"; break;
-            case Ampersand: name = "&"; break;
-            case DblQuoteStart: name = "DblQuoteStart"; break;
-            case DblQuoteEnd: name = "DblQuoteEnd"; break;
-            case StringFragment: name = "StringFragment"; break;
-            case FStringStart: name = "FStringStart"; break;
-            case FStringEnd: name = "FStringEnd"; break;
-            case FStringExprStart: name = "FStringExprStart"; break;
-            case FStringExprEnd: name = "FStringExprEnd"; break;
-            // F# style keywords
-            case Let: name = "let"; break;
-            case Mut: name = "mut"; break;
-            case Fun: name = "fun"; break;
-            case Match: name = "match"; break;
-            case With: name = "with"; break;
-            case When: name = "when"; break;
-            case Type: name = "type"; break;
-            case Of: name = "of"; break;
-            case Rec: name = "rec"; break;
-            case And: name = "and"; break;
-            case As: name = "as"; break;
-            case True: name = "true"; break;
-            case False: name = "false"; break;
-            // F# style constructors
-            case OptionSome: name = "Some"; break;
-            case OptionNone: name = "None"; break;
-            case ResultOk: name = "Ok"; break;
-            case ResultError: name = "Error"; break;
-            case Try: name = "try"; break;
-            case Finally: name = "finally"; break;
-            // F# style operators
-            case Arrow: name = "->"; break;
-            case LeftArrow: name = "<-"; break;
-            case ForwardPipe: name = "|>"; break;
-            case DotDot: name = ".."; break;
-            case EqualEqual: name = "=="; break;
-            case NotEqual: name = "!="; break;
-            // F# arithmetic/structural operators
-            case Plus: name = "+"; break;
-            case Minus: name = "-"; break;
-            case Star: name = "*"; break;
-            case Slash: name = "/"; break;
-            case Percent: name = "%"; break;
-            case StarStar: name = "**"; break;
-            case Caret: name = "^"; break;
-            case ColonColon: name = "::"; break;
-            case At: name = "@"; break;
-            case Comma: name = ","; break;
-            case Colon: name = ":"; break;
-            case BracketOpen: name = "["; break;
-            case BracketClose: name = "]"; break;
-            case BraceOpen: name = "{"; break;
-            case BraceClose: name = "}"; break;
-            case Question: name = "?"; break;
-            case QuestionPipe: name = "?|"; break;
-            case QuestionDot: name = "?."; break;
-            case Dot: name = "."; break;
-            case Ellipsis:
-                name = "...";
-                break;
-                // Note: >> and << use GreaterGreater/LessLess tokens
-        }
-        return formatter<std::string_view>::format(name, ctx);
+        return formatter<std::string_view>::format(endo::tos(token), ctx);
     }
 };
 
@@ -514,6 +515,12 @@ struct std::formatter<endo::TokenInfo>
 
     auto format(endo::TokenInfo const& info, format_context& ctx) const -> format_context::iterator
     {
-        return std::format_to(ctx.out(), "({}, {}, {})", info.token, info.literal, info.location);
+        auto lc = [](endo::LineColumn const& v) {
+            return std::to_string(v.line) + ":" + std::to_string(v.column);
+        };
+        auto locStr = std::string(info.location.name) + "(" + lc(info.location.begin) + " - "
+                      + lc(info.location.end) + ")";
+        auto result = "(" + std::string(endo::tos(info.token)) + ", " + info.literal + ", " + locStr + ")";
+        return std::format_to(ctx.out(), "{}", result);
     }
 };

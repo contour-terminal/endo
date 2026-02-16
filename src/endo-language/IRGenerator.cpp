@@ -5,6 +5,7 @@
 
 #include <bit>
 #include <functional>
+#include <map>
 #include <typeinfo>
 
 #include "AST.hpp"
@@ -1495,7 +1496,7 @@ void IRGenerator::visit(ast::BuiltinExitStmt const& node)
             exitCode = _builder.createS2N(exitCode);
         else if (exitCode->type() != CoreVM::LiteralType::Number)
         {
-            reportTypeError("exit code must be a number, got {}", exitCode->type());
+            reportTypeError("exit code must be a number, got {}", CoreVM::tos(exitCode->type()));
             return;
         }
     }
@@ -2198,7 +2199,7 @@ void IRGenerator::visit(ast::BuiltinFgStmt const& node)
             jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
-            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
             return;
         }
         _result = _builder.createCallFunction(
@@ -2221,7 +2222,7 @@ void IRGenerator::visit(ast::BuiltinBgStmt const& node)
             jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
-            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
             return;
         }
         _result = _builder.createCallFunction(
@@ -2244,7 +2245,7 @@ void IRGenerator::visit(ast::BuiltinWaitStmt const& node)
             jobIdValue = _builder.createS2N(jobIdValue);
         else if (jobIdValue->type() != CoreVM::LiteralType::Number)
         {
-            reportTypeError("job ID must be a number, got {}", jobIdValue->type());
+            reportTypeError("job ID must be a number, got {}", CoreVM::tos(jobIdValue->type()));
             return;
         }
         _result = _builder.createCallFunction(

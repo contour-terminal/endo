@@ -28,16 +28,21 @@ inline auto& parserLog()
 }
 
 #define TRACE_SCOPE(message) ScopedLogger _logger { message, parserLog() };
-#define TRACE_FMT(message, ...)                                                        \
-    do                                                                                 \
-    {                                                                                  \
-        parserLog()()("{}", ScopedLogger::write(::std::format(message, __VA_ARGS__))); \
-    } while (0)
-#define TRACE(message)                                                    \
-    do                                                                    \
-    {                                                                     \
-        parserLog()()("{}", ScopedLogger::write(::std::format(message))); \
-    } while (0)
+#ifdef __EMSCRIPTEN__
+    #define TRACE_FMT(message, ...) ((void) 0)
+    #define TRACE(message)          ((void) 0)
+#else
+    #define TRACE_FMT(message, ...)                                                        \
+        do                                                                                 \
+        {                                                                                  \
+            parserLog()()("{}", ScopedLogger::write(::std::format(message, __VA_ARGS__))); \
+        } while (0)
+    #define TRACE(message)                                                    \
+        do                                                                    \
+        {                                                                     \
+            parserLog()()("{}", ScopedLogger::write(::std::format(message))); \
+        } while (0)
+#endif
 
 namespace endo
 {
