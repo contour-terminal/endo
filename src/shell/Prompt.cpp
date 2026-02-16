@@ -549,20 +549,28 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     if (_promptConfig.transient == TransientMode::Arrow)
         out.write("\u276F ", tui::Style { .dim = true });
 
-    // Show first line of input (with ellipsis for multi-line)
-    auto const firstNewline = inputText.find('\n');
-    if (firstNewline != std::string_view::npos)
+    // Show full command input, each line on its own terminal row
+    auto linesWritten = 0;
+    auto remaining = inputText;
+    while (!remaining.empty())
     {
-        writeSyntaxHighlighted(out, inputText.substr(0, firstNewline));
-        out.write("\u2026", tui::Style { .dim = true });
-    }
-    else
-    {
-        writeSyntaxHighlighted(out, inputText);
+        auto const newlinePos = remaining.find('\n');
+        auto const line = remaining.substr(0, newlinePos);
+        if (linesWritten > 0)
+        {
+            out.moveDown(1);
+            out.writeRaw("\r");
+            out.clearLine();
+        }
+        writeSyntaxHighlighted(out, line);
+        ++linesWritten;
+        if (newlinePos == std::string_view::npos)
+            break;
+        remaining = remaining.substr(newlinePos + 1);
     }
 
     // Clear remaining rows (including padding rows with NBSP markers)
-    for (auto i = topPad + 1; i < totalHeight; ++i)
+    for (auto i = topPad + linesWritten; i < totalHeight; ++i)
     {
         out.moveDown(1);
         out.writeRaw("\r");
@@ -571,7 +579,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
 
     // Cursor is now at row (totalHeight - 1). Reposition so that the subsequent
     // \r\n in the submit handler preserves exactly the configured spacing.
-    if (auto const excessRows = totalHeight - 1 - topPad - botPad; excessRows > 0)
+    if (auto const excessRows = totalHeight - topPad - linesWritten - botPad; excessRows > 0)
         out.moveUp(excessRows);
 }
 
