@@ -1118,6 +1118,7 @@ Milestone 5: Developer Tools
 - [ ] Milestone 3 Phase 3.1 and 3.2 complete (basic AI integration)
 - [ ] Passes comprehensive test suite on Linux and Windows
 - [x] Documentation complete (user guide, configuration reference) — MkDocs site in `docs/`
+- [x] Browser playground (WASM-compiled interpreter, xterm.js terminal, endo-signature prompt)
 - [ ] Performance acceptable for interactive use (< 50ms prompt latency)
 - [ ] No critical or high-severity bugs
 
