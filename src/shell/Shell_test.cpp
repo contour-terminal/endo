@@ -1989,6 +1989,16 @@ TEST_CASE("shell.fsharp.match_nested_in_let")
     CHECK(shell.exitCode == 14);
 }
 
+TEST_CASE("shell.fsharp.pipeline_map_take_each_println")
+{
+    // Verify that map producing tuples, followed by take and each println,
+    // formats output correctly (not raw pointer values).
+    TestShell shell;
+    shell("([1; 2; 3]) |> map (fun x -> (x, x * 2)) |> take 2 |> each println");
+    // The trailing "0" is the return value of `each` (unit) auto-displayed by the shell.
+    CHECK(escape(shell.output()) == escape("(1, 2)\n(2, 4)\n0\n"));
+}
+
 // ============================================================================
 // LetBindingCompleter Tests
 // ============================================================================

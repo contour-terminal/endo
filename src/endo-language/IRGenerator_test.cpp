@@ -7046,7 +7046,7 @@ TEST_CASE("IRGenerator.FSharp.ls.map_formatMode")
 {
     // Map over ls results to format mode as rwx strings
     CHECK(executeSourceAndGetOutput("print (ls |> map (fun f -> formatMode f.mode))")
-          == "[rwxr-xr-x; rw-r--r--; rwxr-xr-x]");
+          == "[\"rwxr-xr-x\"; \"rw-r--r--\"; \"rwxr-xr-x\"]");
 }
 
 TEST_CASE("IRGenerator.FSharp.ls.filter_executable")

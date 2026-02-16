@@ -9648,6 +9648,17 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
         return;
     }
 
+    // Capture the mapped element's type info for annotating the output list.
+    // getObjectTypeId checks annotations; tryGetObjectInfo traces the IR chain (ObjSetSlot → ObjAlloc)
+    // as a fallback — needed because emitTuple2/emitTuple3 don't annotate their results.
+    auto const mappedLiteralType = mapped->type();
+    auto mappedObjTypeId = getObjectTypeId(mapped);
+    if (!mappedObjTypeId)
+    {
+        if (auto info = tryGetObjectInfo(mapped))
+            mappedObjTypeId = static_cast<uint16_t>(info->typeId);
+    }
+
     // Store mapped value and accumulator in temp allocas to survive ObjAlloc
     auto* mappedTmp = createAllocaInEntryBlock(mapped->type(), "map.mapped.tmp");
     _builder.createStore(mappedTmp, mapped);
@@ -9658,7 +9669,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     // Create Cons cell: tag=1, slot[0]=mapped, slot[1]=oldAcc
     auto* mappedReload = _builder.createLoad(mappedTmp, "map.mapped.reload");
     auto* accReload = _builder.createLoad(accTmp, "map.acc.reload");
-    auto* cons = emitListCons(mappedReload, accReload, CoreVM::LiteralType::Void, "map.cons");
+    auto* cons = emitListCons(mappedReload, accReload, mappedLiteralType, "map.cons");
 
     _builder.createStore(accStorage, cons);
     _builder.createBr(condBlock);
@@ -9687,7 +9698,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "map.rev.tail");
     _builder.createStore(revSrcStorage, revTail);
 
-    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "map.rev.elem.tmp");
+    auto* revElemTmp = createAllocaInEntryBlock(mappedLiteralType, "map.rev.elem.tmp");
     _builder.createStore(revElemTmp, revHead);
     auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "map.rev.acc.tmp");
     auto* revAccForCons = _builder.createLoad(revAccStorage, "map.rev.acc.for_cons");
@@ -9695,7 +9706,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
 
     auto* revElemReload = _builder.createLoad(revElemTmp, "map.rev.elem.reload");
     auto* revAccReload = _builder.createLoad(revAccTmp, "map.rev.acc.reload");
-    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "map.rev.cons");
+    auto* revCons = emitListCons(revElemReload, revAccReload, mappedLiteralType, "map.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -9703,6 +9714,10 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "map.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    // Annotate the output list with the mapped element type (may differ from input)
+    if (mappedObjTypeId)
+        annotateListElementTypeId(_result, *mappedObjTypeId);
+    annotateListElementLiteralType(_result, mappedLiteralType);
 }
 
 void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue)
