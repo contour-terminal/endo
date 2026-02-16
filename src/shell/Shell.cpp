@@ -51,17 +51,21 @@
 #include "commands/JobsCommand.hpp"
 #include "commands/LsCommand.hpp"
 #include "commands/PsCommand.hpp"
-#include "platform/LinuxFileInfoProvider.hpp"
-#include "platform/LinuxProcessProvider.hpp"
-#include "platform/PosixEnvironmentProvider.hpp"
-
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    #include "platform/WindowsEnvironmentProvider.hpp"
+    #include "platform/WindowsFileInfoProvider.hpp"
+    #include "platform/WindowsProcessProvider.hpp"
+#else
     #include <sys/wait.h>
 
     #include <fcntl.h>
     #include <poll.h>
     #include <pwd.h>
     #include <unistd.h>
+
+    #include "platform/LinuxFileInfoProvider.hpp"
+    #include "platform/LinuxProcessProvider.hpp"
+    #include "platform/PosixEnvironmentProvider.hpp"
 #endif
 
 namespace
@@ -360,7 +364,7 @@ std::string readLine(TTY& tty, std::string_view prompt)
     while (true)
     {
         char ch {};
-        ssize_t const n = read(tty.inputFd(), &ch, 1);
+        auto const n = platformRead(tty.inputFd(), &ch, 1);
         if (n == 0)
             break;
         else if (n == -1)
@@ -443,7 +447,7 @@ NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, 
         if (entry.type == Type::OutputFile && entry.sourceFd == STDOUT_FILENO)
         {
             // Open the file if not already open
-            if (entry.openedFd == -1)
+            if (entry.openedFd == InvalidHandle)
             {
                 int const oflags =
                     entry.append ? (O_WRONLY | O_CREAT | O_APPEND) : (O_WRONLY | O_CREAT | O_TRUNC);
@@ -451,7 +455,7 @@ NativeHandle Shell::RedirectState::getEffectiveStdoutFd(NativeHandle defaultFd, 
                 if (result.has_value())
                     entry.openedFd = result.value();
             }
-            if (entry.openedFd != -1)
+            if (entry.openedFd != InvalidHandle)
                 return entry.openedFd;
         }
     }
@@ -465,38 +469,38 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
         if (entry.type == Type::InputFile && entry.targetFd == STDIN_FILENO)
         {
             // Open the file if not already open
-            if (entry.openedFd == -1)
+            if (entry.openedFd == InvalidHandle)
             {
                 auto const result = pm.openFile(entry.path, O_RDONLY);
                 if (result.has_value())
                     entry.openedFd = result.value();
             }
-            if (entry.openedFd != -1)
+            if (entry.openedFd != InvalidHandle)
                 return entry.openedFd;
         }
         else if ((entry.type == Type::HereDoc || entry.type == Type::HereString)
                  && entry.targetFd == STDIN_FILENO)
         {
             // Lazily create the pipe if not already created
-            if (entry.openedFd == -1)
+            if (entry.openedFd == InvalidHandle)
             {
                 auto pipeResult = createPipe();
                 if (pipeResult.has_value())
                 {
                     auto pipe = std::move(pipeResult.value());
                     // Write content to pipe
-                    write(pipe->writer(), entry.content.data(), entry.content.size());
+                    platformWrite(pipe->writer(), entry.content.data(), entry.content.size());
                     // Add trailing newline for herestrings if needed
                     if (entry.type == Type::HereString && !entry.content.empty()
                         && entry.content.back() != '\n')
                     {
-                        write(pipe->writer(), "\n", 1);
+                        platformWrite(pipe->writer(), "\n", 1);
                     }
                     pipe->closeWriter();
                     entry.openedFd = pipe->releaseReader();
                 }
             }
-            if (entry.openedFd != -1)
+            if (entry.openedFd != InvalidHandle)
                 return entry.openedFd;
         }
     }
@@ -510,9 +514,9 @@ NativeHandle Shell::RedirectState::getEffectiveStdinFd(NativeHandle defaultFd, P
 void Shell::SubstitutionCapture::clear()
 {
     pipe.reset();
-    if (savedStdout != -1)
+    if (savedStdout != InvalidHandle)
     {
-        savedStdout = -1;
+        savedStdout = InvalidHandle;
     }
     output.clear();
 }
@@ -521,12 +525,26 @@ void Shell::SubstitutionCapture::clear()
 // Shell implementation
 // ========================================================================
 
+#if defined(_WIN32)
+Shell::Shell(): Shell(WindowsTTY::instance(), WindowsEnvironmentProvider::instance())
+{
+}
+#else
 Shell::Shell(): Shell(RealTTY::instance(), PosixEnvironmentProvider::instance())
 {
 }
+#endif
 
 Shell::Shell(TTY& tty, EnvironmentProvider& env):
-    _env { env }, _tty { tty }, _processManager { PosixProcessManager::instance() }
+    _env { env },
+    _tty { tty },
+    _processManager {
+#if defined(_WIN32)
+        WindowsProcessManager::instance()
+#else
+        PosixProcessManager::instance()
+#endif
+    }
 {
     _currentPipelineBuilder.defaultStdinFd = _tty.inputFd();
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
@@ -564,9 +582,17 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
 #if defined(ENDO_DEFINITIONS_DIR)
     _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR);
 #endif
+#if defined(_WIN32)
+    if (auto const* appData = std::getenv("LOCALAPPDATA"))
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(appData) / "endo" / "definitions");
+    else if (auto const* userProfile = std::getenv("USERPROFILE"))
+        _outputDefinitions.loadFromDirectory(std::filesystem::path(userProfile) / ".config" / "endo"
+                                             / "definitions");
+#else
     if (auto const* home = std::getenv("HOME"))
         _outputDefinitions.loadFromDirectory(std::filesystem::path(home) / ".config" / "endo"
                                              / "definitions");
+#endif
 
     // Register output definition types and structured commands in persistent state
     {
@@ -718,8 +744,14 @@ void Shell::emitCurrentWorkingDirectory()
 
     // Get hostname for the file:// URI
     auto hostname = std::array<char, 256> {};
+#if defined(_WIN32)
+    DWORD hostnameLen = static_cast<DWORD>(hostname.size());
+    if (!GetComputerNameA(hostname.data(), &hostnameLen))
+        hostname[0] = '\0';
+#else
     if (gethostname(hostname.data(), hostname.size()) != 0)
         hostname[0] = '\0';
+#endif
 
     _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname.data(), encoded));
 }
@@ -778,6 +810,10 @@ int Shell::run()
             ctx.cwd = std::filesystem::current_path().string();
             if (auto const* home = std::getenv("HOME"))
                 ctx.homePath = home;
+    #if defined(_WIN32)
+            else if (auto const* userProfile = std::getenv("USERPROFILE"))
+                ctx.homePath = userProfile;
+    #endif
             ctx.lastExitCode = _exitCode;
             ctx.lastDuration = _lastCommandDuration;
             ctx.terminalWidth = prompt.terminal().columns();
@@ -785,8 +821,14 @@ int Shell::run()
             if (ctx.isSSH)
             {
                 auto buf = std::array<char, 256> {};
+    #if defined(_WIN32)
+                DWORD bufLen = static_cast<DWORD>(buf.size());
+                if (GetComputerNameA(buf.data(), &bufLen))
+                    ctx.hostname = buf.data();
+    #else
                 if (gethostname(buf.data(), buf.size()) == 0)
                     ctx.hostname = buf.data();
+    #endif
             }
             ctx.theme = &tui::currentTheme();
             ctx.fsharpState = &_fsharpState;
@@ -854,11 +896,47 @@ int Shell::run()
         }
     }
 #else
-    // Windows fallback: simple loop without poll
+    // Windows: simple loop without poll/signalfd
     while (!_quit && prompt.ready())
     {
+        // Report completed jobs before prompting
+        reportJobStatus();
+
+        // Shell integration: notify terminal of CWD and prompt lifecycle
         emitCurrentWorkingDirectory();
         emitPromptStart();
+
+        // Populate prompt context for module evaluation
+        {
+            auto ctx = PromptContext {};
+            ctx.cwd = std::filesystem::current_path().string();
+            if (auto const* home = std::getenv("HOME"))
+                ctx.homePath = home;
+            else if (auto const* userProfile = std::getenv("USERPROFILE"))
+                ctx.homePath = userProfile;
+            ctx.lastExitCode = _exitCode;
+            ctx.lastDuration = _lastCommandDuration;
+            ctx.terminalWidth = prompt.terminal().columns();
+            ctx.isSSH = std::getenv("SSH_CONNECTION") != nullptr;
+            if (ctx.isSSH)
+            {
+                auto buf = std::array<char, 256> {};
+                DWORD bufLen = static_cast<DWORD>(buf.size());
+                if (GetComputerNameA(buf.data(), &bufLen))
+                    ctx.hostname = buf.data();
+            }
+            ctx.theme = &tui::currentTheme();
+            ctx.fsharpState = &_fsharpState;
+            ctx.outputDefs = &_outputDefinitions;
+            ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
+            ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
+            prompt.setPromptContext(std::move(ctx));
+        }
+
+        // Display the prompt before waiting for input
+        prompt.display();
+
+        emitPromptEnd();
 
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
@@ -872,7 +950,10 @@ int Shell::run()
 
         auto const _ = Prompt::ScopedSuspend(prompt);
         emitCommandStart();
+        auto const cmdStart = std::chrono::steady_clock::now();
         _exitCode = execute(lineBuffer);
+        _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - cmdStart);
         emitCommandFinished(_exitCode);
 
         if (!lineBuffer.empty())
@@ -1954,7 +2035,11 @@ void Shell::registerBuiltinFunctions()
     _runtime.registerFunction("structured_ps")
         .returnType(CoreVM::LiteralType::Number)  // Returns list object pointer
         .bind([this](CoreVM::Params& args) {
+#if defined(_WIN32)
+            WindowsProcessProvider provider;
+#else
             LinuxProcessProvider provider;
+#endif
             PsCommand cmd(provider);
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
@@ -1966,7 +2051,11 @@ void Shell::registerBuiltinFunctions()
         .returnType(CoreVM::LiteralType::Number) // Returns list object pointer
         .bind([this](CoreVM::Params& args) {
             auto const path = args.getString(1);
+#if defined(_WIN32)
+            WindowsFileInfoProvider provider;
+#else
             LinuxFileInfoProvider provider;
+#endif
             LsCommand cmd(provider, std::string(path));
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
@@ -2013,7 +2102,11 @@ void Shell::registerBuiltinFunctions()
         .bind([](CoreVM::Params& args) {
             auto const epoch = static_cast<time_t>(args.getInt(1));
             struct tm tm {};
+#if defined(_WIN32)
+            gmtime_s(&tm, &epoch);
+#else
             gmtime_r(&epoch, &tm);
+#endif
             auto result = std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
                                       tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
                                       tm.tm_hour, tm.tm_min, tm.tm_sec);
@@ -2094,7 +2187,7 @@ void Shell::registerBuiltinFunctions()
                     config.arguments = { "sh", "-c", cmd };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = 2; // Keep stderr
+                    config.stderrFd = standardError(); // Keep stderr
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -2104,7 +2197,7 @@ void Shell::registerBuiltinFunctions()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));
@@ -2239,7 +2332,7 @@ void Shell::registerBuiltinFunctions()
                     config.arguments = { "sh", "-c", std::string(sourceCmd) };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = 2;
+                    config.stderrFd = standardError();
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -2247,7 +2340,7 @@ void Shell::registerBuiltinFunctions()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));
@@ -2293,7 +2386,7 @@ void Shell::registerBuiltinFunctions()
                     config.arguments = { "sh", "-c", std::string(sourceCmd) };
                     config.stdinFd = _tty.inputFd();
                     config.stdoutFd = pipe->writer();
-                    config.stderrFd = 2;
+                    config.stderrFd = standardError();
 
                     auto pidResult = _processManager.spawn(config);
                     pipe->closeWriter();
@@ -2301,7 +2394,7 @@ void Shell::registerBuiltinFunctions()
                     char buf[4096];
                     while (true)
                     {
-                        auto const n = ::read(pipe->reader(), buf, sizeof(buf));
+                        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
                         if (n <= 0)
                             break;
                         output.append(buf, static_cast<size_t>(n));
@@ -2521,7 +2614,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
         // Write to the correct output fd (respects redirects and test environments)
-        [[maybe_unused]] auto written = write(outputFd, output.data(), output.size());
+        [[maybe_unused]] auto written = platformWrite(outputFd, output.data(), output.size());
 
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
@@ -2632,7 +2725,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
         auto writeOutput = [outputFd](std::string const& str) {
-            [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+            [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
         };
 
         if (showHelp)
@@ -2744,8 +2837,8 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         auto readFromFd = [](NativeHandle fd) -> std::string {
             std::string content;
             char buffer[4096];
-            ssize_t bytesRead;
-            while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+            intptr_t bytesRead;
+            while ((bytesRead = platformRead(fd, buffer, sizeof(buffer))) > 0)
                 content.append(buffer, static_cast<size_t>(bytesRead));
             return content;
         };
@@ -2778,7 +2871,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
                 }
                 NativeHandle fd = result.value();
                 std::string content = readFromFd(fd);
-                close(fd);
+                _processManager.closeHandle(fd);
                 processContent(content);
             }
         }
@@ -2800,7 +2893,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
         auto writeOutput = [outputFd](std::string const& str) {
-            [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+            [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
         };
 
         // Check for help
@@ -3073,7 +3166,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             output += '\n';
 
         // Write to the pipeline's stdout
-        [[maybe_unused]] auto written = write(stdoutFd, output.data(), output.size());
+        [[maybe_unused]] auto written = platformWrite(stdoutFd, output.data(), output.size());
 
         // Close write end of pipe so downstream can see EOF
         // Use the PipelineBuilder method to properly manage the Pipe object
@@ -3094,10 +3187,9 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             // Wait for downstream processes to complete
             for (ProcessId const processPid: _currentProcessGroupPids)
             {
-                int status = 0;
-                waitpid(processPid, &status, 0);
-                if (WIFEXITED(status))
-                    _exitCode = WEXITSTATUS(status);
+                auto const waitResult = _processManager.wait(processPid);
+                if (waitResult.has_value())
+                    _exitCode = waitResult->exitCode;
             }
             _currentProcessGroupPids.clear();
             _pipelineCommands.clear();
@@ -3211,7 +3303,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             numberLines = false;
 
         auto writeOutput = [stdoutFd](std::string const& str) {
-            [[maybe_unused]] auto written = write(stdoutFd, str.data(), str.size());
+            [[maybe_unused]] auto written = platformWrite(stdoutFd, str.data(), str.size());
         };
 
         if (showHelp)
@@ -3313,8 +3405,8 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         auto readFromFd = [](NativeHandle fd) -> std::string {
             std::string content;
             char buffer[4096];
-            ssize_t bytesRead;
-            while ((bytesRead = read(fd, buffer, sizeof(buffer))) > 0)
+            intptr_t bytesRead;
+            while ((bytesRead = platformRead(fd, buffer, sizeof(buffer))) > 0)
                 content.append(buffer, static_cast<size_t>(bytesRead));
             return content;
         };
@@ -3342,7 +3434,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
                 }
                 NativeHandle fd = result.value();
                 std::string content = readFromFd(fd);
-                close(fd);
+                _processManager.closeHandle(fd);
                 processContent(content);
             }
         }
@@ -3360,12 +3452,12 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
         if (lastInChain)
         {
+            // Wait for downstream processes to complete
             for (ProcessId const processPid: _currentProcessGroupPids)
             {
-                int status = 0;
-                waitpid(processPid, &status, 0);
-                if (WIFEXITED(status))
-                    _exitCode = WEXITSTATUS(status);
+                auto const waitResult = _processManager.wait(processPid);
+                if (waitResult.has_value())
+                    _exitCode = waitResult->exitCode;
             }
             _currentProcessGroupPids.clear();
             _pipelineCommands.clear();
@@ -3390,7 +3482,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
             sleepArgs.push_back(args.at(i));
 
         auto writeOutput = [stdoutFd](std::string const& str) {
-            [[maybe_unused]] auto written = write(stdoutFd, str.data(), str.size());
+            [[maybe_unused]] auto written = platformWrite(stdoutFd, str.data(), str.size());
         };
 
         // Check for help
@@ -3523,12 +3615,12 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
         if (lastInChain)
         {
+            // Wait for downstream processes to complete
             for (ProcessId const processPid: _currentProcessGroupPids)
             {
-                int status = 0;
-                waitpid(processPid, &status, 0);
-                if (WIFEXITED(status))
-                    _exitCode = WEXITSTATUS(status);
+                auto const waitResult = _processManager.wait(processPid);
+                if (waitResult.has_value())
+                    _exitCode = waitResult->exitCode;
             }
             _currentProcessGroupPids.clear();
             _pipelineCommands.clear();
@@ -4107,7 +4199,18 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
         }
         else
         {
-            // Reading from pipe/file - use poll + read
+            // Reading from pipe/file - use poll/wait + read
+#if defined(_WIN32)
+            if (remainingTimeout.count() > 0)
+            {
+                auto const waitMs = static_cast<DWORD>(remainingTimeout.count());
+                if (WaitForSingleObject(inputFd, waitMs) != WAIT_OBJECT_0)
+                {
+                    hitEof = true;
+                    break; // timeout
+                }
+            }
+#else
             if (remainingTimeout.count() > 0)
             {
                 pollfd pfd { .fd = inputFd, .events = POLLIN, .revents = 0 };
@@ -4117,8 +4220,9 @@ std::string Shell::readInputLine(NativeHandle inputFd, ReadOptions const& option
                     break; // timeout
                 }
             }
+#endif
             char ch;
-            ssize_t const n = ::read(inputFd, &ch, 1);
+            auto const n = platformRead(inputFd, &ch, 1);
             if (n <= 0)
             {
                 hitEof = true;
@@ -4220,7 +4324,7 @@ void Shell::builtinRead(CoreVM::Params& context)
     auto writeOutput = [this](std::string const& str) {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
     };
 
     // Parse flags
@@ -4448,11 +4552,11 @@ void Shell::builtinRedirectEnd(CoreVM::Params&)
 {
     for (auto& entry: _redirectState.entries)
     {
-        if (entry.openedFd >= 0 && entry.openedFd != STDIN_FILENO && entry.openedFd != STDOUT_FILENO
-            && entry.openedFd != STDERR_FILENO)
+        if (entry.openedFd != InvalidHandle && entry.openedFd != standardInput()
+            && entry.openedFd != standardOutput() && entry.openedFd != standardError())
         {
-            close(entry.openedFd);
-            entry.openedFd = -1;
+            _processManager.closeHandle(entry.openedFd);
+            entry.openedFd = InvalidHandle;
         }
     }
     _redirectState.clear();
@@ -4491,7 +4595,7 @@ void Shell::builtinSubstEnd(CoreVM::Params& context)
     char buffer[4096];
     while (true)
     {
-        ssize_t const bytesRead = read(_substitutionCapture->pipe->reader(), buffer, sizeof(buffer));
+        auto const bytesRead = platformRead(_substitutionCapture->pipe->reader(), buffer, sizeof(buffer));
         if (bytesRead <= 0)
             break;
         output.append(buffer, static_cast<size_t>(bytesRead));
@@ -5289,9 +5393,59 @@ void Shell::builtinFg(CoreVM::Params& context)
 
     context.setResult(CoreVM::CoreNumber(_exitCode));
 #else
-    error("fg: not supported on Windows");
-    _exitCode = 1;
-    context.setResult(CoreVM::CoreNumber(1));
+    // Windows: basic foreground job support
+    Job* job = nullptr;
+    if (context.count() > 1)
+    {
+        int const jobId = static_cast<int>(context.getInt(1));
+        job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("fg: %{}: no such job", jobId);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+    else
+    {
+        job = jobTable.getCurrentJob();
+        if (!job)
+        {
+            error("fg: no current job");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+
+    // Print the command being resumed
+    std::println("{}", job->command);
+
+    // If the job was stopped (suspended threads), resume it
+    if (job->state == JobState::Stopped)
+    {
+        for (ProcessId const pid: job->pids)
+        {
+            auto const sigResult = _processManager.sendSignal(pid, SIGCONT);
+            if (!sigResult.has_value())
+                debugLog()()("fg: failed to resume process {}: {}", pid, toString(sigResult.error()));
+        }
+        job->state = JobState::Running;
+    }
+
+    // Wait for the job to complete
+    for (ProcessId const pid: job->pids)
+    {
+        auto const waitResult = _processManager.wait(pid);
+        if (waitResult.has_value())
+        {
+            _exitCode = waitResult->exitCode;
+            jobTable.updateJobState(pid, *waitResult);
+        }
+    }
+
+    context.setResult(CoreVM::CoreNumber(_exitCode));
 #endif
 }
 
@@ -5349,9 +5503,59 @@ void Shell::builtinBg(CoreVM::Params& context)
     _exitCode = 0;
     context.setResult(CoreVM::CoreNumber(0));
 #else
-    error("bg: not supported on Windows");
-    _exitCode = 1;
-    context.setResult(CoreVM::CoreNumber(1));
+    // Windows: basic background resume support
+    Job* job = nullptr;
+    if (context.count() > 1)
+    {
+        int const jobId = static_cast<int>(context.getInt(1));
+        job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("bg: %{}: no such job", jobId);
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+    else
+    {
+        job = jobTable.getCurrentJob();
+        if (!job)
+        {
+            error("bg: no current job");
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+
+    if (job->state != JobState::Stopped)
+    {
+        error("bg: job {} not stopped", job->id);
+        _exitCode = 1;
+        context.setResult(CoreVM::CoreNumber(1));
+        return;
+    }
+
+    // Print the command being resumed
+    std::println("[{}]+ {} &", job->id, job->command);
+
+    // Resume suspended process threads
+    for (ProcessId const pid: job->pids)
+    {
+        auto const sigResult = _processManager.sendSignal(pid, SIGCONT);
+        if (!sigResult.has_value())
+        {
+            error("bg: failed to resume process {}: {}", pid, toString(sigResult.error()));
+            _exitCode = 1;
+            context.setResult(CoreVM::CoreNumber(1));
+            return;
+        }
+    }
+
+    job->state = JobState::Running;
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
 #endif
 }
 
@@ -5416,9 +5620,62 @@ void Shell::builtinWait(CoreVM::Params& context)
 
     context.setResult(CoreVM::CoreNumber(_exitCode));
 #else
-    error("wait: not supported on Windows");
-    _exitCode = 1;
-    context.setResult(CoreVM::CoreNumber(1));
+    // Windows: wait for background jobs using ProcessManager
+    if (context.count() >= 1)
+    {
+        // Wait for specific job
+        int const jobId = static_cast<int>(context.getInt(1));
+        Job* job = jobTable.getJob(jobId);
+        if (!job)
+        {
+            error("wait: %{}: no such job", jobId);
+            _exitCode = 127;
+            context.setResult(CoreVM::CoreNumber(127));
+            return;
+        }
+
+        for (ProcessId const pid: job->pids)
+        {
+            auto const waitResult = _processManager.wait(pid);
+            if (waitResult.has_value())
+            {
+                _exitCode = waitResult->exitCode;
+                jobTable.updateJobState(pid, *waitResult);
+            }
+        }
+
+        job->state = JobState::Done;
+        job->exitCode = _exitCode;
+    }
+    else
+    {
+        // Wait for all background jobs
+        auto jobs = jobTable.listJobs();
+        for (auto const* constJob: jobs)
+        {
+            if (constJob->state != JobState::Running && constJob->state != JobState::Stopped)
+                continue;
+
+            Job* job = jobTable.getJob(constJob->id);
+            if (!job)
+                continue;
+
+            for (ProcessId const pid: job->pids)
+            {
+                auto const waitResult = _processManager.wait(pid);
+                if (waitResult.has_value())
+                {
+                    _exitCode = waitResult->exitCode;
+                    jobTable.updateJobState(pid, *waitResult);
+                }
+            }
+
+            job->state = JobState::Done;
+            job->exitCode = _exitCode;
+        }
+    }
+
+    context.setResult(CoreVM::CoreNumber(_exitCode));
 #endif
 }
 
@@ -5487,8 +5744,67 @@ void Shell::builtinCmdExecPipedBackground(CoreVM::Params& context)
     _exitCode = 0;
     context.setResult(CoreVM::CoreNumber(0));
 #else
-    error("Background execution not supported on Windows");
-    context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+    // Windows: background execution using CreateProcess without job control
+    std::string const command = context.getString(1);
+
+    if (cmdBuilderArgs().empty())
+    {
+        error("No command to execute");
+        _exitCode = EXIT_FAILURE;
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    std::string const& program = cmdBuilderArgs().at(0);
+    auto const programPath = resolveProgram(program);
+
+    if (!programPath.has_value())
+    {
+        error("{}: {}", program, toString(programPath.error()));
+        _exitCode = EXIT_FAILURE;
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    // Close any existing pipeline pipe (background jobs start fresh)
+    _currentPipelineBuilder.currentPipe.reset();
+
+    SpawnConfig config;
+    config.program = *programPath;
+    config.arguments = std::vector<std::string>(cmdBuilderArgs().begin() + 1, cmdBuilderArgs().end());
+    config.stdinFd = _currentPipelineBuilder.defaultStdinFd;
+    config.stdoutFd = _currentPipelineBuilder.defaultStdoutFd;
+    config.processGroup = std::make_optional<ProcessId>(0); // Create new process group
+    config.closeExtraFds = true;
+
+    applyRedirects(config);
+
+    auto const spawnResult = _processManager.spawn(config);
+    if (!spawnResult.has_value())
+    {
+        error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
+        _exitCode = EXIT_FAILURE;
+        context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        return;
+    }
+
+    ProcessId const pid = spawnResult.value();
+    _lastBackgroundPid = pid;
+
+    // Add to job table
+    std::vector<ProcessId> pids;
+    pids.push_back(pid);
+    int const jobId = jobTable.addJob(pid, std::move(pids), command);
+
+    // Print job info
+    std::println("[{}] {}", jobId, pid);
+
+    if (!_cmdBuilderStack.empty())
+        _cmdBuilderStack.pop_back();
+
+    // Background jobs return 0 immediately
+    _exitCode = 0;
+    context.setResult(CoreVM::CoreNumber(0));
 #endif
 }
 
@@ -5683,7 +5999,7 @@ void Shell::builtinWhich(CoreVM::Params& context)
     auto writeOutput = [this](std::string const& str) {
         NativeHandle const outputFd =
             _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-        [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
     };
 
     // Show help if requested or no arguments given
@@ -5798,6 +6114,21 @@ void Shell::onSigchld()
         // Update job table with this result
         jobTable.updateJobState(static_cast<ProcessId>(pid), result);
     }
+#else
+    // Windows: non-blocking check for terminated background processes
+    auto jobs = jobTable.listJobs();
+    for (auto const* constJob: jobs)
+    {
+        if (constJob->state != JobState::Running)
+            continue;
+
+        for (ProcessId const pid: constJob->pids)
+        {
+            auto const waitResult = _processManager.wait(pid, WaitFlag::NoHang);
+            if (waitResult.has_value() && (waitResult->exitCode != 0 || !waitResult->stopped))
+                jobTable.updateJobState(pid, *waitResult);
+        }
+    }
 #endif
 }
 
@@ -5814,6 +6145,8 @@ void Shell::onSigtstp()
     // Restore terminal to raw mode and redraw
     prompt.resume();
     prompt.display();
+#else
+    // Windows: no SIGTSTP — shell suspension is not supported.
 #endif
 }
 
@@ -5829,11 +6162,17 @@ void Shell::onSigcont()
     // the onSigtstp() handling has already resumed the terminal. In that case,
     // calling resume() again is harmless (it checks for suspended state).
     prompt.resume();
+#else
+    // Windows: no SIGCONT — shell continuation is not supported.
 #endif
 }
 
 void Shell::reportJobStatus()
 {
+#if defined(_WIN32)
+    // Windows: no SIGCHLD, so poll for completed background processes
+    onSigchld();
+#endif
     auto unnotified = jobTable.getUnnotifiedJobs();
     for (Job* job: unnotified)
     {
@@ -5869,6 +6208,20 @@ void Shell::cleanupProcSubst()
     {
         if (fd >= 0)
             close(fd);
+    }
+    _procSubstExposedFds.clear();
+
+    _procSubstFdPath.clear();
+#else
+    // Windows: wait for process substitution children and close handles
+    for (ProcessId childPid: _procSubstChildPids)
+        (void) _processManager.wait(childPid);
+    _procSubstChildPids.clear();
+
+    for (NativeHandle handle: _procSubstExposedFds)
+    {
+        if (handle != InvalidHandle)
+            _processManager.closeHandle(handle);
     }
     _procSubstExposedFds.clear();
 
@@ -5997,7 +6350,7 @@ void Shell::applyRedirects(SpawnConfig& config)
                 auto pipe = std::move(pipeResult.value());
 
                 std::string const& content = entry.content;
-                ssize_t const written = write(pipe->writer(), content.data(), content.size());
+                auto const written = platformWrite(pipe->writer(), content.data(), content.size());
                 if (written < 0)
                 {
                     error("Failed to write to here-string pipe: {}", strerror(errno));
@@ -6007,7 +6360,7 @@ void Shell::applyRedirects(SpawnConfig& config)
                 if (entry.type == RedirectState::Type::HereString && !content.empty()
                     && content.back() != '\n')
                 {
-                    write(pipe->writer(), "\n", 1);
+                    platformWrite(pipe->writer(), "\n", 1);
                 }
 
                 pipe->closeWriter();
@@ -6067,7 +6420,7 @@ void Shell::builtinPrint(CoreVM::Params& context)
     std::string const& text = context.getString(1);
     NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-    [[maybe_unused]] auto written = write(outputFd, text.data(), text.size());
+    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
 }
 
 void Shell::builtinPrintln(CoreVM::Params& context)
@@ -6075,8 +6428,8 @@ void Shell::builtinPrintln(CoreVM::Params& context)
     std::string const& text = context.getString(1);
     NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
-    [[maybe_unused]] auto written = write(outputFd, text.data(), text.size());
-    written = write(outputFd, "\n", 1);
+    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
+    written = platformWrite(outputFd, "\n", 1);
 }
 
 void Shell::builtinDisplayResult(CoreVM::Params& context)
@@ -6086,7 +6439,12 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     NativeHandle const outputFd =
         _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
 
+#if defined(_WIN32)
+    DWORD consoleMode = 0;
+    bool const useColor = GetConsoleMode(outputFd, &consoleMode) != 0;
+#else
     bool const useColor = isatty(outputFd) != 0;
+#endif
 
     // Check if this is a list of records — if so, render as table
     if (runner->isKnownObject(rawVal))
@@ -6103,7 +6461,7 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
                     config.terminalWidth = size->cols;
             }
             auto table = formatRecordTable(obj, runner, config);
-            [[maybe_unused]] auto written = write(outputFd, table.data(), table.size());
+            [[maybe_unused]] auto written = platformWrite(outputFd, table.data(), table.size());
             return;
         }
     }
@@ -6111,7 +6469,7 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
     // Fallback: convert to string and print with newline
     auto str = valueToString(rawVal, runner);
     str += '\n';
-    [[maybe_unused]] auto written = write(outputFd, str.data(), str.size());
+    [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
 }
 
 namespace
@@ -6137,8 +6495,13 @@ namespace
         {
             // Generate unique filename via mkstemp
             auto pattern = (outputPath / "fetch_XXXXXX").string();
+#if defined(_WIN32)
+            auto const fd = _mktemp_s(pattern.data(), pattern.size() + 1);
+            if (fd != 0)
+#else
             auto const fd = mkstemp(pattern.data());
             if (fd == -1)
+#endif
             {
                 auto* resultObj = runner->makeErrorResult(
                     reinterpret_cast<uintptr_t>(runner->newString("Failed to create temporary file")),
@@ -6146,7 +6509,9 @@ namespace
                 args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(resultObj)));
                 return;
             }
+#if !defined(_WIN32)
             close(fd);
+#endif
             outputPath = pattern;
         }
 

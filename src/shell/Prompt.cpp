@@ -3,13 +3,20 @@
 
 #include <tui/Screen.hpp>
 
-#include <unistd.h>
+#if !defined(_WIN32)
+    #include <unistd.h>
+#endif
 
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
+#include "Platform.hpp"
 #include "PromptComponent.hpp"
 #include "SyntaxHighlighter.hpp"
-#include "platform/PosixEnvironmentProvider.hpp"
+#if defined(_WIN32)
+    #include "platform/WindowsEnvironmentProvider.hpp"
+#else
+    #include "platform/PosixEnvironmentProvider.hpp"
+#endif
 
 namespace endo
 {
@@ -47,7 +54,11 @@ void Prompt::initialize()
     _terminal.output().flush();
 
     // Create CommandResolver for tooltip support
+#if defined(_WIN32)
+    _commandResolver = std::make_unique<CommandResolver>(WindowsEnvironmentProvider::instance());
+#else
     _commandResolver = std::make_unique<CommandResolver>(PosixEnvironmentProvider::instance());
+#endif
 
     // Create PromptComponent
     _promptComponent = std::make_unique<PromptComponent>();
@@ -385,7 +396,7 @@ void Prompt::resume()
         // indicating output that didn't end with a newline. Show a dim indicator
         // (like fish shell) and move to a fresh line.
         if (auto const [row, col] = _terminal.queryCursorPosition(); col > 1)
-            emitPartialLineIndicator(STDOUT_FILENO, col);
+            emitPartialLineIndicator(1 /*STDOUT_FILENO*/, col);
 
         if (_screen)
         {
@@ -583,15 +594,19 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         out.moveUp(excessRows);
 }
 
-void emitPartialLineIndicator(int fd, int cursorColumn)
+void emitPartialLineIndicator([[maybe_unused]] int fd, int cursorColumn)
 {
     if (cursorColumn <= 1)
         return;
 
     // SGR 2 (dim) + U+23CE (return symbol) + SGR 0 (reset) + CSI K (clear to EOL) + CR LF
     static constexpr std::string_view indicator = "\033[2m\u23CE\033[0m\033[K\r\n";
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-    ::write(fd, indicator.data(), indicator.size());
+#if defined(_WIN32)
+    auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
+    endo::platformWrite(hStdout, indicator.data(), indicator.size());
+#else
+    static_cast<void>(::write(fd, indicator.data(), indicator.size()));
+#endif
 }
 
 } // namespace endo
