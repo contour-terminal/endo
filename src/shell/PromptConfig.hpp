@@ -56,6 +56,7 @@ struct PromptConfig
     tui::RgbColor gradientStart {};     ///< Gradient start color.
     tui::RgbColor gradientEnd {};       ///< Gradient end color.
     std::vector<tui::RgbColor> auroraBackground {}; ///< Multi-stop background gradient (empty = flat bg).
+    bool enableSixelFade = false;                   ///< Enable sixel aurora fade above prompt.
 };
 
 } // namespace endo

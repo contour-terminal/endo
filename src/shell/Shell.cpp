@@ -791,6 +791,8 @@ int Shell::run()
             ctx.theme = &tui::currentTheme();
             ctx.fsharpState = &_fsharpState;
             ctx.outputDefs = &_outputDefinitions;
+            ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
+            ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
             prompt.setPromptContext(std::move(ctx));
         }
 

@@ -42,6 +42,8 @@ struct PromptContext
     tui::Theme const* theme = nullptr;                    ///< Current TUI theme.
     FSharpPersistentState const* fsharpState = nullptr;   ///< F# persistent state (functions, bindings).
     OutputDefinitionRegistry const* outputDefs = nullptr; ///< Output definitions for structured commands.
+    int cellPixelWidth = 0;                               ///< Cell width in pixels (0 if unknown).
+    int cellPixelHeight = 0;                              ///< Cell height in pixels (0 if unknown).
 };
 
 /// @brief Abstract interface for a pluggable prompt module.
