@@ -89,7 +89,40 @@ class TTY
     }
 };
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+
+/// Windows implementation of the TTY interface.
+///
+/// Uses Console API for terminal operations, with VT processing enabled for
+/// escape sequence support. Defined in platform/WindowsTTY.cpp.
+class WindowsTTY final: public TTY
+{
+  public:
+    WindowsTTY();
+    ~WindowsTTY() override;
+
+    [[nodiscard]] static WindowsTTY& instance();
+
+    [[nodiscard]] NativeHandle inputFd() const noexcept override;
+    [[nodiscard]] NativeHandle outputFd() const noexcept override;
+    [[nodiscard]] bool isTerminal() const noexcept override;
+    [[nodiscard]] std::expected<TerminalSize, ShellError> getSize() const override;
+    void setRawMode() override;
+    void restoreMode() override;
+    void setEchoEnabled(bool enabled) override;
+    [[nodiscard]] std::optional<char> readCharWithTimeout(
+        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero()) override;
+    void writeToStdout(std::string_view str) const override;
+    void writeToStdin(std::string_view str) const override;
+
+  private:
+    NativeHandle _hStdin = InvalidHandle;
+    NativeHandle _hStdout = InvalidHandle;
+    unsigned long _originalInputMode = 0;
+    unsigned long _originalOutputMode = 0;
+};
+
+#else // POSIX
 
 void setRawMode(NativeHandle fd);
 

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Error.hpp"
@@ -20,9 +21,9 @@ struct SpawnConfig
 {
     std::filesystem::path program;                        ///< Path to the program to execute
     std::vector<std::string> arguments;                   ///< Command line arguments (excluding program name)
-    NativeHandle stdinFd = 0;                             ///< File descriptor/handle for stdin
-    NativeHandle stdoutFd = 1;                            ///< File descriptor/handle for stdout
-    NativeHandle stderrFd = 2;                            ///< File descriptor/handle for stderr
+    NativeHandle stdinFd = InvalidHandle;                 ///< File descriptor/handle for stdin (InvalidHandle = standard)
+    NativeHandle stdoutFd = InvalidHandle;                ///< File descriptor/handle for stdout (InvalidHandle = standard)
+    NativeHandle stderrFd = InvalidHandle;                ///< File descriptor/handle for stderr (InvalidHandle = standard)
     std::optional<ProcessId> processGroup = std::nullopt; ///< Process group ID (0 for new group)
     bool closeExtraFds = true;                            ///< Close file descriptors > 2 after fork
     std::vector<NativeHandle> keepOpenFds;                ///< Fds to keep open even with closeExtraFds
@@ -131,7 +132,45 @@ class ProcessManager
     virtual void closeExtraHandles() noexcept = 0;
 };
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+
+/// Windows implementation of ProcessManager.
+///
+/// Uses CreateProcess for spawning, WaitForSingleObject for waiting,
+/// and tracks process handles internally for lifecycle management.
+/// Defined in platform/WindowsProcess.cpp.
+class WindowsProcessManager final: public ProcessManager
+{
+  public:
+    /// Returns the singleton instance of WindowsProcessManager.
+    [[nodiscard]] static WindowsProcessManager& instance();
+
+    [[nodiscard]] std::expected<ProcessId, ShellError> spawn(SpawnConfig const& config) override;
+    [[nodiscard]] std::expected<WaitResult, ShellError> wait(ProcessId pid, WaitFlags flags = {}) override;
+    [[nodiscard]] std::expected<std::optional<std::pair<ProcessId, WaitResult>>, ShellError> waitPgid(
+        ProcessId pgid, WaitFlags flags) override;
+    [[nodiscard]] std::expected<void, ShellError> sendSignal(ProcessId pid, int signal) override;
+    [[nodiscard]] std::expected<ProcessId, ShellError> getForegroundPgrp(NativeHandle fd) override;
+    [[nodiscard]] std::expected<void, ShellError> setForegroundPgrp(NativeHandle fd, ProcessId pgid) override;
+    [[nodiscard]] std::expected<NativeHandle, ShellError> openFile(std::filesystem::path const& path,
+                                                                   int flags,
+                                                                   int mode = 0644) override;
+    [[nodiscard]] std::expected<ProcessId, ShellError> createSession() override;
+    [[nodiscard]] std::expected<void, ShellError> setProcessGroup(ProcessId pid, ProcessId pgid) override;
+    [[nodiscard]] std::expected<void, ShellError> duplicateFd(NativeHandle src, NativeHandle dst) override;
+    void closeHandle(NativeHandle handle) noexcept override;
+    void closeExtraHandles() noexcept override;
+
+  private:
+    std::unordered_map<ProcessId, HANDLE> _processHandles;               ///< PID -> process HANDLE
+    std::unordered_map<ProcessId, std::vector<ProcessId>> _groupMembers; ///< group -> PIDs
+
+    /// @brief Suspends all threads of a process using Toolhelp32.
+    [[nodiscard]] auto suspendProcess(ProcessId pid) -> std::expected<void, ShellError>;
+    /// @brief Resumes all threads of a process using Toolhelp32.
+    [[nodiscard]] auto resumeProcess(ProcessId pid) -> std::expected<void, ShellError>;
+};
+#else
 /// POSIX implementation of ProcessManager.
 class PosixProcessManager final: public ProcessManager
 {
@@ -158,6 +197,6 @@ class PosixProcessManager final: public ProcessManager
     /// Closes all file descriptors > 2 except those in the keepOpen list.
     void closeExtraHandlesExcept(std::vector<NativeHandle> const& keepOpen) noexcept;
 };
-#endif // !_WIN32
+#endif
 
 } // namespace endo

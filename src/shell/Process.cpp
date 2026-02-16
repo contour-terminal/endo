@@ -69,11 +69,11 @@ std::expected<ProcessId, ShellError> PosixProcessManager::spawn(SpawnConfig cons
         if (config.processGroup.has_value())
             setpgid(0, config.processGroup.value());
 
-        if (config.stdinFd != STDIN_FILENO)
+        if (config.stdinFd != InvalidHandle && config.stdinFd != STDIN_FILENO)
             dup2(config.stdinFd, STDIN_FILENO);
-        if (config.stdoutFd != STDOUT_FILENO)
+        if (config.stdoutFd != InvalidHandle && config.stdoutFd != STDOUT_FILENO)
             dup2(config.stdoutFd, STDOUT_FILENO);
-        if (config.stderrFd != STDERR_FILENO)
+        if (config.stderrFd != InvalidHandle && config.stderrFd != STDERR_FILENO)
             dup2(config.stderrFd, STDERR_FILENO);
 
         if (config.closeExtraFds)

@@ -52,7 +52,11 @@ class EnvironmentProvider
     ///
     /// @param name  Variable name
     /// @param value Variable value
-    void setAndExport(std::string_view name, std::string_view value);
+    inline void setAndExport(std::string_view name, std::string_view value)
+    {
+        set(name, value);
+        exportVariable(name);
+    }
 
     /// Changes the current working directory.
     ///

@@ -274,8 +274,8 @@ class Shell final
             NativeHandle writer;
         };
 
-        NativeHandle defaultStdinFd = 0;
-        NativeHandle defaultStdoutFd = 1;
+        NativeHandle defaultStdinFd = InvalidHandle;
+        NativeHandle defaultStdoutFd = InvalidHandle;
         std::unique_ptr<Pipe> currentPipe = nullptr;
 
         auto requestShellPipe(bool lastInChain) -> IODescriptors;
@@ -320,7 +320,7 @@ class Shell final
             std::string path;
             std::string content;
             bool append = false;
-            NativeHandle openedFd = -1;
+            NativeHandle openedFd = InvalidHandle;
         };
 
         std::vector<Entry> entries;
@@ -347,7 +347,7 @@ class Shell final
     struct SubstitutionCapture
     {
         std::unique_ptr<Pipe> pipe;
-        NativeHandle savedStdout = -1;
+        NativeHandle savedStdout = InvalidHandle;
         std::string output;
 
         void clear();
