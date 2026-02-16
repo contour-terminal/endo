@@ -8,8 +8,10 @@
 #include <crispy/utils.h>
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <map>
+#include <set>
 
 namespace endo
 {
@@ -106,7 +108,33 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
     if (!pathValue)
         return {};
 
-    auto const paths = crispy::split(*pathValue, ':');
+#if defined(_WIN32)
+    auto const pathSep = ';';
+#else
+    auto const pathSep = ':';
+#endif
+
+    auto const paths = crispy::split(*pathValue, pathSep);
+
+#if defined(_WIN32)
+    // Build PATHEXT set for recognizing executable extensions
+    auto execExts = std::set<std::string> {};
+    if (auto const pathext = _env.get("PATHEXT"))
+    {
+        auto const exts = crispy::split(*pathext, ';');
+        for (auto const& ext: exts)
+        {
+            std::string lower(ext);
+            std::transform(lower.begin(), lower.end(), lower.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            execExts.insert(lower);
+        }
+    }
+    else
+    {
+        execExts = { ".exe", ".cmd", ".bat", ".com" };
+    }
+#endif
 
     for (auto const& pathStr: paths)
     {
@@ -127,8 +155,21 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
             if (!entry.is_regular_file(ec) && !entry.is_symlink(ec))
                 continue;
 
-            // Check if executable (on POSIX)
             auto const& path = entry.path();
+
+#if defined(_WIN32)
+            // On Windows, check file extension against PATHEXT
+            auto ext = path.extension().string();
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (!execExts.contains(ext))
+                continue;
+
+            // Use stem (without extension) as command name
+            auto const cmdName = path.stem().string();
+            commands.try_emplace(cmdName, path.string());
+#else
+            // Check if executable (on POSIX)
             auto status = std::filesystem::status(path, ec);
             if (ec)
                 continue;
@@ -141,6 +182,7 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
 
             if (isExecutable)
                 commands.try_emplace(path.filename().string(), path.string());
+#endif
         }
     }
 

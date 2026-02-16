@@ -59,7 +59,28 @@ std::string CommandResolver::findInPath(std::string_view command) const
     if (!pathEnv)
         return {};
 
-    auto const paths = crispy::split(*pathEnv, ':');
+#if defined(_WIN32)
+    auto const pathSep = ';';
+#else
+    auto const pathSep = ':';
+#endif
+
+    auto const paths = crispy::split(*pathEnv, pathSep);
+
+#if defined(_WIN32)
+    // Build PATHEXT extensions list
+    auto extensions = std::vector<std::string> {};
+    if (auto const pathext = _env.get("PATHEXT"))
+    {
+        auto const exts = crispy::split(*pathext, ';');
+        for (auto const& ext: exts)
+            extensions.emplace_back(ext);
+    }
+    else
+    {
+        extensions = { ".exe", ".cmd", ".bat", ".com" };
+    }
+#endif
 
     for (auto const& pathStr: paths)
     {
@@ -74,6 +95,25 @@ std::string CommandResolver::findInPath(std::string_view command) const
 
         auto const candidate = dir / std::string(command);
 
+#if defined(_WIN32)
+        // On Windows, check the exact name first, then try each PATHEXT extension
+        auto const candidates = [&]() {
+            auto result = std::vector<std::filesystem::path> {};
+            result.push_back(candidate);
+            for (auto const& ext: extensions)
+                result.push_back(std::filesystem::path(candidate.string() + ext));
+            return result;
+        }();
+
+        for (auto const& cand: candidates)
+        {
+            if (!std::filesystem::exists(cand, ec))
+                continue;
+            if (!std::filesystem::is_regular_file(cand, ec) && !std::filesystem::is_symlink(cand, ec))
+                continue;
+            return cand.string();
+        }
+#else
         if (!std::filesystem::exists(candidate, ec))
             continue;
 
@@ -92,6 +132,7 @@ std::string CommandResolver::findInPath(std::string_view command) const
 
         if (isExecutable)
             return candidate.string();
+#endif
     }
 
     return {};

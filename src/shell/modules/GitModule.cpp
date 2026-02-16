@@ -7,6 +7,11 @@
 #include <cstdio>
 #include <string>
 
+#if defined(_WIN32)
+    #define popen  _popen
+    #define pclose _pclose
+#endif
+
 namespace endo
 {
 
@@ -46,14 +51,22 @@ namespace
         auto info = GitInfo {};
 
         // Get branch name
+#if defined(_WIN32)
+        info.branch = runCommand("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
+#else
         info.branch = runCommand("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
+#endif
         if (info.branch.empty())
             return info;
 
         info.valid = true;
 
         // Get porcelain status for dirty/staged counts
+#if defined(_WIN32)
+        auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>NUL");
+#else
         auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>/dev/null");
+#endif
         for (auto pos = std::size_t { 0 }; pos < status.size();)
         {
             auto const nl = status.find('\n', pos);
@@ -83,7 +96,11 @@ namespace
 
 bool GitModule::shouldShow(PromptContext const& ctx) const
 {
+#if defined(_WIN32)
+    auto const branch = runCommand("git -C " + ctx.cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
+#else
     auto const branch = runCommand("git -C " + ctx.cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
+#endif
     return !branch.empty();
 }
 

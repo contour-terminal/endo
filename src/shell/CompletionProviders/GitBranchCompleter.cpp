@@ -9,6 +9,11 @@
 #include <sstream>
 #include <string>
 
+#if defined(_WIN32)
+    #define popen  _popen
+    #define pclose _pclose
+#endif
+
 namespace endo
 {
 
@@ -214,8 +219,16 @@ std::vector<std::string> GitBranchCompleter::queryBranches()
     auto seen = std::set<std::string> {};
     auto result = std::vector<std::string> {};
 
+#if defined(_WIN32)
+    static constexpr auto localCmd = "git branch --format=\"%(refname:short)\" 2>NUL";
+    static constexpr auto remoteCmd = "git branch -r --format=\"%(refname:short)\" 2>NUL";
+#else
+    static constexpr auto localCmd = "git branch --format='%(refname:short)' 2>/dev/null";
+    static constexpr auto remoteCmd = "git branch -r --format='%(refname:short)' 2>/dev/null";
+#endif
+
     // Local branches
-    auto const localBranches = runCommand("git branch --format='%(refname:short)' 2>/dev/null");
+    auto const localBranches = runCommand(localCmd);
     for (auto const& branch: localBranches)
     {
         if (seen.insert(branch).second)
@@ -223,7 +236,7 @@ std::vector<std::string> GitBranchCompleter::queryBranches()
     }
 
     // Remote tracking branches
-    auto const remoteBranches = runCommand("git branch -r --format='%(refname:short)' 2>/dev/null");
+    auto const remoteBranches = runCommand(remoteCmd);
     for (auto const& branch: remoteBranches)
     {
         // Strip "origin/" prefix for single-remote repos; keep full name otherwise
