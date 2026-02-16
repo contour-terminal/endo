@@ -14,6 +14,7 @@
 #include "PatternIRGenerator.hpp"
 #include "ScopedLogger.hpp"
 #include "TypeInferencer.hpp"
+#include "Unification.hpp"
 
 // {{{ trace macros
 // clang-format off
@@ -582,6 +583,8 @@ std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr con
         return CoreVM::LiteralType::String; // Function references stored as string names
     if (type->isList())
         return CoreVM::LiteralType::Object;
+    if (type->isRecord() || type->isUnion())
+        return CoreVM::LiteralType::Object;
     return std::nullopt;
 }
 
@@ -601,6 +604,11 @@ bool IRGenerator::validateTypeAnnotation(TypePtr const& annotated,
 
     // Unit (Void) expected accepts any value — unit means "no meaningful value"
     if (*expected == CoreVM::LiteralType::Void)
+        return true;
+
+    // Accept Number as compatible with Object expected type — native callbacks (e.g., list_concat)
+    // return object pointers stored as Numbers at the IR level.
+    if (*expected == CoreVM::LiteralType::Object && actual == CoreVM::LiteralType::Number)
         return true;
 
     if (actual != *expected)
@@ -638,14 +646,18 @@ void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& fu
     auto const& inferred = it->second;
 
     // Fill in missing parameter type annotations from inference results.
-    // Only apply types that resolve to concrete primitive types (int, float, bool, str, unit).
-    // Complex types (list, option, result, function, tuple) and unresolved type variables
-    // are not applied — functions using them continue to use AST inlining, which handles
-    // their runtime semantics correctly (recursion patterns, ? operator, object lifecycle).
+    // Apply any concrete, fully-resolved, non-function type (primitives, list, option, result, tuple,
+    // record, union). This enables UCALL compilation for functions with complex-typed parameters,
+    // supporting non-tail recursion via the call stack. Unresolved type variables and function types
+    // are excluded — polymorphic and higher-order functions continue to use AST inlining.
     for (size_t i = 0; i < func.parameterTypes.size() && i < inferred.paramTypes.size(); ++i)
     {
-        if (!func.parameterTypes[i].has_value() && inferred.paramTypes[i]->isPrimitive())
+        if (!func.parameterTypes[i].has_value() && !inferred.paramTypes[i]->isTypeVar()
+            && !inferred.paramTypes[i]->isFunction() && collectTypeVars(inferred.paramTypes[i]).empty()
+            && mapTypeToLiteralType(inferred.paramTypes[i]).has_value())
+        {
             func.parameterTypes[i] = inferred.paramTypes[i];
+        }
     }
 
     // NOTE: We intentionally do NOT apply inferred return types here.

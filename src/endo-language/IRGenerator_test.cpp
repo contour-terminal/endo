@@ -4138,10 +4138,33 @@ TEST_CASE("IRGenerator.FSharp.list_function_arity_too_many_args")
 
 TEST_CASE("IRGenerator.FSharp.list_recursive_non_tail_position")
 {
-    // Non-tail recursive call (h + (sum t)) — should error
-    CHECK(generatesIRWithError(
-        "let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2])",
-        "Non-tail recursive call detected"));
+    // Non-tail recursive call (h + (sum t)) — works via UCALL function compilation.
+    CHECK(executeSourceAndGetOutput(
+              "let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2])")
+          == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.non_tail_rec_list_sum")
+{
+    CHECK(executeSourceAndGetOutput("let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); "
+                                    "print (sum [1; 2; 3; 4; 5])")
+          == "15");
+}
+
+TEST_CASE("IRGenerator.FSharp.non_tail_rec_tree_fibonacci")
+{
+    // Tree recursion: two non-tail recursive calls
+    CHECK(executeSourceAndGetOutput("let rec fib n = if n <= 1 then n else fib (n - 1) + fib (n - 2); "
+                                    "print (fib 10)")
+          == "55");
+}
+
+TEST_CASE("IRGenerator.FSharp.non_tail_rec_list_reverse_sum")
+{
+    // Non-tail recursive list reversal-style sum: processes list in reverse order
+    CHECK(executeSourceAndGetOutput("let rec rsum xs = match xs with | [] -> 0 | h :: t -> (rsum t) + h; "
+                                    "print (rsum [1; 2; 3; 4; 5])")
+          == "15");
 }
 
 // =============================================================================
