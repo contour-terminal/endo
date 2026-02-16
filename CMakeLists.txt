@@ -65,8 +65,9 @@ enable_testing()
 # crispy is symlinked from contour, so we use sed for in-place patching
 # (GNU patch does not follow symlinked directories).
 if(EMSCRIPTEN)
-    file(REAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.h" _BUFOBJ_H)
-    if(EXISTS "${_BUFOBJ_H}")
+    set(_BUFOBJ_PATH "${CMAKE_CURRENT_SOURCE_DIR}/src/crispy/BufferObject.h")
+    if(EXISTS "${_BUFOBJ_PATH}")
+        file(REAL_PATH "${_BUFOBJ_PATH}" _BUFOBJ_H)
         file(READ "${_BUFOBJ_H}" _BUFOBJ_CONTENT)
         string(FIND "${_BUFOBJ_CONTENT}" "buffer_object_ptr<T> buffer_object<T>::create(" _PATCH_POS)
         if(NOT _PATCH_POS EQUAL -1)

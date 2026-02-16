@@ -21,6 +21,8 @@ jobs:
           python-version: '3.12'
 
       # Build WASM playground
+      - name: Get vendored libraries
+        run: ./get_contour_dirs.sh
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
