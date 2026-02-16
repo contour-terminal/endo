@@ -645,6 +645,8 @@ The library includes:
 - `CompletionContextType` enum: Command, Argument, FilePath, Variable, VariableBrace, Redirect, Option, Unknown
 - Ghost text uses SGR 2 (dim) for visual distinction from actual input
 - `CompletionPopup` is a proper TUI widget with `show()`/`hide()`/`updateItems()` visibility management, `processEvent()` returning `CompletionAction` enum (Changed, Accepted, Dismissed), and `render()` using relative cursor positioning
+- Ctrl+R triggers fuzzy history search popup — shows all history entries (newest first), dynamically re-filters as user types, Enter replaces entire input with selected entry, Escape dismisses without changing input
+- Modifier-only keys (bare Ctrl/Alt/Shift via Kitty keyboard protocol) no longer dismiss the completion popup
 - Unhandled keys cause popup to dismiss and pass through to parent (removed `None` action)
 - Visibility state is properly synced between `CompletionPopup` and `Component` base class
 - Dynamic filtering: typing while popup is visible filters the list in real-time; `updateItems()` preserves selection when the selected item still matches, otherwise selects best match; auto-closes on 0 matches

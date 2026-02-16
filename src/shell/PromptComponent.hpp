@@ -232,6 +232,18 @@ class PromptComponent: public tui::Component
     void updateCompletionPopup();
     void insertCompletion(std::string_view text);
 
+    /// @brief Hides the completion popup and resets history search mode.
+    void dismissPopup();
+
+    // History search (Ctrl+R)
+    bool _historySearchMode = false; ///< True when popup shows history entries instead of completions.
+
+    /// @brief Populates the completion popup with fuzzy-searched history entries.
+    void triggerHistorySearch();
+
+    /// @brief Re-filters history search popup with updated input text.
+    void updateHistorySearchPopup();
+
     // Tooltip helpers
     /// @brief Gets the command at a screen column position (if any).
     /// @param screenColumn The screen column (0-based).

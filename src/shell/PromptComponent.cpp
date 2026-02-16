@@ -724,8 +724,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             case tui::CompletionAction::Changed: return Action::Changed;
             case tui::CompletionAction::Accepted:
                 if (auto const* selected = _completionPopup.selectedItem())
-                    insertCompletion(selected->text);
-                _completionPopup.hide();
+                {
+                    if (_historySearchMode)
+                        _inputField.setText(selected->text); // Replace entire input with history entry
+                    else
+                        insertCompletion(selected->text);
+                }
+                dismissPopup();
                 updateGhostText(); // Clear/update ghost text after completion
                 return Action::Changed;
             case tui::CompletionAction::Dismissed:
@@ -818,6 +823,14 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             return Action::ClearScreen;
         }
 
+        // Ctrl+R triggers history search (fuzzy popup over all history)
+        if (key->codepoint == 'r' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+        {
+            _historySearchMode = true;
+            triggerHistorySearch();
+            return Action::Changed;
+        }
+
         // Right arrow or End at end of line accepts ghost text
         if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
         {
@@ -838,17 +851,17 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     {
         case tui::InputFieldAction::Submit:
             _inputField.clearGhostText();
-            _completionPopup.hide();
+            dismissPopup();
             resetHistoryCycling();
             return Action::Submit;
         case tui::InputFieldAction::Abort:
             _inputField.clearGhostText();
-            _completionPopup.hide();
+            dismissPopup();
             resetHistoryCycling();
             return Action::Abort;
         case tui::InputFieldAction::Eof:
             _inputField.clearGhostText();
-            _completionPopup.hide();
+            dismissPopup();
             resetHistoryCycling();
             return Action::Eof;
         case tui::InputFieldAction::Changed:
@@ -864,7 +877,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)
             {
-                _completionPopup.hide();
+                dismissPopup();
                 return Action::Changed; // Trigger re-render so popup disappears
             }
             break;
@@ -925,7 +938,7 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
 
     if (completions.empty())
     {
-        _completionPopup.hide();
+        dismissPopup();
         return;
     }
 
@@ -934,7 +947,7 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
         // Single match: insert directly without showing popup
         // (unless force-show was requested via double-Tab or Ctrl+Space)
         insertCompletion(completions[0].text);
-        _completionPopup.hide();
+        dismissPopup();
         updateGhostText(); // Clear/update ghost text after completion
         return;
     }
@@ -958,7 +971,7 @@ void PromptComponent::updateCompletionPopup()
 {
     if (!_completer)
     {
-        _completionPopup.hide();
+        dismissPopup();
         return;
     }
 
@@ -970,7 +983,7 @@ void PromptComponent::updateCompletionPopup()
 
     if (completions.empty())
     {
-        _completionPopup.hide(); // Auto-close on 0 matches
+        dismissPopup(); // Auto-close on 0 matches
         return;
     }
 
@@ -991,6 +1004,76 @@ void PromptComponent::updateCompletionPopup()
     _completionPopup.updateItems(std::move(popupItems));
 }
 
+void PromptComponent::dismissPopup()
+{
+    _completionPopup.hide();
+    _historySearchMode = false;
+}
+
+void PromptComponent::triggerHistorySearch()
+{
+    if (!_history)
+    {
+        dismissPopup();
+        return;
+    }
+
+    auto const inputText = std::string(_inputField.text());
+    auto results = _history->searchFuzzy(inputText, 200);
+
+    if (results.empty())
+    {
+        dismissPopup();
+        return;
+    }
+
+    std::vector<tui::CompletionItem> items;
+    items.reserve(results.size());
+    for (auto const& result: results)
+    {
+        items.push_back(tui::CompletionItem {
+            .text = std::string(result.entry),
+            .displayText = std::string(result.entry),
+            .description = {},
+            .score = result.score,
+            .matchPositions = result.positions,
+        });
+    }
+    _completionPopup.show(std::move(items));
+}
+
+void PromptComponent::updateHistorySearchPopup()
+{
+    if (!_history)
+    {
+        dismissPopup();
+        return;
+    }
+
+    auto const inputText = std::string(_inputField.text());
+    auto results = _history->searchFuzzy(inputText, 200);
+
+    if (results.empty())
+    {
+        dismissPopup();
+        return;
+    }
+
+    std::vector<tui::CompletionItem> items;
+    items.reserve(results.size());
+    for (auto const& result: results)
+    {
+        items.push_back(tui::CompletionItem {
+            .text = std::string(result.entry),
+            .displayText = std::string(result.entry),
+            .description = {},
+            .score = result.score,
+            .matchPositions = result.positions,
+        });
+    }
+    _completionPopup.updateItems(std::move(items));
+}
+
 void PromptComponent::flushDeferredUpdates()
 {
     if (_ghostTextDirty)
@@ -1008,7 +1091,10 @@ void PromptComponent::flushDeferredUpdates()
     if (_completionPopupDirty)
     {
         _completionPopupDirty = false;
-        updateCompletionPopup();
+        if (_historySearchMode)
+            updateHistorySearchPopup();
+        else
+            updateCompletionPopup();
     }
 }
 
