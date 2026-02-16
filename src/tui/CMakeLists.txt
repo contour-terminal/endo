@@ -17,9 +17,6 @@ add_library(tui
     Spinner.cpp
     StatusBar.cpp
     StyledText.cpp
-    Terminal.cpp
-    TerminalInput.cpp
-    TerminalOutput.cpp
     Text.cpp
     Theme.cpp
     Tooltip.cpp
@@ -28,6 +25,21 @@ add_library(tui
     completer/FuzzyMatch.cpp
     completer/SmartCaseMatch.cpp
 )
+
+# Platform-specific terminal implementations
+if(WIN32)
+    target_sources(tui PRIVATE
+        platform/TerminalInputWin32.cpp
+        platform/TerminalOutputWin32.cpp
+        platform/TerminalWin32.cpp
+    )
+else()
+    target_sources(tui PRIVATE
+        platform/TerminalInput.cpp
+        platform/TerminalOutput.cpp
+        platform/Terminal.cpp
+    )
+endif()
 
 target_include_directories(tui PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/.."

@@ -57,6 +57,10 @@ target_include_directories(CoreVM PUBLIC
 
 target_link_libraries(CoreVM PUBLIC Microsoft.GSL::GSL)
 
+if(WIN32)
+    target_link_libraries(CoreVM PUBLIC ws2_32)
+endif()
+
 enable_sanitizers(CoreVM)
 
 # Tests

@@ -105,8 +105,6 @@ add_library(endo-shell STATIC
     OutputParser.hpp
     OutputParser.cpp
     platform/EnvironmentProvider.hpp
-    platform/PosixEnvironmentProvider.hpp
-    platform/PosixEnvironmentProvider.cpp
     platform/TestEnvironmentProvider.hpp
     TableFormatter.hpp
     TableFormatter.cpp
@@ -114,9 +112,21 @@ add_library(endo-shell STATIC
 
 # Platform-specific implementations
 if(WIN32)
-    target_sources(endo-shell PRIVATE platform/WindowsPipe.cpp platform/WindowsTTY.cpp platform/WindowsProcess.cpp)
+    target_sources(endo-shell PRIVATE
+        platform/WindowsPipe.cpp
+        platform/WindowsTTY.cpp
+        platform/WindowsProcess.cpp
+        platform/WindowsEnvironmentProvider.hpp
+        platform/WindowsEnvironmentProvider.cpp
+        platform/WindowsProcessProvider.hpp
+        platform/WindowsProcessProvider.cpp
+        platform/WindowsFileInfoProvider.hpp
+        platform/WindowsFileInfoProvider.cpp
+    )
 else()
     target_sources(endo-shell PRIVATE
+        platform/PosixEnvironmentProvider.hpp
+        platform/PosixEnvironmentProvider.cpp
         platform/LinuxProcessProvider.hpp
         platform/LinuxProcessProvider.cpp
         platform/LinuxFileInfoProvider.hpp
@@ -128,7 +138,7 @@ find_package(Threads REQUIRED)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(endo-shell PUBLIC endo vtparser tui)
+    target_link_libraries(endo-shell PUBLIC endo vtparser tui psapi)
 else()
     # util for pty.h on POSIX systems
     target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
@@ -180,10 +190,14 @@ add_executable(test-endo-shell
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
     PersistentHistory_test.cpp
-    Shell_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp
 )
+
+# Shell_test.cpp requires TestPTY which uses POSIX PTY primitives
+if(NOT WIN32)
+    target_sources(test-endo-shell PRIVATE Shell_test.cpp)
+endif()
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 target_compile_definitions(test-endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"

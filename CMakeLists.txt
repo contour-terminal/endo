@@ -11,6 +11,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(WIN32)
+    # Prevent <windows.h> from defining min/max macros that conflict with std::min/std::max
+    add_definitions(-DNOMINMAX)
+    # Exclude rarely-used Windows headers (prevents winsock.h/winsock2.h conflicts)
+    add_definitions(-DWIN32_LEAN_AND_MEAN)
+    # Target Windows 10+
+    add_definitions(-D_WIN32_WINNT=0x0A00)
+    # Use Unicode APIs
+    add_definitions(-DUNICODE -D_UNICODE)
+endif()
+
 
 if(NOT DEFINED ENDO_TRACE_VM)
     option(ENDO_TRACE_VM "Enables debug output" OFF)
