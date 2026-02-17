@@ -154,6 +154,125 @@ TEST_CASE("agent.config.load_malformed_yaml")
 // API key resolution tests
 // =============================================================================
 
+TEST_CASE("agent.config.load_yaml_with_api_keys")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-apikey";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    {
+        std::ofstream f(configPath);
+        f << R"(
+active_provider: openai
+
+claude:
+  api_key: sk-ant-test-key-123
+  model: claude-opus-4-20250514
+
+openai:
+  api_key: sk-openai-test-key-456
+
+gemini:
+  api_key: AIzaSy-test-key-789
+)";
+    }
+
+    auto result = loadAgentConfig(configPath);
+    REQUIRE(result.has_value());
+    auto const& config = *result;
+
+    CHECK(config.claude.apiKey == "sk-ant-test-key-123");
+    CHECK(config.claude.model == "claude-opus-4-20250514");
+    CHECK(config.openai.apiKey == "sk-openai-test-key-456");
+    CHECK(config.gemini.apiKey == "AIzaSy-test-key-789");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+// =============================================================================
+// Config save/load round-trip tests
+// =============================================================================
+
+TEST_CASE("agent.config.save_load_roundtrip")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-save";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    auto original = AgentConfig {};
+    original.activeProvider = "openai";
+    original.claude.apiKey = "sk-ant-test-roundtrip";
+    original.claude.model = "claude-opus-4-20250514";
+    original.openai.apiKey = "sk-openai-test-roundtrip";
+    original.openai.model = "gpt-4-turbo";
+    original.openai.baseUrl = "https://custom.openai.com/v1";
+    original.gemini.apiKey = "AIzaSy-test-roundtrip";
+    original.gemini.model = "gemini-2.5-pro";
+    original.maxToolResultSize = 65536;
+
+    auto saveError = saveAgentConfig(original, configPath);
+    REQUIRE(!saveError.has_value());
+
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    auto const& loaded = *loadResult;
+
+    CHECK(loaded.activeProvider == "openai");
+    CHECK(loaded.claude.apiKey == "sk-ant-test-roundtrip");
+    CHECK(loaded.claude.model == "claude-opus-4-20250514");
+    CHECK(loaded.openai.apiKey == "sk-openai-test-roundtrip");
+    CHECK(loaded.openai.model == "gpt-4-turbo");
+    CHECK(loaded.openai.baseUrl == "https://custom.openai.com/v1");
+    CHECK(loaded.gemini.apiKey == "AIzaSy-test-roundtrip");
+    CHECK(loaded.gemini.model == "gemini-2.5-pro");
+    CHECK(loaded.maxToolResultSize == 65536);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("agent.config.save_creates_parent_directories")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-mkdir" / "nested" / "dirs";
+    auto const configPath = tmpDir / "agent.yml";
+
+    // Ensure the nested path doesn't exist
+    std::filesystem::remove_all(std::filesystem::temp_directory_path() / "endo-test-config-mkdir");
+
+    auto config = AgentConfig {};
+    config.claude.apiKey = "test-key";
+
+    auto error = saveAgentConfig(config, configPath);
+    REQUIRE(!error.has_value());
+    CHECK(std::filesystem::exists(configPath));
+
+    std::filesystem::remove_all(std::filesystem::temp_directory_path() / "endo-test-config-mkdir");
+}
+
+TEST_CASE("agent.config.save_only_non_defaults")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-defaults";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    // Save with all defaults — should produce minimal YAML
+    auto config = AgentConfig {};
+    auto error = saveAgentConfig(config, configPath);
+    REQUIRE(!error.has_value());
+
+    // Load it back — should still be defaults
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    CHECK(loadResult->activeProvider == "claude");
+    CHECK(loadResult->claude.apiKey.empty());
+    CHECK(loadResult->claude.model == "claude-sonnet-4-5-20250929");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+// =============================================================================
+// API key resolution tests
+// =============================================================================
+
 TEST_CASE("agent.config.resolve_api_key_missing")
 {
     auto result = resolveApiKey("ENDO_TEST_NONEXISTENT_KEY_12345");
@@ -166,4 +285,26 @@ TEST_CASE("agent.config.resolve_api_key_present")
     auto result = resolveApiKey("HOME");
     REQUIRE(result.has_value());
     CHECK(!result->empty());
+}
+
+TEST_CASE("agent.config.resolve_provider_api_key_stored_takes_priority")
+{
+    // Stored key should be returned even when env var is also set
+    auto result = resolveProviderApiKey("stored-key-value", "HOME");
+    REQUIRE(result.has_value());
+    CHECK(*result == "stored-key-value");
+}
+
+TEST_CASE("agent.config.resolve_provider_api_key_env_fallback")
+{
+    // When stored key is empty, should fall back to env var
+    auto result = resolveProviderApiKey("", "HOME");
+    REQUIRE(result.has_value());
+    CHECK(!result->empty());
+}
+
+TEST_CASE("agent.config.resolve_provider_api_key_neither")
+{
+    auto result = resolveProviderApiKey("", "ENDO_TEST_NONEXISTENT_KEY_12345");
+    CHECK(!result.has_value());
 }

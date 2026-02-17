@@ -13,6 +13,7 @@ namespace endo::agent
 /// Configuration for the Anthropic Claude provider.
 struct ClaudeConfig
 {
+    std::string apiKey;                               ///< Stored API key (from config file).
     std::string apiKeyEnv = "ANTHROPIC_API_KEY";      ///< Environment variable holding the API key.
     std::string model = "claude-sonnet-4-5-20250929"; ///< Model identifier.
     size_t maxTokens = 8192;                          ///< Maximum output tokens per request.
@@ -21,6 +22,7 @@ struct ClaudeConfig
 /// Configuration for OpenAI-compatible providers.
 struct OpenAiConfig
 {
+    std::string apiKey;                       ///< Stored API key (from config file).
     std::string apiKeyEnv = "OPENAI_API_KEY"; ///< Environment variable holding the API key.
     std::string model = "gpt-4o";             ///< Model identifier.
     std::string baseUrl;                      ///< Base URL (empty = https://api.openai.com/v1).
@@ -30,6 +32,7 @@ struct OpenAiConfig
 /// Configuration for the Google Gemini provider.
 struct GeminiConfig
 {
+    std::string apiKey;                       ///< Stored API key (from config file).
     std::string apiKeyEnv = "GEMINI_API_KEY"; ///< Environment variable holding the API key.
     std::string model = "gemini-2.5-flash";   ///< Model identifier.
     size_t maxTokens = 8192;                  ///< Maximum output tokens per request.
@@ -62,5 +65,24 @@ struct AgentConfig
 /// @param envVarName Name of the environment variable.
 /// @return The API key value, or std::nullopt if not set.
 [[nodiscard]] auto resolveApiKey(std::string_view envVarName) -> std::optional<std::string>;
+
+/// Resolves the API key for a provider: stored key takes priority, then env var fallback.
+/// @param apiKey Stored API key from config file.
+/// @param apiKeyEnv Environment variable name for fallback.
+/// @return The resolved API key, or std::nullopt if neither source is available.
+[[nodiscard]] auto resolveProviderApiKey(std::string const& apiKey, std::string const& apiKeyEnv)
+    -> std::optional<std::string>;
+
+/// Saves agent configuration to a YAML file using atomic write (write to .tmp, then rename).
+/// @param config The configuration to save.
+/// @param path Target file path.
+/// @return std::nullopt on success, or an error message.
+[[nodiscard]] auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& path)
+    -> std::optional<std::string>;
+
+/// Saves agent configuration to the default path (~/.config/endo/agent.yml).
+/// @param config The configuration to save.
+/// @return std::nullopt on success, or an error message.
+[[nodiscard]] auto saveAgentConfig(AgentConfig const& config) -> std::optional<std::string>;
 
 } // namespace endo::agent
