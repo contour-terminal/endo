@@ -1196,23 +1196,24 @@ void Shell::runAgentMode()
         auto const toolNameStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
         auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
 
-        _agentSession->setToolStatusCallback([&](agent::ToolCall const& call) {
-            // Clear spinner line
-            out.writeRaw("\r");
-            out.clearToEndOfLine();
+        _agentSession->setToolStatusCallback(
+            [&out, &activeRenderer, barStyle, toolNameStyle, argsStyle](agent::ToolCall const& call) {
+                // Clear spinner line
+                out.writeRaw("\r");
+                out.clearToEndOfLine();
 
-            // Write styled tool use line: "│ ⚙ tool_name { args... }"
-            out.write("\u2502 ", barStyle);
-            out.write("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
-            if (auto const args = formatToolCallArgs(call.arguments); !args.empty())
-                out.write(" " + args, argsStyle);
-            out.writeRaw("\n");
+                // Write styled tool use line: "│ ⚙ tool_name { args... }"
+                out.write("\u2502 ", barStyle);
+                out.write("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
+                if (auto const args = formatToolCallArgs(call.arguments); !args.empty())
+                    out.write(" " + args, argsStyle);
+                out.writeRaw("\n");
 
-            // Re-render spinner if still in thinking phase
-            if (activeRenderer && activeRenderer->isThinking())
-                activeRenderer->renderSpinner();
-            out.flush();
-        });
+                // Re-render spinner if still in thinking phase
+                if (activeRenderer && activeRenderer->isThinking())
+                    activeRenderer->renderSpinner();
+                out.flush();
+            });
     }
 
     // Create inline Screen with AgentInputComponent — prompt visible instantly
