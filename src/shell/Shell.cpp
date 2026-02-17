@@ -1287,12 +1287,11 @@ void Shell::runAgentMode()
                     }
 
                     auto const query = std::string(inputComponent.text());
-                    inputComponent.clear();
 
-                    // Move cursor past the input component
-                    screen.draw();
+                    // Move cursor past the input component while text is still visible
                     auto const totalLines = inputComponent.inputField().lineCount();
                     auto const cursorLine = inputComponent.inputField().cursorLine();
+                    inputComponent.clear();
                     auto const linesToMoveDown = totalLines - cursorLine;
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
