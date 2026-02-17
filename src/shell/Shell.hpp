@@ -104,12 +104,44 @@ class Shell final
     std::unique_ptr<Completer> completer; ///< Completion system
 
   private:
+    // --- Registration (builtins/Registration.cpp) ---
     void registerBuiltinFunctions();
+    void registerEnvironmentBuiltins();
+    void registerProcessBuiltins();
+    void registerIOBuiltins();
+    void registerCommandBuilderBuiltins();
+    void registerExpansionBuiltins();
+    void registerFlowControlBuiltins();
+    void registerJobControlBuiltins();
+    void registerUserCommandBuiltins();
+    void registerOutputBuiltins();
+    void registerLanguageBuiltins();
+    void registerStructuredBuiltins();
+    void registerPromptBuiltins();
 
-    // Builtin functions
-    void builtinExit(CoreVM::Params& context);
+    // --- Inline command implementations (builtins/InlineCommands.cpp) ---
+    /// Executes the echo builtin, writing to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the cat builtin, writing to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineCat(CoreVM::CoreStringArray const& args,
+                                       NativeHandle outputFd,
+                                       NativeHandle stdinFd);
+    /// Executes the sleep builtin, writing help to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the rm builtin, writing verbose output to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
+    void finalizePipelineBuiltin(bool lastInChain,
+                                 CoreVM::CoreStringArray const& args,
+                                 std::string_view programName,
+                                 CoreVM::Params& context);
+
+    // --- Process execution (builtins/ProcessExecution.cpp) ---
     void builtinCallProcess(CoreVM::Params& context);
     void builtinCallProcessShellPiped(CoreVM::Params& context);
+
+    // --- Environment builtins (builtins/Environment.cpp) ---
+    void builtinExit(CoreVM::Params& context);
     void builtinChDir(CoreVM::Params& context);
     void builtinChDirHome(CoreVM::Params& context);
     void builtinSet(CoreVM::Params& context);
@@ -120,14 +152,33 @@ class Shell final
     void builtinGetProcessId(CoreVM::Params& context);
     void builtinGetBackgroundId(CoreVM::Params& context);
     void builtinGetPositional(CoreVM::Params& context);
+    void builtinSetAndExport(CoreVM::Params& context);
+    void builtinExport(CoreVM::Params& context);
+
+    // --- Command builder (builtins/CommandBuilder.cpp) ---
     void builtinCmdStart(CoreVM::Params& context);
     void builtinCmdArg(CoreVM::Params& context);
     void builtinCmdExec(CoreVM::Params& context);
     void builtinCmdExecPiped(CoreVM::Params& context);
-    void builtinSetAndExport(CoreVM::Params& context);
-    void builtinExport(CoreVM::Params& context);
-    void builtinReadDefault(CoreVM::Params& context);
-    void builtinRead(CoreVM::Params& context);
+    std::vector<std::string>& cmdBuilderArgs();
+    void cleanupProcSubst();
+    void applyRedirects(SpawnConfig& config);
+    [[nodiscard]] std::expected<std::filesystem::path, ShellError> resolveProgram(
+        std::string const& program) const;
+
+    /// Result of running a command in the foreground with job control.
+    struct ForegroundResult
+    {
+        int exitCode = 0;     ///< Exit code if process terminated
+        bool stopped = false; ///< True if process was stopped (Ctrl+Z)
+        ProcessId pid = 0;    ///< Process ID of the child
+        ProcessId pgid = 0;   ///< Process group ID
+    };
+
+    [[nodiscard]] std::expected<ForegroundResult, ShellError> runForeground(SpawnConfig& config,
+                                                                            std::string const& command);
+
+    // --- Redirect builtins (builtins/Redirects.cpp) ---
     void builtinOpenRead(CoreVM::Params& context);
     void builtinOpenWrite(CoreVM::Params& context);
     void builtinRedirectStart(CoreVM::Params& context);
@@ -137,12 +188,16 @@ class Shell final
     void builtinRedirectHeredoc(CoreVM::Params& context);
     void builtinRedirectHerestring(CoreVM::Params& context);
     void builtinRedirectEnd(CoreVM::Params& context);
+
+    // --- Substitution builtins (builtins/Substitution.cpp) ---
     void builtinSubstStart(CoreVM::Params& context);
     void builtinSubstEnd(CoreVM::Params& context);
     void builtinProcSubstFork(CoreVM::Params& context);
     void builtinProcSubstExit(CoreVM::Params& context);
     void builtinProcSubstGetPath(CoreVM::Params& context);
     void builtinProcSubstCleanup(CoreVM::Params& context);
+
+    // --- Expansion builtins (builtins/Expansion.cpp) ---
     void builtinExpandTilde(CoreVM::Params& context);
     void builtinExpandTildeUser(CoreVM::Params& context);
     void builtinExpandGlob(CoreVM::Params& context);
@@ -157,6 +212,8 @@ class Shell final
     void builtinExpandParamRemovePrefix(CoreVM::Params& context);
     void builtinExpandParamRemoveSuffix(CoreVM::Params& context);
     void builtinExpandParamReplace(CoreVM::Params& context);
+
+    // --- Flow control builtins (builtins/FlowControl.cpp) ---
     void builtinForInit(CoreVM::Params& context);
     void builtinForAddItem(CoreVM::Params& context);
     void builtinForHasMore(CoreVM::Params& context);
@@ -165,65 +222,32 @@ class Shell final
     void builtinCaseMatch(CoreVM::Params& context);
     void builtinFunctionRegister(CoreVM::Params& context);
     void builtinFunctionCall(CoreVM::Params& context);
+
+    // --- Job control builtins (builtins/JobControl.cpp) ---
     void builtinJobs(CoreVM::Params& context);
     void builtinFg(CoreVM::Params& context);
     void builtinBg(CoreVM::Params& context);
     void builtinWait(CoreVM::Params& context);
     void builtinCmdExecPipedBackground(CoreVM::Params& context);
-    void builtinBind(CoreVM::Params& context);
-    void builtinWhich(CoreVM::Params& context);
-    void builtinPrint(CoreVM::Params& context);
-    void builtinPrintln(CoreVM::Params& context);
-    void builtinDisplayResult(CoreVM::Params& context);
-    /// Downloads a URL to a file in the current working directory.
-    ///
-    /// The filename is derived from the URL path, or auto-generated if no filename can be extracted.
-    /// Returns Ok(filename) on success, Error(message) on failure.
-    /// @param context Params: (url: string) -> Number (Result object pointer)
-    void builtinFetch(CoreVM::Params& context);
 
-    /// Downloads a URL to a file with custom headers.
-    ///
-    /// Headers are passed as a List of "Key: Value" strings.
-    /// Returns Ok(filename) on success, Error(message) on failure.
-    /// @param context Params: (url: string, headers: Number/List) -> Number (Result object pointer)
-    void builtinFetchWithHeaders(CoreVM::Params& context);
-
-    // Helper functions
-    void cleanupProcSubst();
-    void applyRedirects(SpawnConfig& config);
-
-    // Read builtin helpers
+    // --- Read command builtins (builtins/ReadCommand.cpp) ---
+    void builtinReadDefault(CoreVM::Params& context);
+    void builtinRead(CoreVM::Params& context);
     [[nodiscard]] std::string readInputLine(NativeHandle inputFd, ReadOptions const& options);
     [[nodiscard]] std::vector<std::string> splitByIFS(std::string_view input) const;
 
-    [[nodiscard]] std::expected<std::filesystem::path, ShellError> resolveProgram(
-        std::string const& program) const;
+    // --- User commands (builtins/UserCommands.cpp) ---
+    void builtinBind(CoreVM::Params& context);
+    void builtinWhich(CoreVM::Params& context);
 
-    /// Result of running a command in the foreground with job control.
-    struct ForegroundResult
-    {
-        int exitCode = 0;     ///< Exit code if process terminated
-        bool stopped = false; ///< True if process was stopped (Ctrl+Z)
-        ProcessId pid = 0;    ///< Process ID of the child
-        ProcessId pgid = 0;   ///< Process group ID
-    };
+    // --- Output builtins (builtins/Output.cpp) ---
+    void builtinPrint(CoreVM::Params& context);
+    void builtinPrintln(CoreVM::Params& context);
+    void builtinDisplayResult(CoreVM::Params& context);
+    void builtinFetch(CoreVM::Params& context);
+    void builtinFetchWithHeaders(CoreVM::Params& context);
 
-    /// Runs a command in the foreground with proper job control.
-    ///
-    /// This handles:
-    /// - Creating a new process group for the child
-    /// - Transferring terminal control to the child
-    /// - Waiting for the child with WUNTRACED to detect Ctrl+Z
-    /// - Adding stopped jobs to the job table
-    /// - Restoring terminal control to the shell
-    ///
-    /// @param config Spawn configuration (processGroup will be set to 0)
-    /// @param command Command string for job table display
-    /// @return ForegroundResult on success, or an error
-    [[nodiscard]] std::expected<ForegroundResult, ShellError> runForeground(SpawnConfig& config,
-                                                                            std::string const& command);
-
+    // --- Core shell methods ---
     void trace(CoreVM::Instruction instr, size_t ip, size_t sp);
 
     // Shell integration (OSC 133) and CWD propagation (OSC 7)
@@ -238,19 +262,6 @@ class Shell final
     {
         std::println(std::cerr, "{}", std::format(message, std::forward<Args>(args)...));
     }
-
-    [[nodiscard]] static bool globMatchFilename(std::string_view filename, std::string_view pattern);
-    [[nodiscard]] static std::vector<std::string> expandGlobPattern(std::string_view pattern);
-    [[nodiscard]] static std::vector<std::string> expandRecursiveGlob(std::string_view pattern);
-    [[nodiscard]] static bool globMatch(std::string_view text, std::string_view pattern);
-    [[nodiscard]] static std::vector<size_t> findPrefixMatches(std::string_view text,
-                                                               std::string_view pattern);
-    [[nodiscard]] static std::vector<size_t> findSuffixMatches(std::string_view text,
-                                                               std::string_view pattern);
-    [[nodiscard]] static std::optional<size_t> findPatternMatchLength(std::string_view text,
-                                                                      std::string_view pattern);
-
-    std::vector<std::string>& cmdBuilderArgs();
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

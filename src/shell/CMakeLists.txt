@@ -69,6 +69,21 @@ add_library(endo-shell STATIC
     PromptPresets.cpp
     Shell.hpp
     Shell.cpp
+    GlobMatcher.hpp
+    GlobMatcher.cpp
+    builtins/InlineCommands.cpp
+    builtins/Registration.cpp
+    builtins/ProcessExecution.cpp
+    builtins/Environment.cpp
+    builtins/CommandBuilder.cpp
+    builtins/Redirects.cpp
+    builtins/Substitution.cpp
+    builtins/Expansion.cpp
+    builtins/FlowControl.cpp
+    builtins/JobControl.cpp
+    builtins/ReadCommand.cpp
+    builtins/UserCommands.cpp
+    builtins/Output.cpp
     SourceOffsetUtils.hpp
     SourceOffsetUtils.cpp
     SyntaxHighlighter.hpp
