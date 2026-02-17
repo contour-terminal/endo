@@ -668,7 +668,7 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
             else
                 prompt = std::format("rm: remove file '{}'? ", path);
             // Write prompt to stderr, read response from stdin
-            [[maybe_unused]] auto w = platformWrite(2, prompt.data(), prompt.size());
+            [[maybe_unused]] auto w = platformWrite(standardError(), prompt.data(), prompt.size());
             // In non-interactive/test contexts, skip (treat as 'no')
             if (!_tty.isTerminal())
                 continue;
