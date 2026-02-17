@@ -202,16 +202,16 @@ namespace
 
 // --- SyncGuard ---
 
-SyncGuard::SyncGuard(int fd): _fd(fd)
+SyncGuard::SyncGuard(NativeHandle handle): _handle(handle)
 {
     static constexpr auto Begin = "\033[?2026h";
-    static_cast<void>(::write(_fd, Begin, std::strlen(Begin)));
+    static_cast<void>(::write(_handle, Begin, std::strlen(Begin)));
 }
 
 SyncGuard::~SyncGuard()
 {
     static constexpr auto End = "\033[?2026l";
-    static_cast<void>(::write(_fd, End, std::strlen(End)));
+    static_cast<void>(::write(_handle, End, std::strlen(End)));
 }
 
 // --- TerminalOutput ---

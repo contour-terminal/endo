@@ -209,20 +209,18 @@ namespace
 
 // --- SyncGuard ---
 
-SyncGuard::SyncGuard(int /*fd*/): _fd(0)
+SyncGuard::SyncGuard(NativeHandle handle): _handle(handle)
 {
     static constexpr auto Begin = "\033[?2026h";
-    auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD written = 0;
-    WriteFile(hStdout, Begin, static_cast<DWORD>(std::strlen(Begin)), &written, nullptr);
+    WriteFile(_handle, Begin, static_cast<DWORD>(std::strlen(Begin)), &written, nullptr);
 }
 
 SyncGuard::~SyncGuard()
 {
     static constexpr auto End = "\033[?2026l";
-    auto const hStdout = GetStdHandle(STD_OUTPUT_HANDLE);
     DWORD written = 0;
-    WriteFile(hStdout, End, static_cast<DWORD>(std::strlen(End)), &written, nullptr);
+    WriteFile(_handle, End, static_cast<DWORD>(std::strlen(End)), &written, nullptr);
 }
 
 // --- TerminalOutput ---
@@ -313,7 +311,7 @@ void TerminalOutput::leaveAltScreen()
 auto TerminalOutput::syncGuard() -> SyncGuard
 {
     flush();
-    return SyncGuard(0); // fd parameter unused on Windows
+    return SyncGuard(GetStdHandle(STD_OUTPUT_HANDLE));
 }
 
 void TerminalOutput::setDoubleWidth()

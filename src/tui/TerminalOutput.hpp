@@ -67,9 +67,15 @@ struct Style
 class SyncGuard
 {
   public:
+#if defined(_WIN32)
+    using NativeHandle = void*; ///< Windows HANDLE, avoids #include <windows.h>.
+#else
+    using NativeHandle = int; ///< POSIX file descriptor.
+#endif
+
     /// @brief Begins synchronized output mode.
-    /// @param fd File descriptor to write to (typically STDOUT_FILENO).
-    explicit SyncGuard(int fd);
+    /// @param handle Native file handle to write to.
+    explicit SyncGuard(NativeHandle handle);
 
     /// @brief Ends synchronized output mode and flushes.
     ~SyncGuard();
@@ -80,7 +86,7 @@ class SyncGuard
     auto operator=(SyncGuard&&) -> SyncGuard& = delete;
 
   private:
-    [[maybe_unused]] int _fd;
+    NativeHandle _handle;
 };
 
 /// @brief Handles styled terminal output, cursor control, and screen management.
