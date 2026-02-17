@@ -919,6 +919,17 @@ Component (base class)
 - [x] Shell `/plan` command: exploration → review → y/n/r → execution loop
 - [x] Comprehensive test coverage (SubmitPlanTool, PlanExecutor, AgentSession plan mode, ToolRegistry filter)
 
+### Phase 3.6: Agent Tool Use Logging ✅
+
+**Dependency:** Phase 3.1
+
+**Tasks:**
+- [x] `ToolStatusCallback` enhanced to pass full `ToolCall const&` (name + arguments)
+- [x] `AgentConfig::logToolUses` flag with YAML persistence (`log_tool_uses` key, default: true)
+- [x] `formatToolCallArgs()` helper: compact JSON with truncated strings and content redaction
+- [x] Tool use lines rendered inline during agent thinking phase (`│ ⚙ tool_name {args}`)
+- [x] `ScopedAssign` RAII guard for `activeRenderer` tracking across renderer lifetimes
+
 ---
 
 ## Milestone 4: Windows Support

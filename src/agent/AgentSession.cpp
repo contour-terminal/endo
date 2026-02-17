@@ -260,7 +260,7 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
     for (auto const& call: calls)
     {
         if (_toolStatusCallback)
-            _toolStatusCallback(call.name);
+            _toolStatusCallback(call);
 
         auto result = _toolRegistry->execute(call);
         truncateToolResult(result, _maxToolResultSize);

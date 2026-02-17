@@ -350,7 +350,7 @@ TEST_CASE("AgentSession.tool_status_callback_fires", "[agent]")
     session.setToolRegistry(&registry);
 
     auto statusToolNames = std::vector<std::string> {};
-    session.setToolStatusCallback([&](std::string_view toolName) { statusToolNames.emplace_back(toolName); });
+    session.setToolStatusCallback([&](ToolCall const& call) { statusToolNames.emplace_back(call.name); });
 
     provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "mock_tool", .arguments = {} } };
 

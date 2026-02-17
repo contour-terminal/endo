@@ -39,8 +39,8 @@ struct AgentError
 };
 
 /// Callback invoked when a tool begins execution.
-/// @param toolName The name of the tool being executed.
-using ToolStatusCallback = std::function<void(std::string_view toolName)>;
+/// @param call The tool call being executed, including name and arguments.
+using ToolStatusCallback = std::function<void(ToolCall const& call)>;
 
 /// Manages a conversation with an LLM provider.
 ///

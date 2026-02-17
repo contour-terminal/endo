@@ -167,6 +167,8 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
         if (root["max_tool_result_size"])
             config.maxToolResultSize = root["max_tool_result_size"].as<size_t>();
+        if (root["log_tool_uses"])
+            config.logToolUses = root["log_tool_uses"].as<bool>();
 
         parsePlanModeConfig(root["plan_mode"], config.planMode);
 
@@ -234,6 +236,8 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 
         if (config.maxToolResultSize != defaults.maxToolResultSize)
             emitter << YAML::Key << "max_tool_result_size" << YAML::Value << config.maxToolResultSize;
+        if (config.logToolUses != defaults.logToolUses)
+            emitter << YAML::Key << "log_tool_uses" << YAML::Value << config.logToolUses;
 
         emitPlanModeConfig(emitter, config.planMode);
 

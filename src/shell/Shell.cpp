@@ -51,6 +51,7 @@
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tools/WriteFileTool.hpp>
+#include <nlohmann/json.hpp>
 #if defined(_WIN32)
     #include "platform/WindowsEnvironmentProvider.hpp"
 #else
@@ -991,6 +992,61 @@ void Shell::trace(CoreVM::Instruction instr, size_t ip, size_t sp)
 namespace
 {
 
+    /// @brief RAII guard that sets a pointer for the duration of a scope and clears it on destruction.
+    template <typename T>
+    class ScopedAssign
+    {
+      public:
+        ScopedAssign(T*& target, T& value): _target(target) { _target = &value; }
+
+        ~ScopedAssign() { _target = nullptr; }
+
+        ScopedAssign(ScopedAssign const&) = delete;
+        ScopedAssign& operator=(ScopedAssign const&) = delete;
+
+      private:
+        T*& _target;
+    };
+
+    /// @brief Formats tool call arguments as a compact, truncated string for display.
+    /// @param arguments The JSON arguments from a tool call.
+    /// @return A compact string representation, truncated at ~120 characters.
+    [[nodiscard]] auto formatToolCallArgs(nlohmann::json const& arguments) -> std::string
+    {
+        if (arguments.is_null() || (arguments.is_object() && arguments.empty()))
+            return {};
+
+        // Build compact JSON with truncated string values
+        auto truncated = arguments;
+        for (auto& [key, value]: truncated.items())
+        {
+            if (value.is_string())
+            {
+                // Replace "content" fields (write_file/edit_file payloads) with size placeholder
+                if (key == "content" || key == "new_string" || key == "old_string")
+                {
+                    auto const len = value.get<std::string>().size();
+                    value = std::format("<{} chars>", len);
+                }
+                else if (auto const& s = value.get<std::string>(); s.size() > 60)
+                {
+                    value = s.substr(0, 57) + "...";
+                }
+            }
+        }
+
+        auto result = truncated.dump(-1);
+
+        static constexpr auto maxLen = size_t { 120 };
+        if (result.size() > maxLen)
+        {
+            result.resize(maxLen - 3);
+            result += "...";
+        }
+
+        return result;
+    }
+
     /// @brief Runs a command and captures stdout (for git info queries).
     [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
     {
@@ -1130,6 +1186,35 @@ void Shell::runAgentMode()
     auto& out = terminal.output();
     auto const& theme = tui::currentTheme();
 
+    // Track the active renderer so tool-use lines can re-render the spinner
+    agent::AgentResponseRenderer* activeRenderer = nullptr;
+
+    // Set up tool-use logging callback
+    if (agentConfig.logToolUses)
+    {
+        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto const toolNameStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+        auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
+
+        _agentSession->setToolStatusCallback([&](agent::ToolCall const& call) {
+            // Clear spinner line
+            out.writeRaw("\r");
+            out.clearToEndOfLine();
+
+            // Write styled tool use line: "│ ⚙ tool_name { args... }"
+            out.write("\u2502 ", barStyle);
+            out.write("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
+            if (auto const args = formatToolCallArgs(call.arguments); !args.empty())
+                out.write(" " + args, argsStyle);
+            out.writeRaw("\n");
+
+            // Re-render spinner if still in thinking phase
+            if (activeRenderer && activeRenderer->isThinking())
+                activeRenderer->renderSpinner();
+            out.flush();
+        });
+    }
+
     // Create inline Screen with AgentInputComponent — prompt visible instantly
     auto screenConfig = tui::ScreenConfig {
         .viewport = tui::Viewport::Inline,
@@ -1226,6 +1311,7 @@ void Shell::runAgentMode()
 
                         // Exploration phase
                         auto renderer = agent::AgentResponseRenderer(out);
+                        auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
                         renderer.begin();
 
                         auto planResult = _agentSession->processMessageForPlan(
@@ -1266,6 +1352,7 @@ void Shell::runAgentMode()
                                                                         executor.currentStepIndex());
 
                                             auto stepRenderer = agent::AgentResponseRenderer(out);
+                                            auto const stepGuard = ScopedAssign(activeRenderer, stepRenderer);
                                             stepRenderer.begin();
 
                                             auto stepResult =
@@ -1328,6 +1415,7 @@ void Shell::runAgentMode()
                     {
                         // Normal (non-plan) message processing
                         auto renderer = agent::AgentResponseRenderer(out);
+                        auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
                         renderer.begin();
 
                         auto result = _agentSession->processMessage(

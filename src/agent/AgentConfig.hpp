@@ -58,6 +58,7 @@ struct AgentConfig
     GeminiConfig gemini;       ///< Google Gemini configuration.
 
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
+    bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.
 
     PlanModeConfig planMode; ///< Plan mode configuration.
 };
