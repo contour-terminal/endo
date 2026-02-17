@@ -23,6 +23,7 @@
 
 #include "CrashHandler.hpp"
 #include "Shell.hpp"
+#include <agent/LoginCommand.hpp>
 
 using namespace std::string_view_literals;
 
@@ -48,6 +49,12 @@ Options:
                      (comma-separated, supports wildcards)
   --log-list         List all available log categories and exit
 
+Agent Commands:
+  agent login [PROVIDER]    Authenticate with an LLM provider (claude, openai, gemini)
+  agent status              Show configured providers and active selection
+  agent switch [PROVIDER]   Switch the active LLM provider
+  agent logout [PROVIDER]   Remove stored API key for a provider
+
 Log Categories:
   shell.debug        Shell execution debug output
   vm.trace           VM instruction execution trace
@@ -60,7 +67,7 @@ Log Categories:
 Script Execution:
   When executing a script file, arguments after the script become positional
   parameters ($1, $2, ...). The script path is available as $0.
-  
+
   When using -c, arguments after the command become positional parameters.
   The program name is available as $0.
 
@@ -74,8 +81,12 @@ Examples:
   {} -c 'echo $1' foo             Execute command with argument ($1=foo)
   {} --log=shell.debug            Enable shell debug logging
   {} --log='shell.*,parser'       Enable multiple log categories
+  {} agent login claude           Authenticate with Claude
+  {} agent status                 Show provider status
 
 )",
+               programName,
+               programName,
                programName,
                programName,
                programName,
@@ -255,6 +266,24 @@ int main(int argc, char const* argv[])
 
     auto const args = std::span(argv, static_cast<size_t>(argc));
     auto const programName = args.empty() ? "endo"sv : std::string_view(args[0]);
+
+    // Handle `endo agent <subcommand>` before general argument parsing
+    if (args.size() >= 3 && std::string_view(args[1]) == "agent"sv)
+    {
+        auto const subcommand = std::string_view(args[2]);
+        auto const hint = (args.size() >= 4) ? std::string_view(args[3]) : ""sv;
+        if (subcommand == "login")
+            return endo::agent::runLoginCommand(hint);
+        if (subcommand == "status")
+            return endo::agent::runStatusCommand();
+        if (subcommand == "switch")
+            return endo::agent::runSwitchCommand(hint);
+        if (subcommand == "logout")
+            return endo::agent::runLogoutCommand(hint);
+        std::print(stderr, "Unknown agent command: {}\n", subcommand);
+        std::print(stderr, "Available commands: login, status, switch, logout\n");
+        return EXIT_FAILURE;
+    }
 
     auto const parsed = parseArguments(args);
 

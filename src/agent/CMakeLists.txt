@@ -5,6 +5,8 @@ add_library(endo-agent STATIC
     Types.hpp
     LlmProvider.hpp
     AgentConfig.hpp AgentConfig.cpp
+    TerminalInput.hpp TerminalInput.cpp
+    LoginCommand.hpp LoginCommand.cpp
     ClaudeProvider.hpp ClaudeProvider.cpp
     OpenAiProvider.hpp OpenAiProvider.cpp
     GeminiProvider.hpp GeminiProvider.cpp
@@ -43,6 +45,7 @@ add_executable(test-endo-agent
     test_main.cpp
     Types_test.cpp
     AgentConfig_test.cpp
+    LoginCommand_test.cpp
     ClaudeProvider_test.cpp
     OpenAiProvider_test.cpp
     GeminiProvider_test.cpp
