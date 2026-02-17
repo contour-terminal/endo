@@ -17,11 +17,14 @@ add_library(endo-agent STATIC
     ProjectFileTree.hpp ProjectFileTree.cpp
     ProjectContextLoader.hpp ProjectContextLoader.cpp
     SystemPromptBuilder.hpp SystemPromptBuilder.cpp
+    Plan.hpp
     AgentSession.hpp AgentSession.cpp
+    PlanExecutor.hpp PlanExecutor.cpp
     AgentInputComponent.hpp AgentInputComponent.cpp
     AgentResponseRenderer.hpp AgentResponseRenderer.cpp
     tools/AgentTool.hpp
     tools/ToolRegistry.hpp tools/ToolRegistry.cpp
+    tools/SubmitPlanTool.hpp tools/SubmitPlanTool.cpp
     tools/ReadFileTool.hpp tools/ReadFileTool.cpp
     tools/WriteFileTool.hpp tools/WriteFileTool.cpp
     tools/EditFileTool.hpp tools/EditFileTool.cpp
@@ -57,7 +60,9 @@ add_executable(test-endo-agent
     ProjectContextLoader_test.cpp
     SystemPromptBuilder_test.cpp
     AgentSession_test.cpp
+    PlanExecutor_test.cpp
     tools/ToolRegistry_test.cpp
+    tools/SubmitPlanTool_test.cpp
     tools/ReadFileTool_test.cpp
     tools/WriteFileTool_test.cpp
     tools/EditFileTool_test.cpp

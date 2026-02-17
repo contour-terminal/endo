@@ -55,6 +55,18 @@ namespace
             config.maxTokens = node["max_tokens"].as<size_t>();
     }
 
+    void parsePlanModeConfig(YAML::Node const& node, PlanModeConfig& config)
+    {
+        if (!node || !node.IsMap())
+            return;
+        if (node["enabled"])
+            config.enabled = node["enabled"].as<bool>();
+        if (node["pause_between_steps"])
+            config.pauseBetweenSteps = node["pause_between_steps"].as<bool>();
+        if (node["max_exploration_turns"])
+            config.maxExplorationTurns = node["max_exploration_turns"].as<size_t>();
+    }
+
     void emitClaudeConfig(YAML::Emitter& emitter, ClaudeConfig const& config)
     {
         auto const defaults = ClaudeConfig {};
@@ -116,6 +128,24 @@ namespace
             emitter << YAML::Key << "max_tokens" << YAML::Value << config.maxTokens;
         emitter << YAML::EndMap;
     }
+
+    void emitPlanModeConfig(YAML::Emitter& emitter, PlanModeConfig const& config)
+    {
+        auto const defaults = PlanModeConfig {};
+        auto hasNonDefault = config.enabled != defaults.enabled
+                             || config.pauseBetweenSteps != defaults.pauseBetweenSteps
+                             || config.maxExplorationTurns != defaults.maxExplorationTurns;
+        if (!hasNonDefault)
+            return;
+        emitter << YAML::Key << "plan_mode" << YAML::Value << YAML::BeginMap;
+        if (config.enabled != defaults.enabled)
+            emitter << YAML::Key << "enabled" << YAML::Value << config.enabled;
+        if (config.pauseBetweenSteps != defaults.pauseBetweenSteps)
+            emitter << YAML::Key << "pause_between_steps" << YAML::Value << config.pauseBetweenSteps;
+        if (config.maxExplorationTurns != defaults.maxExplorationTurns)
+            emitter << YAML::Key << "max_exploration_turns" << YAML::Value << config.maxExplorationTurns;
+        emitter << YAML::EndMap;
+    }
 } // namespace
 
 auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentConfig, std::string>
@@ -137,6 +167,8 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
         if (root["max_tool_result_size"])
             config.maxToolResultSize = root["max_tool_result_size"].as<size_t>();
+
+        parsePlanModeConfig(root["plan_mode"], config.planMode);
 
         return config;
     }
@@ -202,6 +234,8 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 
         if (config.maxToolResultSize != defaults.maxToolResultSize)
             emitter << YAML::Key << "max_tool_result_size" << YAML::Value << config.maxToolResultSize;
+
+        emitPlanModeConfig(emitter, config.planMode);
 
         emitter << YAML::EndMap;
 

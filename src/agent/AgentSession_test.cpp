@@ -3,6 +3,7 @@
 
 #include <agent/AgentSession.hpp>
 #include <agent/ConversationCompactor.hpp>
+#include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 using namespace endo::agent;
@@ -432,4 +433,212 @@ TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
     REQUIRE(result != nullptr);
     CHECK(result->content.size() == 1000);
     CHECK(result->content.find("[truncated") == std::string::npos);
+}
+
+// ============================================================================
+// Plan mode tests
+// ============================================================================
+
+namespace
+{
+/// Provider that returns a submit_plan tool call on the first generate().
+class PlanSubmitProvider final: public LlmProvider
+{
+  public:
+    nlohmann::json planArguments;
+    std::string explorationText;
+    int generateCallCount = 0;
+    std::vector<ToolDefinition> lastToolDefs;
+
+    [[nodiscard]] auto generate(std::span<ChatMessage const>,
+                                std::span<ToolDefinition const> tools,
+                                StreamCallback) -> std::expected<GenerateResult, ProviderError> override
+    {
+        ++generateCallCount;
+        lastToolDefs.assign(tools.begin(), tools.end());
+
+        auto result = GenerateResult {};
+        if (generateCallCount == 1 && !explorationText.empty())
+        {
+            // First call: return a read_file tool call to simulate exploration
+            result.toolCalls = { ToolCall { .id = "tc-explore", .name = "read_file", .arguments = {} } };
+            result.content.emplace_back(
+                ToolUseBlock { .id = "tc-explore", .name = "read_file", .arguments = {} });
+        }
+        else
+        {
+            // Submit the plan
+            result.toolCalls = { ToolCall {
+                .id = "tc-plan", .name = "submit_plan", .arguments = planArguments } };
+            result.content.emplace_back(
+                ToolUseBlock { .id = "tc-plan", .name = "submit_plan", .arguments = planArguments });
+        }
+        return result;
+    }
+
+    [[nodiscard]] auto supportsToolUse() const noexcept -> bool override { return true; }
+
+    [[nodiscard]] auto supportsImageInput() const noexcept -> bool override { return false; }
+
+    [[nodiscard]] auto supportsImageOutput() const noexcept -> bool override { return false; }
+
+    [[nodiscard]] auto contextSize() const noexcept -> size_t override { return 8192; }
+
+    [[nodiscard]] auto modelInfo() const -> ModelInfo override
+    {
+        return ModelInfo { .providerName = "mock", .modelName = "mock-1" };
+    }
+};
+
+/// A simple mock read_file tool for plan mode tests.
+class MockReadFileTool final: public AgentTool
+{
+  public:
+    [[nodiscard]] auto name() const noexcept -> std::string_view override { return "read_file"; }
+
+    [[nodiscard]] auto definition() const -> ToolDefinition override
+    {
+        return ToolDefinition {
+            .name = "read_file",
+            .description = "Read a file",
+            .inputSchema = nlohmann::json { { "type", "object" } },
+        };
+    }
+
+    [[nodiscard]] auto execute(nlohmann::json const&) -> std::expected<ToolResult, ToolError> override
+    {
+        return ToolResult { .content = "file contents", .isError = false };
+    }
+};
+} // namespace
+
+TEST_CASE("AgentSession.plan_mode_returns_plan", "[agent]")
+{
+    auto provider = PlanSubmitProvider {};
+    provider.planArguments = nlohmann::json {
+        { "summary", "Test plan" },
+        { "steps",
+          nlohmann::json::array({
+              nlohmann::json { { "description", "Do the thing" } },
+          }) },
+    };
+
+    auto session = AgentSession(provider);
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<SubmitPlanTool>());
+    registry.registerTool(std::make_unique<MockReadFileTool>());
+    session.setToolRegistry(&registry);
+
+    auto result = session.processMessageForPlan("Add a feature", nullptr);
+
+    REQUIRE(result.has_value());
+    CHECK(result->summary == "Test plan");
+    CHECK(result->steps.size() == 1);
+    CHECK(result->steps[0].description == "Do the thing");
+}
+
+TEST_CASE("AgentSession.plan_mode_only_read_tools_sent", "[agent]")
+{
+    auto provider = PlanSubmitProvider {};
+    provider.planArguments = nlohmann::json {
+        { "summary", "Plan" },
+        { "steps",
+          nlohmann::json::array({
+              nlohmann::json { { "description", "Step" } },
+          }) },
+    };
+
+    auto session = AgentSession(provider);
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<SubmitPlanTool>());
+    registry.registerTool(std::make_unique<MockReadFileTool>());
+
+    // Register a write tool that should NOT be sent to the provider
+    class MockWriteTool final: public AgentTool
+    {
+      public:
+        [[nodiscard]] auto name() const noexcept -> std::string_view override { return "write_file"; }
+
+        [[nodiscard]] auto definition() const -> ToolDefinition override
+        {
+            return ToolDefinition { .name = "write_file", .description = "Write", .inputSchema = {} };
+        }
+
+        [[nodiscard]] auto execute(nlohmann::json const&) -> std::expected<ToolResult, ToolError> override
+        {
+            return ToolResult { .content = "written", .isError = false };
+        }
+    };
+
+    registry.registerTool(std::make_unique<MockWriteTool>());
+    session.setToolRegistry(&registry);
+
+    (void) session.processMessageForPlan("Plan something", nullptr);
+
+    // Check that write_file was NOT in the tool definitions sent to the provider
+    auto hasWriteFile = false;
+    for (auto const& def: provider.lastToolDefs)
+    {
+        if (def.name == "write_file")
+            hasWriteFile = true;
+    }
+    CHECK_FALSE(hasWriteFile);
+
+    // Check that submit_plan and read_file WERE sent
+    auto hasSubmitPlan = false;
+    auto hasReadFile = false;
+    for (auto const& def: provider.lastToolDefs)
+    {
+        if (def.name == "submit_plan")
+            hasSubmitPlan = true;
+        if (def.name == "read_file")
+            hasReadFile = true;
+    }
+    CHECK(hasSubmitPlan);
+    CHECK(hasReadFile);
+}
+
+TEST_CASE("AgentSession.plan_mode_exceeded_iterations", "[agent]")
+{
+    /// Provider that never submits a plan — always calls read_file.
+    struct NeverPlanProvider final: public LlmProvider
+    {
+        [[nodiscard]] auto generate(std::span<ChatMessage const>,
+                                    std::span<ToolDefinition const>,
+                                    StreamCallback) -> std::expected<GenerateResult, ProviderError> override
+        {
+            auto result = GenerateResult {};
+            result.toolCalls = { ToolCall { .id = "tc", .name = "read_file", .arguments = {} } };
+            result.content.emplace_back(ToolUseBlock { .id = "tc", .name = "read_file", .arguments = {} });
+            return result;
+        }
+
+        [[nodiscard]] auto supportsToolUse() const noexcept -> bool override { return true; }
+
+        [[nodiscard]] auto supportsImageInput() const noexcept -> bool override { return false; }
+
+        [[nodiscard]] auto supportsImageOutput() const noexcept -> bool override { return false; }
+
+        [[nodiscard]] auto contextSize() const noexcept -> size_t override { return 8192; }
+
+        [[nodiscard]] auto modelInfo() const -> ModelInfo override
+        {
+            return ModelInfo { .providerName = "mock", .modelName = "mock-1" };
+        }
+    };
+
+    auto provider = NeverPlanProvider {};
+    auto session = AgentSession(provider);
+    session.setMaxExplorationIterations(3);
+
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<SubmitPlanTool>());
+    registry.registerTool(std::make_unique<MockReadFileTool>());
+    session.setToolRegistry(&registry);
+
+    auto result = session.processMessageForPlan("Plan", nullptr);
+
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().code == AgentErrorCode::ToolLoopExceeded);
+    CHECK(result.error().message.find("3") != std::string::npos);
 }

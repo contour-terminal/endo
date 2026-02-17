@@ -38,6 +38,14 @@ struct GeminiConfig
     size_t maxTokens = 8192;                  ///< Maximum output tokens per request.
 };
 
+/// Configuration for agent plan mode.
+struct PlanModeConfig
+{
+    bool enabled = true;             ///< Whether plan mode (/plan) is available.
+    bool pauseBetweenSteps = false;  ///< Whether to pause for confirmation between steps.
+    size_t maxExplorationTurns = 15; ///< Maximum exploration iterations before requiring a plan.
+};
+
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
@@ -50,6 +58,8 @@ struct AgentConfig
     GeminiConfig gemini;       ///< Google Gemini configuration.
 
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
+
+    PlanModeConfig planMode; ///< Plan mode configuration.
 };
 
 /// Loads agent configuration from a YAML file.

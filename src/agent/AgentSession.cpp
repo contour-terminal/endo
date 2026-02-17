@@ -4,6 +4,7 @@
 
 #include <agent/AgentSession.hpp>
 #include <agent/ConversationCompactor.hpp>
+#include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 namespace endo::agent
@@ -120,6 +121,125 @@ auto AgentSession::history() const -> ConversationHistory const&
 void AgentSession::reset()
 {
     _history.clear();
+}
+
+auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
+    -> std::expected<Plan, AgentError>
+{
+    if (!_toolRegistry)
+    {
+        return std::unexpected(AgentError {
+            .code = AgentErrorCode::NoProvider,
+            .message = "No tool registry configured for plan mode.",
+        });
+    }
+
+    // Find or verify the submit_plan tool is registered
+    auto* submitPlanTool = dynamic_cast<SubmitPlanTool*>(_toolRegistry->findTool("submit_plan"));
+    if (!submitPlanTool)
+    {
+        return std::unexpected(AgentError {
+            .code = AgentErrorCode::NoProvider,
+            .message = "submit_plan tool not registered in tool registry.",
+        });
+    }
+
+    // Clear any previous plan
+    submitPlanTool->clearParsedPlan();
+
+    // Add user message to history
+    _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
+
+    // Build filtered tool definitions: only read-only tools + submit_plan
+    static constexpr auto allowedTools = std::array<std::string_view, 5> {
+        "read_file", "glob", "grep", "git", "submit_plan",
+    };
+    auto const filteredDefs = _toolRegistry->definitions([](std::string_view toolName) {
+        for (auto const& allowed: allowedTools)
+            if (toolName == allowed)
+                return true;
+        return false;
+    });
+    auto const tools = std::span<ToolDefinition const>(filteredDefs);
+
+    for (auto iteration = size_t { 0 }; iteration < _maxExplorationIterations; ++iteration)
+    {
+        // Compact conversation if needed
+        if (_compactor)
+            (void) _compactor->compactIfNeeded(_history);
+
+        auto result = _provider.generate(_history.messages(), tools, streamCb);
+
+        if (!result.has_value())
+        {
+            return std::unexpected(AgentError {
+                .code = AgentErrorCode::ProviderError,
+                .message = std::format("{} (HTTP {})", result.error().message, result.error().httpStatus),
+            });
+        }
+
+        // Add assistant message to history
+        auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
+        _history.addMessage(std::move(assistantMsg));
+
+        // If no tool calls, the agent didn't submit a plan
+        if (!result->hasToolCalls() || !_toolRegistry)
+        {
+            return std::unexpected(AgentError {
+                .code = AgentErrorCode::ProviderError,
+                .message = "Agent finished exploration without submitting a plan.",
+            });
+        }
+
+        // Execute tool calls
+        auto toolResults = executeToolCalls(result->toolCalls);
+
+        // Check if submit_plan was called
+        if (submitPlanTool->lastParsedPlan().has_value())
+        {
+            // Add tool results to history before returning
+            auto toolResultMsg = ChatMessage { .role = Role::User };
+            for (auto& tr: toolResults)
+            {
+                toolResultMsg.content.emplace_back(ToolResultBlock {
+                    .toolUseId = std::move(tr.callId),
+                    .content = std::move(tr.content),
+                    .isError = tr.isError,
+                });
+            }
+            _history.addMessage(std::move(toolResultMsg));
+
+            auto plan = *submitPlanTool->lastParsedPlan();
+            submitPlanTool->clearParsedPlan();
+            return plan;
+        }
+
+        // Add tool results to history and continue exploration
+        auto toolResultMsg = ChatMessage { .role = Role::User };
+        for (auto& tr: toolResults)
+        {
+            toolResultMsg.content.emplace_back(ToolResultBlock {
+                .toolUseId = std::move(tr.callId),
+                .content = std::move(tr.content),
+                .isError = tr.isError,
+            });
+        }
+        _history.addMessage(std::move(toolResultMsg));
+
+        // Clear stream callback for subsequent iterations
+        streamCb = nullptr;
+    }
+
+    return std::unexpected(AgentError {
+        .code = AgentErrorCode::ToolLoopExceeded,
+        .message = std::format("Exploration exceeded {} iterations without submitting a plan.",
+                               _maxExplorationIterations),
+    });
+}
+
+void AgentSession::setMaxExplorationIterations(size_t n)
+{
+    _maxExplorationIterations = n;
 }
 
 void AgentSession::setMaxToolResultSize(size_t maxBytes)

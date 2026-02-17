@@ -12,12 +12,14 @@
 
 #include <agent/ConversationHistory.hpp>
 #include <agent/LlmProvider.hpp>
+#include <agent/Plan.hpp>
 #include <agent/Types.hpp>
 
 namespace endo::agent
 {
 
 class ToolRegistry;
+class SubmitPlanTool;
 class ConversationCompactor;
 struct CompactionConfig;
 
@@ -68,6 +70,21 @@ class AgentSession
     [[nodiscard]] auto processMessage(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<std::string, AgentError>;
 
+    /// @brief Explores the codebase and produces a structured plan.
+    ///
+    /// Runs a tool loop with only read-only tools (read_file, glob, grep, git)
+    /// plus the submit_plan pseudo-tool. The LLM explores the codebase and
+    /// then calls submit_plan to propose a structured plan.
+    /// @param userMessage The user's planning request.
+    /// @param streamCb Optional callback for streaming tokens during exploration.
+    /// @return The submitted plan, or an error.
+    [[nodiscard]] auto processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
+        -> std::expected<Plan, AgentError>;
+
+    /// @brief Sets the maximum number of exploration iterations for plan mode.
+    /// @param n Maximum iterations (default: 15).
+    void setMaxExplorationIterations(size_t n);
+
     /// @brief Sets the tool registry for tool call dispatch.
     ///
     /// When set, the session will pass tool definitions to the provider
@@ -112,6 +129,7 @@ class AgentSession
     ConversationHistory _history;
     ToolRegistry* _toolRegistry = nullptr;
     size_t _maxToolIterations = 25;
+    size_t _maxExplorationIterations = 15;
     size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
     std::unique_ptr<ConversationCompactor> _compactor;

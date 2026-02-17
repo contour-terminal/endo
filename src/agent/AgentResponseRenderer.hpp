@@ -4,11 +4,17 @@
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/Spinner.hpp>
 
+#include <cstddef>
 #include <string_view>
 
 namespace tui
 {
 class TerminalOutput;
+}
+
+namespace endo::agent
+{
+struct Plan;
 }
 
 namespace endo::agent
@@ -52,6 +58,15 @@ class AgentResponseRenderer
 
     /// @brief Returns whether the response is still in the thinking phase.
     [[nodiscard]] auto isThinking() const noexcept -> bool { return _thinking; }
+
+    /// @brief Renders a plan for user review with chrome and action hints.
+    /// @param plan The plan to render.
+    void renderPlan(Plan const& plan);
+
+    /// @brief Renders plan execution progress with step status indicators.
+    /// @param plan The plan being executed.
+    /// @param currentStep The index of the step currently being executed.
+    void renderPlanProgress(Plan const& plan, size_t currentStep);
 
   private:
     tui::TerminalOutput& _output;
