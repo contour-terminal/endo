@@ -94,15 +94,34 @@ namespace
         if (!pathEnv)
             return false;
 
+#if defined(_WIN32)
+        constexpr char pathSeparator = ';';
+#else
+        constexpr char pathSeparator = ':';
+#endif
+
         auto const pathStr = std::string_view(pathEnv);
         size_t start = 0;
         while (start < pathStr.size())
         {
-            auto const end = pathStr.find(':', start);
+            auto const end = pathStr.find(pathSeparator, start);
             auto const dir = pathStr.substr(start, end == std::string_view::npos ? end : end - start);
 
             if (!dir.empty())
             {
+#if defined(_WIN32)
+                // On Windows, check the bare name and common executable extensions.
+                // Windows does not have Unix-style execute permission bits, so
+                // file existence with a known extension is sufficient.
+                static constexpr std::string_view extensions[] = { "", ".exe", ".cmd", ".bat" };
+                for (auto const ext: extensions)
+                {
+                    auto const candidate = std::filesystem::path(dir) / std::string(program).append(ext);
+                    std::error_code ec;
+                    if (std::filesystem::exists(candidate, ec) && !ec)
+                        return true;
+                }
+#else
                 auto const candidate = std::filesystem::path(dir) / program;
                 std::error_code ec;
                 if (std::filesystem::exists(candidate, ec) && !ec)
@@ -115,6 +134,7 @@ namespace
                         return true;
                     }
                 }
+#endif
             }
 
             if (end == std::string_view::npos)

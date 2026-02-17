@@ -82,6 +82,16 @@ namespace CoreVM
             consume(OP); \
             break;       \
         }
+    // Override jump_to for switch-based loop: the common do { ... } while(0) wrapper
+    // causes `break` inside `jump` to exit the do-while instead of the switch statement,
+    // leading to fall-through into the next case handler.
+    #undef jump_to
+    #define jump_to(offset) \
+        if (true)           \
+        {                   \
+            set_pc(offset); \
+            jump;           \
+        }
 #elif defined(COREVM_DIRECT_THREADED_VM)
     #define LOOP_BEGIN() jump;
     #define LOOP_END()

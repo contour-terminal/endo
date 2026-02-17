@@ -919,6 +919,8 @@ Component (base class)
 - [ ] Configure MSVC and Clang-cl support
 - [ ] Set up Windows CI pipeline
 - [ ] Handle Windows-specific dependencies
+- [x] Fix CoreVM `jump_to` macro for switch-based VM dispatch loop (Windows/MSVC): `break` inside `do { ... } while(0)` wrapper exits the do-while instead of the switch, causing fall-through to the next case handler and VM stack corruption
+- [x] Fix `isInPath()` PATH separator for Windows: use `;` instead of `:`, probe `.exe`/`.cmd`/`.bat` extensions, skip POSIX `owner_exec` permission check
 
 ### Phase 4.2: Platform Implementation
 
