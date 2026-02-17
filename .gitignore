@@ -4,7 +4,6 @@ _ucd/
 out/
 build/
 target/
-/cmake/CPM.cmake
 
 compile_commands.json
 /src/vtparser/

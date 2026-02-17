@@ -5,13 +5,24 @@
 # When ENABLE_STATIC_LINKING is ON, all dependencies are built from source via CPM
 # to ensure static libraries are available.
 
+set(CPM_VERSION "0.40.8")
+set(CPM_HASH_SUM "78ba32abdf798bc616bab7c73aac32a17bbd7b06ad9e26a6add69de8f3ae4791")
+
+if(CPM_SOURCE_CACHE)
+    set(CPM_DOWNLOAD_LOCATION "${CPM_SOURCE_CACHE}/cpm/CPM_${CPM_VERSION}.cmake")
+elseif(DEFINED ENV{CPM_SOURCE_CACHE})
+    set(CPM_DOWNLOAD_LOCATION "$ENV{CPM_SOURCE_CACHE}/cpm/CPM_${CPM_VERSION}.cmake")
+else()
+    set(CPM_DOWNLOAD_LOCATION "${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM_${CPM_VERSION}.cmake")
+endif()
+
 file(
   DOWNLOAD
-  https://github.com/cpm-cmake/CPM.cmake/releases/download/v0.40.8/CPM.cmake
-  ${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake
-  EXPECTED_HASH SHA256=78ba32abdf798bc616bab7c73aac32a17bbd7b06ad9e26a6add69de8f3ae4791
+  https://github.com/cpm-cmake/CPM.cmake/releases/download/v${CPM_VERSION}/CPM.cmake
+  ${CPM_DOWNLOAD_LOCATION}
+  EXPECTED_HASH SHA256=${CPM_HASH_SUM}
 )
-include(${CMAKE_CURRENT_BINARY_DIR}/cmake/CPM.cmake)
+include(${CPM_DOWNLOAD_LOCATION})
 
 # Helper macro for displaying dependency status
 macro(EndoThirdPartiesSummary2)
