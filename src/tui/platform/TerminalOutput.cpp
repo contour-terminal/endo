@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/TerminalOutput.hpp>
+#include <tui/platform/PosixIO.hpp>
 
 #include <array>
 #include <cctype>
@@ -54,7 +55,7 @@ namespace
 
         // Send XTVERSION query: CSI > q
         static constexpr auto Query = "\033[>q";
-        static_cast<void>(::write(STDOUT_FILENO, Query, std::strlen(Query)));
+        safeWrite(STDOUT_FILENO, Query, std::strlen(Query));
 
         std::string response;
         std::array<char, 256> buffer {};
@@ -70,7 +71,7 @@ namespace
             if (ret <= 0)
                 break; // Timeout or error
 
-            auto const n = ::read(STDIN_FILENO, buffer.data(), buffer.size());
+            auto const n = safeRead(STDIN_FILENO, buffer.data(), buffer.size());
             if (n <= 0)
                 break;
 
@@ -205,13 +206,13 @@ namespace
 SyncGuard::SyncGuard(NativeHandle handle): _handle(handle)
 {
     static constexpr auto Begin = "\033[?2026h";
-    static_cast<void>(::write(_handle, Begin, std::strlen(Begin)));
+    safeWrite(_handle, Begin, std::strlen(Begin));
 }
 
 SyncGuard::~SyncGuard()
 {
     static constexpr auto End = "\033[?2026l";
-    static_cast<void>(::write(_handle, End, std::strlen(End)));
+    safeWrite(_handle, End, std::strlen(End));
 }
 
 // --- TerminalOutput ---
@@ -405,7 +406,7 @@ void TerminalOutput::flush()
 {
     if (!_buffer.empty())
     {
-        static_cast<void>(::write(STDOUT_FILENO, _buffer.data(), _buffer.size()));
+        safeWrite(STDOUT_FILENO, _buffer.data(), _buffer.size());
         _buffer.clear();
     }
 }

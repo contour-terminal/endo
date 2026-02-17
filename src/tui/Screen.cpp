@@ -455,18 +455,30 @@ void Screen::endFrame()
 
 void Screen::flush()
 {
-    // Use synchronized output to prevent tearing
-    auto syncGuard = _terminal.output().syncGuard();
-
-    switch (_config.viewport)
+    if (_config.viewport == Viewport::Inline && _peakContentHeight == 0)
     {
-        case Viewport::Fullscreen: flushFullscreen(); break;
-        case Viewport::Inline: flushInline(); break;
-        case Viewport::Fixed: flushFixed(); break;
+        // First inline render: skip SyncGuard — no previous content to tear against,
+        // and avoids SIGCHLD-interrupted write leaving the terminal in sync-buffer mode.
+        _terminal.output().flush();
+        flushInline();
+        applyCursorShape();
+        _terminal.output().flush();
     }
+    else
+    {
+        // Use synchronized output to prevent tearing
+        auto syncGuard = _terminal.output().syncGuard();
 
-    // Apply cursor shape based on focused component
-    applyCursorShape();
+        switch (_config.viewport)
+        {
+            case Viewport::Fullscreen: flushFullscreen(); break;
+            case Viewport::Inline: flushInline(); break;
+            case Viewport::Fixed: flushFixed(); break;
+        }
+
+        // Apply cursor shape based on focused component
+        applyCursorShape();
+    }
 
     // Swap buffers
     std::swap(_current, _previous);

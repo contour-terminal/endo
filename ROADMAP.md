@@ -722,7 +722,8 @@ and focus group management.
 - Inline viewport: Shell renders at cursor position, grows downward by emitting newlines
 - Widget lifecycle: Persistent tree with explicit `addChild()`/`removeChild()`
 - `InputField::Model`: Nested class pattern separates logic from rendering, enables unit testing
-- Synchronized output: `Screen::flush()` uses DEC mode 2026 (`SyncGuard`) to batch terminal updates and prevent visual tearing
+- Synchronized output: `Screen::flush()` uses DEC mode 2026 (`SyncGuard`) to batch terminal updates and prevent visual tearing. First inline render skips `SyncGuard` to avoid SIGCHLD-interrupted writes leaving the terminal in sync-buffer mode.
+- EINTR-safe I/O: All TUI `::write()` and `::read()` syscalls use `safeWrite()`/`safeRead()` helpers (`PosixIO.hpp`) that retry on `EINTR`. Prevents silent failures when background `popen()` children exit and send `SIGCHLD` during terminal I/O.
 - Inline cursor management: `flushInline()` properly handles content height changes - moves up by `newLines` (not `contentHeight`) after emitting newlines, and clears excess rows when content shrinks to avoid visual artifacts
 - Kitty unscroll extension (WIP): Infrastructure added for `CSI Ps + T` to restore scrollback content. Detected via XTVERSION query. Supported terminals: Kitty, Contour, mintty. Configurable via `UnscrollMode::Auto|Enabled|Disabled`. Currently disabled for inline mode because the sequence shifts the entire screen, which doesn't work well when rendering at the bottom. Needs scroll region approach for proper implementation.
 - Unit tests for cursor movement calculations in `Screen_test.cpp` (13 test cases)

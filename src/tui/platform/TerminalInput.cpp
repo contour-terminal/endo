@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/TerminalInput.hpp>
+#include <tui/platform/PosixIO.hpp>
 
 #include <array>
 #include <string_view>
@@ -67,7 +68,7 @@ namespace
     /// Writes a string_view to the terminal (stdout).
     void writeToTerminal(std::string_view data)
     {
-        static_cast<void>(write(STDOUT_FILENO, data.data(), data.size()));
+        safeWrite(STDOUT_FILENO, data.data(), data.size());
     }
 } // namespace
 
@@ -137,7 +138,7 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     {
         // Drain the pipe
         auto buf = char {};
-        while (read(_resizePipe[0], &buf, 1) > 0)
+        while (safeRead(_resizePipe[0], &buf, 1) > 0)
             ;
 
         // Query actual terminal size
@@ -150,7 +151,7 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     if ((fds[0].revents & POLLIN) != 0)
     {
         auto buf = std::array<char, 512> {};
-        auto const n = read(_fd, buf.data(), buf.size());
+        auto const n = safeRead(_fd, buf.data(), buf.size());
         if (n > 0)
         {
             auto parsed = _parser.feed(std::string_view(buf.data(), static_cast<size_t>(n)));
@@ -167,8 +168,7 @@ void TerminalInput::notifyResize(int /*cols*/, int /*rows*/)
     if (_resizePipe[1] != -1)
     {
         auto const byte = char { 1 };
-        auto const result = write(_resizePipe[1], &byte, 1);
-        static_cast<void>(result);
+        safeWrite(_resizePipe[1], &byte, 1);
     }
 }
 
