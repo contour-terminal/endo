@@ -47,6 +47,7 @@
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
+#include <agent/tools/SaveMemoryTool.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -1180,6 +1181,8 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
     toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
     toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
+    toolRegistry.registerTool(
+        std::make_unique<agent::SaveMemoryTool>([this]() { _cachedProjectContext.reset(); }));
     toolRegistry.registerTool(std::make_unique<agent::SubmitPlanTool>());
 
     _agentSession->setToolRegistry(&toolRegistry);

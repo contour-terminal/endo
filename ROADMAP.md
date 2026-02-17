@@ -940,6 +940,18 @@ Component (base class)
 - [x] Git branch and status always queried fresh (may change between sessions)
 - [x] Cache invalidated automatically on `cwd` change
 
+### Phase 3.8: Agent Memory Persistence ✅
+
+**Dependency:** Phase 3.7
+
+**Tasks:**
+- [x] `SaveMemoryTool` writes memory files to `~/.config/endo/agent-memory/{filename}.md`
+- [x] Auto-create memory directory if it does not exist
+- [x] Path traversal protection (reject filenames with `/` or `\`)
+- [x] Cache invalidation callback: saving memory clears cached `ProjectContext`
+- [x] Tool registered in agent mode (normal mode only, not plan mode)
+- [x] Unit tests for save, overwrite, directory creation, and error cases
+
 ---
 
 ## Milestone 4: Windows Support

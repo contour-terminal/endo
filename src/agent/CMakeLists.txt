@@ -32,6 +32,7 @@ add_library(endo-agent STATIC
     tools/GrepTool.hpp tools/GrepTool.cpp
     tools/ShellExecuteTool.hpp tools/ShellExecuteTool.cpp
     tools/GitTool.hpp tools/GitTool.cpp
+    tools/SaveMemoryTool.hpp tools/SaveMemoryTool.cpp
 )
 
 target_link_libraries(endo-agent PUBLIC
@@ -70,6 +71,7 @@ add_executable(test-endo-agent
     tools/GrepTool_test.cpp
     tools/ShellExecuteTool_test.cpp
     tools/GitTool_test.cpp
+    tools/SaveMemoryTool_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
