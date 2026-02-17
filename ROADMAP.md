@@ -864,6 +864,7 @@ Component (base class)
 - [ ] Design AI provider interface
 - [ ] Implement local LLM backend (llama.cpp, ollama)
 - [ ] Implement Claude API backend
+- [ ] Implement Gemini API backend
 - [ ] Implement OpenAI API backend
 - [ ] Implement provider configuration and selection
 - [ ] Handle API keys securely
@@ -901,6 +902,21 @@ Component (base class)
 - [ ] Implement project detection (git, package.json, etc.)
 - [ ] Implement environment-aware suggestions
 - [ ] Add context tests
+
+### Phase 3.5: Agent Plan Mode ✅
+
+**Dependency:** Phase 3.1
+
+**Tasks:**
+- [x] Plan data model (`Plan.hpp`): `PlanStepStatus`, `PlanStep`, `Plan` structs
+- [x] `SubmitPlanTool`: pseudo-tool for LLM to submit structured plans during exploration
+- [x] `ToolRegistry::definitions(ToolFilter)`: filtered tool definitions overload
+- [x] `AgentSession::processMessageForPlan()`: exploration loop with read-only tools
+- [x] `PlanExecutor`: step-by-step execution driver with skip/fail support
+- [x] Plan rendering in `AgentResponseRenderer`: `renderPlan()` and `renderPlanProgress()`
+- [x] `PlanModeConfig` in `AgentConfig` with YAML persistence
+- [x] Shell `/plan` command: exploration → review → y/n/r → execution loop
+- [x] Comprehensive test coverage (SubmitPlanTool, PlanExecutor, AgentSession plan mode, ToolRegistry filter)
 
 ---
 
