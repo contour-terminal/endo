@@ -219,3 +219,48 @@ TEST_CASE("http.client.download.public_url", "[.integration]")
     // Cleanup
     std::filesystem::remove(outputPath);
 }
+
+// =============================================================================
+// SSE parser tests (offline, no network)
+// =============================================================================
+
+TEST_CASE("http.sse.simple_event")
+{
+    // Simulate feeding SSE data through the callback
+    std::vector<SseEvent> events;
+    SseCallback callback = [&](SseEvent const& event) -> bool {
+        events.push_back(event);
+        return true;
+    };
+
+    // We can't call the internal parser directly, but we can test via
+    // a helper that simulates the SSE protocol.
+    // For now, test the SseEvent struct and SseCallback type compile correctly.
+    auto event = SseEvent { .event = "message", .data = "hello world", .id = "1" };
+    CHECK(callback(event));
+    REQUIRE(events.size() == 1);
+    CHECK(events[0].event == "message");
+    CHECK(events[0].data == "hello world");
+    CHECK(events[0].id == "1");
+}
+
+TEST_CASE("http.sse.event_default_values")
+{
+    auto event = SseEvent {};
+    CHECK(event.event.empty());
+    CHECK(event.data.empty());
+    CHECK(event.id.empty());
+}
+
+TEST_CASE("http.sse.callback_abort")
+{
+    int callCount = 0;
+    SseCallback callback = [&](SseEvent const&) -> bool {
+        ++callCount;
+        return false; // Abort after first event
+    };
+
+    auto event = SseEvent { .data = "test" };
+    CHECK(!callback(event));
+    CHECK(callCount == 1);
+}

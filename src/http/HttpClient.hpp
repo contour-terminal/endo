@@ -60,6 +60,18 @@ struct HttpResponse
     std::vector<std::string> headers; ///< Response headers
 };
 
+/// A parsed Server-Sent Event.
+struct SseEvent
+{
+    std::string event; ///< Event type (from "event:" field, empty if not specified).
+    std::string data;  ///< Event data (from "data:" lines, joined with newlines).
+    std::string id;    ///< Event ID (from "id:" field, empty if not specified).
+};
+
+/// Callback for receiving Server-Sent Events during streaming.
+/// @return false to abort the stream, true to continue.
+using SseCallback = std::function<bool(SseEvent const&)>;
+
 /// RAII wrapper around libcurl for performing HTTP requests.
 ///
 /// Each HttpClient instance owns a CURL easy handle. The class manages
@@ -93,6 +105,13 @@ class HttpClient
     /// @return HttpResponse with statusCode and headers populated (body is empty)
     [[nodiscard]] std::expected<HttpResponse, HttpError> download(
         HttpRequest const& request, std::filesystem::path const& outputPath) const;
+
+    /// Executes an HTTP request and streams Server-Sent Events (SSE) to a callback.
+    /// @param request  The request configuration (typically a POST with stream: true).
+    /// @param callback Called for each parsed SSE event. Return false to abort the stream.
+    /// @return The HTTP status code on success, or an HttpError on failure.
+    [[nodiscard]] std::expected<long, HttpError> executeStreaming(HttpRequest const& request,
+                                                                  SseCallback const& callback) const;
 
   private:
     /// Sets up common curl options shared between execute() and download().

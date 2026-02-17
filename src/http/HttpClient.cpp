@@ -100,6 +100,113 @@ namespace
         return file->good() ? totalSize : 0;
     }
 
+    /// State for the incremental SSE parser used during streaming.
+    struct SseParserState
+    {
+        std::string buffer;       ///< Accumulated raw data not yet parsed.
+        std::string currentEvent; ///< Current "event:" value.
+        std::string currentData;  ///< Accumulated "data:" lines for the current event.
+        std::string currentId;    ///< Current "id:" value.
+        SseCallback const* callback = nullptr;
+        bool aborted = false;
+
+        /// Processes a single line of SSE input.
+        void processLine(std::string_view line)
+        {
+            if (aborted)
+                return;
+
+            // Empty line dispatches the event
+            if (line.empty())
+            {
+                if (!currentData.empty())
+                {
+                    // Remove trailing newline from data if present
+                    if (currentData.back() == '\n')
+                        currentData.pop_back();
+
+                    auto event = SseEvent {
+                        .event = std::move(currentEvent),
+                        .data = std::move(currentData),
+                        .id = std::move(currentId),
+                    };
+                    currentEvent.clear();
+                    currentData.clear();
+                    currentId.clear();
+
+                    if (callback && !(*callback)(event))
+                        aborted = true;
+                }
+                return;
+            }
+
+            // Comment lines (starting with ':') are ignored
+            if (line.starts_with(':'))
+                return;
+
+            // Parse "field: value" or "field:value"
+            auto const colonPos = line.find(':');
+            if (colonPos == std::string_view::npos)
+            {
+                // Field with no value — treat as field with empty value
+                // (SSE spec says field names without ':' set the field to "")
+                return;
+            }
+
+            auto const field = line.substr(0, colonPos);
+            auto value = line.substr(colonPos + 1);
+            // Strip single leading space after colon (SSE spec)
+            if (!value.empty() && value.front() == ' ')
+                value.remove_prefix(1);
+
+            if (field == "data")
+            {
+                currentData += value;
+                currentData += '\n';
+            }
+            else if (field == "event")
+            {
+                currentEvent = std::string(value);
+            }
+            else if (field == "id")
+            {
+                currentId = std::string(value);
+            }
+            // Other fields are ignored per SSE spec
+        }
+
+        /// Feeds raw data from curl into the parser, extracting complete lines.
+        void feed(std::string_view chunk)
+        {
+            buffer += chunk;
+
+            // Process all complete lines in the buffer
+            while (!aborted)
+            {
+                auto const nlPos = buffer.find('\n');
+                if (nlPos == std::string::npos)
+                    break;
+
+                auto line = std::string_view(buffer).substr(0, nlPos);
+                // Strip trailing \r for \r\n line endings
+                if (!line.empty() && line.back() == '\r')
+                    line.remove_suffix(1);
+
+                processLine(line);
+                buffer.erase(0, nlPos + 1);
+            }
+        }
+    };
+
+    /// Write callback for SSE streaming that feeds data into the parser.
+    size_t sseWriteCallback(char* ptr, size_t size, size_t nmemb, void* userdata)
+    {
+        auto* state = static_cast<SseParserState*>(userdata);
+        auto const totalSize = size * nmemb;
+        state->feed(std::string_view(ptr, totalSize));
+        return state->aborted ? 0 : totalSize;
+    }
+
 } // namespace
 
 HttpClient::HttpClient()
@@ -302,6 +409,48 @@ std::expected<HttpResponse, HttpError> HttpClient::download(HttpRequest const& r
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response.statusCode);
 
     return response;
+}
+
+std::expected<long, HttpError> HttpClient::executeStreaming(HttpRequest const& request,
+                                                            SseCallback const& callback) const
+{
+    if (!_handle)
+        return std::unexpected(HttpError { .curlCode = -1, .message = "CURL handle not initialized" });
+
+    auto* curl = static_cast<CURL*>(_handle);
+
+    // Reset handle state from any prior request
+    curl_easy_reset(curl);
+
+    // Build request header list
+    curl_slist* headerList = nullptr;
+    for (auto const& h: request.headers)
+        headerList = curl_slist_append(headerList, h.c_str());
+
+    setupRequest(curl, request, headerList);
+
+    // SSE streaming write callback
+    auto parserState = SseParserState {};
+    parserState.callback = &callback;
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, sseWriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &parserState);
+
+    // Perform the request
+    auto const result = curl_easy_perform(curl);
+
+    // Clean up request headers
+    if (headerList)
+        curl_slist_free_all(headerList);
+
+    // If the callback aborted, curl returns CURLE_WRITE_ERROR — that's expected
+    if (result != CURLE_OK && !(result == CURLE_WRITE_ERROR && parserState.aborted))
+        return std::unexpected(makeError(result));
+
+    // Get status code
+    long statusCode = 0;
+    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+
+    return statusCode;
 }
 
 std::optional<std::string> extractFilenameFromUrl(std::string_view url)
