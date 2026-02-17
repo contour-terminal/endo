@@ -66,6 +66,7 @@ add_executable(test-tui
     SmartCaseMatch_test.cpp
     FuzzyMatch_test.cpp
     Unicode_test.cpp
+    VtParser_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

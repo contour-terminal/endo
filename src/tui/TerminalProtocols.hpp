@@ -18,10 +18,13 @@ using namespace std::string_view_literals;
 //   8 = Report all keys as escape codes
 //  16 = Report associated text
 //
-// We use flags 1|8=9 to ensure modifiers are reported for all keys including Enter.
+// We use flags 1|4|8=13 to ensure modifiers are reported for all keys including Enter.
+// Flag 4 is needed to receive the shifted_key for non-letter shifted characters
+// (e.g., Shift+3→'#' sends key='3':shifted_key='#').
 // Flag 8 is needed because some terminals only report Shift+Enter with this flag.
-constexpr auto EnableCsiU = "\033[>9u"sv;  ///< Enable Kitty keyboard protocol (disambiguate + all keys).
-constexpr auto DisableCsiU = "\033[<u"sv;  ///< Pop Kitty keyboard protocol.
+constexpr auto EnableCsiU =
+    "\033[>13u"sv; ///< Enable Kitty keyboard protocol (disambiguate + alternate + all keys).
+constexpr auto DisableCsiU = "\033[<u"sv; ///< Pop Kitty keyboard protocol.
 
 constexpr auto EnableBracketedPaste = "\033[?2004h"sv;  ///< Enable bracketed paste mode.
 constexpr auto DisableBracketedPaste = "\033[?2004l"sv; ///< Disable bracketed paste mode.

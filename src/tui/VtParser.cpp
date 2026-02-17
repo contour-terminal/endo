@@ -15,8 +15,11 @@ namespace
 {
 
     /// @brief Parses semicolon-separated integer parameters from a CSI parameter string.
-    /// @param buf The parameter string (e.g. "0;10;20").
-    /// @return Vector of parsed integer values.
+    ///
+    /// Colons within a parameter field are treated as subparameter separators per the
+    /// Kitty keyboard protocol. Only the value before the first colon is extracted.
+    /// @param buf The parameter string (e.g. "0;10;20" or "51:35;2").
+    /// @return Vector of parsed integer values (first subparameter of each field).
     auto parseCsiParams(std::string_view buf) -> std::vector<int>
     {
         auto result = std::vector<int> {};
@@ -24,12 +27,51 @@ namespace
         {
             auto sv = std::string_view(part.begin(), part.end());
             auto value = 0;
+            // from_chars stops at the first non-digit (e.g., ':'), so "51:35" → 51
             if (auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value); ec == std::errc {})
                 result.push_back(value);
             else
                 result.push_back(0);
         }
         return result;
+    }
+
+    /// @brief Parsed components of the CSI u key field (colon-separated subparameters).
+    struct KeyFieldInfo
+    {
+        int key = 0;           ///< Base/un-shifted key codepoint.
+        int shiftedKey = 0;    ///< Shifted key codepoint (0 if absent).
+        int baseLayoutKey = 0; ///< PC-101 base layout key codepoint (0 if absent).
+    };
+
+    /// @brief Parses the key field from a CSI u sequence.
+    ///
+    /// Format: key[:shifted_key[:base_layout_key]]
+    /// @param field The raw first semicolon-separated parameter string.
+    /// @return Parsed key field components.
+    auto parseKeyField(std::string_view field) -> KeyFieldInfo
+    {
+        auto info = KeyFieldInfo {};
+        auto it = field.begin();
+        auto const end = field.end();
+
+        auto parseNext = [&](int& target) {
+            if (it == end)
+                return;
+            auto const start = &*it;
+            auto const fieldEnd = start + std::distance(it, end);
+            auto const [ptr, ec] = std::from_chars(start, fieldEnd, target);
+            if (ec == std::errc {})
+                it = field.begin() + std::distance(field.data(), ptr);
+            // Skip the colon separator if present
+            if (it != end && *it == ':')
+                ++it;
+        };
+
+        parseNext(info.key);
+        parseNext(info.shiftedKey);
+        parseNext(info.baseLayoutKey);
+        return info;
     }
 
     /// @brief Decodes CSI modifier parameter to Modifier bitmask.
@@ -242,8 +284,9 @@ void VtParser::processEscape(std::uint8_t byte, std::vector<InputEvent>& events)
 
 void VtParser::processCsi(std::uint8_t byte, std::vector<InputEvent>& events)
 {
-    // Parameter bytes: digits, semicolons, and private markers
-    if ((byte >= '0' && byte <= '9') || byte == ';' || byte == '<' || byte == '>' || byte == '?')
+    // Parameter bytes: digits, semicolons, colons (subparameters), and private markers
+    if ((byte >= '0' && byte <= '9') || byte == ';' || byte == ':' || byte == '<' || byte == '>'
+        || byte == '?')
     {
         _paramBuf += static_cast<char>(byte);
         _state = State::CsiParam;
@@ -419,12 +462,31 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         return;
     }
 
-    // Check for CSIu (Kitty keyboard protocol): ESC[keycode;modifiers u
+    // Check for CSIu (Kitty keyboard protocol): ESC[key[:shifted[:base]];modifiers u
     if (finalByte == 'u')
     {
         auto const params = parseCsiParams(_paramBuf);
-        auto const keycode = params.empty() ? 0 : params[0];
-        auto const modifier = (params.size() >= 2) ? decodeModifiers(params[1]) : Modifier::None;
+        auto modifier = (params.size() >= 2) ? decodeModifiers(params[1]) : Modifier::None;
+
+        // Parse the key field's colon-separated subparameters (key:shifted_key:base_layout_key)
+        auto const firstSemicolon = _paramBuf.find(';');
+        auto const keyFieldStr = (firstSemicolon != std::string_view::npos)
+                                     ? std::string_view(_paramBuf.data(), firstSemicolon)
+                                     : std::string_view(_paramBuf);
+        auto const keyInfo = parseKeyField(keyFieldStr);
+        auto const keycode = keyInfo.key;
+
+        // When a shifted_key is present and Shift is active, the Shift modifier was
+        // "consumed" to produce the shifted character. Use shifted_key as the effective
+        // codepoint and strip Shift from modifiers — matching legacy terminal behavior
+        // where Shift+3 just sends '#' with no modifier info.
+        auto effectiveCodepoint = keycode;
+        if (keyInfo.shiftedKey > 0 && hasModifier(modifier, Modifier::Shift))
+        {
+            effectiveCodepoint = keyInfo.shiftedKey;
+            modifier = static_cast<Modifier>(static_cast<std::uint8_t>(modifier)
+                                             & ~static_cast<std::uint8_t>(Modifier::Shift));
+        }
 
         switch (keycode)
         {
@@ -552,7 +614,7 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         // Printable codepoint (but exclude remaining PUA range)
         if (keycode >= 32 && keycode < 0x10000 && !(keycode >= 57344 && keycode <= 63743))
         {
-            auto const cp = static_cast<char32_t>(keycode);
+            auto const cp = static_cast<char32_t>(effectiveCodepoint);
             events.emplace_back(
                 KeyEvent { .key = keyCodeFromCodepoint(cp), .modifiers = modifier, .codepoint = cp });
         }
