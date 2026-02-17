@@ -682,15 +682,61 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
         {
             if (recursive)
             {
-                auto const count = fs::remove_all(path, ec);
-                if (ec)
+                if (verbose)
                 {
-                    error("rm: cannot remove '{}': {}", path, ec.message());
-                    success = false;
+                    // Manual recursive traversal to print each entry (matches GNU coreutils rm -vr)
+                    auto entries = std::vector<fs::path> {};
+                    for (auto const& entry: fs::recursive_directory_iterator(
+                             path, fs::directory_options::skip_permission_denied, ec))
+                    {
+                        if (ec)
+                            break;
+                        entries.push_back(entry.path());
+                    }
+                    if (ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        success = false;
+                    }
+                    else
+                    {
+                        // Reverse for leaf-to-root removal order
+                        std::ranges::reverse(entries);
+                        auto allOk = true;
+                        for (auto const& entry: entries)
+                        {
+                            if (!fs::remove(entry, ec) || ec)
+                            {
+                                error("rm: cannot remove '{}': {}", entry.string(), ec.message());
+                                allOk = false;
+                                break;
+                            }
+                            writeOutput(std::format("removed '{}'\n", entry.string()));
+                        }
+                        if (!allOk)
+                        {
+                            success = false;
+                        }
+                        else if (!fs::remove(path, ec) || ec)
+                        {
+                            error("rm: cannot remove '{}': {}", path, ec.message());
+                            success = false;
+                        }
+                        else
+                        {
+                            writeOutput(std::format("removed '{}'\n", path));
+                        }
+                    }
                 }
-                else if (verbose && count > 0)
+                else
                 {
-                    writeOutput(std::format("removed '{}'\n", path));
+                    auto const count = fs::remove_all(path, ec);
+                    if (ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        success = false;
+                    }
+                    (void) count;
                 }
             }
             else if (removeEmptyDirs)

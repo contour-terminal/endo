@@ -810,6 +810,29 @@ TEST_CASE("shell.builtin.rm_verbose")
     fs::remove_all(testDir);
 }
 
+TEST_CASE("shell.builtin.rm_verbose_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_verbose_recursive";
+    fs::create_directories(testDir / "subdir");
+    {
+        std::ofstream ofs(testDir / "subdir" / "file.txt");
+        ofs << "data";
+    }
+    REQUIRE(fs::exists(testDir / "subdir" / "file.txt"));
+
+    TestShell shell;
+    auto output = shell(std::format("rm -vr {}", testDir.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(testDir));
+
+    // Should list each removed entry (file, subdir, top-level dir)
+    auto const lines = std::count(output.begin(), output.end(), '\n');
+    CHECK(lines == 3);
+    CHECK(output.find("file.txt") != std::string::npos);
+    CHECK(output.find("subdir") != std::string::npos);
+}
+
 TEST_CASE("shell.builtin.rm_combined_flags")
 {
     namespace fs = std::filesystem;
