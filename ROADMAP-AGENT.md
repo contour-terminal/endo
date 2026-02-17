@@ -193,11 +193,21 @@ openai_compat:
 This is the core UX — the user stays in their terminal, responses stream inline.
 
 **Status (2.1–2.4):** Fully implemented. Press `#` on an empty prompt to enter agent mode.
-AgentInputComponent (purple-bar styled input), AgentResponseRenderer (streaming markdown with
-spinner), AgentSession (conversation history + LLM generation), SystemPromptBuilder (environment
-context), and ConversationHistory are all in `src/agent/`. AgentColorPalette added to Theme.
+AgentInputComponent renders a rounded-chrome header line showing "agent" label with active
+provider/model info (e.g., `╭─ agent │ claude/claude-sonnet-4-5-20250929 │ main`), followed by
+input with configurable prompt indicator (default: `❯`, configurable via `prompt_indicator` in
+`agent.yml`). AgentResponseRenderer (streaming markdown with spinner), AgentSession
+(conversation history + LLM generation), SystemPromptBuilder (environment context), and
+ConversationHistory are all in `src/agent/`. AgentColorPalette added to Theme.
 Shell integration via `Shell::runAgentMode()` with lazy provider initialization.
-81 test cases (319 assertions), all passing. Phases 2.5–2.7 (VT extension, image I/O) deferred.
+**Instant prompt display:** Heavy context loading (project file scanning, git subprocess queries)
+runs in a background thread via `std::async`. The prompt appears immediately on mode switch;
+git branch appears in the header as a fragment update when the background thread completes
+(~1-2s). Early submit before context is ready blocks briefly until the future resolves.
+Bug fixes applied: prompt cleared on Ctrl+T entry (no lingering shell prompt),
+HTTP error bodies captured and included in API error diagnostics, CPR/CellSizeReport
+events filtered in `Terminal::poll()` to prevent escape sequence leaking into input.
+Phases 2.5–2.7 (VT extension, image I/O) deferred.
 
 ### 2.1 Agent Mode Activation
 
@@ -223,7 +233,10 @@ return `Action::AgentMode` instead of inserting the character.
 
 Create `AgentInputComponent` — a styled variant of `PromptComponent` for agent queries:
 
-- **Purple/magenta left bar** (vs. the shell prompt's blue bar) for visual distinction
+- **Rounded-chrome header line** (`╭─ agent │ provider/model`) in agent purple accent color
+- **Configurable prompt indicator** (default: `❯`, set via `prompt_indicator` in `agent.yml`)
+- **Provider/model display** — header shows active provider and model name from `LlmProvider::modelInfo()`
+- **Purple/magenta left bar** (`╰─` first line, `│` continuation) for visual distinction
 - Same `InputField` infrastructure (multiline, undo, clipboard, kill ring)
 - `Escape` returns `Action::Abort` → shell restores the normal prompt
 - `Enter` submits the query to the agent session
@@ -930,13 +943,217 @@ When a shell command fails (non-zero exit code):
 
 ### 10.4 Plan Mode
 
-Structured planning workflow:
+**Goal:** Add a structured planning workflow where the agent explores the codebase and
+produces a step-by-step implementation plan for user approval before making any mutations.
+This prevents wasted work, gives the user control over the approach, and surfaces
+architectural decisions early.
 
-- Agent enters plan mode: explores codebase, reads files, builds understanding
-- Produces a numbered step-by-step implementation plan
-- User reviews and approves (`[y]es / [n]o / [e]dit`)
-- Agent executes the approved plan, tracking progress inline
-- Status bar shows: `Step 3/7: Writing unit tests...`
+#### 10.4.1 Activation
+
+Plan mode is activated in three ways:
+
+| Trigger | Behavior |
+|---------|----------|
+| `/plan <description>` | Explicit slash command — agent enters plan mode immediately |
+| Auto-detection | Agent detects a complex request (multi-file, architectural decision, ambiguous) and proposes: "This looks like it needs planning. Enter plan mode? `[y/n]`" |
+| `plan_mode: auto` config | Always plan before mutating tools — the agent explores first, then presents a plan |
+
+#### 10.4.2 Plan Mode Agent Loop
+
+In plan mode, the agent operates in a **read-only exploration phase** followed by a
+**plan presentation phase**:
+
+```
+User submits request (or /plan command)
+  │
+  ├── Phase A: Exploration (read-only tools only)
+  │    ├── Agent uses: read_file, glob, grep, git (read ops)
+  │    ├── Agent CANNOT use: write_file, edit_file, shell_execute (mutations blocked)
+  │    ├── Agent builds understanding of codebase, identifies relevant files
+  │    ├── Streaming thinking shown inline: "Reading src/agent/AgentSession.cpp..."
+  │    └── Exploration loop runs until agent has enough context
+  │
+  ├── Phase B: Plan Generation
+  │    ├── Agent produces a structured plan (see Plan Data Model below)
+  │    ├── Plan rendered inline with numbered steps, file paths, risk assessment
+  │    └── Each step has: description, files touched, estimated complexity
+  │
+  └── Phase C: User Review
+       ├── [y]es    — Approve and execute the plan
+       ├── [n]o     — Reject, return to agent input for a different approach
+       ├── [e]dit   — Open plan in InputField for inline editing, then re-approve
+       └── [r]evise — Give feedback, agent revises the plan (loops back to B)
+```
+
+#### 10.4.3 Plan Data Model
+
+```cpp
+/// A single step in an agent's implementation plan.
+struct PlanStep {
+    size_t index;                          ///< 1-based step number.
+    std::string description;               ///< What this step does (imperative form).
+    std::vector<std::string> filesTouched; ///< File paths that will be created or modified.
+    std::string rationale;                 ///< Why this step is needed (optional).
+    std::vector<size_t> dependsOn;         ///< Indices of steps that must complete first.
+};
+
+/// The agent's proposed implementation plan.
+struct Plan {
+    std::string summary;                   ///< One-line summary of the overall approach.
+    std::vector<PlanStep> steps;           ///< Ordered steps to execute.
+    std::string riskAssessment;            ///< Potential risks and mitigations.
+    std::vector<std::string> alternatives; ///< Alternative approaches considered (optional).
+};
+
+/// Status of a plan step during execution.
+enum class PlanStepStatus : uint8_t {
+    Pending,     ///< Not yet started.
+    InProgress,  ///< Currently being executed.
+    Completed,   ///< Successfully completed.
+    Failed,      ///< Failed — agent will attempt recovery or ask user.
+    Skipped,     ///< Skipped by user request or dependency failure.
+};
+```
+
+The agent outputs the plan as a JSON tool call (`submit_plan`) which the session
+parses into a `Plan` struct. This avoids fragile markdown parsing and lets the
+renderer present the plan with consistent formatting.
+
+#### 10.4.4 Plan Execution
+
+After user approval, `PlanExecutor` drives the agent through the plan step by step:
+
+```cpp
+class PlanExecutor {
+public:
+    PlanExecutor(AgentSession& session, Plan plan);
+
+    /// Execute the next pending step. Returns the updated step status.
+    /// The agent receives: "Execute step N: <description>" as a user message,
+    /// with full tool access (mutations enabled).
+    std::expected<PlanStepStatus, AgentError> executeNextStep(StreamCallback streamCb);
+
+    /// Current execution state.
+    Plan const& plan() const;
+    size_t currentStepIndex() const;
+    PlanStepStatus stepStatus(size_t index) const;
+    bool isComplete() const;
+
+    /// User intervention points.
+    void skipStep(size_t index);
+    void pauseExecution();
+    void resumeExecution();
+};
+```
+
+**Execution behavior:**
+
+- Each step is injected as a focused user message: `"Execute step 3/7: Add error handling to AgentSession::processMessage. Files: src/agent/AgentSession.cpp"`
+- The agent gets full tool access during execution (write, edit, shell_execute)
+- After each step, the executor checks the result and updates `PlanStepStatus`
+- If a step fails, the agent can retry once or ask the user for guidance
+- The user can pause between steps (`Ctrl+C` → pause menu), skip steps, or abort
+
+#### 10.4.5 Plan Mode TUI Rendering
+
+Plan mode renders inline in the primary screen:
+
+**Exploration phase:**
+```
+╭─ agent │ claude/claude-sonnet-4-5-20250929 │ plan mode │ main
+│ ⠋ Exploring codebase...
+│   Reading src/agent/AgentSession.hpp
+│   Searching for "processMessage" across src/agent/
+│   Reading src/shell/Shell.cpp (lines 1063-1261)
+```
+
+**Plan presentation:**
+```
+╭─ plan │ 7 steps │ ~5 files
+│
+│  Summary: Add plan mode to the agent with read-only exploration,
+│  structured plan output, and step-by-step execution.
+│
+│  1. ☐ Create Plan data model in src/agent/Plan.hpp
+│     Files: src/agent/Plan.hpp (new)
+│
+│  2. ☐ Add submit_plan tool to ToolRegistry
+│     Files: src/agent/tools/SubmitPlanTool.hpp/.cpp (new)
+│
+│  3. ☐ Implement PlanExecutor for step-by-step execution
+│     Files: src/agent/PlanExecutor.hpp/.cpp (new)
+│
+│  4. ☐ Add plan mode loop to AgentSession
+│     Files: src/agent/AgentSession.hpp/.cpp
+│
+│  5. ☐ Render plan and step progress in TUI
+│     Files: src/agent/AgentResponseRenderer.hpp/.cpp
+│
+│  6. ☐ Wire /plan slash command into Shell::runAgentMode()
+│     Files: src/shell/Shell.cpp
+│
+│  7. ☐ Add unit tests for plan mode
+│     Files: src/agent/test-agent-session.cpp
+│
+│  Risk: Low — additive changes, no existing behavior modified.
+│
+│  [y]es  [n]o  [e]dit  [r]evise
+```
+
+**During execution:**
+```
+╭─ plan │ step 3/7 │ Implementing PlanExecutor
+│ ✓ 1. Create Plan data model
+│ ✓ 2. Add submit_plan tool
+│ ⠋ 3. Implement PlanExecutor — writing src/agent/PlanExecutor.cpp...
+│ ☐ 4. Add plan mode loop to AgentSession
+│ ☐ 5. Render plan and step progress
+│ ☐ 6. Wire /plan slash command
+│ ☐ 7. Add unit tests
+```
+
+#### 10.4.6 AgentSession Integration
+
+`AgentSession::processMessage()` gains a mode parameter:
+
+```cpp
+enum class SessionMode : uint8_t {
+    Normal,    ///< Full tool access, direct execution (current behavior).
+    PlanOnly,  ///< Read-only tools + submit_plan. No mutations allowed.
+};
+
+// Extended processMessage signature
+auto processMessage(std::string_view userMessage, StreamCallback streamCb,
+                    SessionMode mode = SessionMode::Normal)
+    -> std::expected<std::string, AgentError>;
+```
+
+In `PlanOnly` mode:
+- `ToolRegistry::definitions()` filters out mutating tools (write_file, edit_file, shell_execute)
+- The `submit_plan` pseudo-tool is added to the tool definitions
+- When the agent calls `submit_plan`, the session extracts the `Plan` and returns it
+  via a special `AgentError` variant or a dedicated return type
+- The caller (Shell::runAgentMode) catches the plan and enters the review/execution flow
+
+#### 10.4.7 Configuration
+
+In `~/.config/endo/agent.yml`:
+
+```yaml
+plan_mode:
+  enabled: true
+  auto_detect: true           # Agent proposes plan mode for complex requests
+  require_approval: true      # Always require user approval before execution
+  pause_between_steps: false  # Pause after each step for user review
+  max_exploration_turns: 15   # Max tool-loop iterations during exploration phase
+```
+
+**Touches:** new `src/agent/Plan.hpp`, new `src/agent/PlanExecutor.hpp/cpp`,
+`src/agent/AgentSession.hpp/cpp` (SessionMode, plan-only filtering),
+`src/agent/tools/ToolRegistry.hpp/cpp` (filtering by risk level),
+`src/agent/AgentResponseRenderer.hpp/cpp` (plan rendering),
+`src/shell/Shell.cpp` (plan mode activation in `runAgentMode()`),
+`src/agent/AgentConfig.hpp/cpp` (plan_mode config section)
 
 ### 10.5 Memory System
 
@@ -948,7 +1165,7 @@ Persistent agent memory across sessions:
 - Organize by project (project-level memory files)
 
 **Touches:** `src/agent/AgentSession.hpp/cpp`, `src/agent/ConversationHistory.hpp/cpp`,
-new `src/agent/PlanExecutor.hpp/cpp`, `src/shell/PromptComponent.hpp/cpp` (completion integration),
+`src/shell/PromptComponent.hpp/cpp` (completion integration),
 `src/agent/LlamaCppProvider.hpp/cpp` (local model parallel inference)
 
 ---

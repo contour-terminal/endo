@@ -567,12 +567,16 @@ The library includes:
 - Selection highlighting uses inverse video (SGR 7/27)
 - Display width calculation uses libunicode for proper Unicode handling
 - Keybinding system maps key chords to edit actions, enabling future vi mode support
-- Default keybindings use modern conventions: Ctrl+C=copy, Ctrl+Y=redo, Ctrl+D=delete char (EOF on empty)
+- Default keybindings use modern conventions: Ctrl+C=copy, Ctrl+Y=redo, Ctrl+D=delete char (EOF on empty), Ctrl+T=agent mode
+- Ctrl+T seamlessly toggles between shell and agent prompts: the agent prompt replaces the shell prompt in-place (and vice versa) with no extra text, vertical gap, or visual jank
 - Shift+movement keys extend selection; Ctrl+D is context-sensitive (EOF vs delete)
 - Kitty keyboard protocol support: Full handling of Kitty's CSIu escape sequences including:
   - CapsLock and NumLock modifiers (bits 6-7) for proper capitalization with CapsLock active
   - All special keycodes in Private Use Area (57344-63743): lock keys, F13-F35, keypad, media keys, modifier keys
   - CapsLock XOR Shift behavior: either one (but not both) capitalizes letters, matching standard keyboard behavior
+  - Colon-separated key subparameters (key:shifted_key:base_layout_key) per Kitty spec
+  - Shifted key consumption: when shifted_key is present with Shift modifier, uses shifted codepoint and strips Shift (e.g., Shift+3 → '#' with no Shift)
+  - Flag 4 (report alternate keys) now requested alongside flags 1+8 for proper shifted symbol handling
 - `bind` builtin command allows runtime keybinding management:
   - `bind` - List all keybindings
   - `bind <key> <action>` - Bind a key to an action (e.g., `bind ctrl+y yank`)
