@@ -740,6 +740,52 @@ global rules, project rules, environment, project structure, and agent memory.
 
 ---
 
+## Phase 7b: Interactive Authentication (**COMPLETE**)
+
+**Goal:** Provide CLI commands for authenticating with LLM providers, persisting API keys,
+and switching between providers — mirroring the UX of `claude` CLI and `opencode`.
+
+**Status:** Fully implemented. `endo agent login/status/switch/logout` subcommands with
+interactive provider selection, browser-based API key page opening, hidden input for key
+entry, key validation via lightweight API call, atomic config file save, and stored-key
+priority over env var fallback. 13 new test cases added (config save/load round-trips,
+api_key parsing, provider key resolution). 187 total agent test cases (627 assertions),
+all passing.
+
+### 7b.1 Config Extensions
+
+- Added `apiKey` field to `ClaudeConfig`, `OpenAiConfig`, `GeminiConfig` structs
+- `resolveProviderApiKey()` checks stored key first, env var fallback
+- `saveAgentConfig()` with atomic write (`.tmp` + `rename()` pattern)
+- Only non-default fields emitted to keep YAML clean
+
+### 7b.2 CLI Subcommands
+
+| Command | Behavior |
+|---------|----------|
+| `endo agent login [PROVIDER]` | Interactive login: select provider, open browser to API key page, paste key (hidden input), validate, save |
+| `endo agent status` | Show all providers with auth status, key source, and active marker |
+| `endo agent switch [PROVIDER]` | Switch active provider (interactive menu or direct) |
+| `endo agent logout [PROVIDER]` | Remove stored API key for a provider |
+
+### 7b.3 Key Validation
+
+Lightweight `GET` request to each provider's models endpoint before saving:
+- Claude: `GET /v1/models` with `x-api-key` header
+- OpenAI: `GET /v1/models` with `Authorization: Bearer` header
+- Gemini: `GET /v1beta/models?key=...`
+
+### 7b.4 Terminal Utilities
+
+- `readSecretLine()` — disables terminal echo via `termios` (POSIX) / `SetConsoleMode` (Windows)
+- `openBrowser()` — `xdg-open` (Linux) / `open` (macOS) / `start` (Windows)
+
+**Files:** `src/agent/LoginCommand.hpp/cpp`, `src/agent/TerminalInput.hpp/cpp`,
+`src/agent/AgentConfig.hpp/cpp` (extended), `src/agent/ProviderFactory.cpp` (updated),
+`src/shell/main.cpp` (subcommand routing + help text)
+
+---
+
 ## Phase 8: MCP Support
 
 **Goal:** Enable the agent to use external MCP (Model Context Protocol) servers alongside
