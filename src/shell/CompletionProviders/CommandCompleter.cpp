@@ -3,6 +3,7 @@
 #include <shell/CompletionAdapter.hpp>
 #include <shell/Shell.hpp>
 
+#include <endo-language/BuiltinSignatures.hpp>
 #include <endo-language/CompletionCandidates.hpp>
 
 #include <crispy/utils.h>
@@ -125,8 +126,9 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
         for (auto const& ext: exts)
         {
             std::string lower(ext);
-            std::transform(lower.begin(), lower.end(), lower.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
             execExts.insert(lower);
         }
     }
@@ -160,8 +162,9 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
 #if defined(_WIN32)
             // On Windows, check file extension against PATHEXT
             auto ext = path.extension().string();
-            std::transform(ext.begin(), ext.end(), ext.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
             if (!execExts.contains(ext))
                 continue;
 
@@ -191,38 +194,7 @@ std::vector<std::pair<std::string, std::string>> CommandCompleter::scanPath() co
 
 std::vector<std::string> CommandCompleter::builtinNames()
 {
-    return {
-        // Shell builtins
-        "cat",
-        "cd",
-        "exit",
-        "export",
-        "set",
-        "unset",
-        "read",
-        "sleep",
-        "true",
-        "false",
-        "jobs",
-        "fg",
-        "bg",
-        "wait",
-        "bind",
-        "which",
-        // Control flow keywords (also completable)
-        "if",
-        "then",
-        "else",
-        "elif",
-        "for",
-        "while",
-        "do",
-        "end",
-        "in",
-        "return",
-        "break",
-        "continue",
-    };
+    return endo::userFacingBuiltinNames();
 }
 
 } // namespace endo

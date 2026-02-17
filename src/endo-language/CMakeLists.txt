@@ -46,6 +46,12 @@ add_library(endo STATIC
     DiagnosticsCollector.hpp
     DiagnosticsCollector.cpp
 
+    # Builtin Registration (single source of truth for signatures + shared implementations)
+    BuiltinSignatures.hpp
+    BuiltinSignatures.cpp
+    BuiltinImpls.hpp
+    BuiltinImpls.cpp
+
     # Hover & Stub Runtime
     HoverInfo.hpp
     HoverProvider.hpp
