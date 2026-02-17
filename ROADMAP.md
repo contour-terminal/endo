@@ -930,6 +930,16 @@ Component (base class)
 - [x] Tool use lines rendered inline during agent thinking phase (`│ ⚙ tool_name {args}`)
 - [x] `ScopedAssign` RAII guard for `activeRenderer` tracking across renderer lifetimes
 
+### Phase 3.7: Agent Context Caching ✅
+
+**Dependency:** Phase 3.1
+
+**Tasks:**
+- [x] Cache `ProjectContext` (file tree, rules, memory) as `Shell` member keyed by `cwd`
+- [x] Reuse cached context on agent mode re-entry when `cwd` unchanged (skips file scanning)
+- [x] Git branch and status always queried fresh (may change between sessions)
+- [x] Cache invalidated automatically on `cwd` change
+
 ---
 
 ## Milestone 4: Windows Support
