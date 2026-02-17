@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
-#include <agent/OpenAiProvider.hpp>
+#include <agent/providers/OpenAiProvider.hpp>
 
 using namespace endo::agent;
 

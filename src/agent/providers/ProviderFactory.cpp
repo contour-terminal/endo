@@ -3,9 +3,9 @@
 
 #include <http/HttpClient.hpp>
 
-#include <agent/ClaudeProvider.hpp>
-#include <agent/GeminiProvider.hpp>
-#include <agent/OpenAiProvider.hpp>
+#include <agent/providers/ClaudeProvider.hpp>
+#include <agent/providers/GeminiProvider.hpp>
+#include <agent/providers/OpenAiProvider.hpp>
 
 namespace endo::agent
 {

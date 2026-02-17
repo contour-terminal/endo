@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
-#include <agent/ClaudeProvider.hpp>
+#include <agent/providers/ClaudeProvider.hpp>
 
 using namespace endo::agent;
 using namespace endo::http;

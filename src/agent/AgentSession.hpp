@@ -11,7 +11,7 @@
 #include <vector>
 
 #include <agent/ConversationHistory.hpp>
-#include <agent/LlmProvider.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <agent/Plan.hpp>
 #include <agent/Types.hpp>
 

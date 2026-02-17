@@ -6,7 +6,7 @@
 #include <cstdlib>
 
 #include <agent/AgentConfig.hpp>
-#include <agent/ProviderFactory.hpp>
+#include <agent/providers/ProviderFactory.hpp>
 
 using namespace endo::agent;
 

@@ -7,7 +7,7 @@
 #include <vector>
 
 #include <agent/AgentConfig.hpp>
-#include <agent/LlmProvider.hpp>
+#include <agent/providers/LlmProvider.hpp>
 
 namespace endo::http
 {

@@ -8,7 +8,7 @@
 #include <utility>
 
 #include <agent/ConversationHistory.hpp>
-#include <agent/LlmProvider.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <agent/Types.hpp>
 
 namespace endo::agent

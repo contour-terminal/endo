@@ -5,7 +5,7 @@
 #include <map>
 #include <optional>
 
-#include <agent/OpenAiProvider.hpp>
+#include <agent/providers/OpenAiProvider.hpp>
 
 using namespace std::string_view_literals;
 

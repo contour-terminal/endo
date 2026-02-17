@@ -3,7 +3,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <agent/GeminiProvider.hpp>
+#include <agent/providers/GeminiProvider.hpp>
 
 using namespace endo::agent;
 

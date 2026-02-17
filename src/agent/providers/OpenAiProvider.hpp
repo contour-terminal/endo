@@ -6,7 +6,7 @@
 #include <span>
 #include <string>
 
-#include <agent/LlmProvider.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <agent/Types.hpp>
 #include <nlohmann/json.hpp>
 

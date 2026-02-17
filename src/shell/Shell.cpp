@@ -40,7 +40,7 @@
 #include <agent/AgentSession.hpp>
 #include <agent/PlanExecutor.hpp>
 #include <agent/ProjectContextLoader.hpp>
-#include <agent/ProviderFactory.hpp>
+#include <agent/providers/ProviderFactory.hpp>
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/GitTool.hpp>

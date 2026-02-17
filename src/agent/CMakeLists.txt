@@ -3,14 +3,14 @@
 
 add_library(endo-agent STATIC
     Types.hpp
-    LlmProvider.hpp
+    providers/LlmProvider.hpp
     AgentConfig.hpp AgentConfig.cpp
     TerminalInput.hpp TerminalInput.cpp
     LoginCommand.hpp LoginCommand.cpp
-    ClaudeProvider.hpp ClaudeProvider.cpp
-    OpenAiProvider.hpp OpenAiProvider.cpp
-    GeminiProvider.hpp GeminiProvider.cpp
-    ProviderFactory.hpp ProviderFactory.cpp
+    providers/ClaudeProvider.hpp providers/ClaudeProvider.cpp
+    providers/OpenAiProvider.hpp providers/OpenAiProvider.cpp
+    providers/GeminiProvider.hpp providers/GeminiProvider.cpp
+    providers/ProviderFactory.hpp providers/ProviderFactory.cpp
     ConversationHistory.hpp ConversationHistory.cpp
     TokenEstimator.hpp TokenEstimator.cpp
     ConversationCompactor.hpp ConversationCompactor.cpp
@@ -50,10 +50,10 @@ add_executable(test-endo-agent
     Types_test.cpp
     AgentConfig_test.cpp
     LoginCommand_test.cpp
-    ClaudeProvider_test.cpp
-    OpenAiProvider_test.cpp
-    GeminiProvider_test.cpp
-    ProviderFactory_test.cpp
+    providers/ClaudeProvider_test.cpp
+    providers/OpenAiProvider_test.cpp
+    providers/GeminiProvider_test.cpp
+    providers/ProviderFactory_test.cpp
     ConversationHistory_test.cpp
     TokenEstimator_test.cpp
     ConversationCompactor_test.cpp
