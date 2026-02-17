@@ -4,8 +4,11 @@
 
 #include <catch2/catch_session.hpp>
 
+#include <testing/SuppressWindowsDialogs.hpp>
+
 int main(int argc, char const* argv[])
 {
+    testing::suppressWindowsDialogs();
     char const* logFilterString = getenv("LOG");
     if (logFilterString)
     {
