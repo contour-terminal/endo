@@ -53,4 +53,17 @@ constexpr auto operator|=(Modifier& lhs, Modifier rhs) noexcept -> Modifier&
     return (mods & flag) != Modifier::None;
 }
 
+/// @brief Strips lock key modifiers (CapsLock, NumLock) from a modifier bitmask.
+///
+/// Lock keys are reported by the Kitty keyboard protocol but should be ignored
+/// when matching modifier combinations for keybindings and special key detection.
+/// @param mods The modifier bitmask to strip lock keys from.
+/// @return The modifier bitmask with CapsLock and NumLock bits cleared.
+[[nodiscard]] constexpr auto withoutLockKeys(Modifier mods) noexcept -> Modifier
+{
+    return static_cast<Modifier>(
+        static_cast<std::uint8_t>(mods)
+        & ~(static_cast<std::uint8_t>(Modifier::CapsLock) | static_cast<std::uint8_t>(Modifier::NumLock)));
+}
+
 } // namespace tui

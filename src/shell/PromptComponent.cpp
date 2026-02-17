@@ -701,9 +701,10 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     if (_completionPopup.visible())
     {
         // Intercept Tab for partial completion (longest common prefix)
-        if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && key->key == tui::KeyCode::Tab
-                                                                  && key->modifiers == tui::Modifier::None
-                                                                  && _completionPopup.itemCount() > 1)
+        if (auto const* key = std::get_if<tui::KeyEvent>(&event);
+            key && key->key == tui::KeyCode::Tab
+            && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+            && _completionPopup.itemCount() > 1)
         {
             auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
             if (!commonPrefix.empty())
@@ -801,7 +802,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
     if (auto const* key = std::get_if<tui::KeyEvent>(&event))
     {
         // Tab triggers completion (double-Tab forces popup to show)
-        if (key->key == tui::KeyCode::Tab && key->modifiers == tui::Modifier::None)
+        if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None)
         {
             auto const now = std::chrono::steady_clock::now();
             bool const isDoubleTab = (now - _lastTabTime) < DoubleTabThreshold;
@@ -844,7 +845,8 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
         }
 
         // '#' on empty input enters agent mode
-        if (key->codepoint == '#' && key->modifiers == tui::Modifier::None && _inputField.text().empty())
+        if (key->codepoint == '#' && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+            && _inputField.text().empty())
             return Action::AgentMode;
     }
 
@@ -868,6 +870,11 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             dismissPopup();
             resetHistoryCycling();
             return Action::Eof;
+        case tui::InputFieldAction::AgentMode:
+            _inputField.clearGhostText();
+            dismissPopup();
+            resetHistoryCycling();
+            return Action::AgentMode;
         case tui::InputFieldAction::Changed:
             resetHistoryCycling();
             _inputField.clearGhostText(); // Remove stale suggestion immediately

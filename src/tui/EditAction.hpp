@@ -63,6 +63,7 @@ enum class EditAction : std::uint8_t
     Submit,        ///< Submit input (Enter)
     Abort,         ///< Abort input (Ctrl+D on empty, or explicit abort)
     InsertNewline, ///< Insert newline in multiline mode
+    AgentMode,     ///< Enter agent/AI mode
 
     // === History ===
     HistoryPrev, ///< Navigate to previous history entry

@@ -36,11 +36,12 @@ struct InputFieldStyles
 /// @brief Result of processing an input event in InputField.
 enum class InputFieldAction : std::uint8_t
 {
-    Changed, ///< Buffer content or cursor changed, re-render needed.
-    Submit,  ///< User pressed Enter.
-    Abort,   ///< User pressed Ctrl+C.
-    Eof,     ///< User pressed Ctrl+D on an empty line.
-    None,    ///< Event not consumed by InputField.
+    Changed,   ///< Buffer content or cursor changed, re-render needed.
+    Submit,    ///< User pressed Enter.
+    Abort,     ///< User pressed Ctrl+C.
+    Eof,       ///< User pressed Ctrl+D on an empty line.
+    AgentMode, ///< User triggered agent mode (Ctrl+T by default).
+    None,      ///< Event not consumed by InputField.
 };
 
 /// @brief Text editor component with Emacs keybindings, history, and kill ring.

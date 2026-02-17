@@ -57,6 +57,70 @@ TEST_CASE("KeyChord.matches_combined_modifiers")
 }
 
 // ============================================================================
+// withoutLockKeys tests
+// ============================================================================
+
+TEST_CASE("withoutLockKeys.strips_capslock")
+{
+    CHECK(withoutLockKeys(Modifier::CapsLock) == Modifier::None);
+}
+
+TEST_CASE("withoutLockKeys.strips_numlock")
+{
+    CHECK(withoutLockKeys(Modifier::NumLock) == Modifier::None);
+}
+
+TEST_CASE("withoutLockKeys.strips_both_lock_keys")
+{
+    CHECK(withoutLockKeys(Modifier::CapsLock | Modifier::NumLock) == Modifier::None);
+}
+
+TEST_CASE("withoutLockKeys.preserves_ctrl_shift_when_stripping_numlock")
+{
+    auto const mods = Modifier::Ctrl | Modifier::Shift | Modifier::NumLock;
+    CHECK(withoutLockKeys(mods) == (Modifier::Ctrl | Modifier::Shift));
+}
+
+TEST_CASE("withoutLockKeys.preserves_none")
+{
+    CHECK(withoutLockKeys(Modifier::None) == Modifier::None);
+}
+
+// ============================================================================
+// KeyChord lock key tolerance tests
+// ============================================================================
+
+TEST_CASE("KeyChord.matches_with_numlock")
+{
+    auto chord = KeyChord::fromChar('a', Modifier::Ctrl);
+    CHECK(chord.matches(charEvent('a', Modifier::Ctrl | Modifier::NumLock)));
+}
+
+TEST_CASE("KeyChord.matches_with_capslock")
+{
+    auto chord = KeyChord::fromChar('a', Modifier::Ctrl);
+    CHECK(chord.matches(charEvent('a', Modifier::Ctrl | Modifier::CapsLock)));
+}
+
+TEST_CASE("KeyChord.matches_with_both_lock_keys")
+{
+    auto chord = KeyChord::fromChar('a', Modifier::Ctrl);
+    CHECK(chord.matches(charEvent('a', Modifier::Ctrl | Modifier::NumLock | Modifier::CapsLock)));
+}
+
+TEST_CASE("KeyChord.matches_no_modifier_with_numlock")
+{
+    auto chord = KeyChord::fromKey(KeyCode::Enter, Modifier::None);
+    CHECK(chord.matches(keyEvent(KeyCode::Enter, Modifier::NumLock)));
+}
+
+TEST_CASE("KeyChord.matches_no_modifier_with_capslock")
+{
+    auto chord = KeyChord::fromKey(KeyCode::Tab, Modifier::None);
+    CHECK(chord.matches(keyEvent(KeyCode::Tab, Modifier::CapsLock)));
+}
+
+// ============================================================================
 // KeyBindings tests
 // ============================================================================
 
@@ -554,4 +618,28 @@ TEST_CASE("editActionToString_parseEditAction_roundtrip")
     testRoundtrip(EditAction::Yank);
     testRoundtrip(EditAction::Submit);
     testRoundtrip(EditAction::HistoryPrev);
+    testRoundtrip(EditAction::AgentMode);
+}
+
+// ============================================================================
+// AgentMode binding tests
+// ============================================================================
+
+TEST_CASE("KeyBindings.defaults_ctrl_t_agent_mode")
+{
+    auto bindings = KeyBindings::defaults();
+
+    auto result = bindings.lookup(charEvent('t', Modifier::Ctrl));
+    REQUIRE(result.has_value());
+    CHECK(*result == EditAction::AgentMode);
+}
+
+TEST_CASE("parseEditAction.agent_mode")
+{
+    CHECK(parseEditAction("agent-mode") == EditAction::AgentMode);
+}
+
+TEST_CASE("editActionToString.agent_mode")
+{
+    CHECK(editActionToString(EditAction::AgentMode) == "agent-mode");
 }

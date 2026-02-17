@@ -820,6 +820,8 @@ TEST_CASE("InputField.setCursorFromClick_extends_selection")
 TEST_CASE("InputField.transpose_characters")
 {
     InputField field;
+    // Ctrl+T defaults to AgentMode; bind it to Transpose for this test
+    field.keyBindings().bind(KeyChord::fromChar('t', Modifier::Ctrl), EditAction::Transpose);
     field.setText("ab");
 
     // Ctrl+T transposes characters before cursor

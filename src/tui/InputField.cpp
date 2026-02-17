@@ -212,6 +212,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::Submit:
         case InputFieldAction::Abort:
         case InputFieldAction::Eof:
+        case InputFieldAction::AgentMode:
             // These need special handling by the parent
             return EventResult::Handled;
         case InputFieldAction::None: return EventResult::Ignored;
@@ -527,6 +528,8 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
                 return InputFieldAction::Changed;
             }
             return InputFieldAction::None;
+
+        case EditAction::AgentMode: _lastWasKill = false; return InputFieldAction::AgentMode;
 
         // History
         case EditAction::HistoryPrev:

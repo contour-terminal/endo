@@ -241,7 +241,7 @@ auto List::processEvent(InputEvent const& event) -> ListAction
 auto List::handleKey(KeyEvent const& key) -> ListAction
 {
     // Handle vim-style navigation (j/k) for printable keys
-    if (isPrintable(key.key) && key.modifiers == Modifier::None)
+    if (isPrintable(key.key) && withoutLockKeys(key.modifiers) == Modifier::None)
     {
         if (key.codepoint == 'j')
         {

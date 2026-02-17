@@ -94,7 +94,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 32> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 33> actionNameMappings = { {
         // Movement
         { "move-forward-char", EditAction::MoveForwardChar },
         { "move-backward-char", EditAction::MoveBackwardChar },
@@ -132,6 +132,7 @@ namespace
         { "submit", EditAction::Submit },
         { "abort", EditAction::Abort },
         { "insert-newline", EditAction::InsertNewline },
+        { "agent-mode", EditAction::AgentMode },
         // History
         { "history-prev", EditAction::HistoryPrev },
         { "history-next", EditAction::HistoryNext },
@@ -245,7 +246,7 @@ std::string KeyChord::toString() const
 bool KeyChord::matches(KeyEvent const& event) const noexcept
 {
     // Check modifiers match
-    if (modifiers != event.modifiers)
+    if (modifiers != withoutLockKeys(event.modifiers))
         return false;
 
     // If we have a codepoint, match against event's codepoint
@@ -368,7 +369,8 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromChar('d', M::Alt), A::DeleteWord);
     bindings.bind(K::fromChar('k', M::Ctrl), A::KillToEnd);
     bindings.bind(K::fromChar('u', M::Ctrl), A::KillToStart);
-    bindings.bind(K::fromChar('t', M::Ctrl), A::Transpose);
+    // Note: Transpose has no default binding, users can reconfigure
+    bindings.bind(K::fromChar('t', M::Ctrl), A::AgentMode);
 
     // === Kill Ring ===
     // Note: Yank has no default binding (was Ctrl+Y, now Redo)
