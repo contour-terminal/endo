@@ -6,11 +6,13 @@
 
 #include <endo-language/IRGenerator.hpp>
 
+#include <agent/ProjectContextLoader.hpp>
 #include <http/HttpClient.hpp>
 
 #include <CoreVM/CoreVM.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -275,6 +277,8 @@ class Shell final
     std::unique_ptr<http::HttpClient> _agentHttpClient;
     std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
     std::unique_ptr<agent::AgentSession> _agentSession;
+    std::optional<agent::ProjectContext> _cachedProjectContext; ///< Cached project context for agent mode re-entry.
+    std::filesystem::path _cachedProjectContextCwd;            ///< CWD associated with cached project context.
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

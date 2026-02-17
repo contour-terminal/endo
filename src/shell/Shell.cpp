@@ -1068,19 +1068,23 @@ namespace
     /// @brief Result of background agent context loading.
     struct AgentContextResult
     {
-        std::string systemPrompt; ///< Fully built system prompt.
-        std::string gitBranch;    ///< Current git branch name (for header display).
+        std::string systemPrompt;            ///< Fully built system prompt.
+        std::string gitBranch;               ///< Current git branch name (for header display).
+        agent::ProjectContext projectContext; ///< Project context (returned for caching).
     };
 
     /// @brief Builds agent context (project files, git info, system prompt) — runs in background thread.
     /// @param agentConfig The agent configuration.
     /// @param cwd The current working directory.
+    /// @param cachedContext Optional cached project context to reuse (skips file scanning).
     /// @return The assembled context result.
     [[nodiscard]] auto buildAgentContext(agent::AgentConfig const& agentConfig,
-                                         std::filesystem::path const& cwd) -> AgentContextResult
+                                         std::filesystem::path const& cwd,
+                                         std::optional<agent::ProjectContext> cachedContext)
+        -> AgentContextResult
     {
-        auto const contextLoader = agent::ProjectContextLoader {};
-        auto const projectContext = contextLoader.load(cwd);
+        auto projectContext = cachedContext ? std::move(*cachedContext)
+                                           : agent::ProjectContextLoader {}.load(cwd);
 
         auto promptBuilder = agent::SystemPromptBuilder {};
         promptBuilder.setWorkingDirectory(cwd.string());
@@ -1113,6 +1117,7 @@ namespace
         return AgentContextResult {
             .systemPrompt = promptBuilder.build(),
             .gitBranch = gitBranch,
+            .projectContext = std::move(projectContext),
         };
     }
 
@@ -1235,9 +1240,13 @@ void Shell::runAgentMode()
     screen.draw();
     out.flush();
 
-    // Launch background thread for heavy context loading (git queries, project file scanning)
+    // Launch background thread for heavy context loading (git queries, project file scanning).
+    // Reuse cached project context if cwd hasn't changed (avoids re-scanning file tree/rules/memory).
     auto const cwd = std::filesystem::current_path();
-    auto contextFuture = std::async(std::launch::async, buildAgentContext, agentConfig, cwd);
+    auto cachedCtx = (_cachedProjectContextCwd == cwd) ? std::move(_cachedProjectContext) : std::nullopt;
+    _cachedProjectContext.reset();
+    auto contextFuture =
+        std::async(std::launch::async, buildAgentContext, agentConfig, cwd, std::move(cachedCtx));
     auto systemPromptReady = false;
 
     while (true)
@@ -1255,6 +1264,8 @@ void Shell::runAgentMode()
                 _agentSession->setSystemPrompt(std::move(result.systemPrompt));
                 if (!result.gitBranch.empty())
                     inputComponent.setGitBranch(std::move(result.gitBranch));
+                _cachedProjectContext = std::move(result.projectContext);
+                _cachedProjectContextCwd = cwd;
                 systemPromptReady = true;
                 auto const newPrefSize = inputComponent.preferredSize();
                 inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
@@ -1283,6 +1294,8 @@ void Shell::runAgentMode()
                         _agentSession->setSystemPrompt(std::move(result.systemPrompt));
                         if (!result.gitBranch.empty())
                             inputComponent.setGitBranch(std::move(result.gitBranch));
+                        _cachedProjectContext = std::move(result.projectContext);
+                        _cachedProjectContextCwd = cwd;
                         systemPromptReady = true;
                     }
 
