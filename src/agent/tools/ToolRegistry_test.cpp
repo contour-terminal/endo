@@ -106,3 +106,39 @@ TEST_CASE("ToolRegistry.execute_tool_error", "[agent][tools]")
     CHECK(result.content.find("mock failure") != std::string::npos);
     CHECK(result.isError);
 }
+
+TEST_CASE("ToolRegistry.filtered_definitions", "[agent][tools]")
+{
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>("read_file"));
+    registry.registerTool(std::make_unique<MockTool>("write_file"));
+    registry.registerTool(std::make_unique<MockTool>("glob"));
+
+    auto const filtered =
+        registry.definitions([](std::string_view name) { return name == "read_file" || name == "glob"; });
+
+    REQUIRE(filtered.size() == 2);
+    CHECK(filtered[0].name == "read_file");
+    CHECK(filtered[1].name == "glob");
+}
+
+TEST_CASE("ToolRegistry.filtered_definitions_empty_result", "[agent][tools]")
+{
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>("tool_a"));
+
+    auto const filtered = registry.definitions([](std::string_view) { return false; });
+
+    CHECK(filtered.empty());
+}
+
+TEST_CASE("ToolRegistry.filtered_definitions_all_match", "[agent][tools]")
+{
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>("tool_a"));
+    registry.registerTool(std::make_unique<MockTool>("tool_b"));
+
+    auto const filtered = registry.definitions([](std::string_view) { return true; });
+
+    CHECK(filtered.size() == 2);
+}

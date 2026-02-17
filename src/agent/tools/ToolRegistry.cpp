@@ -31,6 +31,15 @@ auto ToolRegistry::definitions() const -> std::vector<ToolDefinition>
     return result;
 }
 
+auto ToolRegistry::definitions(ToolFilter const& filter) const -> std::vector<ToolDefinition>
+{
+    auto result = std::vector<ToolDefinition> {};
+    for (auto const& tool: _tools)
+        if (filter(tool->name()))
+            result.push_back(tool->definition());
+    return result;
+}
+
 auto ToolRegistry::execute(ToolCall const& call) -> ToolResult
 {
     auto* tool = findTool(call.name);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <unordered_map>
@@ -16,6 +17,9 @@ namespace endo::agent
 ///
 /// Manages a collection of tools by name. Provides lookup and dispatch
 /// for tool calls received from the LLM.
+/// Predicate for filtering tools by name.
+using ToolFilter = std::function<bool(std::string_view toolName)>;
+
 class ToolRegistry
 {
   public:
@@ -30,6 +34,10 @@ class ToolRegistry
 
     /// @brief Returns tool definitions for all registered tools.
     [[nodiscard]] auto definitions() const -> std::vector<ToolDefinition>;
+
+    /// @brief Returns tool definitions for tools matching the filter predicate.
+    /// @param filter Predicate that returns true for tool names to include.
+    [[nodiscard]] auto definitions(ToolFilter const& filter) const -> std::vector<ToolDefinition>;
 
     /// @brief Executes a tool call by dispatching to the appropriate tool.
     ///
