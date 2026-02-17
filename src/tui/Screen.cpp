@@ -565,18 +565,17 @@ void Screen::flushInline()
     {
         if (_peakContentHeight == 0)
         {
-            // First render - query cursor position to know where we're starting
-            auto const [cursorRow, cursorCol] = _terminal.queryCursorPosition();
-            if (cursorRow > 0)
-            {
-                // cursorRow is 1-based, convert to 0-based
-                _inlineContentStartRow = cursorRow - 1;
-            }
-            else
-            {
-                // Query failed, assume bottom of terminal
-                _inlineContentStartRow = _terminal.rows() - contentHeight;
-            }
+            // First render: emit newlines to ensure room at the bottom of the terminal.
+            // Without this, rendering near the last row causes \n to scroll the header
+            // into scrollback, making it invisible until the next draw.
+            for (int i = 0; i < contentHeight; ++i)
+                out.writeRaw("\n");
+            if (contentHeight > 0)
+                out.moveUp(contentHeight);
+            _totalNewlinesEmitted += contentHeight;
+
+            // Approximate content start row (accurate enough for mouse translation)
+            _inlineContentStartRow = _terminal.rows() - contentHeight;
             _peakContentHeight = contentHeight;
         }
         else
