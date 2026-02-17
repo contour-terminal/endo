@@ -187,10 +187,17 @@ openai_compat:
 
 ---
 
-## Phase 2: Agent Mode UX — Inline Experience
+## Phase 2: Agent Mode UX — Inline Experience (**2.1–2.4 COMPLETE**)
 
 **Goal:** Provide a seamless inline agent experience activated from the shell prompt.
 This is the core UX — the user stays in their terminal, responses stream inline.
+
+**Status (2.1–2.4):** Fully implemented. Press `#` on an empty prompt to enter agent mode.
+AgentInputComponent (purple-bar styled input), AgentResponseRenderer (streaming markdown with
+spinner), AgentSession (conversation history + LLM generation), SystemPromptBuilder (environment
+context), and ConversationHistory are all in `src/agent/`. AgentColorPalette added to Theme.
+Shell integration via `Shell::runAgentMode()` with lazy provider initialization.
+81 test cases (319 assertions), all passing. Phases 2.5–2.7 (VT extension, image I/O) deferred.
 
 ### 2.1 Agent Mode Activation
 
@@ -330,12 +337,214 @@ new `src/agent/AgentInputComponent.hpp/cpp`, `src/agent/AgentResponseComponent.h
 
 ---
 
-## Phase 3: Tool System — Shell-Native Tools
+## Phase 3: Local Model Inference — llama.cpp
+
+**Goal:** Enable fully offline, privacy-preserving LLM inference by integrating llama.cpp as a
+local model backend. This adds a `LlamaCppProvider` implementing the `LlmProvider` interface
+from Phase 1, allowing the agent to run without any external API dependency.
+
+### 3.1 llama.cpp Integration
+
+Link against llama.cpp as a library dependency (not a subprocess):
+
+```
+src/agent/
+├── LlamaCppProvider.hpp/.cpp   # Local inference via llama.cpp
+└── ModelManager.hpp/.cpp       # GGUF model discovery, loading, memory management
+```
+
+**LlamaCppProvider** implements the `LlmProvider` interface:
+
+- `generate()` — Run inference on the local model with streaming token callback
+- `supportsToolUse()` — `true` for models with tool-use fine-tuning (Llama 3.x, Qwen 2.5, Mistral, etc.)
+- `supportsImageInput()` — `true` for multimodal models (LLaVA, Llama 3.2-Vision, etc.)
+- `supportsImageOutput()` — `false` (no local image generation models supported initially)
+- `contextSize()` — Read from GGUF model metadata or user config override
+- `modelInfo()` — Extract model name, parameter count, quantization level from GGUF metadata
+
+### 3.2 Model Management
+
+`ModelManager` handles model lifecycle:
+
+- **Discovery** — Scan configured model directories for `.gguf` files, display model list with
+  size, quantization, and parameter count
+- **Loading** — Load model and create llama context with configurable parameters (context size,
+  batch size, thread count, GPU layer count)
+- **Memory management** — Track VRAM/RAM usage, enforce memory limits, warn when a model
+  exceeds available memory
+- **Hot-swap** — Unload current model and load a different one on provider switch via `/model`
+  slash command without restarting the agent session
+
+### 3.3 GPU Acceleration
+
+Support hardware acceleration backends:
+
+| Backend | Platform | Detection |
+|---------|----------|-----------|
+| CUDA | Linux, Windows (NVIDIA) | Check for `libcuda.so` / CUDA toolkit |
+| Vulkan | Linux, Windows (any GPU) | Check for Vulkan driver |
+| Metal | macOS (Apple Silicon) | Always available on macOS |
+| CPU | All platforms | Fallback — always available |
+
+- Auto-detect available backends at CMake configure time
+- Runtime selection: prefer GPU, fall back to CPU
+- Configurable GPU layer offloading (`n_gpu_layers` in config, `-1` = all layers)
+
+### 3.4 Streaming and KV Cache
+
+- **Streaming** — Token-by-token generation via `StreamCallback`, same interface as API providers.
+  The TUI renders tokens identically regardless of whether they come from an API or local inference.
+- **KV cache** — Persistent KV cache across turns within a session for fast multi-turn conversation.
+  Avoids re-processing the entire conversation history on each turn.
+- **Context shifting** — When KV cache fills, shift out oldest tokens (llama.cpp built-in support)
+- **Batch inference** — Use llama.cpp batch API for parallel prompt evaluation (faster prefill)
+
+### 3.5 Tool Call Parsing
+
+Local models don't have native tool-calling wire formats. `LlamaCppProvider` handles this:
+
+- **Structured output** — Use llama.cpp grammar-constrained generation (GBNF) to enforce valid
+  JSON tool call output
+- **Prompt templates** — Model-specific chat templates (ChatML, Llama 3, Mistral, etc.) with
+  tool-use system prompts that instruct the model to emit tool calls in a standardized JSON format
+- **Parsing** — Extract tool calls from model output, normalize into `GenerateResult { text, vector<ToolCall> }`
+- **Fallback** — If grammar enforcement is unavailable, parse best-effort JSON from free-form output
+
+### 3.6 Configuration
+
+In `~/.config/endo/agent.yml`:
+
+```yaml
+provider: local                   # Use local llama.cpp inference
+
+local:
+  model_path: ~/.local/share/endo/models/qwen2.5-coder-32b-q4_k_m.gguf
+  model_dir: ~/.local/share/endo/models/   # Directory to scan for models
+  n_gpu_layers: -1                # -1 = offload all layers to GPU
+  context_size: 32768             # Context window override (0 = use model default)
+  threads: 8                      # CPU threads for inference
+  batch_size: 512                 # Prompt evaluation batch size
+  temperature: 0.7
+  top_p: 0.9
+  flash_attention: true           # Enable flash attention if supported
+```
+
+- Model selection at runtime via `/model` slash command (list available models, switch instantly)
+- Memory usage displayed in agent status bar (VRAM/RAM, KV cache fill level)
+
+**Touches:** new `src/agent/LlamaCppProvider.hpp/cpp`, `src/agent/ModelManager.hpp/cpp`,
+`CMakeLists.txt` (llama.cpp dependency), `src/agent/AgentConfig.hpp`
+
+---
+
+## Phase 4: Voice Input — whisper.cpp + VAD
+
+**Goal:** Enable voice-to-text input for agent mode using whisper.cpp for speech recognition
+and Voice Activity Detection (VAD) for automatic speech segmentation. Users can dictate
+queries hands-free or via push-to-talk.
+
+### 4.1 whisper.cpp Integration
+
+Link against whisper.cpp as a library dependency:
+
+```
+src/agent/voice/
+├── WhisperEngine.hpp/.cpp          # whisper.cpp wrapper for speech-to-text
+├── AudioCapture.hpp/.cpp           # Microphone input (PulseAudio/ALSA/CoreAudio/WASAPI)
+├── VoiceActivityDetector.hpp/.cpp  # VAD for automatic speech segmentation
+└── VoiceInputManager.hpp/.cpp      # Coordinates capture → VAD → transcription → input
+```
+
+**WhisperEngine** wraps whisper.cpp:
+
+- Load Whisper GGML models (tiny, base, small, medium, large-v3-turbo)
+- Real-time transcription of audio segments
+- Language auto-detection or explicit language selection
+- GPU-accelerated inference (same backends as Phase 3)
+
+### 4.2 Audio Capture
+
+`AudioCapture` provides cross-platform microphone input:
+
+| Platform | Backend | Library |
+|----------|---------|---------|
+| Linux | PulseAudio / PipeWire | libpulse |
+| Linux (fallback) | ALSA | libasound |
+| macOS | CoreAudio | AudioToolbox framework |
+| Windows | WASAPI | Windows SDK |
+
+- 16 kHz mono PCM capture (Whisper's expected input format)
+- Ring buffer for continuous audio streaming
+- Device enumeration and selection
+
+### 4.3 Voice Activity Detection (VAD)
+
+`VoiceActivityDetector` segments continuous audio into speech chunks:
+
+- **Silero VAD** — Lightweight ONNX-based VAD model (~2 MB), high accuracy, low latency
+- **Energy-based fallback** — Simple RMS energy threshold for systems without ONNX runtime
+- **Parameters:** speech probability threshold, silence duration (end-of-utterance trigger),
+  minimum speech duration (filter noise bursts)
+- **Output:** Speech segments with start/end timestamps → fed to WhisperEngine for transcription
+
+### 4.4 Input Modes
+
+Two voice input modes, selectable by the user:
+
+| Mode | Activation | Behavior |
+|------|-----------|----------|
+| Push-to-talk | Hold `Ctrl+Space` | Record while held, transcribe on release |
+| Hands-free | Toggle `Ctrl+Shift+Space` | VAD-driven: auto-detect speech start/end, transcribe segments continuously |
+
+- Voice input injects transcribed text into `AgentInputComponent` (or `PromptComponent` in shell mode)
+- Real-time partial transcription displayed as greyed-out preview text
+- Final transcription replaces preview with confirmed text
+- `Enter` still required to submit (voice only fills the input field)
+
+### 4.5 Inline Status Rendering
+
+Voice input status renders inline below the prompt:
+
+- **Recording indicator** — Pulsing `●` with `Spinner` animation and elapsed time
+- **Audio level meter** — Simple bar showing microphone input level (helps diagnose muted mic)
+- **Transcription preview** — Partial results shown in dim text, updated in real-time
+- **VAD state** — In hands-free mode: `Listening...` / `Speaking...` / `Processing...`
+
+### 4.6 Configuration
+
+In `~/.config/endo/agent.yml`:
+
+```yaml
+voice:
+  enabled: true
+  model_path: ~/.local/share/endo/models/ggml-large-v3-turbo.bin
+  language: auto                   # or "en", "de", "ja", etc.
+  vad:
+    backend: silero                # silero | energy
+    speech_threshold: 0.5          # Silero VAD confidence threshold
+    silence_duration_ms: 800       # Silence before end-of-utterance
+    min_speech_duration_ms: 250    # Minimum speech segment length
+  input_mode: push_to_talk         # push_to_talk | hands_free
+  audio_device: default            # or specific device name
+  gpu_acceleration: true           # Use GPU for Whisper inference
+```
+
+- Model selection: smaller models (tiny/base) for low-latency real-time preview, larger models
+  (large-v3-turbo) for final transcription accuracy
+- Per-session override via `/voice` slash command (toggle on/off, switch mode, change model)
+
+**Touches:** new `src/agent/voice/` directory, `src/agent/AgentInputComponent.hpp/cpp`,
+`src/shell/PromptComponent.hpp/cpp`, `CMakeLists.txt` (whisper.cpp + audio library dependencies),
+`src/agent/AgentConfig.hpp`
+
+---
+
+## Phase 5: Tool System — Shell-Native Tools
 
 **Goal:** Provide a core set of built-in tools that the agent can call without any external MCP
 server. Endo's unique advantage: `Shell::execute()` gives the agent direct shell access.
 
-### 3.1 Tool Interface and Registry
+### 5.1 Tool Interface and Registry
 
 ```
 src/agent/tools/
@@ -355,9 +564,9 @@ Each tool implements:
 - `name() -> std::string_view` — tool name (e.g., `"shell_execute"`)
 - `definition() -> ToolDefinition` — JSON Schema for `inputSchema`
 - `execute(json arguments) -> std::expected<ToolResult, ToolError>` — run and return output
-- `risk() -> ToolRisk` — risk classification (see Phase 4)
+- `risk() -> ToolRisk` — risk classification (see Phase 6)
 
-### 3.2 Shell Execute Tool
+### 5.2 Shell Execute Tool
 
 The `ShellExecuteTool` wraps `Shell::execute()` — endo's unique advantage over external agents:
 
@@ -370,7 +579,7 @@ The `ShellExecuteTool` wraps `Shell::execute()` — endo's unique advantage over
 This means the agent inherits endo's full capabilities: pipelines, F# expressions,
 structured output recognition, job control — no separate `bash` process needed.
 
-### 3.3 File Tools
+### 5.3 File Tools
 
 Standard coding-assistant file operations:
 
@@ -382,7 +591,7 @@ Standard coding-assistant file operations:
 | `glob` | `{ pattern, path? }` | File pattern matching, sorted by mtime |
 | `grep` | `{ pattern, path?, glob?, context? }` | Regex search across files with context lines |
 
-### 3.4 Git Tool
+### 5.4 Git Tool
 
 Git operations with safety guardrails:
 
@@ -391,24 +600,24 @@ Git operations with safety guardrails:
 - **Write operations** (require approval): `add`, `commit`, `checkout`, `merge`
 - **Blocked by default:** `push --force`, `reset --hard`, `clean -f`
 
-### 3.5 Integration with AgentSession
+### 5.5 Integration with AgentSession
 
 `AgentSession::executeToolCalls()` dispatches in order:
 
 1. Check `ToolRegistry` for built-in tools
-2. Fall back to `ServerManager` for MCP tools (Phase 6)
+2. Fall back to `ServerManager` for MCP tools (Phase 8)
 3. Return `ToolResult { isError = true }` for unknown tool names
 
 **Touches:** new `src/agent/tools/` directory, `src/agent/AgentSession.hpp/cpp`, `CMakeLists.txt`
 
 ---
 
-## Phase 4: Permission & Safety System
+## Phase 6: Permission & Safety System
 
 **Goal:** Classify tools by risk and gate dangerous operations on user approval.
 Permission prompts render inline in the primary screen.
 
-### 4.1 Risk Classification
+### 6.1 Risk Classification
 
 ```cpp
 enum class ToolRisk {
@@ -418,7 +627,7 @@ enum class ToolRisk {
 };
 ```
 
-### 4.2 Permission Manager
+### 6.2 Permission Manager
 
 ```
 src/agent/
@@ -431,7 +640,7 @@ src/agent/
 - `Destructive` tools: always prompt with command preview
 - Permission prompts rendered inline (styled confirmation bar, `[y/n/a]`)
 
-### 4.3 Shell Command Safety
+### 6.3 Shell Command Safety
 
 Special handling for the `shell_execute` tool:
 
@@ -440,7 +649,7 @@ Special handling for the `shell_execute` tool:
 - Block interactive commands that need a TTY (`vim`, `less`, `top`, `git rebase -i`)
 - Enforce timeout, kill child process group on expiry
 
-### 4.4 Configurable Policy
+### 6.4 Configurable Policy
 
 In `~/.config/endo/agent.yml`:
 
@@ -457,22 +666,22 @@ permissions:
 ```
 
 **Touches:** `src/agent/PermissionManager.hpp/cpp`, `src/agent/AgentSession.hpp/cpp`,
-`src/agent/tools/ShellExecuteTool.hpp/cpp`
+`src/agent/tools/ShellExecuteTool.hpp/cpp`, `src/agent/AgentConfig.hpp`
 
 ---
 
-## Phase 5: Context Management
+## Phase 7: Context Management
 
 **Goal:** Keep conversations within the LLM's context window during long coding sessions.
 
-### 5.1 Token Tracking
+### 7.1 Token Tracking
 
 - Estimate token counts per message (provider-specific tokenizer or heuristic)
 - Track cumulative usage in `ConversationHistory`
 - Expose `ConversationHistory::estimatedTokenCount() -> size_t`
 - Display token usage in the agent status bar
 
-### 5.2 Conversation Compaction
+### 7.2 Conversation Compaction
 
 When approaching the context limit (80% of `contextSize`):
 
@@ -480,13 +689,13 @@ When approaching the context limit (80% of `contextSize`):
 2. **Replace** — Replace old messages with a single system message containing the summary
 3. **Preserve** — Keep system prompt, summary, and the last N messages + pending tool results
 
-### 5.3 Tool Result Truncation
+### 7.3 Tool Result Truncation
 
 - Truncate large tool results before adding to conversation (default 30 KB)
 - Add `[truncated — X bytes omitted]` marker
 - Configurable via `agent.yml`: `max_tool_result_size: 30720`
 
-### 5.4 Project Context
+### 7.4 Project Context
 
 Build initial context from existing infrastructure:
 
@@ -496,7 +705,7 @@ Build initial context from existing infrastructure:
 - **Rules files** — load `CLAUDE.md`, `AGENT.md`, or `.endo/agent-rules.md` from project root
 - **Memory files** — persistent agent memory in `~/.config/endo/agent-memory/`
 
-### 5.5 System Prompt Assembly
+### 7.5 System Prompt Assembly
 
 Compose the system prompt from:
 
@@ -507,16 +716,16 @@ Compose the system prompt from:
 5. Memory files (learnings from past sessions)
 
 **Touches:** `src/agent/ConversationHistory.hpp/cpp` (from mychat `ChatSession`),
-`src/agent/AgentSession.hpp/cpp`, `src/agent/AgentConfig.hpp`
+`src/agent/AgentSession.hpp/cpp`, `src/agent/AgentConfig.hpp/.cpp`
 
 ---
 
-## Phase 6: MCP Support
+## Phase 8: MCP Support
 
 **Goal:** Enable the agent to use external MCP (Model Context Protocol) servers alongside
 built-in tools.
 
-### 6.1 MCP Client — Stdio Transport
+### 8.1 MCP Client — Stdio Transport
 
 Bootstrap from mychat's `src/mcp/` directory:
 
@@ -533,7 +742,7 @@ src/agent/mcp/
 - Adapt namespace `mychat` → `endo::agent::mcp`
 - `ServerManager` aggregates both MCP tools and built-in `ToolRegistry` tools
 
-### 6.2 Configuration
+### 8.2 Configuration
 
 In `~/.config/endo/agent.yml`:
 
@@ -550,7 +759,7 @@ mcp_servers:
       GITHUB_TOKEN: "${GITHUB_TOKEN}"
 ```
 
-### 6.3 HTTP/SSE Transport
+### 8.3 HTTP/SSE Transport
 
 Add `HttpTransport` using the existing `HttpClient`:
 
@@ -563,7 +772,7 @@ src/agent/mcp/
 - Support session management via `Mcp-Session-Id` header
 - Leverage existing `HttpClient::executeStreaming()` (from Phase 1.5)
 
-### 6.4 Dynamic Tool Discovery
+### 8.4 Dynamic Tool Discovery
 
 - Handle `notifications/tools/list_changed` from MCP servers
 - Re-fetch tool list on notification
@@ -575,11 +784,11 @@ src/agent/mcp/
 
 ---
 
-## Phase 7: Agent TUI Enhancements
+## Phase 9: Agent TUI Enhancements
 
 **Goal:** Polish the inline agent experience with visualization and navigation.
 
-### 7.1 Slash Commands
+### 9.1 Slash Commands
 
 Add a command system for common agent workflows:
 
@@ -595,20 +804,20 @@ Add a command system for common agent workflows:
 - Each command expands to a prompt + optional tool sequence
 - Tab completion via existing `CompletionPopup` infrastructure
 
-### 7.2 Tool Execution Visualization
+### 9.2 Tool Execution Visualization
 
 - Show a status line per tool call: tool name, arguments summary, elapsed time
 - Use existing `Spinner` with tool-specific labels during execution
 - Display tool result summary (success/error, output size) after completion
 - Diff rendering for `edit_file` results (green additions, red deletions)
 
-### 7.3 Conversation History Navigation
+### 9.3 Conversation History Navigation
 
 - Scrollback through previous agent exchanges
 - `Ctrl+Up`/`Ctrl+Down` to cycle through conversation turns
 - Search through conversation history (`Ctrl+R` in agent mode)
 
-### 7.4 Alt-Screen Fullscreen Agent View
+### 9.4 Alt-Screen Fullscreen Agent View
 
 Available on demand for focused agent interaction:
 
@@ -618,15 +827,16 @@ Available on demand for focused agent interaction:
 - `Escape` or `q` returns to inline primary screen
 
 **Touches:** `src/agent/AgentInputComponent.hpp/cpp`, `src/agent/AgentResponseComponent.hpp/cpp`,
-new `src/agent/SlashCommandRegistry.hpp/cpp`, `src/tui/MarkdownRenderer.hpp/cpp`
+new `src/agent/SlashCommandRegistry.hpp/cpp`, `src/tui/MarkdownRenderer.hpp/cpp`,
+`src/agent/voice/VoiceInputManager.hpp/cpp` (voice status integration)
 
 ---
 
-## Phase 8: Advanced Agent Features
+## Phase 10: Advanced Agent Features
 
 **Goal:** Evolve from a single-turn tool caller into a sophisticated coding agent.
 
-### 8.1 Parallel Tool Execution
+### 10.1 Parallel Tool Execution
 
 Upgrade `AgentSession::executeToolCalls()`:
 
@@ -635,7 +845,7 @@ Upgrade `AgentSession::executeToolCalls()`:
 - Collect results and return in original order
 - Serial fallback for tools with side effects on shared state
 
-### 8.2 Agent-Powered Shell Completion
+### 10.2 Agent-Powered Shell Completion
 
 Use the LLM to enhance shell completions:
 
@@ -643,7 +853,7 @@ Use the LLM to enhance shell completions:
 - Agent suggests commands based on natural language intent
 - Integrate with existing `CompletionPopup` — agent suggestions labeled `[AI]`
 
-### 8.3 Error Recovery Suggestions
+### 10.3 Error Recovery Suggestions
 
 When a shell command fails (non-zero exit code):
 
@@ -652,7 +862,7 @@ When a shell command fails (non-zero exit code):
 - Suggests corrective commands or code fixes
 - User can accept suggestions directly into the prompt
 
-### 8.4 Plan Mode
+### 10.4 Plan Mode
 
 Structured planning workflow:
 
@@ -662,7 +872,7 @@ Structured planning workflow:
 - Agent executes the approved plan, tracking progress inline
 - Status bar shows: `Step 3/7: Writing unit tests...`
 
-### 8.5 Memory System
+### 10.5 Memory System
 
 Persistent agent memory across sessions:
 
@@ -672,17 +882,18 @@ Persistent agent memory across sessions:
 - Organize by project (project-level memory files)
 
 **Touches:** `src/agent/AgentSession.hpp/cpp`, `src/agent/ConversationHistory.hpp/cpp`,
-new `src/agent/PlanExecutor.hpp/cpp`, `src/shell/PromptComponent.hpp/cpp` (completion integration)
+new `src/agent/PlanExecutor.hpp/cpp`, `src/shell/PromptComponent.hpp/cpp` (completion integration),
+`src/agent/LlamaCppProvider.hpp/cpp` (local model parallel inference)
 
 ---
 
-## Phase 9: Multi-Agent Teams
+## Phase 11: Multi-Agent Teams
 
 **Goal:** Enable the user to create a team of AI agents that collaborate on complex tasks.
 Each agent has an assigned role, one agent serves as the team leader that supervises and
 coordinates the others. Agents communicate via a structured message-passing system.
 
-### 9.1 Team Data Model
+### 11.1 Team Data Model
 
 ```
 src/agent/team/
@@ -722,7 +933,7 @@ struct TeamConfig {
 };
 ```
 
-### 9.2 Team Leader Agent
+### 11.2 Team Leader Agent
 
 The team leader is a distinguished agent responsible for:
 
@@ -736,7 +947,7 @@ The leader has an augmented system prompt with team-management instructions and 
 team-coordination tools (see 9.4). The leader's `AgentSession` receives teammate messages
 as tool results, keeping the coordination within the standard agent loop.
 
-### 9.3 Cross-Agent Communication — Message Bus
+### 11.3 Cross-Agent Communication — Message Bus
 
 Agents communicate through a typed message bus (not direct function calls):
 
@@ -768,7 +979,7 @@ enum class MessageType {
 - Incoming messages are injected into the agent's `ConversationHistory` as system messages
 - The leader sees all teammate messages (star topology); teammates can DM each other or broadcast
 
-### 9.4 Team-Coordination Tools
+### 11.4 Team-Coordination Tools
 
 The team leader gets additional built-in tools for team management:
 
@@ -789,7 +1000,7 @@ All agents (including non-leaders) get:
 
 These tools are registered in the `ToolRegistry` only when the agent is part of a team.
 
-### 9.5 Shared Task Board
+### 11.5 Shared Task Board
 
 A lightweight task tracker shared across the team:
 
@@ -810,7 +1021,7 @@ struct TeamTask {
 - The task board is stored in memory (not persisted to disk) — ephemeral per team session
 - The TUI can render task board state (see 9.7)
 
-### 9.6 Agent Lifecycle
+### 11.6 Agent Lifecycle
 
 ```
 User: "Create a team to refactor the auth module"
@@ -864,7 +1075,7 @@ agents:
 - Ad-hoc team creation: `/team create researcher implementer tester` — auto-generates roles
   from built-in templates with sensible defaults
 
-### 9.7 Team TUI Rendering
+### 11.7 Team TUI Rendering
 
 Team activity renders in the primary screen (inline-first principle):
 
@@ -880,7 +1091,7 @@ Team activity renders in the primary screen (inline-first principle):
   - Right pane: selected agent's conversation history
   - Bottom pane: message bus activity log
 
-### 9.8 Configuration
+### 11.8 Configuration
 
 In `~/.config/endo/agent.yml`:
 
@@ -899,7 +1110,7 @@ teams:
 ```
 
 **Touches:** new `src/agent/team/` directory, `src/agent/AgentSession.hpp/cpp`,
-`src/agent/tools/ToolRegistry.hpp/cpp` (team tools), `src/agent/AgentConfig.hpp`,
+`src/agent/tools/ToolRegistry.hpp/cpp` (team tools), `src/agent/AgentConfig.hpp/.cpp`,
 `src/agent/SlashCommandRegistry.hpp/cpp` (`/team` commands), `CMakeLists.txt`
 
 ---
@@ -909,32 +1120,40 @@ teams:
 ```
 Phase 1 (LLM Providers + Multimodal)
    │
-   ├──→ Phase 2 (Agent Mode UX + Image I/O) ──→ Phase 3 (Tool System) ──→ Phase 4 (Permissions)
-   │         │                                          │
-   │         │                                          └──→ Phase 8 (Advanced Features)
-   │         │                                          │       ├── 8.1 Parallel Tools
-   │         │                                          │       ├── 8.2 AI Completion
-   │         │                                          │       ├── 8.3 Error Recovery
-   │         │                                          │       ├── 8.4 Plan Mode
-   │         │                                          │       └── 8.5 Memory System
-   │         │                                          │
-   │         │                                          └──→ Phase 9 (Multi-Agent Teams)
+   ├──→ Phase 2 (Agent Mode UX + Image I/O)
    │         │
-   │         └──→ Phase 7 (TUI Enhancements)
+   │         ├──→ Phase 5 (Tool System) ──→ Phase 6 (Permissions)
+   │         │         │
+   │         │         ├──→ Phase 10 (Advanced Features)
+   │         │         │       ├── 10.1 Parallel Tools
+   │         │         │       ├── 10.2 AI Completion
+   │         │         │       ├── 10.3 Error Recovery
+   │         │         │       ├── 10.4 Plan Mode
+   │         │         │       └── 10.5 Memory System
+   │         │         │
+   │         │         └──→ Phase 11 (Multi-Agent Teams)
+   │         │
+   │         └──→ Phase 9 (TUI Enhancements)
    │
-   ├──→ Phase 5 (Context Management)
+   ├──→ Phase 3 (Local Models — llama.cpp)
    │
-   └──→ Phase 6 (MCP Support)
+   ├──→ Phase 4 (Voice Input — whisper.cpp + VAD) ──→ Phase 9 (TUI Enhancements)
+   │
+   ├──→ Phase 7 (Context Management)
+   │
+   └──→ Phase 8 (MCP Support)
 ```
 
 - **Phase 1** is the prerequisite — LLM provider support (including multimodal content model) unblocks all agentic features.
 - **Phase 2** (UX) should come next — establishes the interaction model, including image paste input (2.6) and image output rendering (2.7).
-- **Phase 3** (Tools) and **Phase 5** (Context) can proceed in parallel after Phase 2.
-- **Phase 4** (Permissions) depends on Phase 3 (tools must exist to classify).
-- **Phase 6** (MCP) is independent after Phase 1 — mychat code provides a head start.
-- **Phase 7** (TUI) depends on Phase 2 (agent UX must exist to enhance).
-- **Phase 8** (Advanced) depends on Phases 3 and 4 being in place.
-- **Phase 9** (Multi-Agent Teams) depends on Phase 3 (tools), Phase 4 (permissions — each agent needs risk caps), and Phase 5 (context management — each agent needs its own conversation). This is the capstone feature.
+- **Phase 3** (Local Models) is independent after Phase 1 — adds a new `LlmProvider` backend using llama.cpp for offline inference. Shares GPU acceleration infrastructure with Phase 4.
+- **Phase 4** (Voice Input) is independent after Phase 1 — uses whisper.cpp for speech-to-text with VAD. Shares GPU backends with Phase 3 and feeds into TUI enhancements (Phase 9).
+- **Phase 5** (Tools) and **Phase 7** (Context) can proceed in parallel after Phase 2.
+- **Phase 6** (Permissions) depends on Phase 5 (tools must exist to classify).
+- **Phase 8** (MCP) is independent after Phase 1 — mychat code provides a head start.
+- **Phase 9** (TUI) depends on Phase 2 (agent UX must exist to enhance) and benefits from Phase 4 (voice status rendering).
+- **Phase 10** (Advanced) depends on Phases 5 and 6 being in place.
+- **Phase 11** (Multi-Agent Teams) depends on Phase 5 (tools), Phase 6 (permissions — each agent needs risk caps), and Phase 7 (context management — each agent needs its own conversation). This is the capstone feature.
 
 ---
 
@@ -947,14 +1166,16 @@ src/agent/
 ├── ClaudeProvider.hpp/.cpp         # Anthropic Claude API (SSE streaming)
 ├── OpenAiProvider.hpp/.cpp         # OpenAI-compatible API (OpenAI, Ollama, vLLM, LM Studio)
 ├── GeminiProvider.hpp/.cpp         # Google Gemini API (SSE streaming, image output)
+├── LlamaCppProvider.hpp/.cpp       # Local inference via llama.cpp (Phase 3)
+├── ModelManager.hpp/.cpp           # GGUF model discovery, loading, memory management (Phase 3)
 ├── ProviderFactory.hpp/.cpp        # Multi-provider creation and runtime switching
 ├── AgentConfig.hpp/.cpp            # Configuration data model + YAML loading
 ├── AgentSession.hpp/.cpp           # Multi-step agent loop (from mychat AgentLoop)
 ├── ConversationHistory.hpp/.cpp    # Conversation management (from mychat ChatSession)
 ├── PermissionManager.hpp/.cpp      # Tool risk classification and approval
-├── AgentInputComponent.hpp/.cpp    # Styled agent input (purple bar, image paste)
+├── AgentInputComponent.hpp/.cpp    # Styled agent input (purple bar, image paste, voice)
 ├── AgentResponseComponent.hpp/.cpp # Streaming response renderer (text + inline images)
-├── SlashCommandRegistry.hpp/.cpp   # /commit, /review, /test, /team, etc.
+├── SlashCommandRegistry.hpp/.cpp   # /commit, /review, /test, /team, /model, /voice, etc.
 ├── tools/
 │   ├── AgentTool.hpp               # Abstract tool interface
 │   ├── ToolRegistry.hpp/.cpp       # Built-in tool registry
@@ -965,6 +1186,11 @@ src/agent/
 │   ├── GrepTool.hpp/.cpp
 │   ├── ShellExecuteTool.hpp/.cpp
 │   └── GitTool.hpp/.cpp
+├── voice/                          # Voice input subsystem (Phase 4)
+│   ├── WhisperEngine.hpp/.cpp      # whisper.cpp wrapper for speech-to-text
+│   ├── AudioCapture.hpp/.cpp       # Microphone input (PulseAudio/ALSA/CoreAudio/WASAPI)
+│   ├── VoiceActivityDetector.hpp/.cpp  # VAD (Silero ONNX / energy-based fallback)
+│   └── VoiceInputManager.hpp/.cpp  # Coordinates capture → VAD → transcription → input
 ├── team/
 │   ├── Team.hpp/.cpp               # Team lifecycle, agent registry
 │   ├── TeamAgent.hpp/.cpp          # Individual agent within a team
@@ -987,9 +1213,9 @@ src/agent/
 
 - **Separate agent binary** — agent mode is integrated into the endo shell, not a standalone tool
 - **GUI / web interface** — endo is a terminal application
-- **Local model hosting** — use external providers (Ollama, vLLM) via OpenAI-compatible API
 - **Training or fine-tuning** — use pre-trained models only
 - **Multi-user / server mode** — single-user local shell
+- **Speech synthesis / TTS** — voice output is out of scope; voice input (STT) via whisper.cpp is in scope
 
 ---
 
@@ -1001,9 +1227,11 @@ The roadmap is complete when a user can:
 2. Ask the agent to read, understand, and modify code — all inline
 3. Paste an image from the clipboard (`Ctrl+V`) and ask the agent about it — with inline sixel preview
 4. See LLM-generated images rendered inline in the terminal (Gemini, OpenAI)
-5. See the agent plan changes, execute tools (including shell commands), and iterate
-6. Review diffs, approve mutations, and commit results — without leaving the shell
-7. Use MCP servers to extend the agent's capabilities
-8. Work through long sessions without context window issues
-9. Create a team of agents (`/team create`) with assigned roles and a leader, watch them collaborate on complex tasks, and receive a synthesized result
-10. Return to normal shell mode with `Escape` at any time
+5. Run a local LLM via llama.cpp (`provider: local`) — fully offline, no API key required
+6. Dictate a query via voice (`Ctrl+Space` push-to-talk) and see real-time transcription
+7. See the agent plan changes, execute tools (including shell commands), and iterate
+8. Review diffs, approve mutations, and commit results — without leaving the shell
+9. Use MCP servers to extend the agent's capabilities
+10. Work through long sessions without context window issues
+11. Create a team of agents (`/team create`) with assigned roles and a leader, watch them collaborate on complex tasks, and receive a synthesized result
+12. Return to normal shell mode with `Escape` at any time

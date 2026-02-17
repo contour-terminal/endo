@@ -172,7 +172,7 @@ else()
     target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
 endif()
 
-target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http)
+target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http endo-agent)
 
 # C++23 std::stacktrace may require -lstdc++exp (GCC/Clang with libstdc++)
 include(CheckCXXSourceCompiles)

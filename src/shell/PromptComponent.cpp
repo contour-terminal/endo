@@ -842,6 +842,10 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
                 return Action::Changed;
             }
         }
+
+        // '#' on empty input enters agent mode
+        if (key->codepoint == '#' && key->modifiers == tui::Modifier::None && _inputField.text().empty())
+            return Action::AgentMode;
     }
 
     // Process through InputField

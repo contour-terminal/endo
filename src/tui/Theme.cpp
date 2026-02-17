@@ -117,6 +117,14 @@ auto darkTheme() -> Theme
         .defaultText = 0xDCDCDC_rgb, // Default text
     };
 
+    // Agent mode colors
+    theme.agentColors = {
+        .leftBar = 0xAA55FF_rgb,
+        .spinnerColor = 0xAA55FF_rgb,
+        .errorText = 0xFF5555_rgb,
+        .statusText = 0x888888_rgb,
+    };
+
     theme.borderStyle = BorderStyle::Rounded;
 
     return theme;
@@ -226,6 +234,14 @@ auto lightTheme() -> Theme
         .defaultText = 0x282A36_rgb, // Dark
     };
 
+    // Agent mode colors
+    theme.agentColors = {
+        .leftBar = 0x6400B4_rgb,
+        .spinnerColor = 0x6400B4_rgb,
+        .errorText = 0xC83232_rgb,
+        .statusText = 0x787882_rgb,
+    };
+
     theme.borderStyle = BorderStyle::Rounded;
 
     return theme;
@@ -327,6 +343,14 @@ auto monoTheme() -> Theme
         .type = 0xFFFFFF_rgb,
         .function = 0xFFFFFF_rgb,
         .defaultText = 0xFFFFFF_rgb,
+    };
+
+    // Agent mode colors
+    theme.agentColors = {
+        .leftBar = 0xC8C8C8_rgb,
+        .spinnerColor = 0xC8C8C8_rgb,
+        .errorText = 0xFFFFFF_rgb,
+        .statusText = 0x808080_rgb,
     };
 
     theme.borderStyle = BorderStyle::Single;

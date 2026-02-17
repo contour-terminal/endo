@@ -20,6 +20,12 @@
 #include <string>
 #include <vector>
 
+namespace endo::agent
+{
+class AgentSession;
+class ProviderFactory;
+} // namespace endo::agent
+
 #include "Completer.hpp"
 #include "History.hpp"
 #include "Job.hpp"
@@ -262,6 +268,13 @@ class Shell final
     {
         std::println(std::cerr, "{}", std::format(message, std::forward<Args>(args)...));
     }
+
+    // --- Agent mode ---
+    void runAgentMode();
+
+    std::unique_ptr<http::HttpClient> _agentHttpClient;
+    std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
+    std::unique_ptr<agent::AgentSession> _agentSession;
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

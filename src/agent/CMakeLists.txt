@@ -1,5 +1,5 @@
 # Endo Agent Library
-# LLM provider abstraction layer for multi-provider AI agent support.
+# LLM provider abstraction layer and agent mode UX for multi-provider AI agent support.
 
 add_library(endo-agent STATIC
     Types.hpp
@@ -9,10 +9,16 @@ add_library(endo-agent STATIC
     OpenAiProvider.hpp OpenAiProvider.cpp
     GeminiProvider.hpp GeminiProvider.cpp
     ProviderFactory.hpp ProviderFactory.cpp
+    ConversationHistory.hpp ConversationHistory.cpp
+    SystemPromptBuilder.hpp SystemPromptBuilder.cpp
+    AgentSession.hpp AgentSession.cpp
+    AgentInputComponent.hpp AgentInputComponent.cpp
+    AgentResponseRenderer.hpp AgentResponseRenderer.cpp
 )
 
 target_link_libraries(endo-agent PUBLIC
     endo-http
+    tui
     nlohmann_json::nlohmann_json
     yaml-cpp::yaml-cpp
     crispy::core
@@ -28,6 +34,9 @@ add_executable(test-endo-agent
     OpenAiProvider_test.cpp
     GeminiProvider_test.cpp
     ProviderFactory_test.cpp
+    ConversationHistory_test.cpp
+    SystemPromptBuilder_test.cpp
+    AgentSession_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)

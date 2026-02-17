@@ -182,6 +182,7 @@ class PromptComponent: public tui::Component
         Abort,       ///< User aborted (Ctrl+C).
         Eof,         ///< User pressed Ctrl+D on empty line.
         ClearScreen, ///< User requested screen clear (Ctrl+L).
+        AgentMode,   ///< User pressed '#' on empty prompt to enter agent mode.
     };
 
     /// @brief Processes an input event and returns the action.

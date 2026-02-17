@@ -203,6 +203,7 @@ std::string Prompt::read()
                     out.writeRaw("\r\n");
                     out.enableReflow();
                     out.flush();
+                    _lastAction = PromptComponent::Action::Submit;
                     return inputText;
                 }
                 case PromptComponent::Action::Abort:
@@ -211,6 +212,7 @@ std::string Prompt::read()
                     _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _promptComponent->clear();
+                    _lastAction = PromptComponent::Action::Abort;
                     return {};
                 case PromptComponent::Action::Eof:
                     // Ctrl+D on empty line - signal EOF
@@ -218,7 +220,24 @@ std::string Prompt::read()
                     _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _aborted = true;
+                    _lastAction = PromptComponent::Action::Eof;
                     return {};
+                case PromptComponent::Action::AgentMode: {
+                    // Move cursor past editor region and write newline
+                    _screen->draw();
+                    auto& out = _terminal.output();
+                    auto const totalLines = _promptComponent->inputField().lineCount();
+                    auto const cursorLine = _promptComponent->inputField().cursorLine();
+                    auto const linesToMoveDown =
+                        totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
+                    if (linesToMoveDown > 0)
+                        out.moveDown(linesToMoveDown);
+                    out.writeRaw("\r\n");
+                    out.enableReflow();
+                    out.flush();
+                    _lastAction = PromptComponent::Action::AgentMode;
+                    return {};
+                }
                 case PromptComponent::Action::Changed: needsRedraw = true; break;
                 case PromptComponent::Action::ClearScreen: {
                     // Clear screen and move prompt to top
@@ -341,6 +360,21 @@ std::optional<std::string> Prompt::processInput()
                 _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
                 _screen->draw();
                 break;
+            }
+            case PromptComponent::Action::AgentMode: {
+                // Move cursor past editor region
+                _screen->draw();
+                auto& out = _terminal.output();
+                auto const totalLines = _promptComponent->inputField().lineCount();
+                auto const cursorLine = _promptComponent->inputField().cursorLine();
+                auto const linesToMoveDown = totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
+                if (linesToMoveDown > 0)
+                    out.moveDown(linesToMoveDown);
+                out.writeRaw("\r\n");
+                out.enableReflow();
+                out.flush();
+                _lastAction = PromptComponent::Action::AgentMode;
+                return std::string {};
             }
             case PromptComponent::Action::None: break;
         }

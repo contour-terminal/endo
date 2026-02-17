@@ -126,6 +126,16 @@ struct Theme
         RgbColor defaultText; ///< Default/unclassified text.
     } syntaxColors;
 
+    // Agent mode color palette
+    /// @brief Colors used by the agent mode UI (input bar, spinner, status).
+    struct AgentColorPalette
+    {
+        RgbColor leftBar;      ///< Left bar accent color for agent input/response.
+        RgbColor spinnerColor; ///< Spinner animation color.
+        RgbColor errorText;    ///< Error message text color.
+        RgbColor statusText;   ///< Status/info text color.
+    } agentColors;
+
     // Border style
     BorderStyle borderStyle = BorderStyle::Rounded;
 };

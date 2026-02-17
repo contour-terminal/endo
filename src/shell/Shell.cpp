@@ -8,6 +8,7 @@
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/Parser.hpp>
 
+#include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -32,6 +33,12 @@
 #include "Prompt.hpp"
 #include "SignalHandler.hpp"
 #include "TTY.hpp"
+#include <agent/AgentConfig.hpp>
+#include <agent/AgentInputComponent.hpp>
+#include <agent/AgentResponseRenderer.hpp>
+#include <agent/AgentSession.hpp>
+#include <agent/ProviderFactory.hpp>
+#include <agent/SystemPromptBuilder.hpp>
 #if defined(_WIN32)
     #include "platform/WindowsEnvironmentProvider.hpp"
 #else
@@ -583,6 +590,14 @@ int Shell::run()
             auto const lineBuffer = prompt.read();
             debugLog()()("input buffer: {}", lineBuffer);
 
+            // Check if the user wants to enter agent mode
+            if (prompt.lastAction() == PromptComponent::Action::AgentMode)
+            {
+                auto const _ = Prompt::ScopedSuspend(prompt);
+                runAgentMode();
+                continue;
+            }
+
             // Add non-empty commands to history
             if (!lineBuffer.empty())
             {
@@ -655,6 +670,14 @@ int Shell::run()
 
         auto const lineBuffer = prompt.read();
         debugLog()()("input buffer: {}", lineBuffer);
+
+        // Check if the user wants to enter agent mode
+        if (prompt.lastAction() == PromptComponent::Action::AgentMode)
+        {
+            auto const _ = Prompt::ScopedSuspend(prompt);
+            runAgentMode();
+            continue;
+        }
 
         // Add non-empty commands to history
         if (!lineBuffer.empty())
@@ -947,6 +970,188 @@ void Shell::reportJobStatus()
 void Shell::trace(CoreVM::Instruction instr, size_t ip, size_t sp)
 {
     traceLog()()("{}\n", CoreVM::disassemble(instr, ip, sp, &_currentProgram->constants()));
+}
+
+// ========================================================================
+// Agent mode
+// ========================================================================
+
+namespace
+{
+
+    /// @brief Runs a command and captures stdout (for git info queries).
+    [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
+    {
+        auto result = std::string {};
+        auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
+        if (!fp)
+            return result;
+
+        auto buf = std::array<char, 256> {};
+        while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
+            result += buf.data();
+        pclose(fp); // NOLINT(cert-env33-c)
+
+        while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
+            result.pop_back();
+        return result;
+    }
+
+} // namespace
+
+void Shell::runAgentMode()
+{
+    // Lazy initialization of agent infrastructure
+    if (!_agentProviderFactory)
+    {
+        auto config = agent::loadAgentConfig();
+        _agentHttpClient = std::make_unique<http::HttpClient>();
+        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, config);
+    }
+
+    auto* provider = _agentProviderFactory->activeProvider();
+    if (!provider)
+    {
+        auto const& theme = tui::currentTheme();
+        auto& out = prompt.terminal().output();
+        auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+        auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
+        out.write("No AI provider configured or authenticated.\n", errorStyle);
+        out.write("Create ~/.config/endo/agent.yml or set ANTHROPIC_API_KEY / OPENAI_API_KEY.\n", mutedStyle);
+        out.flush();
+        return;
+    }
+
+    // Create or reuse agent session (preserves conversation history)
+    if (!_agentSession)
+        _agentSession = std::make_unique<agent::AgentSession>(*provider);
+
+    // Build system prompt with current environment context
+    auto promptBuilder = agent::SystemPromptBuilder {};
+    promptBuilder.setWorkingDirectory(std::filesystem::current_path().string());
+    promptBuilder.setShellInfo("endo");
+
+    auto const cwd = std::filesystem::current_path().string();
+#if defined(_WIN32)
+    auto const gitBranch = runCommandCapture("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
+#else
+    auto const gitBranch = runCommandCapture("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
+#endif
+    if (!gitBranch.empty())
+    {
+        promptBuilder.setGitBranch(gitBranch);
+#if defined(_WIN32)
+        auto const gitStatus = runCommandCapture("git -C " + cwd + " status --porcelain=v2 --branch 2>NUL");
+#else
+        auto const gitStatus =
+            runCommandCapture("git -C " + cwd + " status --porcelain=v2 --branch 2>/dev/null");
+#endif
+        promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
+    }
+
+    _agentSession->setSystemPrompt(promptBuilder.build());
+
+    // Agent input loop
+    auto& terminal = prompt.terminal();
+    auto& out = terminal.output();
+    auto const& theme = tui::currentTheme();
+    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+    auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
+
+    // Create inline Screen with AgentInputComponent
+    auto screenConfig = tui::ScreenConfig {
+        .viewport = tui::Viewport::Inline,
+        .inhibitReflow = true,
+    };
+    auto screen = tui::Screen(terminal, screenConfig);
+    auto inputComponent = agent::AgentInputComponent {};
+    auto const prefSize = inputComponent.preferredSize();
+    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), prefSize.height });
+    screen.root().addChild(inputComponent);
+    screen.setFocus(&inputComponent);
+    screen.draw();
+
+    while (true)
+    {
+        auto const spinnerTimeout = 80; // ms for spinner animation if we add one later
+        auto events = terminal.poll(spinnerTimeout);
+
+        if (events.empty())
+        {
+            // Timeout — could tick spinner here if needed
+            continue;
+        }
+
+        auto needsRedraw = false;
+        for (auto const& event: events)
+        {
+            if (std::holds_alternative<tui::ResizeEvent>(event))
+            {
+                needsRedraw = true;
+                continue;
+            }
+
+            auto const action = inputComponent.processInput(event);
+            switch (action)
+            {
+                case agent::AgentInputComponent::Action::Submit: {
+                    auto const query = std::string(inputComponent.text());
+                    inputComponent.clear();
+
+                    // Move cursor past the input component
+                    screen.draw();
+                    auto const totalLines = inputComponent.inputField().lineCount();
+                    auto const cursorLine = inputComponent.inputField().cursorLine();
+                    auto const linesToMoveDown = totalLines - cursorLine;
+                    if (linesToMoveDown > 0)
+                        out.moveDown(linesToMoveDown);
+                    out.writeRaw("\r\n");
+                    out.flush();
+
+                    // Release the screen before streaming the response
+                    screen.releaseCursor();
+
+                    // Stream the response
+                    auto renderer = agent::AgentResponseRenderer(out);
+                    renderer.begin();
+
+                    auto result = _agentSession->processMessage(
+                        query, [&](std::string_view token) { renderer.feedToken(token); });
+
+                    renderer.end();
+
+                    if (!result.has_value())
+                    {
+                        auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                        out.write("Error: " + result.error().message + "\n", errorStyle);
+                        out.flush();
+                    }
+
+                    // Re-render the input component for the next query
+                    auto const newPrefSize = inputComponent.preferredSize();
+                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                    screen.draw();
+                    break;
+                }
+                case agent::AgentInputComponent::Action::Abort:
+                    // Exit agent mode
+                    screen.draw();
+                    out.writeRaw("\r\n");
+                    out.flush();
+                    screen.releaseCursor();
+                    return;
+                case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
+                case agent::AgentInputComponent::Action::None: break;
+            }
+        }
+
+        if (needsRedraw)
+        {
+            auto const newPrefSize = inputComponent.preferredSize();
+            inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+            screen.draw();
+        }
+    }
 }
 
 } // namespace endo

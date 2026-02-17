@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <shell/PromptComponent.hpp>
 #include <shell/PromptConfig.hpp>
 #include <shell/PromptModule.hpp>
-
-#include "Platform.hpp"
 
 #include <tui/KeyBindings.hpp>
 #include <tui/Screen.hpp>
@@ -15,6 +14,8 @@
 #include <set>
 #include <string>
 
+#include "Platform.hpp"
+
 namespace endo
 {
 
@@ -22,7 +23,6 @@ namespace endo
 class Completer;
 class CommandResolver;
 class History;
-class PromptComponent;
 
 /// @brief TUI-based prompt using tui::Terminal and tui::InputField.
 ///
@@ -103,6 +103,9 @@ class Prompt
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
 
+    /// @brief Returns the action from the last read() call.
+    [[nodiscard]] auto lastAction() const noexcept -> PromptComponent::Action { return _lastAction; }
+
     /// @brief Sets externally known F# names for diagnostics suppression.
     ///
     /// @param names The set of known F# names (persisted from prior REPL prompts).
@@ -170,6 +173,7 @@ class Prompt
     bool _initialized = false;
     bool _aborted = false;
     bool _multilineEnabled = true; ///< Enable multiline editing by default
+    PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
 
     void initialize();
     void setupHoverCallbacks();
