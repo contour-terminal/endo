@@ -12,7 +12,7 @@
 
 namespace endo::ast
 {
-class Statement;
+struct Statement;
 }
 
 namespace endo

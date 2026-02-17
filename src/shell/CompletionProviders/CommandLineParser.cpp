@@ -2,6 +2,7 @@
 #include "CommandLineParser.hpp"
 
 #include <algorithm>
+#include <span>
 #include <sstream>
 
 namespace endo

@@ -65,6 +65,12 @@ if(NOT EMSCRIPTEN)
         )
         set(THIRDPARTY_BUILTIN_Catch2 "CPM (v3.8.0)")
     endif()
+    # The global -D_UNICODE definition causes Catch2WithMain to define wmain()
+    # instead of main(), leading to unresolved symbol errors on MSVC.
+    # Undefine _UNICODE for Catch2WithMain so it provides the standard main().
+    if(WIN32 AND TARGET Catch2WithMain)
+        target_compile_options(Catch2WithMain PRIVATE /U_UNICODE)
+    endif()
 endif()
 
 # ==============================================================================

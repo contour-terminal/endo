@@ -26,8 +26,9 @@
         #include <cstdio>
         #include <filesystem>
 
-        #include <dbghelp.h>
         #include <windows.h>
+        // dbghelp.h requires windows.h type definitions (PSTR, HANDLE, ULONG, etc.)
+        #include <dbghelp.h>
     #endif
 #endif
 

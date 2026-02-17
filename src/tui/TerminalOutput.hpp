@@ -80,7 +80,7 @@ class SyncGuard
     auto operator=(SyncGuard&&) -> SyncGuard& = delete;
 
   private:
-    int _fd;
+    [[maybe_unused]] int _fd;
 };
 
 /// @brief Handles styled terminal output, cursor control, and screen management.
