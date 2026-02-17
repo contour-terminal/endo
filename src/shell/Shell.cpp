@@ -2465,6 +2465,219 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    // Handle rm builtin
+    if (program == "rm")
+    {
+        // Helper to write output
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+        auto writeOutput = [outputFd](std::string const& str) {
+            [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        };
+
+        bool recursive = false;
+        bool force = false;
+        bool removeEmptyDirs = false;
+        bool verbose = false;
+        bool interactive = false;
+        bool endOfOptions = false;
+        std::vector<std::string> paths;
+
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            std::string_view const arg = args.at(i);
+
+            if (!endOfOptions && arg == "--")
+            {
+                endOfOptions = true;
+                continue;
+            }
+
+            if (!endOfOptions && arg == "--help")
+            {
+                writeOutput("Usage: rm [OPTION]... [FILE]...\n");
+                writeOutput("Remove (unlink) the FILE(s).\n");
+                writeOutput("\n");
+                writeOutput("Options:\n");
+                writeOutput("  -f, --force       ignore nonexistent files, never prompt\n");
+                writeOutput("  -i                prompt before every removal\n");
+                writeOutput("  -r, -R, --recursive  remove directories and their contents recursively\n");
+                writeOutput("  -d, --dir         remove empty directories\n");
+                writeOutput("  -v, --verbose     explain what is being done\n");
+                writeOutput("      --help        display this help and exit\n");
+                _exitCode = 0;
+                context.setResult(CoreVM::CoreNumber(0));
+                return;
+            }
+
+            if (!endOfOptions && arg == "--recursive")
+            {
+                recursive = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--force")
+            {
+                force = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--dir")
+            {
+                removeEmptyDirs = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--verbose")
+            {
+                verbose = true;
+                continue;
+            }
+
+            // Parse combined short flags: -rf, -rv, etc.
+            if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
+            {
+                bool validFlags = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    switch (arg[j])
+                    {
+                        case 'r':
+                        case 'R': recursive = true; break;
+                        case 'f': force = true; break;
+                        case 'd': removeEmptyDirs = true; break;
+                        case 'v': verbose = true; break;
+                        case 'i': interactive = true; break;
+                        default: validFlags = false; break;
+                    }
+                    if (!validFlags)
+                        break;
+                }
+                if (validFlags)
+                    continue;
+            }
+
+            paths.emplace_back(arg);
+        }
+
+        if (paths.empty())
+        {
+            if (!force)
+            {
+                error("rm: missing operand");
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreNumber(1));
+                return;
+            }
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+
+        bool success = true;
+        for (auto const& path: paths)
+        {
+            namespace fs = std::filesystem;
+
+            // Preserve root: reject "/"
+            auto const canonical = fs::path(path).lexically_normal();
+            if (canonical == "/" || canonical == "//" || canonical.string() == "\\")
+            {
+                error("rm: it is dangerous to operate recursively on '/'");
+                success = false;
+                continue;
+            }
+
+            // Reject paths ending in . or ..
+            auto const filename = canonical.filename().string();
+            if (filename == "." || filename == "..")
+            {
+                error("rm: refusing to remove '.' or '..' directory: skipping '{}'", path);
+                success = false;
+                continue;
+            }
+
+            std::error_code ec;
+            auto const status = fs::symlink_status(path, ec);
+            if (ec || !fs::exists(status))
+            {
+                if (!force)
+                {
+                    error("rm: cannot remove '{}': No such file or directory", path);
+                    success = false;
+                }
+                continue;
+            }
+
+            // Interactive prompt
+            if (interactive && !force)
+            {
+                std::string prompt;
+                if (fs::is_directory(status))
+                    prompt = std::format("rm: remove directory '{}'? ", path);
+                else
+                    prompt = std::format("rm: remove file '{}'? ", path);
+                // Write prompt to stderr, read response from stdin
+                [[maybe_unused]] auto w = platformWrite(2, prompt.data(), prompt.size());
+                // In non-interactive/test contexts, skip (treat as 'no')
+                if (!_tty.isTerminal())
+                    continue;
+                std::string response;
+                std::getline(std::cin, response);
+                if (response.empty() || (response[0] != 'y' && response[0] != 'Y'))
+                    continue;
+            }
+
+            if (fs::is_directory(status) && !fs::is_symlink(status))
+            {
+                if (recursive)
+                {
+                    auto const count = fs::remove_all(path, ec);
+                    if (ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        success = false;
+                    }
+                    else if (verbose && count > 0)
+                    {
+                        writeOutput(std::format("removed '{}'\n", path));
+                    }
+                }
+                else if (removeEmptyDirs)
+                {
+                    if (!fs::remove(path, ec) || ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Directory not empty");
+                        success = false;
+                    }
+                    else if (verbose)
+                    {
+                        writeOutput(std::format("removed '{}'\n", path));
+                    }
+                }
+                else
+                {
+                    error("rm: cannot remove '{}': Is a directory", path);
+                    success = false;
+                }
+            }
+            else
+            {
+                if (!fs::remove(path, ec) || ec)
+                {
+                    error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Unknown error");
+                    success = false;
+                }
+                else if (verbose)
+                {
+                    writeOutput(std::format("removed '{}'\n", path));
+                }
+            }
+        }
+
+        _exitCode = success ? 0 : 1;
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
     {
@@ -3087,6 +3300,234 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
+        return;
+    }
+
+    // Handle rm builtin in pipeline
+    if (program == "rm")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+
+        auto writeOutput = [stdoutFd](std::string const& str) {
+            [[maybe_unused]] auto written = platformWrite(stdoutFd, str.data(), str.size());
+        };
+
+        bool recursive = false;
+        bool force = false;
+        bool removeEmptyDirs = false;
+        bool verbose = false;
+        bool interactive = false;
+        bool endOfOptions = false;
+        std::vector<std::string> paths;
+
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            std::string_view const arg = args.at(i);
+
+            if (!endOfOptions && arg == "--")
+            {
+                endOfOptions = true;
+                continue;
+            }
+
+            if (!endOfOptions && arg == "--help")
+            {
+                writeOutput("Usage: rm [OPTION]... [FILE]...\n");
+                writeOutput("Remove (unlink) the FILE(s).\n");
+                writeOutput("\n");
+                writeOutput("Options:\n");
+                writeOutput("  -f, --force       ignore nonexistent files, never prompt\n");
+                writeOutput("  -i                prompt before every removal\n");
+                writeOutput("  -r, -R, --recursive  remove directories and their contents recursively\n");
+                writeOutput("  -d, --dir         remove empty directories\n");
+                writeOutput("  -v, --verbose     explain what is being done\n");
+                writeOutput("      --help        display this help and exit\n");
+
+                if (!lastInChain)
+                    _currentPipelineBuilder.closeCurrentPipeWriter();
+
+                _exitCode = 0;
+                context.setResult(CoreVM::CoreNumber(0));
+                return;
+            }
+
+            if (!endOfOptions && arg == "--recursive")
+            {
+                recursive = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--force")
+            {
+                force = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--dir")
+            {
+                removeEmptyDirs = true;
+                continue;
+            }
+            if (!endOfOptions && arg == "--verbose")
+            {
+                verbose = true;
+                continue;
+            }
+
+            if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
+            {
+                bool validFlags = true;
+                for (size_t j = 1; j < arg.size(); ++j)
+                {
+                    switch (arg[j])
+                    {
+                        case 'r':
+                        case 'R': recursive = true; break;
+                        case 'f': force = true; break;
+                        case 'd': removeEmptyDirs = true; break;
+                        case 'v': verbose = true; break;
+                        case 'i': interactive = true; break;
+                        default: validFlags = false; break;
+                    }
+                    if (!validFlags)
+                        break;
+                }
+                if (validFlags)
+                    continue;
+            }
+
+            paths.emplace_back(arg);
+        }
+
+        if (paths.empty())
+        {
+            if (!force)
+            {
+                error("rm: missing operand");
+                if (!lastInChain)
+                    _currentPipelineBuilder.closeCurrentPipeWriter();
+                _exitCode = 1;
+                context.setResult(CoreVM::CoreNumber(1));
+                return;
+            }
+            if (!lastInChain)
+                _currentPipelineBuilder.closeCurrentPipeWriter();
+            _exitCode = 0;
+            context.setResult(CoreVM::CoreNumber(0));
+            return;
+        }
+
+        bool success = true;
+        for (auto const& path: paths)
+        {
+            namespace fs = std::filesystem;
+
+            auto const canonical = fs::path(path).lexically_normal();
+            if (canonical == "/" || canonical == "//" || canonical.string() == "\\")
+            {
+                error("rm: it is dangerous to operate recursively on '/'");
+                success = false;
+                continue;
+            }
+
+            auto const filename = canonical.filename().string();
+            if (filename == "." || filename == "..")
+            {
+                error("rm: refusing to remove '.' or '..' directory: skipping '{}'", path);
+                success = false;
+                continue;
+            }
+
+            std::error_code ec;
+            auto const status = fs::symlink_status(path, ec);
+            if (ec || !fs::exists(status))
+            {
+                if (!force)
+                {
+                    error("rm: cannot remove '{}': No such file or directory", path);
+                    success = false;
+                }
+                continue;
+            }
+
+            if (interactive && !force)
+                continue; // Skip in pipeline context (non-interactive)
+
+            if (fs::is_directory(status) && !fs::is_symlink(status))
+            {
+                if (recursive)
+                {
+                    auto const count = fs::remove_all(path, ec);
+                    if (ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec.message());
+                        success = false;
+                    }
+                    else if (verbose && count > 0)
+                    {
+                        writeOutput(std::format("removed '{}'\n", path));
+                    }
+                }
+                else if (removeEmptyDirs)
+                {
+                    if (!fs::remove(path, ec) || ec)
+                    {
+                        error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Directory not empty");
+                        success = false;
+                    }
+                    else if (verbose)
+                    {
+                        writeOutput(std::format("removed '{}'\n", path));
+                    }
+                }
+                else
+                {
+                    error("rm: cannot remove '{}': Is a directory", path);
+                    success = false;
+                }
+            }
+            else
+            {
+                if (!fs::remove(path, ec) || ec)
+                {
+                    error("rm: cannot remove '{}': {}", path, ec ? ec.message() : "Unknown error");
+                    success = false;
+                }
+                else if (verbose)
+                {
+                    writeOutput(std::format("removed '{}'\n", path));
+                }
+            }
+        }
+
+        if (!lastInChain)
+            _currentPipelineBuilder.closeCurrentPipeWriter();
+
+        // Track command for job table
+        std::string cmdString = "rm";
+        for (size_t i = 1; i < args.size(); ++i)
+        {
+            cmdString += ' ';
+            cmdString += args.at(i);
+        }
+        _pipelineCommands.push_back(std::move(cmdString));
+
+        if (lastInChain)
+        {
+            for (ProcessId const processPid: _currentProcessGroupPids)
+            {
+                auto const waitResult = _processManager.wait(processPid);
+                if (waitResult.has_value())
+                    _exitCode = waitResult->exitCode;
+            }
+            _currentProcessGroupPids.clear();
+            _pipelineCommands.clear();
+
+            auto const setFgResult = _processManager.setForegroundPgrp(_tty.inputFd(), _shellPgid);
+            if (!setFgResult)
+                debugLog()()("Failed to reclaim foreground: {}", toString(setFgResult.error()));
+        }
+
+        _exitCode = success ? 0 : 1;
+        context.setResult(CoreVM::CoreNumber(_exitCode));
         return;
     }
 

@@ -158,6 +158,7 @@ std::set<std::string> const& CommandResolver::builtinNames()
         "cd",
         "exit",
         "export",
+        "rm",
         "set",
         "unset",
         "read",

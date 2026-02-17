@@ -801,6 +801,7 @@ std::vector<std::string> userFacingBuiltinNames()
         "cd",
         "exit",
         "export",
+        "rm",
         "set",
         "unset",
         "read",

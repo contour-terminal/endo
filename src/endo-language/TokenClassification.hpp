@@ -160,10 +160,10 @@ enum class TokenCategory
 [[nodiscard]] constexpr bool isShellBuiltin(std::string_view name) noexcept
 {
     return name == "cd" || name == "echo" || name == "exit" || name == "export" || name == "pwd"
-           || name == "env" || name == "read" || name == "time" || name == "fg" || name == "bg"
-           || name == "source" || name == "alias" || name == "unalias" || name == "set" || name == "unset"
-           || name == "jobs" || name == "kill" || name == "wait" || name == "eval" || name == "test"
-           || name == "true" || name == "false" || name == "set_prompt_preset"
+           || name == "rm" || name == "env" || name == "read" || name == "time" || name == "fg"
+           || name == "bg" || name == "source" || name == "alias" || name == "unalias" || name == "set"
+           || name == "unset" || name == "jobs" || name == "kill" || name == "wait" || name == "eval"
+           || name == "test" || name == "true" || name == "false" || name == "set_prompt_preset"
            || name == "set_prompt_indicator" || name == "set_prompt_layout" || name == "set_prompt_separator"
            || name == "set_prompt_transient" || name == "set_prompt_duration_threshold"
            || name == "set_prompt_spacing";

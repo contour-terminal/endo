@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <format>
 #include <fstream>
 
 using namespace std::string_literals;
@@ -694,6 +695,177 @@ TEST_CASE("shell.builtin.sleep_float")
     TestShell shell;
     shell("sleep 0.001");
     CHECK(shell.exitCode == 0);
+}
+
+// ============================================================================
+// Rm Builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.rm_help")
+{
+    TestShell shell;
+    auto output = shell("rm --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--force") != std::string::npos);
+    CHECK(output.find("--recursive") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.rm_file")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_file";
+    fs::create_directories(testDir);
+    auto const filePath = testDir / "testfile.txt";
+    {
+        std::ofstream ofs(filePath);
+        ofs << "hello";
+    }
+    REQUIRE(fs::exists(filePath));
+
+    TestShell shell;
+    shell(std::format("rm {}", filePath.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(filePath));
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.rm_nonexistent")
+{
+    TestShell shell;
+    shell("rm /tmp/endo_rm_test_nonexistent_file_xyz");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.rm_force_nonexistent")
+{
+    TestShell shell;
+    shell("rm -f /tmp/endo_rm_test_nonexistent_file_xyz");
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.rm_directory_without_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_dir_norec";
+    fs::create_directories(testDir);
+    REQUIRE(fs::exists(testDir));
+
+    TestShell shell;
+    shell(std::format("rm {}", testDir.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.rm_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_recursive";
+    fs::create_directories(testDir / "subdir");
+    {
+        std::ofstream ofs(testDir / "subdir" / "file.txt");
+        ofs << "data";
+    }
+    REQUIRE(fs::exists(testDir / "subdir" / "file.txt"));
+
+    TestShell shell;
+    shell(std::format("rm -r {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(testDir));
+}
+
+TEST_CASE("shell.builtin.rm_dir_flag")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_emptydir";
+    fs::create_directories(testDir);
+    REQUIRE(fs::exists(testDir));
+
+    TestShell shell;
+    shell(std::format("rm -d {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(testDir));
+}
+
+TEST_CASE("shell.builtin.rm_verbose")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_verbose";
+    fs::create_directories(testDir);
+    auto const filePath = testDir / "verbose_file.txt";
+    {
+        std::ofstream ofs(filePath);
+        ofs << "data";
+    }
+    REQUIRE(fs::exists(filePath));
+
+    TestShell shell;
+    auto output = shell(std::format("rm -v {}", filePath.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("removed") != std::string::npos);
+    CHECK(!fs::exists(filePath));
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.rm_combined_flags")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_combined";
+    fs::create_directories(testDir / "inner");
+    {
+        std::ofstream ofs(testDir / "inner" / "f.txt");
+        ofs << "x";
+    }
+    REQUIRE(fs::exists(testDir / "inner" / "f.txt"));
+
+    TestShell shell;
+    shell(std::format("rm -rf {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(testDir));
+}
+
+TEST_CASE("shell.builtin.rm_double_dash")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_rm_test_ddash";
+    fs::create_directories(testDir);
+    auto const filePath = testDir / "-weirdname";
+    {
+        std::ofstream ofs(filePath);
+        ofs << "data";
+    }
+    REQUIRE(fs::exists(filePath));
+
+    TestShell shell;
+    shell(std::format("rm -- {}", filePath.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(filePath));
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.rm_preserve_root")
+{
+    TestShell shell;
+    shell("rm -rf /");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.rm_dot_rejection")
+{
+    {
+        TestShell shell;
+        shell("rm .");
+        CHECK(shell.exitCode == 1);
+    }
+    {
+        TestShell shell;
+        shell("rm ..");
+        CHECK(shell.exitCode == 1);
+    }
 }
 
 // ============================================================================
