@@ -181,9 +181,27 @@ TEST_CASE("KeyBindings.defaults_select_all")
 {
     auto bindings = KeyBindings::defaults();
 
-    auto result = bindings.lookup(charEvent('a', Modifier::Ctrl));
+    auto result = bindings.lookup(charEvent('a', Modifier::Ctrl | Modifier::Shift));
     REQUIRE(result.has_value());
     CHECK(*result == EditAction::SelectAll);
+}
+
+TEST_CASE("KeyBindings.defaults_smart_move_to_line_start")
+{
+    auto bindings = KeyBindings::defaults();
+
+    auto result = bindings.lookup(charEvent('a', Modifier::Ctrl));
+    REQUIRE(result.has_value());
+    CHECK(*result == EditAction::SmartMoveToLineStart);
+}
+
+TEST_CASE("KeyBindings.defaults_smart_move_to_line_end")
+{
+    auto bindings = KeyBindings::defaults();
+
+    auto result = bindings.lookup(charEvent('e', Modifier::Ctrl));
+    REQUIRE(result.has_value());
+    CHECK(*result == EditAction::SmartMoveToLineEnd);
 }
 
 TEST_CASE("KeyBindings.defaults_delete_char_ctrl_d")
@@ -458,6 +476,8 @@ TEST_CASE("parseEditAction.movement_actions")
     CHECK(parseEditAction("move-to-buffer-end") == EditAction::MoveToBufferEnd);
     CHECK(parseEditAction("move-up") == EditAction::MoveUp);
     CHECK(parseEditAction("move-down") == EditAction::MoveDown);
+    CHECK(parseEditAction("smart-move-to-line-start") == EditAction::SmartMoveToLineStart);
+    CHECK(parseEditAction("smart-move-to-line-end") == EditAction::SmartMoveToLineEnd);
 }
 
 TEST_CASE("parseEditAction.editing_actions")

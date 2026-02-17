@@ -385,6 +385,18 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
             _lastWasKill = false;
             return InputFieldAction::Changed;
 
+        case EditAction::SmartMoveToLineStart:
+            clearSelection();
+            smartMoveToLineStart();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
+        case EditAction::SmartMoveToLineEnd:
+            clearSelection();
+            smartMoveToLineEnd();
+            _lastWasKill = false;
+            return InputFieldAction::Changed;
+
         // Editing
         case EditAction::DeleteCharBackward:
             clearGhostText();
@@ -1173,6 +1185,44 @@ void InputField::moveToLineStart()
 void InputField::moveToLineEnd()
 {
     _cursor = findLineEnd(_cursor);
+}
+
+void InputField::smartMoveToLineStart()
+{
+    if (!_multiline)
+    {
+        _cursor = 0;
+        return;
+    }
+    auto const lineStart = findLineStart(_cursor);
+    if (_cursor != lineStart)
+    {
+        _cursor = lineStart;
+    }
+    else if (lineStart > 0)
+    {
+        // Already at line start, jump to start of previous line
+        _cursor = findLineStart(lineStart - 1);
+    }
+}
+
+void InputField::smartMoveToLineEnd()
+{
+    if (!_multiline)
+    {
+        _cursor = _buffer.size();
+        return;
+    }
+    auto const lineEnd = findLineEnd(_cursor);
+    if (_cursor != lineEnd)
+    {
+        _cursor = lineEnd;
+    }
+    else if (lineEnd < _buffer.size())
+    {
+        // Already at line end, jump to end of next line
+        _cursor = findLineEnd(lineEnd + 1);
+    }
 }
 
 void InputField::moveUp()

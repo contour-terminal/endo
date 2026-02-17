@@ -94,7 +94,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 30> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 32> actionNameMappings = { {
         // Movement
         { "move-forward-char", EditAction::MoveForwardChar },
         { "move-backward-char", EditAction::MoveBackwardChar },
@@ -106,6 +106,8 @@ namespace
         { "move-to-buffer-end", EditAction::MoveToBufferEnd },
         { "move-up", EditAction::MoveUp },
         { "move-down", EditAction::MoveDown },
+        { "smart-move-to-line-start", EditAction::SmartMoveToLineStart },
+        { "smart-move-to-line-end", EditAction::SmartMoveToLineEnd },
         // Editing
         { "delete-char-backward", EditAction::DeleteCharBackward },
         { "delete-char-forward", EditAction::DeleteCharForward },
@@ -333,14 +335,15 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromChar('v', M::Ctrl), A::Paste);
 
     // === Selection ===
-    bindings.bind(K::fromChar('a', M::Ctrl), A::SelectAll);
+    bindings.bind(K::fromChar('a', M::Ctrl | M::Shift), A::SelectAll);
 
     // === Movement (letter keys) ===
+    bindings.bind(K::fromChar('a', M::Ctrl), A::SmartMoveToLineStart);
     bindings.bind(K::fromChar('f', M::Ctrl), A::MoveForwardChar);
     bindings.bind(K::fromChar('b', M::Ctrl), A::MoveBackwardChar);
     bindings.bind(K::fromChar('f', M::Alt), A::MoveForwardWord);
     bindings.bind(K::fromChar('b', M::Alt), A::MoveBackwardWord);
-    bindings.bind(K::fromChar('e', M::Ctrl), A::MoveToLineEnd);
+    bindings.bind(K::fromChar('e', M::Ctrl), A::SmartMoveToLineEnd);
     bindings.bind(K::fromChar('p', M::Ctrl), A::MoveUp);
     bindings.bind(K::fromChar('n', M::Ctrl), A::MoveDown);
 

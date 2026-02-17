@@ -361,26 +361,29 @@ class InputField: public Component
     [[nodiscard]] auto executeAction(EditAction action) -> InputFieldAction;
 
     // Editing operations
-    void killToEnd();          ///< Ctrl+K: Kill from cursor to end of line.
-    void killToStart();        ///< Ctrl+U: Kill from cursor to start of line.
-    void killWord();           ///< Alt+D: Kill word forward.
-    void killWordBackward();   ///< Alt+Backspace / Ctrl+W: Kill word backward.
-    void yank();               ///< Ctrl+Y: Yank (paste) from kill ring.
-    void yankPop();            ///< Alt+Y: Cycle kill ring.
-    void deleteChar();         ///< Delete / Ctrl+D: Delete character at cursor.
-    void deleteCharBackward(); ///< Backspace: Delete character before cursor.
-    void moveToStart();        ///< Ctrl+A / Home: Move cursor to start of line (or buffer).
-    void moveToEnd();          ///< Ctrl+E / End: Move cursor to end of line (or buffer).
-    void moveToBufferStart();  ///< Move cursor to start of buffer.
-    void moveToBufferEnd();    ///< Move cursor to end of buffer.
-    void moveToLineStart();    ///< Move cursor to start of current line.
-    void moveToLineEnd();      ///< Move cursor to end of current line.
-    void moveForwardChar();    ///< Ctrl+F / Right: Move cursor forward one grapheme.
-    void moveBackwardChar();   ///< Ctrl+B / Left: Move cursor backward one grapheme.
-    void moveForwardWord();    ///< Alt+F / Ctrl+Right: Move cursor forward one word.
-    void moveBackwardWord();   ///< Alt+B / Ctrl+Left: Move cursor backward one word.
-    void moveUp();             ///< Move cursor up one line (multiline mode).
-    void moveDown();           ///< Move cursor down one line (multiline mode).
+    void killToEnd();            ///< Ctrl+K: Kill from cursor to end of line.
+    void killToStart();          ///< Ctrl+U: Kill from cursor to start of line.
+    void killWord();             ///< Alt+D: Kill word forward.
+    void killWordBackward();     ///< Alt+Backspace / Ctrl+W: Kill word backward.
+    void yank();                 ///< Ctrl+Y: Yank (paste) from kill ring.
+    void yankPop();              ///< Alt+Y: Cycle kill ring.
+    void deleteChar();           ///< Delete / Ctrl+D: Delete character at cursor.
+    void deleteCharBackward();   ///< Backspace: Delete character before cursor.
+    void moveToStart();          ///< Ctrl+A / Home: Move cursor to start of line (or buffer).
+    void moveToEnd();            ///< Ctrl+E / End: Move cursor to end of line (or buffer).
+    void moveToBufferStart();    ///< Move cursor to start of buffer.
+    void moveToBufferEnd();      ///< Move cursor to end of buffer.
+    void moveToLineStart();      ///< Move cursor to start of current line.
+    void moveToLineEnd();        ///< Move cursor to end of current line.
+    void moveForwardChar();      ///< Ctrl+F / Right: Move cursor forward one grapheme.
+    void moveBackwardChar();     ///< Ctrl+B / Left: Move cursor backward one grapheme.
+    void moveForwardWord();      ///< Alt+F / Ctrl+Right: Move cursor forward one word.
+    void moveBackwardWord();     ///< Alt+B / Ctrl+Left: Move cursor backward one word.
+    void moveUp();               ///< Move cursor up one line (multiline mode).
+    void moveDown();             ///< Move cursor down one line (multiline mode).
+    void smartMoveToLineStart(); ///< Move to line start; if already there in multiline, move to previous
+                                 ///< line's start.
+    void smartMoveToLineEnd(); ///< Move to line end; if already there in multiline, move to next line's end.
     void historyPrev();        ///< Up / Ctrl+P: Previous history entry.
     void historyNext();        ///< Down / Ctrl+N: Next history entry.
     void transpose();          ///< Ctrl+T: Transpose characters before cursor.

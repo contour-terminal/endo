@@ -222,8 +222,8 @@ TEST_CASE("InputField.select_all")
     InputField field;
     field.setText("hello world");
 
-    // Ctrl+A selects all
-    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    // Ctrl+Shift+A selects all
+    (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift));
     CHECK(field.hasSelection());
     CHECK(field.selectedText() == "hello world");
 }
@@ -232,7 +232,7 @@ TEST_CASE("InputField.selection_cleared_on_unshifted_movement")
 {
     InputField field;
     field.setText("hello");
-    (void) field.processEvent(charKey('a', Modifier::Ctrl)); // Select all
+    (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift)); // Select all
 
     CHECK(field.hasSelection());
 
@@ -245,7 +245,7 @@ TEST_CASE("InputField.typing_replaces_selection")
 {
     InputField field;
     field.setText("hello");
-    (void) field.processEvent(charKey('a', Modifier::Ctrl)); // Select all
+    (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift)); // Select all
 
     // Typing replaces selection
     (void) field.processEvent(charKey('x'));
@@ -716,7 +716,7 @@ TEST_CASE("InputField.ctrl_c_copies_when_selection")
 {
     InputField field;
     field.setText("hello");
-    (void) field.processEvent(charKey('a', Modifier::Ctrl)); // Select all
+    (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift)); // Select all
 
     // Ctrl+C with selection should copy, not abort
     auto action = field.processEvent(charKey('c', Modifier::Ctrl));
@@ -768,7 +768,7 @@ TEST_CASE("InputField.paste_replaces_selection")
 {
     InputField field;
     field.setText("hello");
-    (void) field.processEvent(charKey('a', Modifier::Ctrl)); // Select all
+    (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift)); // Select all
 
     PasteEvent paste { .text = "goodbye" };
     (void) field.processEvent(paste);
@@ -1116,4 +1116,152 @@ TEST_CASE("InputField.mixed_capslock_typing")
     (void) field.processEvent(charKey('o', Modifier::CapsLock | Modifier::Shift)); // o (shift cancels caps)
 
     CHECK(field.text() == "HeLLo");
+}
+
+// ============================================================================
+// Smart cursor movement tests (Ctrl+A / Ctrl+E)
+// ============================================================================
+
+TEST_CASE("InputField.smart_move_to_line_start_single_line")
+{
+    InputField field;
+    field.setText("hello");
+
+    // Ctrl+A goes to position 0 in single-line mode
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+}
+
+TEST_CASE("InputField.smart_move_to_line_start_multiline_from_middle")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Cursor at end of "world" (position 11)
+    CHECK(field.cursor() == 11);
+
+    // First Ctrl+A goes to start of current line ("world" starts at 6)
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 6);
+}
+
+TEST_CASE("InputField.smart_move_to_line_start_multiline_already_at_start")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Move to start of second line
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 6);
+
+    // Second Ctrl+A jumps to start of previous line
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+}
+
+TEST_CASE("InputField.smart_move_to_line_start_already_at_buffer_start")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Move to buffer start
+    (void) field.processEvent(specialKey(KeyCode::Home, Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+
+    // Ctrl+A stays at 0 (nowhere to go)
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+}
+
+TEST_CASE("InputField.smart_move_to_line_end_single_line")
+{
+    InputField field;
+    field.setText("hello");
+
+    // Move to start first
+    (void) field.processEvent(specialKey(KeyCode::Home));
+    CHECK(field.cursor() == 0);
+
+    // Ctrl+E goes to buffer end in single-line mode
+    (void) field.processEvent(charKey('e', Modifier::Ctrl));
+    CHECK(field.cursor() == 5);
+}
+
+TEST_CASE("InputField.smart_move_to_line_end_multiline_from_middle")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Move to buffer start
+    (void) field.processEvent(specialKey(KeyCode::Home, Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+
+    // Move to middle of first line
+    (void) field.processEvent(specialKey(KeyCode::Right));
+    (void) field.processEvent(specialKey(KeyCode::Right));
+    CHECK(field.cursor() == 2);
+
+    // First Ctrl+E goes to end of current line ("hello" ends at 5)
+    (void) field.processEvent(charKey('e', Modifier::Ctrl));
+    CHECK(field.cursor() == 5);
+}
+
+TEST_CASE("InputField.smart_move_to_line_end_multiline_already_at_end")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Move to buffer start, then to end of first line
+    (void) field.processEvent(specialKey(KeyCode::Home, Modifier::Ctrl));
+    (void) field.processEvent(charKey('e', Modifier::Ctrl));
+    CHECK(field.cursor() == 5);
+
+    // Second Ctrl+E jumps to end of next line
+    (void) field.processEvent(charKey('e', Modifier::Ctrl));
+    CHECK(field.cursor() == 11);
+}
+
+TEST_CASE("InputField.smart_move_to_line_end_already_at_buffer_end")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("hello\nworld");
+
+    // Cursor already at buffer end (11)
+    CHECK(field.cursor() == 11);
+
+    // Ctrl+E stays at end (nowhere to go)
+    (void) field.processEvent(charKey('e', Modifier::Ctrl));
+    CHECK(field.cursor() == 11);
+}
+
+TEST_CASE("InputField.smart_move_three_lines")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("aaa\nbbb\nccc");
+
+    // Cursor at end of "ccc" (position 11)
+    CHECK(field.cursor() == 11);
+
+    // Ctrl+A from end of third line -> start of third line (8)
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 8);
+
+    // Ctrl+A again -> start of second line (4)
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 4);
+
+    // Ctrl+A again -> start of first line (0)
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
+
+    // Ctrl+A again -> stays at 0
+    (void) field.processEvent(charKey('a', Modifier::Ctrl));
+    CHECK(field.cursor() == 0);
 }

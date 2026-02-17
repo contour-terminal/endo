@@ -21,16 +21,18 @@ enum class EditAction : std::uint8_t
     None, ///< No action (key not bound)
 
     // === Movement ===
-    MoveForwardChar,   ///< Move cursor forward one character
-    MoveBackwardChar,  ///< Move cursor backward one character
-    MoveForwardWord,   ///< Move cursor forward one word
-    MoveBackwardWord,  ///< Move cursor backward one word
-    MoveToLineStart,   ///< Move cursor to start of current line
-    MoveToLineEnd,     ///< Move cursor to end of current line
-    MoveToBufferStart, ///< Move cursor to start of buffer
-    MoveToBufferEnd,   ///< Move cursor to end of buffer
-    MoveUp,            ///< Move cursor up one line (or history prev in single-line)
-    MoveDown,          ///< Move cursor down one line (or history next in single-line)
+    MoveForwardChar,      ///< Move cursor forward one character
+    MoveBackwardChar,     ///< Move cursor backward one character
+    MoveForwardWord,      ///< Move cursor forward one word
+    MoveBackwardWord,     ///< Move cursor backward one word
+    MoveToLineStart,      ///< Move cursor to start of current line
+    MoveToLineEnd,        ///< Move cursor to end of current line
+    MoveToBufferStart,    ///< Move cursor to start of buffer
+    MoveToBufferEnd,      ///< Move cursor to end of buffer
+    MoveUp,               ///< Move cursor up one line (or history prev in single-line)
+    MoveDown,             ///< Move cursor down one line (or history next in single-line)
+    SmartMoveToLineStart, ///< Move to line start; if already there, move to previous line's start
+    SmartMoveToLineEnd,   ///< Move to line end; if already there, move to next line's end
 
     // === Editing ===
     DeleteCharBackward, ///< Delete character before cursor (Backspace)
