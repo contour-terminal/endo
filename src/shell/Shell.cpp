@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <future>
 #include <iostream>
 #include <print>
 #include <set>
@@ -602,8 +603,8 @@ int Shell::run()
             // Check if the user wants to enter agent mode
             if (prompt.lastAction() == PromptComponent::Action::AgentMode)
             {
-                auto const _ = Prompt::ScopedSuspend(prompt);
                 runAgentMode();
+                prompt.resume();
                 continue;
             }
 
@@ -683,8 +684,8 @@ int Shell::run()
         // Check if the user wants to enter agent mode
         if (prompt.lastAction() == PromptComponent::Action::AgentMode)
         {
-            auto const _ = Prompt::ScopedSuspend(prompt);
             runAgentMode();
+            prompt.resume();
             continue;
         }
 
@@ -1006,6 +1007,57 @@ namespace
         return result;
     }
 
+    /// @brief Result of background agent context loading.
+    struct AgentContextResult
+    {
+        std::string systemPrompt; ///< Fully built system prompt.
+        std::string gitBranch;    ///< Current git branch name (for header display).
+    };
+
+    /// @brief Builds agent context (project files, git info, system prompt) — runs in background thread.
+    /// @param agentConfig The agent configuration.
+    /// @param cwd The current working directory.
+    /// @return The assembled context result.
+    [[nodiscard]] auto buildAgentContext(agent::AgentConfig const& agentConfig,
+                                         std::filesystem::path const& cwd) -> AgentContextResult
+    {
+        auto const contextLoader = agent::ProjectContextLoader {};
+        auto const projectContext = contextLoader.load(cwd);
+
+        auto promptBuilder = agent::SystemPromptBuilder {};
+        promptBuilder.setWorkingDirectory(cwd.string());
+        promptBuilder.setShellInfo("endo");
+        promptBuilder.setProjectRules(projectContext.rulesFiles);
+        promptBuilder.setGlobalRules(projectContext.globalRules);
+        promptBuilder.setMemoryFiles(projectContext.memoryFiles);
+        promptBuilder.setFileTree(projectContext.fileTree);
+
+        auto const cwdStr = cwd.string();
+#if defined(_WIN32)
+        auto const gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
+#else
+        auto const gitBranch =
+            runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>/dev/null");
+#endif
+        if (!gitBranch.empty())
+        {
+            promptBuilder.setGitBranch(gitBranch);
+#if defined(_WIN32)
+            auto const gitStatus =
+                runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>NUL");
+#else
+            auto const gitStatus =
+                runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>/dev/null");
+#endif
+            promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
+        }
+
+        return AgentContextResult {
+            .systemPrompt = promptBuilder.build(),
+            .gitBranch = gitBranch,
+        };
+    }
+
 } // namespace
 
 void Shell::runAgentMode()
@@ -1067,60 +1119,36 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
 
     _agentSession->setToolRegistry(&toolRegistry);
-
-    // Load project context (rules, memory, file tree)
-    auto const contextLoader = agent::ProjectContextLoader {};
-    auto const projectContext = contextLoader.load(std::filesystem::current_path());
-
-    // Build system prompt with current environment context and project context
-    auto promptBuilder = agent::SystemPromptBuilder {};
-    promptBuilder.setWorkingDirectory(std::filesystem::current_path().string());
-    promptBuilder.setShellInfo("endo");
-    promptBuilder.setProjectRules(projectContext.rulesFiles);
-    promptBuilder.setGlobalRules(projectContext.globalRules);
-    promptBuilder.setMemoryFiles(projectContext.memoryFiles);
-    promptBuilder.setFileTree(projectContext.fileTree);
-
-    auto const cwd = std::filesystem::current_path().string();
-#if defined(_WIN32)
-    auto const gitBranch = runCommandCapture("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
-#else
-    auto const gitBranch = runCommandCapture("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-#endif
-    if (!gitBranch.empty())
-    {
-        promptBuilder.setGitBranch(gitBranch);
-#if defined(_WIN32)
-        auto const gitStatus = runCommandCapture("git -C " + cwd + " status --porcelain=v2 --branch 2>NUL");
-#else
-        auto const gitStatus =
-            runCommandCapture("git -C " + cwd + " status --porcelain=v2 --branch 2>/dev/null");
-#endif
-        promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
-    }
-
-    _agentSession->setSystemPrompt(promptBuilder.build());
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
 
     // Agent input loop
     auto& terminal = prompt.terminal();
     auto& out = terminal.output();
     auto const& theme = tui::currentTheme();
-    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
 
-    // Create inline Screen with AgentInputComponent
+    // Create inline Screen with AgentInputComponent — prompt visible instantly
     auto screenConfig = tui::ScreenConfig {
         .viewport = tui::Viewport::Inline,
         .inhibitReflow = true,
     };
     auto screen = tui::Screen(terminal, screenConfig);
     auto inputComponent = agent::AgentInputComponent {};
+    inputComponent.setPromptIndicator(agentConfig.promptIndicator);
+    auto const modelInfo = provider->modelInfo();
+    inputComponent.setProviderName(modelInfo.providerName);
+    inputComponent.setModelName(modelInfo.modelName);
     auto const prefSize = inputComponent.preferredSize();
     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), prefSize.height });
     screen.root().addChild(inputComponent);
     screen.setFocus(&inputComponent);
+    screen.invalidate();
     screen.draw();
+    out.flush();
+
+    // Launch background thread for heavy context loading (git queries, project file scanning)
+    auto const cwd = std::filesystem::current_path();
+    auto contextFuture = std::async(std::launch::async, buildAgentContext, agentConfig, cwd);
+    auto systemPromptReady = false;
 
     while (true)
     {
@@ -1129,7 +1157,19 @@ void Shell::runAgentMode()
 
         if (events.empty())
         {
-            // Timeout — could tick spinner here if needed
+            // Check if background context loading has completed
+            if (!systemPromptReady
+                && contextFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
+            {
+                auto result = contextFuture.get();
+                _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+                if (!result.gitBranch.empty())
+                    inputComponent.setGitBranch(std::move(result.gitBranch));
+                systemPromptReady = true;
+                auto const newPrefSize = inputComponent.preferredSize();
+                inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                screen.draw();
+            }
             continue;
         }
 
@@ -1146,6 +1186,16 @@ void Shell::runAgentMode()
             switch (action)
             {
                 case agent::AgentInputComponent::Action::Submit: {
+                    // Ensure system prompt is ready before sending a message
+                    if (!systemPromptReady)
+                    {
+                        auto result = contextFuture.get();
+                        _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+                        if (!result.gitBranch.empty())
+                            inputComponent.setGitBranch(std::move(result.gitBranch));
+                        systemPromptReady = true;
+                    }
+
                     auto const query = std::string(inputComponent.text());
                     inputComponent.clear();
 
@@ -1184,13 +1234,18 @@ void Shell::runAgentMode()
                     screen.draw();
                     break;
                 }
-                case agent::AgentInputComponent::Action::Abort:
-                    // Exit agent mode
-                    screen.draw();
-                    out.writeRaw("\r\n");
+                case agent::AgentInputComponent::Action::Abort: {
+                    // Move cursor up to the top of the agent prompt and clear from there,
+                    // so the shell prompt can replace the agent prompt in-place.
+                    auto const rowsUp = 1 // AgentInputComponent::HeaderHeight
+                                        + inputComponent.inputField().cursorLine();
+                    if (rowsUp > 0)
+                        out.moveUp(rowsUp);
+                    out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
                     out.flush();
                     screen.releaseCursor();
                     return;
+                }
                 case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
                 case agent::AgentInputComponent::Action::None: break;
             }

@@ -223,18 +223,18 @@ std::string Prompt::read()
                     _lastAction = PromptComponent::Action::Eof;
                     return {};
                 case PromptComponent::Action::AgentMode: {
-                    // Move cursor past editor region and write newline
-                    _screen->draw();
+                    // Move cursor up to the top of the prompt and clear from there,
+                    // so the agent prompt can replace the shell prompt in-place.
                     auto& out = _terminal.output();
-                    auto const totalLines = _promptComponent->inputField().lineCount();
-                    auto const cursorLine = _promptComponent->inputField().cursorLine();
-                    auto const linesToMoveDown =
-                        totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
-                    if (linesToMoveDown > 0)
-                        out.moveDown(linesToMoveDown);
-                    out.writeRaw("\r\n");
-                    out.enableReflow();
+                    auto const rowsUp = _promptComponent->topPadding()
+                                      + _promptComponent->chromeHeight()
+                                      + _promptComponent->inputField().cursorLine();
+                    if (rowsUp > 0)
+                        out.moveUp(rowsUp);
+                    out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
                     out.flush();
+                    _promptComponent->clear();
+                    _screen->releaseCursor();
                     _lastAction = PromptComponent::Action::AgentMode;
                     return {};
                 }
@@ -362,17 +362,18 @@ std::optional<std::string> Prompt::processInput()
                 break;
             }
             case PromptComponent::Action::AgentMode: {
-                // Move cursor past editor region
-                _screen->draw();
+                // Move cursor up to the top of the prompt and clear from there,
+                // so the agent prompt can replace the shell prompt in-place.
                 auto& out = _terminal.output();
-                auto const totalLines = _promptComponent->inputField().lineCount();
-                auto const cursorLine = _promptComponent->inputField().cursorLine();
-                auto const linesToMoveDown = totalLines - cursorLine - 1 + _promptComponent->bottomPadding();
-                if (linesToMoveDown > 0)
-                    out.moveDown(linesToMoveDown);
-                out.writeRaw("\r\n");
-                out.enableReflow();
+                auto const rowsUp = _promptComponent->topPadding()
+                                  + _promptComponent->chromeHeight()
+                                  + _promptComponent->inputField().cursorLine();
+                if (rowsUp > 0)
+                    out.moveUp(rowsUp);
+                out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
                 out.flush();
+                _promptComponent->clear();
+                _screen->releaseCursor();
                 _lastAction = PromptComponent::Action::AgentMode;
                 return std::string {};
             }
