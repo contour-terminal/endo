@@ -3250,7 +3250,7 @@ void Shell::builtinChDir(CoreVM::Params& context)
     else
     {
         _env.set("OLDPWD", _env.get("PWD").value_or(""));
-        _env.set("PWD", path);
+        _env.set("PWD", _env.currentDirectory());
         _exitCode = 0;
         emitCurrentWorkingDirectory();
     }
@@ -3271,7 +3271,7 @@ void Shell::builtinChDirHome(CoreVM::Params& context)
     else
     {
         _env.set("OLDPWD", _env.get("PWD").value_or(""));
-        _env.set("PWD", std::string(path));
+        _env.set("PWD", _env.currentDirectory());
         _exitCode = 0;
         emitCurrentWorkingDirectory();
     }

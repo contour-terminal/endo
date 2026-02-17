@@ -55,7 +55,8 @@ class TestEnvironmentProvider final: public EnvironmentProvider
 
     [[nodiscard]] std::expected<void, ShellError> changeDirectory(std::filesystem::path const& path) override
     {
-        auto const pathStr = path.string();
+        auto const resolved = path.is_absolute() ? path : std::filesystem::path(_currentDirectory) / path;
+        auto const pathStr = resolved.lexically_normal().string();
         if (!_validPaths.empty() && !_validPaths.contains(pathStr))
             return std::unexpected(ShellError::FileNotFound);
         _currentDirectory = pathStr;

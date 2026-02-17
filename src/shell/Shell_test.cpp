@@ -127,6 +127,29 @@ TEST_CASE("shell.cd.minus_swaps")
     CHECK(shell.env.get("PWD").value_or("") == "/var");
 }
 
+TEST_CASE("shell.cd.relative_then_minus")
+{
+    TestShell shell;
+    shell.env.addValidPath("/tmp");
+    shell.env.addValidPath("/tmp/subdir");
+
+    shell("cd /tmp");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+
+    // cd with a relative path — PWD must still be the resolved absolute path
+    shell("cd subdir");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp/subdir");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/tmp");
+
+    // cd - should return to the previous absolute directory
+    shell("cd -");
+    CHECK(shell.exitCode == 0);
+    CHECK(shell.env.get("PWD").value_or("") == "/tmp");
+    CHECK(shell.env.get("OLDPWD").value_or("") == "/tmp/subdir");
+}
+
 TEST_CASE("shell.cd.minus_no_oldpwd")
 {
     TestShell shell;
