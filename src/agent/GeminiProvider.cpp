@@ -1,0 +1,303 @@
+// SPDX-License-Identifier: Apache-2.0
+#include "GeminiProvider.hpp"
+
+#include <http/HttpClient.hpp>
+
+#include <crispy/base64.h>
+
+#include <format>
+
+namespace endo::agent
+{
+
+GeminiProvider::GeminiProvider(http::HttpClient const& httpClient, GeminiProviderConfig config):
+    _httpClient { httpClient }, _config { std::move(config) }
+{
+}
+
+auto GeminiProvider::buildUrl() const -> std::string
+{
+    return std::format(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
+        _config.model,
+        _config.apiKey);
+}
+
+auto GeminiProvider::mapHttpError(long statusCode) -> ProviderErrorCode
+{
+    if (statusCode == 401 || statusCode == 403)
+        return ProviderErrorCode::AuthenticationError;
+    if (statusCode == 429)
+        return ProviderErrorCode::RateLimitError;
+    if (statusCode >= 500)
+        return ProviderErrorCode::ServerError;
+    return ProviderErrorCode::Unknown;
+}
+
+auto GeminiProvider::findToolName(std::span<ChatMessage const> messages, std::string_view toolUseId)
+    -> std::string
+{
+    // Walk backwards through messages to find a ToolUseBlock with matching id.
+    for (auto it = messages.rbegin(); it != messages.rend(); ++it)
+    {
+        for (auto const& block: it->content)
+        {
+            if (auto const* toolUse = std::get_if<ToolUseBlock>(&block))
+            {
+                if (toolUse->id == toolUseId)
+                    return toolUse->name;
+            }
+        }
+    }
+    // Fallback: use the toolUseId itself as the name.
+    return std::string(toolUseId);
+}
+
+auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
+                                      std::span<ToolDefinition const> tools,
+                                      size_t maxTokens) -> nlohmann::json
+{
+    auto request = nlohmann::json::object();
+
+    // Extract system instruction from system messages.
+    auto systemText = std::string {};
+    auto contents = nlohmann::json::array();
+
+    for (auto const& msg: messages)
+    {
+        if (msg.role == Role::System)
+        {
+            // System messages go into systemInstruction.
+            if (!systemText.empty())
+                systemText += '\n';
+            systemText += msg.textContent();
+            continue;
+        }
+
+        // Determine Gemini role: "user" or "model".
+        auto const geminiRole = (msg.role == Role::Assistant) ? "model" : "user";
+
+        // Check if this message contains ToolResultBlocks — they need special handling.
+        auto hasToolResults = false;
+        for (auto const& block: msg.content)
+        {
+            if (std::holds_alternative<ToolResultBlock>(block))
+            {
+                hasToolResults = true;
+                break;
+            }
+        }
+
+        if (hasToolResults)
+        {
+            // ToolResultBlocks must be in a "user" role entry with functionResponse parts.
+            auto parts = nlohmann::json::array();
+            for (auto const& block: msg.content)
+            {
+                if (auto const* toolResult = std::get_if<ToolResultBlock>(&block))
+                {
+                    auto const toolName = findToolName(messages, toolResult->toolUseId);
+                    parts.push_back(
+                        nlohmann::json { { "functionResponse",
+                                           { { "name", toolName },
+                                             { "response", { { "content", toolResult->content } } } } } });
+                }
+                else if (auto const* text = std::get_if<TextBlock>(&block))
+                {
+                    if (!text->text.empty())
+                        parts.push_back(nlohmann::json { { "text", text->text } });
+                }
+            }
+            if (!parts.empty())
+                contents.push_back(nlohmann::json { { "role", "user" }, { "parts", std::move(parts) } });
+            continue;
+        }
+
+        // Regular message: serialize all content blocks.
+        auto parts = nlohmann::json::array();
+        for (auto const& block: msg.content)
+        {
+            if (auto const* text = std::get_if<TextBlock>(&block))
+            {
+                parts.push_back(nlohmann::json { { "text", text->text } });
+            }
+            else if (auto const* image = std::get_if<ImageBlock>(&block))
+            {
+                auto const encoded = crispy::base64::encode(image->data.begin(), image->data.end());
+                parts.push_back(nlohmann::json {
+                    { "inlineData", { { "mimeType", image->mediaType }, { "data", encoded } } } });
+            }
+            else if (auto const* toolUse = std::get_if<ToolUseBlock>(&block))
+            {
+                parts.push_back(nlohmann::json {
+                    { "functionCall", { { "name", toolUse->name }, { "args", toolUse->arguments } } } });
+            }
+        }
+        if (!parts.empty())
+            contents.push_back(nlohmann::json { { "role", geminiRole }, { "parts", std::move(parts) } });
+    }
+
+    if (!systemText.empty())
+        request["systemInstruction"] =
+            nlohmann::json { { "parts", nlohmann::json::array({ { { "text", systemText } } }) } };
+
+    request["contents"] = std::move(contents);
+
+    // Tool definitions.
+    if (!tools.empty())
+    {
+        auto functionDeclarations = nlohmann::json::array();
+        for (auto const& tool: tools)
+        {
+            auto decl = nlohmann::json { { "name", tool.name }, { "description", tool.description } };
+            if (!tool.inputSchema.is_null() && !tool.inputSchema.empty())
+                decl["parameters"] = tool.inputSchema;
+            functionDeclarations.push_back(std::move(decl));
+        }
+        request["tools"] =
+            nlohmann::json::array({ { { "functionDeclarations", std::move(functionDeclarations) } } });
+    }
+
+    // Generation config.
+    request["generationConfig"] = nlohmann::json { { "maxOutputTokens", maxTokens } };
+
+    return request;
+}
+
+auto GeminiProvider::generate(std::span<ChatMessage const> messages,
+                              std::span<ToolDefinition const> tools,
+                              StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
+{
+    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens);
+
+    auto httpRequest = http::HttpRequest {};
+    httpRequest.url = buildUrl();
+    httpRequest.method = http::HttpMethod::Post;
+    httpRequest.headers = { "Content-Type: application/json" };
+    httpRequest.body = requestBody.dump();
+
+    auto result = GenerateResult {};
+    auto accumulatedText = std::string {};
+    auto toolCallIdCounter = 0;
+
+    auto const sseResult =
+        _httpClient.executeStreaming(httpRequest, [&](http::SseEvent const& event) -> bool {
+            if (event.data.empty() || event.data == "[DONE]")
+                return true;
+
+            auto parsed = nlohmann::json {};
+            try
+            {
+                parsed = nlohmann::json::parse(event.data);
+            }
+            catch (nlohmann::json::parse_error const&)
+            {
+                return true; // Skip malformed events.
+            }
+
+            // Check for error response.
+            if (parsed.contains("error"))
+            {
+                return false;
+            }
+
+            // Extract parts from candidates[0].content.parts[].
+            if (!parsed.contains("candidates") || parsed["candidates"].empty())
+                return true;
+
+            auto const& candidate = parsed["candidates"][0];
+            if (!candidate.contains("content") || !candidate["content"].contains("parts"))
+                return true;
+
+            for (auto const& part: candidate["content"]["parts"])
+            {
+                if (part.contains("text"))
+                {
+                    auto const& text = part["text"].get<std::string>();
+                    accumulatedText += text;
+                    if (streamCb)
+                        streamCb(text);
+                }
+                else if (part.contains("functionCall"))
+                {
+                    auto const& funcCall = part["functionCall"];
+                    auto toolCall = ToolCall {};
+                    toolCall.name = funcCall["name"].get<std::string>();
+                    toolCall.arguments = funcCall.value("args", nlohmann::json::object());
+                    toolCall.id = std::format("call_{}", toolCallIdCounter++);
+                    result.toolCalls.push_back(std::move(toolCall));
+                }
+                else if (part.contains("inlineData"))
+                {
+                    auto const& inlineData = part["inlineData"];
+                    auto imageBlock = ImageBlock {};
+                    imageBlock.mediaType = inlineData.value("mimeType", "image/png");
+                    auto const& b64Data = inlineData["data"].get<std::string>();
+                    imageBlock.data.resize(crispy::base64::decodeLength(b64Data));
+                    imageBlock.data.resize(crispy::base64::decode(b64Data, imageBlock.data.data()));
+                    result.content.emplace_back(std::move(imageBlock));
+                }
+            }
+
+            return true;
+        });
+
+    if (!sseResult.has_value())
+    {
+        return std::unexpected(
+            ProviderError { .code = ProviderErrorCode::NetworkError,
+                            .message = std::format("HTTP request failed: {}", sseResult.error().message),
+                            .httpStatus = 0 });
+    }
+
+    auto const statusCode = sseResult.value();
+    if (statusCode != 200)
+    {
+        return std::unexpected(
+            ProviderError { .code = mapHttpError(statusCode),
+                            .message = std::format("Gemini API returned HTTP {}", statusCode),
+                            .httpStatus = static_cast<int>(statusCode) });
+    }
+
+    if (!accumulatedText.empty())
+        result.content.emplace_back(TextBlock { .text = std::move(accumulatedText) });
+
+    // Convert tool calls into ToolUseBlock content entries as well.
+    for (auto const& toolCall: result.toolCalls)
+        result.content.emplace_back(
+            ToolUseBlock { .id = toolCall.id, .name = toolCall.name, .arguments = toolCall.arguments });
+
+    return result;
+}
+
+auto GeminiProvider::supportsToolUse() const noexcept -> bool
+{
+    return true;
+}
+
+auto GeminiProvider::supportsImageInput() const noexcept -> bool
+{
+    return true;
+}
+
+auto GeminiProvider::supportsImageOutput() const noexcept -> bool
+{
+    return true;
+}
+
+auto GeminiProvider::contextSize() const noexcept -> size_t
+{
+    return _config.contextWindowSize;
+}
+
+auto GeminiProvider::modelInfo() const -> ModelInfo
+{
+    return ModelInfo { .providerName = "gemini",
+                       .modelName = _config.model,
+                       .contextSize = _config.contextWindowSize,
+                       .supportsToolUse = true,
+                       .supportsImageInput = true,
+                       .supportsImageOutput = true };
+}
+
+} // namespace endo::agent
