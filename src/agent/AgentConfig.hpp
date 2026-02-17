@@ -41,7 +41,8 @@ struct GeminiConfig
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
-    std::string activeProvider = "claude"; ///< Which provider to use by default.
+    std::string activeProvider = "claude";        ///< Which provider to use by default.
+    std::string promptIndicator = "\xe2\x9d\xaf"; ///< Agent prompt indicator (default: ❯ U+276F).
 
     ClaudeConfig claude;       ///< Anthropic Claude configuration.
     OpenAiConfig openai;       ///< OpenAI configuration.

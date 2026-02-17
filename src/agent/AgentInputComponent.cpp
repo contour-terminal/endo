@@ -9,28 +9,85 @@ namespace endo::agent
 
 AgentInputComponent::AgentInputComponent()
 {
-    _inputField.setPrompt("# ");
+    // Default prompt indicator: ❯ (U+276F)
+    _inputField.setPrompt("\xe2\x9d\xaf ");
+}
+
+void AgentInputComponent::setPromptIndicator(std::string indicator)
+{
+    _inputField.setPrompt(std::move(indicator) + " ");
 }
 
 void AgentInputComponent::render(tui::Canvas& canvas)
 {
     auto const& theme = tui::currentTheme();
     auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-    auto const textStyle = tui::Style { .fg = theme.colors.text };
+    auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
+    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
 
     auto const area = screenBounds();
     auto const lineCount = _inputField.lineCount();
 
-    // Draw purple left bar for each line
-    for (auto row = 0; row < lineCount && row < area.height; ++row)
-        canvas.put(row, 0, "\u2502", barStyle); // │ character
+    // Row 0: Header line  ╭─ agent │ provider/model
+    canvas.putString(0, 0, "\xe2\x95\xad", barStyle);           // ╭
+    canvas.putString(0, 1, "\xe2\x94\x80", barStyle);           // ─
+    canvas.put(0, 2, " ", {});                                  // padding
+    auto col = 3 + canvas.putString(0, 3, "agent", labelStyle); // "agent" label
 
-    // Render InputField in the remaining area
+    // Show provider and model info if available
+    if (!_providerName.empty() || !_modelName.empty())
+    {
+        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        dimPipeStyle.dim = true;
+        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(0, col, " ", {});
+
+        if (!_providerName.empty() && !_modelName.empty())
+            col += canvas.putString(0, col, _providerName + "/" + _modelName, infoStyle);
+        else if (!_providerName.empty())
+            col += canvas.putString(0, col, _providerName, infoStyle);
+        else
+            col += canvas.putString(0, col, _modelName, infoStyle);
+    }
+
+    // Show git branch if available (appears after background context loading completes)
+    if (!_gitBranch.empty())
+    {
+        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        dimPipeStyle.dim = true;
+        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(0, col, " ", {});
+
+        auto branchStyle = tui::Style { .fg = theme.agentColors.statusText };
+        branchStyle.dim = true;
+        col += canvas.putString(0, col, _gitBranch, branchStyle);
+    }
+
+    // Draw left chrome for each input line
+    for (auto row = 0; row < lineCount && (row + HeaderHeight) < area.height; ++row)
+    {
+        auto const canvasRow = row + HeaderHeight;
+        if (row == 0)
+        {
+            // First input line: ╰─
+            canvas.putString(canvasRow, 0, "\xe2\x95\xb0", barStyle); // ╰
+            canvas.putString(canvasRow, 1, "\xe2\x94\x80", barStyle); // ─
+        }
+        else
+        {
+            // Continuation lines: │
+            canvas.putString(canvasRow, 0, "\xe2\x94\x82", barStyle); // │
+        }
+    }
+
+    // Render InputField offset by header height and left chrome
     auto const fieldArea = tui::Rect {
         LeftBarWidth + BarPadding,
-        0,
+        HeaderHeight,
         area.width - LeftBarWidth - BarPadding,
-        area.height,
+        area.height - HeaderHeight,
     };
     auto fieldCanvas = canvas.subcanvas(fieldArea);
     _inputField.render(fieldCanvas);
@@ -45,7 +102,7 @@ tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
 tui::Size AgentInputComponent::preferredSize() const
 {
     auto const fieldSize = _inputField.preferredSize();
-    return { fieldSize.width + LeftBarWidth + BarPadding, fieldSize.height };
+    return { fieldSize.width + LeftBarWidth + BarPadding, fieldSize.height + HeaderHeight };
 }
 
 AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent const& event)
@@ -68,6 +125,7 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         case tui::InputFieldAction::Abort: return Action::Abort;
         case tui::InputFieldAction::Eof: return Action::Abort;
         case tui::InputFieldAction::Changed: return Action::Changed;
+        case tui::InputFieldAction::AgentMode: return Action::Abort; // Toggle back to shell
         case tui::InputFieldAction::None: break;
     }
 

@@ -11,9 +11,9 @@ namespace endo::agent
 
 /// Styled input component for agent mode queries.
 ///
-/// Renders a purple left bar to distinguish from the shell prompt,
-/// and wraps a tui::InputField for text editing. Supports Submit (Enter)
-/// and Abort (Escape) actions.
+/// Renders a rounded-chrome header line with agent mode label, provider, and model info,
+/// followed by the input area with a configurable prompt indicator. Uses the agent color
+/// palette (purple accent) to visually distinguish from the shell prompt.
 class AgentInputComponent: public tui::Component
 {
   public:
@@ -47,6 +47,22 @@ class AgentInputComponent: public tui::Component
     /// @return The resulting action.
     [[nodiscard]] Action processInput(tui::InputEvent const& event);
 
+    /// @brief Sets the prompt indicator displayed before user input.
+    /// @param indicator The indicator string (e.g., "❯").
+    void setPromptIndicator(std::string indicator);
+
+    /// @brief Sets the provider name displayed in the header line.
+    /// @param name The provider name (e.g., "claude", "openai").
+    void setProviderName(std::string name) { _providerName = std::move(name); }
+
+    /// @brief Sets the model name displayed in the header line.
+    /// @param name The model identifier (e.g., "claude-sonnet-4-5-20250929").
+    void setModelName(std::string name) { _modelName = std::move(name); }
+
+    /// @brief Sets the git branch name displayed in the header line.
+    /// @param branch The branch name (e.g., "main", "feature/xyz").
+    void setGitBranch(std::string branch) { _gitBranch = std::move(branch); }
+
     /// @brief Returns the current input text.
     [[nodiscard]] auto text() const noexcept -> std::string_view { return _inputField.text(); }
 
@@ -60,10 +76,13 @@ class AgentInputComponent: public tui::Component
 
   private:
     tui::InputField _inputField;
+    std::string _providerName; ///< Active provider name for header display.
+    std::string _modelName;    ///< Active model name for header display.
+    std::string _gitBranch;    ///< Current git branch for header display.
 
-    static constexpr int LeftBarWidth = 1; ///< Width of the purple left bar.
+    static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
     static constexpr int BarPadding = 1;   ///< Padding after the bar.
-    static constexpr int PromptWidth = 2;  ///< Width of "# " prompt prefix.
+    static constexpr int HeaderHeight = 1; ///< Height of the header line (shows agent/provider/model).
 };
 
 } // namespace endo::agent

@@ -127,6 +127,8 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
         if (root["active_provider"])
             config.activeProvider = root["active_provider"].as<std::string>();
+        if (root["prompt_indicator"])
+            config.promptIndicator = root["prompt_indicator"].as<std::string>();
 
         parseClaudeConfig(root["claude"], config.claude);
         parseOpenAiConfig(root["openai"], config.openai);
@@ -190,6 +192,8 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
         auto const defaults = AgentConfig {};
         if (config.activeProvider != defaults.activeProvider)
             emitter << YAML::Key << "active_provider" << YAML::Value << config.activeProvider;
+        if (config.promptIndicator != defaults.promptIndicator)
+            emitter << YAML::Key << "prompt_indicator" << YAML::Value << config.promptIndicator;
 
         emitClaudeConfig(emitter, config.claude);
         emitOpenAiConfig(emitter, "openai", config.openai, defaults.openai);
