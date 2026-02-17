@@ -412,7 +412,8 @@ std::expected<HttpResponse, HttpError> HttpClient::download(HttpRequest const& r
 }
 
 std::expected<long, HttpError> HttpClient::executeStreaming(HttpRequest const& request,
-                                                            SseCallback const& callback) const
+                                                            SseCallback const& callback,
+                                                            std::string* errorBody) const
 {
     if (!_handle)
         return std::unexpected(HttpError { .curlCode = -1, .message = "CURL handle not initialized" });
@@ -449,6 +450,11 @@ std::expected<long, HttpError> HttpClient::executeStreaming(HttpRequest const& r
     // Get status code
     long statusCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
+
+    // On non-200 responses, the body is plain JSON (not SSE-framed),
+    // so it accumulates in the parser buffer without being dispatched.
+    if (statusCode != 200 && errorBody)
+        *errorBody = std::move(parserState.buffer);
 
     return statusCode;
 }

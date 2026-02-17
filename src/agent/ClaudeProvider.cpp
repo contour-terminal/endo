@@ -36,22 +36,26 @@ auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
     auto result = GenerateResult {};
     auto accumulators = std::vector<ContentBlockAccumulator> {};
 
-    auto const sseResult = _httpClient.executeStreaming(request, [&](http::SseEvent const& event) -> bool {
-        auto parsed = parseSseEvent(event, accumulators);
-        if (!parsed.has_value())
-            return false;
+    auto errorBody = std::string {};
+    auto const sseResult = _httpClient.executeStreaming(
+        request,
+        [&](http::SseEvent const& event) -> bool {
+            auto parsed = parseSseEvent(event, accumulators);
+            if (!parsed.has_value())
+                return false;
 
-        if (!parsed->textDelta.empty() && streamCb)
-            streamCb(parsed->textDelta);
+            if (!parsed->textDelta.empty() && streamCb)
+                streamCb(parsed->textDelta);
 
-        for (auto& block: parsed->completedBlocks)
-            result.content.push_back(std::move(block));
+            for (auto& block: parsed->completedBlocks)
+                result.content.push_back(std::move(block));
 
-        for (auto& toolCall: parsed->completedToolCalls)
-            result.toolCalls.push_back(std::move(toolCall));
+            for (auto& toolCall: parsed->completedToolCalls)
+                result.toolCalls.push_back(std::move(toolCall));
 
-        return !parsed->done;
-    });
+            return !parsed->done;
+        },
+        &errorBody);
 
     if (!sseResult.has_value())
         return std::unexpected(
@@ -59,7 +63,27 @@ auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
 
     auto const statusCode = sseResult.value();
     if (statusCode != 200)
-        return std::unexpected(mapHttpError(statusCode, std::format("HTTP {}", statusCode)));
+    {
+        // Try to extract the API error message from the JSON error body.
+        auto message = std::format("HTTP {}", statusCode);
+        if (!errorBody.empty())
+        {
+            try
+            {
+                auto const errorJson = nlohmann::json::parse(errorBody);
+                if (errorJson.contains("error") && errorJson["error"].contains("message"))
+                    message = std::format(
+                        "HTTP {}: {}", statusCode, errorJson["error"]["message"].get<std::string>());
+            }
+            catch (nlohmann::json::parse_error const&)
+            {
+                // Fall back to generic message with raw body snippet.
+                auto const snippet = errorBody.substr(0, 200);
+                message = std::format("HTTP {}: {}", statusCode, snippet);
+            }
+        }
+        return std::unexpected(mapHttpError(statusCode, std::move(message)));
+    }
 
     return result;
 }

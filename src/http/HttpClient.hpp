@@ -107,11 +107,13 @@ class HttpClient
         HttpRequest const& request, std::filesystem::path const& outputPath) const;
 
     /// Executes an HTTP request and streams Server-Sent Events (SSE) to a callback.
-    /// @param request  The request configuration (typically a POST with stream: true).
-    /// @param callback Called for each parsed SSE event. Return false to abort the stream.
+    /// @param request   The request configuration (typically a POST with stream: true).
+    /// @param callback  Called for each parsed SSE event. Return false to abort the stream.
+    /// @param errorBody If non-null and the HTTP status is not 200, receives the raw response body.
     /// @return The HTTP status code on success, or an HttpError on failure.
     [[nodiscard]] std::expected<long, HttpError> executeStreaming(HttpRequest const& request,
-                                                                  SseCallback const& callback) const;
+                                                                  SseCallback const& callback,
+                                                                  std::string* errorBody = nullptr) const;
 
   private:
     /// Sets up common curl options shared between execute() and download().
