@@ -37,11 +37,11 @@ inline int graphemeClusterWidth(std::u32string_view cluster) noexcept
     auto const props = unicode::codepoint_properties::get(cluster[0]);
 
     // Emoji with emoji presentation are width 2
-    if (props.emoji_presentation())
+    if (props.is_emoji_presentation())
         return 2;
 
     // Check for ZWJ sequences - if first codepoint is emoji and cluster contains ZWJ
-    if (props.emoji() && cluster.size() > 1)
+    if (props.is_emoji() && cluster.size() > 1)
     {
         bool const hasZwj = std::find(cluster.begin(), cluster.end(), U'\u200D') != cluster.end();
         if (hasZwj)

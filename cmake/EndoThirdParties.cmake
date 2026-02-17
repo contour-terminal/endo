@@ -137,8 +137,9 @@ endif()
 # ==============================================================================
 # libunicode - Unicode library
 # ==============================================================================
+set(LIBUNICODE_REQUIRED_VERSION "0.8.0")
 if(NOT ENABLE_STATIC_LINKING)
-    find_package(libunicode QUIET)
+    find_package(libunicode ${LIBUNICODE_REQUIRED_VERSION} QUIET)
 endif()
 if(TARGET unicode::unicode OR TARGET unicode::core)
     set(THIRDPARTY_BUILTIN_libunicode "system package")
@@ -146,7 +147,7 @@ else()
     CPMAddPackage(
         NAME libunicode
         GITHUB_REPOSITORY contour-terminal/libunicode
-        GIT_TAG v0.8.0
+        GIT_TAG v${LIBUNICODE_REQUIRED_VERSION}
         OPTIONS
             "LIBUNICODE_TESTING OFF"
             "LIBUNICODE_BENCHMARK OFF"
@@ -155,7 +156,7 @@ else()
             "BUILD_SHARED_LIBS OFF"
         EXCLUDE_FROM_ALL YES
     )
-    set(THIRDPARTY_BUILTIN_libunicode "CPM (v0.8.0, static)")
+    set(THIRDPARTY_BUILTIN_libunicode "CPM (v${LIBUNICODE_REQUIRED_VERSION}, static)")
 endif()
 
 # ==============================================================================
