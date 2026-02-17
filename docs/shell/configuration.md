@@ -206,18 +206,83 @@ Keys are specified as modifier+key combinations:
 
 ### Default Bindings
 
+#### Undo / Redo
+
 | Key | Action |
 |-----|--------|
-| `ctrl+a` | Select all |
-| `ctrl+c` | Copy (or interrupt) |
-| `ctrl+d` | Delete character / EOF |
-| `ctrl+e` | Move to end of line |
+| `ctrl+z` | Undo |
+| `ctrl+y` | Redo |
+| `ctrl+shift+z` | Redo |
+
+#### Clipboard & Selection
+
+| Key | Action |
+|-----|--------|
+| `ctrl+c` | Copy (or interrupt if no selection) |
+| `ctrl+x` | Cut |
+| `ctrl+v` | Paste |
+| `ctrl+shift+a` | Select all |
+
+#### Movement
+
+| Key | Action |
+|-----|--------|
+| `ctrl+a` | Smart move to line start (toggles between first non-space and column 0) |
+| `ctrl+e` | Smart move to line end |
+| `ctrl+f` | Move forward one character |
+| `ctrl+b` | Move backward one character |
+| `alt+f` | Move forward one word |
+| `alt+b` | Move backward one word |
+| `ctrl+p` | Move up one line |
+| `ctrl+n` | Move down one line |
+| `left` | Move backward one character |
+| `right` | Move forward one character |
+| `ctrl+left` | Move backward one word |
+| `ctrl+right` | Move forward one word |
+| `up` | Move up / history previous |
+| `down` | Move down / history next |
+| `home` | Move to line start |
+| `end` | Move to line end |
+| `ctrl+home` | Move to buffer start |
+| `ctrl+end` | Move to buffer end |
+
+#### Editing
+
+| Key | Action |
+|-----|--------|
+| `backspace` | Delete character backward |
+| `delete` | Delete character forward |
+| `ctrl+d` | Delete character forward (EOF on empty line) |
+| `ctrl+backspace` | Delete word backward |
+| `alt+backspace` | Delete word backward |
+| `ctrl+w` | Delete word backward |
+| `alt+d` | Delete word forward |
 | `ctrl+k` | Kill to end of line |
 | `ctrl+u` | Kill to start of line |
-| `ctrl+w` | Kill word backward |
-| `ctrl+y` | Redo |
-| `ctrl+z` | Undo |
+| `ctrl+t` | Transpose characters |
+
+#### Kill Ring
+
+| Key | Action |
+|-----|--------|
+| `alt+y` | Yank pop (cycle through kill ring) |
+
+!!! tip
+    Yank has no default binding (it was `ctrl+y` which is now Redo). To restore the
+    Emacs-style binding, run: `bind ctrl+y yank`
+
+#### Control
+
+| Key | Action |
+|-----|--------|
+| `enter` | Submit command |
+| `shift+enter` | Insert newline (multiline editing) |
+| `alt+enter` | Insert newline (multiline editing) |
+| `tab` | Trigger completion |
+| `ctrl+space` | Trigger completion (always shows popup) |
 | `ctrl+l` | Clear screen |
+| `ctrl+r` | History search |
+| `right` / `end` / `ctrl+e` | Accept ghost text suggestion (when at end of line) |
 
 !!! note "Under Development"
     Some configuration features (such as vi mode and configurable color schemes) are still

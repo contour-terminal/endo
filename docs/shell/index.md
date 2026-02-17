@@ -118,15 +118,24 @@ See [Configuration](configuration.md) for full prompt customization options.
 | Enter | Submit command |
 | Alt+Enter / Shift+Enter | Insert newline |
 | Tab | Trigger completion |
+| Ctrl+Space | Trigger completion (always shows popup) |
 | Up / Down | History navigation |
 | Ctrl+C | Copy selection (or interrupt if no selection) |
+| Ctrl+V | Paste |
+| Ctrl+X | Cut |
 | Ctrl+Z | Undo |
 | Ctrl+Y | Redo |
+| Ctrl+A / Ctrl+E | Smart cursor to line start / end |
+| Ctrl+K / Ctrl+U | Kill to end / start of line |
+| Ctrl+W | Delete word backward |
 | Ctrl+D | Delete character (or EOF on empty line) |
 | Ctrl+L | Clear screen |
+| Ctrl+R | History search |
 | Right / End / Ctrl+E | Accept ghost text suggestion |
 
 Use the [`bind`](builtins.md#bind) builtin to customize key bindings at runtime.
+See [Configuration: Key Bindings](configuration.md#key-bindings) for the full list of default
+bindings and available actions.
 
 ## Further Reading
 

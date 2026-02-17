@@ -421,14 +421,20 @@ Configure key bindings.
 
 ```
 bind                    # List all bindings
+bind -l, --list         # List all bindings (same as no args)
 bind KEY ACTION         # Bind a key to an action
-bind -r KEY             # Remove a binding
+bind -r, --remove KEY   # Remove a binding
 bind --reset            # Reset to default bindings
-bind --help             # Show available actions and key format
+bind -h, --help         # Show available actions and key format
 ```
 
 **Description:** Manages the shell's key bindings at runtime. Changes take effect
-immediately.
+immediately. Keys are specified as modifier+key combinations (e.g. `ctrl+a`, `alt+shift+f`).
+
+**Modifiers:** `ctrl`, `alt` (or `meta`), `shift`, `super` (or `win`, `cmd`)
+
+**Keys:** `a`–`z`, `enter`, `backspace`, `delete`, `tab`, `escape`, `up`, `down`, `left`,
+`right`, `home`, `end`, `pageup`, `pagedown`, `insert`, `space`, `f1`–`f12`
 
 **Example:**
 
@@ -442,12 +448,28 @@ bind ctrl+y yank
 # Remove a binding
 bind -r ctrl+y
 
-# Show help
+# Reset to defaults
+bind --reset
+
+# Show available actions grouped by category
 bind --help
 ```
 
-See [Configuration](configuration.md#key-bindings) for details on key format and available
-actions.
+**Available actions:**
+
+| Category | Actions |
+|----------|---------|
+| Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, `move-backward-word`, `move-to-line-start`, `move-to-line-end`, `move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, `smart-move-to-line-start`, `smart-move-to-line-end` |
+| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, `delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |
+| Undo/Redo | `undo`, `redo` |
+| Kill Ring | `yank`, `yank-pop` |
+| Selection | `select-all` |
+| Clipboard | `cut`, `copy`, `paste` |
+| Control | `submit`, `abort`, `insert-newline` |
+| History | `history-prev`, `history-next` |
+
+See [Configuration: Key Bindings](configuration.md#key-bindings) for the full list of default
+bindings.
 
 ---
 
