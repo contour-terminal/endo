@@ -122,10 +122,10 @@ else()
     CPMAddPackage(
         NAME boxed-cpp
         GITHUB_REPOSITORY contour-terminal/boxed-cpp
-        GIT_TAG master
+        GIT_TAG v1.4.3
         EXCLUDE_FROM_ALL YES
     )
-    set(THIRDPARTY_BUILTIN_boxed_cpp "CPM (master)")
+    set(THIRDPARTY_BUILTIN_boxed_cpp "CPM (v1.4.3)")
 endif()
 
 # ==============================================================================
@@ -262,7 +262,7 @@ endif()
 CPMAddPackage(
     NAME reflection-cpp
     GITHUB_REPOSITORY contour-terminal/reflection-cpp
-    GIT_TAG master
+    GIT_TAG v0.4.0
     EXCLUDE_FROM_ALL YES
 )
-set(THIRDPARTY_BUILTIN_reflection_cpp "CPM (master)")
+set(THIRDPARTY_BUILTIN_reflection_cpp "CPM (v0.4.0)")
