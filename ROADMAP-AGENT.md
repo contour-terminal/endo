@@ -539,10 +539,16 @@ voice:
 
 ---
 
-## Phase 5: Tool System — Shell-Native Tools
+## Phase 5: Tool System — Shell-Native Tools (**COMPLETE**)
 
 **Goal:** Provide a core set of built-in tools that the agent can call without any external MCP
 server. Endo's unique advantage: `Shell::execute()` gives the agent direct shell access.
+
+**Status:** Fully implemented. 7 built-in tools (read_file, write_file, edit_file, glob, grep,
+shell_execute, git) with ToolRegistry dispatch. AgentSession tool loop (up to 25 iterations)
+with ToolUseBlock/ToolResultBlock round-trip. OpenAI provider updated for User-role tool results.
+Shell integration registers all tools in `runAgentMode()`. 47 new test cases, 128 total agent
+test cases (460 assertions), all passing.
 
 ### 5.1 Tool Interface and Registry
 

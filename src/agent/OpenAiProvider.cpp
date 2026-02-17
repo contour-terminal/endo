@@ -58,7 +58,12 @@ namespace
     {
         auto results = std::vector<nlohmann::json> {};
 
-        if (msg.role == Role::Tool)
+        // Handle ToolResultBlocks in User messages (provider-agnostic convention).
+        // When AgentSession puts tool results in User-role messages, serialize as "tool" role.
+        auto const hasToolResults = std::ranges::any_of(
+            msg.content, [](auto const& block) { return std::holds_alternative<ToolResultBlock>(block); });
+
+        if (msg.role == Role::Tool || (msg.role == Role::User && hasToolResults))
         {
             // Each ToolResultBlock becomes a separate "tool" role message.
             for (auto const& block: msg.content)

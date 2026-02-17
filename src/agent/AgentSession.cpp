@@ -3,6 +3,7 @@
 #include <span>
 
 #include <agent/AgentSession.hpp>
+#include <agent/tools/ToolRegistry.hpp>
 
 namespace endo::agent
 {
@@ -17,23 +18,68 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
     // Add user message to history
     _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
 
-    // Call provider with conversation history (no tools in Phase 2)
-    auto const tools = std::span<ToolDefinition const> {};
-    auto result = _provider.generate(_history.messages(), tools, std::move(streamCb));
+    auto const toolDefs = _toolRegistry ? _toolRegistry->definitions() : std::vector<ToolDefinition> {};
+    auto const tools = std::span<ToolDefinition const>(toolDefs);
 
-    if (!result.has_value())
+    for (auto iteration = size_t { 0 }; iteration < _maxToolIterations; ++iteration)
     {
-        return std::unexpected(AgentError {
-            .code = AgentErrorCode::ProviderError,
-            .message = std::format("{} (HTTP {})", result.error().message, result.error().httpStatus),
-        });
+        auto result = _provider.generate(_history.messages(), tools, streamCb);
+
+        if (!result.has_value())
+        {
+            return std::unexpected(AgentError {
+                .code = AgentErrorCode::ProviderError,
+                .message = std::format("{} (HTTP {})", result.error().message, result.error().httpStatus),
+            });
+        }
+
+        // Add the full assistant message (including ToolUseBlocks) to history
+        auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
+        _history.addMessage(std::move(assistantMsg));
+
+        // If no tool calls or no registry, return the text response
+        if (!result->hasToolCalls() || !_toolRegistry)
+        {
+            return result->textContent();
+        }
+
+        // Execute tool calls and add results to history
+        auto toolResults = executeToolCalls(result->toolCalls);
+
+        auto toolResultMsg = ChatMessage { .role = Role::User };
+        for (auto& tr: toolResults)
+        {
+            toolResultMsg.content.emplace_back(ToolResultBlock {
+                .toolUseId = std::move(tr.callId),
+                .content = std::move(tr.content),
+                .isError = tr.isError,
+            });
+        }
+        _history.addMessage(std::move(toolResultMsg));
+
+        // Clear stream callback for subsequent iterations (only stream the first response)
+        streamCb = nullptr;
     }
 
-    // Extract response text and add to history
-    auto responseText = result->textContent();
-    _history.addMessage(ChatMessage::text(Role::Assistant, responseText));
+    return std::unexpected(AgentError {
+        .code = AgentErrorCode::ToolLoopExceeded,
+        .message = std::format("Tool loop exceeded {} iterations", _maxToolIterations),
+    });
+}
 
-    return responseText;
+void AgentSession::setToolRegistry(ToolRegistry* registry)
+{
+    _toolRegistry = registry;
+}
+
+void AgentSession::setMaxToolIterations(size_t n)
+{
+    _maxToolIterations = n;
+}
+
+void AgentSession::setToolStatusCallback(ToolStatusCallback callback)
+{
+    _toolStatusCallback = std::move(callback);
 }
 
 void AgentSession::setSystemPrompt(std::string systemPrompt)
@@ -49,6 +95,22 @@ auto AgentSession::history() const -> ConversationHistory const&
 void AgentSession::reset()
 {
     _history.clear();
+}
+
+auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>
+{
+    auto results = std::vector<ToolResult> {};
+    results.reserve(calls.size());
+
+    for (auto const& call: calls)
+    {
+        if (_toolStatusCallback)
+            _toolStatusCallback(call.name);
+
+        results.push_back(_toolRegistry->execute(call));
+    }
+
+    return results;
 }
 
 } // namespace endo::agent

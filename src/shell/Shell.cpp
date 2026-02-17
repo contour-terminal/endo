@@ -39,6 +39,14 @@
 #include <agent/AgentSession.hpp>
 #include <agent/ProviderFactory.hpp>
 #include <agent/SystemPromptBuilder.hpp>
+#include <agent/tools/EditFileTool.hpp>
+#include <agent/tools/GitTool.hpp>
+#include <agent/tools/GlobTool.hpp>
+#include <agent/tools/GrepTool.hpp>
+#include <agent/tools/ReadFileTool.hpp>
+#include <agent/tools/ShellExecuteTool.hpp>
+#include <agent/tools/ToolRegistry.hpp>
+#include <agent/tools/WriteFileTool.hpp>
 #if defined(_WIN32)
     #include "platform/WindowsEnvironmentProvider.hpp"
 #else
@@ -1025,6 +1033,38 @@ void Shell::runAgentMode()
     // Create or reuse agent session (preserves conversation history)
     if (!_agentSession)
         _agentSession = std::make_unique<agent::AgentSession>(*provider);
+
+    // Set up tool registry with built-in tools
+    auto toolRegistry = agent::ToolRegistry {};
+
+    auto shellExecCb = [](std::string const& command,
+                          std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+        auto const timeoutSec = std::chrono::duration_cast<std::chrono::seconds>(timeout).count();
+        auto const fullCommand = std::format("{} 2>&1", command);
+        auto* pipe = popen(fullCommand.c_str(), "r");
+        if (!pipe)
+            return agent::ShellExecResult { .output = "Failed to execute command", .exitCode = -1 };
+
+        auto output = std::string {};
+        auto buffer = std::array<char, 4096> {};
+        while (auto const bytesRead = fread(buffer.data(), 1, buffer.size(), pipe))
+            output.append(buffer.data(), bytesRead);
+
+        auto const status = pclose(pipe);
+        auto const exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+
+        return agent::ShellExecResult { .output = std::move(output), .exitCode = exitCode };
+    };
+
+    toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::EditFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::GlobTool>());
+    toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
+    toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
+    toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
+
+    _agentSession->setToolRegistry(&toolRegistry);
 
     // Build system prompt with current environment context
     auto promptBuilder = agent::SystemPromptBuilder {};

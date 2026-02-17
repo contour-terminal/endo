@@ -14,6 +14,15 @@ add_library(endo-agent STATIC
     AgentSession.hpp AgentSession.cpp
     AgentInputComponent.hpp AgentInputComponent.cpp
     AgentResponseRenderer.hpp AgentResponseRenderer.cpp
+    tools/AgentTool.hpp
+    tools/ToolRegistry.hpp tools/ToolRegistry.cpp
+    tools/ReadFileTool.hpp tools/ReadFileTool.cpp
+    tools/WriteFileTool.hpp tools/WriteFileTool.cpp
+    tools/EditFileTool.hpp tools/EditFileTool.cpp
+    tools/GlobTool.hpp tools/GlobTool.cpp
+    tools/GrepTool.hpp tools/GrepTool.cpp
+    tools/ShellExecuteTool.hpp tools/ShellExecuteTool.cpp
+    tools/GitTool.hpp tools/GitTool.cpp
 )
 
 target_link_libraries(endo-agent PUBLIC
@@ -37,6 +46,14 @@ add_executable(test-endo-agent
     ConversationHistory_test.cpp
     SystemPromptBuilder_test.cpp
     AgentSession_test.cpp
+    tools/ToolRegistry_test.cpp
+    tools/ReadFileTool_test.cpp
+    tools/WriteFileTool_test.cpp
+    tools/EditFileTool_test.cpp
+    tools/GlobTool_test.cpp
+    tools/GrepTool_test.cpp
+    tools/ShellExecuteTool_test.cpp
+    tools/GitTool_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)

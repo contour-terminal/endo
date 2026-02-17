@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstddef>
 #include <expected>
+#include <functional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <agent/ConversationHistory.hpp>
 #include <agent/LlmProvider.hpp>
@@ -12,11 +16,14 @@
 namespace endo::agent
 {
 
+class ToolRegistry;
+
 /// Error codes specific to the agent session.
 enum class AgentErrorCode : uint8_t
 {
-    ProviderError, ///< The LLM provider returned an error.
-    NoProvider,    ///< No provider is configured or authenticated.
+    ProviderError,    ///< The LLM provider returned an error.
+    NoProvider,       ///< No provider is configured or authenticated.
+    ToolLoopExceeded, ///< The tool call loop exceeded the maximum number of iterations.
 };
 
 /// Error information from an agent session operation.
@@ -26,11 +33,19 @@ struct AgentError
     std::string message;
 };
 
+/// Callback invoked when a tool begins execution.
+/// @param toolName The name of the tool being executed.
+using ToolStatusCallback = std::function<void(std::string_view toolName)>;
+
 /// Manages a conversation with an LLM provider.
 ///
 /// AgentSession maintains conversation history and delegates generation
 /// to the configured LlmProvider. Each call to processMessage() appends
 /// the user message and the assistant's response to the history.
+///
+/// When a ToolRegistry is set, processMessage() enters a tool loop:
+/// the model can request tool calls, which are executed and fed back
+/// until the model produces a final text response or the iteration limit is reached.
 class AgentSession
 {
   public:
@@ -41,12 +56,27 @@ class AgentSession
     /// @brief Processes a user message and generates a response.
     ///
     /// Adds the user message to history, calls the provider with streaming,
-    /// adds the assistant response to history, and returns the full response text.
+    /// executes any tool calls in a loop, and returns the final response text.
     /// @param userMessage The user's query text.
     /// @param streamCb Optional callback for streaming tokens as they arrive.
     /// @return The complete response text, or an error.
     [[nodiscard]] auto processMessage(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<std::string, AgentError>;
+
+    /// @brief Sets the tool registry for tool call dispatch.
+    ///
+    /// When set, the session will pass tool definitions to the provider
+    /// and execute tool calls in a loop until the model produces a final response.
+    /// @param registry Pointer to the tool registry (must outlive the session).
+    void setToolRegistry(ToolRegistry* registry);
+
+    /// @brief Sets the maximum number of tool loop iterations.
+    /// @param n Maximum iterations (default: 25).
+    void setMaxToolIterations(size_t n);
+
+    /// @brief Sets an optional callback for tool execution status updates.
+    /// @param callback Callback invoked with the tool name when a tool starts executing.
+    void setToolStatusCallback(ToolStatusCallback callback);
 
     /// @brief Sets or replaces the system prompt.
     /// @param systemPrompt The system prompt text.
@@ -59,8 +89,14 @@ class AgentSession
     void reset();
 
   private:
+    /// Executes a batch of tool calls and returns results.
+    [[nodiscard]] auto executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>;
+
     LlmProvider& _provider;
     ConversationHistory _history;
+    ToolRegistry* _toolRegistry = nullptr;
+    size_t _maxToolIterations = 25;
+    ToolStatusCallback _toolStatusCallback;
 };
 
 } // namespace endo::agent
