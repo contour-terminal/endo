@@ -67,7 +67,6 @@ WarningsAsErrors: >-
   modernize-use-nullptr,
 UseColor: true
 HeaderFilterRegex: 'src/(contour|crispy|text_shaper|vtpty|vtparser|vtbackend|vtrasterizer)/'
-AnalyzeTemporaryDtors: false
 FormatStyle:     none
 CheckOptions:
   - key:             bugprone-easily-swappable-parameters.MinimumLength

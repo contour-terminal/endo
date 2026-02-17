@@ -1,0 +1,73 @@
+name: Clang-Tidy
+
+on:
+  pull_request:
+    branches: ["master"]
+
+concurrency:
+  group: clang-tidy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  clang-tidy-diff:
+    runs-on: ubuntu-latest
+    name: "clang-tidy (PR diff)"
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ccache-clang-tidy
+        max-size: 256M
+
+    - name: Get vendor libraries
+      run: ./scripts/get_contour_dirs.sh
+
+    - name: Install CMake
+      uses: ssrobins/install-cmake@v1
+
+    - name: Install Ninja
+      uses: seanmiddleditch/gha-setup-ninja@master
+
+    - name: Install LLVM 21
+      run: |
+        wget https://apt.llvm.org/llvm.sh
+        chmod +x llvm.sh
+        sudo ./llvm.sh 21
+        sudo apt-get install -y clang-tidy-21
+
+    - name: Setup clang-tidy problem matcher
+      run: echo "::add-matcher::.github/clang-tidy-matcher.json"
+
+    - name: Configure CMake
+      run: >
+        cmake -B build
+        -DCMAKE_CXX_COMPILER=clang++-21
+        -DCMAKE_C_COMPILER=clang-21
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo
+        -GNinja
+        -S ${{ github.workspace }}
+
+    - name: Build
+      run: cmake --build build --config RelWithDebInfo
+
+    - name: Run clang-tidy on PR diff
+      run: |
+        CLANG_TIDY_DIFF=$(find /usr/lib/llvm-21 -name 'clang-tidy-diff.py' -print -quit)
+        if [ -z "$CLANG_TIDY_DIFF" ]; then
+          echo "::error::clang-tidy-diff.py not found"
+          exit 1
+        fi
+        git diff -U0 origin/${{ github.base_ref }}...HEAD \
+            -- 'src/*.cpp' 'src/*.hpp' 'src/*.h' \
+            ':!src/crispy/*' ':!src/vtparser/*' \
+          | python3 "$CLANG_TIDY_DIFF" \
+              -p1 \
+              -path build \
+              -clang-tidy-binary clang-tidy-21 \
+              -j$(nproc) \
+              -quiet
