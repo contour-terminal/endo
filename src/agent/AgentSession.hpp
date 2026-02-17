@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <span>
 #include <string>
 #include <string_view>
@@ -17,6 +18,8 @@ namespace endo::agent
 {
 
 class ToolRegistry;
+class ConversationCompactor;
+struct CompactionConfig;
 
 /// Error codes specific to the agent session.
 enum class AgentErrorCode : uint8_t
@@ -53,6 +56,8 @@ class AgentSession
     /// @param provider The LLM provider to use for generation.
     explicit AgentSession(LlmProvider& provider);
 
+    ~AgentSession();
+
     /// @brief Processes a user message and generates a response.
     ///
     /// Adds the user message to history, calls the provider with streaming,
@@ -88,6 +93,17 @@ class AgentSession
     /// @brief Resets the conversation, clearing all history.
     void reset();
 
+    /// @brief Sets the maximum tool result size in bytes before truncation.
+    /// @param maxBytes Maximum bytes for a single tool result content.
+    void setMaxToolResultSize(size_t maxBytes);
+
+    /// @brief Configures conversation compaction with the given settings.
+    ///
+    /// Creates a ConversationCompactor that will summarize old messages when
+    /// the conversation approaches the context window limit.
+    /// @param config The compaction configuration.
+    void setCompactionConfig(CompactionConfig const& config);
+
   private:
     /// Executes a batch of tool calls and returns results.
     [[nodiscard]] auto executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>;
@@ -96,7 +112,9 @@ class AgentSession
     ConversationHistory _history;
     ToolRegistry* _toolRegistry = nullptr;
     size_t _maxToolIterations = 25;
+    size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
+    std::unique_ptr<ConversationCompactor> _compactor;
 };
 
 } // namespace endo::agent

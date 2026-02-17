@@ -3,14 +3,31 @@
 #include <span>
 
 #include <agent/AgentSession.hpp>
+#include <agent/ConversationCompactor.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 namespace endo::agent
 {
 
+namespace
+{
+    /// Truncates a tool result's content if it exceeds the maximum allowed size.
+    /// Appends a marker indicating how many bytes were omitted.
+    void truncateToolResult(ToolResult& result, size_t maxSize)
+    {
+        if (result.content.size() <= maxSize)
+            return;
+        auto const omitted = result.content.size() - maxSize;
+        result.content.resize(maxSize);
+        result.content += std::format("\n\n[truncated -- {} bytes omitted]", omitted);
+    }
+} // namespace
+
 AgentSession::AgentSession(LlmProvider& provider): _provider(provider)
 {
 }
+
+AgentSession::~AgentSession() = default;
 
 auto AgentSession::processMessage(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<std::string, AgentError>
@@ -23,6 +40,14 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
 
     for (auto iteration = size_t { 0 }; iteration < _maxToolIterations; ++iteration)
     {
+        // Compact conversation if needed before calling the provider
+        if (_compactor)
+        {
+            auto compactResult = _compactor->compactIfNeeded(_history);
+            // Log but don't abort on compaction failure
+            (void) compactResult;
+        }
+
         auto result = _provider.generate(_history.messages(), tools, streamCb);
 
         if (!result.has_value())
@@ -97,6 +122,16 @@ void AgentSession::reset()
     _history.clear();
 }
 
+void AgentSession::setMaxToolResultSize(size_t maxBytes)
+{
+    _maxToolResultSize = maxBytes;
+}
+
+void AgentSession::setCompactionConfig(CompactionConfig const& config)
+{
+    _compactor = std::make_unique<ConversationCompactor>(_provider, config);
+}
+
 auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>
 {
     auto results = std::vector<ToolResult> {};
@@ -107,7 +142,9 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
         if (_toolStatusCallback)
             _toolStatusCallback(call.name);
 
-        results.push_back(_toolRegistry->execute(call));
+        auto result = _toolRegistry->execute(call);
+        truncateToolResult(result, _maxToolResultSize);
+        results.push_back(std::move(result));
     }
 
     return results;

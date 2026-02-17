@@ -37,6 +37,7 @@
 #include <agent/AgentInputComponent.hpp>
 #include <agent/AgentResponseRenderer.hpp>
 #include <agent/AgentSession.hpp>
+#include <agent/ProjectContextLoader.hpp>
 #include <agent/ProviderFactory.hpp>
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/tools/EditFileTool.hpp>
@@ -1009,12 +1010,13 @@ namespace
 
 void Shell::runAgentMode()
 {
+    auto const agentConfig = agent::loadAgentConfig();
+
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
     {
-        auto config = agent::loadAgentConfig();
         _agentHttpClient = std::make_unique<http::HttpClient>();
-        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, config);
+        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
     }
 
     auto* provider = _agentProviderFactory->activeProvider();
@@ -1066,10 +1068,18 @@ void Shell::runAgentMode()
 
     _agentSession->setToolRegistry(&toolRegistry);
 
-    // Build system prompt with current environment context
+    // Load project context (rules, memory, file tree)
+    auto const contextLoader = agent::ProjectContextLoader {};
+    auto const projectContext = contextLoader.load(std::filesystem::current_path());
+
+    // Build system prompt with current environment context and project context
     auto promptBuilder = agent::SystemPromptBuilder {};
     promptBuilder.setWorkingDirectory(std::filesystem::current_path().string());
     promptBuilder.setShellInfo("endo");
+    promptBuilder.setProjectRules(projectContext.rulesFiles);
+    promptBuilder.setGlobalRules(projectContext.globalRules);
+    promptBuilder.setMemoryFiles(projectContext.memoryFiles);
+    promptBuilder.setFileTree(projectContext.fileTree);
 
     auto const cwd = std::filesystem::current_path().string();
 #if defined(_WIN32)
@@ -1090,6 +1100,7 @@ void Shell::runAgentMode()
     }
 
     _agentSession->setSystemPrompt(promptBuilder.build());
+    _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
 
     // Agent input loop
     auto& terminal = prompt.terminal();

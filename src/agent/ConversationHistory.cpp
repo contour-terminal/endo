@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <agent/ConversationHistory.hpp>
+#include <agent/TokenEstimator.hpp>
 
 namespace endo::agent
 {
 
 void ConversationHistory::addMessage(ChatMessage message)
 {
+    _estimatedTokens += estimateTokenCount(message);
     _messages.emplace_back(std::move(message));
 }
 
@@ -27,15 +29,40 @@ auto ConversationHistory::empty() const noexcept -> bool
 void ConversationHistory::clear()
 {
     _messages.clear();
+    _estimatedTokens = 0;
 }
 
 void ConversationHistory::setSystemPrompt(std::string systemPrompt)
 {
     auto systemMessage = ChatMessage::text(Role::System, std::move(systemPrompt));
+
     if (!_messages.empty() && _messages.front().role == Role::System)
+    {
+        _estimatedTokens -= estimateTokenCount(_messages.front());
+        _estimatedTokens += estimateTokenCount(systemMessage);
         _messages.front() = std::move(systemMessage);
+    }
     else
+    {
+        _estimatedTokens += estimateTokenCount(systemMessage);
         _messages.insert(_messages.begin(), std::move(systemMessage));
+    }
+}
+
+auto ConversationHistory::estimatedTokenCount() const noexcept -> size_t
+{
+    return _estimatedTokens;
+}
+
+void ConversationHistory::replaceMessages(std::vector<ChatMessage> messages)
+{
+    _messages = std::move(messages);
+    recalculateTokens();
+}
+
+void ConversationHistory::recalculateTokens()
+{
+    _estimatedTokens = endo::agent::estimateTokenCount(std::span<ChatMessage const>(_messages));
 }
 
 } // namespace endo::agent

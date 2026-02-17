@@ -64,6 +64,9 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
         parseOpenAiConfig(root["openai_compat"], config.openaiCompat);
         parseGeminiConfig(root["gemini"], config.gemini);
 
+        if (root["max_tool_result_size"])
+            config.maxToolResultSize = root["max_tool_result_size"].as<size_t>();
+
         return config;
     }
     catch (YAML::Exception const& e)

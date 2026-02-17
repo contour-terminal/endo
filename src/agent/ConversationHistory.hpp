@@ -14,6 +14,7 @@ namespace endo::agent
 ///
 /// Provides methods to add messages, query conversation state, and manage
 /// the system prompt. The system prompt is always kept at index 0.
+/// Tracks estimated token usage across all messages.
 class ConversationHistory
 {
   public:
@@ -42,8 +43,21 @@ class ConversationHistory
     /// @param systemPrompt The system prompt text.
     void setSystemPrompt(std::string systemPrompt);
 
+    /// @brief Returns the estimated total token count across all messages.
+    [[nodiscard]] auto estimatedTokenCount() const noexcept -> size_t;
+
+    /// @brief Replaces all messages and recalculates the token total.
+    ///
+    /// Used by conversation compaction to atomically replace the message list.
+    /// @param messages The new message list.
+    void replaceMessages(std::vector<ChatMessage> messages);
+
   private:
+    /// Recalculates _estimatedTokens from scratch based on current messages.
+    void recalculateTokens();
+
     std::vector<ChatMessage> _messages;
+    size_t _estimatedTokens = 0;
 };
 
 } // namespace endo::agent

@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <agent/AgentSession.hpp>
+#include <agent/ConversationCompactor.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 using namespace endo::agent;
@@ -100,6 +101,30 @@ class MockTool final: public AgentTool
         -> std::expected<ToolResult, ToolError> override
     {
         return ToolResult { .content = resultContent, .isError = false };
+    }
+};
+
+/// Mock tool that returns a large result for truncation testing.
+class LargeResultTool final: public AgentTool
+{
+  public:
+    size_t resultSize = 50000;
+
+    [[nodiscard]] auto name() const noexcept -> std::string_view override { return "large_tool"; }
+
+    [[nodiscard]] auto definition() const -> ToolDefinition override
+    {
+        return ToolDefinition {
+            .name = "large_tool",
+            .description = "A tool that returns large results",
+            .inputSchema = nlohmann::json { { "type", "object" } },
+        };
+    }
+
+    [[nodiscard]] auto execute(nlohmann::json const& /*arguments*/)
+        -> std::expected<ToolResult, ToolError> override
+    {
+        return ToolResult { .content = std::string(resultSize, 'x'), .isError = false };
     }
 };
 
@@ -332,4 +357,79 @@ TEST_CASE("AgentSession.tool_status_callback_fires", "[agent]")
 
     REQUIRE(statusToolNames.size() == 1);
     CHECK(statusToolNames[0] == "mock_tool");
+}
+
+// ============================================================================
+// Tool result truncation tests
+// ============================================================================
+
+TEST_CASE("AgentSession.tool_result_under_limit_unchanged", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    auto tool = std::make_unique<MockTool>();
+    tool->resultContent = "short result";
+    registry.registerTool(std::move(tool));
+    session.setToolRegistry(&registry);
+    session.setMaxToolResultSize(1000);
+
+    provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "mock_tool", .arguments = {} } };
+    (void) session.processMessage("Test", nullptr);
+
+    // The tool result in history should be unchanged
+    auto const& toolResultMsg = session.history().messages()[2];
+    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    REQUIRE(result != nullptr);
+    CHECK(result->content == "short result");
+}
+
+TEST_CASE("AgentSession.tool_result_over_limit_truncated", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    auto tool = std::make_unique<LargeResultTool>();
+    tool->resultSize = 50000;
+    registry.registerTool(std::move(tool));
+    session.setToolRegistry(&registry);
+    session.setMaxToolResultSize(1000);
+
+    provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "large_tool", .arguments = {} } };
+    (void) session.processMessage("Test", nullptr);
+
+    // The tool result in history should be truncated
+    auto const& toolResultMsg = session.history().messages()[2];
+    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    REQUIRE(result != nullptr);
+    CHECK(result->content.size() < 50000);
+    CHECK(result->content.find("[truncated") != std::string::npos);
+    CHECK(result->content.find("49000 bytes omitted") != std::string::npos);
+}
+
+TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    auto tool = std::make_unique<LargeResultTool>();
+    tool->resultSize = 1000;
+    registry.registerTool(std::move(tool));
+    session.setToolRegistry(&registry);
+    session.setMaxToolResultSize(1000);
+
+    provider.pendingToolCalls = { ToolCall { .id = "c1", .name = "large_tool", .arguments = {} } };
+    (void) session.processMessage("Test", nullptr);
+
+    auto const& toolResultMsg = session.history().messages()[2];
+    auto const* result = std::get_if<ToolResultBlock>(&toolResultMsg.content[0]);
+    REQUIRE(result != nullptr);
+    CHECK(result->content.size() == 1000);
+    CHECK(result->content.find("[truncated") == std::string::npos);
 }

@@ -44,6 +44,8 @@ struct AgentConfig
     OpenAiConfig openai;       ///< OpenAI configuration.
     OpenAiConfig openaiCompat; ///< OpenAI-compatible provider (Ollama, vLLM, LM Studio).
     GeminiConfig gemini;       ///< Google Gemini configuration.
+
+    size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
 };
 
 /// Loads agent configuration from a YAML file.

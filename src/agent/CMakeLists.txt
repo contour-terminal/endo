@@ -10,6 +10,10 @@ add_library(endo-agent STATIC
     GeminiProvider.hpp GeminiProvider.cpp
     ProviderFactory.hpp ProviderFactory.cpp
     ConversationHistory.hpp ConversationHistory.cpp
+    TokenEstimator.hpp TokenEstimator.cpp
+    ConversationCompactor.hpp ConversationCompactor.cpp
+    ProjectFileTree.hpp ProjectFileTree.cpp
+    ProjectContextLoader.hpp ProjectContextLoader.cpp
     SystemPromptBuilder.hpp SystemPromptBuilder.cpp
     AgentSession.hpp AgentSession.cpp
     AgentInputComponent.hpp AgentInputComponent.cpp
@@ -44,6 +48,10 @@ add_executable(test-endo-agent
     GeminiProvider_test.cpp
     ProviderFactory_test.cpp
     ConversationHistory_test.cpp
+    TokenEstimator_test.cpp
+    ConversationCompactor_test.cpp
+    ProjectFileTree_test.cpp
+    ProjectContextLoader_test.cpp
     SystemPromptBuilder_test.cpp
     AgentSession_test.cpp
     tools/ToolRegistry_test.cpp

@@ -676,53 +676,67 @@ permissions:
 
 ---
 
-## Phase 7: Context Management
+## Phase 7: Context Management (**COMPLETE**)
 
 **Goal:** Keep conversations within the LLM's context window during long coding sessions.
 
+**Status:** Fully implemented. TokenEstimator provides character-based heuristic token counting
+(~4 chars/token for natural language, ~3.5 for code). ConversationHistory tracks estimated tokens
+across all messages. ConversationCompactor performs LLM-driven summarization when the conversation
+approaches 80% of the context window, preserving system prompt and recent messages (including
+tool result chains). Tool results are truncated at 30 KB (configurable via `max_tool_result_size`
+in `agent.yml`). ProjectFileTree generates git-aware file trees. ProjectContextLoader loads
+project rules (CLAUDE.md, AGENT.md, .endo/agent-rules.md), global rules
+(~/.config/endo/agent-rules/*.md), and memory files (~/.config/endo/agent-memory/*.md).
+SystemPromptBuilder assembles all context into a structured system prompt with sections for
+global rules, project rules, environment, project structure, and agent memory.
+
 ### 7.1 Token Tracking
 
-- Estimate token counts per message (provider-specific tokenizer or heuristic)
-- Track cumulative usage in `ConversationHistory`
-- Expose `ConversationHistory::estimatedTokenCount() -> size_t`
-- Display token usage in the agent status bar
+- `TokenEstimator` — pure utility functions for estimating token counts
+- `estimateTokenCount(text)` — character-based heuristic with code detection
+- `estimateTokenCount(ChatMessage)` — per-message overhead + content block estimates
+- `ConversationHistory::estimatedTokenCount()` — running total, updated on add/clear/replace
+- `ConversationHistory::replaceMessages()` — atomic replacement with token recalculation
 
 ### 7.2 Conversation Compaction
 
-When approaching the context limit (80% of `contextSize`):
-
-1. **Summarize** — Ask the LLM to summarize the conversation so far
-2. **Replace** — Replace old messages with a single system message containing the summary
-3. **Preserve** — Keep system prompt, summary, and the last N messages + pending tool results
+- `ConversationCompactor` — LLM-driven summarization when approaching context limit
+- Trigger at 80% of `contextSize` (configurable via `CompactionConfig::triggerThreshold`)
+- Preserves system prompt, last N messages, and pending tool result chains
+- Summary injected as system message between original system prompt and preserved messages
+- `AgentSession::setCompactionConfig()` creates compactor; runs before each provider call
 
 ### 7.3 Tool Result Truncation
 
 - Truncate large tool results before adding to conversation (default 30 KB)
-- Add `[truncated — X bytes omitted]` marker
-- Configurable via `agent.yml`: `max_tool_result_size: 30720`
+- `[truncated -- X bytes omitted]` marker appended
+- Configurable via `AgentConfig::maxToolResultSize` and `agent.yml`: `max_tool_result_size: 30720`
 
 ### 7.4 Project Context
 
-Build initial context from existing infrastructure:
-
-- **Working directory** from `Shell`
-- **Git status** from `GitModule` (branch, dirty files, recent commits)
-- **Project structure** — condensed file tree (respecting `.gitignore`)
-- **Rules files** — load `CLAUDE.md`, `AGENT.md`, or `.endo/agent-rules.md` from project root
-- **Memory files** — persistent agent memory in `~/.config/endo/agent-memory/`
+- `ProjectFileTree` — git-aware condensed file tree using `git ls-files`
+- `ProjectContextLoader` — loads rules files, global rules, and memory files
+- Rules file search: `CLAUDE.md`, `AGENT.md`, `.endo/agent-rules.md`
+- Global rules: `~/.config/endo/agent-rules/*.md`
+- Memory files: `~/.config/endo/agent-memory/*.md`
 
 ### 7.5 System Prompt Assembly
 
-Compose the system prompt from:
+`SystemPromptBuilder` extended with new sections (all optional, omitted when empty):
 
-1. Base agent instructions (built-in)
-2. Global rules (`~/.config/endo/agent-rules/*.md`)
-3. Project rules (`<project-root>/CLAUDE.md`, `<project-root>/AGENT.md`)
-4. Project context (CWD, git status, file tree)
-5. Memory files (learnings from past sessions)
+1. Base instructions (built-in default or custom)
+2. Global Rules section
+3. Project Rules section
+4. Environment section (CWD, git, shell)
+5. Project Structure section (file tree)
+6. Agent Memory section
 
-**Touches:** `src/agent/ConversationHistory.hpp/cpp` (from mychat `ChatSession`),
-`src/agent/AgentSession.hpp/cpp`, `src/agent/AgentConfig.hpp/.cpp`
+**Touches:** `src/agent/TokenEstimator.hpp/cpp`, `src/agent/ConversationCompactor.hpp/cpp`,
+`src/agent/ProjectFileTree.hpp/cpp`, `src/agent/ProjectContextLoader.hpp/cpp`,
+`src/agent/ConversationHistory.hpp/cpp`, `src/agent/AgentSession.hpp/cpp`,
+`src/agent/SystemPromptBuilder.hpp/cpp`, `src/agent/AgentConfig.hpp/cpp`,
+`src/shell/Shell.cpp`
 
 ---
 
