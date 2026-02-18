@@ -12,6 +12,7 @@ AgentInputComponent::AgentInputComponent()
 {
     // Default prompt indicator: ❯ (U+276F)
     _inputField.setPrompt("\xe2\x9d\xaf ");
+    _inputField.setMultiline(true);
 }
 
 void AgentInputComponent::setPromptIndicator(std::string indicator)
