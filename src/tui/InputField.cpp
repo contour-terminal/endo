@@ -213,6 +213,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::Abort:
         case InputFieldAction::Eof:
         case InputFieldAction::AgentMode:
+        case InputFieldAction::CycleAgentMode:
             // These need special handling by the parent
             return EventResult::Handled;
         case InputFieldAction::None: return EventResult::Ignored;
@@ -531,6 +532,8 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
 
         case EditAction::AgentMode: _lastWasKill = false; return InputFieldAction::AgentMode;
 
+        case EditAction::CycleAgentMode: _lastWasKill = false; return InputFieldAction::CycleAgentMode;
+
         // History
         case EditAction::HistoryPrev:
             clearSelection();
@@ -650,8 +653,8 @@ auto InputField::handleKey(KeyEvent const& key) -> InputFieldAction
         // Otherwise fall through to keybinding lookup (DeleteCharForward)
     }
 
-    // Tab: Not handled yet, ignore
-    if (key.key == KeyCode::Tab)
+    // Plain Tab: Not handled yet, ignore (modified Tab like Shift+Tab goes to keybinding lookup)
+    if (key.key == KeyCode::Tab && !shift && !ctrl && !alt)
     {
         _lastWasKill = false;
         return InputFieldAction::None;

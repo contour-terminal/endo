@@ -60,10 +60,11 @@ enum class EditAction : std::uint8_t
     Paste, ///< Paste from system clipboard
 
     // === Control ===
-    Submit,        ///< Submit input (Enter)
-    Abort,         ///< Abort input (Ctrl+D on empty, or explicit abort)
-    InsertNewline, ///< Insert newline in multiline mode
-    AgentMode,     ///< Enter agent/AI mode
+    Submit,         ///< Submit input (Enter)
+    Abort,          ///< Abort input (Ctrl+D on empty, or explicit abort)
+    InsertNewline,  ///< Insert newline in multiline mode
+    AgentMode,      ///< Enter agent/AI mode
+    CycleAgentMode, ///< Cycle between agent sub-modes (Shift+Tab)
 
     // === History ===
     HistoryPrev, ///< Navigate to previous history entry

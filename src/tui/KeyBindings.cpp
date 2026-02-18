@@ -94,7 +94,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 33> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 34> actionNameMappings = { {
         // Movement
         { "move-forward-char", EditAction::MoveForwardChar },
         { "move-backward-char", EditAction::MoveBackwardChar },
@@ -133,6 +133,7 @@ namespace
         { "abort", EditAction::Abort },
         { "insert-newline", EditAction::InsertNewline },
         { "agent-mode", EditAction::AgentMode },
+        { "cycle-agent-mode", EditAction::CycleAgentMode },
         // History
         { "history-prev", EditAction::HistoryPrev },
         { "history-next", EditAction::HistoryNext },
@@ -371,6 +372,7 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromChar('u', M::Ctrl), A::KillToStart);
     // Note: Transpose has no default binding, users can reconfigure
     bindings.bind(K::fromChar('t', M::Ctrl), A::AgentMode);
+    bindings.bind(K::fromKey(KeyCode::Tab, M::Shift), A::CycleAgentMode);
 
     // === Kill Ring ===
     // Note: Yank has no default binding (was Ctrl+Y, now Redo)
