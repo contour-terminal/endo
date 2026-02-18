@@ -6,6 +6,7 @@
 #include <tui/InputEvent.hpp>
 #include <tui/KeyBindings.hpp>
 #include <tui/TerminalOutput.hpp>
+#include <tui/TextDecorator.hpp>
 #include <tui/completer/CompletionProvider.hpp>
 
 #include <chrono>
@@ -194,6 +195,11 @@ class InputField: public Component
     /// @brief Sets the scroll offset (for multiline mode).
     void setScrollOffset(int offset);
 
+    /// @brief Returns the byte offset of the start of the given line.
+    /// @param lineIndex The 0-based line index.
+    /// @return Byte offset into the buffer where the line starts.
+    [[nodiscard]] auto lineStartOffset(int lineIndex) const -> std::size_t;
+
     /// @brief Sets the maximum number of lines allowed in multiline mode (0 = unlimited).
     void setMaxLines(int maxLines);
 
@@ -274,6 +280,21 @@ class InputField: public Component
     /// @brief Returns the current keybindings (mutable).
     [[nodiscard]] auto keyBindings() noexcept -> KeyBindings&;
 
+    // ========================================================================
+    // Text decorator (for syntax highlighting, error underlines, custom backgrounds)
+    // ========================================================================
+
+    /// @brief Sets a text decorator for custom rendering (syntax highlight, underlines, backgrounds).
+    /// @param decorator Pointer to decorator (caller owns, must outlive InputField usage). Nullptr to clear.
+    void setTextDecorator(TextDecorator const* decorator);
+
+    /// @brief Sets the continuation prompt for non-first lines in multiline mode.
+    /// @param prompt The continuation text (e.g., "·· " or "  ").
+    void setContinuationPrompt(std::string_view prompt);
+
+    /// @brief Returns the continuation prompt.
+    [[nodiscard]] auto continuationPrompt() const noexcept -> std::string_view;
+
     /// @brief Copies the selected text to the clipboard (kill ring for now).
     /// @return True if text was copied.
     auto copySelection() -> bool;
@@ -308,8 +329,10 @@ class InputField: public Component
     std::size_t _cursor = 0;
     std::string _prompt;
     KeyBindings _keyBindings = KeyBindings::defaults();
-    InputFieldStyles _styles; ///< Custom styles (nullopt values use theme defaults)
-    std::string _ghostText;   ///< Ghost text suggestion (displayed dimmed after cursor)
+    InputFieldStyles _styles;                      ///< Custom styles (nullopt values use theme defaults)
+    std::string _ghostText;                        ///< Ghost text suggestion (displayed dimmed after cursor)
+    TextDecorator const* _textDecorator = nullptr; ///< Optional decorator for custom rendering.
+    std::string _continuationPrompt;               ///< Continuation prompt for non-first lines.
     bool _multiline = false;
     int _maxLines = 0;     ///< 0 = unlimited
     int _scrollOffset = 0; ///< Scroll offset for multiline mode

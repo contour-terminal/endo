@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Buffer.hpp>
+#include <tui/Canvas.hpp>
 #include <tui/InputField.hpp>
+#include <tui/TextDecorator.hpp>
+#include <tui/Theme.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -1266,4 +1270,259 @@ TEST_CASE("InputField.smart_move_three_lines")
     // Ctrl+A again -> stays at 0
     (void) field.processEvent(charKey('a', Modifier::Ctrl));
     CHECK(field.cursor() == 0);
+}
+
+// ============================================================================
+// lineStartOffset tests
+// ============================================================================
+
+TEST_CASE("InputField.lineStartOffset_single_line")
+{
+    InputField field;
+    field.setText("hello");
+    CHECK(field.lineStartOffset(0) == 0);
+}
+
+TEST_CASE("InputField.lineStartOffset_multiline")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("aaa\nbbb\nccc");
+
+    CHECK(field.lineStartOffset(0) == 0); // "aaa"
+    CHECK(field.lineStartOffset(1) == 4); // "bbb" (after "aaa\n")
+    CHECK(field.lineStartOffset(2) == 8); // "ccc" (after "aaa\nbbb\n")
+}
+
+TEST_CASE("InputField.lineStartOffset_empty_lines")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("a\n\nc");
+
+    CHECK(field.lineStartOffset(0) == 0); // "a"
+    CHECK(field.lineStartOffset(1) == 2); // "" (empty line)
+    CHECK(field.lineStartOffset(2) == 3); // "c"
+}
+
+// ============================================================================
+// Multiline rendering tests
+// ============================================================================
+
+TEST_CASE("InputField.multiline_render_basic")
+{
+    // Verify that multiline render puts content on the correct rows
+    InputField field;
+    field.setMultiline(true);
+    field.setText("aaa\nbbb");
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Row 0 should contain "aaa", row 1 should contain "bbb"
+    CHECK(buf.at(0, 0).grapheme == "a");
+    CHECK(buf.at(0, 1).grapheme == "a");
+    CHECK(buf.at(0, 2).grapheme == "a");
+    CHECK(buf.at(1, 0).grapheme == "b");
+    CHECK(buf.at(1, 1).grapheme == "b");
+    CHECK(buf.at(1, 2).grapheme == "b");
+}
+
+TEST_CASE("InputField.multiline_render_with_prompt")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setPrompt("> ");
+    field.setContinuationPrompt("  ");
+    field.setText("aaa\nbbb");
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Row 0: "> " prompt then "aaa"
+    CHECK(buf.at(0, 0).grapheme == ">");
+    CHECK(buf.at(0, 1).grapheme == " ");
+    CHECK(buf.at(0, 2).grapheme == "a");
+    // Row 1: "  " continuation then "bbb"
+    CHECK(buf.at(1, 0).grapheme == " ");
+    CHECK(buf.at(1, 1).grapheme == " ");
+    CHECK(buf.at(1, 2).grapheme == "b");
+}
+
+TEST_CASE("InputField.multiline_render_ghost_text_on_last_line")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setText("aaa\nbbb");
+    field.setGhostText("ccc");
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Ghost text appears after "bbb" on row 1 (last line)
+    CHECK(buf.at(1, 3).grapheme == "c");
+    CHECK(buf.at(1, 4).grapheme == "c");
+    CHECK(buf.at(1, 5).grapheme == "c");
+}
+
+TEST_CASE("InputField.multiline_continuation_prompt")
+{
+    InputField field;
+    field.setMultiline(true);
+    field.setContinuationPrompt(".. ");
+    CHECK(field.continuationPrompt() == ".. ");
+}
+
+// ============================================================================
+// TextDecorator tests
+// ============================================================================
+
+TEST_CASE("InputField.decorator_foreground_applied")
+{
+    // Simple decorator that colors the first grapheme red
+    struct TestDecorator: TextDecorator
+    {
+        mutable std::vector<std::size_t> queriedIndices;
+
+        [[nodiscard]] auto foreground(TextPosition pos) const -> std::optional<RgbColor> override
+        {
+            queriedIndices.push_back(pos.graphemeIndex);
+            if (pos.graphemeIndex == 0)
+                return RgbColor { .r = 255, .g = 0, .b = 0 };
+            return {};
+        }
+    };
+
+    InputField field;
+    field.setText("abc");
+
+    TestDecorator decorator;
+    field.setTextDecorator(&decorator);
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 1 });
+    field.render(canvas);
+
+    // Decorator should be queried for each grapheme (a, b, c)
+    REQUIRE(decorator.queriedIndices.size() == 3);
+    CHECK(decorator.queriedIndices[0] == 0);
+    CHECK(decorator.queriedIndices[1] == 1);
+    CHECK(decorator.queriedIndices[2] == 2);
+
+    // First grapheme should have red foreground
+    CHECK(std::holds_alternative<RgbColor>(buf.at(0, 0).style.fg));
+    auto const& fg = std::get<RgbColor>(buf.at(0, 0).style.fg);
+    CHECK(fg.r == 255);
+    CHECK(fg.g == 0);
+    CHECK(fg.b == 0);
+}
+
+TEST_CASE("InputField.decorator_background_applied")
+{
+    struct TestDecorator: TextDecorator
+    {
+        mutable int callCount = 0;
+
+        [[nodiscard]] auto background(int /*displayCol*/) const -> std::optional<RgbColor> override
+        {
+            ++callCount;
+            return RgbColor { .r = 42, .g = 42, .b = 42 };
+        }
+    };
+
+    InputField field;
+    field.setText("ab");
+
+    TestDecorator decorator;
+    field.setTextDecorator(&decorator);
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 1 });
+    field.render(canvas);
+
+    // Background decorator should be called during rendering
+    CHECK(decorator.callCount > 0);
+
+    // Text cells should have the decorator background
+    CHECK(std::holds_alternative<RgbColor>(buf.at(0, 0).style.bg));
+    auto const& bg = std::get<RgbColor>(buf.at(0, 0).style.bg);
+    CHECK(bg.r == 42);
+}
+
+TEST_CASE("InputField.decorator_cleared_with_nullptr")
+{
+    struct TestDecorator: TextDecorator
+    {
+        mutable int callCount = 0;
+
+        [[nodiscard]] auto foreground(TextPosition /*pos*/) const -> std::optional<RgbColor> override
+        {
+            ++callCount;
+            return RgbColor { .r = 255, .g = 0, .b = 0 };
+        }
+    };
+
+    InputField field;
+    field.setText("a");
+
+    TestDecorator decorator;
+    field.setTextDecorator(&decorator);
+    field.setTextDecorator(nullptr); // Clear decorator
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 1 });
+    field.render(canvas);
+
+    // Decorator should NOT be called after being cleared
+    CHECK(decorator.callCount == 0);
+}
+
+TEST_CASE("InputField.decorator_multiline_global_grapheme_index")
+{
+    // Verify that the decorator receives global (buffer-wide) grapheme indices in multiline mode
+    struct TestDecorator: TextDecorator
+    {
+        mutable std::vector<std::size_t> queriedIndices;
+
+        [[nodiscard]] auto foreground(TextPosition pos) const -> std::optional<RgbColor> override
+        {
+            queriedIndices.push_back(pos.graphemeIndex);
+            return {};
+        }
+    };
+
+    InputField field;
+    field.setMultiline(true);
+    field.setText("ab\ncd"); // 2 graphemes + newline + 2 graphemes = indices 0,1,(2=newline),3,4
+
+    TestDecorator decorator;
+    field.setTextDecorator(&decorator);
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Should have queried indices for a(0), b(1), c(3), d(4) — index 2 is the newline (skipped)
+    REQUIRE(decorator.queriedIndices.size() == 4);
+    CHECK(decorator.queriedIndices[0] == 0); // 'a'
+    CHECK(decorator.queriedIndices[1] == 1); // 'b'
+    CHECK(decorator.queriedIndices[2] == 3); // 'c' (index 2 = newline)
+    CHECK(decorator.queriedIndices[3] == 4); // 'd'
 }

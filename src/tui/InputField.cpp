@@ -123,83 +123,250 @@ void InputField::render(Canvas& canvas)
     if (_styles.background.has_value())
         canvas.fill(Rect { 0, 0, width, height }, ' ', *_styles.background);
 
-    // For now, render single-line mode
-    // TODO: Implement multiline rendering
-
-    int col = 0;
-
-    // Render prompt
-    if (!_prompt.empty())
+    // ====================================================================
+    // Single-line mode (or single-line content)
+    // ====================================================================
+    if (!_multiline || lineCount() <= 1)
     {
-        col += canvas.putString(0, col, _prompt, textStyle);
-    }
+        int col = 0;
 
-    // Calculate visible portion of text
-    auto const textStartCol = col;
-    auto const availableWidth = width - textStartCol;
+        // Render prompt
+        if (!_prompt.empty())
+            col += canvas.putString(0, col, _prompt, textStyle);
 
-    if (availableWidth <= 0)
-        return;
+        auto const textStartCol = col;
+        auto const availableWidth = width - textStartCol;
+        if (availableWidth <= 0)
+            return;
 
-    // Render text with selection highlighting
-    auto segmenter = unicode::utf8_grapheme_segmenter(_buffer);
-    int cursorDisplayCol = textStartCol;
-    bool cursorFound = false;
+        // Render text with selection highlighting and optional decorator
+        auto segmenter = unicode::utf8_grapheme_segmenter(_buffer);
+        int cursorDisplayCol = textStartCol;
+        bool cursorFound = false;
+        std::size_t graphemeIdx = 0;
 
-    for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it)
-    {
-        auto const& cluster = *it;
-
-        // Calculate byte range for this cluster
-        auto nextIt = it;
-        ++nextIt;
-        char const* clusterStart = it._clusterStart;
-        char const* clusterEnd =
-            (nextIt != segmenter.end()) ? nextIt._clusterStart : (_buffer.data() + _buffer.size());
-        size_t clusterByteStart = static_cast<size_t>(clusterStart - _buffer.data());
-        size_t clusterByteEnd = static_cast<size_t>(clusterEnd - _buffer.data());
-
-        // Check if cursor is at this position
-        if (!cursorFound && _cursor <= clusterByteStart)
+        for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it, ++graphemeIdx)
         {
+            auto const& cluster = *it;
+            auto nextIt = it;
+            ++nextIt;
+            char const* clusterStart = it._clusterStart;
+            char const* clusterEnd =
+                (nextIt != segmenter.end()) ? nextIt._clusterStart : (_buffer.data() + _buffer.size());
+            auto const clusterByteStart = static_cast<std::size_t>(clusterStart - _buffer.data());
+
+            if (!cursorFound && _cursor <= clusterByteStart)
+            {
+                cursorDisplayCol = col;
+                cursorFound = true;
+            }
+
+            int const clusterWidth = graphemeClusterWidth(cluster);
+
+            // Build style: start with text style, apply decorator, then selection
+            Style style = textStyle;
+            if (_textDecorator)
+            {
+                auto const pos =
+                    TextPosition { .graphemeIndex = graphemeIdx, .byteOffset = clusterByteStart };
+                if (auto fg = _textDecorator->foreground(pos))
+                    style.fg = *fg;
+                if (auto ul = _textDecorator->underline(pos))
+                {
+                    style.underlineStyle = ul->style;
+                    style.underlineColor = ul->color;
+                }
+            }
+            if (hasSelection())
+            {
+                auto const selStart = selectionStart();
+                auto const selEnd = selectionEnd();
+                if (clusterByteStart >= selStart && clusterByteStart < selEnd)
+                    style = selectionStyle;
+            }
+
+            // Apply background from decorator
+            if (_textDecorator)
+            {
+                if (auto bg = _textDecorator->background(col))
+                    style.bg = *bg;
+            }
+
+            std::string_view clusterView(clusterStart, static_cast<std::size_t>(clusterEnd - clusterStart));
+            canvas.putString(0, col, clusterView, style);
+            col += clusterWidth;
+        }
+
+        if (!cursorFound || _cursor >= _buffer.size())
             cursorDisplayCol = col;
-            cursorFound = true;
-        }
 
-        // Calculate cluster width
-        int const clusterWidth = graphemeClusterWidth(cluster);
+        if (!_ghostText.empty() && _cursor >= _buffer.size())
+            canvas.putString(0, col, _ghostText, ghostStyle);
 
-        // Determine style (normal or selected)
-        Style style = textStyle;
-        if (hasSelection())
+        canvas.setCursor(0, cursorDisplayCol);
+        return;
+    }
+
+    // ====================================================================
+    // Multiline mode
+    // ====================================================================
+    auto const totalLines = lineCount();
+
+    // Auto-scroll: ensure cursorLine is visible
+    auto const curLine = cursorLine();
+    if (curLine < _scrollOffset)
+        _scrollOffset = curLine;
+    else if (curLine >= _scrollOffset + height)
+        _scrollOffset = curLine - height + 1;
+    _scrollOffset = std::clamp(_scrollOffset, 0, std::max(0, totalLines - 1));
+
+    // Get selection bounds once
+    auto const hasSel = hasSelection();
+    auto const selStart = selectionStart();
+    auto const selEnd = selectionEnd();
+
+    int cursorRow = 0;
+    int cursorDisplayCol = 0;
+
+    // Compute global grapheme index for the first visible line (skip graphemes before scrollOffset)
+    std::size_t globalGraphemeBase = 0;
+    if (_scrollOffset > 0)
+    {
+        auto const prefixLen = lineStartOffset(_scrollOffset);
+        auto const prefix = std::string_view(_buffer.data(), prefixLen);
+        auto seg = unicode::utf8_grapheme_segmenter(prefix);
+        for (auto it = seg.begin(); it != seg.end(); ++it)
+            ++globalGraphemeBase;
+    }
+
+    auto const lastVisibleLine = std::min(totalLines, _scrollOffset + height);
+    for (int lineIndex = _scrollOffset; lineIndex < lastVisibleLine; ++lineIndex)
+    {
+        auto const row = lineIndex - _scrollOffset;
+        auto const lineContent = lineAt(lineIndex);
+        auto const lineStartByte = lineStartOffset(lineIndex);
+        auto const lineEndByte = lineStartByte + lineContent.size();
+
+        int col = 0;
+
+        // Fill background per cell (decorator or default)
+        for (int c = 0; c < width; ++c)
         {
-            size_t selStart = selectionStart();
-            size_t selEnd = selectionEnd();
-            if (clusterByteStart >= selStart && clusterByteStart < selEnd)
-                style = selectionStyle;
+            Style cellStyle = _styles.background.value_or(Style {});
+            if (_textDecorator)
+            {
+                if (auto bg = _textDecorator->background(c))
+                    cellStyle.bg = *bg;
+            }
+            canvas.put(row, c, " ", cellStyle);
         }
 
-        // Render the cluster
-        std::string_view clusterView(clusterStart, static_cast<size_t>(clusterEnd - clusterStart));
-        canvas.putString(0, col, clusterView, style);
-        col += clusterWidth;
-        (void) clusterByteEnd; // bytePos tracking reserved for future multiline support
+        // Render prompt (first visible line) or continuation prompt
+        if (lineIndex == 0)
+        {
+            if (!_prompt.empty())
+                col += canvas.putString(row, col, _prompt, textStyle);
+        }
+        else
+        {
+            if (!_continuationPrompt.empty())
+                col += canvas.putString(row, col, _continuationPrompt, textStyle);
+        }
+
+        // Determine selection range local to this line
+        auto const lineSelStart = (hasSel && selStart < lineEndByte && selEnd > lineStartByte)
+                                      ? std::max(selStart, lineStartByte) - lineStartByte
+                                      : lineContent.size();
+        auto const lineSelEnd = (hasSel && selStart < lineEndByte && selEnd > lineStartByte)
+                                    ? std::min(selEnd, lineEndByte) - lineStartByte
+                                    : lineContent.size();
+
+        // Render line content grapheme by grapheme
+        auto segmenter = unicode::utf8_grapheme_segmenter(lineContent);
+        std::size_t localByteOffset = 0;
+        std::size_t lineGraphemeCount = 0;
+
+        for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it, ++lineGraphemeCount)
+        {
+            auto const& cluster = *it;
+            auto nextIt = it;
+            ++nextIt;
+            char const* clusterStart = it._clusterStart;
+            char const* clusterEnd = (nextIt != segmenter.end()) ? nextIt._clusterStart
+                                                                 : (lineContent.data() + lineContent.size());
+            localByteOffset = static_cast<std::size_t>(clusterStart - lineContent.data());
+            auto const globalByteOffset = lineStartByte + localByteOffset;
+
+            int const clusterWidth = graphemeClusterWidth(cluster);
+
+            Style style = textStyle;
+            if (_textDecorator)
+            {
+                // Both graphemeIndex and byteOffset are buffer-global.
+                auto const pos = TextPosition { .graphemeIndex = globalGraphemeBase + lineGraphemeCount,
+                                                .byteOffset = globalByteOffset };
+                if (auto fg = _textDecorator->foreground(pos))
+                    style.fg = *fg;
+                if (auto ul = _textDecorator->underline(pos))
+                {
+                    style.underlineStyle = ul->style;
+                    style.underlineColor = ul->color;
+                }
+            }
+
+            // Selection highlighting
+            if (localByteOffset >= lineSelStart && localByteOffset < lineSelEnd)
+                style.inverse = true;
+
+            // Background from decorator
+            if (_textDecorator)
+            {
+                if (auto bg = _textDecorator->background(col))
+                    style.bg = *bg;
+            }
+
+            std::string_view clusterView(clusterStart, static_cast<std::size_t>(clusterEnd - clusterStart));
+            canvas.putString(row, col, clusterView, style);
+            col += clusterWidth;
+        }
+
+        // Advance global grapheme base: line graphemes + 1 for newline (except last line)
+        globalGraphemeBase += lineGraphemeCount;
+        if (lineIndex < totalLines - 1)
+            ++globalGraphemeBase; // Account for newline grapheme cluster
+
+        // Ghost text on last line only, when cursor is at end of buffer
+        if (lineIndex == totalLines - 1 && !_ghostText.empty() && _cursor >= _buffer.size())
+        {
+            Style gStyle = ghostStyle;
+            if (_textDecorator)
+            {
+                if (auto bg = _textDecorator->background(col))
+                    gStyle.bg = *bg;
+            }
+            canvas.putString(row, col, _ghostText, gStyle);
+        }
+
+        // Track cursor position for this line
+        if (lineIndex == curLine)
+        {
+            cursorRow = row;
+            auto const cursorInLine = _cursor - lineStartByte;
+            auto curCol = (lineIndex == 0) ? static_cast<int>(_prompt.size())
+                                           : static_cast<int>(_continuationPrompt.size());
+            auto seg = unicode::utf8_grapheme_segmenter(lineContent);
+            for (auto curIt = seg.begin(); curIt != seg.end(); ++curIt)
+            {
+                auto const localOffset = static_cast<std::size_t>(curIt._clusterStart - lineContent.data());
+                if (localOffset >= cursorInLine)
+                    break;
+                curCol += graphemeClusterWidth(*curIt);
+            }
+            cursorDisplayCol = curCol;
+        }
     }
 
-    // Handle cursor at end of text
-    if (!cursorFound || _cursor >= _buffer.size())
-    {
-        cursorDisplayCol = col;
-    }
-
-    // Render ghost text after cursor
-    if (!_ghostText.empty() && _cursor >= _buffer.size())
-    {
-        canvas.putString(0, col, _ghostText, ghostStyle);
-    }
-
-    // Set cursor position
-    canvas.setCursor(0, cursorDisplayCol);
+    canvas.setCursor(cursorRow, cursorDisplayCol);
 }
 
 EventResult InputField::onEvent(InputEvent const& event)
@@ -999,6 +1166,37 @@ auto InputField::isWordChar(char c) -> bool
 // ============================================================================
 // Multiline support
 // ============================================================================
+
+void InputField::setTextDecorator(TextDecorator const* decorator)
+{
+    _textDecorator = decorator;
+}
+
+void InputField::setContinuationPrompt(std::string_view prompt)
+{
+    _continuationPrompt = std::string(prompt);
+}
+
+auto InputField::continuationPrompt() const noexcept -> std::string_view
+{
+    return _continuationPrompt;
+}
+
+auto InputField::lineStartOffset(int lineIndex) const -> std::size_t
+{
+    if (lineIndex <= 0)
+        return 0;
+
+    std::size_t pos = 0;
+    int currentLine = 0;
+    while (pos < _buffer.size() && currentLine < lineIndex)
+    {
+        if (_buffer[pos] == '\n')
+            ++currentLine;
+        ++pos;
+    }
+    return pos;
+}
 
 void InputField::setMultiline(bool enable)
 {
