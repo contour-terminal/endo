@@ -97,11 +97,15 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         col += canvas.putString(0, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
-    // Draw left chrome for each input line
-    for (auto row = 0; row < lineCount && (row + HeaderHeight) < area.height; ++row)
+    // Draw left chrome for each visible input line (accounting for scroll offset)
+    auto const scrollOff = _inputField.scrollOffset();
+    auto const fieldHeight = area.height - HeaderHeight;
+    auto const visibleLines = std::min(lineCount - scrollOff, fieldHeight);
+    for (auto row = 0; row < visibleLines && (row + HeaderHeight) < area.height; ++row)
     {
         auto const canvasRow = row + HeaderHeight;
-        if (row == 0)
+        auto const logicalLine = row + scrollOff;
+        if (logicalLine == 0)
         {
             // First input line: ╰─
             canvas.putString(canvasRow, 0, "\xe2\x95\xb0", barStyle); // ╰
@@ -116,10 +120,10 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
     // Render InputField offset by header height and left chrome
     auto const fieldArea = tui::Rect {
-        LeftBarWidth + BarPadding,
-        HeaderHeight,
-        area.width - LeftBarWidth - BarPadding,
-        area.height - HeaderHeight,
+        .x = LeftBarWidth + BarPadding,
+        .y = HeaderHeight,
+        .width = area.width - LeftBarWidth - BarPadding,
+        .height = fieldHeight,
     };
     auto fieldCanvas = canvas.subcanvas(fieldArea);
     _inputField.render(fieldCanvas);
@@ -128,7 +132,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     if (_completionPopup.visible())
     {
         auto const popupSize = _completionPopup.preferredSize();
-        auto const cursorRow = HeaderHeight + _inputField.cursorLine();
+        auto const cursorRow = HeaderHeight + _inputField.cursorLine() - scrollOff;
         auto const popupRow = cursorRow + 1; // Below the cursor line
         auto const popupCol = LeftBarWidth + BarPadding;
         auto const popupHeight = std::min(popupSize.height, area.height - popupRow);
@@ -136,7 +140,8 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
         if (popupHeight > 0 && popupWidth > 0)
         {
-            auto const popupRect = tui::Rect { popupCol, popupRow, popupWidth, popupHeight };
+            auto const popupRect =
+                tui::Rect { .x = popupCol, .y = popupRow, .width = popupWidth, .height = popupHeight };
             _completionPopup.setArea(popupRect);
             auto popupCanvas = canvas.subcanvas(popupRect);
             _completionPopup.render(popupCanvas);
