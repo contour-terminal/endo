@@ -982,10 +982,13 @@ Component (base class)
 - [x] `shell_execute` rewritten to use `fork/exec` with explicit `bash` (fallback to `/bin/sh`)
   - [x] Proper timeout support via `poll()` polling loop with `SIGKILL` on timeout
   - [x] Command passed as single `execl` argument — no shell expansion quoting issues
+  - [x] Child process unblocks inherited signal mask (SIGCHLD/SIGTSTP/SIGCONT/SIGINT) and resets handlers to SIG_DFL
+  - [x] Parent poll/read loop handles EINTR from signal interrupts (e.g., SIGWINCH)
 - [x] `EndoExecuteTool` (`endo_execute`): evaluates endo source code directly and returns captured output
   - [x] Callback captures stdout/stderr via `tmpfile()` + `dup2()` redirection
   - [x] Excluded from plan mode's allowed tools (can execute shell commands with side effects)
   - [x] Unit tests with mock callbacks (7 test cases, 18 assertions)
+- [x] Fix: post-tool-call LLM responses now streamed to user (removed erroneous `streamCb = nullptr` after first iteration)
 
 ---
 
