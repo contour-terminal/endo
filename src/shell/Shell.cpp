@@ -46,12 +46,12 @@
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
+#include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/GitTool.hpp>
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
 #include <agent/tools/SaveMemoryTool.hpp>
-#include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -60,6 +60,9 @@
 #if defined(_WIN32)
     #include "platform/WindowsEnvironmentProvider.hpp"
 #else
+    #include <cerrno>
+    #include <csignal>
+
     #include <sys/wait.h>
 
     #include <fcntl.h>
@@ -1180,7 +1183,7 @@ void Shell::runAgentMode()
     }();
 
     auto shellExecCb = [shellPath](std::string const& command,
-                                    std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+                                   std::chrono::milliseconds timeout) -> agent::ShellExecResult {
         // Create pipe for capturing stdout+stderr
         auto pipeFds = std::array<int, 2> {};
         if (pipe(pipeFds.data()) != 0)
@@ -1201,6 +1204,21 @@ void Shell::runAgentMode()
             dup2(pipeFds[1], STDOUT_FILENO);
             dup2(pipeFds[1], STDERR_FILENO);
             close(pipeFds[1]);
+
+            // Unblock signals blocked by the shell for signalfd (matching Process.cpp:48-57)
+            sigset_t mask;
+            sigemptyset(&mask);
+            sigaddset(&mask, SIGCHLD);
+            sigaddset(&mask, SIGTSTP);
+            sigaddset(&mask, SIGCONT);
+            sigaddset(&mask, SIGINT);
+            sigprocmask(SIG_UNBLOCK, &mask, nullptr);
+
+            // Reset signal handlers to default (matching Process.cpp:60-64)
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
+            signal(SIGPIPE, SIG_DFL);
+
             execl(shellPath.c_str(), shellPath.c_str(), "-c", command.c_str(), nullptr);
             _exit(127); // execl failed
         }
@@ -1217,23 +1235,34 @@ void Shell::runAgentMode()
         auto pfd = pollfd { .fd = pipeFds[0], .events = POLLIN, .revents = 0 };
         for (;;)
         {
-            auto const remaining =
-                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
             if (remaining.count() <= 0)
             {
                 timedOut = true;
                 break;
             }
             auto const pollResult = poll(&pfd, 1, static_cast<int>(remaining.count()));
-            if (pollResult <= 0)
+            if (pollResult < 0)
             {
-                if (pollResult == 0)
-                    timedOut = true;
+                if (errno == EINTR)
+                    continue; // Signal interrupted poll — retry
+                break;        // Actual error
+            }
+            if (pollResult == 0)
+            {
+                timedOut = true;
                 break;
             }
             auto const bytesRead = read(pipeFds[0], buffer.data(), buffer.size());
-            if (bytesRead <= 0)
-                break;
+            if (bytesRead < 0)
+            {
+                if (errno == EINTR)
+                    continue; // Signal interrupted read — retry
+                break;        // Actual error
+            }
+            if (bytesRead == 0)
+                break; // EOF — child closed pipe
             output.append(buffer.data(), static_cast<size_t>(bytesRead));
         }
         close(pipeFds[0]);
