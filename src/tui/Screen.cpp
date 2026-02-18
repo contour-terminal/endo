@@ -53,6 +53,28 @@ Screen::Screen(Terminal& terminal, ScreenConfig config):
     // rendering, possibly using scroll regions.
     // The UnscrollMode config is preserved for future implementation.
     (void) _config.unscrollMode; // Suppress unused warning
+
+    // Wire hover callbacks: translate hover position to component-relative coordinates
+    // and call the component's onHover() virtual method.
+    _hoverState.setOnHoverConfirmed([this](HoverInfo const& hover) {
+        auto* target = hover.target;
+        // Fall back to focused component when hit-testing fails (e.g., in inline mode
+        // before first render or after releaseCursor() resets _inlineContentStartRow).
+        if (!target)
+            target = focusedComponent();
+        if (!target)
+            return;
+        auto const bounds = target->screenBounds();
+        int const relX = hover.x - 1 - bounds.x;
+        int const relY = hover.y - 1 - bounds.y;
+        if (auto result = target->onHover(relX, relY))
+        {
+            auto const absPos = Point { bounds.x + result->position.x, bounds.y + result->position.y };
+            showTooltip(result->text, absPos, result->contentType);
+        }
+    });
+
+    _hoverState.setOnHoverLeave([this]() { hideTooltip(); });
 }
 
 Screen::~Screen() = default;
@@ -848,6 +870,13 @@ EventResult Screen::bubbleEvent(Component* target, InputEvent const& event)
 
 EventResult Screen::dispatchKeyEvent(InputEvent const& event)
 {
+    // Auto-hide tooltip on any key press
+    if (_tooltipVisible)
+    {
+        hideTooltip();
+        _hoverState.reset();
+    }
+
     Component* focused = focusedComponent();
     if (!focused)
         return EventResult::Ignored;

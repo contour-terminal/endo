@@ -24,6 +24,11 @@ EventResult Component::onEvent([[maybe_unused]] InputEvent const& event)
     return EventResult::Ignored;
 }
 
+std::optional<HoverResult> Component::onHover(int /*x*/, int /*y*/)
+{
+    return std::nullopt;
+}
+
 void Component::setVisible(bool visible)
 {
     if (_layout.visible != visible)

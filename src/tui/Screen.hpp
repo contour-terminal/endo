@@ -276,6 +276,9 @@ class Screen
     /// Returns true if a tooltip is currently visible.
     [[nodiscard]] bool isTooltipVisible() const noexcept { return _tooltipVisible; }
 
+    /// Returns the last-rendered buffer (for testing). Valid after draw().
+    [[nodiscard]] Buffer const& renderedBuffer() const noexcept { return _previous; }
+
   private:
     Terminal& _terminal;
     ScreenConfig _config;

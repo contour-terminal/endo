@@ -156,4 +156,13 @@ inline std::vector<CompletionItem> makeItemsWithDesc(
     return result;
 }
 
+/// @brief Creates a MouseEvent for a mouse move at the given 1-based position.
+/// @param x Column (1-based).
+/// @param y Row (1-based).
+/// @return The MouseEvent.
+inline MouseEvent mouseMove(int x, int y)
+{
+    return MouseEvent { .type = MouseEvent::Type::Move, .button = 0, .x = x, .y = y };
+}
+
 } // namespace tui::test

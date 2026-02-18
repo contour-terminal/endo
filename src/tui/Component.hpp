@@ -6,6 +6,8 @@
 #include <tui/Rect.hpp>
 
 #include <algorithm>
+#include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -15,6 +17,22 @@ namespace tui
 
 class Canvas;
 class Screen;
+
+// Forward declaration from Tooltip.hpp
+enum class TooltipContentType : std::uint8_t;
+
+/// @brief Result of a hover query on a component.
+///
+/// Components return this from onHover() to provide tooltip content.
+/// Supports plain text and markdown. Multi-line content causes the tooltip
+/// to grow dynamically up to the Tooltip's configured max height (default 15),
+/// after which scrolling is enabled automatically.
+struct HoverResult
+{
+    std::string text;               ///< Tooltip content (plain text or markdown).
+    Point position;                 ///< Component-relative anchor for tooltip placement.
+    TooltipContentType contentType; ///< How to render the text.
+};
 
 /// Focus group identifier.
 using FocusGroupId = std::string;
@@ -86,6 +104,17 @@ class Component
 
     /// Called when this component loses focus.
     virtual void onBlur() {}
+
+    /// @brief Called when the user hovers over this component after the hover delay.
+    ///
+    /// Override to provide tooltip content. Supports single-line and multi-line
+    /// content in both plain text and markdown formats. Tooltips grow dynamically
+    /// in height and enable scrolling when content exceeds the configured maximum.
+    ///
+    /// @param x Component-relative column (0-based).
+    /// @param y Component-relative row (0-based).
+    /// @return Tooltip info if hover content available, std::nullopt otherwise.
+    [[nodiscard]] virtual std::optional<HoverResult> onHover(int x, int y);
 
     // --- Focus ---
 
