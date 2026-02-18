@@ -46,6 +46,12 @@ struct PlanModeConfig
     size_t maxExplorationTurns = 15; ///< Maximum exploration iterations before requiring a plan.
 };
 
+/// Configuration for the explore sub-agent tool.
+struct ExploreConfig
+{
+    size_t maxTurns = 10; ///< Maximum exploration iterations for the sub-agent.
+};
+
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
@@ -61,6 +67,7 @@ struct AgentConfig
     bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.
 
     PlanModeConfig planMode; ///< Plan mode configuration.
+    ExploreConfig explore;   ///< Explore sub-agent configuration.
 };
 
 /// Loads agent configuration from a YAML file.

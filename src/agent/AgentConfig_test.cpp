@@ -308,3 +308,50 @@ TEST_CASE("agent.config.resolve_provider_api_key_neither")
     auto result = resolveProviderApiKey("", "ENDO_TEST_NONEXISTENT_KEY_12345");
     CHECK(!result.has_value());
 }
+
+// =============================================================================
+// ExploreConfig tests
+// =============================================================================
+
+TEST_CASE("agent.config.explore_defaults")
+{
+    auto config = AgentConfig {};
+    CHECK(config.explore.maxTurns == 10);
+}
+
+TEST_CASE("agent.config.explore_yaml_roundtrip")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-explore";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    auto original = AgentConfig {};
+    original.explore.maxTurns = 25;
+
+    auto saveError = saveAgentConfig(original, configPath);
+    REQUIRE(!saveError.has_value());
+
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    CHECK(loadResult->explore.maxTurns == 25);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("agent.config.explore_default_not_emitted")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-explore-def";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    // Default explore config should not produce an explore section
+    auto config = AgentConfig {};
+    auto saveError = saveAgentConfig(config, configPath);
+    REQUIRE(!saveError.has_value());
+
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    CHECK(loadResult->explore.maxTurns == 10); // default preserved
+
+    std::filesystem::remove_all(tmpDir);
+}

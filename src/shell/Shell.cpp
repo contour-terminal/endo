@@ -43,6 +43,7 @@
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
+#include <agent/tools/ExploreTool.hpp>
 #include <agent/tools/GitTool.hpp>
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
@@ -1077,6 +1078,7 @@ namespace
     struct AgentContextResult
     {
         std::string systemPrompt;             ///< Fully built system prompt.
+        std::string exploreSystemPrompt;      ///< System prompt for the explore sub-agent.
         std::string gitBranch;                ///< Current git branch name (for header display).
         std::string projectPath;              ///< Tilde-contracted project path (for header display).
         agent::ProjectContext projectContext; ///< Project context (returned for caching).
@@ -1132,8 +1134,26 @@ namespace
                 projectPath = std::move(contracted);
         }
 
+        // Build the explore sub-agent system prompt (shares project context, uses exploration-focused instructions)
+        auto explorePromptBuilder = agent::SystemPromptBuilder {};
+        explorePromptBuilder.setBaseInstructions(
+            "You are a codebase exploration agent. Your task is to answer questions about the codebase "
+            "by reading files, searching with grep, and listing files with glob. "
+            "Be thorough but concise. Reference file paths with line numbers. "
+            "Do not ask follow-up questions — produce a complete answer. "
+            "Do not suggest code changes — only report findings.");
+        explorePromptBuilder.setWorkingDirectory(cwd.string());
+        explorePromptBuilder.setShellInfo("endo");
+        explorePromptBuilder.setProjectRules(projectContext.rulesFiles);
+        explorePromptBuilder.setGlobalRules(projectContext.globalRules);
+        explorePromptBuilder.setMemoryFiles(projectContext.memoryFiles);
+        explorePromptBuilder.setFileTree(projectContext.fileTree);
+        if (!gitBranch.empty())
+            explorePromptBuilder.setGitBranch(gitBranch);
+
         return AgentContextResult {
             .systemPrompt = promptBuilder.build(),
+            .exploreSystemPrompt = explorePromptBuilder.build(),
             .gitBranch = gitBranch,
             .projectPath = std::move(projectPath),
             .projectContext = std::move(projectContext),
@@ -1342,6 +1362,8 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(
         std::make_unique<agent::SaveMemoryTool>([this]() { _cachedProjectContext.reset(); }));
     toolRegistry.registerTool(std::make_unique<agent::SubmitPlanTool>());
+    toolRegistry.registerTool(
+        std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
 
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
@@ -1518,6 +1540,8 @@ void Shell::runAgentMode()
             {
                 auto result = contextFuture.get();
                 _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+                if (auto* explore = dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
+                    explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
                 if (!result.gitBranch.empty())
                     inputComponent.setGitBranch(std::move(result.gitBranch));
                 if (!result.projectPath.empty())
@@ -1550,6 +1574,9 @@ void Shell::runAgentMode()
                     {
                         auto result = contextFuture.get();
                         _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+                        if (auto* explore =
+                                dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
+                            explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
                         if (!result.gitBranch.empty())
                             inputComponent.setGitBranch(std::move(result.gitBranch));
                         if (!result.projectPath.empty())

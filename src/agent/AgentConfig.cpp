@@ -67,6 +67,14 @@ namespace
             config.maxExplorationTurns = node["max_exploration_turns"].as<size_t>();
     }
 
+    void parseExploreConfig(YAML::Node const& node, ExploreConfig& config)
+    {
+        if (!node || !node.IsMap())
+            return;
+        if (node["max_turns"])
+            config.maxTurns = node["max_turns"].as<size_t>();
+    }
+
     void emitClaudeConfig(YAML::Emitter& emitter, ClaudeConfig const& config)
     {
         auto const defaults = ClaudeConfig {};
@@ -146,6 +154,16 @@ namespace
             emitter << YAML::Key << "max_exploration_turns" << YAML::Value << config.maxExplorationTurns;
         emitter << YAML::EndMap;
     }
+
+    void emitExploreConfig(YAML::Emitter& emitter, ExploreConfig const& config)
+    {
+        auto const defaults = ExploreConfig {};
+        if (config.maxTurns == defaults.maxTurns)
+            return;
+        emitter << YAML::Key << "explore" << YAML::Value << YAML::BeginMap;
+        emitter << YAML::Key << "max_turns" << YAML::Value << config.maxTurns;
+        emitter << YAML::EndMap;
+    }
 } // namespace
 
 auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentConfig, std::string>
@@ -171,6 +189,7 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
             config.logToolUses = root["log_tool_uses"].as<bool>();
 
         parsePlanModeConfig(root["plan_mode"], config.planMode);
+        parseExploreConfig(root["explore"], config.explore);
 
         return config;
     }
@@ -240,6 +259,7 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
             emitter << YAML::Key << "log_tool_uses" << YAML::Value << config.logToolUses;
 
         emitPlanModeConfig(emitter, config.planMode);
+        emitExploreConfig(emitter, config.explore);
 
         emitter << YAML::EndMap;
 

@@ -997,6 +997,21 @@ Component (base class)
   - [x] Unit tests with mock callbacks (7 test cases, 18 assertions)
 - [x] Fix: post-tool-call LLM responses now streamed to user (removed erroneous `streamCb = nullptr` after first iteration)
 
+### Phase 3.11: Explore Tool (Sub-Agent) ✅
+
+**Dependency:** Phase 3.1, Phase 3.5
+
+**Tasks:**
+- [x] `ExploreConfig` in `AgentConfig` with `max_turns` YAML setting (default: 10)
+- [x] `ExploreTool`: isolated sub-agent with read-only tools (`read_file`, `glob`, `grep`, `git`)
+  - [x] Spawns temporary `AgentSession` with local `ToolRegistry` — no write tools, no `explore` recursion
+  - [x] Conversation history discarded after execution — only concise answer returned to outer context
+  - [x] Input schema: `{ question: string (required), scope?: string }`
+  - [x] System prompt with exploration-focused instructions built from shared `ProjectContext`
+  - [x] Deferred system prompt injection via `setSystemPrompt()` (async context loading compatible)
+- [x] Shell integration: tool registered in `runAgentMode()`, explore prompt set alongside main prompt
+- [x] Comprehensive tests (13 test cases, 40 assertions): schema, error handling, tool isolation, provider errors
+
 ---
 
 ## Milestone 4: Windows Support
