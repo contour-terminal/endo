@@ -406,10 +406,10 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 // standardLibraryCandidates tests
 // =============================================================================
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_40_entries", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_51_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 40);
+    CHECK(stdlib.size() == 51);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -488,10 +488,31 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.list_transforms", "[co
     CHECK(hasCandidate(stdlib, "flatten"));
 }
 
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.formatting_helpers", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "formatNumber"));
+    CHECK(hasCandidate(stdlib, "formatDateTime"));
+    CHECK(hasCandidate(stdlib, "formatMode"));
+    CHECK(hasCandidate(stdlib, "toText"));
+    CHECK(hasCandidate(stdlib, "string"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.permission_tests", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "isReadable"));
+    CHECK(hasCandidate(stdlib, "isWritable"));
+    CHECK(hasCandidate(stdlib, "isExecutable"));
+}
+
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.env_system_functions", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
     CHECK(hasCandidate(stdlib, "env"));
+    CHECK(hasCandidate(stdlib, "which"));
+    CHECK(hasCandidate(stdlib, "ps"));
+    CHECK(hasCandidate(stdlib, "ls"));
     CHECK(hasCandidate(stdlib, "rand"));
     CHECK(hasCandidate(stdlib, "fetch"));
 }
@@ -501,7 +522,6 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[
     auto stdlib = standardLibraryCandidates();
     CHECK(!hasCandidate(stdlib, "print"));
     CHECK(!hasCandidate(stdlib, "println"));
-    CHECK(!hasCandidate(stdlib, "which"));
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.signature_descriptions", "[completion][stdlib]")

@@ -114,10 +114,23 @@ namespace
         StdLibEntry { "drop", "drop n lst -> list<'a>" },
         StdLibEntry { "zip", "zip lst1 lst2 -> list<'a * 'b>" },
         StdLibEntry { "flatten", "flatten lst -> list<'a>" },
+        // Formatting Helpers
+        StdLibEntry { "formatNumber", "formatNumber sep n -> string  |  formatNumber n -> string (locale)" },
+        StdLibEntry { "formatDateTime", "formatDateTime epoch -> string" },
+        StdLibEntry { "formatMode", "formatMode mode -> string (rwxrwxrwx)" },
+        StdLibEntry { "toText", "toText obj -> string" },
+        StdLibEntry { "string", "string x -> string" },
+        // Permission Tests
+        StdLibEntry { "isReadable", "isReadable mode -> bool" },
+        StdLibEntry { "isWritable", "isWritable mode -> bool" },
+        StdLibEntry { "isExecutable", "isExecutable mode -> bool" },
         // Environment/System
-        StdLibEntry { "env", "env name -> string" },
-        StdLibEntry { "rand", "rand min max -> int" },
-        StdLibEntry { "fetch", "fetch url -> string" },
+        StdLibEntry { "env", "env name -> option<string>" },
+        StdLibEntry { "which", "which name -> option<string>" },
+        StdLibEntry { "ps", "ps -> list<ProcessInfo>" },
+        StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>" },
+        StdLibEntry { "rand", "rand -> int  |  rand min max -> int" },
+        StdLibEntry { "fetch", "fetch url -> result<string, string>" },
     };
     // clang-format on
 

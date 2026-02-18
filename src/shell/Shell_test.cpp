@@ -2324,11 +2324,13 @@ TEST_CASE("LetBindingCompleter.handles_empty_state")
     endo::LetBindingCompleter completer(state);
     endo::CompletionContext context {
         .type = endo::CompletionContextType::Command,
-        .prefix = "foo",
-        .cursorPosition = 3,
-        .fullInput = "foo",
+        .prefix = "zzz_unlikely_prefix",
+        .cursorPosition = 19,
+        .fullInput = "zzz_unlikely_prefix",
     };
 
+    // With empty user state, only stdlib fuzzy matches may appear.
+    // A prefix that doesn't match any stdlib name should yield no results.
     auto results = completer.complete(context);
     CHECK(results.empty());
 }
