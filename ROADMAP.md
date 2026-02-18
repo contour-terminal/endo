@@ -952,6 +952,21 @@ Component (base class)
 - [x] Tool registered in agent mode (normal mode only, not plan mode)
 - [x] Unit tests for save, overwrite, directory creation, and error cases
 
+### Phase 3.9: Agent Slash Command System ✅
+
+**Dependency:** Phase 3.5
+
+**Tasks:**
+- [x] `SlashCommand` interface with `name()`, `description()`, `execute()` returning `SlashCommandResult` variant (`PromptRewrite`, `PlanModeRequest`, `DirectOutput`)
+- [x] `SlashCommandRegistry` for dynamic command registration with `registerCommand()`, `findCommand()`, `commands()`
+- [x] Built-in `/help` (lists all commands) and `/plan` (enters plan mode) commands
+- [x] `CallbackSlashCommand` convenience class for lambda-based dynamic registration (skills/plugins)
+- [x] `SlashCommandCompleter` implementing `tui::CompletionProvider` with smart-case prefix and fuzzy matching
+- [x] `AgentInputComponent` enhanced with `tui::CompletionPopup` + `tui::Completer` for slash command completion
+- [x] `Shell::runAgentMode()` refactored: registry-based dispatch replaces hardcoded `/plan` check
+- [x] Unknown command error message: `Unknown command: /xyz`
+- [x] 23 unit tests (60 assertions) covering registry, commands, completer, dynamic registration, fuzzy matching
+
 ---
 
 ## Milestone 4: Windows Support

@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
+#include <tui/completer/Completer.hpp>
 
+#include <memory>
 #include <string>
+
+namespace tui
+{
+class CompletionProvider;
+} // namespace tui
 
 namespace endo::agent
 {
@@ -14,6 +22,9 @@ namespace endo::agent
 /// Renders a rounded-chrome header line with agent mode label, provider, and model info,
 /// followed by the input area with a configurable prompt indicator. Uses the agent color
 /// palette (purple accent) to visually distinguish from the shell prompt.
+///
+/// Supports slash command completion via a CompletionPopup and Completer, reusing the
+/// same TUI completion infrastructure as the shell prompt.
 class AgentInputComponent: public tui::Component
 {
   public:
@@ -66,16 +77,40 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns the current input text.
     [[nodiscard]] auto text() const noexcept -> std::string_view { return _inputField.text(); }
 
-    /// @brief Clears the input field.
-    void clear() { _inputField.clear(); }
+    /// @brief Clears the input field and dismisses any popup.
+    void clear()
+    {
+        _inputField.clear();
+        dismissPopup();
+    }
 
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] auto inputField() noexcept -> tui::InputField& { return _inputField; }
 
     [[nodiscard]] auto inputField() const noexcept -> tui::InputField const& { return _inputField; }
 
+    // --- Completion API ---
+
+    /// @brief Adds a completion provider to the completer.
+    /// @param provider The provider to add (ownership transferred).
+    void addCompletionProvider(std::unique_ptr<tui::CompletionProvider> provider);
+
+    /// @brief Returns whether the completion popup is currently visible.
+    [[nodiscard]] bool completionVisible() const noexcept { return _completionPopup.visible(); }
+
+    /// @brief Returns the CompletionPopup for direct access.
+    [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
+
+    /// @brief Flushes deferred completion popup updates.
+    /// Call once per event batch, before drawing.
+    void flushDeferredUpdates();
+
   private:
     tui::InputField _inputField;
+    tui::CompletionPopup _completionPopup; ///< Popup widget for slash command completion.
+    tui::Completer _completer;             ///< Orchestrates completion providers.
+    bool _completionPopupDirty = false;    ///< Completion popup needs re-filtering.
+
     std::string _providerName; ///< Active provider name for header display.
     std::string _modelName;    ///< Active model name for header display.
     std::string _gitBranch;    ///< Current git branch for header display.
@@ -83,6 +118,12 @@ class AgentInputComponent: public tui::Component
     static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
     static constexpr int BarPadding = 1;   ///< Padding after the bar.
     static constexpr int HeaderHeight = 1; ///< Height of the header line (shows agent/provider/model).
+
+    // Completion helpers
+    void triggerCompletion(bool forceShowPopup);
+    void updateCompletionPopup();
+    void insertCompletion(std::string_view text);
+    void dismissPopup();
 };
 
 } // namespace endo::agent

@@ -22,6 +22,10 @@ add_library(endo-agent STATIC
     PlanExecutor.hpp PlanExecutor.cpp
     AgentInputComponent.hpp AgentInputComponent.cpp
     AgentResponseRenderer.hpp AgentResponseRenderer.cpp
+    SlashCommand.hpp
+    SlashCommandRegistry.hpp SlashCommandRegistry.cpp
+    SlashCommands.hpp SlashCommands.cpp
+    SlashCommandCompleter.hpp SlashCommandCompleter.cpp
     tools/AgentTool.hpp
     tools/ToolRegistry.hpp tools/ToolRegistry.cpp
     tools/SubmitPlanTool.hpp tools/SubmitPlanTool.cpp
@@ -72,6 +76,9 @@ add_executable(test-endo-agent
     tools/ShellExecuteTool_test.cpp
     tools/GitTool_test.cpp
     tools/SaveMemoryTool_test.cpp
+    SlashCommandRegistry_test.cpp
+    SlashCommands_test.cpp
+    SlashCommandCompleter_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
