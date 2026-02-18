@@ -860,6 +860,7 @@ Component (base class)
 - [x] Add syntax highlighting to transient prompt (reuses `computeHighlightMap` / `categoryColor` from `SyntaxHighlighter`)
 - [x] Implement aurora background gradient for endo-signature preset (multi-stop horizontal color interpolation via `multiStopGradient()`)
 - [x] Implement sixel aurora fade effect above prompt (pixel-level gradient via `Canvas::drawImage()`, CSI 16t cell size query, pre-encoded sixel caching in `PromptComponent`; transparent alpha for terminal background bleed-through)
+- [x] Fix Ctrl+T prompt toggle drift when aurora fade is active (missing `auroraFadeHeight()` in cursor-up calculation for AgentMode and transient prompt; added `cursorRowFromTop()` helper to `PromptComponent`; replaced `prompt.resume()` with `updateDimensions()` after agent mode to avoid partial-line-indicator cursor shift)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests
