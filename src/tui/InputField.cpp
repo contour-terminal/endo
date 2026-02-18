@@ -272,6 +272,7 @@ void InputField::render(Canvas& canvas)
             if (!_continuationPrompt.empty())
                 col += canvas.putString(row, col, _continuationPrompt, textStyle);
         }
+        auto const promptDisplayWidth = col; // Display columns consumed by prompt/continuation
 
         // Determine selection range local to this line
         auto const lineSelStart = (hasSel && selStart < lineEndByte && selEnd > lineStartByte)
@@ -352,8 +353,7 @@ void InputField::render(Canvas& canvas)
         {
             cursorRow = row;
             auto const cursorInLine = _cursor - lineStartByte;
-            auto curCol = (lineIndex == 0) ? static_cast<int>(_prompt.size())
-                                           : static_cast<int>(_continuationPrompt.size());
+            auto curCol = promptDisplayWidth;
             auto seg = unicode::utf8_grapheme_segmenter(lineContent);
             for (auto curIt = seg.begin(); curIt != seg.end(); ++curIt)
             {
