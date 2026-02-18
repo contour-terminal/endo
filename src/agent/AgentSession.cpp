@@ -82,9 +82,6 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
             });
         }
         _history.addMessage(std::move(toolResultMsg));
-
-        // Clear stream callback for subsequent iterations (only stream the first response)
-        streamCb = nullptr;
     }
 
     return std::unexpected(AgentError {
