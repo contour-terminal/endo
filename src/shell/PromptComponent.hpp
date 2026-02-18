@@ -103,14 +103,11 @@ class PromptComponent: public tui::Component
     /// @brief Sets the history source for inline history cycling.
     void setHistory(History const* history) { _history = history; }
 
-    /// @brief Called when a hover is confirmed over this component.
+    /// @brief Called when the user hovers over this component after the hover delay.
     ///
-    /// This is called by the Screen's hover system after the hover delay.
-    /// The coordinates are component-relative.
-    void onHoverConfirmed(int x, int y);
-
-    /// @brief Called when a hover leaves this component.
-    void onHoverLeave();
+    /// Returns tooltip content for diagnostics, language hover info, or command tooltips.
+    /// Coordinates are component-relative (0-based).
+    [[nodiscard]] std::optional<tui::HoverResult> onHover(int x, int y) override;
 
     /// @brief Returns whether the completion popup is visible.
     [[nodiscard]] bool completionVisible() const noexcept { return _completionPopup.visible(); }

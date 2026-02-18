@@ -176,7 +176,6 @@ class Prompt
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
 
     void initialize();
-    void setupHoverCallbacks();
 
     /// @brief Replaces the full prompt with a compact transient indicator before scrolling off.
     /// @param inputText The user's submitted command text.

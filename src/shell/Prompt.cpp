@@ -96,30 +96,7 @@ void Prompt::initialize()
     // Set initial focus
     _screen->setFocus(_promptComponent.get());
 
-    // Set up hover callbacks for tooltip support
-    setupHoverCallbacks();
-
     _initialized = true;
-}
-
-void Prompt::setupHoverCallbacks()
-{
-    // Set up hover confirmed callback
-    _screen->hoverState().setOnHoverConfirmed([this](tui::HoverInfo const& hover) {
-        // Check if hovering over our prompt component
-        if (hover.target == _promptComponent.get() || hover.target == nullptr)
-        {
-            // hover.x and hover.y are viewport-relative 1-based coordinates
-            // Convert to component-relative 0-based coordinates
-            auto const bounds = _promptComponent->screenBounds();
-            int const relX = hover.x - 1 - bounds.x;
-            int const relY = hover.y - 1 - bounds.y;
-            _promptComponent->onHoverConfirmed(relX, relY);
-        }
-    });
-
-    // Set up hover leave callback
-    _screen->hoverState().setOnHoverLeave([this]() { _promptComponent->onHoverLeave(); });
 }
 
 std::string Prompt::read()
@@ -178,12 +155,8 @@ std::string Prompt::read()
                 continue;
             }
 
-            // Dispatch mouse events through Screen (updates hover state)
-            // Key events go directly to processInput to avoid double-processing
-            if (std::holds_alternative<tui::MouseEvent>(event))
-            {
-                (void) _screen->dispatchEvent(event);
-            }
+            // Dispatch all events through Screen (updates hover state, auto-hides tooltips on key press)
+            (void) _screen->dispatchEvent(event);
 
             // Process event through PromptComponent
             auto action = _promptComponent->processInput(event);

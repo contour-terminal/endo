@@ -651,13 +651,6 @@ int PromptComponent::displayWidth(std::string_view text)
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
 {
-    // Hide tooltip when user starts typing
-    if (std::holds_alternative<tui::KeyEvent>(event))
-    {
-        if (auto* scr = screen())
-            scr->hideTooltip();
-    }
-
     // Track if popup was visible before processing (for dynamic filtering)
     bool const popupWasVisible = _completionPopup.visible();
     bool popupDismissedByTyping = false;
@@ -1102,18 +1095,11 @@ void PromptComponent::insertCompletion(std::string_view text)
     _inputField.setText(newBuffer);
 }
 
-void PromptComponent::onHoverConfirmed(int x, int y)
+std::optional<tui::HoverResult> PromptComponent::onHover(int x, int y)
 {
-    auto* scr = screen();
-    if (!scr)
-        return;
-
-    auto const bounds = screenBounds();
-
-    // Convert screen coordinates to source position
     auto const sourcePos = screenToSourcePosition(x, y);
 
-    // Priority 1: Check diagnostics at this position
+    // Priority 1: Diagnostics (plain text with hints, multi-line)
     if (sourcePos)
     {
         if (auto diag = diagnosticAt(sourcePos->line, sourcePos->character))
@@ -1121,44 +1107,44 @@ void PromptComponent::onHoverConfirmed(int x, int y)
             auto tooltipText = diag->message;
             for (auto const& hint: diag->suggestions)
                 tooltipText += "\nhint: " + hint;
-            tui::Point tooltipPos { bounds.x + x, bounds.y + y + 1 };
-            scr->showTooltip(tooltipText, tooltipPos, tui::TooltipContentType::PlainText);
-            return;
+            return tui::HoverResult {
+                .text = std::move(tooltipText),
+                .position = { x, y },
+                .contentType = tui::TooltipContentType::PlainText,
+            };
         }
     }
 
-    // Priority 2: Check language hover info (keywords, constructors, operators, builtins, bindings)
+    // Priority 2: Language hover info (markdown, can be multi-line)
     if (sourcePos)
     {
         auto const text = std::string(_inputField.text());
         if (auto hover = endo::computeHover(text, *sourcePos))
         {
-            tui::Point tooltipPos { bounds.x + x, bounds.y + y + 1 };
-            scr->showTooltip(hover->markdownText, tooltipPos, tui::TooltipContentType::Markdown);
-            return;
+            return tui::HoverResult {
+                .text = hover->markdownText,
+                .position = { x, y },
+                .contentType = tui::TooltipContentType::Markdown,
+            };
         }
     }
 
-    // Priority 3: Fall through to existing command hover logic (first input line only)
+    // Priority 3: Command tooltip (plain text)
     if (y == topPadding() + auroraFadeHeight() + chromeHeight() && _commandResolver)
     {
-        auto const cmd = getCommandAtColumn(x);
-        if (cmd)
+        if (auto const cmd = getCommandAtColumn(x))
         {
             auto const info = _commandResolver->resolve(*cmd);
-            auto const [cmdStart, cmdEnd] = getCommandBounds();
-            tui::Point tooltipPos { bounds.x + cmdStart, bounds.y + 1 };
-            scr->showTooltip(info.tooltip, tooltipPos, tui::TooltipContentType::PlainText);
+            auto const [cmdStart, _] = getCommandBounds();
+            return tui::HoverResult {
+                .text = info.tooltip,
+                .position = { cmdStart, y },
+                .contentType = tui::TooltipContentType::PlainText,
+            };
         }
     }
-}
 
-void PromptComponent::onHoverLeave()
-{
-    if (auto* scr = screen())
-    {
-        scr->hideTooltip();
-    }
+    return std::nullopt;
 }
 
 std::string PromptComponent::generateAuroraFadeSixel(int cellPixelWidth,
