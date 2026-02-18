@@ -261,16 +261,31 @@ void InputField::render(Canvas& canvas)
             canvas.put(row, c, " ", cellStyle);
         }
 
-        // Render prompt (first visible line) or continuation prompt
-        if (lineIndex == 0)
+        // Render prompt (first visible line) or continuation prompt with per-column decorator bg
         {
-            if (!_prompt.empty())
-                col += canvas.putString(row, col, _prompt, textStyle);
-        }
-        else
-        {
-            if (!_continuationPrompt.empty())
-                col += canvas.putString(row, col, _continuationPrompt, textStyle);
+            auto const& promptStr = (lineIndex == 0) ? _prompt : _continuationPrompt;
+            if (!promptStr.empty())
+            {
+                auto promptSeg = unicode::utf8_grapheme_segmenter(promptStr);
+                for (auto pIt = promptSeg.begin(); pIt != promptSeg.end() && col < width; ++pIt)
+                {
+                    auto pNext = pIt;
+                    ++pNext;
+                    char const* pStart = pIt._clusterStart;
+                    char const* pEnd = (pNext != promptSeg.end())
+                                           ? pNext._clusterStart
+                                           : (promptStr.data() + promptStr.size());
+                    Style pStyle = textStyle;
+                    if (_textDecorator)
+                    {
+                        if (auto bg = _textDecorator->background(col))
+                            pStyle.bg = *bg;
+                    }
+                    auto const pView =
+                        std::string_view(pStart, static_cast<std::size_t>(pEnd - pStart));
+                    col += canvas.putString(row, col, pView, pStyle);
+                }
+            }
         }
         auto const promptDisplayWidth = col; // Display columns consumed by prompt/continuation
 
