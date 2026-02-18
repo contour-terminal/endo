@@ -120,6 +120,11 @@ void AgentSession::reset()
     _history.clear();
 }
 
+void AgentSession::loadPersistedMessages(std::vector<ChatMessage> messages)
+{
+    _history.replaceMessages(std::move(messages));
+}
+
 auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<Plan, AgentError>
 {

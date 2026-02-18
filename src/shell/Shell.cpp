@@ -31,9 +31,11 @@
 #include "Prompt.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
+#include <agent/AgentHistoryProvider.hpp>
 #include <agent/AgentInputComponent.hpp>
 #include <agent/AgentResponseRenderer.hpp>
 #include <agent/AgentSession.hpp>
+#include <agent/ConversationHistoryStore.hpp>
 #include <agent/PlanExecutor.hpp>
 #include <agent/ProjectContextLoader.hpp>
 #include <agent/SlashCommandCompleter.hpp>
@@ -1134,7 +1136,8 @@ namespace
                 projectPath = std::move(contracted);
         }
 
-        // Build the explore sub-agent system prompt (shares project context, uses exploration-focused instructions)
+        // Build the explore sub-agent system prompt (shares project context, uses exploration-focused
+        // instructions)
         auto explorePromptBuilder = agent::SystemPromptBuilder {};
         explorePromptBuilder.setBaseInstructions(
             "You are a codebase exploration agent. Your task is to answer questions about the codebase "
@@ -1189,6 +1192,30 @@ void Shell::runAgentMode()
     // Create or reuse agent session (preserves conversation history)
     if (!_agentSession)
         _agentSession = std::make_unique<agent::AgentSession>(*provider);
+
+    // Load persisted conversation history from project-local store.
+    auto const historyStore = agent::ConversationHistoryStore(".endo/agent-history.json");
+    auto historyProvider = std::make_unique<agent::AgentHistoryProvider>();
+    if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
+    {
+        // Extract user query strings for history navigation and ghost text.
+        for (auto const& msg: *loaded)
+        {
+            if (msg.role == agent::Role::User)
+            {
+                auto const text = msg.textContent();
+                if (!text.empty())
+                    historyProvider->addEntry(text);
+            }
+        }
+        _agentSession->loadPersistedMessages(std::move(*loaded));
+    }
+    auto* historyProviderPtr = historyProvider.get();
+
+    // Lambda to save history after each successful exchange.
+    auto const saveHistory = [&] {
+        (void) historyStore.save(_agentSession->history().messages());
+    };
 
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
@@ -1419,7 +1446,22 @@ void Shell::runAgentMode()
     // Set up slash command registry with built-in commands and completion
     auto slashRegistry = agent::SlashCommandRegistry {};
     agent::registerBuiltinSlashCommands(slashRegistry);
+
+    // Register /reset command to clear conversation history.
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "reset", "Clear conversation history", [&](std::string_view) -> agent::SlashCommandResult {
+            _agentSession->reset();
+            (void) historyStore.remove();
+            historyProviderPtr->setEntries({});
+            return agent::DirectOutput { .text = "Conversation history cleared.\n" };
+        }));
+
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
+    inputComponent.addCompletionProvider(std::move(historyProvider));
+
+    // Feed persisted history entries to InputField for Up/Down navigation.
+    for (auto const& entry: historyProviderPtr->entries())
+        inputComponent.inputField().addHistory(entry);
 
     auto const prefSize = inputComponent.preferredSize();
     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), prefSize.height });
@@ -1529,8 +1571,9 @@ void Shell::runAgentMode()
 
     while (true)
     {
-        auto const spinnerTimeout = 80; // ms for spinner animation if we add one later
-        auto events = terminal.poll(spinnerTimeout);
+        auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();
+        auto const pollTimeout = ghostTimeout >= 0 ? std::min(ghostTimeout, 80) : 80;
+        auto events = terminal.poll(pollTimeout);
 
         if (events.empty())
         {
@@ -1549,6 +1592,15 @@ void Shell::runAgentMode()
                 _cachedProjectContext = std::move(result.projectContext);
                 _cachedProjectContextCwd = cwd;
                 systemPromptReady = true;
+                auto const newPrefSize = inputComponent.preferredSize();
+                inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                screen.draw();
+            }
+
+            // Flush ghost text updates on debounce timeout expiry.
+            inputComponent.flushDeferredUpdates();
+            if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0)
+            {
                 auto const newPrefSize = inputComponent.preferredSize();
                 inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
                 screen.draw();
@@ -1587,6 +1639,13 @@ void Shell::runAgentMode()
                     }
 
                     auto const query = std::string(inputComponent.text());
+
+                    // Feed query to input history (Up/Down navigation) and history provider (ghost text).
+                    if (!query.starts_with("/"))
+                    {
+                        inputComponent.inputField().addHistory(query);
+                        historyProviderPtr->addEntry(query);
+                    }
 
                     // Move cursor past the input component while text is still visible
                     auto const totalLines = inputComponent.inputField().lineCount();
@@ -1654,6 +1713,7 @@ void Shell::runAgentMode()
                                     r->prompt, [&](std::string_view token) { renderer.feedToken(token); });
 
                                 renderer.end();
+                                saveHistory();
 
                                 if (!result.has_value())
                                 {
@@ -1674,6 +1734,7 @@ void Shell::runAgentMode()
                     {
                         // Plan mode: route through plan exploration
                         executePlanFlow(query);
+                        saveHistory();
                     }
                     else
                     {
@@ -1686,6 +1747,7 @@ void Shell::runAgentMode()
                             query, [&](std::string_view token) { renderer.feedToken(token); });
 
                         renderer.end();
+                        saveHistory();
 
                         if (!result.has_value())
                         {

@@ -11,9 +11,9 @@
 #include <vector>
 
 #include <agent/ConversationHistory.hpp>
-#include <agent/providers/LlmProvider.hpp>
 #include <agent/Plan.hpp>
 #include <agent/Types.hpp>
+#include <agent/providers/LlmProvider.hpp>
 
 namespace endo::agent
 {
@@ -109,6 +109,12 @@ class AgentSession
 
     /// @brief Resets the conversation, clearing all history.
     void reset();
+
+    /// @brief Loads persisted messages into the conversation history.
+    ///
+    /// Call before setSystemPrompt() — the system prompt will be inserted at index 0.
+    /// @param messages Previously persisted messages (excluding system prompt).
+    void loadPersistedMessages(std::vector<ChatMessage> messages);
 
     /// @brief Sets the maximum tool result size in bytes before truncation.
     /// @param maxBytes Maximum bytes for a single tool result content.

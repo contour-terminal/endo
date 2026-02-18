@@ -6,7 +6,9 @@
 #include <tui/InputField.hpp>
 #include <tui/completer/Completer.hpp>
 
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace tui
@@ -113,9 +115,15 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns the CompletionPopup for direct access.
     [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
-    /// @brief Flushes deferred completion popup updates.
+    /// @brief Flushes deferred completion popup and ghost text updates.
     /// Call once per event batch, before drawing.
     void flushDeferredUpdates();
+
+    /// @brief Returns milliseconds until the ghost text debounce fires, or -1 if idle.
+    ///
+    /// Use this to set the event loop poll timeout so ghost text appears promptly
+    /// after the debounce period without requiring additional keystrokes.
+    [[nodiscard]] int ghostTextTimeoutMs() const;
 
   private:
     tui::InputField _inputField;
@@ -138,6 +146,15 @@ class AgentInputComponent: public tui::Component
     void updateCompletionPopup();
     void insertCompletion(std::string_view text);
     void dismissPopup();
+
+    // Ghost text helpers
+    void updateGhostText();
+
+    bool _ghostTextDirty = false; ///< Ghost text needs recomputation.
+    std::optional<std::chrono::steady_clock::time_point> _ghostTextPendingSince;
+    static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
+    std::string _suggestCacheText;                  ///< Last input text for suggest cache.
+    std::optional<std::string> _suggestCacheResult; ///< Cached suggest result.
 };
 
 } // namespace endo::agent

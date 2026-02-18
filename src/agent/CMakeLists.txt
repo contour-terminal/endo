@@ -12,6 +12,8 @@ add_library(endo-agent STATIC
     providers/GeminiProvider.hpp providers/GeminiProvider.cpp
     providers/ProviderFactory.hpp providers/ProviderFactory.cpp
     ConversationHistory.hpp ConversationHistory.cpp
+    ConversationHistoryStore.hpp ConversationHistoryStore.cpp
+    AgentHistoryProvider.hpp AgentHistoryProvider.cpp
     TokenEstimator.hpp TokenEstimator.cpp
     ConversationCompactor.hpp ConversationCompactor.cpp
     ProjectFileTree.hpp ProjectFileTree.cpp
@@ -61,6 +63,8 @@ add_executable(test-endo-agent
     providers/GeminiProvider_test.cpp
     providers/ProviderFactory_test.cpp
     ConversationHistory_test.cpp
+    ConversationHistoryStore_test.cpp
+    AgentHistoryProvider_test.cpp
     TokenEstimator_test.cpp
     ConversationCompactor_test.cpp
     ProjectFileTree_test.cpp

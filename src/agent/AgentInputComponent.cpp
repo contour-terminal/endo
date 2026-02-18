@@ -217,10 +217,32 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
                 dismissPopup();
                 return Action::Changed;
             }
+            _inputField.clearGhostText();
             return Action::Abort;
         }
 
-        // Tab triggers completion
+        // Tab with ghost text: accept ghost text before trying completion
+        if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
+            && _inputField.hasGhostText())
+        {
+            _inputField.acceptGhostText();
+            updateGhostText();
+            return Action::Changed;
+        }
+
+        // Right arrow or End at end of line accepts ghost text
+        if (_inputField.hasGhostText() && _inputField.cursor() == _inputField.text().size())
+        {
+            if (key->key == tui::KeyCode::Right || key->key == tui::KeyCode::End
+                || (key->codepoint == 'e' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl)))
+            {
+                _inputField.acceptGhostText();
+                updateGhostText();
+                return Action::Changed;
+            }
+        }
+
+        // Tab triggers completion (no ghost text case)
         if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None)
         {
             triggerCompletion(false);
@@ -240,13 +262,23 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     switch (action)
     {
         case tui::InputFieldAction::Submit:
+            _inputField.clearGhostText();
             dismissPopup();
             if (!_inputField.text().empty())
                 return Action::Submit;
             return Action::None;
-        case tui::InputFieldAction::Abort: dismissPopup(); return Action::Abort;
-        case tui::InputFieldAction::Eof: dismissPopup(); return Action::Abort;
+        case tui::InputFieldAction::Abort:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::Abort;
+        case tui::InputFieldAction::Eof:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::Abort;
         case tui::InputFieldAction::Changed:
+            _inputField.clearGhostText();
+            _ghostTextDirty = true;
+            _ghostTextPendingSince = std::chrono::steady_clock::now();
             // If popup was visible and dismissed by typing, re-filter instead of hiding
             if (popupWasVisible && popupDismissedByTyping)
                 _completionPopupDirty = true;
@@ -259,8 +291,14 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             else if (_completionPopup.visible())
                 dismissPopup();
             return Action::Changed;
-        case tui::InputFieldAction::AgentMode: dismissPopup(); return Action::Abort; // Toggle back to shell
-        case tui::InputFieldAction::CycleAgentMode: dismissPopup(); return Action::CycleMode;
+        case tui::InputFieldAction::AgentMode:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::Abort; // Toggle back to shell
+        case tui::InputFieldAction::CycleAgentMode:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::CycleMode;
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)
@@ -346,13 +384,77 @@ void AgentInputComponent::dismissPopup()
     _completionPopupDirty = false;
 }
 
+void AgentInputComponent::updateGhostText()
+{
+    if (_completer.providerCount() == 0)
+    {
+        _inputField.clearGhostText();
+        return;
+    }
+
+    auto const text = _inputField.text();
+    auto const cursor = _inputField.cursor();
+
+    // Only show ghost text when cursor is at end of input.
+    if (cursor != text.size())
+    {
+        _inputField.clearGhostText();
+        return;
+    }
+
+    // Check suggest cache — skip expensive completer call if text unchanged.
+    if (text == _suggestCacheText)
+    {
+        if (_suggestCacheResult)
+            _inputField.setGhostText(*_suggestCacheResult);
+        else
+            _inputField.clearGhostText();
+        return;
+    }
+
+    // Cache miss — call completer and store result.
+    auto suggestion = _completer.suggest(text, cursor);
+    _suggestCacheText = std::string(text);
+    _suggestCacheResult = suggestion;
+
+    if (suggestion)
+        _inputField.setGhostText(*suggestion);
+    else
+        _inputField.clearGhostText();
+}
+
 void AgentInputComponent::flushDeferredUpdates()
 {
+    if (_ghostTextDirty)
+    {
+        // Only flush once debounce period has elapsed.
+        if (!_ghostTextPendingSince
+            || (std::chrono::steady_clock::now() - *_ghostTextPendingSince) >= GhostTextDebounceMs)
+        {
+            _ghostTextDirty = false;
+            _ghostTextPendingSince.reset();
+            updateGhostText();
+        }
+        // else: debounce not expired — keep dirty flag for next flush.
+    }
     if (_completionPopupDirty)
     {
         _completionPopupDirty = false;
         updateCompletionPopup();
     }
+}
+
+int AgentInputComponent::ghostTextTimeoutMs() const
+{
+    if (!_ghostTextPendingSince)
+        return -1;
+
+    auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
+    auto const remaining = GhostTextDebounceMs - elapsed;
+    if (remaining <= std::chrono::milliseconds::zero())
+        return 0;
+
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
 }
 
 } // namespace endo::agent
