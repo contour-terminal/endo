@@ -208,8 +208,7 @@ std::string Prompt::read()
                     // Move cursor up to the top of the prompt and clear from there,
                     // so the agent prompt can replace the shell prompt in-place.
                     auto& out = _terminal.output();
-                    auto const rowsUp = _promptComponent->topPadding() + _promptComponent->chromeHeight()
-                                        + _promptComponent->inputField().cursorLine();
+                    auto const rowsUp = _promptComponent->cursorRowFromTop();
                     if (rowsUp > 0)
                         out.moveUp(rowsUp);
                     out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
@@ -346,8 +345,7 @@ std::optional<std::string> Prompt::processInput()
                 // Move cursor up to the top of the prompt and clear from there,
                 // so the agent prompt can replace the shell prompt in-place.
                 auto& out = _terminal.output();
-                auto const rowsUp = _promptComponent->topPadding() + _promptComponent->chromeHeight()
-                                    + _promptComponent->inputField().cursorLine();
+                auto const rowsUp = _promptComponent->cursorRowFromTop();
                 if (rowsUp > 0)
                     out.moveUp(rowsUp);
                 out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
@@ -558,12 +556,13 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
 
     auto& out = _terminal.output();
     auto const topPad = _promptComponent->topPadding();
+    auto const auroraH = _promptComponent->auroraFadeHeight();
     auto const chrome = _promptComponent->chromeHeight();
     auto const totalInputLines = _promptComponent->inputField().lineCount();
     auto const cursorLine = _promptComponent->inputField().cursorLine();
     auto const botPad = _promptComponent->bottomPadding();
-    auto const totalHeight = topPad + chrome + totalInputLines + botPad;
-    auto const currentRow = topPad + chrome + cursorLine;
+    auto const totalHeight = topPad + auroraH + chrome + totalInputLines + botPad;
+    auto const currentRow = topPad + auroraH + chrome + cursorLine;
 
     // Move cursor up to the top of the prompt region
     if (currentRow > 0)

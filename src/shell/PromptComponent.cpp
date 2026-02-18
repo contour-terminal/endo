@@ -628,6 +628,11 @@ int PromptComponent::bottomPadding() const noexcept
     return _config.promptSpacing;
 }
 
+int PromptComponent::cursorRowFromTop() const noexcept
+{
+    return topPadding() + auroraFadeHeight() + chromeHeight() + _inputField.cursorLine();
+}
+
 int PromptComponent::displayWidth(std::string_view text)
 {
     int width = 0;

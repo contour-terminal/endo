@@ -618,7 +618,11 @@ int Shell::run()
             if (prompt.lastAction() == PromptComponent::Action::AgentMode)
             {
                 runAgentMode();
-                prompt.resume();
+                // Only update terminal dimensions after agent mode — do NOT call prompt.resume()
+                // which would query cursor position and risk emitting a partial line indicator
+                // that shifts the prompt down. The screen cursor tracking was already released
+                // inside Prompt::read()'s AgentMode handler.
+                prompt.terminal().output().updateDimensions();
                 continue;
             }
 
@@ -699,7 +703,11 @@ int Shell::run()
         if (prompt.lastAction() == PromptComponent::Action::AgentMode)
         {
             runAgentMode();
-            prompt.resume();
+            // Only update terminal dimensions after agent mode — do NOT call prompt.resume()
+            // which would query cursor position and risk emitting a partial line indicator
+            // that shifts the prompt down. The screen cursor tracking was already released
+            // inside Prompt::read()'s AgentMode handler.
+            prompt.terminal().output().updateDimensions();
             continue;
         }
 

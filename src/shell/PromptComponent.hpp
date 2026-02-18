@@ -50,6 +50,7 @@ class PromptComponent: public tui::Component
     // --- Component Interface ---
 
     void render(tui::Canvas& canvas) override;
+
     [[nodiscard]] bool focusable() const override { return true; }
 
     /// @brief PromptComponent uses I-beam cursor when focused.
@@ -163,6 +164,9 @@ class PromptComponent: public tui::Component
 
     /// @brief Returns the number of bottom padding rows.
     [[nodiscard]] int bottomPadding() const noexcept;
+
+    /// @brief Returns the row offset of the cursor from the top of the component.
+    [[nodiscard]] int cursorRowFromTop() const noexcept;
 
     /// @brief Returns the CompletionPopup for direct access.
     [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
