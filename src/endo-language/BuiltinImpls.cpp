@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <bit>
 #include <format>
+#include <locale>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -172,8 +173,7 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
                         result += ", ";
                     if (hasNamedFields && i < variantInfo->fields.size())
                         result += variantInfo->fields[i].name + ": ";
-                    result +=
-                        slotValueToString(obj->getSlot(i), CoreVM::LiteralType::Number, runner, false);
+                    result += slotValueToString(obj->getSlot(i), CoreVM::LiteralType::Number, runner, false);
                 }
                 if (hasNamedFields)
                     result += ")";
@@ -644,6 +644,53 @@ void formatMode(CoreVM::Params& args)
     args.setResult(args.caller()->newString(result));
 }
 
+namespace
+{
+    /// Formats an integer with the given thousand separator string.
+    std::string formatNumberWithSeparator(std::string_view separator, int64_t number)
+    {
+        auto const isNegative = number < 0;
+        auto digits = std::to_string(isNegative ? -number : number);
+
+        std::string result;
+        auto const len = digits.size();
+        for (size_t i = 0; i < len; ++i)
+        {
+            if (i > 0 && (len - i) % 3 == 0)
+                result.append(separator);
+            result += digits[i];
+        }
+
+        if (isNegative)
+            result.insert(0, "-");
+
+        return result;
+    }
+} // namespace
+
+void formatNumber(CoreVM::Params& args)
+{
+    auto const separator = args.getString(1);
+    auto const number = args.getInt(2);
+    args.setResult(args.caller()->newString(formatNumberWithSeparator(separator, number)));
+}
+
+void formatNumberWithLocale(CoreVM::Params& args)
+{
+    auto const number = args.getInt(1);
+    try
+    {
+        auto const loc = std::locale("");
+        auto const sep = std::string(1, std::use_facet<std::numpunct<char>>(loc).thousands_sep());
+        args.setResult(args.caller()->newString(formatNumberWithSeparator(sep, number)));
+    }
+    catch (std::runtime_error const&)
+    {
+        // Fallback: no separator if locale is unavailable
+        args.setResult(args.caller()->newString(std::to_string(number)));
+    }
+}
+
 void modeIsReadable(CoreVM::Params& args)
 {
     auto const mode = static_cast<int>(args.getInt(1));
@@ -689,45 +736,82 @@ void randRange(CoreVM::Params& args)
 std::optional<CoreVM::NativeCallback::Functor> resolveSharedImpl(std::string_view name, size_t arity)
 {
     // List operations
-    if (name == "list_concat" && arity == 2) return &listConcat;
-    if (name == "list_head" && arity == 1) return &listHead;
-    if (name == "list_tail" && arity == 1) return &listTail;
-    if (name == "list_length" && arity == 1) return &listLength;
-    if (name == "list_isEmpty" && arity == 1) return &listIsEmpty;
-    if (name == "list_sort" && arity == 1) return &listSort;
-    if (name == "list_distinct" && arity == 1) return &listDistinct;
-    if (name == "list_sort_pairs" && arity == 1) return &listSortPairs;
-    if (name == "list_group_pairs" && arity == 1) return &listGroupPairs;
-    if (name == "list_nth" && arity == 2) return &listNth;
-    if (name == "list_last" && arity == 1) return &listLast;
-    if (name == "list_replicate" && arity == 2) return &listReplicate;
-    if (name == "list_char_range" && arity == 2) return &listCharRange;
-    if (name == "list_range" && arity == 3) return &listRange;
-    if (name == "list_to_string" && arity == 1) return &listToString;
-    if (name == "object_to_string" && arity == 1) return &objectToString;
+    if (name == "list_concat" && arity == 2)
+        return &listConcat;
+    if (name == "list_head" && arity == 1)
+        return &listHead;
+    if (name == "list_tail" && arity == 1)
+        return &listTail;
+    if (name == "list_length" && arity == 1)
+        return &listLength;
+    if (name == "list_isEmpty" && arity == 1)
+        return &listIsEmpty;
+    if (name == "list_sort" && arity == 1)
+        return &listSort;
+    if (name == "list_distinct" && arity == 1)
+        return &listDistinct;
+    if (name == "list_sort_pairs" && arity == 1)
+        return &listSortPairs;
+    if (name == "list_group_pairs" && arity == 1)
+        return &listGroupPairs;
+    if (name == "list_nth" && arity == 2)
+        return &listNth;
+    if (name == "list_last" && arity == 1)
+        return &listLast;
+    if (name == "list_replicate" && arity == 2)
+        return &listReplicate;
+    if (name == "list_char_range" && arity == 2)
+        return &listCharRange;
+    if (name == "list_range" && arity == 3)
+        return &listRange;
+    if (name == "list_to_string" && arity == 1)
+        return &listToString;
+    if (name == "object_to_string" && arity == 1)
+        return &objectToString;
 
     // String operations
-    if (name == "string_repeat" && arity == 2) return &stringRepeat;
-    if (name == "string_replace" && arity == 3) return &stringReplace;
-    if (name == "string_split" && arity == 2) return &stringSplit;
-    if (name == "string_join" && arity == 2) return &stringJoin;
-    if (name == "string_trim" && arity == 1) return &stringTrim;
-    if (name == "string_toLower" && arity == 1) return &stringToLower;
-    if (name == "string_toUpper" && arity == 1) return &stringToUpper;
-    if (name == "string_contains" && arity == 2) return &stringContains;
-    if (name == "string_startsWith" && arity == 2) return &stringStartsWith;
-    if (name == "string_endsWith" && arity == 2) return &stringEndsWith;
+    if (name == "string_repeat" && arity == 2)
+        return &stringRepeat;
+    if (name == "string_replace" && arity == 3)
+        return &stringReplace;
+    if (name == "string_split" && arity == 2)
+        return &stringSplit;
+    if (name == "string_join" && arity == 2)
+        return &stringJoin;
+    if (name == "string_trim" && arity == 1)
+        return &stringTrim;
+    if (name == "string_toLower" && arity == 1)
+        return &stringToLower;
+    if (name == "string_toUpper" && arity == 1)
+        return &stringToUpper;
+    if (name == "string_contains" && arity == 2)
+        return &stringContains;
+    if (name == "string_startsWith" && arity == 2)
+        return &stringStartsWith;
+    if (name == "string_endsWith" && arity == 2)
+        return &stringEndsWith;
 
     // Formatting helpers
-    if (name == "format_datetime" && arity == 1) return &formatDatetime;
-    if (name == "format_mode" && arity == 1) return &formatMode;
-    if (name == "mode_isReadable" && arity == 1) return &modeIsReadable;
-    if (name == "mode_isWritable" && arity == 1) return &modeIsWritable;
-    if (name == "mode_isExecutable" && arity == 1) return &modeIsExecutable;
+    if (name == "format_datetime" && arity == 1)
+        return &formatDatetime;
+    if (name == "format_mode" && arity == 1)
+        return &formatMode;
+    if (name == "format_number" && arity == 2)
+        return &formatNumber;
+    if (name == "format_number" && arity == 1)
+        return &formatNumberWithLocale;
+    if (name == "mode_isReadable" && arity == 1)
+        return &modeIsReadable;
+    if (name == "mode_isWritable" && arity == 1)
+        return &modeIsWritable;
+    if (name == "mode_isExecutable" && arity == 1)
+        return &modeIsExecutable;
 
     // Random number generation
-    if (name == "rand" && arity == 0) return &randNoArgs;
-    if (name == "rand" && arity == 2) return &randRange;
+    if (name == "rand" && arity == 0)
+        return &randNoArgs;
+    if (name == "rand" && arity == 2)
+        return &randRange;
 
     return std::nullopt;
 }

@@ -661,6 +661,17 @@ void Shell::registerLanguageBuiltins()
         .returnType(CoreVM::LiteralType::String)
         .bind(endo::builtins::formatMode);
 
+    _runtime.registerFunction("format_number")
+        .param<CoreVM::CoreString>("separator")
+        .param<CoreVM::CoreNumber>("number")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(endo::builtins::formatNumber);
+
+    _runtime.registerFunction("format_number")
+        .param<CoreVM::CoreNumber>("number")
+        .returnType(CoreVM::LiteralType::String)
+        .bind(endo::builtins::formatNumberWithLocale);
+
     _runtime.registerFunction("mode_isReadable")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean)

@@ -128,6 +128,13 @@ void formatDatetime(CoreVM::Params& args);
 /// format_mode(mode) -> string: Formats Unix file mode as "rwxrwxrwx" string.
 void formatMode(CoreVM::Params& args);
 
+/// format_number(separator, number) -> string: Formats integer with thousand separators.
+/// E.g. formatNumber "," 1234567 -> "1,234,567", formatNumber "." 1234567 -> "1.234.567".
+void formatNumber(CoreVM::Params& args);
+
+/// format_number(number) -> string: Formats integer using the user's locale thousand separator.
+void formatNumberWithLocale(CoreVM::Params& args);
+
 /// mode_isReadable(mode) -> bool: Tests if any read bit is set.
 void modeIsReadable(CoreVM::Params& args);
 

@@ -228,6 +228,17 @@ void registerFSharpBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::String), resolve, "format_mode", 1);
 
+    // format_number(separator: string, number: number) -> string
+    bindResolved(rt.registerFunction("format_number")
+        .param<CoreVM::CoreString>("separator")
+        .param<CoreVM::CoreNumber>("number")
+        .returnType(CoreVM::LiteralType::String), resolve, "format_number", 2);
+
+    // format_number(number: number) -> string (uses user locale)
+    bindResolved(rt.registerFunction("format_number")
+        .param<CoreVM::CoreNumber>("number")
+        .returnType(CoreVM::LiteralType::String), resolve, "format_number", 1);
+
     // mode_isReadable(mode: number) -> bool
     bindResolved(rt.registerFunction("mode_isReadable")
         .param<CoreVM::CoreNumber>("mode")

@@ -207,6 +207,7 @@ This document tracks the implementation status of F# language features as define
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
 - [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
+- [x] `formatNumber` — insert thousand separators (`formatNumber "," 1234567` → `"1,234,567"`; 1-arg locale-aware overload; pipelines supported)
 - [x] Standard library reference documentation with validated code examples (`docs/language/standard-library.md`)
 - [ ] `File.read`, `File.write`, `File.list` — file operations
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations

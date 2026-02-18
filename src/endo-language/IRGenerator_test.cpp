@@ -7002,6 +7002,80 @@ TEST_CASE("IRGenerator.FSharp.formatDateTime.epoch_zero")
     CHECK(executeSourceAndGetOutput("print (formatDateTime 0)") == "1970-01-01 00:00:00");
 }
 
+// --- formatNumber helper tests ---
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.us_locale")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," 1234567))") == "1,234,567");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.de_locale")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "." 1234567))") == "1.234.567");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.space_separator")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber " " 1234567))") == "1 234 567");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.small_number")
+{
+    // Numbers < 1000 need no separator
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," 42))") == "42");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.exactly_1000")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," 1000))") == "1,000");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.zero")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," 0))") == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.negative")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," -1234567))") == "-1,234,567");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.large_number")
+{
+    CHECK(executeSourceAndGetOutput(R"(print (formatNumber "," 1000000000))") == "1,000,000,000");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.pipeline")
+{
+    // Pipeline: number |> formatNumber ","
+    CHECK(executeSourceAndGetOutput(R"(print (1234567 |> formatNumber ","))") == "1,234,567");
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.locale_aware")
+{
+    // 1-arg: uses the user's locale thousand separator
+    auto const output = executeSourceAndGetOutput("print (formatNumber 1234567)");
+    // The exact separator depends on the locale, but the digits must be correct
+    CHECK(output.find("1234567") == std::string::npos); // Should have separators
+    CHECK(output.find("1") == 0);                       // Starts with 1
+    CHECK(output.find("567") != std::string::npos);     // Ends with 567
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.locale_pipeline")
+{
+    // Pipeline: number |> formatNumber (locale-aware)
+    auto const output = executeSourceAndGetOutput("print (1234567 |> formatNumber)");
+    CHECK(output.find("1234567") == std::string::npos);
+    CHECK(output.find("1") == 0);
+    CHECK(output.find("567") != std::string::npos);
+}
+
+TEST_CASE("IRGenerator.FSharp.formatNumber.locale_small")
+{
+    // Small numbers have no separator regardless of locale
+    CHECK(executeSourceAndGetOutput("print (formatNumber 42)") == "42");
+}
+
 // --- isReadable/isWritable/isExecutable helper tests ---
 
 TEST_CASE("IRGenerator.FSharp.isReadable.true")

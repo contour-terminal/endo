@@ -15,7 +15,8 @@ by category. Each example is executable and verified by the documentation test s
 - [15.8 Option Combinators](#158-option-combinators) -- `Option.map`, `Option.bind`, `Option.defaultValue`
 - [15.9 Environment & System](#159-environment-system) -- `env`, `which`
 - [15.10 Random](#1510-random) -- `rand`
-- [15.11 Composition Examples](#1511-composition-examples)
+- [15.11 Number Formatting](#1511-number-formatting) -- `formatNumber`
+- [15.12 Composition Examples](#1512-composition-examples)
 
 ---
 
@@ -836,7 +837,48 @@ println y
 
 ---
 
-## 15.11 Composition Examples
+## 15.11 Number Formatting
+
+#### `formatNumber`
+
+**Signatures:**
+- `formatNumber separator number : string` — uses the given separator
+- `formatNumber number : string` — uses the user's locale thousand separator
+
+Formats an integer with thousand separators for readability.
+In the 2-argument form, `separator` is a string inserted every 3 digits from the right.
+In the 1-argument form, the thousand separator is determined by the user's system locale.
+Negative numbers are handled correctly (the sign is preserved).
+
+```endo
+print (formatNumber "," 1234567)       # => 1,234,567
+```
+
+```endo
+print (formatNumber "." 1234567)       # => 1.234.567
+```
+
+```endo
+print (formatNumber " " 1000000)       # => 1 000 000
+```
+
+```endo
+print (formatNumber "," 42)            # => 42
+```
+
+```endo
+print (formatNumber "," -9876543)      # => -9,876,543
+```
+
+Works in pipelines too:
+
+```endo
+print (1234567 |> formatNumber ",")    # => 1,234,567
+```
+
+---
+
+## 15.12 Composition Examples
 
 These examples combine multiple standard library functions.
 

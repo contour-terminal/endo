@@ -3966,6 +3966,57 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // formatNumber: string -> int -> string  OR  int -> string (locale-aware)
+    if (name == "formatNumber")
+    {
+        if (argExprs.size() == 1)
+        {
+            // 1-arg: use user's locale thousand separator
+            auto* num = codegen(argExprs[0]);
+            if (!num)
+            {
+                reportTypeError("Failed to evaluate formatNumber number argument");
+                return true;
+            }
+            auto* callback = findCallback("format_number(I)S");
+            if (!callback)
+            {
+                reportTypeError("format_number builtin not registered");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { num }, "formatNumber");
+            return true;
+        }
+        if (argExprs.size() == 2)
+        {
+            // 2-arg: explicit separator
+            auto* sep = codegen(argExprs[0]);
+            if (!sep)
+            {
+                reportTypeError("Failed to evaluate formatNumber separator argument");
+                return true;
+            }
+            auto* num = codegen(argExprs[1]);
+            if (!num)
+            {
+                reportTypeError("Failed to evaluate formatNumber number argument");
+                return true;
+            }
+            auto* callback = findCallback("format_number(SI)S");
+            if (!callback)
+            {
+                reportTypeError("format_number builtin not registered");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { sep, num }, "formatNumber");
+            return true;
+        }
+        reportTypeError("formatNumber requires 1 or 2 arguments, got {}", argExprs.size());
+        return true;
+    }
+
     // isReadable/isWritable/isExecutable: int -> bool (test permission bits)
     if (name == "isReadable" || name == "isWritable" || name == "isExecutable")
     {
@@ -5420,6 +5471,19 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, sigName);
             return;
         }
+        // Locale-aware formatNumber in pipeline: number |> formatNumber
+        if (funcIdent->name == "formatNumber")
+        {
+            auto* callback = findCallback("format_number(I)S");
+            if (!callback)
+            {
+                reportTypeError("format_number builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, "formatNumber");
+            return;
+        }
 
         // Named function or stored lambda
         funcName = funcIdent->name;
@@ -5605,6 +5669,32 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             }
             _result = _builder.createCallFunction(
                 _builder.getBuiltinFunction(*callback), { value, patternArg }, sigName);
+            return;
+        }
+
+        // Handle formatNumber as partial application in pipeline:
+        // number |> formatNumber ","  →  format_number(",", number)
+        if (baseIdent->name == "formatNumber")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("formatNumber in pipeline requires exactly 1 argument (separator)");
+                return;
+            }
+            auto* separatorArg = codegen(explicitArgExprs[0]);
+            if (!separatorArg)
+            {
+                reportTypeError("Failed to evaluate formatNumber separator argument");
+                return;
+            }
+            auto* callback = findCallback("format_number(SI)S");
+            if (!callback)
+            {
+                reportTypeError("format_number builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { separatorArg, value }, "format_number");
             return;
         }
 
