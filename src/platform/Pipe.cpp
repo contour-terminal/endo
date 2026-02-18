@@ -19,7 +19,7 @@ namespace endo::platform
 
 namespace
 {
-    auto inline pipeTag = logstore::category("pipe", "Pipe operations");
+    auto inline pipeTag = logstore::category("platform.pipe", "Platform pipe operations");
 
     auto& pipeLog()
     {
