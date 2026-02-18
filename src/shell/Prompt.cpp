@@ -421,6 +421,7 @@ void Prompt::resume()
     if (_initialized)
     {
         _terminal.resume();
+        _terminal.output().updateDimensions(); // Refresh cached dimensions after child exit
 
         // Check if the command left the cursor at a non-column-1 position,
         // indicating output that didn't end with a newline. Show a dim indicator
