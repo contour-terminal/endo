@@ -816,8 +816,15 @@ Component (base class)
 - `StyledText` class provides styled text rendering with markdown parsing (reuses parsing from `MarkdownRenderer`)
 - `CommandResolver` determines command type (external, builtin, alias, not found) and provides tooltip text
 - Screen overlay system used for tooltip positioning
-- Hover callbacks integrated into event loop with poll timeout management
-- Tooltip automatically hides when user starts typing
+- Hover is a first-class Component-level feature: `Component::onHover(x, y)` virtual method returns
+  `std::optional<HoverResult>` (text, position, contentType). Screen wires hover callbacks internally
+  in its constructor, translating viewport coordinates to component-relative and calling `onHover()`.
+- `PromptComponent` overrides `onHover()` with the priority chain: diagnostics → language hover → command resolver
+- Tooltip automatically hides when user starts typing (via `Screen::dispatchKeyEvent`); all events
+  (not just mouse) are routed through `Screen::dispatchEvent()` so key presses auto-hide tooltips
+  without PromptComponent needing any tooltip-awareness
+- `onHover()` returns the position of the hovered element (not where the tooltip should appear);
+  `showTooltip()` adds the +1 row offset for "below cursor" placement
 - Inline mode coordinate tracking handles content shifts caused by tooltip/popup rendering:
   - `_mainContentHeight` tracks main content height before overlays for accurate mouse hit-testing
   - `_peakContentHeight` tracks maximum allocated space to avoid redundant newline emission
