@@ -10,7 +10,8 @@ using enum TokenCategory;
 namespace
 {
 
-/// @brief Checks that all bytes in [start, start+len) have the expected category.
+/// @brief Checks that all grapheme clusters in [start, start+len) have the expected category.
+/// For ASCII input, grapheme index == byte index, so the numerical values are unchanged.
 void expectRange(HighlightMap const& map, std::size_t start, std::size_t len, TokenCategory expected)
 {
     for (std::size_t i = start; i < start + len && i < map.size(); ++i)

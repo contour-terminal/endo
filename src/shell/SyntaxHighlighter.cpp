@@ -3,6 +3,15 @@
 
 #include <endo-language/ContextAwareTokenizer.hpp>
 
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+#include <libunicode/utf8_grapheme_segmenter.h>
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
+
 #include "SourceOffsetUtils.hpp"
 
 namespace endo
@@ -10,9 +19,11 @@ namespace endo
 
 HighlightMap computeHighlightMap(std::string_view source)
 {
-    auto map = HighlightMap(source.size(), TokenCategory::Default);
     if (source.empty())
-        return map;
+        return {};
+
+    // Step 1: Build a per-byte map (tokenizer operates on byte ranges)
+    auto byteMap = std::vector<TokenCategory>(source.size(), TokenCategory::Default);
 
     auto const lineStartOffsets = buildLineStartOffsets(source);
     auto const tokens = tokenizeWithContext(source);
@@ -53,12 +64,24 @@ HighlightMap computeHighlightMap(std::string_view source)
         if (byteLen == 0 && byteStart < source.size())
             byteLen = 1;
 
-        // Fill the map for this token's byte range
-        for (std::size_t i = 0; i < byteLen && byteStart + i < map.size(); ++i)
-            map[byteStart + i] = category;
+        // Fill the byte map for this token's byte range
+        for (std::size_t i = 0; i < byteLen && byteStart + i < byteMap.size(); ++i)
+            byteMap[byteStart + i] = category;
     }
 
-    return map;
+    // Step 2: Compress per-byte map to per-grapheme-cluster map.
+    // Take the category at each cluster's first byte offset.
+    auto result = HighlightMap {};
+    result.reserve(source.size()); // Upper bound for ASCII (will be exact for ASCII)
+
+    auto segmenter = unicode::utf8_grapheme_segmenter(source);
+    for (auto it = segmenter.begin(); it != segmenter.end(); ++it)
+    {
+        auto const byteOffset = static_cast<std::size_t>(it._clusterStart - source.data());
+        result.push_back(byteOffset < byteMap.size() ? byteMap[byteOffset] : TokenCategory::Default);
+    }
+
+    return result;
 }
 
 } // namespace endo

@@ -12,12 +12,15 @@
 namespace endo
 {
 
-/// @brief Per-byte token category map for syntax highlighting.
+/// @brief Per-grapheme-cluster token category map for syntax highlighting.
+///
+/// One entry per grapheme cluster in the source text (0-indexed).
+/// For ASCII input, the grapheme index equals the byte index.
 using HighlightMap = std::vector<TokenCategory>;
 
-/// @brief Tokenizes the source and produces a per-byte highlight map.
+/// @brief Tokenizes the source and produces a per-grapheme-cluster highlight map.
 /// @param source The input text to highlight.
-/// @return A vector of TokenCategory, one per byte of source.
+/// @return A vector of TokenCategory, one per grapheme cluster of source.
 [[nodiscard]] HighlightMap computeHighlightMap(std::string_view source);
 
 /// @brief Returns the display color for a given token category using the current theme.

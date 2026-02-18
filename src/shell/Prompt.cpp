@@ -3,6 +3,15 @@
 
 #include <tui/Screen.hpp>
 
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+#include <libunicode/utf8_grapheme_segmenter.h>
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
+
 #include "CommandResolver.hpp"
 #include "Completer.hpp"
 #include "PromptComponent.hpp"
@@ -531,7 +540,7 @@ tui::KeyBindings& Prompt::keyBindings()
     return _promptComponent->inputField().keyBindings();
 }
 
-/// @brief Writes text to the terminal output with per-byte syntax highlighting.
+/// @brief Writes text to the terminal output with per-grapheme syntax highlighting.
 /// @param out The terminal output to write to.
 /// @param text The source text to highlight and write.
 static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view text)
@@ -540,20 +549,33 @@ static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view te
     if (highlights.empty())
         return;
 
-    size_t segStart = 0;
+    // Group consecutive grapheme clusters with the same category into segments.
+    // The highlight map is now per-grapheme-cluster, so we iterate grapheme
+    // clusters and look up by grapheme index.
+    auto segmenter = unicode::utf8_grapheme_segmenter(text);
+
+    std::size_t graphemeIdx = 0;
+    std::size_t segStartByte = 0;
     auto currentCat = highlights[0];
-    for (size_t i = 1; i <= text.size(); ++i)
+
+    for (auto it = segmenter.begin(); it != segmenter.end(); ++it, ++graphemeIdx)
     {
-        if (i == text.size() || highlights[i] != currentCat)
+        auto const clusterByte = static_cast<std::size_t>(it._clusterStart - text.data());
+        auto const cat = graphemeIdx < highlights.size() ? highlights[graphemeIdx] : TokenCategory::Default;
+
+        if (graphemeIdx > 0 && cat != currentCat)
         {
-            out.write(text.substr(segStart, i - segStart), tui::Style { .fg = categoryColor(currentCat) });
-            if (i < text.size())
-            {
-                currentCat = highlights[i];
-                segStart = i;
-            }
+            // Flush the previous segment
+            out.write(text.substr(segStartByte, clusterByte - segStartByte),
+                      tui::Style { .fg = categoryColor(currentCat) });
+            segStartByte = clusterByte;
+            currentCat = cat;
         }
     }
+
+    // Flush remaining segment
+    if (segStartByte < text.size())
+        out.write(text.substr(segStartByte), tui::Style { .fg = categoryColor(currentCat) });
 }
 
 void Prompt::emitTransientPrompt(std::string_view inputText)
