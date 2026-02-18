@@ -50,8 +50,6 @@ class PromptComponent: public tui::Component
     // --- Component Interface ---
 
     void render(tui::Canvas& canvas) override;
-    [[nodiscard]] tui::EventResult onEvent(tui::InputEvent const& event) override;
-
     [[nodiscard]] bool focusable() const override { return true; }
 
     /// @brief PromptComponent uses I-beam cursor when focused.

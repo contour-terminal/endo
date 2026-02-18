@@ -566,18 +566,6 @@ void PromptComponent::render(tui::Canvas& canvas)
     _firstDisplay = false;
 }
 
-tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
-{
-    auto action = processInput(event);
-    if (action != Action::None)
-    {
-        flushDeferredUpdates();
-        invalidate();
-        return tui::EventResult::Handled;
-    }
-    return tui::EventResult::Ignored;
-}
-
 tui::Size PromptComponent::preferredSize() const
 {
     auto const inputLineCount = _inputField.lineCount();
