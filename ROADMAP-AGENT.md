@@ -1398,6 +1398,278 @@ teams:
 
 ---
 
+## Phase 12: Codebase Intelligence & Exploration
+
+**Goal:** Give the agent structured codebase understanding beyond text-based grep — symbol-level
+navigation, file outlines, exploration context isolation, and optional semantic search. This
+bridges the gap between raw file tools (Phase 5) and the kind of deep code comprehension that
+makes agentic coding assistants effective on large, unfamiliar projects.
+
+**Status:** Not started.
+
+### 12A — Tree-sitter Symbol Extraction
+
+**Goal:** Provide symbol-level codebase navigation using tree-sitter for fast, accurate AST
+parsing across languages. This is the foundation for all code intelligence features.
+
+**Why tree-sitter over ctags:** Tree-sitter provides full AST access — not just symbol names
+but also signatures, doc comments, nesting structure, and structural outlines. It parses
+incrementally and tolerates syntax errors, making it suitable for in-progress code.
+
+```
+src/agent/intelligence/
+├── TreeSitterParser.hpp/.cpp       # tree-sitter wrapper: load grammars, parse files
+├── SymbolIndex.hpp/.cpp            # In-memory symbol table built from tree-sitter ASTs
+├── SymbolExtractor.hpp/.cpp        # Language-specific AST queries for symbol extraction
+└── grammars/                       # Bundled tree-sitter grammars (C/C++, Python, JS/TS, Rust, Go, etc.)
+```
+
+**Data model:**
+
+```cpp
+/// Classification of a code symbol.
+enum class SymbolKind : uint8_t {
+    Function,
+    Method,
+    Class,
+    Struct,
+    Enum,
+    EnumVariant,
+    Interface,
+    Trait,
+    Module,
+    Namespace,
+    Variable,
+    Constant,
+    TypeAlias,
+    Macro,
+    Field,
+};
+
+/// A symbol extracted from source code via tree-sitter.
+struct SymbolInfo {
+    std::string name;                    ///< Symbol name (e.g., "processMessage").
+    SymbolKind kind;                     ///< Classification (function, class, etc.).
+    std::string filePath;                ///< Absolute path to the source file.
+    size_t line;                         ///< 1-based line number of the definition.
+    size_t endLine;                      ///< 1-based end line (for range).
+    std::string signature;               ///< Full signature (e.g., "auto processMessage(std::string_view, StreamCallback) -> std::expected<...>").
+    std::string docComment;              ///< Extracted doc comment (Doxygen, JSDoc, etc.), if any.
+    std::optional<std::string> parent;   ///< Enclosing symbol name (class for methods, namespace, etc.).
+    std::vector<SymbolInfo> children;    ///< Nested symbols (class members, enum variants, etc.).
+};
+```
+
+**New tools:**
+
+| Tool | Input | Behavior |
+|------|-------|----------|
+| `find_symbol` | `{ name: string, kind?: string, language?: string }` | Find symbol definitions by name (exact or fuzzy). Returns file path, line, signature, doc comment. |
+| `list_symbols` | `{ path: string, kind?: string }` | List all symbols in a file or directory, optionally filtered by kind. |
+| `file_outline` | `{ path: string }` | Return a structural outline of a file: top-level symbols with their signatures, nesting, and line ranges. Compact — suitable for understanding file structure without reading the entire file. |
+
+### 12B — LSP Client Integration (Optional)
+
+**Goal:** Connect to running Language Server Protocol servers for precise, compiler-grade
+navigation. This is optional — tree-sitter (12A) covers 80% of the value without requiring
+users to have language servers installed.
+
+**Dependency:** Phase 8 (MCP) shares JSON-RPC infrastructure (`src/agent/mcp/JsonRpc.hpp`).
+
+```
+src/agent/intelligence/
+├── LspClient.hpp/.cpp              # LSP client: initialize, textDocument/* requests
+└── LspManager.hpp/.cpp             # Discover, start, and manage LSP server processes
+```
+
+**Implementation notes:**
+
+- Reuse `JsonRpc.hpp` from Phase 8 for the JSON-RPC 2.0 transport layer
+- Communicate with LSP servers via stdio (same as MCP stdio transport)
+- Auto-discover LSP servers from common locations and configuration
+- Graceful fallback: if no LSP server is available, tools return an error suggesting tree-sitter alternatives
+
+**New tools:**
+
+| Tool | Input | Behavior |
+|------|-------|----------|
+| `goto_definition` | `{ path: string, line: number, column: number }` | Jump to the definition of the symbol at the given position. Returns target file path and line. |
+| `find_references` | `{ path: string, line: number, column: number }` | Find all references to the symbol at the given position across the workspace. |
+| `workspace_symbols` | `{ query: string }` | Search for symbols across the entire workspace by name pattern. |
+
+### 12C — Exploration Context Isolation
+
+**Goal:** Provide an `explore` tool that runs an isolated inner agent loop for codebase
+exploration, returning only a concise summary to the main conversation. This prevents
+20+ intermediate grep/read results from polluting the main context window.
+
+**Priority:** Implement first — highest impact, lowest effort. Requires zero new dependencies;
+reuses existing `AgentSession` infrastructure (Phase 5) and `ConversationHistory` (Phase 7).
+
+```
+src/agent/tools/
+└── ExploreTool.hpp/.cpp             # Isolated exploration sub-agent
+```
+
+**How it works:**
+
+1. The main agent calls `explore` with a natural-language question about the codebase
+2. `ExploreTool` creates a temporary `AgentSession` with its own `ConversationHistory`
+3. The inner session has access to read-only tools only (`read_file`, `glob`, `grep`, `git` read ops, `file_outline`, `find_symbol`, `list_symbols`)
+4. The inner agent iterates (up to `max_exploration_turns`) until it has an answer
+5. The inner session is discarded; only the final summary is returned as the tool result
+6. The main conversation sees one tool call + one concise result — not the intermediate exploration
+
+**Tool definition:**
+
+| Tool | Input | Behavior |
+|------|-------|----------|
+| `explore` | `{ question: string, scope?: string, max_turns?: number }` | Run an isolated exploration sub-agent. `scope` narrows the search (e.g., `"src/agent/"`, `"*.cpp"`). Returns a concise summary answering the question. |
+
+**Design decisions:**
+
+- **Read-only enforcement:** The inner session's `ToolRegistry` excludes all mutating tools.
+  This is a hard constraint, not a prompt instruction — the tools simply aren't available.
+- **Context isolation:** The inner `ConversationHistory` is completely separate from the main
+  conversation. The inner agent's system prompt includes the project file tree and rules
+  (same as the main agent) but no prior conversation context.
+- **Token budget:** The inner session has its own context window budget. If the inner agent
+  approaches its limit, it summarizes what it's found so far and returns early.
+- **Concurrency:** Only one `explore` call runs at a time (sequential). Future work (Phase 10.1
+  parallel tools) could allow concurrent explorations.
+
+### 12D — Codebase Indexing & Caching
+
+**Goal:** Build and persist a symbol index so the agent doesn't start from scratch every session.
+Background indexing runs non-blocking, following the `std::async` pattern from `runAgentMode()`.
+
+**Dependency:** 12A (tree-sitter symbol extraction provides the data to index).
+
+```
+src/agent/intelligence/
+├── IndexBuilder.hpp/.cpp           # Background indexer: walk files, extract symbols, build index
+├── IndexCache.hpp/.cpp             # Persistent index storage (SQLite or flat file)
+└── FileWatcher.hpp/.cpp            # inotify/kqueue watcher for incremental re-indexing
+```
+
+**Index lifecycle:**
+
+1. **Initial build:** On first agent session in a project, index all source files in a background
+   thread. The agent can work immediately with grep/read — index results become available
+   progressively.
+2. **Incremental update:** `FileWatcher` detects file changes (save, create, delete) and re-indexes
+   only affected files. Uses `inotify` (Linux) / `kqueue` (macOS) / `ReadDirectoryChangesW` (Windows).
+3. **Cache persistence:** Index is stored in `~/.cache/endo/index/<project-hash>/` as a compact
+   binary or SQLite database. Invalidated by file modification timestamps.
+4. **Warm start:** On subsequent sessions, load the cached index and verify freshness against
+   filesystem mtimes. Stale entries are re-indexed in the background.
+
+**Integration with tools:**
+
+- `find_symbol` checks the index first (O(1) lookup), falls back to on-demand tree-sitter parse
+- `workspace_symbols` (12B) can use the index for fast fuzzy matching when no LSP is available
+- `file_outline` checks the index for cached outlines, re-parses on cache miss
+
+### 12E — Semantic / Embedding Search (Optional)
+
+**Goal:** Enable conceptual queries like "find the retry logic" or "where is authentication
+handled" without knowing exact function names. Uses local embedding models to build a
+semantic index of the codebase.
+
+**Dependencies:** 12D (codebase indexing provides the chunking infrastructure) + Phase 3
+(llama.cpp provides the model runtime for running embedding models locally).
+
+```
+src/agent/intelligence/
+├── EmbeddingEngine.hpp/.cpp        # Local embedding model wrapper (via llama.cpp or ONNX)
+├── SemanticIndex.hpp/.cpp          # Vector index for code chunks (HNSW or flat)
+└── CodeChunker.hpp/.cpp            # Split source files into semantically meaningful chunks
+```
+
+**Implementation notes:**
+
+- **Embedding model:** Use a small, code-optimized embedding model (e.g., `nomic-embed-code`,
+  `jina-embeddings-v3`, or similar) via llama.cpp's embedding API or ONNX runtime
+- **Chunking strategy:** Split files at function/class boundaries (using tree-sitter from 12A),
+  not fixed token windows. Each chunk includes the symbol's signature, doc comment, and body.
+- **Vector storage:** Lightweight HNSW index (e.g., hnswlib or usearch, header-only) stored
+  alongside the symbol index in `~/.cache/endo/index/<project-hash>/`
+- **Query flow:** User query → embed → k-NN search → return top-N code chunks with file paths
+  and line ranges
+
+**New tool:**
+
+| Tool | Input | Behavior |
+|------|-------|----------|
+| `semantic_search` | `{ query: string, top_k?: number, scope?: string }` | Search the codebase by concept. Returns ranked code chunks with file paths, line ranges, and relevance scores. |
+
+### 12.6 Configuration
+
+In `~/.config/endo/agent.yml`:
+
+```yaml
+intelligence:
+  # Tree-sitter (12A)
+  tree_sitter:
+    enabled: true
+    languages: auto                  # auto-detect from file extensions, or explicit list
+    max_file_size_kb: 512            # Skip files larger than this
+
+  # LSP (12B)
+  lsp:
+    enabled: false                   # Opt-in — requires language servers to be installed
+    servers:
+      cpp: clangd
+      python: pylsp
+      typescript: typescript-language-server
+
+  # Exploration (12C)
+  explore:
+    max_turns: 15                    # Max tool iterations for inner exploration agent
+    provider: null                   # null = use main provider; or override with a cheaper model
+
+  # Indexing (12D)
+  indexing:
+    enabled: true
+    background: true                 # Index in background thread (non-blocking)
+    cache_dir: ~/.cache/endo/index/
+    watch_files: true                # Use file watcher for incremental updates
+    exclude_patterns:                # Patterns to exclude from indexing
+      - "build/"
+      - "node_modules/"
+      - ".git/"
+      - "vendor/"
+
+  # Semantic search (12E)
+  semantic:
+    enabled: false                   # Opt-in — requires embedding model
+    model_path: ~/.local/share/endo/models/nomic-embed-code-q8_0.gguf
+    chunk_size: 512                  # Target chunk size in tokens
+    top_k: 10                        # Default number of results
+```
+
+### 12.7 Integration Points
+
+| Existing Code | Integration |
+|---------------|-------------|
+| `ToolRegistry` (Phase 5) | Register `find_symbol`, `list_symbols`, `file_outline`, `explore`, optionally `goto_definition`, `find_references`, `workspace_symbols`, `semantic_search` |
+| `Shell::runAgentMode()` | Initialize `TreeSitterParser` and `IndexBuilder` at session start; start background indexing |
+| `AgentConfig` | Add `IntelligenceConfig` section for tree-sitter, LSP, indexing, and semantic settings |
+| `SystemPromptBuilder` | Add tool descriptions for intelligence tools to the system prompt |
+| `AgentSession` (Phase 7) | `ExploreTool` creates a temporary `AgentSession` for isolated exploration |
+| `ConversationHistory` (Phase 7) | Inner exploration sessions use their own `ConversationHistory` instance |
+| `JsonRpc` (Phase 8) | LSP client reuses JSON-RPC 2.0 transport for language server communication |
+| `LlamaCppProvider` (Phase 3) | Semantic search uses llama.cpp embedding API for local embeddings |
+
+**Touches:** new `src/agent/intelligence/` directory, new `src/agent/tools/ExploreTool.hpp/cpp`,
+`src/agent/tools/ToolRegistry.hpp/cpp` (register intelligence tools),
+`src/agent/AgentConfig.hpp/.cpp` (intelligence config section),
+`src/agent/SystemPromptBuilder.hpp/cpp` (tool descriptions),
+`src/shell/Shell.cpp` (intelligence initialization in `runAgentMode()`),
+`CMakeLists.txt` (tree-sitter dependency, optional hnswlib/usearch)
+
+---
+
 ## Dependency Graph
 
 ```
@@ -1414,7 +1686,14 @@ Phase 1 (LLM Providers + Multimodal)
    │         │         │       ├── 10.4 Plan Mode
    │         │         │       └── 10.5 Memory System
    │         │         │
-   │         │         └──→ Phase 11 (Multi-Agent Teams)
+   │         │         ├──→ Phase 11 (Multi-Agent Teams)
+   │         │         │
+   │         │         └──→ Phase 12 (Codebase Intelligence & Exploration)
+   │         │                  ├── 12C Explore Tool (Phase 5 + 7 only)
+   │         │                  ├── 12A Tree-sitter (Phase 5 only)
+   │         │                  ├── 12B LSP Client (Phase 8 — JSON-RPC)
+   │         │                  ├── 12D Indexing (12A)
+   │         │                  └── 12E Semantic Search (12D + Phase 3)
    │         │
    │         └──→ Phase 9 (TUI Enhancements)
    │
@@ -1437,6 +1716,7 @@ Phase 1 (LLM Providers + Multimodal)
 - **Phase 9** (TUI) depends on Phase 2 (agent UX must exist to enhance) and benefits from Phase 4 (voice status rendering).
 - **Phase 10** (Advanced) depends on Phases 5 and 6 being in place.
 - **Phase 11** (Multi-Agent Teams) depends on Phase 5 (tools), Phase 6 (permissions — each agent needs risk caps), and Phase 7 (context management — each agent needs its own conversation). This is the capstone feature.
+- **Phase 12** (Codebase Intelligence) depends on Phase 5 (tool system). Sub-phase 12C (explore tool) also needs Phase 7 (context management for isolated sessions). Sub-phase 12B (LSP) reuses Phase 8's JSON-RPC. Sub-phase 12E (semantic search) requires Phase 3 (llama.cpp for local embeddings) and 12D (indexing). **Recommended implementation order:** 12C → 12A → 12D → 12B → 12E.
 
 ---
 
@@ -1468,12 +1748,26 @@ src/agent/
 │   ├── GlobTool.hpp/.cpp
 │   ├── GrepTool.hpp/.cpp
 │   ├── ShellExecuteTool.hpp/.cpp
-│   └── GitTool.hpp/.cpp
+│   ├── GitTool.hpp/.cpp
+│   └── ExploreTool.hpp/.cpp        # Isolated exploration sub-agent (12C)
 ├── voice/                          # Voice input subsystem (Phase 4)
 │   ├── WhisperEngine.hpp/.cpp      # whisper.cpp wrapper for speech-to-text
 │   ├── AudioCapture.hpp/.cpp       # Microphone input (PulseAudio/ALSA/CoreAudio/WASAPI)
 │   ├── VoiceActivityDetector.hpp/.cpp  # VAD (Silero ONNX / energy-based fallback)
 │   └── VoiceInputManager.hpp/.cpp  # Coordinates capture → VAD → transcription → input
+├── intelligence/
+│   ├── TreeSitterParser.hpp/.cpp   # tree-sitter wrapper: load grammars, parse files (12A)
+│   ├── SymbolIndex.hpp/.cpp        # In-memory symbol table from tree-sitter ASTs (12A)
+│   ├── SymbolExtractor.hpp/.cpp    # Language-specific AST queries for symbol extraction (12A)
+│   ├── LspClient.hpp/.cpp          # LSP client: initialize, textDocument/* requests (12B)
+│   ├── LspManager.hpp/.cpp         # Discover, start, manage LSP server processes (12B)
+│   ├── IndexBuilder.hpp/.cpp       # Background indexer: walk files, extract symbols (12D)
+│   ├── IndexCache.hpp/.cpp         # Persistent index storage (SQLite or flat file) (12D)
+│   ├── FileWatcher.hpp/.cpp        # inotify/kqueue watcher for incremental re-indexing (12D)
+│   ├── EmbeddingEngine.hpp/.cpp    # Local embedding model wrapper (12E)
+│   ├── SemanticIndex.hpp/.cpp      # Vector index for code chunks (HNSW) (12E)
+│   ├── CodeChunker.hpp/.cpp        # Split source files into semantic chunks (12E)
+│   └── grammars/                   # Bundled tree-sitter grammars (C/C++, Python, JS/TS, etc.)
 ├── team/
 │   ├── Team.hpp/.cpp               # Team lifecycle, agent registry
 │   ├── TeamAgent.hpp/.cpp          # Individual agent within a team
@@ -1517,4 +1811,5 @@ The roadmap is complete when a user can:
 9. Use MCP servers to extend the agent's capabilities
 10. Work through long sessions without context window issues
 11. Create a team of agents (`/team create`) with assigned roles and a leader, watch them collaborate on complex tasks, and receive a synthesized result
-12. Return to normal shell mode with `Escape` at any time
+12. Ask the agent to explore an unfamiliar codebase — it navigates symbols, outlines files, and answers questions without flooding the conversation with raw grep output
+13. Return to normal shell mode with `Escape` at any time
