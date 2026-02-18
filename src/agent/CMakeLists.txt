@@ -35,6 +35,7 @@ add_library(endo-agent STATIC
     tools/GlobTool.hpp tools/GlobTool.cpp
     tools/GrepTool.hpp tools/GrepTool.cpp
     tools/ShellExecuteTool.hpp tools/ShellExecuteTool.cpp
+    tools/EndoExecuteTool.hpp tools/EndoExecuteTool.cpp
     tools/GitTool.hpp tools/GitTool.cpp
     tools/SaveMemoryTool.hpp tools/SaveMemoryTool.cpp
 )
@@ -74,6 +75,7 @@ add_executable(test-endo-agent
     tools/GlobTool_test.cpp
     tools/GrepTool_test.cpp
     tools/ShellExecuteTool_test.cpp
+    tools/EndoExecuteTool_test.cpp
     tools/GitTool_test.cpp
     tools/SaveMemoryTool_test.cpp
     SlashCommandRegistry_test.cpp

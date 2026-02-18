@@ -51,6 +51,7 @@
 #include <agent/tools/GrepTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
 #include <agent/tools/SaveMemoryTool.hpp>
+#include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -1169,23 +1170,136 @@ void Shell::runAgentMode()
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
 
-    auto shellExecCb = [](std::string const& command,
-                          std::chrono::milliseconds timeout) -> agent::ShellExecResult {
-        auto const timeoutSec = std::chrono::duration_cast<std::chrono::seconds>(timeout).count();
-        auto const fullCommand = std::format("{} 2>&1", command);
-        auto* pipe = popen(fullCommand.c_str(), "r");
-        if (!pipe)
-            return agent::ShellExecResult { .output = "Failed to execute command", .exitCode = -1 };
+    // Resolve shell path: prefer bash, fall back to sh
+    auto const shellPath = [&]() -> std::string {
+        if (access("/bin/bash", X_OK) == 0)
+            return "/bin/bash";
+        if (access("/usr/bin/bash", X_OK) == 0)
+            return "/usr/bin/bash";
+        return "/bin/sh";
+    }();
+
+    auto shellExecCb = [shellPath](std::string const& command,
+                                    std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+        // Create pipe for capturing stdout+stderr
+        auto pipeFds = std::array<int, 2> {};
+        if (pipe(pipeFds.data()) != 0)
+            return agent::ShellExecResult { .output = "Failed to create pipe", .exitCode = -1 };
+
+        auto const pid = fork();
+        if (pid < 0)
+        {
+            close(pipeFds[0]);
+            close(pipeFds[1]);
+            return agent::ShellExecResult { .output = "Failed to fork process", .exitCode = -1 };
+        }
+
+        if (pid == 0)
+        {
+            // Child process: redirect stdout+stderr to pipe write-end
+            close(pipeFds[0]);
+            dup2(pipeFds[1], STDOUT_FILENO);
+            dup2(pipeFds[1], STDERR_FILENO);
+            close(pipeFds[1]);
+            execl(shellPath.c_str(), shellPath.c_str(), "-c", command.c_str(), nullptr);
+            _exit(127); // execl failed
+        }
+
+        // Parent process: read from pipe read-end
+        close(pipeFds[1]);
 
         auto output = std::string {};
         auto buffer = std::array<char, 4096> {};
-        while (auto const bytesRead = fread(buffer.data(), 1, buffer.size(), pipe))
-            output.append(buffer.data(), bytesRead);
+        auto const deadline = std::chrono::steady_clock::now() + timeout;
+        auto timedOut = false;
 
-        auto const status = pclose(pipe);
+        // Non-blocking read with timeout via poll()
+        auto pfd = pollfd { .fd = pipeFds[0], .events = POLLIN, .revents = 0 };
+        for (;;)
+        {
+            auto const remaining =
+                std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+            {
+                timedOut = true;
+                break;
+            }
+            auto const pollResult = poll(&pfd, 1, static_cast<int>(remaining.count()));
+            if (pollResult <= 0)
+            {
+                if (pollResult == 0)
+                    timedOut = true;
+                break;
+            }
+            auto const bytesRead = read(pipeFds[0], buffer.data(), buffer.size());
+            if (bytesRead <= 0)
+                break;
+            output.append(buffer.data(), static_cast<size_t>(bytesRead));
+        }
+        close(pipeFds[0]);
+
+        if (timedOut)
+        {
+            kill(pid, SIGKILL);
+            waitpid(pid, nullptr, 0);
+            return agent::ShellExecResult { .output = std::move(output), .exitCode = -1, .timedOut = true };
+        }
+
+        auto status = 0;
+        waitpid(pid, &status, 0);
         auto const exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 
         return agent::ShellExecResult { .output = std::move(output), .exitCode = exitCode };
+    };
+
+    auto endoExecCb = [this](std::string const& source,
+                             std::chrono::milliseconds /*timeout*/) -> agent::EndoExecResult {
+        // Create a temporary file for capturing output
+        auto* tmpFile = tmpfile();
+        if (!tmpFile)
+            return agent::EndoExecResult { .output = "Failed to create temporary file", .exitCode = -1 };
+
+        auto const tmpFd = fileno(tmpFile);
+
+        // Save original stdout/stderr
+        auto const savedStdout = dup(STDOUT_FILENO);
+        auto const savedStderr = dup(STDERR_FILENO);
+
+        // Redirect stdout/stderr to tmpfile
+        fflush(stdout);
+        fflush(stderr);
+        dup2(tmpFd, STDOUT_FILENO);
+        dup2(tmpFd, STDERR_FILENO);
+
+        // Execute the endo source
+        auto const exitCode = this->execute(source);
+
+        // Flush and restore stdout/stderr
+        fflush(stdout);
+        fflush(stderr);
+        dup2(savedStdout, STDOUT_FILENO);
+        dup2(savedStderr, STDERR_FILENO);
+        close(savedStdout);
+        close(savedStderr);
+
+        // Read captured output
+        fflush(tmpFile);
+        auto const outputSize = lseek(tmpFd, 0, SEEK_END);
+        lseek(tmpFd, 0, SEEK_SET);
+
+        auto output = std::string {};
+        if (outputSize > 0)
+        {
+            output.resize(static_cast<size_t>(outputSize));
+            auto const bytesRead = ::read(tmpFd, output.data(), output.size());
+            if (bytesRead >= 0)
+                output.resize(static_cast<size_t>(bytesRead));
+            else
+                output.clear();
+        }
+        fclose(tmpFile);
+
+        return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
 
     toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
@@ -1194,6 +1308,7 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::GlobTool>());
     toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
     toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
+    toolRegistry.registerTool(std::make_unique<agent::EndoExecuteTool>(endoExecCb));
     toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
     toolRegistry.registerTool(
         std::make_unique<agent::SaveMemoryTool>([this]() { _cachedProjectContext.reset(); }));
