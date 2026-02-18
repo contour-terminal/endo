@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <platform/EnvironmentProvider.hpp>
+
 #include <set>
 #include <string>
 #include <string_view>
@@ -8,8 +10,6 @@
 
 namespace endo
 {
-
-class EnvironmentProvider;
 
 /// @brief Type of command resolved.
 enum class CommandType

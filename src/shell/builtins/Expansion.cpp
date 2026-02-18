@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/GlobMatcher.hpp>
-#include <shell/Platform.hpp>
 #include <shell/Shell.hpp>
 
 #include <charconv>
 #include <cmath>
 #include <filesystem>
+
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <pwd.h>

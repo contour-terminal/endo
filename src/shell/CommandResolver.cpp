@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CommandResolver.hpp"
-#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <crispy/utils.h>
 
 #include <filesystem>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo
 {

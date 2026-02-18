@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Pipe.hpp>
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/Shell.hpp>
+
+#include <platform/Pipe.hpp>
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>

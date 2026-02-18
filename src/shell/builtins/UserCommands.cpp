@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/CommandResolver.hpp>
-#include <shell/Platform.hpp>
 #include <shell/Shell.hpp>
 
 #include <crispy/utils.h>
@@ -8,6 +7,8 @@
 #include <filesystem>
 #include <format>
 #include <print>
+
+#include <platform/Types.hpp>
 
 namespace endo
 {

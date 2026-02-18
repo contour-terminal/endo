@@ -3,8 +3,8 @@
 
 #include <string>
 
-#include "FileInfoProvider.hpp"
 #include "StructuredCommand.hpp"
+#include <platform/FileInfoProvider.hpp>
 
 namespace endo
 {

@@ -102,6 +102,13 @@ Windows support.
 - [x] Implement Linux/POSIX backend
 - [x] Add CMake configuration for platform-specific compilation
 - [x] Create Windows stubs (WindowsPipe, WindowsTTY, WindowsProcess)
+- [x] Consolidate into `endo-platform` static library (`endo::platform` namespace)
+  - [x] `PlatformError` enum replaces platform-related `ShellError` entries
+  - [x] Moved Process, Pipe, EnvironmentProvider, ProcessProvider, FileInfoProvider, SignalHandler
+  - [x] `SignalCallback` interface decouples SignalHandler from Shell
+  - [x] Mock classes for full test isolation (MockProcessManager, MockPipe, MockProcessProvider, MockFileInfoProvider)
+  - [x] 16 test cases (60 assertions) in `test-endo-platform`
+  - [x] Removed forwarding headers and orphaned source files from `src/shell/`
 - [ ] Implement Windows backend (ConPTY, CreateProcess) → Deferred to Milestone 4
 
 ### 0.3 Error Handling Modernization ✅

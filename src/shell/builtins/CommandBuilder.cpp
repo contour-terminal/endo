@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
-#include <shell/Pipe.hpp>
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/Shell.hpp>
 
 #include <endo-language/LogCategories.hpp>
@@ -12,6 +9,10 @@
 #include <filesystem>
 #include <format>
 #include <print>
+
+#include <platform/Pipe.hpp>
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
@@ -306,7 +307,7 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnCon
 
     auto spawnResult = _processManager.spawn(config);
     if (!spawnResult)
-        return std::unexpected(spawnResult.error());
+        return std::unexpected(toShellError(spawnResult.error()));
 
     ProcessId const pid = spawnResult.value();
     ProcessId const pgid = pid; // Child is process group leader
@@ -329,7 +330,7 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnCon
     }
 
     if (!waitResult)
-        return std::unexpected(waitResult.error());
+        return std::unexpected(toShellError(waitResult.error()));
 
     ForegroundResult result {
         .exitCode = waitResult->exitCode,
@@ -351,11 +352,11 @@ std::expected<Shell::ForegroundResult, ShellError> Shell::runForeground(SpawnCon
     // Windows: no job control, just spawn and wait
     auto spawnResult = _processManager.spawn(config);
     if (!spawnResult)
-        return std::unexpected(spawnResult.error());
+        return std::unexpected(toShellError(spawnResult.error()));
 
     auto waitResult = _processManager.wait(spawnResult.value());
     if (!waitResult)
-        return std::unexpected(waitResult.error());
+        return std::unexpected(toShellError(waitResult.error()));
 
     return ForegroundResult {
         .exitCode = waitResult->exitCode,

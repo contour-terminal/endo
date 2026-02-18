@@ -51,11 +51,6 @@ add_library(endo-shell STATIC
     PersistentHistory.cpp
     Job.hpp
     Job.cpp
-    Pipe.hpp
-    Pipe.cpp
-    Platform.hpp
-    Process.hpp
-    Process.cpp
     ProcessGroup.hpp
     Prompt.hpp
     Prompt.cpp
@@ -88,17 +83,13 @@ add_library(endo-shell STATIC
     SourceOffsetUtils.cpp
     SyntaxHighlighter.hpp
     SyntaxHighlighter.cpp
-    SignalHandler.hpp
-    SignalHandler.cpp
     Suggestions.hpp
     Suggestions.cpp
     TTY.hpp
     TTY.cpp
-    commands/ProcessProvider.hpp
     commands/StructuredCommand.hpp
     commands/PsCommand.hpp
     commands/PsCommand.cpp
-    commands/FileInfoProvider.hpp
     commands/LsCommand.hpp
     commands/LsCommand.cpp
     commands/JobProvider.hpp
@@ -131,8 +122,6 @@ add_library(endo-shell STATIC
     OutputDefinitionRegistry.cpp
     OutputParser.hpp
     OutputParser.cpp
-    platform/EnvironmentProvider.hpp
-    platform/TestEnvironmentProvider.hpp
     TableFormatter.hpp
     TableFormatter.cpp
 )
@@ -140,25 +129,8 @@ add_library(endo-shell STATIC
 # Platform-specific implementations
 if(WIN32)
     target_sources(endo-shell PRIVATE
-        platform/WindowsPipe.cpp
         platform/WindowsTTY.cpp
         platform/WindowsTestPTY.cpp
-        platform/WindowsProcess.cpp
-        platform/WindowsEnvironmentProvider.hpp
-        platform/WindowsEnvironmentProvider.cpp
-        platform/WindowsProcessProvider.hpp
-        platform/WindowsProcessProvider.cpp
-        platform/WindowsFileInfoProvider.hpp
-        platform/WindowsFileInfoProvider.cpp
-    )
-else()
-    target_sources(endo-shell PRIVATE
-        platform/PosixEnvironmentProvider.hpp
-        platform/PosixEnvironmentProvider.cpp
-        platform/LinuxProcessProvider.hpp
-        platform/LinuxProcessProvider.cpp
-        platform/LinuxFileInfoProvider.hpp
-        platform/LinuxFileInfoProvider.cpp
     )
 endif()
 
@@ -172,7 +144,7 @@ else()
     target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
 endif()
 
-target_link_libraries(endo-shell PUBLIC yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http endo-agent)
+target_link_libraries(endo-shell PUBLIC endo-platform yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http endo-agent)
 
 # C++23 std::stacktrace may require -lstdc++exp (GCC/Clang with libstdc++)
 include(CheckCXXSourceCompiles)

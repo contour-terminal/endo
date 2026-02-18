@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Platform.hpp>
 #include <shell/Shell.hpp>
 
 #include <filesystem>
 #include <format>
+
+#include <platform/Types.hpp>
 
 namespace endo
 {

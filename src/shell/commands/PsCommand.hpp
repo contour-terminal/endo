@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "ProcessProvider.hpp"
 #include "StructuredCommand.hpp"
+#include <platform/ProcessProvider.hpp>
 
 namespace endo
 {

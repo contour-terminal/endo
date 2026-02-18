@@ -22,7 +22,7 @@ using crispy::escape;
 #include "Shell.hpp"
 #include "TTY.hpp"
 #include "TableFormatter.hpp"
-#include "platform/TestEnvironmentProvider.hpp"
+#include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
 {
@@ -2508,8 +2508,8 @@ TEST_CASE("table.terminalWidth.minimum_column_width")
 // Partial-line indicator
 // ============================================================================
 
-#include "Pipe.hpp"
 #include "Prompt.hpp"
+#include <platform/Pipe.hpp>
 
 namespace
 {

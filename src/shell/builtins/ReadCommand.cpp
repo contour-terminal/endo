@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
 
@@ -8,6 +6,9 @@
 #include <format>
 #include <iostream>
 #include <print>
+
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <poll.h>

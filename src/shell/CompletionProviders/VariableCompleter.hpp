@@ -2,10 +2,11 @@
 #pragma once
 
 #include <shell/CompletionProvider.hpp>
-#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <string>
 #include <vector>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo
 {

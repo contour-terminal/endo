@@ -11,7 +11,7 @@
 #include <thread>
 
 #include "Error.hpp"
-#include "Platform.hpp"
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/ioctl.h>
@@ -171,7 +171,7 @@ class WindowsTestPTY final: public TTY
 
 using TestPTY = WindowsTestPTY;
 
-#else // POSIX
+#else  // POSIX
 
 void setRawMode(NativeHandle fd);
 

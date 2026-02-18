@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/Shell.hpp>
 
 #include <chrono>
@@ -10,6 +8,9 @@
 #include <thread>
 
 #include <fcntl.h>
+
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
 
 namespace
 {

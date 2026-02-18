@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "Error.hpp"
-#include "Platform.hpp"
+#include <platform/Types.hpp>
 
 namespace endo
 {

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/Platform.hpp>
 #include <shell/Shell.hpp>
 #include <shell/TableFormatter.hpp>
 
@@ -12,6 +11,8 @@
 #include <filesystem>
 #include <format>
 #include <print>
+
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <unistd.h>

@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <expected>
+#include <platform/PlatformError.hpp>
+#include <platform/WaitResult.hpp>
+
 #include <string_view>
 
 namespace endo
 {
 
-/// Shell error codes for operations that can fail
+/// Shell error codes for operations that can fail.
+///
+/// Platform-level errors (fork, pipe, file I/O) are in endo::platform::PlatformError.
+/// This enum retains shell-specific errors and platform-error aliases for backward compatibility.
 enum class ShellError
 {
-    // Process errors
+    // Process errors (aliases for backward compat — prefer PlatformError for new code)
     ForkFailed,
     ExecFailed,
     WaitFailed,
@@ -59,13 +64,30 @@ enum class ShellError
     return "unknown error";
 }
 
-/// Result of waiting for a process to complete.
-struct WaitResult
+/// Converts a PlatformError to a ShellError for backward compatibility.
+///
+/// @param error The platform error to convert
+/// @return The corresponding ShellError
+[[nodiscard]] constexpr ShellError toShellError(platform::PlatformError error) noexcept
 {
-    int exitCode = 0;      ///< Exit code of the process
-    bool signaled = false; ///< Whether the process was terminated by a signal
-    bool stopped = false;  ///< Whether the process was stopped (SIGTSTP/SIGSTOP)
-    int signal = 0;        ///< Signal number if signaled or stopped is true
-};
+    switch (error)
+    {
+        case platform::PlatformError::ForkFailed: return ShellError::ForkFailed;
+        case platform::PlatformError::ExecFailed: return ShellError::ExecFailed;
+        case platform::PlatformError::WaitFailed: return ShellError::WaitFailed;
+        case platform::PlatformError::ProgramNotFound: return ShellError::ProgramNotFound;
+        case platform::PlatformError::PipeCreationFailed: return ShellError::PipeCreationFailed;
+        case platform::PlatformError::HandleDuplicationFailed: return ShellError::HandleDuplicationFailed;
+        case platform::PlatformError::FileNotFound: return ShellError::FileNotFound;
+        case platform::PlatformError::PermissionDenied: return ShellError::PermissionDenied;
+        case platform::PlatformError::IoError: return ShellError::IoError;
+        case platform::PlatformError::SignalFailed: return ShellError::ExecutionFailed;
+        case platform::PlatformError::SessionCreationFailed: return ShellError::ForkFailed;
+        case platform::PlatformError::ProcessGroupFailed: return ShellError::ExecutionFailed;
+        case platform::PlatformError::TerminalControlFailed: return ShellError::ExecutionFailed;
+        case platform::PlatformError::NotImplemented: return ShellError::NotImplemented;
+    }
+    return ShellError::ExecutionFailed;
+}
 
 } // namespace endo

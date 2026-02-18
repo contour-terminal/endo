@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
-#include <shell/Platform.hpp>
 #include <shell/TTY.hpp>
 
 #include <chrono>
@@ -10,6 +9,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <platform/Types.hpp>
 
 #if defined(_WIN32)
     #include <windows.h>

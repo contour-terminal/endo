@@ -4,15 +4,14 @@
 #include <shell/CompletionProvider.hpp>
 #include <shell/CompletionProviders/BuiltinArgumentCompleter.hpp>
 #include <shell/CompletionProviders/CommandCompleter.hpp>
+#include <shell/CompletionProviders/CommandSpecCompleter.hpp>
 #include <shell/CompletionProviders/FSharpCompleter.hpp>
 #include <shell/CompletionProviders/FileCompleter.hpp>
-#include <shell/CompletionProviders/CommandSpecCompleter.hpp>
 #include <shell/CompletionProviders/HistoryCompleter.hpp>
 #include <shell/CompletionProviders/LetBindingCompleter.hpp>
 #include <shell/CompletionProviders/OptionCompleter.hpp>
 #include <shell/CompletionProviders/VariableCompleter.hpp>
 #include <shell/History.hpp>
-#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <endo-language/CompletionContext.hpp>
 
@@ -21,6 +20,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo
 {

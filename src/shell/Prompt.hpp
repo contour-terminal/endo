@@ -14,7 +14,7 @@
 #include <set>
 #include <string>
 
-#include "Platform.hpp"
+#include <platform/Types.hpp>
 
 namespace endo
 {

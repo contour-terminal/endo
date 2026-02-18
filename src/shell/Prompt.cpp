@@ -8,9 +8,9 @@
 #include "PromptComponent.hpp"
 #include "SyntaxHighlighter.hpp"
 #if defined(_WIN32)
-    #include "platform/WindowsEnvironmentProvider.hpp"
+    #include <platform/windows/WindowsEnvironmentProvider.hpp>
 #else
-    #include "platform/PosixEnvironmentProvider.hpp"
+    #include <platform/posix/PosixEnvironmentProvider.hpp>
 #endif
 
 namespace endo
@@ -226,9 +226,8 @@ std::string Prompt::read()
                     // Move cursor up to the top of the prompt and clear from there,
                     // so the agent prompt can replace the shell prompt in-place.
                     auto& out = _terminal.output();
-                    auto const rowsUp = _promptComponent->topPadding()
-                                      + _promptComponent->chromeHeight()
-                                      + _promptComponent->inputField().cursorLine();
+                    auto const rowsUp = _promptComponent->topPadding() + _promptComponent->chromeHeight()
+                                        + _promptComponent->inputField().cursorLine();
                     if (rowsUp > 0)
                         out.moveUp(rowsUp);
                     out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
@@ -365,9 +364,8 @@ std::optional<std::string> Prompt::processInput()
                 // Move cursor up to the top of the prompt and clear from there,
                 // so the agent prompt can replace the shell prompt in-place.
                 auto& out = _terminal.output();
-                auto const rowsUp = _promptComponent->topPadding()
-                                  + _promptComponent->chromeHeight()
-                                  + _promptComponent->inputField().cursorLine();
+                auto const rowsUp = _promptComponent->topPadding() + _promptComponent->chromeHeight()
+                                    + _promptComponent->inputField().cursorLine();
                 if (rowsUp > 0)
                     out.moveUp(rowsUp);
                 out.writeRaw("\r\033[J"); // CR + clear cursor to end of display

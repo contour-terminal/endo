@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/CommandResolver.hpp>
 #include <shell/OutputParser.hpp>
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/PromptPresets.hpp>
 #include <shell/Shell.hpp>
 #include <shell/commands/JobsCommand.hpp>
@@ -11,12 +9,15 @@
 
 #include <endo-language/BuiltinImpls.hpp>
 
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
+
 #if defined(_WIN32)
-    #include <shell/platform/WindowsFileInfoProvider.hpp>
-    #include <shell/platform/WindowsProcessProvider.hpp>
+    #include <platform/windows/WindowsFileInfoProvider.hpp>
+    #include <platform/windows/WindowsProcessProvider.hpp>
 #else
-    #include <shell/platform/LinuxFileInfoProvider.hpp>
-    #include <shell/platform/LinuxProcessProvider.hpp>
+    #include <platform/linux/LinuxFileInfoProvider.hpp>
+    #include <platform/linux/LinuxProcessProvider.hpp>
 #endif
 
 #include <algorithm>

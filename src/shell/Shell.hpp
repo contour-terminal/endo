@@ -2,11 +2,9 @@
 #pragma once
 
 #include <shell/ProcessGroup.hpp>
-#include <shell/platform/EnvironmentProvider.hpp>
 
 #include <endo-language/IRGenerator.hpp>
 
-#include <agent/ProjectContextLoader.hpp>
 #include <http/HttpClient.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -22,6 +20,9 @@
 #include <string>
 #include <vector>
 
+#include <agent/ProjectContextLoader.hpp>
+#include <platform/EnvironmentProvider.hpp>
+
 namespace endo::agent
 {
 class AgentSession;
@@ -33,11 +34,11 @@ class ProviderFactory;
 #include "Job.hpp"
 #include "OutputDefinitionRegistry.hpp"
 #include "PersistentHistory.hpp"
-#include "Pipe.hpp"
-#include "Process.hpp"
 #include "Prompt.hpp"
-#include "SignalHandler.hpp"
 #include "TTY.hpp"
+#include <platform/Pipe.hpp>
+#include <platform/Process.hpp>
+#include <platform/SignalHandler.hpp>
 
 namespace endo
 {
@@ -56,11 +57,11 @@ struct ReadOptions
     std::vector<std::string> variableNames;           ///< VAR1 VAR2 ...
 };
 
-class Shell final
+class Shell final: public SignalCallback
 {
   public:
     Shell();
-    ~Shell();
+    ~Shell() override;
 
     Shell(TTY& tty, EnvironmentProvider& env);
 
@@ -82,7 +83,7 @@ class Shell final
     int execute(std::string const& lineBuffer);
 
     /// Called when SIGCHLD is received to reap child processes.
-    void onSigchld();
+    void onSigchld() override;
 
     /// Called when SIGTSTP is received to suspend the shell.
     ///
@@ -94,13 +95,13 @@ class Shell final
     /// 1. Restore terminal to cooked mode (disable raw mode and protocols)
     /// 2. Re-raise SIGTSTP with default handling to actually stop
     /// 3. After resume, restore terminal to raw mode and redraw
-    void onSigtstp();
+    void onSigtstp() override;
 
     /// Called when SIGCONT is received after being stopped.
     ///
     /// This is triggered when the shell is resumed after being stopped.
     /// The shell will restore terminal state and redraw the prompt.
-    void onSigcont();
+    void onSigcont() override;
 
     /// Reports status of completed/stopped background jobs to the user.
     void reportJobStatus();
@@ -277,8 +278,9 @@ class Shell final
     std::unique_ptr<http::HttpClient> _agentHttpClient;
     std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
     std::unique_ptr<agent::AgentSession> _agentSession;
-    std::optional<agent::ProjectContext> _cachedProjectContext; ///< Cached project context for agent mode re-entry.
-    std::filesystem::path _cachedProjectContextCwd;            ///< CWD associated with cached project context.
+    std::optional<agent::ProjectContext>
+        _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
+    std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

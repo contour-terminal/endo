@@ -3,7 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "Completer.hpp"
-#include "platform/TestEnvironmentProvider.hpp"
+#include <platform/testing/TestEnvironmentProvider.hpp>
 
 using namespace std::string_literals;
 

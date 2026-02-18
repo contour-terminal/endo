@@ -28,11 +28,7 @@
 #include <unordered_set>
 
 #include "Error.hpp"
-#include "Pipe.hpp"
-#include "Platform.hpp"
-#include "Process.hpp"
 #include "Prompt.hpp"
-#include "SignalHandler.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
 #include <agent/AgentInputComponent.hpp>
@@ -57,8 +53,12 @@
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tools/WriteFileTool.hpp>
 #include <nlohmann/json.hpp>
+#include <platform/Pipe.hpp>
+#include <platform/Process.hpp>
+#include <platform/SignalHandler.hpp>
+#include <platform/Types.hpp>
 #if defined(_WIN32)
-    #include "platform/WindowsEnvironmentProvider.hpp"
+    #include <platform/windows/WindowsEnvironmentProvider.hpp>
 #else
     #include <cerrno>
     #include <csignal>
@@ -69,7 +69,7 @@
     #include <poll.h>
     #include <unistd.h>
 
-    #include "platform/PosixEnvironmentProvider.hpp"
+    #include <platform/posix/PosixEnvironmentProvider.hpp>
 #endif
 
 namespace

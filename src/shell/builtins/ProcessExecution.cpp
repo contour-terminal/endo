@@ -1,7 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
-#include <shell/Platform.hpp>
-#include <shell/Process.hpp>
 #include <shell/Shell.hpp>
 
 #include <endo-language/LogCategories.hpp>
@@ -10,6 +8,9 @@
 
 #include <format>
 #include <print>
+
+#include <platform/Process.hpp>
+#include <platform/Types.hpp>
 
 #if !defined(_WIN32)
     #include <sys/wait.h>
