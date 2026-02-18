@@ -974,6 +974,19 @@ Component (base class)
   - [x] Normal messages route through `processMessageForPlan()` when plan mode active
   - [x] Plan-result handling extracted to lambda (shared by `/plan <task>` and persistent mode)
 
+### Phase 3.10: Agent Tool Improvements ✅
+
+**Dependency:** Phase 3.1
+
+**Tasks:**
+- [x] `shell_execute` rewritten to use `fork/exec` with explicit `bash` (fallback to `/bin/sh`)
+  - [x] Proper timeout support via `poll()` polling loop with `SIGKILL` on timeout
+  - [x] Command passed as single `execl` argument — no shell expansion quoting issues
+- [x] `EndoExecuteTool` (`endo_execute`): evaluates endo source code directly and returns captured output
+  - [x] Callback captures stdout/stderr via `tmpfile()` + `dup2()` redirection
+  - [x] Excluded from plan mode's allowed tools (can execute shell commands with side effects)
+  - [x] Unit tests with mock callbacks (7 test cases, 18 assertions)
+
 ---
 
 ## Milestone 4: Windows Support
