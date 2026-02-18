@@ -822,7 +822,9 @@ Component (base class)
 - `PromptComponent` overrides `onHover()` with the priority chain: diagnostics → language hover → command resolver
 - Tooltip automatically hides when user starts typing (via `Screen::dispatchKeyEvent`); all events
   (not just mouse) are routed through `Screen::dispatchEvent()` so key presses auto-hide tooltips
-  without PromptComponent needing any tooltip-awareness
+  without PromptComponent needing any tooltip-awareness.
+  `PromptComponent` does **not** override `onEvent()` — key processing is handled solely by
+  `Prompt::read()` calling `processInput()`, avoiding double-dispatch through the event bubble chain.
 - `onHover()` returns the position of the hovered element (not where the tooltip should appear);
   `showTooltip()` adds the +1 row offset for "below cursor" placement
 - Inline mode coordinate tracking handles content shifts caused by tooltip/popup rendering:
