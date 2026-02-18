@@ -1012,6 +1012,25 @@ Component (base class)
 - [x] Shell integration: tool registered in `runAgentMode()`, explore prompt set alongside main prompt
 - [x] Comprehensive tests (13 test cases, 40 assertions): schema, error handling, tool isolation, provider errors
 
+### Phase 3.12: Agent Conversation Persistence & Ghost Text
+
+- [x] `ConversationHistoryStore`: JSON persistence for agent conversation history
+  - [x] Atomic write (`.tmp` + rename), version-stamped format, system prompt exclusion
+  - [x] Load on agent mode startup, save after each exchange
+  - [x] Comprehensive tests (12 test cases): round-trip all block types, base64 image encoding, corrupt JSON, missing version, atomic write verification
+- [x] `AgentHistoryProvider`: completion provider for previous user queries
+  - [x] Prefix and fuzzy matching with recency scoring (most recent = highest)
+  - [x] Deduplication, slash command exclusion, smart case matching
+  - [x] Comprehensive tests (11 test cases): prefix/fuzzy matching, recency ordering, deduplication, edge cases
+- [x] Ghost text support in `AgentInputComponent`
+  - [x] Debounced ghost text updates (100ms), suggest cache for performance
+  - [x] Tab accepts ghost text, Right/End at end of line accepts ghost text
+  - [x] Clear ghost text on text change, Escape, Submit, Abort
+- [x] `/reset` slash command: clears in-memory history, removes persisted file, resets provider entries
+- [x] `AgentSession::loadPersistedMessages()` for history restoration
+- [x] Up/Down history navigation fed from persisted queries via `InputField::addHistory()`
+- [x] Event loop poll timeout respects ghost text debounce for responsive updates
+
 ---
 
 ## Milestone 4: Windows Support
