@@ -151,8 +151,8 @@ void InputField::render(Canvas& canvas)
                 auto pNext = pIt;
                 ++pNext;
                 char const* pStart = pIt._clusterStart;
-                char const* pEnd = (pNext != promptSeg.end()) ? pNext._clusterStart
-                                                              : (_prompt.data() + _prompt.size());
+                char const* pEnd =
+                    (pNext != promptSeg.end()) ? pNext._clusterStart : (_prompt.data() + _prompt.size());
                 Style pStyle = textStyle;
                 if (_textDecorator)
                 {
@@ -277,6 +277,20 @@ void InputField::render(Canvas& canvas)
             ++globalGraphemeBase;
     }
 
+    // Compute auto-continuation string when no explicit continuation prompt is set.
+    // This pads continuation lines with spaces matching the prompt's display width,
+    // so multiline text aligns with the first line's content.
+    auto autoContinuation = std::string {};
+    if (_continuationPrompt.empty() && !_prompt.empty())
+    {
+        auto seg = unicode::utf8_grapheme_segmenter(_prompt);
+        int w = 0;
+        for (auto it = seg.begin(); it != seg.end(); ++it)
+            w += graphemeClusterWidth(*it);
+        autoContinuation.assign(static_cast<std::size_t>(w), ' ');
+    }
+    auto const& effectiveContinuation = _continuationPrompt.empty() ? autoContinuation : _continuationPrompt;
+
     auto const lastVisibleLine = std::min(totalLines, _scrollOffset + height);
     for (int lineIndex = _scrollOffset; lineIndex < lastVisibleLine; ++lineIndex)
     {
@@ -301,7 +315,7 @@ void InputField::render(Canvas& canvas)
 
         // Render prompt (first visible line) or continuation prompt with per-column decorator bg
         {
-            auto const& promptStr = (lineIndex == 0) ? _prompt : _continuationPrompt;
+            auto const& promptStr = (lineIndex == 0) ? _prompt : effectiveContinuation;
             if (!promptStr.empty())
             {
                 auto promptSeg = unicode::utf8_grapheme_segmenter(promptStr);
@@ -310,17 +324,15 @@ void InputField::render(Canvas& canvas)
                     auto pNext = pIt;
                     ++pNext;
                     char const* pStart = pIt._clusterStart;
-                    char const* pEnd = (pNext != promptSeg.end())
-                                           ? pNext._clusterStart
-                                           : (promptStr.data() + promptStr.size());
+                    char const* pEnd = (pNext != promptSeg.end()) ? pNext._clusterStart
+                                                                  : (promptStr.data() + promptStr.size());
                     Style pStyle = textStyle;
                     if (_textDecorator)
                     {
                         if (auto bg = _textDecorator->background(col))
                             pStyle.bg = *bg;
                     }
-                    auto const pView =
-                        std::string_view(pStart, static_cast<std::size_t>(pEnd - pStart));
+                    auto const pView = std::string_view(pStart, static_cast<std::size_t>(pEnd - pStart));
                     col += canvas.putString(row, col, pView, pStyle);
                 }
             }

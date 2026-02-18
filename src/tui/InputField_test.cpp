@@ -1386,6 +1386,34 @@ TEST_CASE("InputField.multiline_continuation_prompt")
 // TextDecorator tests
 // ============================================================================
 
+TEST_CASE("InputField.multiline_auto_continuation_alignment")
+{
+    // When no continuation prompt is set, continuation lines should auto-align
+    // to the same column as the first line's text (spaces matching prompt width).
+    InputField field;
+    field.setMultiline(true);
+    field.setPrompt("> "); // 2-column prompt, NO setContinuationPrompt call
+    field.setText("aaa\nbbb\nccc");
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Row 0: "> aaa" — text starts at col 2
+    CHECK(buf.at(0, 0).grapheme == ">");
+    CHECK(buf.at(0, 2).grapheme == "a");
+    // Row 1: "  bbb" — auto-continuation: 2 spaces, text at col 2
+    CHECK(buf.at(1, 0).grapheme == " ");
+    CHECK(buf.at(1, 1).grapheme == " ");
+    CHECK(buf.at(1, 2).grapheme == "b");
+    // Row 2: "  ccc" — same alignment
+    CHECK(buf.at(2, 0).grapheme == " ");
+    CHECK(buf.at(2, 1).grapheme == " ");
+    CHECK(buf.at(2, 2).grapheme == "c");
+}
+
 TEST_CASE("InputField.decorator_foreground_applied")
 {
     // Simple decorator that colors the first grapheme red
