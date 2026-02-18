@@ -12,6 +12,7 @@
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
+#include <tui/TextDecorator.hpp>
 
 #include <chrono>
 #include <memory>
@@ -262,7 +263,29 @@ class PromptComponent: public tui::Component
 
     // Syntax highlighting cache (avoids re-tokenizing on every render)
     std::string _highlightCacheText;               ///< Input text that _highlightCacheMap corresponds to.
-    std::vector<TokenCategory> _highlightCacheMap; ///< Cached per-byte highlight map.
+    std::vector<TokenCategory> _highlightCacheMap; ///< Cached per-grapheme highlight map.
+
+    /// @brief Text decorator that provides syntax highlighting, error underlines, and aurora backgrounds.
+    ///
+    /// Populated before each render frame and passed to InputField via setTextDecorator().
+    /// Uses per-grapheme highlight map and error map, plus per-column aurora background.
+    class PromptTextDecorator: public tui::TextDecorator
+    {
+      public:
+        std::vector<TokenCategory> const* highlightMap = nullptr; ///< Per-grapheme TokenCategory.
+        std::vector<bool> const* errorMap = nullptr;              ///< Per-grapheme error flags.
+        std::vector<tui::RgbColor> const* bgColors = nullptr;     ///< Aurora gradient (per display col).
+        tui::RgbColor flatBg {};                                  ///< Fallback background color.
+        int bgOffset = 0;                                         ///< Column offset into bgColors.
+        tui::Theme const* theme = nullptr;
+
+        [[nodiscard]] auto foreground(tui::TextPosition pos) const -> std::optional<tui::RgbColor> override;
+        [[nodiscard]] auto underline(tui::TextPosition pos) const
+            -> std::optional<UnderlineDecoration> override;
+        [[nodiscard]] auto background(int displayCol) const -> std::optional<tui::RgbColor> override;
+    };
+
+    PromptTextDecorator _decorator; ///< Decorator instance, populated per render frame.
 
     // Deferred update flags (set during batch, flushed once before draw)
     bool _ghostTextDirty = false;       ///< Ghost text needs recomputation.
@@ -277,6 +300,7 @@ class PromptComponent: public tui::Component
     std::optional<std::string> _suggestCacheResult; ///< Cached suggestion (nullopt = no suggestion).
 
     // Diagnostics cache for parse error underlines
+    std::vector<bool> _errorMap; ///< Per-grapheme error flags for current input.
     std::vector<endo::DiagnosticMessage> _diagnostics;
     std::string _diagnosticsContent;         ///< Input text that _diagnostics corresponds to.
     std::set<std::string> _knownFSharpNames; ///< Persisted F# names from prior REPL prompts.

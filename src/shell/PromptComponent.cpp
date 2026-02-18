@@ -44,6 +44,41 @@ using tui::operator""_rgb;
 namespace endo
 {
 
+// ============================================================================
+// PromptTextDecorator implementation
+// ============================================================================
+
+auto PromptComponent::PromptTextDecorator::foreground(tui::TextPosition pos) const
+    -> std::optional<tui::RgbColor>
+{
+    if (highlightMap && pos.graphemeIndex < highlightMap->size() && theme)
+        return categoryColor((*highlightMap)[pos.graphemeIndex], *theme);
+    return {};
+}
+
+auto PromptComponent::PromptTextDecorator::underline(tui::TextPosition pos) const
+    -> std::optional<UnderlineDecoration>
+{
+    if (errorMap && pos.graphemeIndex < errorMap->size() && (*errorMap)[pos.graphemeIndex])
+    {
+        using tui::operator""_rgb;
+        return UnderlineDecoration { .style = tui::UnderlineStyle::Curly, .color = 0xC0C000_rgb };
+    }
+    return {};
+}
+
+auto PromptComponent::PromptTextDecorator::background(int displayCol) const -> std::optional<tui::RgbColor>
+{
+    auto const idx = displayCol + bgOffset;
+    if (bgColors && !bgColors->empty() && idx >= 0 && idx < static_cast<int>(bgColors->size()))
+        return (*bgColors)[static_cast<std::size_t>(idx)];
+    return flatBg;
+}
+
+// ============================================================================
+// PromptComponent
+// ============================================================================
+
 PromptComponent::PromptComponent()
 {
     _inputField.setPrompt(""); // We handle prompt rendering ourselves
@@ -349,11 +384,6 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Get selection bounds
-    auto const hasSelection = _inputField.hasSelection();
-    auto const selStart = _inputField.selectionStart();
-    auto const selEnd = _inputField.selectionEnd();
-
     // Compute syntax highlighting for the full input text (cached)
     auto const fullText = _inputField.text();
     if (fullText != _highlightCacheText)
@@ -361,31 +391,42 @@ void PromptComponent::render(tui::Canvas& canvas)
         _highlightCacheText = std::string(fullText);
         _highlightCacheMap = computeHighlightMap(fullText);
     }
-    auto const& highlightMap = _highlightCacheMap;
 
-    // Compute diagnostics and build per-byte error map
+    // Compute diagnostics and build per-grapheme error map
     updateDiagnostics();
-    auto errorMap = std::vector<bool>(fullText.size(), false);
-    if (!_diagnostics.empty())
     {
-        auto const lineStarts = buildLineStartOffsets(fullText);
-        for (auto const& diag: _diagnostics)
+        // Build per-byte error flags first, then compress to per-grapheme
+        auto byteErrors = std::vector<bool>(fullText.size(), false);
+        if (!_diagnostics.empty())
         {
-            if (diag.severity != DiagnosticSeverity::Error && diag.severity != DiagnosticSeverity::Warning)
-                continue;
-            auto const startByte = positionToByteOffset(fullText, lineStarts, diag.range.start);
-            auto const endByte = positionToByteOffset(fullText, lineStarts, diag.range.end);
-            for (auto i = startByte; i < endByte && i < errorMap.size(); ++i)
-                errorMap[i] = true;
+            auto const lineStarts = buildLineStartOffsets(fullText);
+            for (auto const& diag: _diagnostics)
+            {
+                if (diag.severity != DiagnosticSeverity::Error
+                    && diag.severity != DiagnosticSeverity::Warning)
+                    continue;
+                auto const startByte = positionToByteOffset(fullText, lineStarts, diag.range.start);
+                auto const endByte = positionToByteOffset(fullText, lineStarts, diag.range.end);
+                for (auto i = startByte; i < endByte && i < byteErrors.size(); ++i)
+                    byteErrors[i] = true;
+            }
+        }
+        // Compress to per-grapheme: check error flag at each cluster's first byte
+        _errorMap.clear();
+        _errorMap.reserve(fullText.size());
+        auto errSegmenter = unicode::utf8_grapheme_segmenter(fullText);
+        for (auto it = errSegmenter.begin(); it != errSegmenter.end(); ++it)
+        {
+            auto const byteOffset = static_cast<std::size_t>(it._clusterStart - fullText.data());
+            _errorMap.push_back(byteOffset < byteErrors.size() && byteErrors[byteOffset]);
         }
     }
 
-    // Render each input line (offset by top padding + aurora + chrome height)
+    // Render left chrome for each input line
     for (int lineIndex = 0; lineIndex < totalLines && (lineIndex + inputStartRow) < canvas.height();
          ++lineIndex)
     {
         auto const row = lineIndex + inputStartRow;
-        auto const lineContent = _inputField.lineAt(lineIndex);
 
         // Fill content area with background (with margins)
         if (hasAurora)
@@ -436,129 +477,54 @@ void PromptComponent::render(tui::Canvas& canvas)
             padStyle.bg = bgAt(padCol);
             canvas.put(row, padCol, " ", padStyle);
         }
-
-        // Prompt or continuation indicator
-        auto col = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
-        if (lineIndex == 0)
-        {
-            promptStyle.bg = bgAt(col);
-            col += canvas.putString(row, col, _promptStr, promptStyle);
-        }
-        else
-        {
-            // Continuation indicator: spaces + middle dots
-            for (int i = 0; i < promptTextWidth - 2; ++i)
-            {
-                tui::Style spStyle;
-                spStyle.bg = bgAt(col);
-                canvas.put(row, col++, " ", spStyle);
-            }
-            promptStyle.bg = bgAt(col);
-            col += canvas.putString(row, col, "\xc2\xb7\xc2\xb7", promptStyle); // ··
-        }
-
-        // Calculate byte offset of this line's start in the buffer
-        std::size_t lineStartByte = 0;
-        {
-            auto const text = _inputField.text();
-            std::size_t pos = 0;
-            int currentLine = 0;
-            while (pos < text.size() && currentLine < lineIndex)
-            {
-                if (text[pos] == '\n')
-                    ++currentLine;
-                ++pos;
-            }
-            lineStartByte = pos;
-        }
-        auto const lineEndByte = lineStartByte + lineContent.size();
-
-        // Render line content with syntax highlighting, selection, and error underlines
-        {
-            // Determine selection range local to this line
-            auto const lineSelStart = (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
-                                          ? std::max(selStart, lineStartByte) - lineStartByte
-                                          : lineContent.size();
-            auto const lineSelEnd = (hasSelection && selStart < lineEndByte && selEnd > lineStartByte)
-                                        ? std::min(selEnd, lineEndByte) - lineStartByte
-                                        : lineContent.size();
-
-            // Iterate line content, grouping consecutive bytes with same category, selection, and error state
-            std::size_t segStart = 0;
-            while (segStart < lineContent.size())
-            {
-                auto const globalByte = lineStartByte + segStart;
-                auto const cat =
-                    (globalByte < highlightMap.size()) ? highlightMap[globalByte] : TokenCategory::Default;
-                auto const selected = segStart >= lineSelStart && segStart < lineSelEnd;
-                auto const hasError = globalByte < errorMap.size() && errorMap[globalByte];
-
-                // Extend segment while category, selection state, and error state remain the same
-                auto segEnd = segStart + 1;
-                while (segEnd < lineContent.size())
-                {
-                    auto const gb = lineStartByte + segEnd;
-                    auto const nextCat =
-                        (gb < highlightMap.size()) ? highlightMap[gb] : TokenCategory::Default;
-                    auto const nextSel = segEnd >= lineSelStart && segEnd < lineSelEnd;
-                    auto const nextErr = gb < errorMap.size() && errorMap[gb];
-                    if (nextCat != cat || nextSel != selected || nextErr != hasError)
-                        break;
-                    ++segEnd;
-                }
-
-                // Build style for this segment
-                tui::Style segStyle;
-                segStyle.fg = categoryColor(cat);
-                segStyle.bg = bgAt(col);
-                segStyle.inverse = selected;
-
-                // Apply curly red underline for error regions
-                if (hasError)
-                {
-                    segStyle.underlineStyle = tui::UnderlineStyle::Curly;
-                    segStyle.underlineColor = 0xC0C000_rgb; // Yellow color for errors (stands out on both
-                                                            // light and dark backgrounds)
-                }
-
-                col += canvas.putString(row, col, lineContent.substr(segStart, segEnd - segStart), segStyle);
-                segStart = segEnd;
-            }
-        }
-
-        // Ghost text on last line
-        if (!_inputField.ghostText().empty() && lineIndex == totalLines - 1)
-        {
-            ghostStyle.bg = bgAt(col);
-            canvas.putString(row, col, _inputField.ghostText(), ghostStyle);
-        }
     }
 
-    // Position cursor (add top padding + aurora + chrome height offset)
-    auto const cursorLine = _inputField.cursorLine();
-    auto const cursorColumn = _inputField.cursorColumn();
-    auto const cursorRow = cursorLine + inputStartRow;
-
-    // Calculate cursor display position (including left margin)
-    auto const lineContent = _inputField.lineAt(cursorLine);
-    int displayCol = totalPromptWidth;
-
-    // Count display width up to cursor column (in graphemes)
-    auto segmenter = unicode::utf8_grapheme_segmenter(lineContent);
-    int graphemeIndex = 0;
-    for (auto const& cluster: segmenter)
+    // Build continuation prompt string: spaces + middle dots (matching prompt width)
+    auto continuationStr = std::string {};
     {
-        if (graphemeIndex >= cursorColumn)
-            break;
-        displayCol += tui::graphemeClusterWidth(cluster);
-        ++graphemeIndex;
+        auto const contSpaces = std::max(0, promptTextWidth - 2);
+        continuationStr.reserve(static_cast<std::size_t>(contSpaces) + 4);
+        for (int i = 0; i < contSpaces; ++i)
+            continuationStr += ' ';
+        continuationStr += "\xc2\xb7\xc2\xb7"; // ··
     }
 
-    canvas.setCursor(cursorRow, displayCol);
+    // Set up InputField with prompt, continuation, ghost text style, and decorator
+    _inputField.setPrompt(_promptStr);
+    _inputField.setContinuationPrompt(continuationStr);
+    _inputField.setStyles(tui::InputFieldStyles {
+        .text = promptStyle,
+        .ghost = ghostStyle,
+    });
+
+    // Configure decorator for this frame
+    auto const fieldOriginCol = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
+    _decorator.highlightMap = &_highlightCacheMap;
+    _decorator.errorMap = &_errorMap;
+    _decorator.bgColors = bgColors.empty() ? nullptr : &bgColors;
+    _decorator.flatBg = pc.background;
+    _decorator.bgOffset = fieldOriginCol - HorizontalMargin; // Map field col 0 to aurora col offset
+    _decorator.theme = &theme;
+    _inputField.setTextDecorator(&_decorator);
+
+    // Render InputField into a subcanvas that starts after the left chrome
+    auto const fieldArea = tui::Rect {
+        fieldOriginCol,
+        inputStartRow,
+        canvasWidth - fieldOriginCol - HorizontalMargin,
+        std::min(totalLines, canvas.height() - inputStartRow),
+    };
+    auto fieldCanvas = canvas.subcanvas(fieldArea);
+    _inputField.render(fieldCanvas);
+
+    // The cursor position is set by InputField::render() on the subcanvas,
+    // which translates to the correct canvas-absolute position.
 
     // Render completion popup if visible
     if (_completionPopup.visible())
     {
+        auto const cursorLine = _inputField.cursorLine();
+        auto const cursorRow = cursorLine + inputStartRow;
         auto popupSize = _completionPopup.preferredSize();
         int availableBelow = canvas.height() - cursorRow - 1;
         int availableAbove = cursorRow;
@@ -581,7 +547,6 @@ void PromptComponent::render(tui::Canvas& canvas)
 
         if (popupHeight >= 3) // Minimum: border (2) + 1 item
         {
-            // Rect constructor: {x, y, width, height} where x=column, y=row
             auto popupRect =
                 tui::Rect { totalPromptWidth, // x (column) - where prompt ends
                             popupRow,         // y (row) - below or above cursor
