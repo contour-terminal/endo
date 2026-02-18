@@ -966,6 +966,13 @@ Component (base class)
 - [x] `Shell::runAgentMode()` refactored: registry-based dispatch replaces hardcoded `/plan` check
 - [x] Unknown command error message: `Unknown command: /xyz`
 - [x] 23 unit tests (60 assertions) covering registry, commands, completer, dynamic registration, fuzzy matching
+- [x] Persistent plan mode with Shift+Tab cycling between plan/execute sub-modes
+  - [x] `CycleAgentMode` edit action with Shift+Tab default keybinding
+  - [x] `AgentInputComponent` mode badge in header (plan bright, execute dim)
+  - [x] Project path in agent header: `branch @ ~/path` (git repo) or `~/path` (non-git)
+  - [x] `/plan` (no args) idempotently enters plan mode
+  - [x] Normal messages route through `processMessageForPlan()` when plan mode active
+  - [x] Plan-result handling extracted to lambda (shared by `/plan <task>` and persistent mode)
 
 ---
 
