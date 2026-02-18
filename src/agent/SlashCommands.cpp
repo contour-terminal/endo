@@ -39,7 +39,10 @@ namespace
       public:
         [[nodiscard]] std::string_view name() const override { return "plan"; }
 
-        [[nodiscard]] std::string_view description() const override { return "Enter plan mode for a task"; }
+        [[nodiscard]] std::string_view description() const override
+        {
+            return "Enter plan mode (Shift+Tab to cycle)";
+        }
 
         [[nodiscard]] SlashCommandResult execute(std::string_view arguments) const override
         {

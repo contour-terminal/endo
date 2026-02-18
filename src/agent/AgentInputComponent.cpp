@@ -57,8 +57,8 @@ void AgentInputComponent::render(tui::Canvas& canvas)
             col += canvas.putString(0, col, _modelName, infoStyle);
     }
 
-    // Show git branch if available (appears after background context loading completes)
-    if (!_gitBranch.empty())
+    // Show git branch and/or project path (appears after background context loading completes)
+    if (!_gitBranch.empty() || !_projectPath.empty())
     {
         auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
@@ -66,9 +66,34 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
         col += canvas.putString(0, col, " ", {});
 
-        auto branchStyle = tui::Style { .fg = theme.agentColors.statusText };
-        branchStyle.dim = true;
-        col += canvas.putString(0, col, _gitBranch, branchStyle);
+        auto dimTextStyle = tui::Style { .fg = theme.agentColors.statusText };
+        dimTextStyle.dim = true;
+
+        if (!_gitBranch.empty())
+        {
+            col += canvas.putString(0, col, _gitBranch, dimTextStyle);
+            if (!_projectPath.empty())
+            {
+                col += canvas.putString(0, col, " @ ", dimPipeStyle);
+                col += canvas.putString(0, col, _projectPath, dimTextStyle);
+            }
+        }
+        else
+        {
+            col += canvas.putString(0, col, _projectPath, dimTextStyle);
+        }
+    }
+
+    // Show mode indicator (plan vs execute)
+    {
+        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        dimPipeStyle.dim = true;
+        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(0, col, " ", {});
+        auto modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.statusText }
+                                   : tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        col += canvas.putString(0, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
     // Draw left chrome for each input line
@@ -225,8 +250,17 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             // If popup was visible and dismissed by typing, re-filter instead of hiding
             if (popupWasVisible && popupDismissedByTyping)
                 _completionPopupDirty = true;
+            // Auto-trigger popup when typing a slash command
+            else if (_inputField.text().starts_with("/")
+                     && std::string_view(_inputField.text()).substr(0, _inputField.cursor()).find(' ')
+                            == std::string_view::npos)
+                _completionPopupDirty = true;
+            // Dismiss popup if text no longer looks like a slash command
+            else if (_completionPopup.visible())
+                dismissPopup();
             return Action::Changed;
         case tui::InputFieldAction::AgentMode: dismissPopup(); return Action::Abort; // Toggle back to shell
+        case tui::InputFieldAction::CycleAgentMode: dismissPopup(); return Action::CycleMode;
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)

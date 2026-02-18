@@ -1074,6 +1074,7 @@ namespace
     {
         std::string systemPrompt;             ///< Fully built system prompt.
         std::string gitBranch;                ///< Current git branch name (for header display).
+        std::string projectPath;              ///< Tilde-contracted project path (for header display).
         agent::ProjectContext projectContext; ///< Project context (returned for caching).
     };
 
@@ -1118,9 +1119,19 @@ namespace
             promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
         }
 
+        // Tilde-contract the project path for display
+        auto projectPath = cwd.string();
+        if (auto const* home = std::getenv("HOME"); home && projectPath.starts_with(home))
+        {
+            auto contracted = "~" + projectPath.substr(std::strlen(home));
+            if (contracted.size() == 1 || contracted[1] == '/')
+                projectPath = std::move(contracted);
+        }
+
         return AgentContextResult {
             .systemPrompt = promptBuilder.build(),
             .gitBranch = gitBranch,
+            .projectPath = std::move(projectPath),
             .projectContext = std::move(projectContext),
         };
     }
@@ -1260,6 +1271,95 @@ void Shell::runAgentMode()
     auto contextFuture =
         std::async(std::launch::async, buildAgentContext, agentConfig, cwd, std::move(cachedCtx));
     auto systemPromptReady = false;
+    auto planModeActive = false;
+
+    // Lambda to handle plan exploration and user decision after a plan is generated.
+    // Used by both `/plan <task>` and persistent plan mode.
+    auto executePlanFlow = [&](std::string const& planQuery) {
+        auto renderer = agent::AgentResponseRenderer(out);
+        auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
+        renderer.begin();
+
+        auto planResult = _agentSession->processMessageForPlan(
+            planQuery, [&](std::string_view token) { renderer.feedToken(token); });
+
+        renderer.end();
+
+        if (!planResult.has_value())
+        {
+            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+            out.write("Error: " + planResult.error().message + "\n", errorStyle);
+            out.flush();
+            return;
+        }
+
+        // Render plan for review
+        renderer.renderPlan(*planResult);
+
+        // Wait for user decision
+        auto decided = false;
+        while (!decided)
+        {
+            auto decisionEvents = terminal.poll(0);
+            for (auto const& decisionEvent: decisionEvents)
+            {
+                auto const* keyEvent = std::get_if<tui::KeyEvent>(&decisionEvent);
+                if (!keyEvent)
+                    continue;
+
+                if (keyEvent->codepoint == U'y' || keyEvent->codepoint == U'Y')
+                {
+                    auto executor = agent::PlanExecutor(*_agentSession, std::move(*planResult));
+                    while (!executor.isComplete())
+                    {
+                        renderer.renderPlanProgress(executor.plan(), executor.currentStepIndex());
+
+                        auto stepRenderer = agent::AgentResponseRenderer(out);
+                        auto const stepGuard = ScopedAssign(activeRenderer, stepRenderer);
+                        stepRenderer.begin();
+
+                        auto stepResult = executor.executeNextStep(
+                            [&](std::string_view token) { stepRenderer.feedToken(token); });
+
+                        stepRenderer.end();
+
+                        if (!stepResult.has_value())
+                        {
+                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                            out.write("Step failed: " + stepResult.error().message + "\n", errorStyle);
+                            out.flush();
+                            break;
+                        }
+
+                        if (agentConfig.planMode.pauseBetweenSteps && !executor.isComplete())
+                        {
+                            auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            out.write("Press any key to continue...\n", labelStyle);
+                            out.flush();
+                            (void) terminal.poll(0);
+                        }
+                    }
+
+                    renderer.renderPlanProgress(executor.plan(), executor.currentStepIndex());
+                    decided = true;
+                }
+                else if (keyEvent->codepoint == U'n' || keyEvent->codepoint == U'N')
+                {
+                    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+                    out.write("Plan rejected.\n", labelStyle);
+                    out.flush();
+                    decided = true;
+                }
+                else if (keyEvent->codepoint == U'r' || keyEvent->codepoint == U'R')
+                {
+                    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+                    out.write("Enter revision feedback:\n", labelStyle);
+                    out.flush();
+                    decided = true;
+                }
+            }
+        }
+    };
 
     while (true)
     {
@@ -1276,6 +1376,8 @@ void Shell::runAgentMode()
                 _agentSession->setSystemPrompt(std::move(result.systemPrompt));
                 if (!result.gitBranch.empty())
                     inputComponent.setGitBranch(std::move(result.gitBranch));
+                if (!result.projectPath.empty())
+                    inputComponent.setProjectPath(std::move(result.projectPath));
                 _cachedProjectContext = std::move(result.projectContext);
                 _cachedProjectContextCwd = cwd;
                 systemPromptReady = true;
@@ -1306,6 +1408,8 @@ void Shell::runAgentMode()
                         _agentSession->setSystemPrompt(std::move(result.systemPrompt));
                         if (!result.gitBranch.empty())
                             inputComponent.setGitBranch(std::move(result.gitBranch));
+                        if (!result.projectPath.empty())
+                            inputComponent.setProjectPath(std::move(result.projectPath));
                         _cachedProjectContext = std::move(result.projectContext);
                         _cachedProjectContextCwd = cwd;
                         systemPromptReady = true;
@@ -1350,114 +1454,22 @@ void Shell::runAgentMode()
                                     out.write("Plan mode is disabled in configuration.\n", errorStyle);
                                     out.flush();
                                 }
+                                else if (p->query.empty())
+                                {
+                                    // Idempotently enter plan mode
+                                    if (!planModeActive)
+                                    {
+                                        planModeActive = true;
+                                        inputComponent.setPlanMode(true);
+                                    }
+                                    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                                    out.write("Plan mode active. Type your task to generate a plan.\n",
+                                              infoStyle);
+                                    out.flush();
+                                }
                                 else
                                 {
-                                    // Exploration phase
-                                    auto renderer = agent::AgentResponseRenderer(out);
-                                    auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
-                                    renderer.begin();
-
-                                    auto planResult = _agentSession->processMessageForPlan(
-                                        p->query, [&](std::string_view token) { renderer.feedToken(token); });
-
-                                    renderer.end();
-
-                                    if (!planResult.has_value())
-                                    {
-                                        auto const errorStyle =
-                                            tui::Style { .fg = theme.agentColors.errorText };
-                                        out.write("Error: " + planResult.error().message + "\n", errorStyle);
-                                        out.flush();
-                                    }
-                                    else
-                                    {
-                                        // Render plan for review
-                                        renderer.renderPlan(*planResult);
-
-                                        // Wait for user decision
-                                        auto decided = false;
-                                        while (!decided)
-                                        {
-                                            auto decisionEvents = terminal.poll(0);
-                                            for (auto const& decisionEvent: decisionEvents)
-                                            {
-                                                auto const* keyEvent =
-                                                    std::get_if<tui::KeyEvent>(&decisionEvent);
-                                                if (!keyEvent)
-                                                    continue;
-
-                                                if (keyEvent->codepoint == U'y'
-                                                    || keyEvent->codepoint == U'Y')
-                                                {
-                                                    auto executor = agent::PlanExecutor(
-                                                        *_agentSession, std::move(*planResult));
-                                                    while (!executor.isComplete())
-                                                    {
-                                                        renderer.renderPlanProgress(
-                                                            executor.plan(), executor.currentStepIndex());
-
-                                                        auto stepRenderer = agent::AgentResponseRenderer(out);
-                                                        auto const stepGuard =
-                                                            ScopedAssign(activeRenderer, stepRenderer);
-                                                        stepRenderer.begin();
-
-                                                        auto stepResult = executor.executeNextStep(
-                                                            [&](std::string_view token) {
-                                                                stepRenderer.feedToken(token);
-                                                            });
-
-                                                        stepRenderer.end();
-
-                                                        if (!stepResult.has_value())
-                                                        {
-                                                            auto const errorStyle = tui::Style {
-                                                                .fg = theme.agentColors.errorText
-                                                            };
-                                                            out.write("Step failed: "
-                                                                          + stepResult.error().message + "\n",
-                                                                      errorStyle);
-                                                            out.flush();
-                                                            break;
-                                                        }
-
-                                                        if (agentConfig.planMode.pauseBetweenSteps
-                                                            && !executor.isComplete())
-                                                        {
-                                                            auto const labelStyle = tui::Style {
-                                                                .fg = theme.agentColors.statusText
-                                                            };
-                                                            out.write("Press any key to continue...\n",
-                                                                      labelStyle);
-                                                            out.flush();
-                                                            (void) terminal.poll(0);
-                                                        }
-                                                    }
-
-                                                    renderer.renderPlanProgress(executor.plan(),
-                                                                                executor.currentStepIndex());
-                                                    decided = true;
-                                                }
-                                                else if (keyEvent->codepoint == U'n'
-                                                         || keyEvent->codepoint == U'N')
-                                                {
-                                                    auto const labelStyle =
-                                                        tui::Style { .fg = theme.agentColors.statusText };
-                                                    out.write("Plan rejected.\n", labelStyle);
-                                                    out.flush();
-                                                    decided = true;
-                                                }
-                                                else if (keyEvent->codepoint == U'r'
-                                                         || keyEvent->codepoint == U'R')
-                                                {
-                                                    auto const labelStyle =
-                                                        tui::Style { .fg = theme.agentColors.statusText };
-                                                    out.write("Enter revision feedback:\n", labelStyle);
-                                                    out.flush();
-                                                    decided = true;
-                                                }
-                                            }
-                                        }
-                                    }
+                                    executePlanFlow(p->query);
                                 }
                             }
                             else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
@@ -1486,6 +1498,11 @@ void Shell::runAgentMode()
                             out.write("Unknown command: /" + cmdName + "\n", errorStyle);
                             out.flush();
                         }
+                    }
+                    else if (planModeActive && agentConfig.planMode.enabled)
+                    {
+                        // Plan mode: route through plan exploration
+                        executePlanFlow(query);
                     }
                     else
                     {
@@ -1524,6 +1541,12 @@ void Shell::runAgentMode()
                     out.flush();
                     screen.releaseCursor();
                     return;
+                }
+                case agent::AgentInputComponent::Action::CycleMode: {
+                    planModeActive = !planModeActive;
+                    inputComponent.setPlanMode(planModeActive);
+                    needsRedraw = true;
+                    break;
                 }
                 case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
                 case agent::AgentInputComponent::Action::None: break;

@@ -31,10 +31,11 @@ class AgentInputComponent: public tui::Component
     /// @brief Result of processing input.
     enum class Action
     {
-        None,    ///< No action needed.
-        Changed, ///< Content changed, re-render needed.
-        Submit,  ///< User pressed Enter on non-empty input.
-        Abort,   ///< User pressed Escape to exit agent mode.
+        None,      ///< No action needed.
+        Changed,   ///< Content changed, re-render needed.
+        Submit,    ///< User pressed Enter on non-empty input.
+        Abort,     ///< User pressed Escape to exit agent mode.
+        CycleMode, ///< User toggled agent sub-mode (plan/execute).
     };
 
     AgentInputComponent();
@@ -74,6 +75,10 @@ class AgentInputComponent: public tui::Component
     /// @param branch The branch name (e.g., "main", "feature/xyz").
     void setGitBranch(std::string branch) { _gitBranch = std::move(branch); }
 
+    /// @brief Sets the project path displayed in the header line (tilde-contracted).
+    /// @param path The project path (e.g., "~/projects/endo").
+    void setProjectPath(std::string path) { _projectPath = std::move(path); }
+
     /// @brief Returns the current input text.
     [[nodiscard]] auto text() const noexcept -> std::string_view { return _inputField.text(); }
 
@@ -83,6 +88,13 @@ class AgentInputComponent: public tui::Component
         _inputField.clear();
         dismissPopup();
     }
+
+    /// @brief Sets whether plan mode is active (affects header badge).
+    /// @param enabled True to show plan mode, false for execute mode.
+    void setPlanMode(bool enabled) { _planMode = enabled; }
+
+    /// @brief Returns whether plan mode is currently active.
+    [[nodiscard]] bool planMode() const noexcept { return _planMode; }
 
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] auto inputField() noexcept -> tui::InputField& { return _inputField; }
@@ -114,6 +126,8 @@ class AgentInputComponent: public tui::Component
     std::string _providerName; ///< Active provider name for header display.
     std::string _modelName;    ///< Active model name for header display.
     std::string _gitBranch;    ///< Current git branch for header display.
+    std::string _projectPath;  ///< Tilde-contracted project path for header display.
+    bool _planMode = false;    ///< Whether plan mode is active (vs execute mode).
 
     static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
     static constexpr int BarPadding = 1;   ///< Padding after the bar.

@@ -875,6 +875,9 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             dismissPopup();
             resetHistoryCycling();
             return Action::AgentMode;
+        case tui::InputFieldAction::CycleAgentMode:
+            // Not applicable in shell prompt context; ignore.
+            break;
         case tui::InputFieldAction::Changed:
             resetHistoryCycling();
             _inputField.clearGhostText(); // Remove stale suggestion immediately

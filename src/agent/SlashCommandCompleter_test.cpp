@@ -101,7 +101,7 @@ TEST_CASE("SlashCommandCompleter.descriptions_propagate", "[agent][slash][comple
     auto const items = completer.complete("/pl", 3);
     REQUIRE(items.size() == 1);
     CHECK(!items[0].description.empty());
-    CHECK(items[0].description == "Enter plan mode for a task");
+    CHECK(items[0].description == "Enter plan mode (Shift+Tab to cycle)");
 }
 
 TEST_CASE("SlashCommandCompleter.dynamically_registered_commands_appear", "[agent][slash][completer]")
