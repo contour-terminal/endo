@@ -128,11 +128,41 @@ void InputField::render(Canvas& canvas)
     // ====================================================================
     if (!_multiline || lineCount() <= 1)
     {
+        // Fill background with decorator bg (aurora gradient or flat)
+        if (_textDecorator)
+        {
+            for (int c = 0; c < width; ++c)
+            {
+                Style cellStyle = _styles.background.value_or(Style {});
+                if (auto bg = _textDecorator->background(c))
+                    cellStyle.bg = *bg;
+                canvas.put(0, c, " ", cellStyle);
+            }
+        }
+
         int col = 0;
 
-        // Render prompt
+        // Render prompt with per-column decorator background
         if (!_prompt.empty())
-            col += canvas.putString(0, col, _prompt, textStyle);
+        {
+            auto promptSeg = unicode::utf8_grapheme_segmenter(_prompt);
+            for (auto pIt = promptSeg.begin(); pIt != promptSeg.end() && col < width; ++pIt)
+            {
+                auto pNext = pIt;
+                ++pNext;
+                char const* pStart = pIt._clusterStart;
+                char const* pEnd = (pNext != promptSeg.end()) ? pNext._clusterStart
+                                                              : (_prompt.data() + _prompt.size());
+                Style pStyle = textStyle;
+                if (_textDecorator)
+                {
+                    if (auto bg = _textDecorator->background(col))
+                        pStyle.bg = *bg;
+                }
+                auto const pView = std::string_view(pStart, static_cast<std::size_t>(pEnd - pStart));
+                col += canvas.putString(0, col, pView, pStyle);
+            }
+        }
 
         auto const textStartCol = col;
         auto const availableWidth = width - textStartCol;
@@ -201,7 +231,15 @@ void InputField::render(Canvas& canvas)
             cursorDisplayCol = col;
 
         if (!_ghostText.empty() && _cursor >= _buffer.size())
-            canvas.putString(0, col, _ghostText, ghostStyle);
+        {
+            Style gStyle = ghostStyle;
+            if (_textDecorator)
+            {
+                if (auto bg = _textDecorator->background(col))
+                    gStyle.bg = *bg;
+            }
+            canvas.putString(0, col, _ghostText, gStyle);
+        }
 
         canvas.setCursor(0, cursorDisplayCol);
         return;
