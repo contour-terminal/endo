@@ -452,6 +452,9 @@ class InputField: public Component
 
     // Undo/Redo helpers
     void saveUndoState(); ///< Saves current state to undo stack before an editing operation.
+
+    /// @brief Renders ghost text character-by-character with per-column decorator background.
+    void renderGhostText(Canvas& canvas, int row, int& col, Style const& ghostStyle) const;
 };
 
 } // namespace tui

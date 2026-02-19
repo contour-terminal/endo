@@ -1554,3 +1554,93 @@ TEST_CASE("InputField.decorator_multiline_global_grapheme_index")
     CHECK(decorator.queriedIndices[2] == 3); // 'c' (index 2 = newline)
     CHECK(decorator.queriedIndices[3] == 4); // 'd'
 }
+
+TEST_CASE("InputField.ghost_text_decorator_background_per_column")
+{
+    // A gradient decorator that returns a different background per column.
+    struct GradientDecorator: TextDecorator
+    {
+        mutable std::vector<int> queriedColumns;
+
+        [[nodiscard]] auto background(int displayCol) const -> std::optional<RgbColor> override
+        {
+            queriedColumns.push_back(displayCol);
+            return RgbColor { .r = static_cast<uint8_t>(displayCol * 10),
+                              .g = static_cast<uint8_t>(displayCol * 20),
+                              .b = static_cast<uint8_t>(displayCol * 30) };
+        }
+    };
+
+    InputField field;
+    field.setText("ab");
+    field.setGhostText("xyz");
+
+    GradientDecorator decorator;
+    field.setTextDecorator(&decorator);
+
+    Buffer buf(1, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 1 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 1 });
+    field.render(canvas);
+
+    // Ghost text starts at column 2 (after "ab").
+    // Each ghost character should have its own per-column background.
+    auto const& bgX = std::get<RgbColor>(buf.at(0, 2).style.bg);
+    auto const& bgY = std::get<RgbColor>(buf.at(0, 3).style.bg);
+    auto const& bgZ = std::get<RgbColor>(buf.at(0, 4).style.bg);
+
+    // Verify each ghost char got a distinct background matching its column
+    CHECK(bgX.r == 20); // col 2 * 10
+    CHECK(bgY.r == 30); // col 3 * 10
+    CHECK(bgZ.r == 40); // col 4 * 10
+
+    CHECK(bgX.g == 40); // col 2 * 20
+    CHECK(bgY.g == 60); // col 3 * 20
+    CHECK(bgZ.g == 80); // col 4 * 20
+
+    CHECK(bgX.b == 60);  // col 2 * 30
+    CHECK(bgY.b == 90);  // col 3 * 30
+    CHECK(bgZ.b == 120); // col 4 * 30
+}
+
+TEST_CASE("InputField.multiline_ghost_text_decorator_background_per_column")
+{
+    struct GradientDecorator: TextDecorator
+    {
+        [[nodiscard]] auto background(int displayCol) const -> std::optional<RgbColor> override
+        {
+            return RgbColor { .r = static_cast<uint8_t>(displayCol * 10),
+                              .g = static_cast<uint8_t>(displayCol * 20),
+                              .b = static_cast<uint8_t>(displayCol * 30) };
+        }
+    };
+
+    InputField field;
+    field.setMultiline(true);
+    field.setText("aaa\nbbb");
+    field.setGhostText("xy");
+
+    GradientDecorator decorator;
+    field.setTextDecorator(&decorator);
+
+    Buffer buf(10, 40);
+    auto theme = darkTheme();
+    Canvas canvas(buf, Rect { .x = 0, .y = 0, .width = 40, .height = 10 }, theme);
+    field.setArea(Rect { .x = 0, .y = 0, .width = 40, .height = 5 });
+    field.render(canvas);
+
+    // Ghost text on row 1 (last line), starting at column 3 (after "bbb").
+    auto const& bgX = std::get<RgbColor>(buf.at(1, 3).style.bg);
+    auto const& bgY = std::get<RgbColor>(buf.at(1, 4).style.bg);
+
+    // Each ghost char should get its own column's gradient background
+    CHECK(bgX.r == 30); // col 3 * 10
+    CHECK(bgY.r == 40); // col 4 * 10
+
+    CHECK(bgX.g == 60); // col 3 * 20
+    CHECK(bgY.g == 80); // col 4 * 20
+
+    CHECK(bgX.b == 90);  // col 3 * 30
+    CHECK(bgY.b == 120); // col 4 * 30
+}

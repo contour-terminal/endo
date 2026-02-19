@@ -231,15 +231,7 @@ void InputField::render(Canvas& canvas)
             cursorDisplayCol = col;
 
         if (!_ghostText.empty() && _cursor >= _buffer.size())
-        {
-            Style gStyle = ghostStyle;
-            if (_textDecorator)
-            {
-                if (auto bg = _textDecorator->background(col))
-                    gStyle.bg = *bg;
-            }
-            canvas.putString(0, col, _ghostText, gStyle);
-        }
+            renderGhostText(canvas, 0, col, ghostStyle);
 
         canvas.setCursor(0, cursorDisplayCol);
         return;
@@ -403,15 +395,7 @@ void InputField::render(Canvas& canvas)
 
         // Ghost text on last line only, when cursor is at end of buffer
         if (lineIndex == totalLines - 1 && !_ghostText.empty() && _cursor >= _buffer.size())
-        {
-            Style gStyle = ghostStyle;
-            if (_textDecorator)
-            {
-                if (auto bg = _textDecorator->background(col))
-                    gStyle.bg = *bg;
-            }
-            canvas.putString(row, col, _ghostText, gStyle);
-        }
+            renderGhostText(canvas, row, col, ghostStyle);
 
         // Track cursor position for this line
         if (lineIndex == curLine)
@@ -1379,6 +1363,31 @@ auto InputField::ghostText() const noexcept -> std::string_view
 auto InputField::hasGhostText() const noexcept -> bool
 {
     return !_ghostText.empty();
+}
+
+void InputField::renderGhostText(Canvas& canvas, int row, int& col, Style const& ghostStyle) const
+{
+    auto const width = canvas.width();
+    auto segmenter = unicode::utf8_grapheme_segmenter(_ghostText);
+    for (auto it = segmenter.begin(); it != segmenter.end() && col < width; ++it)
+    {
+        auto nextIt = it;
+        ++nextIt;
+        char const* clusterStart = it._clusterStart;
+        char const* clusterEnd =
+            (nextIt != segmenter.end()) ? nextIt._clusterStart : (_ghostText.data() + _ghostText.size());
+
+        auto style = ghostStyle;
+        if (_textDecorator)
+        {
+            if (auto bg = _textDecorator->background(col))
+                style.bg = *bg;
+        }
+
+        auto const clusterView =
+            std::string_view(clusterStart, static_cast<std::size_t>(clusterEnd - clusterStart));
+        col += canvas.putString(row, col, clusterView, style);
+    }
 }
 
 auto InputField::findLineStart(std::size_t pos) const -> std::size_t
