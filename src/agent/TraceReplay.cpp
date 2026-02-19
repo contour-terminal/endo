@@ -21,6 +21,11 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
 
     auto lineNumber = 0;
     auto toolCallCount = 0;
+    auto userMessageCount = 0;
+    auto llmRequestCount = 0;
+    auto llmResponseCount = 0;
+    auto compactionCount = 0;
+    auto errorCount = 0;
     auto line = std::string {};
 
     while (std::getline(ifs, line))
@@ -48,6 +53,36 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
             auto const timestamp = doc.value("timestamp", "");
             std::println("=== Session: {} / {} ({})", provider, model, timestamp);
         }
+        else if (type == "user_message")
+        {
+            ++userMessageCount;
+            auto const mode = doc.value("mode", "unknown");
+            auto content = doc.value("content", "");
+            if (content.size() > 80)
+                content = content.substr(0, 77) + "...";
+            std::println("  [USER] ({}) {}", mode, content);
+        }
+        else if (type == "llm_request")
+        {
+            ++llmRequestCount;
+            auto const iteration = doc.value("iteration", 0);
+            auto const msgCount = doc.value("message_count", 0);
+            auto const tokenEst = doc.value("token_estimate", 0);
+            std::println("  [REQ] iteration={} messages={} tokens=~{}", iteration, msgCount, tokenEst);
+        }
+        else if (type == "llm_response")
+        {
+            ++llmResponseCount;
+            auto const iteration = doc.value("iteration", 0);
+            auto const toolCount = doc.value("tool_count", 0);
+            auto const textLen = doc.value("text_length", 0);
+            auto const durationMs = doc.value("duration_ms", 0);
+            std::println("  [RES] iteration={} tools={} text={} chars ({}ms)",
+                         iteration,
+                         toolCount,
+                         textLen,
+                         durationMs);
+        }
         else if (type == "tool_call")
         {
             ++toolCallCount;
@@ -68,12 +103,49 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
             std::println(
                 "  [{:3}] {} ({}) -> {} ({}ms)", toolCallCount, toolName, argsStr, status, durationMs);
         }
+        else if (type == "compaction")
+        {
+            ++compactionCount;
+            auto const beforeMsgs = doc.value("before_messages", 0);
+            auto const afterMsgs = doc.value("after_messages", 0);
+            auto const beforeTokens = doc.value("before_tokens", 0);
+            auto const afterTokens = doc.value("after_tokens", 0);
+            std::println("  [COMPACT] messages: {}->{}  tokens: ~{}->~{}",
+                         beforeMsgs,
+                         afterMsgs,
+                         beforeTokens,
+                         afterTokens);
+        }
+        else if (type == "error")
+        {
+            ++errorCount;
+            auto const code = doc.value("code", "unknown");
+            auto const message = doc.value("message", "");
+            std::println("  [ERROR] {}: {}", code, message);
+        }
     }
 
-    if (toolCallCount == 0)
-        std::println("No tool calls found in trace file.");
+    auto const totalEvents =
+        toolCallCount + userMessageCount + llmRequestCount + llmResponseCount + compactionCount + errorCount;
+    if (totalEvents == 0)
+        std::println("No events found in trace file.");
     else
-        std::println("\nTotal: {} tool call(s)", toolCallCount);
+    {
+        std::println("\nSummary:");
+        if (userMessageCount > 0)
+            std::println("  User messages:  {}", userMessageCount);
+        if (llmRequestCount > 0)
+            std::println("  LLM requests:   {}", llmRequestCount);
+        if (llmResponseCount > 0)
+            std::println("  LLM responses:  {}", llmResponseCount);
+        if (toolCallCount > 0)
+            std::println("  Tool calls:     {}", toolCallCount);
+        if (compactionCount > 0)
+            std::println("  Compactions:    {}", compactionCount);
+        if (errorCount > 0)
+            std::println("  Errors:         {}", errorCount);
+        std::println("  Total events:   {}", totalEvents);
+    }
 
     return EXIT_SUCCESS;
 }
