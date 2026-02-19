@@ -123,6 +123,10 @@ class InputField: public Component
     /// @param text New buffer content.
     void setText(std::string_view text);
 
+    /// @brief Sets the cursor position.
+    /// @param pos The byte offset to move the cursor to (clamped to buffer size).
+    void setCursor(size_t pos);
+
     /// @brief Adds an entry to the history ring.
     /// @param entry The line to add.
     void addHistory(std::string entry);

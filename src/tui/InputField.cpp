@@ -505,6 +505,12 @@ void InputField::setText(std::string_view text)
     clearSelection();
 }
 
+void InputField::setCursor(size_t pos)
+{
+    _cursor = std::min(pos, _buffer.size());
+    clearSelection();
+}
+
 void InputField::addHistory(std::string entry)
 {
     if (entry.empty())
