@@ -20,7 +20,7 @@ add_library(endo-agent STATIC
     ProjectContextLoader.hpp ProjectContextLoader.cpp
     SystemPromptBuilder.hpp SystemPromptBuilder.cpp
     Plan.hpp
-    ToolTracer.hpp ToolTracer.cpp
+    AgentTracer.hpp AgentTracer.cpp
     TraceReplay.hpp TraceReplay.cpp
     AgentSession.hpp AgentSession.cpp
     PlanExecutor.hpp PlanExecutor.cpp
@@ -73,7 +73,7 @@ add_executable(test-endo-agent
     ProjectContextLoader_test.cpp
     SystemPromptBuilder_test.cpp
     AgentSession_test.cpp
-    ToolTracer_test.cpp
+    AgentTracer_test.cpp
     PlanExecutor_test.cpp
     tools/ToolRegistry_test.cpp
     tools/SubmitPlanTool_test.cpp

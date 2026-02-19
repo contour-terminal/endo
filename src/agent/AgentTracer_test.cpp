@@ -5,7 +5,7 @@
 #include <fstream>
 #include <string>
 
-#include <agent/ToolTracer.hpp>
+#include <agent/AgentTracer.hpp>
 #include <nlohmann/json.hpp>
 
 using namespace endo::agent;
@@ -24,26 +24,26 @@ auto readLines(std::filesystem::path const& path) -> std::vector<std::string>
 }
 } // namespace
 
-TEST_CASE("ToolTracer.create_creates_file", "[agent]")
+TEST_CASE("AgentTracer.create_creates_file", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-create";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto result = ToolTracer::create(tracePath);
+    auto result = AgentTracer::create(tracePath);
     REQUIRE(result.has_value());
     CHECK(std::filesystem::exists(tracePath));
 
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ToolTracer.session_header_format", "[agent]")
+TEST_CASE("AgentTracer.session_header_format", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-header";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto tracer = ToolTracer::create(tracePath);
+    auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
 
     tracer->writeSessionHeader("claude", "claude-sonnet-4-5-20250929");
@@ -60,13 +60,13 @@ TEST_CASE("ToolTracer.session_header_format", "[agent]")
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ToolTracer.tool_call_entry_format", "[agent]")
+TEST_CASE("AgentTracer.tool_call_entry_format", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-entry";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto tracer = ToolTracer::create(tracePath);
+    auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
 
     auto const entry = ToolTraceEntry {
@@ -96,13 +96,13 @@ TEST_CASE("ToolTracer.tool_call_entry_format", "[agent]")
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ToolTracer.multiple_entries_one_per_line", "[agent]")
+TEST_CASE("AgentTracer.multiple_entries_one_per_line", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-multi";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto tracer = ToolTracer::create(tracePath);
+    auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
 
     tracer->writeSessionHeader("openai", "gpt-4o");
@@ -133,47 +133,47 @@ TEST_CASE("ToolTracer.multiple_entries_one_per_line", "[agent]")
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ToolTracer.create_creates_parent_directories", "[agent]")
+TEST_CASE("AgentTracer.create_creates_parent_directories", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-mkdir" / "nested" / "dirs";
     std::filesystem::remove_all(std::filesystem::temp_directory_path() / "endo-test-tracer-mkdir");
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto result = ToolTracer::create(tracePath);
+    auto result = AgentTracer::create(tracePath);
     REQUIRE(result.has_value());
     CHECK(std::filesystem::exists(tracePath));
 
     std::filesystem::remove_all(std::filesystem::temp_directory_path() / "endo-test-tracer-mkdir");
 }
 
-TEST_CASE("ToolTracer.create_returns_error_for_invalid_path", "[agent]")
+TEST_CASE("AgentTracer.create_returns_error_for_invalid_path", "[agent]")
 {
     // /proc is read-only on Linux, so writing there should fail
-    auto result = ToolTracer::create("/proc/nonexistent/dir/trace.jsonl");
+    auto result = AgentTracer::create("/proc/nonexistent/dir/trace.jsonl");
     CHECK_FALSE(result.has_value());
     CHECK_FALSE(result.error().empty());
 }
 
-TEST_CASE("ToolTracer.path_returns_configured_path", "[agent]")
+TEST_CASE("AgentTracer.path_returns_configured_path", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-path";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto tracer = ToolTracer::create(tracePath);
+    auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
     CHECK(tracer->path() == tracePath);
 
     std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("ToolTracer.error_result_entry", "[agent]")
+TEST_CASE("AgentTracer.error_result_entry", "[agent]")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-error";
     std::filesystem::remove_all(tmpDir);
     auto const tracePath = tmpDir / "trace.jsonl";
 
-    auto tracer = ToolTracer::create(tracePath);
+    auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
 
     tracer->writeToolCall(ToolTraceEntry {
@@ -192,6 +192,131 @@ TEST_CASE("ToolTracer.error_result_entry", "[agent]")
     auto const doc = nlohmann::json::parse(lines[0]);
     CHECK(doc.at("result").at("is_error") == true);
     CHECK(doc.at("result").at("content") == "Permission denied");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+// ============================================================================
+// New event type tests
+// ============================================================================
+
+TEST_CASE("AgentTracer.user_message_format", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-usermsg";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeUserMessage("chat", "explain this code");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "user_message");
+    CHECK(doc.at("mode") == "chat");
+    CHECK(doc.at("content") == "explain this code");
+    CHECK(doc.contains("timestamp"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.llm_request_format", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-llmreq";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeLlmRequest(2, 10, 3500);
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "llm_request");
+    CHECK(doc.at("iteration") == 2);
+    CHECK(doc.at("message_count") == 10);
+    CHECK(doc.at("token_estimate") == 3500);
+    CHECK(doc.contains("timestamp"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.llm_response_format", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-llmres";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeLlmResponse(1, true, 3, 250, std::chrono::milliseconds { 2400 });
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "llm_response");
+    CHECK(doc.at("iteration") == 1);
+    CHECK(doc.at("has_tool_calls") == true);
+    CHECK(doc.at("tool_count") == 3);
+    CHECK(doc.at("text_length") == 250);
+    CHECK(doc.at("duration_ms") == 2400);
+    CHECK(doc.contains("timestamp"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.compaction_format", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-compact";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeCompaction(25, 8, 12000, 4000);
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "compaction");
+    CHECK(doc.at("before_messages") == 25);
+    CHECK(doc.at("after_messages") == 8);
+    CHECK(doc.at("before_tokens") == 12000);
+    CHECK(doc.at("after_tokens") == 4000);
+    CHECK(doc.contains("timestamp"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.error_format", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-errfmt";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeError("ProviderError", "HTTP 429 rate limit");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "error");
+    CHECK(doc.at("code") == "ProviderError");
+    CHECK(doc.at("message") == "HTTP 429 rate limit");
+    CHECK(doc.contains("timestamp"));
 
     std::filesystem::remove_all(tmpDir);
 }
