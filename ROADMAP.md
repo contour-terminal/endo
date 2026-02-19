@@ -1065,6 +1065,23 @@ Component (base class)
 - [x] Wired in `Shell::runAgentMode()`: tracer creation from CLI/config, session header, `setTracer()` pointer
 - [x] Comprehensive test coverage: AgentTracer (13 cases), AgentSession tracer (3 cases), AgentConfig trace roundtrip (3 cases)
 
+### Phase 3.14: @-Mention File Path Completion ✅
+
+- [x] `FilePathCompleter` implementing `tui::CompletionProvider` with smart-case prefix and fuzzy matching (priority 75)
+  - [x] `@` trigger detection: must be at position 0 or after whitespace, no whitespace between `@` and cursor
+  - [x] Completion items: `.text` includes `@` prefix, `.displayText` shows bare path, `.description` = "file"
+  - [x] Thread-safe `setFilePaths()` for background context loading
+- [x] `ProjectFileTree::filePaths()`: flat list of relative file and directory paths (5000 limit) via `git ls-files` or filesystem fallback; directories have trailing `/` and are extracted from file path parents
+- [x] `ProjectContext::filePaths` field populated by `ProjectContextLoader::load()`
+- [x] `AgentInputComponent` enhanced for @-mention:
+  - [x] Auto-trigger popup when typing `@` (alongside existing slash command trigger)
+  - [x] `insertCompletion()` handles `@`-mention partial replacement (preserves surrounding text)
+  - [x] Tab partial completion computes prefix from `@` position for @-mention items
+  - [x] `InputField::setCursor()` for precise cursor positioning after mid-sentence insertion
+- [x] Shell integration: `FilePathCompleter` registered and fed file paths at both context-resolution sites
+- [x] Completion items show `"directory"` description for entries ending with `/`, `"file"` otherwise
+- [x] 15 unit tests (42 assertions) for FilePathCompleter + 1 new ProjectFileTree test: all-entries trigger, prefix/fuzzy matching, mid-input trigger, whitespace guards, directory descriptions, edge cases
+
 ---
 
 ## Milestone 4: Windows Support
