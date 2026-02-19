@@ -26,8 +26,14 @@ struct DirectOutput
     std::string text;
 };
 
+/// @brief Result type: render markdown directly without LLM involvement.
+struct MarkdownOutput
+{
+    std::string markdown;
+};
+
 /// @brief The result of executing a slash command.
-using SlashCommandResult = std::variant<PromptRewrite, PlanModeRequest, DirectOutput>;
+using SlashCommandResult = std::variant<PromptRewrite, PlanModeRequest, DirectOutput, MarkdownOutput>;
 
 /// @brief Abstract interface for slash commands in agent mode.
 ///
