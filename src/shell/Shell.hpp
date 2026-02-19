@@ -73,6 +73,10 @@ class Shell final: public SignalCallback
     /// Set check-only mode (compile without executing).
     void setCheckOnly(bool checkOnly) noexcept { _checkOnly = checkOnly; }
 
+    /// @brief Sets the trace file path for agent tool I/O tracing.
+    /// @param path File path for JSONL trace output. Empty triggers auto-generated path.
+    void setAgentTracePath(std::string path);
+
     /// Set interactive mode (controls prompts, job notifications, etc.)
     void setInteractive(bool interactive);
 
@@ -281,6 +285,7 @@ class Shell final: public SignalCallback
     std::optional<agent::ProjectContext>
         _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
     std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.
+    std::optional<std::string> _agentTracePath; ///< Trace file path for agent tool I/O (nullopt = disabled).
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

@@ -42,6 +42,7 @@
 #include <agent/SlashCommandRegistry.hpp>
 #include <agent/SlashCommands.hpp>
 #include <agent/SystemPromptBuilder.hpp>
+#include <agent/ToolTracer.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
@@ -430,6 +431,11 @@ EnvironmentProvider const& Shell::environment() const noexcept
 void Shell::setOptimize(bool optimize)
 {
     _optimize = optimize;
+}
+
+void Shell::setAgentTracePath(std::string path)
+{
+    _agentTracePath = std::move(path);
 }
 
 void Shell::setInteractive(bool interactive)
@@ -1404,6 +1410,38 @@ void Shell::runAgentMode()
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
     _agentSession->setMaxExplorationIterations(agentConfig.planMode.maxExplorationTurns);
+
+    // Set up tool I/O tracing if enabled via CLI flag or config
+    auto toolTracer = std::optional<agent::ToolTracer> {};
+    if (_agentTracePath.has_value() || agentConfig.trace.enabled)
+    {
+        auto tracePath = std::string {};
+        if (_agentTracePath.has_value() && !_agentTracePath->empty())
+            tracePath = *_agentTracePath;
+        else if (!agentConfig.trace.defaultPath.empty())
+            tracePath = agentConfig.trace.defaultPath;
+        else
+        {
+            auto const now = std::chrono::system_clock::now();
+            auto const timestamp =
+                std::format("{:%Y%m%d-%H%M%S}", std::chrono::floor<std::chrono::seconds>(now));
+            tracePath = ".endo/agent-trace-" + timestamp + ".jsonl";
+        }
+
+        auto tracerResult = agent::ToolTracer::create(tracePath);
+        if (tracerResult.has_value())
+        {
+            toolTracer.emplace(std::move(*tracerResult));
+            auto const modelInfo = provider->modelInfo();
+            toolTracer->writeSessionHeader(modelInfo.providerName, modelInfo.modelName);
+            _agentSession->setToolTraceCallback(
+                [&toolTracer](agent::ToolTraceEntry const& entry) { toolTracer->writeToolCall(entry); });
+        }
+        else
+        {
+            std::println(std::cerr, "Warning: Failed to open trace file: {}", tracerResult.error());
+        }
+    }
 
     // Agent input loop
     auto& terminal = prompt.terminal();

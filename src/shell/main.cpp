@@ -24,6 +24,7 @@
 #include "CrashHandler.hpp"
 #include "Shell.hpp"
 #include <agent/LoginCommand.hpp>
+#include <agent/TraceReplay.hpp>
 
 using namespace std::string_view_literals;
 
@@ -54,6 +55,10 @@ Agent Commands:
   agent status              Show configured providers and active selection
   agent switch [PROVIDER]   Switch the active LLM provider
   agent logout [PROVIDER]   Remove stored API key for a provider
+  agent trace replay <FILE> Replay a tool trace JSONL file
+
+Agent Options:
+  --agent-trace[=FILE]     Enable tool I/O tracing (auto-generated path if FILE omitted)
 
 Log Categories:
   shell.debug        Shell execution debug output
@@ -129,7 +134,8 @@ struct ParsedArgs
     std::string_view command;
     std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
     std::string_view scriptFile;
-    std::vector<std::string_view> scriptArgs; ///< Arguments after script file ($1, $2, ...)
+    std::vector<std::string_view> scriptArgs;  ///< Arguments after script file ($1, $2, ...)
+    std::optional<std::string> agentTracePath; ///< Agent trace file path (nullopt = disabled).
 };
 
 ParsedArgs parseArguments(std::span<char const* const> args)
@@ -159,6 +165,14 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg == "--check")
         {
             result.checkOnly = true;
+        }
+        else if (arg == "--agent-trace")
+        {
+            result.agentTracePath = ""; // Empty = auto-generate path.
+        }
+        else if (arg.starts_with("--agent-trace="))
+        {
+            result.agentTracePath = std::string(arg.substr(14));
         }
         else if (arg.starts_with("--log="))
         {
@@ -280,8 +294,15 @@ int main(int argc, char const* argv[])
             return endo::agent::runSwitchCommand(hint);
         if (subcommand == "logout")
             return endo::agent::runLogoutCommand(hint);
+        if (subcommand == "trace" && hint == "replay" && args.size() >= 5)
+            return endo::agent::runTraceReplay(std::string_view(args[4]));
+        if (subcommand == "trace" && hint == "replay")
+        {
+            std::print(stderr, "Usage: {} agent trace replay <FILE>\n", programName);
+            return EXIT_FAILURE;
+        }
         std::print(stderr, "Unknown agent command: {}\n", subcommand);
-        std::print(stderr, "Available commands: login, status, switch, logout\n");
+        std::print(stderr, "Available commands: login, status, switch, logout, trace\n");
         return EXIT_FAILURE;
     }
 
@@ -328,6 +349,9 @@ int main(int argc, char const* argv[])
     }
 
     auto shell = endo::Shell {};
+
+    if (parsed.agentTracePath.has_value())
+        shell.setAgentTracePath(*parsed.agentTracePath);
 
     if (parsed.checkOnly)
         shell.setCheckOnly(true);
