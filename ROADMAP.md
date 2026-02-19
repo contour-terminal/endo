@@ -1048,6 +1048,7 @@ Component (base class)
   - [x] Tab accepts ghost text, Right/End at end of line accepts ghost text
   - [x] Clear ghost text on text change, Escape, Submit, Abort
 - [x] `/reset` slash command: clears in-memory history, removes persisted file, resets provider entries
+- [x] `/tools` slash command: lists all active agent tools (built-in + MCP) with descriptions and count
 - [x] `AgentSession::loadPersistedMessages()` for history restoration
 - [x] Up/Down history navigation fed from persisted queries via `InputField::addHistory()`
 - [x] Event loop poll timeout respects ghost text debounce for responsive updates
@@ -1117,6 +1118,18 @@ Component (base class)
 - [x] Configuration reference (`docs/agent/configuration.md`): `agent.yml` fields, MCP server setup via `init.endo`, web search config
 - [x] Tools & commands page (`docs/agent/tools.md`): 12 built-in tools, slash commands, plan mode workflow, agent memory
 - [x] `mkdocs.yml` nav updated with "AI Agent" section between Shell and Roadmap
+
+### Phase 3.17: Agent Tool Expansion ✅
+
+- [x] Extract `HtmlUtils` from `WebSearchTool`: shared `urlEncode()`, `stripHtmlTags()`, `decodeHtmlEntities()` free functions in `agent/tools/HtmlUtils.hpp/cpp`
+- [x] `ListDirectoryTool` (`list_directory`): directory listing with `show_hidden`, `long_format` options, alphabetical sort with directories first, symlink detection, 1000-entry cap
+  - [x] Registered in `ExploreTool` inner registry (read-only tool for sub-agent)
+- [x] `WebFetchTool` (`web_fetch`): fetches URLs, converts HTML→markdown (strips script/style/nav/footer, headings, links, lists, code blocks, bold/italic), pretty-prints JSON, 15-minute in-memory cache, configurable truncation
+  - [x] `WebFetchConfig` struct with `maxContentSize`, `requestTimeout`, `cacheTtl`, `maxOutputLength`
+  - [x] HTTP→HTTPS auto-upgrade, content-type-based processing
+- [x] `AskUserTool` (`ask_user`): callback-based user interaction with optional 2–6 multiple-choice options, cancellation support
+  - [x] Shell callback: numbered option display, stdin input, numeric-to-option mapping
+- [x] 51 new unit tests across 4 test files (138 assertions)
 
 ---
 

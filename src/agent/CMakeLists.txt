@@ -45,7 +45,11 @@ add_library(endo-agent STATIC
     tools/ExploreTool.hpp tools/ExploreTool.cpp
     tools/GitTool.hpp tools/GitTool.cpp
     tools/SaveMemoryTool.hpp tools/SaveMemoryTool.cpp
+    tools/HtmlUtils.hpp tools/HtmlUtils.cpp
     tools/WebSearchTool.hpp tools/WebSearchTool.cpp
+    tools/WebFetchTool.hpp tools/WebFetchTool.cpp
+    tools/ListDirectoryTool.hpp tools/ListDirectoryTool.cpp
+    tools/AskUserTool.hpp tools/AskUserTool.cpp
     mcp/McpError.hpp
     mcp/Transport.hpp
     mcp/StdioTransport.hpp mcp/StdioTransport.cpp
@@ -98,7 +102,11 @@ add_executable(test-endo-agent
     tools/ExploreTool_test.cpp
     tools/GitTool_test.cpp
     tools/SaveMemoryTool_test.cpp
+    tools/HtmlUtils_test.cpp
     tools/WebSearchTool_test.cpp
+    tools/WebFetchTool_test.cpp
+    tools/ListDirectoryTool_test.cpp
+    tools/AskUserTool_test.cpp
     SlashCommandRegistry_test.cpp
     SlashCommands_test.cpp
     SlashCommandCompleter_test.cpp

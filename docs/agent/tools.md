@@ -23,7 +23,11 @@ contributed by [MCP servers](configuration.md#mcp-server-configuration).
 | `explore` | Spawn a read-only sub-agent to research the codebase. The sub-agent's conversation is discarded after it returns. |
 | `submit_plan` | Submit a structured plan during plan mode exploration. |
 | `save_memory` | Persist a memory file to `~/.config/endo/agent-memory/`. Memories are loaded into the system prompt on future sessions. |
+| `search` | Unified glob + grep search. Combines file pattern matching and content search in a single tool call. |
 | `web_search` | Search the web via DuckDuckGo, Brave, or Google. Configure in [`init.endo`](configuration.md#web-search-configuration). |
+| `web_fetch` | Fetch a web page and return its content as readable text. HTML is converted to markdown, JSON is pretty-printed. Includes a 15-minute cache. |
+| `list_directory` | List directory contents with optional hidden file display and long format (sizes, dates, types). |
+| `ask_user` | Ask the user a clarifying question. Supports free-text input or 2–6 multiple-choice options. |
 
 MCP tools from configured servers appear alongside these built-in tools and are callable
 in the same way.
@@ -35,6 +39,7 @@ Slash commands are typed directly in the agent prompt:
 | Command | Description |
 |---------|-------------|
 | `/help` | List available commands |
+| `/tools` | List all active agent tools |
 | `/plan [query]` | Enter plan mode (also activated with **Shift+Tab**) |
 | `/exit` | Leave agent mode (same as `Ctrl+D`) |
 

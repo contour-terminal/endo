@@ -70,15 +70,6 @@ class WebSearchTool final: public AgentTool
     [[nodiscard]] static auto formatResults(std::string const& query,
                                             std::vector<SearchResult> const& results) -> std::string;
 
-    /// @brief URL-encodes a string for use in query parameters.
-    [[nodiscard]] static auto urlEncode(std::string_view input) -> std::string;
-
-    /// @brief Strips HTML tags from a string.
-    [[nodiscard]] static auto stripHtmlTags(std::string_view html) -> std::string;
-
-    /// @brief Decodes common HTML entities (&amp;, &lt;, etc.).
-    [[nodiscard]] static auto decodeHtmlEntities(std::string_view text) -> std::string;
-
     http::HttpClient const& _httpClient;
     WebSearchConfig const& _config;
 };

@@ -221,7 +221,7 @@ TEST_CASE("ExploreTool.inner_agent_has_only_read_tools", "[agent][explore]")
 
     // Verify that only read-only tool definitions were sent to the provider
     auto const& defs = provider.lastToolDefs;
-    REQUIRE(defs.size() == 5);
+    REQUIRE(defs.size() == 6);
 
     auto toolNames = std::set<std::string> {};
     for (auto const& d: defs)
@@ -231,6 +231,7 @@ TEST_CASE("ExploreTool.inner_agent_has_only_read_tools", "[agent][explore]")
     CHECK(toolNames.count("glob") == 1);
     CHECK(toolNames.count("grep") == 1);
     CHECK(toolNames.count("search") == 1);
+    CHECK(toolNames.count("list_directory") == 1);
     CHECK(toolNames.count("git") == 1);
 
     // Verify write tools are NOT present

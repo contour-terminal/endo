@@ -46,18 +46,21 @@
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/mcp/McpToolAdapter.hpp>
 #include <agent/providers/ProviderFactory.hpp>
+#include <agent/tools/AskUserTool.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ExploreTool.hpp>
 #include <agent/tools/GitTool.hpp>
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
+#include <agent/tools/ListDirectoryTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
 #include <agent/tools/SaveMemoryTool.hpp>
 #include <agent/tools/SearchTool.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
+#include <agent/tools/WebFetchTool.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 #include <agent/tools/WriteFileTool.hpp>
 #include <nlohmann/json.hpp>
@@ -1447,6 +1450,7 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::GlobTool>());
     toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
     toolRegistry.registerTool(std::make_unique<agent::SearchTool>());
+    toolRegistry.registerTool(std::make_unique<agent::ListDirectoryTool>());
     toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
     toolRegistry.registerTool(std::make_unique<agent::EndoExecuteTool>(endoExecCb));
     toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
@@ -1456,6 +1460,41 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(
         std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
     toolRegistry.registerTool(std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
+
+    auto const webFetchConfig = agent::WebFetchConfig {};
+    toolRegistry.registerTool(std::make_unique<agent::WebFetchTool>(*_agentHttpClient, webFetchConfig));
+
+    auto askUserCb = [](agent::UserQuestion const& q) -> agent::UserAnswer {
+        std::println(stderr, "\n{}", q.text);
+        if (!q.options.empty())
+        {
+            for (size_t i = 0; i < q.options.size(); ++i)
+                std::println(stderr, "  {}. {}", i + 1, q.options[i]);
+            std::print(stderr, "Choice (1-{}): ", q.options.size());
+        }
+        else
+        {
+            std::print(stderr, "> ");
+        }
+        auto answer = std::string {};
+        if (!std::getline(std::cin, answer))
+            return { .cancelled = true };
+        if (!q.options.empty())
+        {
+            try
+            {
+                if (auto const idx = std::stoi(answer) - 1;
+                    idx >= 0 && static_cast<size_t>(idx) < q.options.size())
+                    answer = q.options[static_cast<size_t>(idx)];
+            }
+            catch (std::exception const&)
+            {
+                // Not a number — treat as raw text answer
+            }
+        }
+        return { .answer = std::move(answer) };
+    };
+    toolRegistry.registerTool(std::make_unique<agent::AskUserTool>(std::move(askUserCb)));
 
     // Start MCP servers and register their tools
     auto mcpServerManager = agent::mcp::ServerManager {};
@@ -1576,6 +1615,17 @@ void Shell::runAgentMode()
             (void) historyStore.remove();
             historyProviderPtr->setEntries({});
             return agent::DirectOutput { .text = "Conversation history cleared.\n" };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "tools",
+        "List all active agent tools",
+        [&toolRegistry](std::string_view) -> agent::SlashCommandResult {
+            auto text = std::string { "Active tools:\n" };
+            for (auto const& def: toolRegistry.definitions())
+                text += std::format("  {:<20} {}\n", def.name, def.description);
+            text += std::format("\n{} tools registered.\n", toolRegistry.size());
+            return agent::DirectOutput { .text = std::move(text) };
         }));
 
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));

@@ -6,6 +6,7 @@
 #include <agent/tools/GitTool.hpp>
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
+#include <agent/tools/ListDirectoryTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
 #include <agent/tools/SearchTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -82,6 +83,7 @@ auto ExploreTool::execute(nlohmann::json const& arguments) -> std::expected<Tool
     innerRegistry.registerTool(std::make_unique<GlobTool>());
     innerRegistry.registerTool(std::make_unique<GrepTool>());
     innerRegistry.registerTool(std::make_unique<SearchTool>());
+    innerRegistry.registerTool(std::make_unique<ListDirectoryTool>());
     innerRegistry.registerTool(std::make_unique<GitTool>(_shellExecCb));
 
     // Create an isolated inner agent session
