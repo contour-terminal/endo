@@ -635,6 +635,7 @@ The library includes:
 - [x] Implement history abstraction (`History` interface, `InMemoryHistory` implementation)
 - [x] Implement persistent shell history (`PersistentHistory` - YAML-based disk persistence with frequency tracking, auto-import from fish/zsh/bash, atomic flush, failed command un-persistence on failure, link error checking — 18 tests)
 - [x] Fix invalid commands (program-not-found) persisting to history — set `_exitCode` in all command execution error paths (`builtinCallProcess`, `builtinCallProcessShellPiped`, `builtinCmdExec`, `builtinCmdExecPiped`, `builtinCmdExecPipedBackground`)
+- [x] Trim leading/trailing whitespace from history entries at `add()` entry point — `trimInPlace()` helper in `History.hpp`, applied in `InMemoryHistory`, `PersistentHistory`, and `AgentSession` message processing. Whitespace-only entries are cleared and rejected. Trimmed duplicates are properly deduplicated. — 6 new tests
 - [x] Implement completer orchestrator (`Completer.cpp` - coordinates providers, generates suggestions)
 - [x] Add ghost text support to InputField (`setGhostText()`, `acceptGhostText()`, auto-clear on modification)
 - [x] Add completion styles to Theme (`ghostText`, `completionItem`, `completionSelected`, `completionDesc`)
