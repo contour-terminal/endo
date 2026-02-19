@@ -155,6 +155,9 @@ class AgentInputComponent: public tui::Component
     void insertCompletion(std::string_view text);
     void dismissPopup();
 
+    /// @brief Checks whether the cursor is inside an @-mention context.
+    [[nodiscard]] static bool isInAtMentionContext(std::string_view input, size_t cursorPosition);
+
     // Ghost text helpers
     void updateGhostText();
 

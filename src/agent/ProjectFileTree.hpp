@@ -33,6 +33,15 @@ class ProjectFileTree
     /// @return An indented text representation of the file tree.
     [[nodiscard]] auto generate(std::filesystem::path const& rootPath) const -> std::string;
 
+    /// @brief Returns the flat list of relative file paths (no tree formatting).
+    ///
+    /// Uses `git ls-files` for git repositories, or filesystem traversal otherwise.
+    /// Uses a higher entry limit than the tree display for comprehensive @-mention completion.
+    ///
+    /// @param rootPath The project root directory.
+    /// @return Sorted vector of relative file path strings.
+    [[nodiscard]] auto filePaths(std::filesystem::path const& rootPath) const -> std::vector<std::string>;
+
   private:
     /// Checks whether the given path is inside a git repository.
     [[nodiscard]] auto isGitRepo(std::filesystem::path const& path) const -> bool;

@@ -67,9 +67,10 @@ auto ProjectContextLoader::load(std::filesystem::path const& projectRoot) const 
 {
     auto context = ProjectContext {};
 
-    // Generate file tree
+    // Generate file tree and collect flat file paths for @-mention completion
     auto treeGen = ProjectFileTree {};
     context.fileTree = treeGen.generate(projectRoot);
+    context.filePaths = treeGen.filePaths(projectRoot);
 
     // Load project rules
     context.rulesFiles = loadRulesFiles(projectRoot);

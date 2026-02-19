@@ -52,6 +52,63 @@ auto ProjectFileTree::generate(std::filesystem::path const& rootPath) const -> s
     return scanDirectory(rootPath);
 }
 
+auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> std::vector<std::string>
+{
+    static constexpr size_t FilePathLimit = 5000;
+
+    auto files = std::vector<std::string> {};
+
+    if (_config.respectGitignore && isGitRepo(rootPath))
+    {
+        files = getGitTrackedFiles(rootPath);
+        if (files.size() > FilePathLimit)
+            files.resize(FilePathLimit);
+    }
+    else
+    {
+        // Non-git fallback: collect paths with filesystem traversal
+        try
+        {
+            auto const options = std::filesystem::directory_options::skip_permission_denied;
+            for (auto const& entry: std::filesystem::recursive_directory_iterator(rootPath, options))
+            {
+                if (files.size() >= FilePathLimit)
+                    break;
+
+                if (!entry.is_regular_file())
+                    continue;
+
+                auto const relPath = std::filesystem::relative(entry.path(), rootPath);
+                auto const firstComponent = relPath.begin()->string();
+                if (firstComponent.starts_with('.') && firstComponent != ".")
+                    continue;
+                if (firstComponent == "build" || firstComponent == "node_modules")
+                    continue;
+
+                files.push_back(relPath.string());
+            }
+        }
+        catch (std::filesystem::filesystem_error const&)
+        {
+            // Permission denied or other FS errors — return what we have
+        }
+    }
+
+    // Extract unique directory paths from file paths (with trailing '/')
+    auto dirs = std::set<std::string> {};
+    for (auto const& filePath: files)
+    {
+        auto p = std::filesystem::path(filePath);
+        for (auto parent = p.parent_path(); !parent.empty(); parent = parent.parent_path())
+            dirs.insert(parent.string() + "/");
+    }
+
+    // Merge directories into the result
+    files.insert(files.end(), dirs.begin(), dirs.end());
+    std::ranges::sort(files);
+    return files;
+}
+
 auto ProjectFileTree::isGitRepo(std::filesystem::path const& path) const -> bool
 {
     auto const result =

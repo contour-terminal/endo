@@ -37,6 +37,7 @@
 #include <agent/AgentSession.hpp>
 #include <agent/AgentTracer.hpp>
 #include <agent/ConversationHistoryStore.hpp>
+#include <agent/FilePathCompleter.hpp>
 #include <agent/PlanExecutor.hpp>
 #include <agent/ProjectContextLoader.hpp>
 #include <agent/SlashCommandCompleter.hpp>
@@ -1562,6 +1563,9 @@ void Shell::runAgentMode()
         }));
 
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
+    auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
+    auto* filePathProviderPtr = filePathProvider.get();
+    inputComponent.addCompletionProvider(std::move(filePathProvider));
     inputComponent.addCompletionProvider(std::move(historyProvider));
 
     // Feed persisted history entries to InputField for Up/Down navigation.
@@ -1694,6 +1698,7 @@ void Shell::runAgentMode()
                     inputComponent.setGitBranch(std::move(result.gitBranch));
                 if (!result.projectPath.empty())
                     inputComponent.setProjectPath(std::move(result.projectPath));
+                filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
                 _cachedProjectContext = std::move(result.projectContext);
                 _cachedProjectContextCwd = cwd;
                 systemPromptReady = true;
@@ -1738,6 +1743,7 @@ void Shell::runAgentMode()
                             inputComponent.setGitBranch(std::move(result.gitBranch));
                         if (!result.projectPath.empty())
                             inputComponent.setProjectPath(std::move(result.projectPath));
+                        filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
                         _cachedProjectContext = std::move(result.projectContext);
                         _cachedProjectContextCwd = cwd;
                         systemPromptReady = true;

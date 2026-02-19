@@ -191,7 +191,21 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             auto const commonPrefix = tui::Completer::findCommonPrefix(_completionPopup.items());
             auto const inputText = std::string(_inputField.text());
             auto const cursor = _inputField.cursor();
-            auto const currentPrefix = inputText.substr(0, cursor);
+
+            // For @-mentions, compute current prefix from the '@' position
+            auto currentPrefix = std::string {};
+            if (commonPrefix.starts_with("@"))
+            {
+                auto const upToCursor = std::string_view(inputText).substr(0, cursor);
+                auto const atPos = upToCursor.rfind('@');
+                if (atPos != std::string_view::npos)
+                    currentPrefix = inputText.substr(atPos, cursor - atPos);
+            }
+            else
+            {
+                currentPrefix = inputText.substr(0, cursor);
+            }
+
             if (!commonPrefix.empty() && commonPrefix.size() > currentPrefix.size())
             {
                 insertCompletion(commonPrefix);
@@ -296,7 +310,10 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
                      && std::string_view(_inputField.text()).substr(0, _inputField.cursor()).find(' ')
                             == std::string_view::npos)
                 _completionPopupDirty = true;
-            // Dismiss popup if text no longer looks like a slash command
+            // Auto-trigger popup when typing an @-mention
+            else if (isInAtMentionContext(_inputField.text(), _inputField.cursor()))
+                _completionPopupDirty = true;
+            // Dismiss popup if text no longer looks like a completable context
             else if (_completionPopup.visible())
                 dismissPopup();
             return Action::Changed;
@@ -373,11 +390,29 @@ void AgentInputComponent::updateCompletionPopup()
 
 void AgentInputComponent::insertCompletion(std::string_view text)
 {
-    // For slash commands, replace the entire input up to cursor with the completion text
-    // then append a trailing space for argument entry
     auto const inputText = std::string(_inputField.text());
     auto const cursor = _inputField.cursor();
 
+    // @-mention: replace only the @query portion, preserving surrounding text
+    if (text.starts_with("@"))
+    {
+        auto const upToCursor = std::string_view(inputText).substr(0, cursor);
+        auto const atPos = upToCursor.rfind('@');
+        if (atPos != std::string_view::npos)
+        {
+            auto newBuffer = std::string {};
+            newBuffer.append(inputText, 0, atPos);
+            newBuffer.append(text);
+            newBuffer += ' ';
+            newBuffer.append(inputText.substr(cursor));
+            _inputField.setText(std::move(newBuffer));
+            _inputField.setCursor(atPos + text.size() + 1);
+            return;
+        }
+    }
+
+    // Slash commands: replace the entire input up to cursor with the completion text
+    // then append a trailing space for argument entry
     auto newBuffer = std::string {};
     newBuffer.reserve(text.size() + 1 + inputText.size() - cursor);
     newBuffer.append(text);
@@ -464,6 +499,22 @@ int AgentInputComponent::ghostTextTimeoutMs() const
         return 0;
 
     return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+}
+
+bool AgentInputComponent::isInAtMentionContext(std::string_view input, size_t cursorPosition)
+{
+    auto const upToCursor = input.substr(0, cursorPosition);
+    auto const atPos = upToCursor.rfind('@');
+    if (atPos == std::string_view::npos)
+        return false;
+
+    // '@' must be at position 0 or preceded by whitespace
+    if (atPos > 0 && !std::isspace(static_cast<unsigned char>(input[atPos - 1])))
+        return false;
+
+    // No whitespace between '@' and cursor
+    auto const afterAt = upToCursor.substr(atPos + 1);
+    return afterAt.find_first_of(" \t\n") == std::string_view::npos;
 }
 
 } // namespace endo::agent

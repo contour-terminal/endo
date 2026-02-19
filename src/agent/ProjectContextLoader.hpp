@@ -12,6 +12,7 @@ namespace endo::agent
 struct ProjectContext
 {
     std::string fileTree;                 ///< Condensed file tree of the project.
+    std::vector<std::string> filePaths;   ///< Flat list of relative file paths for @-mention completion.
     std::vector<std::string> rulesFiles;  ///< Contents of project rules files (CLAUDE.md, AGENT.md, etc.).
     std::vector<std::string> memoryFiles; ///< Contents of agent memory files.
     std::vector<std::string> globalRules; ///< Contents of global agent rules files.

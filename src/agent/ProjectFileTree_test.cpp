@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 
@@ -96,6 +97,25 @@ TEST_CASE("ProjectFileTree.empty_directory", "[agent]")
     CHECK(result.empty());
 
     std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("ProjectFileTree.filePaths_includes_files_and_directories", "[agent]")
+{
+    auto dir = TempProjectDir {};
+    auto config = FileTreeConfig { .respectGitignore = false };
+    auto tree = ProjectFileTree(config);
+
+    auto const paths = tree.filePaths(dir.root);
+    CHECK(!paths.empty());
+
+    // Should contain file entries
+    CHECK(std::ranges::find(paths, "README.md") != paths.end());
+    CHECK(std::ranges::find(paths, "src/main.cpp") != paths.end());
+
+    // Should contain directory entries (trailing '/')
+    CHECK(std::ranges::find(paths, "src/") != paths.end());
+    CHECK(std::ranges::find(paths, "src/agent/") != paths.end());
+    CHECK(std::ranges::find(paths, "docs/") != paths.end());
 }
 
 TEST_CASE("ProjectFileTree.tree_format_verification", "[agent]")

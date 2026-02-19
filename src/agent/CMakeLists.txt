@@ -30,6 +30,7 @@ add_library(endo-agent STATIC
     SlashCommandRegistry.hpp SlashCommandRegistry.cpp
     SlashCommands.hpp SlashCommands.cpp
     SlashCommandCompleter.hpp SlashCommandCompleter.cpp
+    FilePathCompleter.hpp FilePathCompleter.cpp
     tools/AgentTool.hpp
     tools/ToolRegistry.hpp tools/ToolRegistry.cpp
     tools/SubmitPlanTool.hpp tools/SubmitPlanTool.cpp
@@ -90,6 +91,7 @@ add_executable(test-endo-agent
     SlashCommandRegistry_test.cpp
     SlashCommands_test.cpp
     SlashCommandCompleter_test.cpp
+    FilePathCompleter_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)
