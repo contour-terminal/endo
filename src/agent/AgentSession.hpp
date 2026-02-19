@@ -18,6 +18,7 @@
 namespace endo::agent
 {
 
+class AgentTracer;
 class ToolRegistry;
 class SubmitPlanTool;
 class ConversationCompactor;
@@ -41,10 +42,6 @@ struct AgentError
 /// Callback invoked when a tool begins execution.
 /// @param call The tool call being executed, including name and arguments.
 using ToolStatusCallback = std::function<void(ToolCall const& call)>;
-
-/// Callback invoked after a tool finishes execution with full trace data.
-/// @param entry The completed trace entry with timing and result information.
-using ToolTraceCallback = std::function<void(ToolTraceEntry const& entry)>;
 
 /// Manages a conversation with an LLM provider.
 ///
@@ -104,9 +101,9 @@ class AgentSession
     /// @param callback Callback invoked with the tool name when a tool starts executing.
     void setToolStatusCallback(ToolStatusCallback callback);
 
-    /// @brief Sets an optional callback for tool I/O tracing.
-    /// @param callback Callback invoked after each tool execution with full trace data.
-    void setToolTraceCallback(ToolTraceCallback callback);
+    /// @brief Sets the agent tracer for full I/O tracing.
+    /// @param tracer Pointer to the agent tracer (must outlive the session), or nullptr to disable.
+    void setTracer(AgentTracer* tracer);
 
     /// @brief Sets or replaces the system prompt.
     /// @param systemPrompt The system prompt text.
@@ -142,11 +139,11 @@ class AgentSession
     LlmProvider& _provider;
     ConversationHistory _history;
     ToolRegistry* _toolRegistry = nullptr;
+    AgentTracer* _tracer = nullptr;
     size_t _maxToolIterations = 25;
     size_t _maxExplorationIterations = 15;
     size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
-    ToolTraceCallback _toolTraceCallback;
     std::unique_ptr<ConversationCompactor> _compactor;
 };
 

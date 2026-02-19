@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <filesystem>
+#include <fstream>
+
 #include <agent/AgentSession.hpp>
+#include <agent/AgentTracer.hpp>
 #include <agent/ConversationCompactor.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -436,10 +440,10 @@ TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
 }
 
 // ============================================================================
-// Tool trace callback tests
+// Agent tracer tests
 // ============================================================================
 
-TEST_CASE("AgentSession.tool_trace_callback_fires", "[agent]")
+TEST_CASE("AgentSession.tracer_records_tool_calls", "[agent]")
 {
     auto provider = MockProvider {};
     provider.responseText = "Done";
@@ -451,8 +455,13 @@ TEST_CASE("AgentSession.tool_trace_callback_fires", "[agent]")
     registry.registerTool(std::move(mockTool));
     session.setToolRegistry(&registry);
 
-    auto traceEntries = std::vector<ToolTraceEntry> {};
-    session.setToolTraceCallback([&](ToolTraceEntry const& entry) { traceEntries.push_back(entry); });
+    // Create tracer to temp file
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-session-tracer";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+    session.setTracer(&*tracer);
 
     provider.pendingToolCalls = { ToolCall {
         .id = "trace-call-1",
@@ -462,16 +471,62 @@ TEST_CASE("AgentSession.tool_trace_callback_fires", "[agent]")
 
     (void) session.processMessage("Test trace", nullptr);
 
-    REQUIRE(traceEntries.size() == 1);
-    CHECK(traceEntries[0].callId == "trace-call-1");
-    CHECK(traceEntries[0].toolName == "mock_tool");
-    CHECK(traceEntries[0].arguments == nlohmann::json { { "key", "value" } });
-    CHECK(traceEntries[0].resultContent == "tool output for trace");
-    CHECK_FALSE(traceEntries[0].resultIsError);
-    CHECK_FALSE(traceEntries[0].timestamp.empty());
+    // Read back trace file and find tool_call entries
+    auto ifs = std::ifstream(tracePath);
+    auto line = std::string {};
+    auto toolCallFound = false;
+    while (std::getline(ifs, line))
+    {
+        auto const doc = nlohmann::json::parse(line);
+        if (doc.at("type") == "tool_call")
+        {
+            CHECK(doc.at("call_id") == "trace-call-1");
+            CHECK(doc.at("tool_name") == "mock_tool");
+            CHECK(doc.at("arguments").at("key") == "value");
+            CHECK(doc.at("result").at("content") == "tool output for trace");
+            CHECK(doc.at("result").at("is_error") == false);
+            toolCallFound = true;
+        }
+    }
+    CHECK(toolCallFound);
+
+    std::filesystem::remove_all(tmpDir);
 }
 
-TEST_CASE("AgentSession.tool_trace_callback_duration_positive", "[agent]")
+TEST_CASE("AgentSession.tracer_records_user_message", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-session-tracer-msg";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+    session.setTracer(&*tracer);
+
+    (void) session.processMessage("Hello agent", nullptr);
+
+    auto ifs = std::ifstream(tracePath);
+    auto line = std::string {};
+    auto userMsgFound = false;
+    while (std::getline(ifs, line))
+    {
+        auto const doc = nlohmann::json::parse(line);
+        if (doc.at("type") == "user_message")
+        {
+            CHECK(doc.at("mode") == "chat");
+            CHECK(doc.at("content") == "Hello agent");
+            userMsgFound = true;
+        }
+    }
+    CHECK(userMsgFound);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentSession.tracer_null_by_default", "[agent]")
 {
     auto provider = MockProvider {};
     provider.responseText = "Done";
@@ -481,27 +536,7 @@ TEST_CASE("AgentSession.tool_trace_callback_duration_positive", "[agent]")
     registry.registerTool(std::make_unique<MockTool>());
     session.setToolRegistry(&registry);
 
-    auto recordedDuration = std::chrono::milliseconds { -1 };
-    session.setToolTraceCallback([&](ToolTraceEntry const& entry) { recordedDuration = entry.duration; });
-
-    provider.pendingToolCalls = { ToolCall { .id = "tc-dur", .name = "mock_tool", .arguments = {} } };
-
-    (void) session.processMessage("Test duration", nullptr);
-
-    CHECK(recordedDuration >= std::chrono::milliseconds { 0 });
-}
-
-TEST_CASE("AgentSession.tool_trace_callback_not_called_without_registration", "[agent]")
-{
-    auto provider = MockProvider {};
-    provider.responseText = "Done";
-    auto session = AgentSession(provider);
-
-    auto registry = ToolRegistry {};
-    registry.registerTool(std::make_unique<MockTool>());
-    session.setToolRegistry(&registry);
-
-    // No trace callback set — should not crash
+    // No tracer set — should not crash
     provider.pendingToolCalls = { ToolCall { .id = "tc", .name = "mock_tool", .arguments = {} } };
     auto result = session.processMessage("Test no trace", nullptr);
     REQUIRE(result.has_value());

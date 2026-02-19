@@ -4,6 +4,7 @@
 #include <span>
 
 #include <agent/AgentSession.hpp>
+#include <agent/AgentTracer.hpp>
 #include <agent/ConversationCompactor.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -44,6 +45,9 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
     // Add user message to history
     _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
 
+    if (_tracer)
+        _tracer->writeUserMessage("chat", userMessage);
+
     auto const toolDefs = _toolRegistry ? _toolRegistry->definitions() : std::vector<ToolDefinition> {};
     auto const tools = std::span<ToolDefinition const>(toolDefs);
 
@@ -52,20 +56,44 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
         // Compact conversation if needed before calling the provider
         if (_compactor)
         {
+            auto const beforeMessages = _history.size();
+            auto const beforeTokens = _history.estimatedTokenCount();
             auto compactResult = _compactor->compactIfNeeded(_history);
+            if (_tracer && _history.size() != beforeMessages)
+            {
+                _tracer->writeCompaction(
+                    beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+            }
             // Log but don't abort on compaction failure
             (void) compactResult;
         }
 
+        if (_tracer)
+            _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
+
+        auto const generateStart = std::chrono::steady_clock::now();
         auto result = _provider.generate(_history.messages(), tools, streamCb);
+        auto const generateElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - generateStart);
 
         if (!result.has_value())
         {
+            auto const errorMsg =
+                std::format("{} (HTTP {})", result.error().message, result.error().httpStatus);
+            if (_tracer)
+                _tracer->writeError("ProviderError", errorMsg);
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
-                .message = std::format("{} (HTTP {})", result.error().message, result.error().httpStatus),
+                .message = errorMsg,
             });
         }
+
+        if (_tracer)
+            _tracer->writeLlmResponse(iteration,
+                                      result->hasToolCalls(),
+                                      result->toolCalls.size(),
+                                      result->textContent().size(),
+                                      generateElapsed);
 
         // Add the full assistant message (including ToolUseBlocks) to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
@@ -92,9 +120,13 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
         _history.addMessage(std::move(toolResultMsg));
     }
 
+    auto const errorMsg = std::format("Tool loop exceeded {} iterations", _maxToolIterations);
+    if (_tracer)
+        _tracer->writeError("ToolLoopExceeded", errorMsg);
+
     return std::unexpected(AgentError {
         .code = AgentErrorCode::ToolLoopExceeded,
-        .message = std::format("Tool loop exceeded {} iterations", _maxToolIterations),
+        .message = errorMsg,
     });
 }
 
@@ -160,6 +192,9 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
     // Add user message to history
     _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
 
+    if (_tracer)
+        _tracer->writeUserMessage("plan", userMessage);
+
     // Build filtered tool definitions: only read-only tools + submit_plan
     static constexpr auto allowedTools = std::array<std::string_view, 5> {
         "read_file", "glob", "grep", "git", "submit_plan",
@@ -176,17 +211,43 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
     {
         // Compact conversation if needed
         if (_compactor)
+        {
+            auto const beforeMessages = _history.size();
+            auto const beforeTokens = _history.estimatedTokenCount();
             (void) _compactor->compactIfNeeded(_history);
+            if (_tracer && _history.size() != beforeMessages)
+            {
+                _tracer->writeCompaction(
+                    beforeMessages, _history.size(), beforeTokens, _history.estimatedTokenCount());
+            }
+        }
 
+        if (_tracer)
+            _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
+
+        auto const generateStart = std::chrono::steady_clock::now();
         auto result = _provider.generate(_history.messages(), tools, streamCb);
+        auto const generateElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - generateStart);
 
         if (!result.has_value())
         {
+            auto const errorMsg =
+                std::format("{} (HTTP {})", result.error().message, result.error().httpStatus);
+            if (_tracer)
+                _tracer->writeError("ProviderError", errorMsg);
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
-                .message = std::format("{} (HTTP {})", result.error().message, result.error().httpStatus),
+                .message = errorMsg,
             });
         }
+
+        if (_tracer)
+            _tracer->writeLlmResponse(iteration,
+                                      result->hasToolCalls(),
+                                      result->toolCalls.size(),
+                                      result->textContent().size(),
+                                      generateElapsed);
 
         // Add assistant message to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
@@ -195,9 +256,12 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
         // If no tool calls, the agent didn't submit a plan
         if (!result->hasToolCalls() || !_toolRegistry)
         {
+            auto const errorMsg = std::string("Agent finished exploration without submitting a plan.");
+            if (_tracer)
+                _tracer->writeError("ProviderError", errorMsg);
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
-                .message = "Agent finished exploration without submitting a plan.",
+                .message = errorMsg,
             });
         }
 
@@ -240,10 +304,14 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
         streamCb = nullptr;
     }
 
+    auto const errorMsg = std::format("Exploration exceeded {} iterations without submitting a plan.",
+                                      _maxExplorationIterations);
+    if (_tracer)
+        _tracer->writeError("ToolLoopExceeded", errorMsg);
+
     return std::unexpected(AgentError {
         .code = AgentErrorCode::ToolLoopExceeded,
-        .message = std::format("Exploration exceeded {} iterations without submitting a plan.",
-                               _maxExplorationIterations),
+        .message = errorMsg,
     });
 }
 
@@ -262,9 +330,9 @@ void AgentSession::setCompactionConfig(CompactionConfig const& config)
     _compactor = std::make_unique<ConversationCompactor>(_provider, config);
 }
 
-void AgentSession::setToolTraceCallback(ToolTraceCallback callback)
+void AgentSession::setTracer(AgentTracer* tracer)
 {
-    _toolTraceCallback = std::move(callback);
+    _tracer = tracer;
 }
 
 auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>
@@ -284,9 +352,9 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
 
         truncateToolResult(result, _maxToolResultSize);
 
-        if (_toolTraceCallback)
+        if (_tracer)
         {
-            _toolTraceCallback(ToolTraceEntry {
+            _tracer->writeToolCall(ToolTraceEntry {
                 .timestamp = utcTimestampNow(),
                 .callId = call.id,
                 .toolName = call.name,
