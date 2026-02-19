@@ -808,6 +808,8 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
+            if (std::ranges::all_of(_inputField.text(), [](unsigned char c) { return std::isspace(c); }))
+                return Action::None;
             return Action::Submit;
         case tui::InputFieldAction::Abort:
             _inputField.clearGhostText();

@@ -273,9 +273,9 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
         case tui::InputFieldAction::Submit:
             _inputField.clearGhostText();
             dismissPopup();
-            if (!_inputField.text().empty())
-                return Action::Submit;
-            return Action::None;
+            if (std::ranges::all_of(_inputField.text(), [](unsigned char c) { return std::isspace(c); }))
+                return Action::None;
+            return Action::Submit;
         case tui::InputFieldAction::Abort:
             _inputField.clearGhostText();
             dismissPopup();
