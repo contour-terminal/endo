@@ -149,6 +149,21 @@ Control when the command duration module appears:
 set_prompt_duration_threshold 2000
 ```
 
+### Exit Confirmation
+
+Control the double Ctrl+D exit confirmation behavior. The first Ctrl+D press shows
+a hint; only a second press within the timeout exits the shell:
+
+```endo
+# Set a 2-second confirmation window
+set_exit_confirm_timeout 2000
+
+# Disable confirmation (immediate exit on first Ctrl+D)
+set_exit_confirm_timeout 0
+```
+
+The default timeout is 1000 ms.
+
 ## Aliases
 
 Endo uses F# function definitions with variadic parameters as aliases:

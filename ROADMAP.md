@@ -868,6 +868,7 @@ Component (base class)
 - [x] Fix Ctrl+T prompt toggle drift caused by redundant LF room reservation across Screen instances (new Screen's first `flushInline()` re-emitted room reservation LFs even though `clearAndRelease()` left the room intact; added `TerminalOutput::setInlineRoomReserved()`/`consumeInlineRoom()` API to communicate reserved room between Screens; `clearAndRelease()` now calls `enableReflow()` for clean terminal state)
 - [x] Fix Ctrl+T prompt toggle drift on real terminals via DECSC/DECRC cursor anchoring (`clearAndRelease()` saves cursor via `saveCursor()`, next Screen's first `flushInline()` restores via `restoreCursor()` eliminating relative-tracking drift; eliminated double-draw in `Prompt::read()` via `_displayDrewCurrentState` flag)
 - [x] TUI testing infrastructure: `TerminalOutput` made polymorphic (all public methods virtual), `MockTerminalOutput` tracks cursor position/visibility semantically, `Terminal` supports DI via `unique_ptr<TerminalOutput>` constructor, renamed `write()` → `writeText()` for clarity
+- [x] Implement double Ctrl+D exit confirmation (first press shows ghost text hint, second press within configurable timeout exits; `set_exit_confirm_timeout` builtin for customization; 0 disables confirmation for immediate exit)
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests

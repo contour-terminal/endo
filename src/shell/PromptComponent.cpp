@@ -808,6 +808,7 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
+            _exitHintVisible = false;
             if (std::ranges::all_of(_inputField.text(), [](unsigned char c) { return std::isspace(c); }))
                 return Action::None;
             return Action::Submit;
@@ -815,12 +816,31 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
+            _exitHintVisible = false;
             return Action::Abort;
-        case tui::InputFieldAction::Eof:
+        case tui::InputFieldAction::Eof: {
             _inputField.clearGhostText();
             dismissPopup();
             resetHistoryCycling();
-            return Action::Eof;
+
+            if (_config.exitConfirmTimeoutMs <= 0)
+                return Action::Eof; // Disabled, exit immediately
+
+            auto const now = std::chrono::steady_clock::now();
+            auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastCtrlDTime);
+
+            if (_exitHintVisible && elapsed < std::chrono::milliseconds(_config.exitConfirmTimeoutMs))
+            {
+                _exitHintVisible = false;
+                return Action::Eof; // Second press within timeout → exit
+            }
+
+            // First press: show hint, start timer
+            _lastCtrlDTime = now;
+            _exitHintVisible = true;
+            _inputField.setGhostText("Press Ctrl+D again to exit, or Ctrl+L to clear");
+            return Action::Changed;
+        }
         case tui::InputFieldAction::AgentMode:
             _inputField.clearGhostText();
             dismissPopup();
@@ -831,6 +851,11 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             break;
         case tui::InputFieldAction::Changed:
             resetHistoryCycling();
+            if (_exitHintVisible)
+            {
+                _exitHintVisible = false;
+                _inputField.clearGhostText();
+            }
             _inputField.clearGhostText(); // Remove stale suggestion immediately
             _ghostTextDirty = true;
             _ghostTextPendingSince = std::chrono::steady_clock::now();
@@ -1061,6 +1086,15 @@ void PromptComponent::flushDeferredUpdates()
         else
             updateCompletionPopup();
     }
+    if (_exitHintVisible)
+    {
+        auto const elapsed = std::chrono::steady_clock::now() - _lastCtrlDTime;
+        if (elapsed >= std::chrono::milliseconds(_config.exitConfirmTimeoutMs))
+        {
+            _exitHintVisible = false;
+            _inputField.clearGhostText();
+        }
+    }
 }
 
 void PromptComponent::insertCompletion(std::string_view text)
@@ -1284,6 +1318,20 @@ int PromptComponent::ghostTextTimeoutMs() const
 
     auto const elapsed = std::chrono::steady_clock::now() - *_ghostTextPendingSince;
     auto const remaining = GhostTextDebounceMs - elapsed;
+    if (remaining <= std::chrono::milliseconds::zero())
+        return 0;
+
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+}
+
+int PromptComponent::exitHintTimeoutMs() const
+{
+    if (!_exitHintVisible)
+        return -1;
+
+    auto const elapsed = std::chrono::steady_clock::now() - _lastCtrlDTime;
+    auto const timeout = std::chrono::milliseconds(_config.exitConfirmTimeoutMs);
+    auto const remaining = timeout - elapsed;
     if (remaining <= std::chrono::milliseconds::zero())
         return 0;
 

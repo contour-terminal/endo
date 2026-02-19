@@ -126,8 +126,9 @@ std::string Prompt::read()
         auto const moduleTimeout = _promptComponent->moduleRefreshTimeoutMs();
         auto const diagTimeout = _promptComponent->diagnosticsTimeoutMs();
         auto const ghostTimeout = _promptComponent->ghostTextTimeoutMs();
+        auto const exitHintTimeout = _promptComponent->exitHintTimeoutMs();
         auto timeout = -1;
-        for (auto const t: { hoverTimeout, moduleTimeout, diagTimeout, ghostTimeout })
+        for (auto const t: { hoverTimeout, moduleTimeout, diagTimeout, ghostTimeout, exitHintTimeout })
         {
             if (t >= 0)
                 timeout = (timeout < 0) ? t : std::min(timeout, t);

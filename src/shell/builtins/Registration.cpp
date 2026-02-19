@@ -7,10 +7,9 @@
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
 
-#include <agent/tools/WebSearchTool.hpp>
-
 #include <endo-language/BuiltinImpls.hpp>
 
+#include <agent/tools/WebSearchTool.hpp>
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
 
@@ -1117,6 +1116,15 @@ void Shell::registerPromptBuiltins()
             auto config = prompt.promptConfig();
             config.promptSpacing =
                 static_cast<int>(std::clamp(args.getInt(1), int64_t { 0 }, int64_t { 1 }));
+            prompt.setPromptConfig(std::move(config));
+        });
+
+    _runtime.registerFunction("set_exit_confirm_timeout")
+        .param<CoreVM::CoreNumber>("ms")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto config = prompt.promptConfig();
+            config.exitConfirmTimeoutMs = std::max(int64_t { 0 }, args.getInt(1));
             prompt.setPromptConfig(std::move(config));
         });
     // clang-format on

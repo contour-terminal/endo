@@ -194,6 +194,7 @@ add_executable(test-endo-shell
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
     PersistentHistory_test.cpp
+    PromptComponent_test.cpp
     Suggestions_test.cpp
     SyntaxHighlighter_test.cpp
     Shell_test.cpp

@@ -82,6 +82,7 @@ class PromptComponent: public tui::Component
         _ghostTextPendingSince.reset();
         _suggestCacheText.clear();
         _suggestCacheResult.reset();
+        _exitHintVisible = false;
     }
 
     /// @brief Adds an entry to the command history.
@@ -143,6 +144,9 @@ class PromptComponent: public tui::Component
 
     /// @brief Returns ms until ghost text debounce fires, or -1 if not pending.
     [[nodiscard]] int ghostTextTimeoutMs() const;
+
+    /// @brief Returns ms until exit hint expires, or -1 if no hint is active.
+    [[nodiscard]] int exitHintTimeoutMs() const;
 
     /// @brief Flushes deferred ghost text and completion popup updates.
     /// Call once per event batch, before drawing.
@@ -332,6 +336,10 @@ class PromptComponent: public tui::Component
     // Double-Tab detection
     std::chrono::steady_clock::time_point _lastTabTime {};
     static constexpr auto DoubleTabThreshold = std::chrono::milliseconds(400);
+
+    // Ctrl+D exit confirmation state
+    std::chrono::steady_clock::time_point _lastCtrlDTime {};
+    bool _exitHintVisible = false;
 
     // Inline history cycling (fish-style prefix search)
     std::vector<std::string> _historyCandidates; ///< Cached prefix-matched history entries.
