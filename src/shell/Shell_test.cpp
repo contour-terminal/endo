@@ -892,6 +892,161 @@ TEST_CASE("shell.builtin.rm_dot_rejection")
 }
 
 // ============================================================================
+// mkdir builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.mkdir_help")
+{
+    TestShell shell;
+    auto output = shell("mkdir --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--parents") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.mkdir_basic")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_basic";
+    fs::remove_all(testDir); // ensure clean state
+
+    TestShell shell;
+    shell(std::format("mkdir {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(testDir));
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.mkdir_already_exists")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_exists";
+    fs::create_directories(testDir);
+    REQUIRE(fs::exists(testDir));
+
+    TestShell shell;
+    shell(std::format("mkdir {}", testDir.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.mkdir_parents")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents" / "a" / "b" / "c";
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents");
+
+    TestShell shell;
+    shell(std::format("mkdir -p {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(testDir));
+
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents");
+}
+
+TEST_CASE("shell.builtin.mkdir_parents_long")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents_long" / "x" / "y";
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents_long");
+
+    TestShell shell;
+    shell(std::format("mkdir --parents {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(testDir));
+
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_parents_long");
+}
+
+TEST_CASE("shell.builtin.mkdir_parents_existing")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_parents_exist";
+    fs::create_directories(testDir);
+    REQUIRE(fs::exists(testDir));
+
+    TestShell shell;
+    shell(std::format("mkdir -p {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.mkdir_no_operand")
+{
+    TestShell shell;
+    shell("mkdir");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.mkdir_verbose")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_verbose";
+    fs::remove_all(testDir);
+
+    TestShell shell;
+    auto output = shell(std::format("mkdir -v {}", testDir.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("created directory") != std::string::npos);
+    CHECK(fs::is_directory(testDir));
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.mkdir_combined_flags")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_combined" / "sub";
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_combined");
+
+    TestShell shell;
+    auto output = shell(std::format("mkdir -pv {}", testDir.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(testDir));
+    CHECK(output.find("created directory") != std::string::npos);
+
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_combined");
+}
+
+TEST_CASE("shell.builtin.mkdir_double_dash")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_mkdir_test_ddash" / "-weirdname";
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_ddash");
+    fs::create_directories(fs::temp_directory_path() / "endo_mkdir_test_ddash");
+
+    TestShell shell;
+    shell(std::format("mkdir -- {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(testDir));
+
+    fs::remove_all(fs::temp_directory_path() / "endo_mkdir_test_ddash");
+}
+
+TEST_CASE("shell.builtin.mkdir_multiple_dirs")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mkdir_test_multi";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const dir1 = base / "dir1";
+    auto const dir2 = base / "dir2";
+    auto const dir3 = base / "dir3";
+
+    TestShell shell;
+    shell(std::format("mkdir {} {} {}", dir1.string(), dir2.string(), dir3.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::is_directory(dir1));
+    CHECK(fs::is_directory(dir2));
+    CHECK(fs::is_directory(dir3));
+
+    fs::remove_all(base);
+}
+
+// ============================================================================
 // Variable Substitution - $VAR and ${VAR}
 // ============================================================================
 

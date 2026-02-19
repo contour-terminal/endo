@@ -29,9 +29,6 @@ class AgentSession;
 class ProviderFactory;
 } // namespace endo::agent
 
-#include <agent/mcp/ServerManager.hpp>
-#include <agent/tools/WebSearchTool.hpp>
-
 #include "Completer.hpp"
 #include "History.hpp"
 #include "Job.hpp"
@@ -39,6 +36,8 @@ class ProviderFactory;
 #include "PersistentHistory.hpp"
 #include "Prompt.hpp"
 #include "TTY.hpp"
+#include <agent/mcp/ServerManager.hpp>
+#include <agent/tools/WebSearchTool.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
@@ -159,6 +158,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the rm builtin, writing verbose output to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the mkdir builtin, writing verbose output to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.
     void finalizePipelineBuiltin(bool lastInChain,
                                  CoreVM::CoreStringArray const& args,

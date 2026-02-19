@@ -366,6 +366,38 @@ echo "hello" | cat
 
 ---
 
+## mkdir
+
+Create directories.
+
+**Syntax:**
+
+```
+mkdir [-pv] [--parents] [--verbose] [--] directory...
+```
+
+**Description:** Creates the specified directories. By default, fails if the directory already
+exists or if parent directories are missing.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-p`, `--parents` | Create parent directories as needed; no error if the directory already exists |
+| `-v`, `--verbose` | Print a message for each created directory |
+| `--` | End of options; treat subsequent arguments as directory names |
+
+**Examples:**
+
+```endo
+mkdir mydir
+mkdir -p path/to/nested/dir
+mkdir -pv project/src project/tests
+mkdir -- -starts-with-dash
+```
+
+---
+
 ## sleep
 
 Wait for a specified duration.

@@ -775,6 +775,120 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
     return success ? 0 : 1;
 }
 
+int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto writeOutput = [outputFd](std::string const& str) {
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+    };
+
+    bool parents = false;
+    bool verbose = false;
+    bool endOfOptions = false;
+    std::vector<std::string> paths;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view const arg = args.at(i);
+
+        if (!endOfOptions && arg == "--")
+        {
+            endOfOptions = true;
+            continue;
+        }
+
+        if (!endOfOptions && arg == "--help")
+        {
+            writeOutput("Usage: mkdir [OPTION]... DIRECTORY...\n");
+            writeOutput("Create the DIRECTORY(ies), if they do not already exist.\n");
+            writeOutput("\n");
+            writeOutput("Options:\n");
+            writeOutput("  -p, --parents     make parent directories as needed\n");
+            writeOutput("  -v, --verbose     print a message for each created directory\n");
+            writeOutput("      --help        display this help and exit\n");
+            return 0;
+        }
+
+        if (!endOfOptions && arg == "--parents")
+        {
+            parents = true;
+            continue;
+        }
+        if (!endOfOptions && arg == "--verbose")
+        {
+            verbose = true;
+            continue;
+        }
+
+        // Parse combined short flags: -pv, -vp, etc.
+        if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
+        {
+            bool validFlags = true;
+            for (size_t j = 1; j < arg.size(); ++j)
+            {
+                switch (arg[j])
+                {
+                    case 'p': parents = true; break;
+                    case 'v': verbose = true; break;
+                    default: validFlags = false; break;
+                }
+                if (!validFlags)
+                    break;
+            }
+            if (validFlags)
+                continue;
+        }
+
+        paths.emplace_back(arg);
+    }
+
+    if (paths.empty())
+    {
+        error("mkdir: missing operand");
+        return 1;
+    }
+
+    bool success = true;
+    for (auto const& path: paths)
+    {
+        namespace fs = std::filesystem;
+        std::error_code ec;
+
+        if (parents)
+        {
+            fs::create_directories(path, ec);
+            if (ec)
+            {
+                error("mkdir: cannot create directory '{}': {}", path, ec.message());
+                success = false;
+                continue;
+            }
+            if (verbose && fs::exists(path))
+                writeOutput(std::format("mkdir: created directory '{}'\n", path));
+        }
+        else
+        {
+            if (fs::exists(path, ec))
+            {
+                error("mkdir: cannot create directory '{}': File exists", path);
+                success = false;
+                continue;
+            }
+            if (!fs::create_directory(path, ec) || ec)
+            {
+                error("mkdir: cannot create directory '{}': {}",
+                      path,
+                      ec ? ec.message() : "No such file or directory");
+                success = false;
+                continue;
+            }
+            if (verbose)
+                writeOutput(std::format("mkdir: created directory '{}'\n", path));
+        }
+    }
+
+    return success ? 0 : 1;
+}
+
 void Shell::finalizePipelineBuiltin(bool lastInChain,
                                     CoreVM::CoreStringArray const& args,
                                     std::string_view programName,

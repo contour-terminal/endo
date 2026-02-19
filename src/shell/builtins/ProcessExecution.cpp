@@ -71,6 +71,13 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    if (program == "mkdir")
+    {
+        _exitCode = executeInlineMkdir(args, outputFd);
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     // Check if this is a registered shell function
     if (_registeredFunctions.contains(program))
     {
@@ -188,6 +195,14 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
         _exitCode = executeInlineRm(args, stdoutFd);
         finalizePipelineBuiltin(lastInChain, args, "rm", context);
+        return;
+    }
+
+    if (program == "mkdir")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+        _exitCode = executeInlineMkdir(args, stdoutFd);
+        finalizePipelineBuiltin(lastInChain, args, "mkdir", context);
         return;
     }
 
