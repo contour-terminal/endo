@@ -951,6 +951,8 @@ Component (base class)
 - [x] `AgentConfig::logToolUses` flag with YAML persistence (`log_tool_uses` key, default: true)
 - [x] `formatToolCallArgs()` helper: compact JSON with truncated strings and content redaction
 - [x] Tool use lines rendered inline during agent thinking phase (`│ ⚙ tool_name {args}`)
+- [x] Shell commands (`shell_execute`/`endo_execute`) display full command in shell-prompt style (`│ $ command`)
+- [x] Explicit `timeout_ms` shown as `timeout <seconds>` prefix on shell command lines
 - [x] `ScopedAssign` RAII guard for `activeRenderer` tracking across renderer lifetimes
 
 ### Phase 3.7: Agent Context Caching ✅
