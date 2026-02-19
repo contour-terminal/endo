@@ -25,6 +25,15 @@ namespace
         result.content += std::format("\n\n[truncated -- {} bytes omitted]", omitted);
     }
 
+    /// @brief Trims leading and trailing whitespace from @p str in place.
+    void trimInPlace(std::string& str)
+    {
+        if (auto const start = str.find_first_not_of(" \t\n\r"); start != std::string::npos)
+            str = str.substr(start, str.find_last_not_of(" \t\n\r") - start + 1);
+        else
+            str.clear();
+    }
+
     /// Returns the current UTC time as an ISO 8601 timestamp string.
     auto utcTimestampNow() -> std::string
     {
@@ -42,8 +51,16 @@ AgentSession::~AgentSession() = default;
 auto AgentSession::processMessage(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<std::string, AgentError>
 {
+    auto trimmedMessage = std::string(userMessage);
+    trimInPlace(trimmedMessage);
+    if (trimmedMessage.empty())
+        return std::unexpected(AgentError {
+            .code = AgentErrorCode::ProviderError,
+            .message = "Empty message after trimming whitespace.",
+        });
+
     // Add user message to history
-    _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
+    _history.addMessage(ChatMessage::text(Role::User, std::move(trimmedMessage)));
 
     if (_tracer)
         _tracer->writeUserMessage("chat", userMessage);
@@ -189,8 +206,16 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
     // Clear any previous plan
     submitPlanTool->clearParsedPlan();
 
+    auto trimmedPlanMessage = std::string(userMessage);
+    trimInPlace(trimmedPlanMessage);
+    if (trimmedPlanMessage.empty())
+        return std::unexpected(AgentError {
+            .code = AgentErrorCode::ProviderError,
+            .message = "Empty message after trimming whitespace.",
+        });
+
     // Add user message to history
-    _history.addMessage(ChatMessage::text(Role::User, std::string(userMessage)));
+    _history.addMessage(ChatMessage::text(Role::User, std::move(trimmedPlanMessage)));
 
     if (_tracer)
         _tracer->writeUserMessage("plan", userMessage);

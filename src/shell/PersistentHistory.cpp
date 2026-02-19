@@ -156,6 +156,7 @@ void PersistentHistory::autoImportIfEmpty()
 
 void PersistentHistory::add(std::string entry)
 {
+    trimInPlace(entry);
     if (entry.empty())
         return;
 

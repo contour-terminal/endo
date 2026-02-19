@@ -351,6 +351,48 @@ TEST_CASE("PersistentHistory.entries_returns_unique_set", "[history]")
     CHECK(it == sorted.end());
 }
 
+TEST_CASE("PersistentHistory.trim_whitespace", "[history]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory {};
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("  git status  ");
+    REQUIRE(history.size() == 1);
+    CHECK(history.entries().back() == "git status");
+
+    history.add("\t cmake --build \n");
+    REQUIRE(history.size() == 2);
+    CHECK(history.entries().back() == "cmake --build");
+}
+
+TEST_CASE("PersistentHistory.whitespace_only_not_added", "[history]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory {};
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("   ");
+    history.add("\t\n\r");
+    history.add("");
+
+    CHECK(history.size() == 0);
+}
+
+TEST_CASE("PersistentHistory.trimmed_duplicates_detected", "[history]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory {};
+    history.setFilePath(dir.path / "history.yml");
+
+    history.add("git status");
+    history.add("  git status  "); // duplicate after trimming
+
+    REQUIRE(history.size() == 1);
+    CHECK(history.richEntries().back().command == "git status");
+    CHECK(history.richEntries().back().executionCount == 2);
+}
+
 TEST_CASE("PersistentHistory.atomic_flush_uses_tmp", "[history]")
 {
     auto dir = TempDir {};

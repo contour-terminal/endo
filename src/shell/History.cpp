@@ -16,6 +16,7 @@ InMemoryHistory::InMemoryHistory(size_t maxSize): _maxSize(maxSize)
 
 void InMemoryHistory::add(std::string entry)
 {
+    trimInPlace(entry);
     if (entry.empty())
         return;
 

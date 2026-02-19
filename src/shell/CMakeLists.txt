@@ -190,6 +190,7 @@ add_executable(test-endo-shell
     FSharpCompleter_test.cpp
     CommandSpecCompleter_test.cpp
     Gradient_test.cpp
+    History_test.cpp
     OutputDefinitionRegistry_test.cpp
     OutputParser_test.cpp
     PersistentHistory_test.cpp
