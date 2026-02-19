@@ -35,6 +35,7 @@
 #include <agent/AgentInputComponent.hpp>
 #include <agent/AgentResponseRenderer.hpp>
 #include <agent/AgentSession.hpp>
+#include <agent/AgentTracer.hpp>
 #include <agent/ConversationHistoryStore.hpp>
 #include <agent/PlanExecutor.hpp>
 #include <agent/ProjectContextLoader.hpp>
@@ -42,7 +43,6 @@
 #include <agent/SlashCommandRegistry.hpp>
 #include <agent/SlashCommands.hpp>
 #include <agent/SystemPromptBuilder.hpp>
-#include <agent/AgentTracer.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
@@ -1072,6 +1072,37 @@ namespace
         return result;
     }
 
+    /// @brief Formats a tool status line for terminal display.
+    ///
+    /// For shell_execute / endo_execute, returns a shell-prompt style line with the full command.
+    /// For all other tools, returns the gear icon with truncated JSON arguments.
+    ///
+    /// @param call The tool call to format.
+    /// @return A pair of (prefix, text) strings for styled rendering. The prefix is "$ " for shell
+    ///         commands or "\xe2\x9a\x99 tool_name" for other tools.
+    [[nodiscard]] auto formatToolStatusLine(agent::ToolCall const& call)
+        -> std::pair<std::string, std::string>
+    {
+        if (call.name == "shell_execute" || call.name == "endo_execute")
+        {
+            auto command = std::string {};
+            if (call.arguments.contains("command") && call.arguments["command"].is_string())
+                command = call.arguments["command"].get<std::string>();
+
+            if (call.arguments.contains("timeout_ms") && call.arguments["timeout_ms"].is_number())
+            {
+                auto const timeoutSeconds = call.arguments["timeout_ms"].get<int64_t>() / 1000;
+                return { "$ ", std::format("timeout {} {}", timeoutSeconds, command) };
+            }
+
+            return { "$ ", command };
+        }
+
+        auto args = formatToolCallArgs(call.arguments);
+        auto prefix = "\xe2\x9a\x99 " + std::string(call.name);
+        return { std::move(prefix), args.empty() ? std::string {} : " " + args };
+    }
+
     /// @brief Runs a command and captures stdout (for git info queries).
     [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
     {
@@ -1456,18 +1487,32 @@ void Shell::runAgentMode()
         auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
         auto const toolNameStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
         auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const shellPromptStyle = tui::Style { .fg = theme.colors.accent, .bold = true };
+        auto const shellCommandStyle = tui::Style { .fg = theme.colors.text };
 
         _agentSession->setToolStatusCallback(
-            [&out, &activeRenderer, barStyle, toolNameStyle, argsStyle](agent::ToolCall const& call) {
+            [&out, &activeRenderer, barStyle, toolNameStyle, argsStyle, shellPromptStyle, shellCommandStyle](
+                agent::ToolCall const& call) {
                 // Clear spinner line
                 out.carriageReturn();
                 out.clearToEndOfLine();
 
-                // Write styled tool use line: "│ ⚙ tool_name { args... }"
+                auto const [prefix, text] = formatToolStatusLine(call);
+
                 out.writeText("\u2502 ", barStyle);
-                out.writeText("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
-                if (auto const args = formatToolCallArgs(call.arguments); !args.empty())
-                    out.writeText(" " + args, argsStyle);
+                if (call.name == "shell_execute" || call.name == "endo_execute")
+                {
+                    // Shell-prompt style: "│ $ command"
+                    out.writeText(prefix, shellPromptStyle);
+                    out.writeText(text, shellCommandStyle);
+                }
+                else
+                {
+                    // Tool style: "│ ⚙ tool_name { args... }"
+                    out.writeText(prefix, toolNameStyle);
+                    if (!text.empty())
+                        out.writeText(text, argsStyle);
+                }
                 out.linefeed();
 
                 // Re-render spinner if still in thinking phase
