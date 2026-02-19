@@ -7,6 +7,7 @@
 #include <agent/tools/GlobTool.hpp>
 #include <agent/tools/GrepTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
+#include <agent/tools/SearchTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 namespace endo::agent
@@ -80,6 +81,7 @@ auto ExploreTool::execute(nlohmann::json const& arguments) -> std::expected<Tool
     innerRegistry.registerTool(std::make_unique<ReadFileTool>());
     innerRegistry.registerTool(std::make_unique<GlobTool>());
     innerRegistry.registerTool(std::make_unique<GrepTool>());
+    innerRegistry.registerTool(std::make_unique<SearchTool>());
     innerRegistry.registerTool(std::make_unique<GitTool>(_shellExecCb));
 
     // Create an isolated inner agent session

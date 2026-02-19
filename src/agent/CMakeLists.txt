@@ -39,6 +39,7 @@ add_library(endo-agent STATIC
     tools/EditFileTool.hpp tools/EditFileTool.cpp
     tools/GlobTool.hpp tools/GlobTool.cpp
     tools/GrepTool.hpp tools/GrepTool.cpp
+    tools/SearchTool.hpp tools/SearchTool.cpp
     tools/ShellExecuteTool.hpp tools/ShellExecuteTool.cpp
     tools/EndoExecuteTool.hpp tools/EndoExecuteTool.cpp
     tools/ExploreTool.hpp tools/ExploreTool.cpp
@@ -91,6 +92,7 @@ add_executable(test-endo-agent
     tools/EditFileTool_test.cpp
     tools/GlobTool_test.cpp
     tools/GrepTool_test.cpp
+    tools/SearchTool_test.cpp
     tools/ShellExecuteTool_test.cpp
     tools/EndoExecuteTool_test.cpp
     tools/ExploreTool_test.cpp

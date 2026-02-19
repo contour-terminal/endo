@@ -1097,6 +1097,20 @@ Component (base class)
 - [x] Formatted markdown output: numbered results with title, URL, and description
 - [x] 8 unit tests: definition schema, name, missing/empty query, Brave/Google missing credentials, config reference semantics
 
+### Phase 3.17: Unified SearchTool ✅
+
+- [x] `SearchTool`: unified file finding and content search tool combining glob and grep capabilities
+  - [x] Four output modes: `files`, `content`, `files_with_matches`, `count`
+  - [x] File type shorthand filtering (20 types: cpp, py, js, ts, rust, go, etc.)
+  - [x] Filename glob filter for content modes
+  - [x] Case-insensitive regex matching
+  - [x] Asymmetric context lines (`context_before`, `context_after`) and symmetric `context`
+  - [x] Multiline regex matching (cross-line patterns via `[\s\S]`)
+  - [x] Pagination via `offset`/`limit` parameters
+  - [x] Binary file skipping, mod-time sorting for file modes, count-descending sorting for count mode
+  - [x] Registered in Shell tool registry and ExploreTool inner (read-only) registry
+  - [x] 42 unit tests covering all modes, validation, edge cases, and pagination
+
 ### Phase 3.16: Agent Documentation ✅
 
 - [x] Agent overview page (`docs/agent/index.md`): quick start, providers, CLI commands, entering/exiting agent mode

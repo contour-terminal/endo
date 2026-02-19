@@ -54,6 +54,7 @@
 #include <agent/tools/GrepTool.hpp>
 #include <agent/tools/ReadFileTool.hpp>
 #include <agent/tools/SaveMemoryTool.hpp>
+#include <agent/tools/SearchTool.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
@@ -1445,6 +1446,7 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::EditFileTool>());
     toolRegistry.registerTool(std::make_unique<agent::GlobTool>());
     toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
+    toolRegistry.registerTool(std::make_unique<agent::SearchTool>());
     toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
     toolRegistry.registerTool(std::make_unique<agent::EndoExecuteTool>(endoExecCb));
     toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
