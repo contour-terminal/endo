@@ -44,6 +44,18 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     canvas.put(rowOff, 2, " ", {});                                  // padding
     auto col = 3 + canvas.putString(rowOff, 3, "agent", labelStyle); // "agent" label
 
+    // Show mode indicator (plan vs execute)
+    {
+        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        dimPipeStyle.dim = true;
+        col += canvas.putString(rowOff, col, " ", {});
+        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(rowOff, col, " ", {});
+        auto modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.statusText }
+                                   : tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        col += canvas.putString(rowOff, col, _planMode ? "plan" : "execute", modeStyle);
+    }
+
     // Show provider and model info if available
     if (!_providerName.empty() || !_modelName.empty())
     {
@@ -86,18 +98,6 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         {
             col += canvas.putString(rowOff, col, _projectPath, dimTextStyle);
         }
-    }
-
-    // Show mode indicator (plan vs execute)
-    {
-        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
-        dimPipeStyle.dim = true;
-        col += canvas.putString(rowOff, col, " ", {});
-        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
-        col += canvas.putString(rowOff, col, " ", {});
-        auto modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.statusText }
-                                   : tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-        col += canvas.putString(rowOff, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
     // Draw left chrome for each visible input line (accounting for scroll offset)
