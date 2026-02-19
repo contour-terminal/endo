@@ -100,6 +100,11 @@ MarkdownRenderer::MarkdownRenderer(TerminalOutput& output, MarkdownTheme theme):
 {
 }
 
+void MarkdownRenderer::setFullWidthMode(bool enabled) noexcept
+{
+    _fullWidthMode = enabled;
+}
+
 void MarkdownRenderer::render(std::string_view markdown)
 {
     auto pos = std::size_t { 0 };
@@ -215,6 +220,10 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
     auto heading3 = Style {};
     heading3.bold = true;
 
+    auto headingEmphasis = Style {};
+    headingEmphasis.bold = true;
+    headingEmphasis.fg = 0xFFD700_rgb; // Gold — stands out against heading base style
+
     auto codeBlock = Style {};
     codeBlock.dim = true;
 
@@ -245,6 +254,7 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
         .heading1 = heading1,
         .heading2 = heading2,
         .heading3 = heading3,
+        .headingEmphasis = headingEmphasis,
         .codeBlock = codeBlock,
         .codeInline = codeInline,
         .bold = boldStyle,
@@ -307,8 +317,22 @@ void MarkdownRenderer::renderLine(std::string_view line)
     _output.writeRaw("\n");
 }
 
-void MarkdownRenderer::renderInline(std::string_view text)
+void MarkdownRenderer::renderInline(std::string_view text, Style const* baseStyle, Style const* boldStyle)
 {
+    auto effectiveBold = boldStyle ? *boldStyle : _theme.bold;
+    auto effectiveItalic = _theme.italic;
+    auto effectiveCode = _theme.codeInline;
+    auto effectiveLink = _theme.link;
+
+    // Inherit underline from base style so decorations aren't interrupted by inline emphasis.
+    if (baseStyle && baseStyle->underline)
+    {
+        effectiveBold.underline = true;
+        effectiveItalic.underline = true;
+        effectiveCode.underline = true;
+        effectiveLink.underline = true;
+    }
+
     auto pos = std::size_t { 0 };
     while (pos < text.size())
     {
@@ -318,7 +342,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endTick = text.find('`', pos + 1);
             if (endTick != std::string_view::npos)
             {
-                _output.writeText(text.substr(pos + 1, endTick - pos - 1), _theme.codeInline);
+                _output.writeText(text.substr(pos + 1, endTick - pos - 1), effectiveCode);
                 pos = endTick + 1;
                 continue;
             }
@@ -330,7 +354,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endBold = text.find("**", pos + 2);
             if (endBold != std::string_view::npos)
             {
-                _output.writeText(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
+                _output.writeText(text.substr(pos + 2, endBold - pos - 2), effectiveBold);
                 pos = endBold + 2;
                 continue;
             }
@@ -342,7 +366,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endItalic = text.find('*', pos + 1);
             if (endItalic != std::string_view::npos)
             {
-                _output.writeText(text.substr(pos + 1, endItalic - pos - 1), _theme.italic);
+                _output.writeText(text.substr(pos + 1, endItalic - pos - 1), effectiveItalic);
                 pos = endItalic + 1;
                 continue;
             }
@@ -354,7 +378,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endBold = text.find("__", pos + 2);
             if (endBold != std::string_view::npos)
             {
-                _output.writeText(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
+                _output.writeText(text.substr(pos + 2, endBold - pos - 2), effectiveBold);
                 pos = endBold + 2;
                 continue;
             }
@@ -371,7 +395,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
                 if (endParen != std::string_view::npos)
                 {
                     auto const linkText = text.substr(pos + 1, endBracket - pos - 1);
-                    _output.writeText(linkText, _theme.link);
+                    _output.writeText(linkText, effectiveLink);
                     pos = endParen + 1;
                     continue;
                 }
@@ -381,7 +405,11 @@ void MarkdownRenderer::renderInline(std::string_view text)
         // Regular character — find the next special character
         auto const nextSpecial = text.find_first_of("`*_[", pos + 1);
         auto const end = (nextSpecial != std::string_view::npos) ? nextSpecial : text.size();
-        _output.writeRaw(text.substr(pos, end - pos));
+        auto const span = text.substr(pos, end - pos);
+        if (baseStyle)
+            _output.writeText(span, *baseStyle);
+        else
+            _output.writeRaw(span);
         pos = end;
     }
 }
@@ -451,13 +479,39 @@ void MarkdownRenderer::processStreamBuffer()
 
 void MarkdownRenderer::renderHeading(int level, std::string_view text)
 {
-    switch (level)
+    auto const& headingStyle = [&]() -> Style const& {
+        switch (level)
+        {
+            case 1: return _theme.heading1;
+            case 2: return _theme.heading2;
+            default: return _theme.heading3;
+        }
+    }();
+
+    if (_fullWidthMode && level == 1)
     {
-        case 1: _output.writeText(text, _theme.heading1); break;
-        case 2: _output.writeText(text, _theme.heading2); break;
-        default: _output.writeText(text, _theme.heading3); break;
+        // Double-height + double-width: top half, then bottom half (same text on both lines)
+        _output.setDoubleHeightTop();
+        renderInline(text, &headingStyle, &_theme.headingEmphasis);
+        _output.writeRaw("\n");
+        _output.setDoubleHeightBottom();
+        renderInline(text, &headingStyle, &_theme.headingEmphasis);
+        _output.writeRaw("\n");
+        _output.setSingleWidth();
     }
-    _output.writeRaw("\n");
+    else if (_fullWidthMode && level == 2)
+    {
+        // Double-width only: single line
+        _output.setDoubleWidth();
+        renderInline(text, &headingStyle, &_theme.headingEmphasis);
+        _output.writeRaw("\n");
+        _output.setSingleWidth();
+    }
+    else
+    {
+        renderInline(text, &headingStyle, &_theme.headingEmphasis);
+        _output.writeRaw("\n");
+    }
 }
 
 } // namespace tui

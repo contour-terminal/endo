@@ -13,6 +13,7 @@ namespace endo::agent
 AgentResponseRenderer::AgentResponseRenderer(tui::TerminalOutput& output):
     _output(output), _markdownRenderer(output), _spinner(tui::SpinnerType::Dots)
 {
+    _markdownRenderer.setFullWidthMode(true);
 }
 
 void AgentResponseRenderer::begin()

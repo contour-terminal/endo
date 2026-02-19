@@ -12,17 +12,18 @@ namespace tui
 /// @brief Theme for markdown rendering with terminal styles.
 struct MarkdownTheme
 {
-    Style heading1;   ///< H1: bold + double-height.
-    Style heading2;   ///< H2: bold + underline.
-    Style heading3;   ///< H3: bold.
-    Style codeBlock;  ///< Fenced code block.
-    Style codeInline; ///< Inline `code`.
-    Style bold;       ///< **bold** text.
-    Style italic;     ///< *italic* text.
-    Style link;       ///< [link](url).
-    Style listMarker; ///< List bullet/number.
-    Style blockquote; ///< > quoted text.
-    Style thinkBlock; ///< <think>...</think> content.
+    Style heading1;        ///< H1: bold + double-height.
+    Style heading2;        ///< H2: bold + underline.
+    Style heading3;        ///< H3: bold.
+    Style headingEmphasis; ///< **bold** text within headings (distinct color to raise attention).
+    Style codeBlock;       ///< Fenced code block.
+    Style codeInline;      ///< Inline `code`.
+    Style bold;            ///< **bold** text.
+    Style italic;          ///< *italic* text.
+    Style link;            ///< [link](url).
+    Style listMarker;      ///< List bullet/number.
+    Style blockquote;      ///< > quoted text.
+    Style thinkBlock;      ///< <think>...</think> content.
 };
 
 /// @brief Renders markdown to a terminal output with styling.
@@ -53,6 +54,13 @@ class MarkdownRenderer
     /// @brief Ends the streaming session and flushes remaining buffered content.
     void endStream();
 
+    /// @brief Enables full-width mode for DEC line attribute headings.
+    ///
+    /// When enabled, H1 headings use double-height/double-width (ESC#3/ESC#4)
+    /// and H2 headings use double-width (ESC#6). Only works correctly when
+    /// rendering to the full terminal width.
+    void setFullWidthMode(bool enabled) noexcept;
+
     /// @brief Returns the default theme with sensible terminal colors.
     [[nodiscard]] static auto defaultTheme() -> MarkdownTheme;
 
@@ -63,6 +71,7 @@ class MarkdownRenderer
     // Streaming state
     std::string _streamBuffer;
     bool _streaming = false;
+    bool _fullWidthMode = false;
     bool _inCodeBlock = false;
     bool _inThinkBlock = false;
     std::string _codeFence; ///< The fence string (e.g. "```") that opened the current code block.
@@ -71,7 +80,12 @@ class MarkdownRenderer
     void renderLine(std::string_view line);
 
     /// @brief Renders inline markdown elements (bold, italic, code, links).
-    void renderInline(std::string_view text);
+    /// @param text The inline text to render.
+    /// @param baseStyle Optional style for plain text (nullptr = unstyled raw output).
+    /// @param boldStyle Optional style override for **bold** text (nullptr = theme default).
+    void renderInline(std::string_view text,
+                      Style const* baseStyle = nullptr,
+                      Style const* boldStyle = nullptr);
 
     /// @brief Processes buffered streaming content, rendering complete lines.
     void processStreamBuffer();
