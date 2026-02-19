@@ -331,6 +331,7 @@ class Lexer
 
     void consumeWhitespace();
     Token consumeNumber();
+    Token finalizeNumberOrShellWord();
     Token consumeIdentifier();
     Token consumeIdentifier(Token token);
     Token consumeSingleQuotedString();

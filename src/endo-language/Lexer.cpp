@@ -466,7 +466,7 @@ Token Lexer::consumeNumber()
                 _nextToken.literal += unicode::to_utf8(_currentChar);
                 nextChar();
             }
-            return confirmToken(Token::Number);
+            return finalizeNumberOrShellWord();
         }
         if (_currentChar == U'o' || _currentChar == U'O')
         {
@@ -477,7 +477,7 @@ Token Lexer::consumeNumber()
                 _nextToken.literal += unicode::to_utf8(_currentChar);
                 nextChar();
             }
-            return confirmToken(Token::Number);
+            return finalizeNumberOrShellWord();
         }
         if (_currentChar == U'b' || _currentChar == U'B')
         {
@@ -488,7 +488,7 @@ Token Lexer::consumeNumber()
                 _nextToken.literal += unicode::to_utf8(_currentChar);
                 nextChar();
             }
-            return confirmToken(Token::Number);
+            return finalizeNumberOrShellWord();
         }
         // Fall through: plain '0' followed by more decimal digits, '.', 'e', etc.
     }
@@ -571,6 +571,29 @@ Token Lexer::consumeNumber()
                 nextChar();
             }
         }
+    }
+
+    return finalizeNumberOrShellWord();
+}
+
+Token Lexer::finalizeNumberOrShellWord()
+{
+    // In F# or arithmetic mode, always return Number
+    if (_fsharpDepth > 0 || _arithDepth > 0)
+        return confirmToken(Token::Number);
+
+    // In shell mode, check if the character after the number continues a word
+    // (e.g., git SHA "3a4b5c6" or filename "3.txt")
+    using namespace std::string_view_literals;
+    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`"sv;
+    if (!eof() && ReservedSymbols.find(_currentChar) == std::u32string_view::npos)
+    {
+        while (!eof() && ReservedSymbols.find(_currentChar) == std::u32string_view::npos)
+        {
+            _nextToken.literal += unicode::to_utf8(_currentChar);
+            nextChar();
+        }
+        return confirmToken(Token::Identifier);
     }
 
     return confirmToken(Token::Number);

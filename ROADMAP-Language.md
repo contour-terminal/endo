@@ -269,6 +269,7 @@ This document tracks the implementation status of F# language features as define
 - [ ] Numeric literal suffixes: `1kb`, `1mb`, `1gb`, `1tb` (byte sizes); `1ms`, `1s`, `1min`, `1h` (durations)
 - [x] Comments: `#`, `//`, `(* ... *)`
 - [x] `true`/`false` as native boolean token literals (`Token::True`/`Token::False`), removing shell builtin variants
+- [x] Shell mode: digit-leading tokens with non-digit suffixes lexed as single `Identifier` (e.g., git SHAs `3a4b5c6`, filenames `3.txt`)
 
 ## REPL
 
