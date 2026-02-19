@@ -15,7 +15,7 @@ using namespace endo::agent;
 TEST_CASE("agent.config.defaults")
 {
     auto config = AgentConfig {};
-    CHECK(config.activeProvider == "claude");
+    CHECK(config.activeProvider.empty()); // empty = auto-detect
     CHECK(config.claude.apiKeyEnv == "ANTHROPIC_API_KEY");
     CHECK(config.claude.model == "claude-sonnet-4-5-20250929");
     CHECK(config.claude.maxTokens == 8192);
@@ -29,7 +29,7 @@ TEST_CASE("agent.config.defaults")
 }
 
 // =============================================================================
-// YAML loading tests
+// YAML loading tests (backward compatibility — loads everything)
 // =============================================================================
 
 TEST_CASE("agent.config.load_full_yaml")
@@ -71,6 +71,7 @@ gemini:
     REQUIRE(result.has_value());
     auto const& config = *result;
 
+    // Backward compat: activeProvider still loaded from YAML
     CHECK(config.activeProvider == "gemini");
 
     CHECK(config.claude.apiKeyEnv == "MY_CLAUDE_KEY");
@@ -151,7 +152,7 @@ TEST_CASE("agent.config.load_malformed_yaml")
 }
 
 // =============================================================================
-// API key resolution tests
+// API key loading tests
 // =============================================================================
 
 TEST_CASE("agent.config.load_yaml_with_api_keys")
@@ -163,8 +164,6 @@ TEST_CASE("agent.config.load_yaml_with_api_keys")
     {
         std::ofstream f(configPath);
         f << R"(
-active_provider: openai
-
 claude:
   api_key: sk-ant-test-key-123
   model: claude-opus-4-20250514
@@ -190,10 +189,10 @@ gemini:
 }
 
 // =============================================================================
-// Config save/load round-trip tests
+// Config save/load round-trip tests (key-store only)
 // =============================================================================
 
-TEST_CASE("agent.config.save_load_roundtrip")
+TEST_CASE("agent.config.save_only_persists_api_keys")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-save";
     std::filesystem::create_directories(tmpDir);
@@ -217,15 +216,18 @@ TEST_CASE("agent.config.save_load_roundtrip")
     REQUIRE(loadResult.has_value());
     auto const& loaded = *loadResult;
 
-    CHECK(loaded.activeProvider == "openai");
+    // API keys are persisted
     CHECK(loaded.claude.apiKey == "sk-ant-test-roundtrip");
-    CHECK(loaded.claude.model == "claude-opus-4-20250514");
     CHECK(loaded.openai.apiKey == "sk-openai-test-roundtrip");
-    CHECK(loaded.openai.model == "gpt-4-turbo");
-    CHECK(loaded.openai.baseUrl == "https://custom.openai.com/v1");
     CHECK(loaded.gemini.apiKey == "AIzaSy-test-roundtrip");
-    CHECK(loaded.gemini.model == "gemini-2.5-pro");
-    CHECK(loaded.maxToolResultSize == 65536);
+
+    // Non-key fields are NOT persisted — they revert to defaults on reload
+    CHECK(loaded.activeProvider.empty());                       // not saved
+    CHECK(loaded.claude.model == "claude-sonnet-4-5-20250929"); // default, not "claude-opus"
+    CHECK(loaded.openai.model == "gpt-4o");                     // default, not "gpt-4-turbo"
+    CHECK(loaded.openai.baseUrl.empty());                       // not saved
+    CHECK(loaded.gemini.model == "gemini-2.5-flash");           // default
+    CHECK(loaded.maxToolResultSize == 30720);                   // default
 
     std::filesystem::remove_all(tmpDir);
 }
@@ -262,7 +264,7 @@ TEST_CASE("agent.config.save_only_non_defaults")
     // Load it back — should still be defaults
     auto loadResult = loadAgentConfig(configPath);
     REQUIRE(loadResult.has_value());
-    CHECK(loadResult->activeProvider == "claude");
+    CHECK(loadResult->activeProvider.empty());
     CHECK(loadResult->claude.apiKey.empty());
     CHECK(loadResult->claude.model == "claude-sonnet-4-5-20250929");
 
@@ -310,7 +312,7 @@ TEST_CASE("agent.config.resolve_provider_api_key_neither")
 }
 
 // =============================================================================
-// TraceConfig tests
+// TraceConfig tests (loading still works for backward compat)
 // =============================================================================
 
 TEST_CASE("agent.config.trace_defaults")
@@ -320,41 +322,25 @@ TEST_CASE("agent.config.trace_defaults")
     CHECK(config.trace.defaultPath.empty());
 }
 
-TEST_CASE("agent.config.trace_yaml_roundtrip")
+TEST_CASE("agent.config.trace_yaml_loads")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-trace";
     std::filesystem::create_directories(tmpDir);
     auto const configPath = tmpDir / "agent.yml";
 
-    auto original = AgentConfig {};
-    original.trace.enabled = true;
-    original.trace.defaultPath = "/tmp/my-trace.jsonl";
-
-    auto saveError = saveAgentConfig(original, configPath);
-    REQUIRE(!saveError.has_value());
+    {
+        std::ofstream f(configPath);
+        f << R"(
+trace:
+  enabled: true
+  default_path: /tmp/my-trace.jsonl
+)";
+    }
 
     auto loadResult = loadAgentConfig(configPath);
     REQUIRE(loadResult.has_value());
     CHECK(loadResult->trace.enabled == true);
     CHECK(loadResult->trace.defaultPath == "/tmp/my-trace.jsonl");
-
-    std::filesystem::remove_all(tmpDir);
-}
-
-TEST_CASE("agent.config.trace_default_not_emitted")
-{
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-trace-def";
-    std::filesystem::create_directories(tmpDir);
-    auto const configPath = tmpDir / "agent.yml";
-
-    auto config = AgentConfig {};
-    auto saveError = saveAgentConfig(config, configPath);
-    REQUIRE(!saveError.has_value());
-
-    auto loadResult = loadAgentConfig(configPath);
-    REQUIRE(loadResult.has_value());
-    CHECK_FALSE(loadResult->trace.enabled);
-    CHECK(loadResult->trace.defaultPath.empty());
 
     std::filesystem::remove_all(tmpDir);
 }
@@ -369,39 +355,23 @@ TEST_CASE("agent.config.explore_defaults")
     CHECK(config.explore.maxTurns == 10);
 }
 
-TEST_CASE("agent.config.explore_yaml_roundtrip")
+TEST_CASE("agent.config.explore_yaml_loads")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-explore";
     std::filesystem::create_directories(tmpDir);
     auto const configPath = tmpDir / "agent.yml";
 
-    auto original = AgentConfig {};
-    original.explore.maxTurns = 25;
-
-    auto saveError = saveAgentConfig(original, configPath);
-    REQUIRE(!saveError.has_value());
+    {
+        std::ofstream f(configPath);
+        f << R"(
+explore:
+  max_turns: 25
+)";
+    }
 
     auto loadResult = loadAgentConfig(configPath);
     REQUIRE(loadResult.has_value());
     CHECK(loadResult->explore.maxTurns == 25);
-
-    std::filesystem::remove_all(tmpDir);
-}
-
-TEST_CASE("agent.config.explore_default_not_emitted")
-{
-    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-explore-def";
-    std::filesystem::create_directories(tmpDir);
-    auto const configPath = tmpDir / "agent.yml";
-
-    // Default explore config should not produce an explore section
-    auto config = AgentConfig {};
-    auto saveError = saveAgentConfig(config, configPath);
-    REQUIRE(!saveError.has_value());
-
-    auto loadResult = loadAgentConfig(configPath);
-    REQUIRE(loadResult.has_value());
-    CHECK(loadResult->explore.maxTurns == 10); // default preserved
 
     std::filesystem::remove_all(tmpDir);
 }

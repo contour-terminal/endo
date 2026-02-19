@@ -290,8 +290,6 @@ int main(int argc, char const* argv[])
             return endo::agent::runLoginCommand(hint);
         if (subcommand == "status")
             return endo::agent::runStatusCommand();
-        if (subcommand == "switch")
-            return endo::agent::runSwitchCommand(hint);
         if (subcommand == "logout")
             return endo::agent::runLogoutCommand(hint);
         if (subcommand == "trace" && hint == "replay" && args.size() >= 5)
@@ -302,7 +300,7 @@ int main(int argc, char const* argv[])
             return EXIT_FAILURE;
         }
         std::print(stderr, "Unknown agent command: {}\n", subcommand);
-        std::print(stderr, "Available commands: login, status, switch, logout, trace\n");
+        std::print(stderr, "Available commands: login, status, logout, trace\n");
         return EXIT_FAILURE;
     }
 

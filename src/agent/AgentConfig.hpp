@@ -62,7 +62,7 @@ struct TraceConfig
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
-    std::string activeProvider = "claude";        ///< Which provider to use by default.
+    std::string activeProvider; ///< Which provider to use (empty = auto-detect from authenticated).
     std::string promptIndicator = "\xe2\x9d\xaf"; ///< Agent prompt indicator (default: ❯ U+276F).
 
     ClaudeConfig claude;       ///< Anthropic Claude configuration.

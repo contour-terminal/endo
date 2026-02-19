@@ -85,108 +85,20 @@ namespace
             config.defaultPath = node["default_path"].as<std::string>();
     }
 
-    void emitClaudeConfig(YAML::Emitter& emitter, ClaudeConfig const& config)
+    /// Emits API key fields for a provider section (key-store only).
+    void emitApiKeySection(YAML::Emitter& emitter,
+                           std::string_view sectionName,
+                           std::string const& apiKey,
+                           std::string const& apiKeyEnv,
+                           std::string const& defaultApiKeyEnv)
     {
-        auto const defaults = ClaudeConfig {};
-        auto hasNonDefault = !config.apiKey.empty() || config.apiKeyEnv != defaults.apiKeyEnv
-                             || config.model != defaults.model || config.maxTokens != defaults.maxTokens;
-        if (!hasNonDefault)
-            return;
-        emitter << YAML::Key << "claude" << YAML::Value << YAML::BeginMap;
-        if (!config.apiKey.empty())
-            emitter << YAML::Key << "api_key" << YAML::Value << config.apiKey;
-        if (config.apiKeyEnv != defaults.apiKeyEnv)
-            emitter << YAML::Key << "api_key_env" << YAML::Value << config.apiKeyEnv;
-        if (config.model != defaults.model)
-            emitter << YAML::Key << "model" << YAML::Value << config.model;
-        if (config.maxTokens != defaults.maxTokens)
-            emitter << YAML::Key << "max_tokens" << YAML::Value << config.maxTokens;
-        emitter << YAML::EndMap;
-    }
-
-    void emitOpenAiConfig(YAML::Emitter& emitter,
-                          std::string_view sectionName,
-                          OpenAiConfig const& config,
-                          OpenAiConfig const& defaults)
-    {
-        auto hasNonDefault = !config.apiKey.empty() || config.apiKeyEnv != defaults.apiKeyEnv
-                             || config.model != defaults.model || !config.baseUrl.empty()
-                             || config.maxTokens != defaults.maxTokens;
-        if (!hasNonDefault)
+        if (apiKey.empty() && apiKeyEnv == defaultApiKeyEnv)
             return;
         emitter << YAML::Key << std::string(sectionName) << YAML::Value << YAML::BeginMap;
-        if (!config.apiKey.empty())
-            emitter << YAML::Key << "api_key" << YAML::Value << config.apiKey;
-        if (config.apiKeyEnv != defaults.apiKeyEnv)
-            emitter << YAML::Key << "api_key_env" << YAML::Value << config.apiKeyEnv;
-        if (config.model != defaults.model)
-            emitter << YAML::Key << "model" << YAML::Value << config.model;
-        if (!config.baseUrl.empty())
-            emitter << YAML::Key << "base_url" << YAML::Value << config.baseUrl;
-        if (config.maxTokens != defaults.maxTokens)
-            emitter << YAML::Key << "max_tokens" << YAML::Value << config.maxTokens;
-        emitter << YAML::EndMap;
-    }
-
-    void emitGeminiConfig(YAML::Emitter& emitter, GeminiConfig const& config)
-    {
-        auto const defaults = GeminiConfig {};
-        auto hasNonDefault = !config.apiKey.empty() || config.apiKeyEnv != defaults.apiKeyEnv
-                             || config.model != defaults.model || config.maxTokens != defaults.maxTokens;
-        if (!hasNonDefault)
-            return;
-        emitter << YAML::Key << "gemini" << YAML::Value << YAML::BeginMap;
-        if (!config.apiKey.empty())
-            emitter << YAML::Key << "api_key" << YAML::Value << config.apiKey;
-        if (config.apiKeyEnv != defaults.apiKeyEnv)
-            emitter << YAML::Key << "api_key_env" << YAML::Value << config.apiKeyEnv;
-        if (config.model != defaults.model)
-            emitter << YAML::Key << "model" << YAML::Value << config.model;
-        if (config.maxTokens != defaults.maxTokens)
-            emitter << YAML::Key << "max_tokens" << YAML::Value << config.maxTokens;
-        emitter << YAML::EndMap;
-    }
-
-    void emitPlanModeConfig(YAML::Emitter& emitter, PlanModeConfig const& config)
-    {
-        auto const defaults = PlanModeConfig {};
-        auto hasNonDefault = config.enabled != defaults.enabled
-                             || config.pauseBetweenSteps != defaults.pauseBetweenSteps
-                             || config.maxExplorationTurns != defaults.maxExplorationTurns;
-        if (!hasNonDefault)
-            return;
-        emitter << YAML::Key << "plan_mode" << YAML::Value << YAML::BeginMap;
-        if (config.enabled != defaults.enabled)
-            emitter << YAML::Key << "enabled" << YAML::Value << config.enabled;
-        if (config.pauseBetweenSteps != defaults.pauseBetweenSteps)
-            emitter << YAML::Key << "pause_between_steps" << YAML::Value << config.pauseBetweenSteps;
-        if (config.maxExplorationTurns != defaults.maxExplorationTurns)
-            emitter << YAML::Key << "max_exploration_turns" << YAML::Value << config.maxExplorationTurns;
-        emitter << YAML::EndMap;
-    }
-
-    void emitExploreConfig(YAML::Emitter& emitter, ExploreConfig const& config)
-    {
-        auto const defaults = ExploreConfig {};
-        if (config.maxTurns == defaults.maxTurns)
-            return;
-        emitter << YAML::Key << "explore" << YAML::Value << YAML::BeginMap;
-        emitter << YAML::Key << "max_turns" << YAML::Value << config.maxTurns;
-        emitter << YAML::EndMap;
-    }
-
-    void emitTraceConfig(YAML::Emitter& emitter, TraceConfig const& config)
-    {
-        auto const defaults = TraceConfig {};
-        auto const hasNonDefault =
-            config.enabled != defaults.enabled || config.defaultPath != defaults.defaultPath;
-        if (!hasNonDefault)
-            return;
-        emitter << YAML::Key << "trace" << YAML::Value << YAML::BeginMap;
-        if (config.enabled != defaults.enabled)
-            emitter << YAML::Key << "enabled" << YAML::Value << config.enabled;
-        if (config.defaultPath != defaults.defaultPath)
-            emitter << YAML::Key << "default_path" << YAML::Value << config.defaultPath;
+        if (!apiKey.empty())
+            emitter << YAML::Key << "api_key" << YAML::Value << apiKey;
+        if (apiKeyEnv != defaultApiKeyEnv)
+            emitter << YAML::Key << "api_key_env" << YAML::Value << apiKeyEnv;
         emitter << YAML::EndMap;
     }
 } // namespace
@@ -268,25 +180,19 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
         auto emitter = YAML::Emitter {};
         emitter << YAML::BeginMap;
 
+        // Only persist API key fields — all other settings are managed via init.endo.
         auto const defaults = AgentConfig {};
-        if (config.activeProvider != defaults.activeProvider)
-            emitter << YAML::Key << "active_provider" << YAML::Value << config.activeProvider;
-        if (config.promptIndicator != defaults.promptIndicator)
-            emitter << YAML::Key << "prompt_indicator" << YAML::Value << config.promptIndicator;
-
-        emitClaudeConfig(emitter, config.claude);
-        emitOpenAiConfig(emitter, "openai", config.openai, defaults.openai);
-        emitOpenAiConfig(emitter, "openai_compat", config.openaiCompat, defaults.openaiCompat);
-        emitGeminiConfig(emitter, config.gemini);
-
-        if (config.maxToolResultSize != defaults.maxToolResultSize)
-            emitter << YAML::Key << "max_tool_result_size" << YAML::Value << config.maxToolResultSize;
-        if (config.logToolUses != defaults.logToolUses)
-            emitter << YAML::Key << "log_tool_uses" << YAML::Value << config.logToolUses;
-
-        emitPlanModeConfig(emitter, config.planMode);
-        emitExploreConfig(emitter, config.explore);
-        emitTraceConfig(emitter, config.trace);
+        emitApiKeySection(
+            emitter, "claude", config.claude.apiKey, config.claude.apiKeyEnv, defaults.claude.apiKeyEnv);
+        emitApiKeySection(
+            emitter, "openai", config.openai.apiKey, config.openai.apiKeyEnv, defaults.openai.apiKeyEnv);
+        emitApiKeySection(emitter,
+                          "openai_compat",
+                          config.openaiCompat.apiKey,
+                          config.openaiCompat.apiKeyEnv,
+                          defaults.openaiCompat.apiKeyEnv);
+        emitApiKeySection(
+            emitter, "gemini", config.gemini.apiKey, config.gemini.apiKeyEnv, defaults.gemini.apiKeyEnv);
 
         emitter << YAML::EndMap;
 

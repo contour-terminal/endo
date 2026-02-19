@@ -214,9 +214,8 @@ auto runLoginCommand(std::string_view providerHint) -> int
     }
     std::print(" OK\n");
 
-    // Save to config
+    // Save to config (API key only — provider selection is done via init.endo)
     setProviderApiKey(config, providerName, *apiKey);
-    config.activeProvider = providerName;
 
     if (auto error = saveAgentConfig(config))
     {
@@ -224,7 +223,9 @@ auto runLoginCommand(std::string_view providerHint) -> int
         return EXIT_FAILURE;
     }
 
-    std::print("Authenticated as {}. Configuration saved to ~/.config/endo/agent.yml\n", providerName);
+    std::print("Authenticated as {}. API key saved to ~/.config/endo/agent.yml\n", providerName);
+    std::print("To select this provider, add to ~/.config/endo/init.endo:\n");
+    std::print("  set_agent_provider \"{}\"\n", providerName);
     return EXIT_SUCCESS;
 }
 
@@ -246,11 +247,9 @@ auto runStatusCommand() -> int
     auto const green = useColor ? "\033[32m"sv : ""sv;
     auto const red = useColor ? "\033[31m"sv : ""sv;
     auto const yellow = useColor ? "\033[33m"sv : ""sv;
-    auto const cyan = useColor ? "\033[36m"sv : ""sv;
-    auto const magenta = useColor ? "\033[35m"sv : ""sv;
 
-    std::print("\n{}{:<16}{:<18}{:<14}{}{}\n", bold, "Provider", "Status", "Source", "Active", reset);
-    std::print("{}{:─<16}{:─<18}{:─<14}{:─<8}{}\n", dim, "", "", "", "", reset);
+    std::print("\n{}{:<16}{:<18}{}{}\n", bold, "Provider", "Status", "Source", reset);
+    std::print("{}{:─<16}{:─<18}{:─<14}{}\n", dim, "", "", "", reset);
 
     auto const allProviders = std::array { "claude"sv, "openai"sv, "gemini"sv, "openai_compat"sv };
 
@@ -258,11 +257,6 @@ auto runStatusCommand() -> int
     {
         auto const authenticated = isProviderAuthenticated(config, provider);
         auto const source = getKeySource(config, provider);
-        auto const isActive = (config.activeProvider == provider);
-
-        // Provider name: bold+cyan if active, normal otherwise.
-        auto const nameColor = isActive ? cyan : ""sv;
-        auto const nameBold = isActive ? bold : ""sv;
 
         // Status: green for authenticated, red for not configured.
         auto const statusColor = authenticated ? green : red;
@@ -272,104 +266,17 @@ auto runStatusCommand() -> int
         auto const sourceColor = authenticated ? yellow : ""sv;
         auto const sourceText = authenticated ? source : ""sv;
 
-        // Active marker: bold magenta.
-        auto const activeText = isActive ? "<- active"sv : ""sv;
-        auto const activeColor = isActive ? magenta : ""sv;
-        auto const activeBold = isActive ? bold : ""sv;
-
-        std::print("{}{}{:<16}{}{}{:<18}{}{}{:<14}{}{}{}{}{}\n",
-                   nameBold,
-                   nameColor,
+        std::print("{:<16}{}{:<18}{}{}{}{}\n",
                    provider,
-                   reset,
                    statusColor,
                    statusText,
                    reset,
                    sourceColor,
                    sourceText,
-                   reset,
-                   activeBold,
-                   activeColor,
-                   activeText,
                    reset);
     }
-    std::print("\n");
-    return EXIT_SUCCESS;
-}
-
-auto runSwitchCommand(std::string_view providerHint) -> int
-{
-    auto config = loadAgentConfig();
-
-    if (!providerHint.empty())
-    {
-        // Direct switch to named provider
-        if (!isProviderAuthenticated(config, providerHint))
-        {
-            std::print(stderr,
-                       "Provider '{}' is not authenticated. Run: endo agent login {}\n",
-                       providerHint,
-                       providerHint);
-            return EXIT_FAILURE;
-        }
-
-        config.activeProvider = std::string(providerHint);
-        if (auto error = saveAgentConfig(config))
-        {
-            std::print(stderr, "Failed to save configuration: {}\n", *error);
-            return EXIT_FAILURE;
-        }
-        std::print("Switched active provider to {}.\n", providerHint);
-        return EXIT_SUCCESS;
-    }
-
-    // Interactive: show menu of authenticated providers
-    auto authenticatedProviders = std::vector<std::string> {};
-    auto const allProviders = std::array { "claude"sv, "openai"sv, "gemini"sv, "openai_compat"sv };
-
-    for (auto const& p: allProviders)
-    {
-        if (isProviderAuthenticated(config, p))
-            authenticatedProviders.emplace_back(p);
-    }
-
-    if (authenticatedProviders.empty())
-    {
-        std::print(stderr, "No providers are authenticated. Run: endo agent login\n");
-        return EXIT_FAILURE;
-    }
-
-    std::print("\nAuthenticated providers:\n");
-    for (size_t i = 0; i < authenticatedProviders.size(); ++i)
-    {
-        auto const& name = authenticatedProviders[i];
-        auto const isCurrent = (name == config.activeProvider);
-        std::print("  [{}] {}{}\n", i + 1, name, isCurrent ? " (current)" : "");
-    }
-
-    std::print("\nSelect provider [1-{}]: ", authenticatedProviders.size());
-
-    auto input = std::string {};
-    if (!std::getline(std::cin, input) || input.empty())
-        return EXIT_FAILURE;
-
-    auto const choice = std::strtol(input.c_str(), nullptr, 10);
-    if (choice < 1 || static_cast<size_t>(choice) > authenticatedProviders.size())
-    {
-        std::print(stderr, "Invalid choice.\n");
-        return EXIT_FAILURE;
-    }
-
-    auto const& selected = authenticatedProviders[static_cast<size_t>(choice - 1)];
-    config.activeProvider = selected;
-
-    if (auto error = saveAgentConfig(config))
-    {
-        std::print(stderr, "Failed to save configuration: {}\n", *error);
-        return EXIT_FAILURE;
-    }
-
-    std::print("Switched active provider to {}.\n", selected);
+    std::print("\n{}Configure active provider in ~/.config/endo/init.endo:{}\n", dim, reset);
+    std::print("{}  set_agent_provider \"name\"{}\n\n", dim, reset);
     return EXIT_SUCCESS;
 }
 

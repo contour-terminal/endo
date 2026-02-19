@@ -9,6 +9,7 @@
 
 #include <endo-language/BuiltinImpls.hpp>
 
+#include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
@@ -1135,6 +1136,266 @@ void Shell::registerPromptBuiltins()
 void Shell::registerAgentConfigBuiltins()
 {
     // clang-format off
+
+    // --- Top-level agent settings ---
+
+    _runtime.registerFunction("set_agent_provider")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& name = args.getString(1);
+            if (name == "claude" || name == "openai" || name == "gemini" || name == "openai_compat")
+            {
+                agentConfig.activeProvider = std::string(name);
+                _agentProviderFactory.reset();
+            }
+        });
+
+    _runtime.registerFunction("set_agent_prompt_indicator")
+        .param<CoreVM::CoreString>("chars")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.promptIndicator = std::string(args.getString(1));
+        });
+
+    _runtime.registerFunction("set_agent_max_tool_result_size")
+        .param<CoreVM::CoreNumber>("bytes")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const bytes = args.getInt(1);
+            if (bytes > 0)
+                agentConfig.maxToolResultSize = static_cast<size_t>(bytes);
+        });
+
+    _runtime.registerFunction("set_agent_log_tool_uses")
+        .param<bool>("enabled")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.logToolUses = args.getBool(1);
+        });
+
+    // --- Claude provider ---
+
+    _runtime.registerFunction("set_claude_api_key")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.claude.apiKey = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_claude_api_key_env")
+        .param<CoreVM::CoreString>("env_var")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.claude.apiKeyEnv = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_claude_model")
+        .param<CoreVM::CoreString>("model")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.claude.model = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_claude_max_tokens")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+            {
+                agentConfig.claude.maxTokens = static_cast<size_t>(n);
+                _agentProviderFactory.reset();
+            }
+        });
+
+    // --- OpenAI provider ---
+
+    _runtime.registerFunction("set_openai_api_key")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openai.apiKey = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_api_key_env")
+        .param<CoreVM::CoreString>("env_var")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openai.apiKeyEnv = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_model")
+        .param<CoreVM::CoreString>("model")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openai.model = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_base_url")
+        .param<CoreVM::CoreString>("url")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openai.baseUrl = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_max_tokens")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+            {
+                agentConfig.openai.maxTokens = static_cast<size_t>(n);
+                _agentProviderFactory.reset();
+            }
+        });
+
+    // --- OpenAI-compatible provider ---
+
+    _runtime.registerFunction("set_openai_compat_api_key")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openaiCompat.apiKey = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_compat_api_key_env")
+        .param<CoreVM::CoreString>("env_var")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openaiCompat.apiKeyEnv = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_compat_model")
+        .param<CoreVM::CoreString>("model")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openaiCompat.model = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_compat_base_url")
+        .param<CoreVM::CoreString>("url")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.openaiCompat.baseUrl = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_openai_compat_max_tokens")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+            {
+                agentConfig.openaiCompat.maxTokens = static_cast<size_t>(n);
+                _agentProviderFactory.reset();
+            }
+        });
+
+    // --- Gemini provider ---
+
+    _runtime.registerFunction("set_gemini_api_key")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.gemini.apiKey = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_gemini_api_key_env")
+        .param<CoreVM::CoreString>("env_var")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.gemini.apiKeyEnv = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_gemini_model")
+        .param<CoreVM::CoreString>("model")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.gemini.model = std::string(args.getString(1));
+            _agentProviderFactory.reset();
+        });
+
+    _runtime.registerFunction("set_gemini_max_tokens")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+            {
+                agentConfig.gemini.maxTokens = static_cast<size_t>(n);
+                _agentProviderFactory.reset();
+            }
+        });
+
+    // --- Plan mode ---
+
+    _runtime.registerFunction("set_plan_mode_enabled")
+        .param<bool>("enabled")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.planMode.enabled = args.getBool(1);
+        });
+
+    _runtime.registerFunction("set_plan_mode_pause_between_steps")
+        .param<bool>("enabled")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.planMode.pauseBetweenSteps = args.getBool(1);
+        });
+
+    _runtime.registerFunction("set_plan_mode_max_exploration_turns")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+                agentConfig.planMode.maxExplorationTurns = static_cast<size_t>(n);
+        });
+
+    // --- Explore sub-agent ---
+
+    _runtime.registerFunction("set_explore_max_turns")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const n = args.getInt(1);
+            if (n > 0)
+                agentConfig.explore.maxTurns = static_cast<size_t>(n);
+        });
+
+    // --- Trace ---
+
+    _runtime.registerFunction("set_trace_enabled")
+        .param<bool>("enabled")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.trace.enabled = args.getBool(1);
+        });
+
+    _runtime.registerFunction("set_trace_default_path")
+        .param<CoreVM::CoreString>("path")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            agentConfig.trace.defaultPath = std::string(args.getString(1));
+        });
+
+    // --- Web search ---
+
     _runtime.registerFunction("set_web_search_engine")
         .param<CoreVM::CoreString>("engine")
         .returnType(CoreVM::LiteralType::Void)
