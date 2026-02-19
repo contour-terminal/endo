@@ -548,7 +548,9 @@ int Shell::run()
             {
                 auto ifs = std::ifstream(initPath);
                 auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
-                execute(content);
+                auto const initResult = execute(content);
+                if (initResult != 0)
+                    std::println(std::cerr, "endo: warning: init.endo exited with code {}", initResult);
             }
             catch (std::exception const& e)
             {
@@ -1735,6 +1737,12 @@ void Shell::runAgentMode()
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
     _agentSession->setMaxExplorationIterations(agentConfig.planMode.maxExplorationTurns);
+
+    // Always reset tracer and tool status callback — they are conditionally re-set below.
+    // This ensures config changes (via init.endo or interactive builtins) take effect
+    // on each agent mode entry, and avoids dangling pointers from previous sessions.
+    _agentSession->setTracer(nullptr);
+    _agentSession->setToolStatusCallback(nullptr);
 
     // Set up tool I/O tracing if enabled via CLI flag or config
     auto agentTracer = std::optional<agent::AgentTracer> {};
