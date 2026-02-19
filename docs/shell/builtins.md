@@ -398,6 +398,42 @@ mkdir -- -starts-with-dash
 
 ---
 
+## cp
+
+Copy files and directories.
+
+**Syntax:**
+
+```
+cp [-rfnvR] [--recursive] [--force] [--no-clobber] [--verbose] [--] source... dest
+```
+
+**Description:** Copies SOURCE to DEST, or multiple SOURCE(s) to an existing DIRECTORY. By default,
+overwrites existing destination files. Copying a directory requires the `-r` flag.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-r`, `-R`, `--recursive` | Copy directories recursively |
+| `-f`, `--force` | Force overwrite; remove destination if needed |
+| `-n`, `--no-clobber` | Do not overwrite existing files |
+| `-v`, `--verbose` | Print each file as it is copied |
+| `--` | End of options; treat subsequent arguments as file names |
+
+**Examples:**
+
+```endo
+cp file.txt backup.txt
+cp -r srcdir dstdir
+cp -rv project/ /tmp/project-backup/
+cp -n important.txt dest/
+cp -- -starts-with-dash.txt dest.txt
+cp a.txt b.txt c.txt target-directory/
+```
+
+---
+
 ## sleep
 
 Wait for a specified duration.

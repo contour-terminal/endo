@@ -45,7 +45,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | IR generation to CoreVM bytecode | ✅ |
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
-| Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd` (incl. `cd -`), `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep`, `fetch`, `rm` (-r/-R/-f/-d/-v/-i/--recursive/--force/--dir/--verbose/--help/--), `mkdir` (-p/-v/--parents/--verbose/--help/--) | ✅ |
+| Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd` (incl. `cd -`), `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep`, `fetch`, `rm` (-r/-R/-f/-d/-v/-i/--recursive/--force/--dir/--verbose/--help/--), `mkdir` (-p/-v/--parents/--verbose/--help/--), `cp` (-r/-R/-f/-n/-v/--recursive/--force/--no-clobber/--verbose/--help/--) | ✅ |
 | Environment variables (set/get/export, LINES/COLUMNS from TTY) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | String interpolation in double-quoted strings (`"hello $USER"`) | ✅ |

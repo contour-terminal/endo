@@ -1047,6 +1047,356 @@ TEST_CASE("shell.builtin.mkdir_multiple_dirs")
 }
 
 // ============================================================================
+// cp builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.cp_help")
+{
+    TestShell shell;
+    auto output = shell("cp --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--recursive") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.cp_single_file")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_single";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    // Create source file with content
+    {
+        std::ofstream ofs(src);
+        ofs << "hello world";
+    }
+
+    TestShell shell;
+    shell(std::format("cp {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(dst));
+
+    // Verify content
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "hello world");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_nonexistent_source")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_noexist";
+    fs::remove_all(base);
+    fs::create_directories(base);
+
+    TestShell shell;
+    shell(std::format("cp {}/nosuchfile {}/dest", base.string(), base.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_overwrite_default")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_overwrite";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "new content";
+    }
+    {
+        std::ofstream ofs(dst);
+        ofs << "old content";
+    }
+
+    TestShell shell;
+    shell(std::format("cp {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "new content");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_no_clobber")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_noclobber";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "new content";
+    }
+    {
+        std::ofstream ofs(dst);
+        ofs << "old content";
+    }
+
+    TestShell shell;
+    shell(std::format("cp -n {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+
+    // Original content preserved
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "old content");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_force")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_force";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "forced content";
+    }
+    {
+        std::ofstream ofs(dst);
+        ofs << "old content";
+    }
+
+    TestShell shell;
+    shell(std::format("cp -f {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "forced content");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_directory_without_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_dir_norec";
+    fs::remove_all(base);
+    fs::create_directories(base / "srcdir");
+
+    TestShell shell;
+    shell(std::format("cp {} {}", (base / "srcdir").string(), (base / "dstdir").string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_recursive")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_recursive";
+    fs::remove_all(base);
+    fs::create_directories(base / "srcdir" / "sub");
+    {
+        std::ofstream ofs(base / "srcdir" / "file.txt");
+        ofs << "data";
+    }
+    {
+        std::ofstream ofs(base / "srcdir" / "sub" / "nested.txt");
+        ofs << "nested";
+    }
+
+    TestShell shell;
+    shell(std::format("cp -r {} {}", (base / "srcdir").string(), (base / "dstdir").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(base / "dstdir" / "file.txt"));
+    CHECK(fs::exists(base / "dstdir" / "sub" / "nested.txt"));
+
+    {
+        std::ifstream ifs(base / "dstdir" / "sub" / "nested.txt");
+        std::string c;
+        std::getline(ifs, c);
+        CHECK(c == "nested");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_verbose")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_verbose";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "hello";
+    }
+
+    TestShell shell;
+    auto output = shell(std::format("cp -v {} {}", src.string(), dst.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("->") != std::string::npos);
+    CHECK(fs::exists(dst));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_combined_flags")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_combined";
+    fs::remove_all(base);
+    fs::create_directories(base / "srcdir");
+    {
+        std::ofstream ofs(base / "srcdir" / "file.txt");
+        ofs << "data";
+    }
+
+    TestShell shell;
+    auto output =
+        shell(std::format("cp -rv {} {}", (base / "srcdir").string(), (base / "dstdir").string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(base / "dstdir" / "file.txt"));
+    CHECK(output.find("->") != std::string::npos);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_double_dash")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_ddash";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "-weirdname.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "content";
+    }
+
+    TestShell shell;
+    shell(std::format("cp -- {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(dst));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_multiple_sources_to_dir")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_multi";
+    fs::remove_all(base);
+    fs::create_directories(base / "destdir");
+    auto const src1 = base / "a.txt";
+    auto const src2 = base / "b.txt";
+
+    {
+        std::ofstream ofs(src1);
+        ofs << "aaa";
+    }
+    {
+        std::ofstream ofs(src2);
+        ofs << "bbb";
+    }
+
+    TestShell shell;
+    shell(std::format("cp {} {} {}", src1.string(), src2.string(), (base / "destdir").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(base / "destdir" / "a.txt"));
+    CHECK(fs::exists(base / "destdir" / "b.txt"));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_multiple_sources_to_file")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_multi_fail";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src1 = base / "a.txt";
+    auto const src2 = base / "b.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src1);
+        ofs << "aaa";
+    }
+    {
+        std::ofstream ofs(src2);
+        ofs << "bbb";
+    }
+    {
+        std::ofstream ofs(dst);
+        ofs << "xxx";
+    }
+
+    TestShell shell;
+    shell(std::format("cp {} {} {}", src1.string(), src2.string(), dst.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.cp_no_operand")
+{
+    TestShell shell;
+    shell("cp");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cp_missing_destination")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_cp_test_missdest";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "data";
+    }
+
+    TestShell shell;
+    shell(std::format("cp {}", src.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+// ============================================================================
 // Variable Substitution - $VAR and ${VAR}
 // ============================================================================
 

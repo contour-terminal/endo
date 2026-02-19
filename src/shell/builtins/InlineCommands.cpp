@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <format>
 #include <iostream>
+#include <span>
 #include <thread>
 
 #include <fcntl.h>
@@ -883,6 +884,226 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
             }
             if (verbose)
                 writeOutput(std::format("mkdir: created directory '{}'\n", path));
+        }
+    }
+
+    return success ? 0 : 1;
+}
+
+int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto writeOutput = [outputFd](std::string const& str) {
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+    };
+
+    bool recursive = false;
+    bool force = false;
+    bool noClobber = false;
+    bool verbose = false;
+    bool endOfOptions = false;
+    std::vector<std::string> paths;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view const arg = args.at(i);
+
+        if (!endOfOptions && arg == "--")
+        {
+            endOfOptions = true;
+            continue;
+        }
+
+        if (!endOfOptions && arg == "--help")
+        {
+            writeOutput("Usage: cp [OPTION]... SOURCE... DEST\n");
+            writeOutput("Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n");
+            writeOutput("\n");
+            writeOutput("Options:\n");
+            writeOutput("  -r, -R, --recursive  copy directories recursively\n");
+            writeOutput("  -f, --force          force overwrite; remove destination if needed\n");
+            writeOutput("  -n, --no-clobber     do not overwrite existing files\n");
+            writeOutput("  -v, --verbose        explain what is being done\n");
+            writeOutput("      --help           display this help and exit\n");
+            return 0;
+        }
+
+        if (!endOfOptions && arg == "--recursive")
+        {
+            recursive = true;
+            continue;
+        }
+        if (!endOfOptions && arg == "--force")
+        {
+            force = true;
+            noClobber = false;
+            continue;
+        }
+        if (!endOfOptions && arg == "--no-clobber")
+        {
+            noClobber = true;
+            force = false;
+            continue;
+        }
+        if (!endOfOptions && arg == "--verbose")
+        {
+            verbose = true;
+            continue;
+        }
+
+        // Parse combined short flags: -rv, -fn, etc.
+        if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
+        {
+            bool validFlags = true;
+            for (size_t j = 1; j < arg.size(); ++j)
+            {
+                switch (arg[j])
+                {
+                    case 'r':
+                    case 'R': recursive = true; break;
+                    case 'f':
+                        force = true;
+                        noClobber = false;
+                        break;
+                    case 'n':
+                        noClobber = true;
+                        force = false;
+                        break;
+                    case 'v': verbose = true; break;
+                    default: validFlags = false; break;
+                }
+                if (!validFlags)
+                    break;
+            }
+            if (validFlags)
+                continue;
+        }
+
+        paths.emplace_back(arg);
+    }
+
+    if (paths.empty())
+    {
+        error("cp: missing file operand");
+        return 1;
+    }
+
+    if (paths.size() < 2)
+    {
+        error("cp: missing destination file operand after '{}'", paths.front());
+        return 1;
+    }
+
+    namespace fs = std::filesystem;
+
+    auto const dest = fs::path(paths.back());
+    auto const sources = std::span(paths.data(), paths.size() - 1);
+    auto const destIsDir = fs::is_directory(dest);
+
+    if (sources.size() > 1 && !destIsDir)
+    {
+        error("cp: target '{}' is not a directory", dest.string());
+        return 1;
+    }
+
+    auto copyOptions = fs::copy_options::none;
+    if (noClobber)
+        copyOptions |= fs::copy_options::skip_existing;
+    else
+        copyOptions |= fs::copy_options::overwrite_existing;
+    if (recursive)
+        copyOptions |= fs::copy_options::recursive;
+
+    bool success = true;
+    for (auto const& src: sources)
+    {
+        auto const srcPath = fs::path(src);
+        std::error_code ec;
+
+        if (!fs::exists(srcPath, ec))
+        {
+            error("cp: cannot stat '{}': No such file or directory", src);
+            success = false;
+            continue;
+        }
+
+        if (fs::is_directory(srcPath) && !recursive)
+        {
+            error("cp: -r not specified; omitting directory '{}'", src);
+            success = false;
+            continue;
+        }
+
+        auto const target = destIsDir ? dest / srcPath.filename() : dest;
+
+        if (recursive && fs::is_directory(srcPath) && verbose)
+        {
+            // Verbose recursive copy: iterate and copy individually to report each file
+            for (auto const& entry: fs::recursive_directory_iterator(srcPath, ec))
+            {
+                auto const relativePath = fs::relative(entry.path(), srcPath, ec);
+                auto const entryTarget = target / relativePath;
+
+                if (entry.is_directory())
+                {
+                    fs::create_directories(entryTarget, ec);
+                    if (ec)
+                    {
+                        error("cp: cannot create directory '{}': {}", entryTarget.string(), ec.message());
+                        success = false;
+                    }
+                }
+                else
+                {
+                    // Ensure parent directory exists
+                    fs::create_directories(entryTarget.parent_path(), ec);
+                    auto fileCopyOptions = fs::copy_options::none;
+                    if (noClobber)
+                        fileCopyOptions |= fs::copy_options::skip_existing;
+                    else
+                        fileCopyOptions |= fs::copy_options::overwrite_existing;
+                    fs::copy_file(entry.path(), entryTarget, fileCopyOptions, ec);
+                    if (ec)
+                    {
+                        error("cp: cannot copy '{}': {}", entry.path().string(), ec.message());
+                        success = false;
+                        continue;
+                    }
+                    writeOutput(std::format("'{}' -> '{}'\n", entry.path().string(), entryTarget.string()));
+                }
+            }
+            // Copy the top-level directory itself (create it if needed)
+            fs::create_directories(target, ec);
+            if (ec)
+            {
+                error("cp: cannot create directory '{}': {}", target.string(), ec.message());
+                success = false;
+            }
+        }
+        else
+        {
+            if (fs::is_directory(srcPath))
+            {
+                fs::copy(srcPath, target, copyOptions, ec);
+            }
+            else
+            {
+                auto fileCopyOptions = fs::copy_options::none;
+                if (noClobber)
+                    fileCopyOptions |= fs::copy_options::skip_existing;
+                else
+                    fileCopyOptions |= fs::copy_options::overwrite_existing;
+                fs::copy_file(srcPath, target, fileCopyOptions, ec);
+            }
+
+            if (ec)
+            {
+                error("cp: cannot copy '{}' to '{}': {}", src, target.string(), ec.message());
+                success = false;
+                continue;
+            }
+
+            if (verbose)
+                writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
         }
     }
 
