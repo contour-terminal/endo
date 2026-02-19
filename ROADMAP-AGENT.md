@@ -804,39 +804,42 @@ Lightweight `GET` request to each provider's models endpoint before saving:
 **Goal:** Enable the agent to use external MCP (Model Context Protocol) servers alongside
 built-in tools.
 
-### 8.1 MCP Client — Stdio Transport
+### 8.1 MCP Client — Stdio Transport (**COMPLETE**)
 
-Bootstrap from mychat's `src/mcp/` directory:
+Adapted from mychat's `src/mcp/` directory:
 
 ```
 src/agent/mcp/
-├── Transport.hpp             # Abstract transport interface (from mychat)
-├── StdioTransport.hpp/.cpp   # Stdio pipe transport (from mychat)
-├── JsonRpc.hpp/.cpp          # JSON-RPC 2.0 helpers (from mychat)
-├── McpClient.hpp/.cpp        # MCP protocol client (from mychat)
-└── ServerManager.hpp/.cpp    # Multi-server routing + ToolRegistry integration
+├── McpError.hpp              # Error types (McpErrorCode, McpError, McpResult<T>)
+├── Transport.hpp             # Abstract transport interface
+├── StdioTransport.hpp/.cpp   # Stdio pipe transport (posix_spawnp + pipes)
+├── JsonRpc.hpp/.cpp          # JSON-RPC 2.0 helpers
+├── McpClient.hpp/.cpp        # MCP protocol client (initialize, listTools, callTool)
+├── ServerManager.hpp/.cpp    # Multi-server routing (tool name → server dispatch)
+└── McpToolAdapter.hpp/.cpp   # Bridges MCP tools into AgentTool/ToolRegistry
 ```
 
-- Adapt `Result<T>` → `std::expected<T, McpError>`
-- Adapt namespace `mychat` → `endo::agent::mcp`
-- `ServerManager` aggregates both MCP tools and built-in `ToolRegistry` tools
+- Adapted `Result<T>` → `std::expected<T, McpError>` (custom `McpError` type)
+- Adapted namespace `mychat` → `endo::agent::mcp`
+- `McpToolAdapter` wraps each MCP tool as an `AgentTool` for unified tool dispatch
+- Unit tests: `JsonRpc_test.cpp`, `McpClient_test.cpp`, `ServerManager_test.cpp`, `McpToolAdapter_test.cpp`
 
-### 8.2 Configuration
+### 8.2 Configuration (**COMPLETE** — shell builtins)
 
-In `~/.config/endo/agent.yml`:
+Configured via shell builtins in `~/.config/endo/init.endo`:
 
-```yaml
-mcp_servers:
-  filesystem:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/projects"]
+```endo
+# Add MCP servers
+add_mcp_server "filesystem" "npx -y @modelcontextprotocol/server-filesystem /home/user"
+add_mcp_server "github" "npx -y @modelcontextprotocol/server-github"
+set_mcp_env "github" "GITHUB_TOKEN" "$GITHUB_TOKEN"
 
-  github:
-    command: npx
-    args: ["-y", "@modelcontextprotocol/server-github"]
-    env:
-      GITHUB_TOKEN: "${GITHUB_TOKEN}"
+# Remove a server
+remove_mcp_server "filesystem"
 ```
+
+Builtins: `add_mcp_server`, `set_mcp_env`, `remove_mcp_server`.
+MCP servers are started when entering agent mode and shut down when leaving.
 
 ### 8.3 HTTP/SSE Transport
 
