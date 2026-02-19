@@ -8,6 +8,7 @@
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/Parser.hpp>
 
+#include <tui/MarkdownRenderer.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 
@@ -16,6 +17,7 @@
 
 #include <crispy/assert.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -1621,11 +1623,13 @@ void Shell::runAgentMode()
         "tools",
         "List all active agent tools",
         [&toolRegistry](std::string_view) -> agent::SlashCommandResult {
-            auto text = std::string { "Active tools:\n" };
-            for (auto const& def: toolRegistry.definitions())
-                text += std::format("  {:<20} {}\n", def.name, def.description);
-            text += std::format("\n{} tools registered.\n", toolRegistry.size());
-            return agent::DirectOutput { .text = std::move(text) };
+            auto defs = toolRegistry.definitions();
+            std::ranges::sort(defs, {}, &agent::ToolDefinition::name);
+            auto md = std::string { "| Tool | Description |\n|:-----|:------------|\n" };
+            for (auto const& def: defs)
+                md += std::format("| {} | {} |\n", def.name, def.description);
+            md += std::format("\n{} tools registered.\n", toolRegistry.size());
+            return agent::MarkdownOutput { .markdown = std::move(md) };
         }));
 
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
@@ -1852,6 +1856,13 @@ void Shell::runAgentMode()
                             if (auto const* d = std::get_if<agent::DirectOutput>(&commandResult))
                             {
                                 out.writeText(d->text);
+                                out.flush();
+                            }
+                            else if (auto const* m = std::get_if<agent::MarkdownOutput>(&commandResult))
+                            {
+                                auto renderer = tui::MarkdownRenderer(out);
+                                renderer.setMaxWidth(terminal.columns());
+                                renderer.render(m->markdown);
                                 out.flush();
                             }
                             else if (auto const* p = std::get_if<agent::PlanModeRequest>(&commandResult))

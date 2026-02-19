@@ -169,3 +169,231 @@ TEST_CASE("MarkdownTable.alignCell.exact_width")
     CHECK(alignCell("Hello", 5, TableAlignment::Right) == "Hello");
     CHECK(alignCell("Hello", 5, TableAlignment::Center) == "Hello");
 }
+
+// ============================================================================
+// constrainColumnWidths tests
+// ============================================================================
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.fits")
+{
+    // Table with 2 columns of width 10 each.
+    // Overhead = 1 + 2*3 = 7. Total = 7 + 20 = 27. maxWidth = 80 → no change.
+    auto widths = std::vector<int> { 10, 10 };
+    constrainColumnWidths(widths, 80);
+    CHECK(widths[0] == 10);
+    CHECK(widths[1] == 10);
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.equal_columns_shrink_evenly")
+{
+    // Table with 2 columns of width 40 each.
+    // Overhead = 1 + 2*3 = 7. Total content = 80. maxWidth = 47 → availableContent = 40.
+    // Both columns equal width, so both shrink equally to 20.
+    auto widths = std::vector<int> { 40, 40 };
+    constrainColumnWidths(widths, 47);
+    CHECK(widths[0] + widths[1] <= 40);
+    CHECK(widths[0] == 20);
+    CHECK(widths[1] == 20);
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.respects_minimum")
+{
+    // Very narrow terminal — columns should not go below minimum 3.
+    auto widths = std::vector<int> { 50, 50 };
+    constrainColumnWidths(widths, 15);
+    CHECK(widths[0] >= 3);
+    CHECK(widths[1] >= 3);
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.waterfall_preserves_narrow")
+{
+    // Narrow column (14) + wide column (322), maxWidth = 156.
+    // Overhead = 1 + 2*3 = 7. availableContent = 149.
+    // The narrow column should be preserved at 14, wide column absorbs all.
+    auto widths = std::vector<int> { 14, 322 };
+    constrainColumnWidths(widths, 156);
+    CHECK(widths[0] == 14);
+    CHECK(widths[1] == 135); // 149 - 14 = 135
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.waterfall_both_shrink_when_needed")
+{
+    // Both columns exceed fair share — both must shrink.
+    // Two columns of 30 and 50, maxWidth = 27 → overhead = 7, available = 20.
+    // Excess = 60. Tier 0: width 50 (1 col), next tier = 30. Can reduce 50→30 = 20 removed.
+    // Remaining excess = 60 - 20 = 40. Now both at 30. Tier 1: both at 30, reduce toward min 3.
+    // Each absorbs 20: both become 10. Total = 20. ✓
+    auto widths = std::vector<int> { 30, 50 };
+    constrainColumnWidths(widths, 27);
+    CHECK(widths[0] + widths[1] <= 20);
+    CHECK(widths[0] >= 3);
+    CHECK(widths[1] >= 3);
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.waterfall_single_column")
+{
+    // Single column of width 50, maxWidth = 20 → overhead = 4, available = 16.
+    auto widths = std::vector<int> { 50 };
+    constrainColumnWidths(widths, 20);
+    CHECK(widths[0] == 16);
+}
+
+TEST_CASE("MarkdownTable.constrainColumnWidths.waterfall_three_columns")
+{
+    // Three columns: [5, 10, 100], maxWidth = 30 → overhead = 10, available = 20.
+    // Excess = 95. Tier 0: col[2]=100, next tier=10. Max reduction = 90.
+    // 90 >= 95? No. So reduce col[2] to 10. Excess now = 95 - 90 = 5.
+    // Tier 1: col[1]=10, col[2]=10 (2 cols). next tier=5. Max reduction per col = 5, total = 10.
+    // 10 >= 5? Yes. Each loses 2 or 3 (5/2=2 r1).
+    auto widths = std::vector<int> { 5, 10, 100 };
+    constrainColumnWidths(widths, 30);
+    CHECK(widths[0] == 5); // preserved
+    CHECK(widths[0] + widths[1] + widths[2] == 20);
+    CHECK(widths[1] >= 3);
+    CHECK(widths[2] >= 3);
+}
+
+// ============================================================================
+// wrapText tests
+// ============================================================================
+
+TEST_CASE("MarkdownTable.wrapText.short_text")
+{
+    auto const lines = wrapText("Hello world", 20);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0] == "Hello world");
+}
+
+TEST_CASE("MarkdownTable.wrapText.wraps_at_word_boundary")
+{
+    auto const lines = wrapText("Hello beautiful world", 10);
+    REQUIRE(lines.size() >= 2);
+    // First line should contain "Hello"
+    CHECK(lines[0] == "Hello");
+    // Second line should contain "beautiful"
+    CHECK(lines[1] == "beautiful");
+    // Third line should contain "world"
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[2] == "world");
+}
+
+TEST_CASE("MarkdownTable.wrapText.long_word_broken_at_char_boundary")
+{
+    // A single word longer than maxWidth is broken at character boundaries
+    auto const lines = wrapText("superlongword", 5);
+    REQUIRE(lines.size() == 3);
+    CHECK(lines[0] == "super");
+    CHECK(lines[1] == "longw");
+    CHECK(lines[2] == "ord");
+}
+
+TEST_CASE("MarkdownTable.wrapText.empty_text")
+{
+    auto const lines = wrapText("", 10);
+    REQUIRE(lines.size() == 1);
+    CHECK(lines[0].empty());
+}
+
+// ============================================================================
+// stripInlineMarkdown tests
+// ============================================================================
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.plain_text")
+{
+    CHECK(stripInlineMarkdown("Hello world") == "Hello world");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.bold_asterisks")
+{
+    CHECK(stripInlineMarkdown("**bold**") == "bold");
+    CHECK(stripInlineMarkdown("a **bold** b") == "a bold b");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.bold_underscores")
+{
+    CHECK(stripInlineMarkdown("__bold__") == "bold");
+    CHECK(stripInlineMarkdown("a __bold__ b") == "a bold b");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.italic")
+{
+    CHECK(stripInlineMarkdown("*italic*") == "italic");
+    CHECK(stripInlineMarkdown("a *italic* b") == "a italic b");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.inline_code")
+{
+    CHECK(stripInlineMarkdown("`code`") == "code");
+    CHECK(stripInlineMarkdown("a `code` b") == "a code b");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.link")
+{
+    CHECK(stripInlineMarkdown("[text](http://url)") == "text");
+    CHECK(stripInlineMarkdown("a [link](url) b") == "a link b");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.mixed")
+{
+    CHECK(stripInlineMarkdown("**bold** and *italic* and `code`") == "bold and italic and code");
+}
+
+// ============================================================================
+// inlineDisplayWidth tests
+// ============================================================================
+
+TEST_CASE("MarkdownTable.inlineDisplayWidth.plain_text")
+{
+    CHECK(inlineDisplayWidth("Hello") == 5);
+}
+
+TEST_CASE("MarkdownTable.inlineDisplayWidth.bold_text")
+{
+    CHECK(inlineDisplayWidth("**bold**") == 4);
+    CHECK(inlineDisplayWidth("**Functional Core**") == 15);
+}
+
+TEST_CASE("MarkdownTable.inlineDisplayWidth.inline_code")
+{
+    CHECK(inlineDisplayWidth("`code`") == 4);
+}
+
+// ============================================================================
+// truncateToDisplayWidth tests
+// ============================================================================
+
+TEST_CASE("MarkdownTable.truncateToDisplayWidth.no_truncation_needed")
+{
+    CHECK(truncateToDisplayWidth("Hello", 10) == "Hello");
+    CHECK(truncateToDisplayWidth("Hi", 2) == "Hi");
+}
+
+TEST_CASE("MarkdownTable.truncateToDisplayWidth.truncates_with_ellipsis")
+{
+    auto const result = truncateToDisplayWidth("Hello world", 6);
+    // Should be at most 6 display columns, ending with ellipsis
+    CHECK(result.find("\xe2\x80\xa6") != std::string::npos); // contains …
+    CHECK(inlineDisplayWidth(result) <= 6);
+}
+
+TEST_CASE("MarkdownTable.truncateToDisplayWidth.empty_on_zero_width")
+{
+    CHECK(truncateToDisplayWidth("Hello", 0).empty());
+}
+
+// ============================================================================
+// computeColumnWidths with inline markdown
+// ============================================================================
+
+TEST_CASE("MarkdownTable.computeColumnWidths.strips_markdown")
+{
+    auto table = ParsedTable {};
+    table.headers = { "**Header**", "Plain" };
+    table.columnCount = 2;
+    table.rows = { { "text", "data" } };
+    table.alignments = { TableAlignment::Left, TableAlignment::Left };
+
+    auto const widths = computeColumnWidths(table);
+    CHECK(widths[0] == 6); // "Header" = 6 (not "**Header**" = 10)
+    CHECK(widths[1] == 5); // "Plain" = 5
+}

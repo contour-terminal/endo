@@ -567,7 +567,9 @@ The library includes:
 - [x] Add comprehensive editor unit tests (47 tests covering basic editing, cursor movement, selection, undo/redo, multiline, history, kill ring, clipboard, and UTF-8)
 - [x] Implement configurable keybinding framework (`EditAction`, `KeyChord`, `KeyBindings`)
 - [x] Partial-line indicator on command completion (fish-style reverse-video `⏎` when command output doesn't end with newline)
-- [x] GFM-style pipe table rendering in `MarkdownRenderer` (streaming + batch) and `StyledText` (canvas-based) with rounded box-drawing borders, column alignment, inline markdown in cells, and shared parsing via `MarkdownTable` utilities
+- [x] GFM-style pipe table rendering in `MarkdownRenderer` (streaming + batch) and `StyledText` (canvas-based) with rounded box-drawing borders, column alignment, inline markdown in cells, shared parsing via `MarkdownTable` utilities, `setMaxWidth()` for terminal-width-constrained rendering with word-wrapped multi-line cells
+- [x] Fix table column alignment with inline markdown: `stripInlineMarkdown()` and `inlineDisplayWidth()` ensure column widths and padding are computed from rendered text (after stripping `**`, `*`, `` ` ``, `[text](url)` markers), not raw markdown — fixes misaligned right-side vertical borders when cells contain bold/italic/code/link formatting
+- [x] Fix table overflow when column widths are constrained: replace proportional shrinking with waterfall algorithm that only shrinks the widest columns (preserving narrow columns at natural width), add character-level word breaking in `wrapText()` for extreme cases, and `truncateToDisplayWidth()` as last-resort guard in `renderCellLine()`
 
 **Implementation Notes:**
 - Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
@@ -985,7 +987,7 @@ Component (base class)
 **Dependency:** Phase 3.5
 
 **Tasks:**
-- [x] `SlashCommand` interface with `name()`, `description()`, `execute()` returning `SlashCommandResult` variant (`PromptRewrite`, `PlanModeRequest`, `DirectOutput`)
+- [x] `SlashCommand` interface with `name()`, `description()`, `execute()` returning `SlashCommandResult` variant (`PromptRewrite`, `PlanModeRequest`, `DirectOutput`, `MarkdownOutput`)
 - [x] `SlashCommandRegistry` for dynamic command registration with `registerCommand()`, `findCommand()`, `commands()`
 - [x] Built-in `/help` (lists all commands) and `/plan` (enters plan mode) commands
 - [x] `CallbackSlashCommand` convenience class for lambda-based dynamic registration (skills/plugins)
@@ -1048,7 +1050,7 @@ Component (base class)
   - [x] Tab accepts ghost text, Right/End at end of line accepts ghost text
   - [x] Clear ghost text on text change, Escape, Submit, Abort
 - [x] `/reset` slash command: clears in-memory history, removes persisted file, resets provider entries
-- [x] `/tools` slash command: lists all active agent tools (built-in + MCP) with descriptions and count
+- [x] `/tools` slash command: lists all active agent tools as a markdown table with rounded borders, word-wrapped to terminal width, sorted alphabetically by tool name
 - [x] `AgentSession::loadPersistedMessages()` for history restoration
 - [x] Up/Down history navigation fed from persisted queries via `InputField::addHistory()`
 - [x] Event loop poll timeout respects ghost text debounce for responsive updates

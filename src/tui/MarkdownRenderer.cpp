@@ -107,6 +107,11 @@ void MarkdownRenderer::setFullWidthMode(bool enabled) noexcept
     _fullWidthMode = enabled;
 }
 
+void MarkdownRenderer::setMaxWidth(int width) noexcept
+{
+    _maxWidth = width;
+}
+
 void MarkdownRenderer::render(std::string_view markdown)
 {
     auto pos = std::size_t { 0 };
@@ -594,8 +599,12 @@ void MarkdownRenderer::flushTable()
 
 void MarkdownRenderer::renderTable(ParsedTable const& table)
 {
-    auto const widths = computeColumnWidths(table);
+    auto widths = computeColumnWidths(table);
     auto const border = BorderChars::fromStyle(BorderStyle::Rounded);
+
+    // Constrain widths to terminal width if set.
+    if (_maxWidth > 0)
+        constrainColumnWidths(widths, _maxWidth);
 
     // Helper to render a horizontal border line.
     auto renderHLine = [&](std::string_view left, std::string_view mid, std::string_view right) {
@@ -612,21 +621,80 @@ void MarkdownRenderer::renderTable(ParsedTable const& table)
         _output.writeRaw("\n");
     };
 
-    // Helper to render a row of cells.
-    auto renderRow = [&](std::vector<std::string> const& cells, Style const& cellStyle) {
+    // Helper to render a single physical line of cells.
+    auto renderCellLine = [&](std::vector<std::string> const& cellTexts,
+                              std::vector<int> const& colWidths,
+                              Style const& cellStyle) {
         _output.writeText(border.vertical, _theme.tableBorder);
         for (std::size_t col = 0; col < table.columnCount; ++col)
         {
-            _output.writeRaw(" ");
-            auto const& text = (col < cells.size()) ? cells[col] : std::string {};
+            auto const& rawText = (col < cellTexts.size()) ? cellTexts[col] : std::string {};
             auto const alignment =
                 (col < table.alignments.size()) ? table.alignments[col] : TableAlignment::Left;
-            auto const aligned = alignCell(text, widths[col], alignment);
-            renderInline(aligned, &cellStyle);
+            auto const renderedWidth = inlineDisplayWidth(rawText);
+
+            // Truncate as last-resort guard if text still overflows column width.
+            auto const text =
+                (renderedWidth > colWidths[col]) ? truncateToDisplayWidth(rawText, colWidths[col]) : rawText;
+            auto const finalWidth =
+                (renderedWidth > colWidths[col]) ? inlineDisplayWidth(text) : renderedWidth;
+            auto const padding = std::max(0, colWidths[col] - finalWidth);
+
+            auto leftPad = 0;
+            auto rightPad = 0;
+            switch (alignment)
+            {
+                case TableAlignment::Left: rightPad = padding; break;
+                case TableAlignment::Right: leftPad = padding; break;
+                case TableAlignment::Center:
+                    leftPad = padding / 2;
+                    rightPad = padding - leftPad;
+                    break;
+            }
+
+            _output.writeRaw(" ");
+            _output.writeRaw(std::string(static_cast<std::size_t>(leftPad), ' '));
+            renderInline(text, &cellStyle);
+            _output.writeRaw(std::string(static_cast<std::size_t>(rightPad), ' '));
             _output.writeRaw(" ");
             _output.writeText(border.vertical, _theme.tableBorder);
         }
         _output.writeRaw("\n");
+    };
+
+    // Helper to render a row with word wrapping when maxWidth is active.
+    auto renderRow = [&](std::vector<std::string> const& cells, Style const& cellStyle) {
+        if (_maxWidth <= 0)
+        {
+            // No wrapping — single-line row.
+            renderCellLine(cells, widths, cellStyle);
+            return;
+        }
+
+        // Wrap each cell and find the maximum number of physical lines.
+        auto wrappedCells = std::vector<std::vector<std::string>> {};
+        wrappedCells.reserve(table.columnCount);
+        auto maxLines = std::size_t { 1 };
+
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            auto const& text = (col < cells.size()) ? cells[col] : std::string {};
+            auto wrapped = wrapText(text, widths[col]);
+            maxLines = std::max(maxLines, wrapped.size());
+            wrappedCells.push_back(std::move(wrapped));
+        }
+
+        // Render each physical line.
+        for (std::size_t line = 0; line < maxLines; ++line)
+        {
+            auto lineTexts = std::vector<std::string>(table.columnCount);
+            for (std::size_t col = 0; col < table.columnCount; ++col)
+            {
+                if (col < wrappedCells.size() && line < wrappedCells[col].size())
+                    lineTexts[col] = wrappedCells[col][line];
+            }
+            renderCellLine(lineTexts, widths, cellStyle);
+        }
     };
 
     // Top border
