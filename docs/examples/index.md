@@ -24,6 +24,7 @@ Explore Endo's functional programming features.
 | [Tuples](tuples.md) | Tuple creation and destructuring |
 | [Records](records.md) | Record types and field access |
 | [Union Fields](union-fields.md) | Named union fields with dot-access |
+| [Properties](properties.md) | Computed properties and dot-access |
 | [Type Annotations](type-annotations.md) | Optional type annotations |
 
 ## Advanced

@@ -373,6 +373,14 @@ Consult this section to determine what to work on next.
 - [x] Suppress spurious "0" from parenthesized unit-producing expressions (e.g., `(println "hi")`)
 - [x] Suppress spurious "0" from pipelines ending in unit-producing HOFs (e.g., `list |> each println`)
 
+### Phase 6.5 — Dot Property Syntax ✅
+- [x] Built-in dot properties on collection types: `xs.length`, `xs.isEmpty`, `xs.head`, `xs.tail`, `xs.last`, `opt.isSome`, `opt.isNone`, `res.isOk`, `res.isError`, `t.fst`, `t.snd`, `t.trd`, `t.0`, `t.1`, `t.2`, `s.length`
+- [x] Module-level computed properties with `get`/`set` accessors: `let Name with get () = expr and set (v) = expr`
+- [x] Multi-line property accessor bodies (indentation-based, like function bodies)
+- [x] `with` keyword on next line after property name
+- [x] Function-as-method dot access: `obj.funcName` resolves to `funcName(obj)` when first parameter type matches (field names take priority)
+- [x] Tuple objectTypeId annotation: `visit(TupleExpr)` now annotates results for dot property propagation
+
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
 - [ ] File: `File.read`, `File.write`, `File.list` returning Result types

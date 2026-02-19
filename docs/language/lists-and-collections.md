@@ -108,6 +108,27 @@ let processUsers =
     >> take 100
 ```
 
+### 6.3.1 List Dot Properties
+
+Lists and strings support dot notation for common queries.
+
+<!-- endo-no-check -->
+```endo
+let nums = [1; 2; 3; 4; 5]
+print nums.length                     # 5
+print nums.isEmpty                    # false
+print nums.head                       # Some 1
+print nums.tail                       # [2; 3; 4; 5]
+print nums.last                       # Some 5
+
+let empty: list<int> = []
+print empty.isEmpty                   # true
+print empty.head                      # None
+
+let s = "hello"
+print s.length                        # 5
+```
+
 ### 6.4 Working with Command Output
 
 <!-- endo-no-check -->

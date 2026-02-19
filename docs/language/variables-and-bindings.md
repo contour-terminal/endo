@@ -99,6 +99,55 @@ let export VERBOSE = true     # exports as "true"
 > `let export rec` is not allowed — functions cannot be exported.
 > Mutations to `let export mut` variables automatically re-export the updated value.
 
+### 4.3.1 Properties with Get/Set Accessors
+
+Computed properties use `with get`/`set` syntax for custom read and write logic.
+Properties are accessed like variables but execute accessor bodies on each read or write.
+
+<!-- endo-no-check -->
+```endo
+# Read-only computed property (single-line)
+let Pi with get () = 3.14159
+
+# Read-write property backed by a mutable variable
+let mutable _counter = 0
+let Counter with
+    get () = _counter
+    and set (v) = _counter <- v
+
+print Counter                         # 0
+Counter <- 42
+print Counter                         # 42
+
+# Write-only property
+let Logger with set (msg) =
+    println $"[LOG] {msg}"
+```
+
+**Multi-line bodies** work the same as function bodies — indent the body further than the `let` keyword:
+
+<!-- endo-no-check -->
+```endo
+let mutable _x = 0
+let mutable _log = 0
+let X with
+    get () =
+        let v = _x
+        v
+    and set (v) =
+        _log <- _log + 1
+        _x <- v
+```
+
+The `with` keyword may also appear on the line following the property name:
+
+<!-- endo-no-check -->
+```endo
+let X
+    with get () = _x
+    and set (v) = _x <- v
+```
+
 ### 4.4 Destructuring
 
 Extract values from compound types directly in bindings.

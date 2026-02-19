@@ -255,5 +255,22 @@ let normalizeAndCount =
 let wordCount = normalizeAndCount "  Hello World  "  # 2
 ```
 
+### 5.7 Function-as-Method Dot Access
+
+When `obj.name` doesn't match a built-in field or property, the language looks for a user-defined function whose first parameter type matches and calls it with `obj` as the argument. Built-in fields always take priority.
+
+<!-- endo-no-check -->
+```endo
+type Point = { x: int; y: int }
+
+let magnitude (p: Point) = p.x + p.y
+
+let p = { x = 3; y = 4 }
+print (p.magnitude)                   # 7
+
+# Field names always take priority over function names
+print p.x                             # 3 (field access, not function call)
+```
+
 ---
 **See also:** [Variables & Bindings](variables-and-bindings.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Pattern Matching](pattern-matching.md)

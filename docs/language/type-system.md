@@ -150,5 +150,41 @@ type JsonValue =
 # type result<T, E> = Ok of T | Error of E
 ```
 
+### 3.6 Dot Property Access
+
+Built-in types expose convenient dot properties for common queries.
+
+<!-- endo-no-check -->
+```endo
+# Tuple element access (by name or numeric index)
+let pair = (42, "hello")
+print (pair.fst)                      # 42
+print (pair.0)                        # 42 (same as .fst)
+print (pair.snd)                      # hello
+print (pair.1)                        # hello (same as .snd)
+
+let triple = (1, 2, 3)
+print (triple.fst)                    # 1
+print (triple.0)                      # 1 (same as .fst)
+print (triple.snd)                    # 2
+print (triple.1)                      # 2 (same as .snd)
+print (triple.trd)                    # 3
+print (triple.2)                      # 3 (same as .trd)
+
+# Option properties
+let opt = Some 42
+print opt.isSome                      # true
+print opt.isNone                      # false
+
+# Result properties
+let ok = Ok 100
+print ok.isOk                         # true
+print ok.isError                      # false
+
+# String properties
+let s = "hello"
+print s.length                        # 5
+```
+
 ---
 **See also:** [Lexical Elements](lexical-elements.md) | [Variables & Bindings](variables-and-bindings.md) | [Pattern Matching](pattern-matching.md)
