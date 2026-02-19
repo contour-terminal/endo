@@ -109,3 +109,67 @@ TEST_CASE("PromptComponent.exitHintTimeoutMs_with_active_hint", "[prompt]")
     CHECK(timeout > 0);
     CHECK(timeout <= 1000);
 }
+
+// ============================================================================
+// onHover position mapping tests (verifies screenToSourcePosition via public API)
+// ============================================================================
+
+TEST_CASE("PromptComponent.onHover_withinText_returnsHoverInfo", "[prompt]")
+{
+    auto comp = PromptComponent();
+    // SingleLine layout: chromeHeight=0, topPadding=1, auroraFadeHeight=0.
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("let x = 5");
+
+    // totalPromptWidth = HorizontalMargin(1) + leftBarWidth(1) + PaddingAfterBar(1) + displayWidth("$ ")(2) =
+    // 5 Input line at y = topPadding(1) + auroraFadeHeight(0) + chromeHeight(0) = 1 x=5 maps to first
+    // character 'l' of "let" — keyword with known hover info
+    auto const result = comp.onHover(5, 1);
+    REQUIRE(result.has_value());
+    CHECK(result->text.find("let") != std::string::npos);
+}
+
+TEST_CASE("PromptComponent.onHover_beforePrompt_returnsNullopt", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("let x = 5");
+
+    // x=2 is within the prompt decoration area (before totalPromptWidth=5)
+    auto const result = comp.onHover(2, 1);
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("PromptComponent.onHover_aboveInputLine_returnsNullopt", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("let x = 5");
+
+    // y=0 is the top padding row, before the input line at y=1
+    auto const result = comp.onHover(5, 0);
+    CHECK_FALSE(result.has_value());
+}
+
+TEST_CASE("PromptComponent.onHover_belowInputLine_returnsNullopt", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("let x = 5");
+
+    // y=2 is below the single input line (at y=1)
+    auto const result = comp.onHover(5, 2);
+    CHECK_FALSE(result.has_value());
+}

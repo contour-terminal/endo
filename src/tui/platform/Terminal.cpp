@@ -156,7 +156,11 @@ auto Terminal::isSuspended() const noexcept -> bool
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
     if (_mockMode)
+    {
+        if (auto* mock = dynamic_cast<MockTerminalOutput*>(_output.get()))
+            return { mock->cursorRow() + 1, mock->cursorCol() + 1 }; // Convert 0-based to 1-based
         return { 0, 0 };
+    }
 
     // Send DSR (Device Status Report) to query cursor position.
     // Response will be: CSI row ; col R

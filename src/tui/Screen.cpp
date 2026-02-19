@@ -636,6 +636,10 @@ void Screen::flushInline()
                 // This eliminates any tracking drift from relative cursor movements.
                 out.restoreCursor(); // DECRC: anchor to exact saved position
 
+                // Query cursor position after DECRC to know where content starts.
+                auto const [cursorRow1Based, cursorCol1Based] = _terminal.queryCursorPosition();
+                auto const startRow = (cursorRow1Based > 0) ? (cursorRow1Based - 1) : (_terminal.rows() - 1);
+
                 if (reservedRoom >= contentHeight)
                 {
                     // Room already exists — skip LF emission, just adopt the peak.
@@ -652,37 +656,46 @@ void Screen::flushInline()
                     _totalNewlinesEmitted += newLines;
                     _peakContentHeight = contentHeight;
                 }
+
+                // Content start: min(cursor row, bottom-aligned position).
+                _inlineContentStartRow = std::min(startRow, _terminal.rows() - contentHeight);
             }
             else
             {
                 // Very first render (no previous Screen) — reserve room with LFs.
-                for (int i = 0; i < contentHeight; ++i)
-                    out.linefeed();
-                if (contentHeight > 0)
-                    out.moveUp(contentHeight);
-                _totalNewlinesEmitted += contentHeight;
-                _peakContentHeight = contentHeight;
-            }
+                // Query actual cursor position to compute _inlineContentStartRow accurately.
+                auto const [cursorRow1Based, cursorCol1Based] = _terminal.queryCursorPosition();
+                auto const startRow = (cursorRow1Based > 0) ? (cursorRow1Based - 1) : (_terminal.rows() - 1);
 
-            // Approximate content start row (accurate enough for mouse translation)
-            _inlineContentStartRow = _terminal.rows() - contentHeight;
+                // Emit contentHeight-1 newlines (enough to ensure room without overshooting).
+                auto const newLines = std::max(0, contentHeight - 1);
+                for (int i = 0; i < newLines; ++i)
+                    out.linefeed();
+                if (newLines > 0)
+                    out.moveUp(newLines);
+                _totalNewlinesEmitted += newLines;
+                _peakContentHeight = contentHeight;
+
+                // Content start: min(cursor row, bottom-aligned position).
+                // Cursor near top (row 5, rows=50, height=5): start = min(5, 45) = 5
+                // Cursor at bottom (row 49, rows=50, height=5): start = min(49, 45) = 45
+                _inlineContentStartRow = std::min(startRow, _terminal.rows() - contentHeight);
+            }
         }
         else
         {
-            // Content grew - emit newlines to make room
-            int newLines = contentHeight - _peakContentHeight;
-            for (int i = 0; i < newLines; ++i)
-                out.linefeed();
+            // Content grew — emit LFs for the growth and adjust start row only for actual scrolls.
+            auto const growth = contentHeight - _peakContentHeight;
+            auto const scrollsNeeded = std::max(0, _inlineContentStartRow + contentHeight - _terminal.rows());
 
-            // Move cursor back to top of our region
-            if (newLines > 0)
-                out.moveUp(newLines);
+            for (int i = 0; i < growth; ++i)
+                out.linefeed();
+            if (growth > 0)
+                out.moveUp(growth);
 
             _peakContentHeight = contentHeight;
-            _totalNewlinesEmitted += newLines;
-
-            // Adjust start row for emitted newlines
-            _inlineContentStartRow -= newLines;
+            _totalNewlinesEmitted += growth;
+            _inlineContentStartRow -= scrollsNeeded;
         }
     }
     else if (_inlineContentStartRow < 0)

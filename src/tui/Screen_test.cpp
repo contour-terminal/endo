@@ -1135,3 +1135,232 @@ TEST_CASE("Screen.inlineCursor_clearAndReleaseCycle_noDrift")
         CHECK(cursorRow == baselineCursorRow);
     }
 }
+
+// ============================================================================
+// Inline mode hover coordinate translation tests
+// ============================================================================
+
+namespace
+{
+
+/// @brief A component that returns different tooltip text per row, for verifying coordinate mapping.
+struct RowReportingComponent: Component
+{
+    int contentRows = 3;
+
+    void render(Canvas& canvas) override
+    {
+        for (auto row = 0; row < contentRows; ++row)
+            canvas.putString(row, 0, "row" + std::to_string(row) + " content", {});
+        canvas.setCursor(0, 0);
+    }
+
+    [[nodiscard]] Size preferredSize() const override { return { .width = 80, .height = contentRows }; }
+
+    [[nodiscard]] bool focusable() const override { return true; }
+
+    std::optional<HoverResult> onHover(int x, int y) override
+    {
+        if (y >= 0 && y < contentRows)
+            return HoverResult {
+                .text = "row" + std::to_string(y),
+                .position = { .x = x, .y = y },
+                .contentType = TooltipContentType::PlainText,
+            };
+        return std::nullopt;
+    }
+};
+
+} // namespace
+
+TEST_CASE("Screen.inlineHover_cursorAtTop_correctMapping")
+{
+    // Cursor starts at row 0 (top of terminal) — content should be at top,
+    // and hovering at content rows should produce correct component-relative coordinates.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 50);
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = RowReportingComponent {};
+    comp.contentRows = 3;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 3 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+    screen.draw();
+
+    // Content starts at row 0 (mock cursor starts at 0).
+    // Terminal mouse coordinates are 1-based, so row 1 = content row 0.
+    (void) screen.dispatchEvent(test::mouseMove(5, 1)); // row 1 in 1-based = content row 0
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row0") != std::string::npos);
+    }
+}
+
+TEST_CASE("Screen.inlineHover_cursorInMiddle_correctMapping")
+{
+    // Cursor starts in the middle of the terminal. Hovering above content should be rejected,
+    // hovering at content should work, hovering below content should be rejected.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 50);
+    auto* mock = mockOutput.get();
+
+    // Move mock cursor to middle of terminal before creating Screen
+    mock->linefeed(); // row 1
+    mock->linefeed(); // row 2
+    mock->linefeed(); // row 3
+    mock->linefeed(); // row 4
+    mock->linefeed(); // row 5
+    mock->linefeed(); // row 6
+    mock->linefeed(); // row 7
+    mock->linefeed(); // row 8
+    mock->linefeed(); // row 9
+    mock->linefeed(); // row 10 — content starts here
+
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = RowReportingComponent {};
+    comp.contentRows = 3;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 3 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+    screen.draw();
+
+    // Hover above content area (terminal row 5, 1-based = row 4 0-based, content starts at 10)
+    (void) screen.dispatchEvent(test::mouseMove(5, 5));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+    CHECK_FALSE(screen.isTooltipVisible());
+
+    // Hover at first content row (terminal row 11 in 1-based = row 10 0-based = content row 0)
+    screen.hoverState().reset();
+    (void) screen.dispatchEvent(test::mouseMove(5, 11));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row0") != std::string::npos);
+    }
+
+    // Hover at second content row (terminal row 12 in 1-based = content row 1)
+    screen.hoverState().reset();
+    (void) screen.dispatchEvent(test::mouseMove(5, 12));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row1") != std::string::npos);
+    }
+
+    // Hover below content area (terminal row 20 in 1-based)
+    screen.hoverState().reset();
+    (void) screen.dispatchEvent(test::mouseMove(5, 20));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+    CHECK_FALSE(screen.isTooltipVisible());
+}
+
+TEST_CASE("Screen.inlineHover_cursorAtBottom_correctMapping")
+{
+    // Cursor starts at the bottom of the terminal. Content should be at the bottom,
+    // and hovering at the correct terminal rows should work.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+
+    // Move cursor to bottom (row 23 = last row of 24-row terminal)
+    for (auto i = 0; i < 23; ++i)
+        mock->linefeed();
+
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = RowReportingComponent {};
+    comp.contentRows = 3;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 3 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+    screen.draw();
+
+    // Content starts at row 21 (24 - 3 = 21, 0-based), so terminal row 22 in 1-based = content row 0.
+    // With scrolling from LFs, the content is at the bottom.
+    (void) screen.dispatchEvent(test::mouseMove(5, 22));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row0") != std::string::npos);
+    }
+}
+
+TEST_CASE("Screen.inlineHover_contentGrowth_correctMapping")
+{
+    // Content starts small (1 row), then grows to 3 rows. Hover should still map correctly.
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 50);
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = RowReportingComponent {};
+    comp.contentRows = 1;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+    screen.draw();
+
+    // Grow content to 3 rows
+    comp.contentRows = 3;
+    screen.invalidate();
+    screen.draw();
+
+    // Content starts at row 0 (cursor at top). Hover at row 1 (1-based) = content row 0.
+    (void) screen.dispatchEvent(test::mouseMove(5, 1));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row0") != std::string::npos);
+    }
+
+    // Hover at row 3 (1-based) = content row 2.
+    screen.hoverState().reset();
+    (void) screen.dispatchEvent(test::mouseMove(5, 3));
+    std::this_thread::sleep_for(std::chrono::milliseconds(600));
+    screen.tickHover();
+
+    CHECK(screen.isTooltipVisible());
+    if (screen.isTooltipVisible())
+    {
+        screen.draw();
+        auto const content = test::canvasToString(screen.renderedBuffer());
+        CHECK(content.find("row2") != std::string::npos);
+    }
+}
