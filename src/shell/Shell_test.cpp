@@ -1892,6 +1892,29 @@ TEST_CASE("shell.expand.tilde_multiple")
     CHECK(escape(shell("echo ~ ~").output()) == escape("/home/testuser /home/testuser\n"));
 }
 
+TEST_CASE("shell.expand.tilde_command")
+{
+    // ~/bin/foo as a command: tilde in program position should be expanded
+    TestShell shell;
+    auto const* home = std::getenv("HOME");
+    REQUIRE(home != nullptr);
+
+    // Create a test script in a temp directory, then use tilde to invoke it
+    // We test that the tilde-prefixed path parses and executes correctly
+    // by using /bin/echo via a tilde path (simulated through PATH)
+    // Instead, test that tilde commands parse correctly by using an absolute echo path
+    CHECK(shell("~/../../bin/echo hello").exitCode == 0);
+    CHECK(escape(shell.output()).find("hello") != std::string::npos);
+}
+
+TEST_CASE("shell.expand.tilde_command_pipeline")
+{
+    // Tilde-prefixed command in a pipe: ~/../../bin/echo hello | cat
+    TestShell shell;
+    CHECK(shell("~/../../bin/echo tilde_test | cat").exitCode == 0);
+    CHECK(escape(shell.output()).find("tilde_test") != std::string::npos);
+}
+
 // ============================================================================
 // Brace Expansion
 // ============================================================================

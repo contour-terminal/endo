@@ -684,6 +684,46 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 currentContextSnippet(),
                 "Unexpected end of input");
             return nullptr;
+        case Token::Tilde: {
+            // Tilde-prefixed command: ~/bin/foo args...
+            auto stmt = parseLogicalExpr();
+            if (!stmt)
+                return nullptr;
+
+            // Shell command followed by |> → structured F# pipeline
+            if (_lexer.currentToken() == Token::ForwardPipe)
+            {
+                auto source = std::make_unique<ast::StructuredPipelineSourceExpr>(std::move(stmt));
+                _lexer.enterFSharpExpr();
+                _lexer.nextToken(); // consume first |>
+
+                auto step = parseFSharpComposition();
+                if (!step)
+                {
+                    _lexer.leaveFSharpExpr();
+                    return nullptr;
+                }
+
+                std::unique_ptr<ast::Expr> pipeline =
+                    std::make_unique<ast::PipelineExpr>(std::move(source), std::move(step));
+
+                while (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.nextToken(); // consume |>
+                    auto right = parseFSharpComposition();
+                    if (!right)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
+                }
+
+                _lexer.leaveFSharpExpr();
+                return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+            }
+            return stmt;
+        }
         default:
             _report.syntaxErrorWithSuggestions(currentLocation(),
                                                {},
@@ -979,7 +1019,22 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
 {
     TRACE_SCOPE("parseCall");
     auto const programLocation = _lexer.currentRange();
-    std::string program = consumeLiteral();
+
+    std::unique_ptr<ast::Expr> progExpr;
+    std::string program;
+    if (_lexer.currentToken() == Token::Tilde)
+    {
+        // Tilde-prefixed program name: ~/bin/foo, ~user/bin/bar
+        auto const& lit = _lexer.currentLiteral();
+        program = lit.empty() ? "~" : lit;
+        if (!program.starts_with('~'))
+            program = "~" + program;
+        progExpr = parseTildeExpansion();
+    }
+    else
+    {
+        program = consumeLiteral();
+    }
     std::vector<std::unique_ptr<ast::Expr>> arguments;
     std::vector<std::unique_ptr<ast::InputRedirect>> inputRedirects;
     std::vector<std::unique_ptr<ast::OutputRedirect>> outputRedirects;
@@ -1134,6 +1189,7 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
                                                      std::move(outputRedirects),
                                                      std::move(hereDocuments),
                                                      std::move(hereStrings));
+    result->programExpr = std::move(progExpr);
     result->programLocation = programLocation;
     return result;
 }

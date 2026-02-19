@@ -233,6 +233,10 @@ class IRGenerator final: public ast::Visitor
     void buildCommandArgs(std::string const& programName,
                           std::vector<std::unique_ptr<ast::Expr>> const& args);
 
+    /// Builds command arguments using a runtime-evaluated program name expression.
+    void buildCommandArgs(CoreVM::Value* programNameValue,
+                          std::vector<std::unique_ptr<ast::Expr>> const& args);
+
     /// Executes the built command (non-piped version).
     CoreVM::Value* execBuiltCommand();
 

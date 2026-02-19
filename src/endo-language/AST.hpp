@@ -580,10 +580,11 @@ struct BuiltinWhichStmt final: public Statement
 /// It is a path to an executable, followed by arguments, with optional redirects.
 struct ProgramCall final: public Statement
 {
-    std::string program;                                        ///< Program name or path
-    std::optional<SourceLocationRange> programLocation;         ///< Source location of the program name token
-    std::vector<std::unique_ptr<Expr>> parameters;              ///< Command arguments
-    std::vector<std::unique_ptr<InputRedirect>> inputRedirects; ///< Input redirects (< FILE)
+    std::string program;                                ///< Program name or path (raw display string)
+    std::unique_ptr<Expr> programExpr;                  ///< Runtime program name expression (tilde expansion)
+    std::optional<SourceLocationRange> programLocation; ///< Source location of the program name token
+    std::vector<std::unique_ptr<Expr>> parameters;      ///< Command arguments
+    std::vector<std::unique_ptr<InputRedirect>> inputRedirects;   ///< Input redirects (< FILE)
     std::vector<std::unique_ptr<OutputRedirect>> outputRedirects; ///< Output redirects (> FILE, >> FILE, >&)
     std::vector<std::unique_ptr<HereDocument>> hereDocuments;     ///< Here-documents (<<EOF)
     std::vector<std::unique_ptr<HereString>> hereStrings;         ///< Here-strings (<<<)

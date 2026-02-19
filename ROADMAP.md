@@ -210,7 +210,7 @@ Windows support.
 **Dependency:** Phase 1.1 (variables), Phase 1.4 (substitution for arithmetic)
 
 **Tasks:**
-- [x] Implement tilde expansion `~`, `~user`
+- [x] Implement tilde expansion `~`, `~user` (including as command program name: `~/bin/foo`)
 - [x] Implement brace expansion `{a,b,c}`, `{1..10}`
 - [x] Implement parameter expansion `${var:-default}`, `${var:+alt}`, `${#var}`, etc.
 - [x] Implement arithmetic expansion `$((expr))`

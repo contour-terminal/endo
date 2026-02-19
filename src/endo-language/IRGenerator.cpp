@@ -1599,7 +1599,18 @@ void IRGenerator::visit(ast::CallPipeline const& node)
         for (auto const& herestring: call->hereStrings)
             codegen(herestring.get());
 
-        if (containsRuntimeExpr(call->parameters))
+        if (call->programExpr)
+        {
+            // Runtime-evaluated program name (tilde expansion)
+            auto* expandedProgram = codegen(call->programExpr.get());
+            buildCommandArgs(expandedProgram, call->parameters);
+
+            if (lastInChain && node.background)
+                _result = execBuiltCommandPipedBackground(call->program, call->parameters);
+            else
+                _result = execBuiltCommandPiped(lastInChain);
+        }
+        else if (containsRuntimeExpr(call->parameters))
         {
             // Use dynamic argument building and execution
             buildCommandArgs(call->program, call->parameters);
@@ -2359,7 +2370,14 @@ void IRGenerator::visit(ast::ProgramCall const& node)
     for (auto const& herestring: node.hereStrings)
         codegen(herestring.get());
 
-    if (containsRuntimeExpr(node.parameters))
+    if (node.programExpr)
+    {
+        // Runtime-evaluated program name (tilde expansion)
+        auto* expandedProgram = codegen(node.programExpr.get());
+        buildCommandArgs(expandedProgram, node.parameters);
+        _result = execBuiltCommand();
+    }
+    else if (containsRuntimeExpr(node.parameters))
     {
         // Use dynamic argument building and execution
         buildCommandArgs(node.program, node.parameters);
@@ -2961,6 +2979,45 @@ void IRGenerator::buildCommandArgs(std::string const& programName,
         auto* value = codegen(arg.get());
         if (!value)
             continue; // Error already reported
+
+        _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCallback), { value }, "cmd_arg");
+    }
+}
+
+void IRGenerator::buildCommandArgs(CoreVM::Value* programNameValue,
+                                   std::vector<std::unique_ptr<ast::Expr>> const& args)
+{
+    TRACE_SCOPE("buildCommandArgs(Value*)");
+
+    // Start building the command with the runtime-evaluated program name
+    auto* cmdStartCallback = findCallback("internal.cmd_start(S)V");
+    if (!cmdStartCallback)
+    {
+        reportTypeError("Internal error: internal.cmd_start builtin not found");
+        return;
+    }
+    _builder.createCallFunction(
+        _builder.getBuiltinFunction(*cmdStartCallback), { programNameValue }, "cmd_start");
+
+    // Add each argument
+    auto* cmdArgCallback = findCallback("internal.cmd_arg(S)V");
+    if (!cmdArgCallback)
+    {
+        reportTypeError("Internal error: internal.cmd_arg builtin not found");
+        return;
+    }
+
+    for (auto const& arg: args)
+    {
+        if (dynamic_cast<ast::SplatExpr const*>(arg.get()))
+        {
+            codegen(arg.get());
+            continue;
+        }
+
+        auto* value = codegen(arg.get());
+        if (!value)
+            continue;
 
         _builder.createCallFunction(_builder.getBuiltinFunction(*cmdArgCallback), { value }, "cmd_arg");
     }
