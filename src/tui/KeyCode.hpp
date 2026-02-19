@@ -142,6 +142,17 @@ enum class KeyCode : std::uint32_t
     IsoLevel5Shift,
 };
 
+/// @brief Checks whether a key code represents a modifier-only or lock key.
+///
+/// These keys (Ctrl, Alt, Shift, Meta, CapsLock, etc.) produce no text and
+/// have no editing action when pressed alone. Reported by the Kitty keyboard
+/// protocol (flag 8) as discrete key events.
+[[nodiscard]] constexpr auto isModifierOnlyKey(KeyCode key) noexcept -> bool
+{
+    return (key >= KeyCode::CapsLock && key <= KeyCode::Menu)                // Lock/system keys
+           || (key >= KeyCode::LeftShift && key <= KeyCode::IsoLevel5Shift); // Modifier keys
+}
+
 /// @brief Checks whether a key code represents a printable Unicode character.
 /// @param key The key code to test.
 /// @return True if the key code is a printable codepoint.

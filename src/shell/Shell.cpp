@@ -2052,6 +2052,10 @@ void Shell::runAgentMode()
                 continue;
             }
 
+            // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
+            if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
+                continue;
+
             auto const action = inputComponent.processInput(event);
             switch (action)
             {

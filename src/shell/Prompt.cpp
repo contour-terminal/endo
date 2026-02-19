@@ -157,6 +157,12 @@ std::string Prompt::read()
                 continue;
             }
 
+            // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
+            // These produce no text and no editing action; processing them would cause
+            // unnecessary redraws that force the terminal viewport to scroll to the bottom.
+            if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
+                continue;
+
             // Dispatch all events through Screen (updates hover state, auto-hides tooltips on key press)
             (void) _screen->dispatchEvent(event);
 
@@ -279,6 +285,10 @@ std::optional<std::string> Prompt::processInput()
             _screen->draw();
             continue;
         }
+
+        // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
+        if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
+            continue;
 
         auto action = _promptComponent->processInput(event);
 

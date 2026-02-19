@@ -565,9 +565,7 @@ CompletionAction CompletionPopup::handleKey(KeyEvent const& key)
 
     // Modifier-only keys (Kitty keyboard protocol reports bare Ctrl/Alt/Shift as key events)
     // should not dismiss the popup — they produce no text and no editing action.
-    auto const kv = static_cast<std::uint32_t>(key.key);
-    if (kv >= static_cast<std::uint32_t>(KeyCode::LeftShift)
-        && kv <= static_cast<std::uint32_t>(KeyCode::IsoLevel5Shift))
+    if (isModifierOnlyKey(key.key))
         return CompletionAction::Changed;
 
     // Dismiss popup on Escape or any other unhandled key
