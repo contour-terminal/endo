@@ -75,6 +75,16 @@ namespace
             config.maxTurns = node["max_turns"].as<size_t>();
     }
 
+    void parseTraceConfig(YAML::Node const& node, TraceConfig& config)
+    {
+        if (!node || !node.IsMap())
+            return;
+        if (node["enabled"])
+            config.enabled = node["enabled"].as<bool>();
+        if (node["default_path"])
+            config.defaultPath = node["default_path"].as<std::string>();
+    }
+
     void emitClaudeConfig(YAML::Emitter& emitter, ClaudeConfig const& config)
     {
         auto const defaults = ClaudeConfig {};
@@ -164,6 +174,21 @@ namespace
         emitter << YAML::Key << "max_turns" << YAML::Value << config.maxTurns;
         emitter << YAML::EndMap;
     }
+
+    void emitTraceConfig(YAML::Emitter& emitter, TraceConfig const& config)
+    {
+        auto const defaults = TraceConfig {};
+        auto const hasNonDefault =
+            config.enabled != defaults.enabled || config.defaultPath != defaults.defaultPath;
+        if (!hasNonDefault)
+            return;
+        emitter << YAML::Key << "trace" << YAML::Value << YAML::BeginMap;
+        if (config.enabled != defaults.enabled)
+            emitter << YAML::Key << "enabled" << YAML::Value << config.enabled;
+        if (config.defaultPath != defaults.defaultPath)
+            emitter << YAML::Key << "default_path" << YAML::Value << config.defaultPath;
+        emitter << YAML::EndMap;
+    }
 } // namespace
 
 auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentConfig, std::string>
@@ -190,6 +215,7 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
         parsePlanModeConfig(root["plan_mode"], config.planMode);
         parseExploreConfig(root["explore"], config.explore);
+        parseTraceConfig(root["trace"], config.trace);
 
         return config;
     }
@@ -260,6 +286,7 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 
         emitPlanModeConfig(emitter, config.planMode);
         emitExploreConfig(emitter, config.explore);
+        emitTraceConfig(emitter, config.trace);
 
         emitter << YAML::EndMap;
 

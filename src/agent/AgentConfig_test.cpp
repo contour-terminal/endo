@@ -310,6 +310,56 @@ TEST_CASE("agent.config.resolve_provider_api_key_neither")
 }
 
 // =============================================================================
+// TraceConfig tests
+// =============================================================================
+
+TEST_CASE("agent.config.trace_defaults")
+{
+    auto config = AgentConfig {};
+    CHECK_FALSE(config.trace.enabled);
+    CHECK(config.trace.defaultPath.empty());
+}
+
+TEST_CASE("agent.config.trace_yaml_roundtrip")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-trace";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    auto original = AgentConfig {};
+    original.trace.enabled = true;
+    original.trace.defaultPath = "/tmp/my-trace.jsonl";
+
+    auto saveError = saveAgentConfig(original, configPath);
+    REQUIRE(!saveError.has_value());
+
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    CHECK(loadResult->trace.enabled == true);
+    CHECK(loadResult->trace.defaultPath == "/tmp/my-trace.jsonl");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("agent.config.trace_default_not_emitted")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-trace-def";
+    std::filesystem::create_directories(tmpDir);
+    auto const configPath = tmpDir / "agent.yml";
+
+    auto config = AgentConfig {};
+    auto saveError = saveAgentConfig(config, configPath);
+    REQUIRE(!saveError.has_value());
+
+    auto loadResult = loadAgentConfig(configPath);
+    REQUIRE(loadResult.has_value());
+    CHECK_FALSE(loadResult->trace.enabled);
+    CHECK(loadResult->trace.defaultPath.empty());
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+// =============================================================================
 // ExploreConfig tests
 // =============================================================================
 

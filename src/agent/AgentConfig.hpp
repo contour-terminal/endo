@@ -52,6 +52,13 @@ struct ExploreConfig
     size_t maxTurns = 10; ///< Maximum exploration iterations for the sub-agent.
 };
 
+/// Configuration for agent tool I/O tracing.
+struct TraceConfig
+{
+    bool enabled = false;    ///< Whether tracing is enabled by default.
+    std::string defaultPath; ///< Default trace file path (empty = auto-generate).
+};
+
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
@@ -68,6 +75,7 @@ struct AgentConfig
 
     PlanModeConfig planMode; ///< Plan mode configuration.
     ExploreConfig explore;   ///< Explore sub-agent configuration.
+    TraceConfig trace;       ///< Tool I/O tracing configuration.
 };
 
 /// Loads agent configuration from a YAML file.
