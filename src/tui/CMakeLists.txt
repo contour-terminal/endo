@@ -12,6 +12,7 @@ add_library(tui
     List.cpp
     LogPanel.cpp
     MarkdownRenderer.cpp
+    MarkdownTable.cpp
     MockTerminalOutput.cpp
     Screen.cpp
     Sixel.cpp
@@ -66,6 +67,9 @@ add_executable(test-tui
     Screen_test.cpp
     SmartCaseMatch_test.cpp
     FuzzyMatch_test.cpp
+    MarkdownTable_test.cpp
+    MarkdownRenderer_test.cpp
+    StyledText_test.cpp
     Unicode_test.cpp
     VtParser_test.cpp
 )

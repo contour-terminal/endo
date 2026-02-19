@@ -5,6 +5,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace tui
 {
@@ -24,6 +25,9 @@ struct MarkdownTheme
     Style listMarker;      ///< List bullet/number.
     Style blockquote;      ///< > quoted text.
     Style thinkBlock;      ///< <think>...</think> content.
+    Style tableBorder;     ///< Box-drawing characters for table borders.
+    Style tableHeader;     ///< Table header cell text.
+    Style tableCell;       ///< Table data cell text.
 };
 
 /// @brief Renders markdown to a terminal output with styling.
@@ -76,6 +80,11 @@ class MarkdownRenderer
     bool _inThinkBlock = false;
     std::string _codeFence; ///< The fence string (e.g. "```") that opened the current code block.
 
+    // Table buffering state
+    bool _inTable = false;                ///< Currently buffering table rows.
+    std::vector<std::string> _tableLines; ///< Buffered table lines.
+    bool _tableSeparatorSeen = false;     ///< Separator row detected in buffered lines.
+
     /// @brief Renders a single line of markdown (not inside a code block).
     void renderLine(std::string_view line);
 
@@ -89,6 +98,18 @@ class MarkdownRenderer
 
     /// @brief Processes buffered streaming content, rendering complete lines.
     void processStreamBuffer();
+
+    /// @brief Handles a potential table line (buffers or flushes).
+    /// @param line The line to check.
+    /// @return true if the line was consumed as part of a table.
+    auto handleTableLine(std::string_view line) -> bool;
+
+    /// @brief Flushes buffered table lines, rendering or falling back to paragraphs.
+    void flushTable();
+
+    /// @brief Renders a fully parsed table with box-drawing borders.
+    /// @param table The parsed table to render.
+    void renderTable(struct ParsedTable const& table);
 
     /// @brief Renders a heading line.
     /// @param level The heading level (1-6).

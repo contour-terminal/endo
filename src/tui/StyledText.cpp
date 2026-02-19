@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "StyledText.hpp"
 
+#include <tui/Box.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/MarkdownRenderer.hpp>
+#include <tui/MarkdownTable.hpp>
 #include <tui/Unicode.hpp>
 
 #if defined(__clang__)
@@ -233,12 +235,165 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
     bool inCodeBlock = false;
     std::string codeFence;
 
+    // Table buffering state
+    bool inTable = false;
+    std::vector<std::string> tableLines;
+    bool tableSeparatorSeen = false;
+
+    // Emits a styled line, applying word-wrap if needed.
+    auto emitLine = [&](StyledLine styledLine) {
+        if (maxWidth > 0 && !styledLine.empty())
+        {
+            auto wrapped = wrapLine(styledLine, maxWidth);
+            for (auto& wrappedLine: wrapped)
+                result.addLine(std::move(wrappedLine));
+        }
+        else
+        {
+            result.addLine(std::move(styledLine));
+        }
+    };
+
+    // Flushes buffered table lines into the result.
+    auto flushTable = [&]() {
+        inTable = false;
+        if (!tableSeparatorSeen)
+        {
+            // Not a valid table — render as plain paragraphs.
+            for (auto const& bufferedLine: tableLines)
+            {
+                auto inlineSpans = parseInlineMarkdown(bufferedLine, mdTheme);
+                StyledLine styledLine;
+                for (auto& span: inlineSpans)
+                    styledLine.push_back(std::move(span));
+                emitLine(std::move(styledLine));
+            }
+            tableLines.clear();
+            tableSeparatorSeen = false;
+            return;
+        }
+
+        // Parse into a ParsedTable.
+        auto table = ParsedTable {};
+        auto separatorIdx = std::size_t { 0 };
+        for (std::size_t i = 0; i < tableLines.size(); ++i)
+        {
+            if (detectTableSeparator(tableLines[i]))
+            {
+                separatorIdx = i;
+                break;
+            }
+        }
+
+        if (separatorIdx > 0)
+            table.headers = splitTableRow(tableLines[separatorIdx - 1]);
+
+        table.alignments = parseTableAlignments(tableLines[separatorIdx]);
+        table.columnCount = table.headers.size();
+
+        for (auto i = separatorIdx + 1; i < tableLines.size(); ++i)
+        {
+            auto cells = splitTableRow(tableLines[i]);
+            cells.resize(table.columnCount);
+            table.rows.push_back(std::move(cells));
+        }
+        table.alignments.resize(table.columnCount, TableAlignment::Left);
+
+        auto const widths = computeColumnWidths(table);
+        auto const border = BorderChars::fromStyle(BorderStyle::Rounded);
+
+        // Helper: build a horizontal border StyledLine.
+        auto buildHLine = [&](std::string_view left, std::string_view mid, std::string_view right) {
+            std::string borderStr;
+            borderStr.append(left);
+            for (std::size_t col = 0; col < table.columnCount; ++col)
+            {
+                for (auto j = 0; j < widths[col] + 2; ++j)
+                    borderStr.append(border.horizontal);
+                if (col + 1 < table.columnCount)
+                    borderStr.append(mid);
+            }
+            borderStr.append(right);
+            StyledLine styledLine;
+            styledLine.push_back({ std::move(borderStr), mdTheme.tableBorder });
+            result.addLine(std::move(styledLine)); // No word-wrap for table lines
+        };
+
+        // Helper: build a row StyledLine.
+        auto buildRow = [&](std::vector<std::string> const& cells, Style const& cellStyle) {
+            StyledLine styledLine;
+            std::string vertStr(border.vertical);
+            styledLine.push_back({ vertStr, mdTheme.tableBorder });
+            for (std::size_t col = 0; col < table.columnCount; ++col)
+            {
+                auto const& text = (col < cells.size()) ? cells[col] : std::string {};
+                auto const alignment =
+                    (col < table.alignments.size()) ? table.alignments[col] : TableAlignment::Left;
+                auto const aligned = alignCell(text, widths[col], alignment);
+
+                styledLine.push_back({ " ", {} });
+                // Parse inline markdown in cell content
+                auto inlineSpans = parseInlineMarkdown(aligned, mdTheme);
+                for (auto& span: inlineSpans)
+                {
+                    // Apply cell style to unstyled spans
+                    if (std::holds_alternative<std::monostate>(span.style.fg) && !span.style.bold
+                        && !span.style.italic && !span.style.dim)
+                        span.style = cellStyle;
+                    styledLine.push_back(std::move(span));
+                }
+                styledLine.push_back({ " ", {} });
+                styledLine.push_back({ vertStr, mdTheme.tableBorder });
+            }
+            result.addLine(std::move(styledLine)); // No word-wrap for table lines
+        };
+
+        buildHLine(border.topLeft, border.topT, border.topRight);
+        buildRow(table.headers, mdTheme.tableHeader);
+        buildHLine(border.leftT, border.cross, border.rightT);
+        for (auto const& row: table.rows)
+            buildRow(row, mdTheme.tableCell);
+        buildHLine(border.bottomLeft, border.bottomT, border.bottomRight);
+
+        tableLines.clear();
+        tableSeparatorSeen = false;
+    };
+
     auto pos = std::size_t { 0 };
     while (pos < markdown.size())
     {
         auto const lineEnd = markdown.find('\n', pos);
         auto const line =
             (lineEnd != std::string_view::npos) ? markdown.substr(pos, lineEnd - pos) : markdown.substr(pos);
+
+        // Table row interception
+        if (!inCodeBlock)
+        {
+            if (inTable)
+            {
+                if (detectTableRow(line))
+                {
+                    tableLines.emplace_back(line);
+                    if (detectTableSeparator(line))
+                        tableSeparatorSeen = true;
+                    pos = (lineEnd != std::string_view::npos) ? lineEnd + 1 : markdown.size();
+                    continue;
+                }
+                // Not a table row — flush and fall through to normal processing.
+                flushTable();
+            }
+            else if (detectTableRow(line))
+            {
+                inTable = true;
+                tableLines.clear();
+                tableSeparatorSeen = false;
+                tableLines.emplace_back(line);
+                if (detectTableSeparator(line))
+                    tableSeparatorSeen = true;
+                pos = (lineEnd != std::string_view::npos) ? lineEnd + 1 : markdown.size();
+                continue;
+            }
+        }
 
         StyledLine styledLine;
 
@@ -326,19 +481,14 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
             }
         }
 
-        if (maxWidth > 0 && !styledLine.empty())
-        {
-            auto wrapped = wrapLine(styledLine, maxWidth);
-            for (auto& wrappedLine: wrapped)
-                result.addLine(std::move(wrappedLine));
-        }
-        else
-        {
-            result.addLine(std::move(styledLine));
-        }
+        emitLine(std::move(styledLine));
 
         pos = (lineEnd != std::string_view::npos) ? lineEnd + 1 : markdown.size();
     }
+
+    // Flush any pending table at end of input.
+    if (inTable)
+        flushTable();
 
     return result;
 }

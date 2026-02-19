@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/Box.hpp>
 #include <tui/MarkdownRenderer.hpp>
+#include <tui/MarkdownTable.hpp>
 
 #include <string>
 #include <string_view>
@@ -164,6 +166,10 @@ void MarkdownRenderer::render(std::string_view markdown)
 
         pos = (lineEnd != std::string_view::npos) ? lineEnd + 1 : markdown.size();
     }
+
+    // Flush any pending table at the end of batch rendering.
+    if (_inTable)
+        flushTable();
 }
 
 void MarkdownRenderer::beginStream()
@@ -173,6 +179,9 @@ void MarkdownRenderer::beginStream()
     _inCodeBlock = false;
     _inThinkBlock = false;
     _codeFence.clear();
+    _inTable = false;
+    _tableLines.clear();
+    _tableSeparatorSeen = false;
 }
 
 void MarkdownRenderer::feedToken(std::string_view token)
@@ -183,6 +192,10 @@ void MarkdownRenderer::feedToken(std::string_view token)
 
 void MarkdownRenderer::endStream()
 {
+    // Flush any pending table before final cleanup.
+    if (_inTable)
+        flushTable();
+
     // Flush any remaining content
     if (!_streamBuffer.empty())
     {
@@ -250,6 +263,14 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
     auto thinkBlockStyle = Style {};
     thinkBlockStyle.dim = true;
 
+    auto tableBorderStyle = Style {};
+    tableBorderStyle.dim = true;
+
+    auto tableHeaderStyle = Style {};
+    tableHeaderStyle.bold = true;
+
+    auto tableCellStyle = Style {};
+
     return MarkdownTheme {
         .heading1 = heading1,
         .heading2 = heading2,
@@ -263,11 +284,18 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
         .listMarker = listMarkerStyle,
         .blockquote = blockquoteStyle,
         .thinkBlock = thinkBlockStyle,
+        .tableBorder = tableBorderStyle,
+        .tableHeader = tableHeaderStyle,
+        .tableCell = tableCellStyle,
     };
 }
 
 void MarkdownRenderer::renderLine(std::string_view line)
 {
+    // Table row detection (must come before other block-level checks)
+    if (handleTableLine(line))
+        return;
+
     // Empty line
     if (line.empty())
     {
@@ -475,6 +503,147 @@ void MarkdownRenderer::processStreamBuffer()
         _streamBuffer.erase(0, newlinePos + 1);
         _output.flush();
     }
+}
+
+auto MarkdownRenderer::handleTableLine(std::string_view line) -> bool
+{
+    if (_inTable)
+    {
+        if (detectTableRow(line))
+        {
+            _tableLines.emplace_back(line);
+            if (detectTableSeparator(line))
+                _tableSeparatorSeen = true;
+            return true;
+        }
+        // Line is not a table row — flush the table, let caller render this line normally.
+        flushTable();
+        return false;
+    }
+
+    // Not currently in a table — check if this line starts one.
+    if (detectTableRow(line))
+    {
+        _inTable = true;
+        _tableLines.clear();
+        _tableSeparatorSeen = false;
+        _tableLines.emplace_back(line);
+        if (detectTableSeparator(line))
+            _tableSeparatorSeen = true;
+        return true;
+    }
+
+    return false;
+}
+
+void MarkdownRenderer::flushTable()
+{
+    _inTable = false;
+
+    if (!_tableSeparatorSeen)
+    {
+        // Not a valid table — render buffered lines as plain paragraphs.
+        for (auto const& bufferedLine: _tableLines)
+        {
+            renderInline(bufferedLine);
+            _output.writeRaw("\n");
+        }
+        _tableLines.clear();
+        _tableSeparatorSeen = false;
+        return;
+    }
+
+    // Parse into a ParsedTable.
+    auto table = ParsedTable {};
+
+    // Find the separator row index (should be index 1 for a valid GFM table).
+    auto separatorIdx = std::size_t { 0 };
+    for (std::size_t i = 0; i < _tableLines.size(); ++i)
+    {
+        if (detectTableSeparator(_tableLines[i]))
+        {
+            separatorIdx = i;
+            break;
+        }
+    }
+
+    // Header is the row before the separator.
+    if (separatorIdx > 0)
+        table.headers = splitTableRow(_tableLines[separatorIdx - 1]);
+
+    table.alignments = parseTableAlignments(_tableLines[separatorIdx]);
+    table.columnCount = table.headers.size();
+
+    // Data rows come after the separator.
+    for (auto i = separatorIdx + 1; i < _tableLines.size(); ++i)
+    {
+        auto cells = splitTableRow(_tableLines[i]);
+        // Pad or truncate to match column count.
+        cells.resize(table.columnCount);
+        table.rows.push_back(std::move(cells));
+    }
+
+    // Ensure alignments match column count.
+    table.alignments.resize(table.columnCount, TableAlignment::Left);
+
+    renderTable(table);
+
+    _tableLines.clear();
+    _tableSeparatorSeen = false;
+}
+
+void MarkdownRenderer::renderTable(ParsedTable const& table)
+{
+    auto const widths = computeColumnWidths(table);
+    auto const border = BorderChars::fromStyle(BorderStyle::Rounded);
+
+    // Helper to render a horizontal border line.
+    auto renderHLine = [&](std::string_view left, std::string_view mid, std::string_view right) {
+        _output.writeText(left, _theme.tableBorder);
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            // width + 2 for padding spaces around cell content
+            for (auto i = 0; i < widths[col] + 2; ++i)
+                _output.writeText(border.horizontal, _theme.tableBorder);
+            if (col + 1 < table.columnCount)
+                _output.writeText(mid, _theme.tableBorder);
+        }
+        _output.writeText(right, _theme.tableBorder);
+        _output.writeRaw("\n");
+    };
+
+    // Helper to render a row of cells.
+    auto renderRow = [&](std::vector<std::string> const& cells, Style const& cellStyle) {
+        _output.writeText(border.vertical, _theme.tableBorder);
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            _output.writeRaw(" ");
+            auto const& text = (col < cells.size()) ? cells[col] : std::string {};
+            auto const alignment =
+                (col < table.alignments.size()) ? table.alignments[col] : TableAlignment::Left;
+            auto const aligned = alignCell(text, widths[col], alignment);
+            renderInline(aligned, &cellStyle);
+            _output.writeRaw(" ");
+            _output.writeText(border.vertical, _theme.tableBorder);
+        }
+        _output.writeRaw("\n");
+    };
+
+    // Top border
+    renderHLine(border.topLeft, border.topT, border.topRight);
+
+    // Header row
+    renderRow(table.headers, _theme.tableHeader);
+
+    // Separator between header and data
+    renderHLine(border.leftT, border.cross, border.rightT);
+
+    // Data rows
+    for (auto const& row: table.rows)
+        renderRow(row, _theme.tableCell);
+
+    // Bottom border
+    renderHLine(border.bottomLeft, border.bottomT, border.bottomRight);
 }
 
 void MarkdownRenderer::renderHeading(int level, std::string_view text)

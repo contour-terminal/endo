@@ -567,6 +567,7 @@ The library includes:
 - [x] Add comprehensive editor unit tests (47 tests covering basic editing, cursor movement, selection, undo/redo, multiline, history, kill ring, clipboard, and UTF-8)
 - [x] Implement configurable keybinding framework (`EditAction`, `KeyChord`, `KeyBindings`)
 - [x] Partial-line indicator on command completion (fish-style reverse-video `⏎` when command output doesn't end with newline)
+- [x] GFM-style pipe table rendering in `MarkdownRenderer` (streaming + batch) and `StyledText` (canvas-based) with rounded box-drawing borders, column alignment, inline markdown in cells, and shared parsing via `MarkdownTable` utilities
 
 **Implementation Notes:**
 - Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
