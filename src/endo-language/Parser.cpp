@@ -1152,12 +1152,30 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
             }
 
             // Not followed by redirect - treat the number as a regular argument
-            arguments.emplace_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+            // Check if the next token is adjacent (no whitespace) — combine into a compound word
+            if (!_lexer.hasPrecedingSpace() && isParameterToken())
+            {
+                std::vector<std::unique_ptr<ast::Expr>> parts;
+                parts.push_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+                while (!_lexer.hasPrecedingSpace() && isParameterToken())
+                    if (auto part = parseParameter())
+                        parts.push_back(std::move(part));
+                    else
+                        break;
+                if (parts.size() == 1)
+                    arguments.emplace_back(std::move(parts.front()));
+                else
+                    arguments.emplace_back(std::make_unique<ast::ConcatExpr>(std::move(parts)));
+            }
+            else
+            {
+                arguments.emplace_back(std::make_unique<ast::LiteralExpr>(numLiteral));
+            }
             continue;
         }
 
-        // Regular argument
-        auto arg = parseParameter();
+        // Regular argument — combine adjacent tokens without whitespace into a single word
+        auto arg = parseCompoundParameter();
         if (arg)
         {
             // Check for brace expansion on literal arguments
@@ -1207,7 +1225,7 @@ std::vector<std::unique_ptr<ast::Expr>> Parser::parseParameterList()
             // For now, treat numbers as parameters in this context
         }
 
-        auto arg = parseParameter();
+        auto arg = parseCompoundParameter();
         if (arg)
             parameters.emplace_back(std::move(arg));
         else
@@ -2134,6 +2152,33 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
                                                _lexer.currentLiteral());
             return nullptr;
     }
+}
+
+std::unique_ptr<ast::Expr> Parser::parseCompoundParameter()
+{
+    TRACE_SCOPE("parseCompoundParameter");
+    auto first = parseParameter();
+    if (!first)
+        return nullptr;
+
+    // Check if the next token is adjacent (no intervening whitespace) and is a parameter token
+    if (_lexer.hasPrecedingSpace() || !isParameterToken())
+        return first;
+
+    // Multiple adjacent tokens — combine into ConcatExpr
+    std::vector<std::unique_ptr<ast::Expr>> parts;
+    parts.push_back(std::move(first));
+
+    while (!_lexer.hasPrecedingSpace() && isParameterToken())
+        if (auto part = parseParameter())
+            parts.push_back(std::move(part));
+        else
+            break;
+
+    if (parts.size() == 1)
+        return std::move(parts.front());
+
+    return std::make_unique<ast::ConcatExpr>(std::move(parts));
 }
 
 std::unique_ptr<ast::Statement> Parser::parsePrimaryStmt()

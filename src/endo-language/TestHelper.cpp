@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TestHelper.hpp"
 
-#include "BuiltinImpls.hpp"
-#include "BuiltinSignatures.hpp"
-
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
@@ -11,6 +8,8 @@
 
 #include "AST.hpp"
 #include "ASTPrinter.hpp"
+#include "BuiltinImpls.hpp"
+#include "BuiltinSignatures.hpp"
 #include "IRGenerator.hpp"
 #include "Lexer.hpp"
 #include "Parser.hpp"
@@ -28,6 +27,7 @@ namespace
     void mockStructuredPs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockProc
         {
             int64_t pid;
@@ -37,6 +37,7 @@ namespace
             int64_t mem;
             char const* command;
         };
+
         constexpr MockProc procs[] = {
             { 1, 0, "root", 0.1, 1024, "/sbin/init" },
             { 42, 1, "alice", 15.5, 4096, "firefox" },
@@ -53,7 +54,8 @@ namespace
             record->setSlot(3, std::bit_cast<uint64_t>(p.cpu));
             record->setSlot(4, static_cast<uint64_t>(p.mem));
             record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(p.command)));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -61,6 +63,7 @@ namespace
     void mockStructuredLs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockFile
         {
             char const* name;
@@ -69,6 +72,7 @@ namespace
             int64_t mtime;
             bool isDir;
         };
+
         constexpr MockFile files[] = {
             { "docs", 4096, 0755, 1700000000, true },
             { "hello.txt", 42, 0644, 1700001000, false },
@@ -84,7 +88,8 @@ namespace
             record->setSlot(2, static_cast<uint64_t>(f.mode));
             record->setSlot(3, static_cast<uint64_t>(f.mtime));
             record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -92,6 +97,7 @@ namespace
     void mockStructuredJobs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockJob
         {
             int64_t id;
@@ -99,6 +105,7 @@ namespace
             char const* command;
             int64_t pid;
         };
+
         constexpr MockJob jobs[] = {
             { 1, "Running", "sleep 100", 1234 },
             { 2, "Stopped", "vim", 5678 },
@@ -113,7 +120,8 @@ namespace
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(j.state)));
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(j.command)));
             record->setSlot(3, static_cast<uint64_t>(j.pid));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -121,6 +129,7 @@ namespace
     void mockStructuredDockerPs(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockContainer
         {
             char const* id;
@@ -131,13 +140,29 @@ namespace
             char const* ports;
             char const* names;
         };
+
         constexpr MockContainer containers[] = {
-            { "abc123def", "nginx:latest", "/docker-entrypoint…", "2024-01-15 10:00:00", "Up 3 hours",
-              "80/tcp", "web-server" },
-            { "def456ghi", "postgres:16", "docker-entrypoint.s…", "2024-01-14 08:00:00", "Up 2 days",
-              "5432/tcp", "db-main" },
-            { "ghi789jkl", "redis:7", "docker-entrypoint.s…", "2024-01-13 12:00:00",
-              "Exited (0) 1 hour ago", "", "cache" },
+            { "abc123def",
+              "nginx:latest",
+              "/docker-entrypoint…",
+              "2024-01-15 10:00:00",
+              "Up 3 hours",
+              "80/tcp",
+              "web-server" },
+            { "def456ghi",
+              "postgres:16",
+              "docker-entrypoint.s…",
+              "2024-01-14 08:00:00",
+              "Up 2 days",
+              "5432/tcp",
+              "db-main" },
+            { "ghi789jkl",
+              "redis:7",
+              "docker-entrypoint.s…",
+              "2024-01-13 12:00:00",
+              "Exited (0) 1 hour ago",
+              "",
+              "cache" },
         };
         auto* list = runner->makeNilList(CoreVM::LiteralType::Object);
         for (int i = 2; i >= 0; --i)
@@ -151,7 +176,8 @@ namespace
             record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.status)));
             record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(c.ports)));
             record->setSlot(6, reinterpret_cast<uintptr_t>(runner->newString(c.names)));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -159,6 +185,7 @@ namespace
     void mockStructuredDockerImages(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockImage
         {
             char const* id;
@@ -167,6 +194,7 @@ namespace
             char const* created;
             char const* size;
         };
+
         constexpr MockImage images[] = {
             { "sha256:abc", "nginx", "latest", "2024-01-10", "187MB" },
             { "sha256:def", "postgres", "16", "2024-01-08", "412MB" },
@@ -183,7 +211,8 @@ namespace
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(img.tag)));
             record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(img.created)));
             record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(img.size)));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -191,6 +220,7 @@ namespace
     void mockStructuredGitLog(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockCommit
         {
             char const* sha;
@@ -199,6 +229,7 @@ namespace
             char const* date;
             char const* message;
         };
+
         constexpr MockCommit commits[] = {
             { "abc123", "Alice", "alice@example.com", "2024-01-15", "feat: add login" },
             { "def456", "Bob", "bob@example.com", "2024-01-14", "fix: null check" },
@@ -215,7 +246,8 @@ namespace
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(c.email)));
             record->setSlot(3, reinterpret_cast<uintptr_t>(runner->newString(c.date)));
             record->setSlot(4, reinterpret_cast<uintptr_t>(runner->newString(c.message)));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -223,11 +255,13 @@ namespace
     void mockStructuredGitStatus(CoreVM::Params& args)
     {
         auto* runner = args.caller();
+
         struct MockStatusEntry
         {
             char const* status;
             char const* path;
         };
+
         constexpr MockStatusEntry entries[] = {
             { "M", "src/main.cpp" },
             { "??", "README.md" },
@@ -241,7 +275,8 @@ namespace
             auto* record = runner->allocObject(typeId);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(e.status)));
             record->setSlot(1, reinterpret_cast<uintptr_t>(runner->newString(e.path)));
-            list = runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
+            list =
+                runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
         }
         args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
     }
@@ -256,7 +291,8 @@ TestRuntime::TestRuntime()
 {
     // Resolver chains test-specific overrides with shared stateless implementations.
     // Returns std::nullopt for builtins that should get a no-op default.
-    auto resolver = [this](std::string_view name, size_t arity) -> std::optional<CoreVM::NativeCallback::Functor> {
+    auto resolver = [this](std::string_view name,
+                           size_t arity) -> std::optional<CoreVM::NativeCallback::Functor> {
         using Functor = CoreVM::NativeCallback::Functor;
 
         // --- Output capture (stateful) ---
@@ -371,6 +407,14 @@ TestRuntime::TestRuntime()
                     auto* none = args.caller()->makeNoneOption();
                     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
                 }
+            });
+        if (name == "getvar" && arity == 1)
+            return Functor([this](CoreVM::Params& args) {
+                auto const& key = args.getString(1);
+                if (auto const it = mockEnv.find(std::string(key)); it != mockEnv.end())
+                    args.setResult(args.caller()->newString(it->second));
+                else
+                    args.setResult(args.caller()->newString(""));
             });
         if (name == "getvar.exitstatus" && arity == 0)
             return Functor([](CoreVM::Params& args) { args.setResult(CoreVM::CoreNumber(0)); });

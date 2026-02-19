@@ -8297,3 +8297,57 @@ TEST_CASE("IRGenerator.FSharp.parenthesized_number_still_displays")
 {
     CHECK(executeSourceAndGetOutput("(5 + 3)") == "8\n");
 }
+
+// =============================================================================
+// Shell compound parameter (word splitting) tests
+// =============================================================================
+
+TEST_CASE("IRGenerator.Shell.compound_param_var_colon_var")
+{
+    // $LINES:$COLUMNS should be a single word, not three separate arguments
+    auto& rt = TestRuntime::instance();
+    rt.clearOutput();
+    rt.setMockEnvVar("LINES", "35");
+    rt.setMockEnvVar("COLUMNS", "127");
+    rt.setMockWhichPath("echo", "/bin/echo");
+    CHECK(executeSourceAndGetOutput("echo $LINES:$COLUMNS") == "35:127\n");
+    rt.clearMockEnvVars();
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.Shell.compound_param_var_slash_literal")
+{
+    // $HOME/bin should be a single word
+    auto& rt = TestRuntime::instance();
+    rt.clearOutput();
+    rt.setMockEnvVar("HOME", "/home/test");
+    rt.setMockWhichPath("echo", "/bin/echo");
+    CHECK(executeSourceAndGetOutput("echo $HOME/bin") == "/home/test/bin\n");
+    rt.clearMockEnvVars();
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.Shell.compound_param_literal_dollar")
+{
+    // foo$HOME should be a single word (literal followed by variable)
+    auto& rt = TestRuntime::instance();
+    rt.clearOutput();
+    rt.setMockEnvVar("HOME", "/home/test");
+    rt.setMockWhichPath("echo", "/bin/echo");
+    CHECK(executeSourceAndGetOutput("echo foo$HOME") == "foo/home/test\n");
+    rt.clearMockEnvVars();
+    rt.clearMockWhichPaths();
+}
+
+TEST_CASE("IRGenerator.Shell.compound_param_space_separated_unchanged")
+{
+    // $LINES $COLUMNS should remain two separate arguments (space-separated)
+    auto& rt = TestRuntime::instance();
+    rt.clearOutput();
+    rt.setMockEnvVar("LINES", "35");
+    rt.setMockEnvVar("COLUMNS", "127");
+    rt.setMockWhichPath("echo", "/bin/echo");
+    CHECK(executeSourceAndGetOutput("echo $LINES $COLUMNS") == "35 127\n");
+    rt.clearMockEnvVars();
+    rt.clearMockWhichPaths();
+}

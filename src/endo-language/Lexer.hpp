@@ -307,6 +307,9 @@ class Lexer
     /// Check if currently in F# expression mode
     [[nodiscard]] bool inFSharpMode() const noexcept { return _fsharpDepth > 0; }
 
+    /// Returns true if there was whitespace (space, tab, or comment) before the current token.
+    [[nodiscard]] bool hasPrecedingSpace() const noexcept { return _precedingSpace; }
+
     /// Pushes back a token so that currentToken() returns it immediately,
     /// and the current token is deferred to the next nextToken() call.
     void pushBackToken(Token token, std::string literal)
@@ -358,6 +361,7 @@ class Lexer
     bool _pushedBack = false;      // True if a token has been pushed back
     TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
     bool _atStatementStart = true; // True when next token starts a new statement (for [ disambiguation)
+    bool _precedingSpace = true;   // True when whitespace precedes the current token
 };
 
 /// Converts a Token to its string representation.

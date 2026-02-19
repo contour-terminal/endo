@@ -1621,3 +1621,73 @@ TEST_CASE("Lexer.fsharp_number_unchanged")
     CHECK(lexer2.currentToken() == endo::Token::Number);
     CHECK(lexer2.currentLiteral() == "42");
 }
+
+// =============================================================================
+// Preceding space tracking tests
+// =============================================================================
+
+TEST_CASE("Lexer.preceding_space.no_space_between_dollar_and_colon")
+{
+    // In "$LINES:$COLUMNS", the colon should NOT have preceding space
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("$LINES:$COLUMNS"));
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "LINES");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == ":");
+    CHECK_FALSE(lexer.hasPrecedingSpace());
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "COLUMNS");
+    CHECK_FALSE(lexer.hasPrecedingSpace());
+}
+
+TEST_CASE("Lexer.preceding_space.space_between_variables")
+{
+    // In "$LINES $COLUMNS", there IS preceding space before $COLUMNS
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("$LINES $COLUMNS"));
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "LINES");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "COLUMNS");
+    CHECK(lexer.hasPrecedingSpace());
+}
+
+TEST_CASE("Lexer.preceding_space.no_space_dollar_slash")
+{
+    // In "$HOME/bin", /bin follows $HOME without space
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("$HOME/bin"));
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "HOME");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "/bin");
+    CHECK_FALSE(lexer.hasPrecedingSpace());
+}
+
+TEST_CASE("Lexer.preceding_space.first_token")
+{
+    // The very first token after leading whitespace should report preceding space
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("  hello"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "hello");
+    CHECK(lexer.hasPrecedingSpace());
+}
+
+TEST_CASE("Lexer.preceding_space.literal_adjacent_to_dollar")
+{
+    // In "foo$HOME", $HOME follows foo without space
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("foo$HOME"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "foo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::DollarName);
+    CHECK(lexer.currentLiteral() == "HOME");
+    CHECK_FALSE(lexer.hasPrecedingSpace());
+}

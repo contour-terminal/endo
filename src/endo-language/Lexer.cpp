@@ -387,16 +387,22 @@ std::vector<TokenInfo> Lexer::tokenize(std::unique_ptr<Source> source)
 void Lexer::consumeWhitespace()
 {
     _nextToken.literal = {};
+    _precedingSpace = false;
 
     for (;;)
     {
         // Consume spaces and tabs
-        while (_currentChar == U' ' || _currentChar == U'\t')
-            nextChar();
+        if (_currentChar == U' ' || _currentChar == U'\t')
+        {
+            _precedingSpace = true;
+            while (_currentChar == U' ' || _currentChar == U'\t')
+                nextChar();
+        }
 
         // # line comment (shell style)
         if (_currentChar == U'#')
         {
+            _precedingSpace = true;
             while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
                 nextChar();
             continue;
@@ -405,6 +411,7 @@ void Lexer::consumeWhitespace()
         // // line comment (C style)
         if (_currentChar == U'/' && _source->peekChar() == U'/')
         {
+            _precedingSpace = true;
             while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
                 nextChar();
             continue;
@@ -413,6 +420,7 @@ void Lexer::consumeWhitespace()
         // (* ... *) block comment (F# style, nestable)
         if (_currentChar == U'(' && _source->peekChar() == U'*')
         {
+            _precedingSpace = true;
             nextChar(); // consume '('
             nextChar(); // consume '*'
             auto depth = 1;

@@ -181,6 +181,10 @@ class Parser
     [[nodiscard]] size_t currentTokenColumn() const noexcept;
 
     std::unique_ptr<ast::Expr> parseParameter();
+
+    /// Parses a shell "word" — one or more adjacent parameter tokens without intervening whitespace.
+    /// Adjacent tokens (e.g., `$LINES:$COLUMNS`) are combined into a single ConcatExpr.
+    std::unique_ptr<ast::Expr> parseCompoundParameter();
     std::unique_ptr<ast::Statement> parsePrimaryStmt();
     std::unique_ptr<ast::Statement> parseLogicalExpr();
     std::unique_ptr<ast::Statement> parseCallPipeline();
