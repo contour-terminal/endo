@@ -608,7 +608,10 @@ Token Lexer::consumeIdentifier(Token token)
     // Note: ? is NOT reserved to allow glob patterns like file?.txt to be lexed as single tokens.
     // Note: : is NOT reserved to allow values like one:two:three (common in PATH, etc.)
     //       The parser handles :: and : contextually for F# cons and type annotations.
-    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`~"sv;
+    // Note: ~ is NOT reserved to allow mid-word tilde (e.g., HEAD~2 in git).
+    //       Tilde expansion (~, ~/foo, ~user) still works because nextToken()'s
+    //       `case '~': return consumeTilde()` fires when ~ starts a new token.
+    auto constexpr ReservedSymbols = U"|<>()!$'\"\t\r\n ;`"sv;
     // In arithmetic context, operators are also reserved to allow expressions like 1+2
     auto constexpr ArithReservedSymbols = U"|<>()!$'\"\t\r\n ;`~+-*/%^&,?:"sv;
     // In F# expression context, brackets and operators are reserved

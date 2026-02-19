@@ -1465,3 +1465,53 @@ TEST_CASE("Lexer.fsharp_mode_path_slash_split_tokens")
     lexer.nextToken();
     CHECK(lexer.currentToken() == endo::Token::EndOfInput);
 }
+
+TEST_CASE("lexer.tilde_in_shell_word")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("HEAD~2"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "HEAD~2");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("lexer.tilde_in_shell_word_no_number")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("HEAD~"));
+    CHECK(lexer.currentToken() == endo::Token::Identifier);
+    CHECK(lexer.currentLiteral() == "HEAD~");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("lexer.tilde_standalone")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("~"));
+    CHECK(lexer.currentToken() == endo::Token::Tilde);
+    CHECK(lexer.currentLiteral().empty());
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("lexer.tilde_home_path")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("~/foo"));
+    CHECK(lexer.currentToken() == endo::Token::Tilde);
+    CHECK(lexer.currentLiteral() == "~/foo");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}
+
+TEST_CASE("lexer.tilde_user")
+{
+    auto lexer = endo::Lexer(std::make_unique<endo::StringSource>("~alice"));
+    CHECK(lexer.currentToken() == endo::Token::Tilde);
+    CHECK(lexer.currentLiteral() == "alice");
+
+    lexer.nextToken();
+    CHECK(lexer.currentToken() == endo::Token::EndOfInput);
+}

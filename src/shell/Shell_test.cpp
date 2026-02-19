@@ -176,6 +176,13 @@ TEST_CASE("shell.syntax.pipes")
     CHECK(escape(TestShell()("echo hello | grep ll | grep hell").output()) == escape("hello\n"));
 }
 
+TEST_CASE("shell.tilde_in_argument")
+{
+    CHECK(escape(TestShell()("echo HEAD~2").output()) == escape("HEAD~2\n"));
+    CHECK(escape(TestShell()("echo HEAD~").output()) == escape("HEAD~\n"));
+    CHECK(escape(TestShell()("echo a~b").output()) == escape("a~b\n"));
+}
+
 TEST_CASE("shell.builtin.echo_basic")
 {
     CHECK(escape(TestShell()("echo hello").output()) == escape("hello\n"));
