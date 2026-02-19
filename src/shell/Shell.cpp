@@ -42,7 +42,7 @@
 #include <agent/SlashCommandRegistry.hpp>
 #include <agent/SlashCommands.hpp>
 #include <agent/SystemPromptBuilder.hpp>
-#include <agent/ToolTracer.hpp>
+#include <agent/AgentTracer.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
@@ -1412,7 +1412,7 @@ void Shell::runAgentMode()
     _agentSession->setMaxExplorationIterations(agentConfig.planMode.maxExplorationTurns);
 
     // Set up tool I/O tracing if enabled via CLI flag or config
-    auto toolTracer = std::optional<agent::ToolTracer> {};
+    auto agentTracer = std::optional<agent::AgentTracer> {};
     if (_agentTracePath.has_value() || agentConfig.trace.enabled)
     {
         auto tracePath = std::string {};
@@ -1428,14 +1428,13 @@ void Shell::runAgentMode()
             tracePath = ".endo/agent-trace-" + timestamp + ".jsonl";
         }
 
-        auto tracerResult = agent::ToolTracer::create(tracePath);
+        auto tracerResult = agent::AgentTracer::create(tracePath);
         if (tracerResult.has_value())
         {
-            toolTracer.emplace(std::move(*tracerResult));
+            agentTracer.emplace(std::move(*tracerResult));
             auto const modelInfo = provider->modelInfo();
-            toolTracer->writeSessionHeader(modelInfo.providerName, modelInfo.modelName);
-            _agentSession->setToolTraceCallback(
-                [&toolTracer](agent::ToolTraceEntry const& entry) { toolTracer->writeToolCall(entry); });
+            agentTracer->writeSessionHeader(modelInfo.providerName, modelInfo.modelName);
+            _agentSession->setTracer(&*agentTracer);
         }
         else
         {
