@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/HoverState.hpp>
+#include <tui/MockTerminalOutput.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Terminal.hpp>
 #include <tui/TestHelpers.hpp>
@@ -8,6 +9,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <chrono>
+#include <memory>
 #include <thread>
 
 using namespace tui;
@@ -746,5 +748,390 @@ TEST_CASE("Screen.hoverToTooltip_inlineMode")
         screen.draw();
         auto const content = test::canvasToString(screen.renderedBuffer());
         CHECK(content.find("undefined variable") != std::string::npos);
+    }
+}
+
+// ============================================================================
+// MockTerminalOutput cursor drift tests
+// ============================================================================
+
+namespace
+{
+
+/// @brief A fixed-content component that renders N rows of text with a cursor at a specified row.
+struct FixedContentComponent: Component
+{
+    int contentRows = 4;
+    int cursorAtRow = 2;
+
+    void render(Canvas& canvas) override
+    {
+        for (auto row = 0; row < contentRows; ++row)
+            canvas.putString(0, row, "content line", {});
+        canvas.setCursor(cursorAtRow, 0);
+    }
+
+    [[nodiscard]] Size preferredSize() const override { return { .width = 80, .height = contentRows }; }
+
+    [[nodiscard]] bool focusable() const override { return true; }
+};
+
+} // namespace
+
+TEST_CASE("Screen.inlineCursor_releaseCursorCycle_noDrift")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = FixedContentComponent {};
+    comp.contentRows = 4;
+    comp.cursorAtRow = 2;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 4 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+
+    // First render
+    screen.draw();
+    auto const firstCursorRow = mock->cursorRow();
+
+    // Simulate transition away using clearAndRelease (the fix)
+    screen.clearAndRelease();
+
+    // Re-render after release
+    screen.draw();
+    auto const secondCursorRow = mock->cursorRow();
+
+    CHECK(firstCursorRow == secondCursorRow);
+}
+
+// ============================================================================
+// Variable height component drift tests
+// ============================================================================
+
+namespace
+{
+
+/// @brief A component with configurable height and cursor row, for drift testing.
+struct VariableHeightComponent: Component
+{
+    int height = 2;
+    int cursorRow = 0;
+
+    void render(Canvas& canvas) override
+    {
+        for (auto row = 0; row < height; ++row)
+            canvas.putString(0, row, "content", {});
+        canvas.setCursor(cursorRow, 0);
+    }
+
+    [[nodiscard]] Size preferredSize() const override { return { .width = 80, .height = height }; }
+
+    [[nodiscard]] bool focusable() const override { return true; }
+};
+
+} // namespace
+
+TEST_CASE("Screen.inlineCursor_heightChangeAfterClearAndRelease_drift")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = VariableHeightComponent {};
+    comp.height = 2;
+    comp.cursorRow = 0;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+
+    // First render — baseline
+    screen.draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    // clearAndRelease, change height, draw again
+    screen.clearAndRelease();
+    comp.height = 3;
+    comp.cursorRow = 1;
+    screen.root().removeChild(comp);
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+    screen.draw();
+    auto const afterGrowCursorRow = mock->cursorRow();
+
+    // Height grew by 1, cursor moved from row 0 to row 1 → cursor row should be baseline + 1
+    CHECK(afterGrowCursorRow == baselineCursorRow + 1);
+
+    // Another clearAndRelease + draw with same height — no additional drift
+    screen.clearAndRelease();
+    screen.draw();
+    auto const redrawCursorRow = mock->cursorRow();
+    CHECK(redrawCursorRow == afterGrowCursorRow);
+}
+
+TEST_CASE("Screen.inlineCursor_twoComponentSwap_noDrift")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    // "Shell" component: height 3, cursor at row 1
+    auto shellComp = VariableHeightComponent {};
+    shellComp.height = 3;
+    shellComp.cursorRow = 1;
+
+    // "Agent" component: height 2, cursor at row 1
+    auto agentComp = VariableHeightComponent {};
+    agentComp.height = 2;
+    agentComp.cursorRow = 1;
+
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+
+    // Draw shell component — baseline
+    screen.root().addChild(shellComp, layout);
+    screen.setFocus(&shellComp);
+    screen.draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    // Toggle to agent and back 10 times — no cumulative drift
+    for (auto i = 0; i < 10; ++i)
+    {
+        // Switch to agent
+        screen.clearAndRelease();
+        screen.root().removeChild(shellComp);
+        screen.root().addChild(agentComp, layout);
+        screen.setFocus(&agentComp);
+        screen.draw();
+
+        // Switch back to shell
+        screen.clearAndRelease();
+        screen.root().removeChild(agentComp);
+        screen.root().addChild(shellComp, layout);
+        screen.setFocus(&shellComp);
+        screen.draw();
+        auto const cursorRow = mock->cursorRow();
+        CHECK(cursorRow == baselineCursorRow);
+    }
+}
+
+TEST_CASE("Screen.inline_toggle_no_drift")
+{
+    // Simulates the Ctrl+T toggle between two independent Screens (shell and agent),
+    // which is the exact pattern that causes the +1 drift per shell→agent transition.
+    // Each Screen has its own _peakContentHeight, so the second Screen's first render
+    // would previously re-emit room reservation LFs even though the room already exists.
+    // The fix uses DECSC/DECRC to anchor the cursor position across Screen transitions.
+
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto const screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+
+    // Shell component: 2 rows, cursor at row 0
+    auto shellComp = VariableHeightComponent {};
+    shellComp.height = 2;
+    shellComp.cursorRow = 0;
+
+    // Agent component: 2 rows, cursor at row 0
+    auto agentComp = VariableHeightComponent {};
+    agentComp.height = 2;
+    agentComp.cursorRow = 0;
+
+    // --- Shell Screen: first render (baseline) ---
+    auto shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+    shellScreen->root().addChild(shellComp, layout);
+    shellScreen->setFocus(&shellComp);
+    shellScreen->draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    // Toggle shell → agent → shell 10 times, verify no cumulative drift
+    for (auto i = 0; i < 10; ++i)
+    {
+        // Shell → Agent transition: clearAndRelease shell (saves cursor via DECSC),
+        // create new agent Screen (restores cursor via DECRC on first render)
+        shellScreen->clearAndRelease();
+        shellScreen->root().removeChild(shellComp);
+        shellScreen.reset(); // Destroy shell screen
+
+        auto agentScreen = std::make_unique<Screen>(terminal, screenConfig);
+        agentScreen->root().addChild(agentComp, layout);
+        agentScreen->setFocus(&agentComp);
+        agentScreen->draw();
+
+        // Agent → Shell transition: clearAndRelease agent, create new shell Screen
+        agentScreen->clearAndRelease();
+        agentScreen->root().removeChild(agentComp);
+        agentScreen.reset(); // Destroy agent screen
+
+        shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+        shellScreen->root().addChild(shellComp, layout);
+        shellScreen->setFocus(&shellComp);
+        shellScreen->draw();
+
+        auto const cursorRow = mock->cursorRow();
+        CHECK(cursorRow == baselineCursorRow);
+    }
+
+    // Cleanup
+    shellScreen->root().removeChild(shellComp);
+}
+
+TEST_CASE("Screen.inline_toggle_different_heights_no_drift")
+{
+    // Tests the toggle between screens with different content heights.
+    // The room reservation + DECSC/DECRC cursor anchoring should handle
+    // the taller→shorter and shorter→taller transitions without drift.
+
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto const screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+
+    // Shell: 3 rows, cursor at row 1
+    auto shellComp = VariableHeightComponent {};
+    shellComp.height = 3;
+    shellComp.cursorRow = 1;
+
+    // Agent: 1 row, cursor at row 0
+    auto agentComp = VariableHeightComponent {};
+    agentComp.height = 1;
+    agentComp.cursorRow = 0;
+
+    // --- Shell first render (baseline) ---
+    auto shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+    shellScreen->root().addChild(shellComp, layout);
+    shellScreen->setFocus(&shellComp);
+    shellScreen->draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    for (auto i = 0; i < 5; ++i)
+    {
+        // Shell → Agent (clearAndRelease saves cursor via DECSC)
+        shellScreen->clearAndRelease();
+        shellScreen->root().removeChild(shellComp);
+        shellScreen.reset();
+
+        auto agentScreen = std::make_unique<Screen>(terminal, screenConfig);
+        agentScreen->root().addChild(agentComp, layout);
+        agentScreen->setFocus(&agentComp);
+        agentScreen->draw();
+
+        // Agent → Shell (clearAndRelease saves cursor via DECSC)
+        agentScreen->clearAndRelease();
+        agentScreen->root().removeChild(agentComp);
+        agentScreen.reset();
+
+        shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+        shellScreen->root().addChild(shellComp, layout);
+        shellScreen->setFocus(&shellComp);
+        shellScreen->draw();
+
+        auto const cursorRow = mock->cursorRow();
+        CHECK(cursorRow == baselineCursorRow);
+    }
+
+    shellScreen->root().removeChild(shellComp);
+}
+
+TEST_CASE("Screen.inline_toggle_shell4_agent2_no_drift")
+{
+    // Tests the toggle between screens where shell is taller (4 rows) and agent is shorter (2 rows).
+    // Exercises the partial room-reservation path where reserved room < content height,
+    // verifying DECSC/DECRC correctly anchors the cursor even when extra LFs are needed.
+
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto const screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 12 } };
+
+    // Shell: 4 rows, cursor at row 2
+    auto shellComp = VariableHeightComponent {};
+    shellComp.height = 4;
+    shellComp.cursorRow = 2;
+
+    // Agent: 2 rows, cursor at row 0
+    auto agentComp = VariableHeightComponent {};
+    agentComp.height = 2;
+    agentComp.cursorRow = 0;
+
+    // --- Shell first render (baseline) ---
+    auto shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+    shellScreen->root().addChild(shellComp, layout);
+    shellScreen->setFocus(&shellComp);
+    shellScreen->draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    for (auto i = 0; i < 10; ++i)
+    {
+        // Shell (4 rows) → Agent (2 rows): agent gets reserved room=4, only needs 2
+        shellScreen->clearAndRelease();
+        shellScreen->root().removeChild(shellComp);
+        shellScreen.reset();
+
+        auto agentScreen = std::make_unique<Screen>(terminal, screenConfig);
+        agentScreen->root().addChild(agentComp, layout);
+        agentScreen->setFocus(&agentComp);
+        agentScreen->draw();
+
+        // Agent (2 rows) → Shell (4 rows): shell gets reserved room=2, needs 4
+        // This exercises the partial room path (reservedRoom < contentHeight)
+        agentScreen->clearAndRelease();
+        agentScreen->root().removeChild(agentComp);
+        agentScreen.reset();
+
+        shellScreen = std::make_unique<Screen>(terminal, screenConfig);
+        shellScreen->root().addChild(shellComp, layout);
+        shellScreen->setFocus(&shellComp);
+        shellScreen->draw();
+
+        auto const cursorRow = mock->cursorRow();
+        CHECK(cursorRow == baselineCursorRow);
+    }
+
+    shellScreen->root().removeChild(shellComp);
+}
+
+TEST_CASE("Screen.inlineCursor_clearAndReleaseCycle_noDrift")
+{
+    auto mockOutput = std::make_unique<MockTerminalOutput>(80, 24);
+    auto* mock = mockOutput.get();
+    auto terminal = Terminal(std::move(mockOutput));
+
+    auto screenConfig = ScreenConfig { .viewport = Viewport::Inline, .inlineMaxHeight = 12 };
+    auto screen = Screen(terminal, screenConfig);
+
+    auto comp = FixedContentComponent {};
+    comp.contentRows = 4;
+    comp.cursorAtRow = 2;
+    auto const layout = LayoutParams { .area = { .x = 0, .y = 0, .width = 80, .height = 4 } };
+    screen.root().addChild(comp, layout);
+    screen.setFocus(&comp);
+
+    // Initial render — establish baseline
+    screen.draw();
+    auto const baselineCursorRow = mock->cursorRow();
+
+    // Cycle: clearAndRelease → draw, repeated 10 times
+    for (auto i = 0; i < 10; ++i)
+    {
+        screen.clearAndRelease();
+        screen.draw();
+        auto const cursorRow = mock->cursorRow();
+        CHECK(cursorRow == baselineCursorRow);
     }
 }

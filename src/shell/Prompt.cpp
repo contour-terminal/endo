@@ -109,13 +109,14 @@ std::string Prompt::read()
     _promptComponent->clear();
     _promptComponent->setPrompt(_promptStr);
     _promptComponent->setMultiline(_multilineEnabled);
-
     // Update component area based on content
     auto prefSize = _promptComponent->preferredSize();
     _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), prefSize.height });
 
-    // Render initial state
-    _screen->draw();
+    // Render initial state (skip if display() already drew current state)
+    if (!_displayDrewCurrentState)
+        _screen->draw();
+    _displayDrewCurrentState = false;
 
     // Event loop
     while (ready())
@@ -182,7 +183,8 @@ std::string Prompt::read()
                         if (linesToMoveDown > 0)
                             out.moveDown(linesToMoveDown);
                     }
-                    out.writeRaw("\r\n");
+                    out.carriageReturn();
+                    out.linefeed();
                     out.enableReflow();
                     out.flush();
                     _lastAction = PromptComponent::Action::Submit;
@@ -190,7 +192,9 @@ std::string Prompt::read()
                 }
                 case PromptComponent::Action::Abort:
                     // Ctrl+C - clear line and return empty
-                    _terminal.output().writeRaw("^C\r\n");
+                    _terminal.output().writeText("^C", {});
+                    _terminal.output().carriageReturn();
+                    _terminal.output().linefeed();
                     _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _promptComponent->clear();
@@ -198,23 +202,16 @@ std::string Prompt::read()
                     return {};
                 case PromptComponent::Action::Eof:
                     // Ctrl+D on empty line - signal EOF
-                    _terminal.output().writeRaw("\r\n");
+                    _terminal.output().carriageReturn();
+                    _terminal.output().linefeed();
                     _terminal.output().enableReflow();
                     _terminal.output().flush();
                     _aborted = true;
                     _lastAction = PromptComponent::Action::Eof;
                     return {};
                 case PromptComponent::Action::AgentMode: {
-                    // Move cursor up to the top of the prompt and clear from there,
-                    // so the agent prompt can replace the shell prompt in-place.
-                    auto& out = _terminal.output();
-                    auto const rowsUp = _promptComponent->cursorRowFromTop();
-                    if (rowsUp > 0)
-                        out.moveUp(rowsUp);
-                    out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
-                    out.flush();
                     _promptComponent->clear();
-                    _screen->releaseCursor();
+                    _screen->clearAndRelease();
                     _lastAction = PromptComponent::Action::AgentMode;
                     return {};
                 }
@@ -302,20 +299,24 @@ std::optional<std::string> Prompt::processInput()
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                 }
-                out.writeRaw("\r\n");
+                out.carriageReturn();
+                out.linefeed();
                 out.enableReflow();
                 out.flush();
                 _promptComponent->clear();
                 return result;
             }
             case PromptComponent::Action::Abort:
-                _terminal.output().writeRaw("^C\r\n");
+                _terminal.output().writeText("^C", {});
+                _terminal.output().carriageReturn();
+                _terminal.output().linefeed();
                 _terminal.output().enableReflow();
                 _terminal.output().flush();
                 _promptComponent->clear();
                 return std::string {};
             case PromptComponent::Action::Eof:
-                _terminal.output().writeRaw("\r\n");
+                _terminal.output().carriageReturn();
+                _terminal.output().linefeed();
                 _terminal.output().enableReflow();
                 _terminal.output().flush();
                 _aborted = true;
@@ -342,16 +343,8 @@ std::optional<std::string> Prompt::processInput()
                 break;
             }
             case PromptComponent::Action::AgentMode: {
-                // Move cursor up to the top of the prompt and clear from there,
-                // so the agent prompt can replace the shell prompt in-place.
-                auto& out = _terminal.output();
-                auto const rowsUp = _promptComponent->cursorRowFromTop();
-                if (rowsUp > 0)
-                    out.moveUp(rowsUp);
-                out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
-                out.flush();
                 _promptComponent->clear();
-                _screen->releaseCursor();
+                _screen->clearAndRelease();
                 _lastAction = PromptComponent::Action::AgentMode;
                 return std::string {};
             }
@@ -386,6 +379,7 @@ void Prompt::display()
 
     // Render
     _screen->draw();
+    _displayDrewCurrentState = true;
 }
 
 void Prompt::suspend()
@@ -537,8 +531,8 @@ static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view te
         if (graphemeIdx > 0 && cat != currentCat)
         {
             // Flush the previous segment
-            out.write(text.substr(segStartByte, clusterByte - segStartByte),
-                      tui::Style { .fg = categoryColor(currentCat) });
+            out.writeText(text.substr(segStartByte, clusterByte - segStartByte),
+                          tui::Style { .fg = categoryColor(currentCat) });
             segStartByte = clusterByte;
             currentCat = cat;
         }
@@ -546,7 +540,7 @@ static void writeSyntaxHighlighted(tui::TerminalOutput& out, std::string_view te
 
     // Flush remaining segment
     if (segStartByte < text.size())
-        out.write(text.substr(segStartByte), tui::Style { .fg = categoryColor(currentCat) });
+        out.writeText(text.substr(segStartByte), tui::Style { .fg = categoryColor(currentCat) });
 }
 
 void Prompt::emitTransientPrompt(std::string_view inputText)
@@ -571,17 +565,17 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     // Clear top padding rows to preserve vertical spacing
     for (auto i = 0; i < topPad; ++i)
     {
-        out.writeRaw("\r");
+        out.carriageReturn();
         out.clearLine();
         out.moveDown(1);
     }
 
     // Write transient content at row topPad (after the padding)
-    out.writeRaw("\r");
+    out.carriageReturn();
     out.clearLine();
 
     if (_promptConfig.transient == TransientMode::Arrow)
-        out.write("\u276F ", tui::Style { .dim = true });
+        out.writeText("\u276F ", tui::Style { .dim = true });
 
     // Show full command input, each line on its own terminal row
     auto linesWritten = 0;
@@ -593,7 +587,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
         if (linesWritten > 0)
         {
             out.moveDown(1);
-            out.writeRaw("\r");
+            out.carriageReturn();
             out.clearLine();
         }
         writeSyntaxHighlighted(out, line);
@@ -607,7 +601,7 @@ void Prompt::emitTransientPrompt(std::string_view inputText)
     for (auto i = topPad + linesWritten; i < totalHeight; ++i)
     {
         out.moveDown(1);
-        out.writeRaw("\r");
+        out.carriageReturn();
         out.clearLine();
     }
 

@@ -209,18 +209,49 @@ namespace
 
 // --- SyncGuard ---
 
+SyncGuard::SyncGuard(): _handle(reinterpret_cast<NativeHandle>(-1))
+{
+}
+
 SyncGuard::SyncGuard(NativeHandle handle): _handle(handle)
 {
-    static constexpr auto Begin = "\033[?2026h";
-    DWORD written = 0;
-    WriteFile(_handle, Begin, static_cast<DWORD>(std::strlen(Begin)), &written, nullptr);
+    if (_handle != reinterpret_cast<NativeHandle>(-1))
+    {
+        static constexpr auto Begin = "\033[?2026h";
+        DWORD written = 0;
+        WriteFile(_handle, Begin, static_cast<DWORD>(std::strlen(Begin)), &written, nullptr);
+    }
 }
 
 SyncGuard::~SyncGuard()
 {
-    static constexpr auto End = "\033[?2026l";
-    DWORD written = 0;
-    WriteFile(_handle, End, static_cast<DWORD>(std::strlen(End)), &written, nullptr);
+    if (_handle != reinterpret_cast<NativeHandle>(-1))
+    {
+        static constexpr auto End = "\033[?2026l";
+        DWORD written = 0;
+        WriteFile(_handle, End, static_cast<DWORD>(std::strlen(End)), &written, nullptr);
+    }
+}
+
+SyncGuard::SyncGuard(SyncGuard&& other) noexcept: _handle(other._handle)
+{
+    other._handle = reinterpret_cast<NativeHandle>(-1);
+}
+
+auto SyncGuard::operator=(SyncGuard&& other) noexcept -> SyncGuard&
+{
+    if (this != &other)
+    {
+        if (_handle != reinterpret_cast<NativeHandle>(-1))
+        {
+            static constexpr auto End = "\033[?2026l";
+            DWORD written = 0;
+            WriteFile(_handle, End, static_cast<DWORD>(std::strlen(End)), &written, nullptr);
+        }
+        _handle = other._handle;
+        other._handle = reinterpret_cast<NativeHandle>(-1);
+    }
+    return *this;
 }
 
 // --- TerminalOutput ---
@@ -232,7 +263,7 @@ auto TerminalOutput::initialize() -> VoidResult
     return {};
 }
 
-void TerminalOutput::write(std::string_view text, Style const& style)
+void TerminalOutput::writeText(std::string_view text, Style const& style)
 {
     appendSgr(style);
     _buffer.append(text);
@@ -271,6 +302,31 @@ void TerminalOutput::moveRight(int n)
 {
     if (n > 0)
         _buffer += std::format("\033[{}C", n);
+}
+
+void TerminalOutput::carriageReturn()
+{
+    _buffer += '\r';
+}
+
+void TerminalOutput::linefeed()
+{
+    _buffer += '\n';
+}
+
+void TerminalOutput::clearToEndOfDisplay()
+{
+    _buffer += "\033[J";
+}
+
+void TerminalOutput::requestCellSize()
+{
+    _buffer += "\033[16t";
+}
+
+void TerminalOutput::requestCursorPosition()
+{
+    _buffer += "\033[6n";
 }
 
 void TerminalOutput::clearLine()

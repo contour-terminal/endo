@@ -121,7 +121,7 @@ auto Terminal::isSuspended() const noexcept -> bool
 
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
-    _output.writeRaw("\033[6n");
+    _output.requestCursorPosition();
     _output.flush();
 
     auto constexpr totalTimeout = std::chrono::milliseconds(100);
@@ -157,7 +157,7 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
 auto Terminal::queryCellSize() -> std::pair<int, int>
 {
-    _output.writeRaw("\033[16t");
+    _output.requestCellSize();
     _output.flush();
 
     auto constexpr totalTimeout = std::chrono::milliseconds(100);

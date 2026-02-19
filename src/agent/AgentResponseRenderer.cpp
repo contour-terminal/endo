@@ -31,7 +31,7 @@ void AgentResponseRenderer::feedToken(std::string_view token)
         _thinking = false;
 
         // Clear the spinner line
-        _output.writeRaw("\r");
+        _output.carriageReturn();
         _output.clearToEndOfLine();
 
         // Start markdown streaming
@@ -47,7 +47,7 @@ void AgentResponseRenderer::end()
     if (_thinking)
     {
         // No tokens were received — clear spinner
-        _output.writeRaw("\r");
+        _output.carriageReturn();
         _output.clearToEndOfLine();
         _thinking = false;
     }
@@ -57,7 +57,7 @@ void AgentResponseRenderer::end()
         _markdownRenderer.endStream();
     }
 
-    _output.writeRaw("\n");
+    _output.linefeed();
     _output.flush();
 }
 
@@ -73,9 +73,9 @@ void AgentResponseRenderer::renderSpinner()
     auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
     auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
 
-    _output.writeRaw("\r");
+    _output.carriageReturn();
     _output.clearToEndOfLine();
-    _output.write("\u2502 ", barStyle);
+    _output.writeText("\u2502 ", barStyle);
     _spinner.renderWithLabel(_output, "Thinking...", spinnerStyle, labelStyle);
     _output.flush();
 }
@@ -93,19 +93,19 @@ void AgentResponseRenderer::renderPlan(Plan const& plan)
         fileCount += step.filesTouched.size();
 
     // Header
-    _output.write(
+    _output.writeText(
         std::format("\u256D\u2500 plan \u2502 {} steps \u2502 ~{} files\n", plan.steps.size(), fileCount),
         barStyle);
 
     // Summary
-    _output.write("\u2502  ", barStyle);
-    _output.write("Summary: ", labelStyle);
-    _output.write(plan.summary + "\n", defaultStyle);
+    _output.writeText("\u2502  ", barStyle);
+    _output.writeText("Summary: ", labelStyle);
+    _output.writeText(plan.summary + "\n", defaultStyle);
 
     // Steps
     for (auto const& step: plan.steps)
     {
-        _output.write("\u2502  ", barStyle);
+        _output.writeText("\u2502  ", barStyle);
 
         auto const* const checkbox = [&]() -> char const* {
             switch (step.status)
@@ -117,11 +117,12 @@ void AgentResponseRenderer::renderPlan(Plan const& plan)
                 default: return "[ ]";
             }
         }();
-        _output.write(std::format("{}. {} {}\n", step.index + 1, checkbox, step.description), defaultStyle);
+        _output.writeText(std::format("{}. {} {}\n", step.index + 1, checkbox, step.description),
+                          defaultStyle);
 
         if (!step.filesTouched.empty())
         {
-            _output.write("\u2502     ", barStyle);
+            _output.writeText("\u2502     ", barStyle);
             auto files = std::string { "Files: " };
             for (auto i = size_t { 0 }; i < step.filesTouched.size(); ++i)
             {
@@ -129,33 +130,33 @@ void AgentResponseRenderer::renderPlan(Plan const& plan)
                     files += ", ";
                 files += step.filesTouched[i];
             }
-            _output.write(files + "\n", labelStyle);
+            _output.writeText(files + "\n", labelStyle);
         }
     }
 
     // Risk assessment
     if (!plan.riskAssessment.empty())
     {
-        _output.write("\u2502  ", barStyle);
-        _output.write("Risk: ", labelStyle);
-        _output.write(plan.riskAssessment + "\n", defaultStyle);
+        _output.writeText("\u2502  ", barStyle);
+        _output.writeText("Risk: ", labelStyle);
+        _output.writeText(plan.riskAssessment + "\n", defaultStyle);
     }
 
     // Alternatives
     if (!plan.alternatives.empty())
     {
-        _output.write("\u2502  ", barStyle);
-        _output.write("Alternatives: ", labelStyle);
-        _output.write(plan.alternatives[0], defaultStyle);
+        _output.writeText("\u2502  ", barStyle);
+        _output.writeText("Alternatives: ", labelStyle);
+        _output.writeText(plan.alternatives[0], defaultStyle);
         for (auto i = size_t { 1 }; i < plan.alternatives.size(); ++i)
-            _output.write(std::format(", {}", plan.alternatives[i]), defaultStyle);
+            _output.writeText(std::format(", {}", plan.alternatives[i]), defaultStyle);
         _output.writeRaw("\n");
     }
 
     // Action bar
-    _output.write("\u2502  ", barStyle);
-    _output.write("[y]es  [n]o  [r]evise\n", labelStyle);
-    _output.write("\u2570\u2500\n", barStyle);
+    _output.writeText("\u2502  ", barStyle);
+    _output.writeText("[y]es  [n]o  [r]evise\n", labelStyle);
+    _output.writeText("\u2570\u2500\n", barStyle);
     _output.flush();
 }
 
@@ -167,13 +168,13 @@ void AgentResponseRenderer::renderPlanProgress(Plan const& plan, size_t currentS
     auto const defaultStyle = tui::Style {};
     auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
 
-    _output.write(
+    _output.writeText(
         std::format("\u256D\u2500 progress \u2502 step {}/{}\n", currentStep + 1, plan.steps.size()),
         barStyle);
 
     for (auto const& step: plan.steps)
     {
-        _output.write("\u2502  ", barStyle);
+        _output.writeText("\u2502  ", barStyle);
 
         auto const& style = step.index == currentStep ? spinnerStyle : defaultStyle;
         auto const* const indicator = [&]() -> char const* {
@@ -186,10 +187,10 @@ void AgentResponseRenderer::renderPlanProgress(Plan const& plan, size_t currentS
                 default: return " ";
             }
         }();
-        _output.write(std::format("[{}] {}. {}\n", indicator, step.index + 1, step.description), style);
+        _output.writeText(std::format("[{}] {}. {}\n", indicator, step.index + 1, step.description), style);
     }
 
-    _output.write("\u2570\u2500\n", barStyle);
+    _output.writeText("\u2570\u2500\n", barStyle);
     _output.flush();
 }
 

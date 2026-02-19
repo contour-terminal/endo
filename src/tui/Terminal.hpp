@@ -8,6 +8,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <vector>
 
 namespace tui
@@ -28,7 +29,13 @@ enum class ColorScheme : std::uint8_t
 class Terminal
 {
   public:
+    /// @brief Constructs a Terminal with the default real TerminalOutput.
     Terminal();
+
+    /// @brief Constructs a Terminal with a custom TerminalOutput (for dependency injection in tests).
+    /// @param output The output implementation to use (ownership transferred).
+    explicit Terminal(std::unique_ptr<TerminalOutput> output);
+
     ~Terminal();
 
     Terminal(Terminal const&) = delete;
@@ -106,8 +113,9 @@ class Terminal
 
   private:
     TerminalInput _input;
-    TerminalOutput _output;
+    std::unique_ptr<TerminalOutput> _output;
     bool _initialized = false;
+    bool _mockMode = false; ///< True when using a mock output (skip input/signal init).
     ColorScheme _colorScheme = ColorScheme::Unknown;
     std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).

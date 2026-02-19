@@ -12,6 +12,7 @@ add_library(tui
     List.cpp
     LogPanel.cpp
     MarkdownRenderer.cpp
+    MockTerminalOutput.cpp
     Screen.cpp
     Sixel.cpp
     Spinner.cpp

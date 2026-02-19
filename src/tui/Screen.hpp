@@ -138,6 +138,13 @@ class Screen
     /// to where it thinks the cursor is.
     void releaseCursor();
 
+    /// Clears content from the tracked cursor position and releases cursor tracking.
+    ///
+    /// Moves up to the top of the inline content region, clears from there to the
+    /// end of the display, and calls releaseCursor(). Use this instead of manual
+    /// moveUp() + clear + releaseCursor() sequences to avoid cursor drift.
+    void clearAndRelease();
+
     // --- Render Mode ---
 
     /// Sets the render mode (Diff or Full).

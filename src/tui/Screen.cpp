@@ -151,6 +151,29 @@ void Screen::releaseCursor()
     _currentCursorShape = CursorShape::Default;
 }
 
+void Screen::clearAndRelease()
+{
+    auto& out = _terminal.output();
+
+    // Move up from the tracked cursor row to the top of the content region.
+    if (_previousCursorRow > 0)
+        out.moveUp(_previousCursorRow);
+
+    // Clear from here to end of display and flush.
+    out.carriageReturn();
+    out.clearToEndOfDisplay();
+    out.enableReflow();
+    out.saveCursor(); // DECSC: anchor exact cursor position for next Screen
+    out.flush();
+
+    // Communicate to the next Screen that room already exists on the terminal,
+    // so its first flushInline() render can skip the LF room reservation that
+    // would otherwise cause +1 cursor drift per shell→agent transition.
+    out.setInlineRoomReserved(_peakContentHeight);
+
+    releaseCursor();
+}
+
 void Screen::setTheme(Theme theme)
 {
     _theme = std::move(theme);
@@ -540,7 +563,7 @@ void Screen::flushFullscreen()
             if (needsUpdate)
             {
                 out.moveTo(row + 1, col + 1); // Terminal is 1-based
-                out.write(cell.grapheme, cell.style);
+                out.writeText(cell.grapheme, cell.style);
             }
 
             col += std::max(1, static_cast<int>(cell.width));
@@ -602,22 +625,54 @@ void Screen::flushInline()
             // First render: emit newlines to ensure room at the bottom of the terminal.
             // Without this, rendering near the last row causes \n to scroll the header
             // into scrollback, making it invisible until the next draw.
-            for (int i = 0; i < contentHeight; ++i)
-                out.writeRaw("\n");
-            if (contentHeight > 0)
-                out.moveUp(contentHeight);
-            _totalNewlinesEmitted += contentHeight;
+            //
+            // However, if a previous Screen already reserved room via clearAndRelease(),
+            // the space already exists on the terminal. Emitting LFs again would push the
+            // cursor down by +1 per transition (the Ctrl+T drift bug).
+            auto const reservedRoom = out.consumeInlineRoom();
+            if (reservedRoom > 0)
+            {
+                // A previous Screen saved the cursor position — restore it exactly.
+                // This eliminates any tracking drift from relative cursor movements.
+                out.restoreCursor(); // DECRC: anchor to exact saved position
+
+                if (reservedRoom >= contentHeight)
+                {
+                    // Room already exists — skip LF emission, just adopt the peak.
+                    _peakContentHeight = contentHeight;
+                }
+                else
+                {
+                    // Room exists but insufficient — emit additional LFs for the extra rows.
+                    auto const newLines = contentHeight - reservedRoom;
+                    for (int i = 0; i < newLines; ++i)
+                        out.linefeed();
+                    if (newLines > 0)
+                        out.moveUp(newLines);
+                    _totalNewlinesEmitted += newLines;
+                    _peakContentHeight = contentHeight;
+                }
+            }
+            else
+            {
+                // Very first render (no previous Screen) — reserve room with LFs.
+                for (int i = 0; i < contentHeight; ++i)
+                    out.linefeed();
+                if (contentHeight > 0)
+                    out.moveUp(contentHeight);
+                _totalNewlinesEmitted += contentHeight;
+                _peakContentHeight = contentHeight;
+            }
 
             // Approximate content start row (accurate enough for mouse translation)
             _inlineContentStartRow = _terminal.rows() - contentHeight;
-            _peakContentHeight = contentHeight;
         }
         else
         {
             // Content grew - emit newlines to make room
             int newLines = contentHeight - _peakContentHeight;
             for (int i = 0; i < newLines; ++i)
-                out.writeRaw("\n");
+                out.linefeed();
 
             // Move cursor back to top of our region
             if (newLines > 0)
@@ -655,7 +710,7 @@ void Screen::flushInline()
 
     for (int row = 0; row < contentHeight; ++row)
     {
-        out.writeRaw("\r"); // Move to start of line
+        out.carriageReturn(); // Move to start of line
 
         // Check if an image starts at this row
         if (auto it = imageAtRow.find(row); it != imageAtRow.end())
@@ -679,11 +734,11 @@ void Screen::flushInline()
             auto const skipRows = img.cellArea.height - 1;
             for (int s = 0; s < skipRows && row + 1 < contentHeight; ++s)
             {
-                out.writeRaw("\n");
+                out.linefeed();
                 ++row;
             }
             if (row < contentHeight - 1)
-                out.writeRaw("\n");
+                out.linefeed();
             continue;
         }
 
@@ -710,7 +765,7 @@ void Screen::flushInline()
             if (needsUpdate)
             {
                 // For inline mode, we render sequentially
-                out.write(cell.grapheme, cell.style);
+                out.writeText(cell.grapheme, cell.style);
             }
             else
             {
@@ -724,7 +779,7 @@ void Screen::flushInline()
         out.clearToEndOfLine();
 
         if (row < contentHeight - 1)
-            out.writeRaw("\n");
+            out.linefeed();
     }
 
     // Clear excess rows when content shrank (to avoid leaving garbage on screen)
@@ -733,8 +788,8 @@ void Screen::flushInline()
         // We're currently at row contentHeight-1, need to clear rows below
         for (int i = 0; i < rowsToClear; ++i)
         {
-            out.writeRaw("\n");
-            out.writeRaw("\r");
+            out.linefeed();
+            out.carriageReturn();
             out.clearToEndOfLine();
         }
         // Move back up to where we were (row contentHeight-1)
@@ -754,7 +809,7 @@ void Screen::flushInline()
         else if (rowsToMoveUp < 0)
             out.moveDown(-rowsToMoveUp);
 
-        out.writeRaw("\r");
+        out.carriageReturn();
         if (cursor.x > 0)
             out.moveRight(cursor.x);
 
@@ -795,7 +850,7 @@ void Screen::flushFixed()
             if (needsUpdate)
             {
                 out.moveTo(row + 1, col + 1);
-                out.write(cell.grapheme, cell.style);
+                out.writeText(cell.grapheme, cell.style);
             }
 
             col += std::max(1, static_cast<int>(cell.width));

@@ -73,6 +73,9 @@ class SyncGuard
     using NativeHandle = int; ///< POSIX file descriptor.
 #endif
 
+    /// @brief Constructs a no-op guard (no synchronized output).
+    SyncGuard();
+
     /// @brief Begins synchronized output mode.
     /// @param handle Native file handle to write to.
     explicit SyncGuard(NativeHandle handle);
@@ -82,8 +85,8 @@ class SyncGuard
 
     SyncGuard(SyncGuard const&) = delete;
     auto operator=(SyncGuard const&) -> SyncGuard& = delete;
-    SyncGuard(SyncGuard&&) = delete;
-    auto operator=(SyncGuard&&) -> SyncGuard& = delete;
+    SyncGuard(SyncGuard&&) noexcept;
+    auto operator=(SyncGuard&&) noexcept -> SyncGuard&;
 
   private:
     NativeHandle _handle;
@@ -94,118 +97,143 @@ class SyncGuard
 /// Buffers output internally and flushes on demand. Supports SGR styling,
 /// cursor movement, alt screen, synchronized output, double-width/height lines,
 /// and sixel image output.
+///
+/// All public methods are virtual to allow subclassing for testing (e.g., MockTerminalOutput).
 class TerminalOutput
 {
   public:
+    TerminalOutput() = default;
+    virtual ~TerminalOutput() = default;
+
+    TerminalOutput(TerminalOutput const&) = delete;
+    auto operator=(TerminalOutput const&) -> TerminalOutput& = delete;
+    TerminalOutput(TerminalOutput&&) = delete;
+    auto operator=(TerminalOutput&&) -> TerminalOutput& = delete;
+
     /// @brief Initializes the terminal output by querying terminal dimensions.
     /// @return Success or IoError.
-    [[nodiscard]] auto initialize() -> VoidResult;
+    [[nodiscard]] virtual auto initialize() -> VoidResult;
 
     /// @brief Writes styled text at the current cursor position.
-    /// @param text The text to write.
+    /// @param text The plain text to write (no VT sequences).
     /// @param style The style to apply.
-    void write(std::string_view text, Style const& style = {});
+    virtual void writeText(std::string_view text, Style const& style = {});
 
     /// @brief Writes raw text without styling.
     /// @param text The text to write directly to the buffer.
-    void writeRaw(std::string_view text);
+    virtual void writeRaw(std::string_view text);
 
     /// @brief Moves the cursor to an absolute position.
     /// @param row Row (1-based).
     /// @param col Column (1-based).
-    void moveTo(int row, int col);
+    virtual void moveTo(int row, int col);
 
     /// @brief Moves the cursor up by n rows.
-    void moveUp(int n = 1);
+    virtual void moveUp(int n = 1);
 
     /// @brief Moves the cursor down by n rows.
-    void moveDown(int n = 1);
+    virtual void moveDown(int n = 1);
 
     /// @brief Moves the cursor left by n columns.
-    void moveLeft(int n = 1);
+    virtual void moveLeft(int n = 1);
 
     /// @brief Moves the cursor right by n columns.
-    void moveRight(int n = 1);
+    virtual void moveRight(int n = 1);
+
+    /// @brief Moves the cursor to column 0 (carriage return).
+    virtual void carriageReturn();
+
+    /// @brief Moves the cursor down one row, scrolling if at the bottom.
+    virtual void linefeed();
+
+    /// @brief Clears from the cursor to the end of the display (CSI J).
+    virtual void clearToEndOfDisplay();
+
+    /// @brief Sends a request for cell pixel dimensions (CSI 16 t).
+    virtual void requestCellSize();
+
+    /// @brief Sends a request for cursor position (CSI 6 n).
+    virtual void requestCursorPosition();
 
     /// @brief Clears the entire current line.
-    void clearLine();
+    virtual void clearLine();
 
     /// @brief Clears from cursor to end of line.
-    void clearToEndOfLine();
+    virtual void clearToEndOfLine();
 
     /// @brief Clears from cursor to start of line.
-    void clearToStartOfLine();
+    virtual void clearToStartOfLine();
 
     /// @brief Clears the entire screen.
-    void clearScreen();
+    virtual void clearScreen();
 
     /// @brief Clears the scrollback buffer.
-    void clearScrollback();
+    virtual void clearScrollback();
 
     /// @brief Enters the alternate screen buffer.
-    void enterAltScreen();
+    virtual void enterAltScreen();
 
     /// @brief Leaves the alternate screen buffer.
-    void leaveAltScreen();
+    virtual void leaveAltScreen();
 
     /// @brief Creates a synchronized output guard.
     ///
     /// While the guard is alive, output is batched to prevent tearing.
     /// @return An RAII SyncGuard object.
-    [[nodiscard]] auto syncGuard() -> SyncGuard;
+    [[nodiscard]] virtual auto syncGuard() -> SyncGuard;
 
     /// @brief Sets the current line to double-width (ESC #6).
-    void setDoubleWidth();
+    virtual void setDoubleWidth();
 
     /// @brief Sets the current line to double-height top half (ESC #3).
-    void setDoubleHeightTop();
+    virtual void setDoubleHeightTop();
 
     /// @brief Sets the current line to double-height bottom half (ESC #4).
-    void setDoubleHeightBottom();
+    virtual void setDoubleHeightBottom();
 
     /// @brief Sets the current line to single-width (ESC #5).
-    void setSingleWidth();
+    virtual void setSingleWidth();
 
     /// @brief Disables text reflow mode (DEC mode 2028l — Contour extension).
-    void disableReflow();
+    virtual void disableReflow();
 
     /// @brief Enables text reflow mode (DEC mode 2028h — Contour extension).
-    void enableReflow();
+    virtual void enableReflow();
 
     /// @brief Shows the cursor (CSI ?25h).
-    void showCursor();
+    virtual void showCursor();
 
     /// @brief Hides the cursor (CSI ?25l).
-    void hideCursor();
+    virtual void hideCursor();
 
     /// @brief Saves the cursor position (ESC 7).
-    void saveCursor();
+    virtual void saveCursor();
 
     /// @brief Restores the cursor position (ESC 8).
-    void restoreCursor();
+    virtual void restoreCursor();
 
     /// @brief Sets the cursor shape using DECSCUSR (CSI Ps SP q).
     /// @param shape The desired cursor shape.
-    void setCursorShape(CursorShape shape);
+    virtual void setCursorShape(CursorShape shape);
 
     /// @brief Sets the scroll region to the given rows (1-based, inclusive).
     /// @param top First row of the scroll region.
     /// @param bottom Last row of the scroll region.
-    void setScrollRegion(int top, int bottom);
+    virtual void setScrollRegion(int top, int bottom);
 
     /// @brief Resets the scroll region to the full screen (CSI r).
-    void resetScrollRegion();
+    virtual void resetScrollRegion();
 
     /// @brief Writes raw sixel image data to the terminal.
     /// @param sixelData The sixel-encoded image data (without DCS/ST framing).
-    void writeSixel(std::string_view sixelData);
+    virtual void writeSixel(std::string_view sixelData);
 
     /// @brief Copies text to the system clipboard using OSC 52.
     ///
     /// This works in terminals that support OSC 52 (most modern terminals).
     /// The text is base64-encoded and sent via the OSC 52 escape sequence.
     /// @param text The text to copy to the clipboard.
-    void copyToClipboard(std::string_view text);
+    virtual void copyToClipboard(std::string_view text);
 
     /// @brief Unscrolls (restores) lines from the scrollback buffer.
     ///
@@ -215,7 +243,7 @@ class TerminalOutput
     ///
     /// @param n Number of lines to restore from scrollback.
     /// @note On unsupported terminals, this sequence is silently ignored.
-    void unscroll(int n);
+    virtual void unscroll(int n);
 
     /// @brief Checks if the terminal supports the unscroll extension.
     ///
@@ -225,25 +253,48 @@ class TerminalOutput
     /// - mintty: TERM_PROGRAM=mintty environment variable
     ///
     /// @return true if unscroll is likely supported.
-    [[nodiscard]] bool supportsUnscroll() const noexcept;
+    [[nodiscard]] virtual bool supportsUnscroll() const noexcept;
 
     /// @brief Flushes the internal buffer to stdout.
-    void flush();
+    virtual void flush();
 
     /// @brief Returns the terminal width in columns.
-    [[nodiscard]] auto columns() const noexcept -> int;
+    [[nodiscard]] virtual auto columns() const noexcept -> int;
 
     /// @brief Returns the terminal height in rows.
-    [[nodiscard]] auto rows() const noexcept -> int;
+    [[nodiscard]] virtual auto rows() const noexcept -> int;
 
     /// @brief Updates the cached terminal dimensions.
-    void updateDimensions();
+    virtual void updateDimensions();
+
+    /// @brief Records that inline content room has been reserved on the terminal.
+    ///
+    /// Called by Screen::clearAndRelease() to communicate to the next Screen's
+    /// first flushInline() render that room already exists on screen and LF
+    /// reservation can be skipped.
+    ///
+    /// @param rows Number of rows of reserved room.
+    void setInlineRoomReserved(int rows) noexcept { _inlineRoomReserved = rows; }
+
+    /// @brief Consumes and returns any previously reserved inline room.
+    ///
+    /// Returns the number of rows of room previously reserved via
+    /// setInlineRoomReserved(), then resets the value to 0 (one-shot).
+    ///
+    /// @return Number of reserved rows, or 0 if none.
+    [[nodiscard]] int consumeInlineRoom() noexcept
+    {
+        auto const room = _inlineRoomReserved;
+        _inlineRoomReserved = 0;
+        return room;
+    }
 
   private:
     std::string _buffer; ///< Output buffer for batching writes.
     int _cols = 80;
     int _rows = 24;
     bool _unscrollSupported = false; ///< Cached unscroll support detection.
+    int _inlineRoomReserved = 0;     ///< Rows of inline room reserved by previous Screen.
 
     /// @brief Appends SGR (Select Graphic Rendition) sequences for the given style.
     void appendSgr(Style const& style);

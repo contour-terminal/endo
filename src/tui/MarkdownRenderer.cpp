@@ -117,7 +117,7 @@ void MarkdownRenderer::render(std::string_view markdown)
             }
             else
             {
-                _output.write(line, _theme.thinkBlock);
+                _output.writeText(line, _theme.thinkBlock);
                 _output.writeRaw("\n");
             }
         }
@@ -131,7 +131,7 @@ void MarkdownRenderer::render(std::string_view markdown)
             }
             else
             {
-                _output.write(line, _theme.codeBlock);
+                _output.writeText(line, _theme.codeBlock);
                 _output.writeRaw("\n");
             }
         }
@@ -183,11 +183,11 @@ void MarkdownRenderer::endStream()
     {
         if (_inCodeBlock)
         {
-            _output.write(_streamBuffer, _theme.codeBlock);
+            _output.writeText(_streamBuffer, _theme.codeBlock);
         }
         else if (_inThinkBlock)
         {
-            _output.write(_streamBuffer, _theme.thinkBlock);
+            _output.writeText(_streamBuffer, _theme.thinkBlock);
         }
         else
         {
@@ -278,7 +278,7 @@ void MarkdownRenderer::renderLine(std::string_view line)
     auto const bqLen = detectBlockquote(line);
     if (bqLen > 0)
     {
-        _output.write("│ ", _theme.blockquote);
+        _output.writeText("│ ", _theme.blockquote);
         renderInline(line.substr(bqLen));
         _output.writeRaw("\n");
         return;
@@ -291,7 +291,7 @@ void MarkdownRenderer::renderLine(std::string_view line)
         auto const markerEnd = line.find(' ', 0);
         if (markerEnd != std::string_view::npos && markerEnd < listLen)
         {
-            _output.write(line.substr(0, markerEnd + 1), _theme.listMarker);
+            _output.writeText(line.substr(0, markerEnd + 1), _theme.listMarker);
             renderInline(line.substr(listLen));
         }
         else
@@ -318,7 +318,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endTick = text.find('`', pos + 1);
             if (endTick != std::string_view::npos)
             {
-                _output.write(text.substr(pos + 1, endTick - pos - 1), _theme.codeInline);
+                _output.writeText(text.substr(pos + 1, endTick - pos - 1), _theme.codeInline);
                 pos = endTick + 1;
                 continue;
             }
@@ -330,7 +330,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endBold = text.find("**", pos + 2);
             if (endBold != std::string_view::npos)
             {
-                _output.write(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
+                _output.writeText(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
                 pos = endBold + 2;
                 continue;
             }
@@ -342,7 +342,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endItalic = text.find('*', pos + 1);
             if (endItalic != std::string_view::npos)
             {
-                _output.write(text.substr(pos + 1, endItalic - pos - 1), _theme.italic);
+                _output.writeText(text.substr(pos + 1, endItalic - pos - 1), _theme.italic);
                 pos = endItalic + 1;
                 continue;
             }
@@ -354,7 +354,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
             auto const endBold = text.find("__", pos + 2);
             if (endBold != std::string_view::npos)
             {
-                _output.write(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
+                _output.writeText(text.substr(pos + 2, endBold - pos - 2), _theme.bold);
                 pos = endBold + 2;
                 continue;
             }
@@ -371,7 +371,7 @@ void MarkdownRenderer::renderInline(std::string_view text)
                 if (endParen != std::string_view::npos)
                 {
                     auto const linkText = text.substr(pos + 1, endBracket - pos - 1);
-                    _output.write(linkText, _theme.link);
+                    _output.writeText(linkText, _theme.link);
                     pos = endParen + 1;
                     continue;
                 }
@@ -405,7 +405,7 @@ void MarkdownRenderer::processStreamBuffer()
             }
             else
             {
-                _output.write(line, _theme.thinkBlock);
+                _output.writeText(line, _theme.thinkBlock);
                 _output.writeRaw("\n");
             }
         }
@@ -419,7 +419,7 @@ void MarkdownRenderer::processStreamBuffer()
             }
             else
             {
-                _output.write(line, _theme.codeBlock);
+                _output.writeText(line, _theme.codeBlock);
                 _output.writeRaw("\n");
             }
         }
@@ -453,9 +453,9 @@ void MarkdownRenderer::renderHeading(int level, std::string_view text)
 {
     switch (level)
     {
-        case 1: _output.write(text, _theme.heading1); break;
-        case 2: _output.write(text, _theme.heading2); break;
-        default: _output.write(text, _theme.heading3); break;
+        case 1: _output.writeText(text, _theme.heading1); break;
+        case 2: _output.writeText(text, _theme.heading2); break;
+        default: _output.writeText(text, _theme.heading3); break;
     }
     _output.writeRaw("\n");
 }

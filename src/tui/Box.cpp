@@ -120,7 +120,7 @@ void Box::render(TerminalOutput& output) const
 void Box::renderTopBorder(TerminalOutput& output, BorderChars const& chars) const
 {
     output.moveTo(_config.row, _config.col);
-    output.write(chars.topLeft, _config.borderStyle);
+    output.writeText(chars.topLeft, _config.borderStyle);
 
     auto const innerWidth = _config.width - 2;
 
@@ -156,36 +156,36 @@ void Box::renderTopBorder(TerminalOutput& output, BorderChars const& chars) cons
 
         // Left padding with horizontal line
         for (auto i = 0; i < leftPad; ++i)
-            output.write(chars.horizontal, _config.borderStyle);
+            output.writeText(chars.horizontal, _config.borderStyle);
 
         // Title
-        output.write(displayTitle, _config.titleStyle);
+        output.writeText(displayTitle, _config.titleStyle);
 
         // Right padding with horizontal line
         for (auto i = 0; i < rightPad; ++i)
-            output.write(chars.horizontal, _config.borderStyle);
+            output.writeText(chars.horizontal, _config.borderStyle);
     }
     else
     {
         // No title, just horizontal line
         for (auto i = 0; i < innerWidth; ++i)
-            output.write(chars.horizontal, _config.borderStyle);
+            output.writeText(chars.horizontal, _config.borderStyle);
     }
 
-    output.write(chars.topRight, _config.borderStyle);
+    output.writeText(chars.topRight, _config.borderStyle);
 }
 
 void Box::renderBottomBorder(TerminalOutput& output, BorderChars const& chars) const
 {
     auto const bottomRow = _config.row + _config.height - 1;
     output.moveTo(bottomRow, _config.col);
-    output.write(chars.bottomLeft, _config.borderStyle);
+    output.writeText(chars.bottomLeft, _config.borderStyle);
 
     auto const innerWidth = _config.width - 2;
     for (auto i = 0; i < innerWidth; ++i)
-        output.write(chars.horizontal, _config.borderStyle);
+        output.writeText(chars.horizontal, _config.borderStyle);
 
-    output.write(chars.bottomRight, _config.borderStyle);
+    output.writeText(chars.bottomRight, _config.borderStyle);
 }
 
 void Box::renderSideBorders(TerminalOutput& output, BorderChars const& chars) const
@@ -195,9 +195,9 @@ void Box::renderSideBorders(TerminalOutput& output, BorderChars const& chars) co
     for (auto row = _config.row + 1; row < _config.row + _config.height - 1; ++row)
     {
         output.moveTo(row, _config.col);
-        output.write(chars.vertical, _config.borderStyle);
+        output.writeText(chars.vertical, _config.borderStyle);
         output.moveTo(row, rightCol);
-        output.write(chars.vertical, _config.borderStyle);
+        output.writeText(chars.vertical, _config.borderStyle);
     }
 }
 
@@ -247,7 +247,7 @@ void Box::clearContent(TerminalOutput& output) const
     for (auto row = startRow; row < startRow + height; ++row)
     {
         output.moveTo(row, startCol);
-        output.write(spaces, _config.backgroundStyle);
+        output.writeText(spaces, _config.backgroundStyle);
     }
 }
 

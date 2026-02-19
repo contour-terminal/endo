@@ -1191,8 +1191,9 @@ void Shell::runAgentMode()
         auto& out = prompt.terminal().output();
         auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
         auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
-        out.write("No AI provider configured or authenticated.\n", errorStyle);
-        out.write("Create ~/.config/endo/agent.yml or set ANTHROPIC_API_KEY / OPENAI_API_KEY.\n", mutedStyle);
+        out.writeText("No AI provider configured or authenticated.\n", errorStyle);
+        out.writeText("Create ~/.config/endo/agent.yml or set ANTHROPIC_API_KEY / OPENAI_API_KEY.\n",
+                      mutedStyle);
         out.flush();
         return;
     }
@@ -1422,15 +1423,15 @@ void Shell::runAgentMode()
         _agentSession->setToolStatusCallback(
             [&out, &activeRenderer, barStyle, toolNameStyle, argsStyle](agent::ToolCall const& call) {
                 // Clear spinner line
-                out.writeRaw("\r");
+                out.carriageReturn();
                 out.clearToEndOfLine();
 
                 // Write styled tool use line: "│ ⚙ tool_name { args... }"
-                out.write("\u2502 ", barStyle);
-                out.write("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
+                out.writeText("\u2502 ", barStyle);
+                out.writeText("\xe2\x9a\x99 " + std::string(call.name), toolNameStyle);
                 if (auto const args = formatToolCallArgs(call.arguments); !args.empty())
-                    out.write(" " + args, argsStyle);
-                out.writeRaw("\n");
+                    out.writeText(" " + args, argsStyle);
+                out.linefeed();
 
                 // Re-render spinner if still in thinking phase
                 if (activeRenderer && activeRenderer->isThinking())
@@ -1504,7 +1505,7 @@ void Shell::runAgentMode()
         if (!planResult.has_value())
         {
             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-            out.write("Error: " + planResult.error().message + "\n", errorStyle);
+            out.writeText("Error: " + planResult.error().message + "\n", errorStyle);
             out.flush();
             return;
         }
@@ -1542,7 +1543,7 @@ void Shell::runAgentMode()
                         if (!stepResult.has_value())
                         {
                             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.write("Step failed: " + stepResult.error().message + "\n", errorStyle);
+                            out.writeText("Step failed: " + stepResult.error().message + "\n", errorStyle);
                             out.flush();
                             break;
                         }
@@ -1550,7 +1551,7 @@ void Shell::runAgentMode()
                         if (agentConfig.planMode.pauseBetweenSteps && !executor.isComplete())
                         {
                             auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.write("Press any key to continue...\n", labelStyle);
+                            out.writeText("Press any key to continue...\n", labelStyle);
                             out.flush();
                             (void) terminal.poll(0);
                         }
@@ -1562,14 +1563,14 @@ void Shell::runAgentMode()
                 else if (keyEvent->codepoint == U'n' || keyEvent->codepoint == U'N')
                 {
                     auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                    out.write("Plan rejected.\n", labelStyle);
+                    out.writeText("Plan rejected.\n", labelStyle);
                     out.flush();
                     decided = true;
                 }
                 else if (keyEvent->codepoint == U'r' || keyEvent->codepoint == U'R')
                 {
                     auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                    out.write("Enter revision feedback:\n", labelStyle);
+                    out.writeText("Enter revision feedback:\n", labelStyle);
                     out.flush();
                     decided = true;
                 }
@@ -1662,7 +1663,8 @@ void Shell::runAgentMode()
                     auto const linesToMoveDown = totalLines - cursorLine;
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
-                    out.writeRaw("\r\n");
+                    out.carriageReturn();
+                    out.linefeed();
                     out.flush();
 
                     // Release the screen before streaming the response
@@ -1681,7 +1683,7 @@ void Shell::runAgentMode()
                             auto commandResult = cmd->execute(args);
                             if (auto const* d = std::get_if<agent::DirectOutput>(&commandResult))
                             {
-                                out.write(d->text);
+                                out.writeText(d->text);
                                 out.flush();
                             }
                             else if (auto const* p = std::get_if<agent::PlanModeRequest>(&commandResult))
@@ -1689,7 +1691,7 @@ void Shell::runAgentMode()
                                 if (!agentConfig.planMode.enabled)
                                 {
                                     auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                    out.write("Plan mode is disabled in configuration.\n", errorStyle);
+                                    out.writeText("Plan mode is disabled in configuration.\n", errorStyle);
                                     out.flush();
                                 }
                                 else if (p->query.empty())
@@ -1701,8 +1703,8 @@ void Shell::runAgentMode()
                                         inputComponent.setPlanMode(true);
                                     }
                                     auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                                    out.write("Plan mode active. Type your task to generate a plan.\n",
-                                              infoStyle);
+                                    out.writeText("Plan mode active. Type your task to generate a plan.\n",
+                                                  infoStyle);
                                     out.flush();
                                 }
                                 else
@@ -1726,7 +1728,7 @@ void Shell::runAgentMode()
                                 if (!result.has_value())
                                 {
                                     auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                    out.write("Error: " + result.error().message + "\n", errorStyle);
+                                    out.writeText("Error: " + result.error().message + "\n", errorStyle);
                                     out.flush();
                                 }
                             }
@@ -1734,7 +1736,7 @@ void Shell::runAgentMode()
                         else
                         {
                             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.write("Unknown command: /" + cmdName + "\n", errorStyle);
+                            out.writeText("Unknown command: /" + cmdName + "\n", errorStyle);
                             out.flush();
                         }
                     }
@@ -1760,7 +1762,7 @@ void Shell::runAgentMode()
                         if (!result.has_value())
                         {
                             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.write("Error: " + result.error().message + "\n", errorStyle);
+                            out.writeText("Error: " + result.error().message + "\n", errorStyle);
                             out.flush();
                         }
                     }
@@ -1772,15 +1774,7 @@ void Shell::runAgentMode()
                     break;
                 }
                 case agent::AgentInputComponent::Action::Abort: {
-                    // Move cursor up to the top of the agent prompt and clear from there,
-                    // so the shell prompt can replace the agent prompt in-place.
-                    auto const rowsUp = 1 // AgentInputComponent::HeaderHeight
-                                        + inputComponent.inputField().cursorLine();
-                    if (rowsUp > 0)
-                        out.moveUp(rowsUp);
-                    out.writeRaw("\r\033[J"); // CR + clear cursor to end of display
-                    out.flush();
-                    screen.releaseCursor();
+                    screen.clearAndRelease();
                     return;
                 }
                 case agent::AgentInputComponent::Action::CycleMode: {

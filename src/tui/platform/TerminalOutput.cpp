@@ -203,16 +203,46 @@ namespace
 
 // --- SyncGuard ---
 
+SyncGuard::SyncGuard(): _handle(-1)
+{
+}
+
 SyncGuard::SyncGuard(NativeHandle handle): _handle(handle)
 {
-    static constexpr auto Begin = "\033[?2026h";
-    safeWrite(_handle, Begin, std::strlen(Begin));
+    if (_handle >= 0)
+    {
+        static constexpr auto Begin = "\033[?2026h";
+        safeWrite(_handle, Begin, std::strlen(Begin));
+    }
 }
 
 SyncGuard::~SyncGuard()
 {
-    static constexpr auto End = "\033[?2026l";
-    safeWrite(_handle, End, std::strlen(End));
+    if (_handle >= 0)
+    {
+        static constexpr auto End = "\033[?2026l";
+        safeWrite(_handle, End, std::strlen(End));
+    }
+}
+
+SyncGuard::SyncGuard(SyncGuard&& other) noexcept: _handle(other._handle)
+{
+    other._handle = -1;
+}
+
+auto SyncGuard::operator=(SyncGuard&& other) noexcept -> SyncGuard&
+{
+    if (this != &other)
+    {
+        if (_handle >= 0)
+        {
+            static constexpr auto End = "\033[?2026l";
+            safeWrite(_handle, End, std::strlen(End));
+        }
+        _handle = other._handle;
+        other._handle = -1;
+    }
+    return *this;
 }
 
 // --- TerminalOutput ---
@@ -224,7 +254,7 @@ auto TerminalOutput::initialize() -> VoidResult
     return {};
 }
 
-void TerminalOutput::write(std::string_view text, Style const& style)
+void TerminalOutput::writeText(std::string_view text, Style const& style)
 {
     appendSgr(style);
     _buffer.append(text);
@@ -263,6 +293,31 @@ void TerminalOutput::moveRight(int n)
 {
     if (n > 0)
         _buffer += std::format("\033[{}C", n);
+}
+
+void TerminalOutput::carriageReturn()
+{
+    _buffer += '\r';
+}
+
+void TerminalOutput::linefeed()
+{
+    _buffer += '\n';
+}
+
+void TerminalOutput::clearToEndOfDisplay()
+{
+    _buffer += "\033[J";
+}
+
+void TerminalOutput::requestCellSize()
+{
+    _buffer += "\033[16t";
+}
+
+void TerminalOutput::requestCursorPosition()
+{
+    _buffer += "\033[6n";
 }
 
 void TerminalOutput::clearLine()

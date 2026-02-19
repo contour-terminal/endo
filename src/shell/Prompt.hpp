@@ -174,6 +174,7 @@ class Prompt
     bool _aborted = false;
     bool _multilineEnabled = true; ///< Enable multiline editing by default
     PromptComponent::Action _lastAction = PromptComponent::Action::None; ///< Action from last read() call.
+    bool _displayDrewCurrentState = false; ///< True when display() already drew the current state.
 
     void initialize();
 

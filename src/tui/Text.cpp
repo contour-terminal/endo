@@ -146,7 +146,7 @@ void Text::render(TerminalOutput& output, int startRow, int startCol, int width)
         output.moveTo(row, col);
 
         for (auto const& span: line.spans)
-            output.write(span.text, span.style);
+            output.writeText(span.text, span.style);
     }
 }
 

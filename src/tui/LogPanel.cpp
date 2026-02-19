@@ -76,9 +76,9 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
         headerPrefix += "\u2500"; // ─
     headerPrefix += " ";
 
-    output.write(headerPrefix, separatorStyle);
-    output.write(headerText, headerStyle);
-    output.write(" ", separatorStyle);
+    output.writeText(headerPrefix, separatorStyle);
+    output.writeText(headerText, headerStyle);
+    output.writeText(" ", separatorStyle);
 
     // Fill rest with ─
     auto const usedCols = leftBar + 1 + static_cast<int>(headerText.size()) + 1;
@@ -86,7 +86,7 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
     auto fillStr = std::string {};
     for (auto i = 0; i < remainingCols; ++i)
         fillStr += "\u2500"; // ─
-    output.write(fillStr, separatorStyle);
+    output.writeText(fillStr, separatorStyle);
 
     if (!_expanded)
         return;
@@ -131,7 +131,7 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
                     break;
             }
             levelStyle.bold = true;
-            output.write(std::format(" {} ", levelTag), levelStyle);
+            output.writeText(std::format(" {} ", levelTag), levelStyle);
 
             // Message text (truncate to fit)
             auto const prefixLen = static_cast<int>(levelTag.size()) + 3; // " [Tag] "
@@ -156,7 +156,7 @@ void LogPanel::render(TerminalOutput& output, int startRow, int cols)
             std::format(" [{}-{}/{}]", startIdx + 1, std::min(endIdx, entrySize), entrySize);
         auto const indicatorCol = std::max(1, cols - static_cast<int>(indicator.size()));
         output.moveTo(lastRow, indicatorCol);
-        output.write(indicator, indicatorStyle);
+        output.writeText(indicator, indicatorStyle);
     }
 }
 

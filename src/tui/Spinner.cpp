@@ -212,7 +212,7 @@ void Spinner::reset()
 
 void Spinner::render(TerminalOutput& output, Style const& style) const
 {
-    output.write(currentFrame(), style);
+    output.writeText(currentFrame(), style);
 }
 
 void Spinner::renderWithLabel(TerminalOutput& output,
@@ -222,7 +222,7 @@ void Spinner::renderWithLabel(TerminalOutput& output,
 {
     render(output, spinnerStyle);
     output.writeRaw(" ");
-    output.write(label, labelStyle);
+    output.writeText(label, labelStyle);
 }
 
 void Spinner::setType(SpinnerType type)
@@ -278,24 +278,24 @@ void ProgressBar::render(TerminalOutput& output, Style const& filledStyle, Style
 
     // Render filled blocks
     for (auto i = 0; i < fullBlocks && i < _width; ++i)
-        output.write(FilledChar, filledStyle);
+        output.writeText(FilledChar, filledStyle);
 
     // Render partial block if any
     if (fullBlocks < _width && remainder > 0.0f)
     {
         auto const partialIdx = static_cast<std::size_t>((1.0f - remainder) * 7.0f);
         auto const safeIdx = std::min(partialIdx, std::size_t { 7 });
-        output.write(PartialChars[safeIdx], filledStyle);
+        output.writeText(PartialChars[safeIdx], filledStyle);
 
         // Render empty blocks
         for (auto i = fullBlocks + 1; i < _width; ++i)
-            output.write(EmptyChar, emptyStyle);
+            output.writeText(EmptyChar, emptyStyle);
     }
     else
     {
         // Render empty blocks
         for (auto i = fullBlocks; i < _width; ++i)
-            output.write(EmptyChar, emptyStyle);
+            output.writeText(EmptyChar, emptyStyle);
     }
 }
 
@@ -306,7 +306,7 @@ void ProgressBar::renderWithPercent(TerminalOutput& output,
 {
     render(output, filledStyle, emptyStyle);
     output.writeRaw(" ");
-    output.write(std::format("{:3.0f}%", _progress * 100.0f), labelStyle);
+    output.writeText(std::format("{:3.0f}%", _progress * 100.0f), labelStyle);
 }
 
 } // namespace tui
