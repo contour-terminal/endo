@@ -548,7 +548,7 @@ HOF list element type annotation propagation fixed for `find`, `reverse`, `take`
 
 **Implementation Summary:** A comprehensive TUI library has been integrated into the project (`src/tui/`).
 The library includes:
-- Terminal input/output abstraction (`Terminal`, `TerminalInput`, `TerminalOutput`)
+- Terminal input/output abstraction (`Terminal`, `TerminalInput`, `TerminalOutput`) with polymorphic output for DI-based testing (`MockTerminalOutput`)
 - VT sequence parser (`VtParser`) with support for CSI, SGR mouse, bracketed paste, UTF-8
 - Input field with multiline editing, history, and kill ring (`InputField`)
 - Various UI components (Box, Dialog, List, LogPanel, StatusBar, Spinner, Text, Theme)
@@ -669,7 +669,7 @@ The library includes:
 - `Environment` class extracted to `Environment.hpp` for cleaner dependency management
 - Shell class creates `Completer` with environment and history, connects to Prompt via `setCompleter()`
 - Executed commands are added to both prompt history (Up/Down recall) and completion history (suggestions)
-- Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.)
+- Test utilities in `src/tui/TestHelpers.hpp` for rendering verification (`canvasToString()`, `renderPopup()`, etc.) and `MockTerminalOutput` for cursor positioning tests
 - 44 completion-related tests covering Completer, CompletionPopup, items accessor, LCP integration, and updateItems functionality
 - F# dot-access completion (`FSharpCompleter.cpp`): `Option.map`/`Option.bind`/`Option.defaultValue` module methods, `_.field` record field placeholders (from `FSharpPersistentState::recordTypeFields`), and generic `value.method`/`value.field` access — 24 tests
 - Ghost text two-phase matching: Phase 1 queries Command-capable providers (History, Command, LetBinding, FSharp) with full-line prefix matching in reverse priority order (history preferred); Phase 2 falls back to word-level prefix matching from all context-appropriate providers via `gatherCompletions()`. Enables ghost text for variables (`$PA` → `TH`), file paths, arguments, and history recall in any position
@@ -861,6 +861,12 @@ Component (base class)
 - [x] Implement aurora background gradient for endo-signature preset (multi-stop horizontal color interpolation via `multiStopGradient()`)
 - [x] Implement sixel aurora fade effect above prompt (pixel-level gradient via `Canvas::drawImage()`, CSI 16t cell size query, pre-encoded sixel caching in `PromptComponent`; transparent alpha for terminal background bleed-through)
 - [x] Fix Ctrl+T prompt toggle drift when aurora fade is active (missing `auroraFadeHeight()` in cursor-up calculation for AgentMode and transient prompt; added `cursorRowFromTop()` helper to `PromptComponent`; replaced `prompt.resume()` with `updateDimensions()` after agent mode to avoid partial-line-indicator cursor shift)
+- [x] Fix Ctrl+T agent→shell prompt drift via `Screen::clearAndRelease()` (replaces manual `moveUp()`+`\033[J`+`releaseCursor()` in Prompt.cpp and Shell.cpp; Screen owns cursor-up logic using `_previousCursorRow`)
+- [x] Fix Ctrl+T prompt toggle drift caused by `_firstDisplay` flag (reset `_firstDisplay` on mode transitions via `resetFirstDisplay()` to suppress spurious `topPadding()` height increase; added `carriageReturn()`/`linefeed()`/`clearToEndOfDisplay()`/`requestCellSize()`/`requestCursorPosition()` to `TerminalOutput` API replacing cursor-positioning `writeRaw` calls)
+- [x] Remove `_firstDisplay` flag from PromptComponent; `topPadding()` now always returns `promptSpacing`, eliminating the `display()`→`read()` height oscillation that caused Ctrl+T toggle drift and input jitter
+- [x] Fix Ctrl+T prompt toggle drift caused by redundant LF room reservation across Screen instances (new Screen's first `flushInline()` re-emitted room reservation LFs even though `clearAndRelease()` left the room intact; added `TerminalOutput::setInlineRoomReserved()`/`consumeInlineRoom()` API to communicate reserved room between Screens; `clearAndRelease()` now calls `enableReflow()` for clean terminal state)
+- [x] Fix Ctrl+T prompt toggle drift on real terminals via DECSC/DECRC cursor anchoring (`clearAndRelease()` saves cursor via `saveCursor()`, next Screen's first `flushInline()` restores via `restoreCursor()` eliminating relative-tracking drift; eliminated double-draw in `Prompt::read()` via `_displayDrewCurrentState` flag)
+- [x] TUI testing infrastructure: `TerminalOutput` made polymorphic (all public methods virtual), `MockTerminalOutput` tracks cursor position/visibility semantically, `Terminal` supports DI via `unique_ptr<TerminalOutput>` constructor, renamed `write()` → `writeText()` for clarity
 - [ ] Implement VT420 host-writable status line integration
 - [ ] Support OSC-8 hyperlinks in prompts
 - [ ] Add prompt configuration tests
