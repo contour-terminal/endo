@@ -562,8 +562,6 @@ void PromptComponent::render(tui::Canvas& canvas)
     // Mark bottom padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < botPad; ++i)
         canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
-
-    _firstDisplay = false;
 }
 
 tui::Size PromptComponent::preferredSize() const
@@ -620,7 +618,7 @@ int PromptComponent::auroraFadeHeight() const noexcept
 
 int PromptComponent::topPadding() const noexcept
 {
-    return _firstDisplay ? 0 : _config.promptSpacing;
+    return _config.promptSpacing;
 }
 
 int PromptComponent::bottomPadding() const noexcept

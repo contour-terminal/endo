@@ -198,7 +198,6 @@ class PromptComponent: public tui::Component
 
     // Prompt theming
     PromptConfig _config;             ///< Layout and module configuration.
-    bool _firstDisplay = true;        ///< Suppresses top padding on the very first render.
     PromptContext _context;           ///< Current shell context for module evaluation.
     PromptLayoutEngine _layoutEngine; ///< Layout rendering engine.
     std::unordered_map<std::string, std::unique_ptr<PromptModule>> _modules; ///< Module registry.
