@@ -33,11 +33,12 @@ class AgentInputComponent: public tui::Component
     /// @brief Result of processing input.
     enum class Action
     {
-        None,      ///< No action needed.
-        Changed,   ///< Content changed, re-render needed.
-        Submit,    ///< User pressed Enter on non-empty input.
-        Abort,     ///< User pressed Escape to exit agent mode.
-        CycleMode, ///< User toggled agent sub-mode (plan/execute).
+        None,        ///< No action needed.
+        Changed,     ///< Content changed, re-render needed.
+        Submit,      ///< User pressed Enter on non-empty input.
+        Abort,       ///< User pressed Escape to exit agent mode.
+        CycleMode,   ///< User toggled agent sub-mode (plan/execute).
+        ClearScreen, ///< User requested screen clear (Ctrl+L).
     };
 
     AgentInputComponent();

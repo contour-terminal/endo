@@ -44,8 +44,8 @@
 #include <agent/SlashCommandRegistry.hpp>
 #include <agent/SlashCommands.hpp>
 #include <agent/SystemPromptBuilder.hpp>
-#include <agent/providers/ProviderFactory.hpp>
 #include <agent/mcp/McpToolAdapter.hpp>
+#include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ExploreTool.hpp>
@@ -1453,8 +1453,7 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::SubmitPlanTool>());
     toolRegistry.registerTool(
         std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
-    toolRegistry.registerTool(
-        std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
+    toolRegistry.registerTool(std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
 
     // Start MCP servers and register their tools
     auto mcpServerManager = agent::mcp::ServerManager {};
@@ -1897,6 +1896,13 @@ void Shell::runAgentMode()
                 case agent::AgentInputComponent::Action::CycleMode: {
                     planModeActive = !planModeActive;
                     inputComponent.setPlanMode(planModeActive);
+                    needsRedraw = true;
+                    break;
+                }
+                case agent::AgentInputComponent::Action::ClearScreen: {
+                    out.clearScreen();
+                    out.flush();
+                    screen.releaseCursor();
                     needsRedraw = true;
                     break;
                 }

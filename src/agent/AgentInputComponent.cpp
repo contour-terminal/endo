@@ -265,6 +265,10 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             }
         }
 
+        // Ctrl+L clears the screen
+        if (key->codepoint == 'l' && tui::hasModifier(key->modifiers, tui::Modifier::Ctrl))
+            return Action::ClearScreen;
+
         // Tab triggers completion (no ghost text case)
         if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None)
         {
