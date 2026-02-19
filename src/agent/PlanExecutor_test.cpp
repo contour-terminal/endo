@@ -29,7 +29,7 @@ class MockProvider final: public LlmProvider
             return std::unexpected(failError);
 
         if (streamCb)
-            streamCb(responseText);
+            (void) streamCb(responseText);
 
         auto result = GenerateResult {};
         result.content.emplace_back(TextBlock { .text = responseText });

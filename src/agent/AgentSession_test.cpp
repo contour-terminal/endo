@@ -41,7 +41,7 @@ class MockProvider final: public LlmProvider
 
         // Stream tokens if callback provided
         if (streamCb)
-            streamCb(responseText);
+            (void) streamCb(responseText);
 
         auto result = GenerateResult {};
 
@@ -186,7 +186,10 @@ TEST_CASE("AgentSession.streaming_callback_called", "[agent]")
     auto session = AgentSession(provider);
 
     auto receivedTokens = std::string {};
-    auto result = session.processMessage("Hello", [&](std::string_view token) { receivedTokens += token; });
+    auto result = session.processMessage("Hello", [&](std::string_view token) -> bool {
+        receivedTokens += token;
+        return true;
+    });
 
     REQUIRE(result.has_value());
     CHECK(receivedTokens == "Streamed token");

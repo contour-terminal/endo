@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 
+#include <agent/AgentConfig.hpp>
 #include <agent/ProjectContextLoader.hpp>
 #include <platform/EnvironmentProvider.hpp>
 
@@ -120,6 +121,9 @@ class Shell final: public SignalCallback
     JobTable jobTable;                    ///< Table of background jobs
     PersistentHistory history;            ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
+
+    /// Agent configuration loaded from agent.yml (API keys) and overridden by init.endo builtins.
+    agent::AgentConfig agentConfig;
 
     /// Web search configuration for the agent web_search tool.
     /// Configurable at runtime via set_web_search_* builtins.

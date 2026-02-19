@@ -303,7 +303,10 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
             auto const token = delta["content"].get<std::string>();
             textAccumulator += token;
             if (streamCb)
-                streamCb(token);
+            {
+                if (!streamCb(token))
+                    return false; // Abort streaming on cancellation.
+            }
         }
 
         // Tool call deltas.

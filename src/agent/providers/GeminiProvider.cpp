@@ -216,7 +216,10 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
                     auto const& text = part["text"].get<std::string>();
                     accumulatedText += text;
                     if (streamCb)
-                        streamCb(text);
+                    {
+                        if (!streamCb(text))
+                            return false; // Abort streaming on cancellation.
+                    }
                 }
                 else if (part.contains("functionCall"))
                 {

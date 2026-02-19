@@ -5,6 +5,7 @@
 #include <tui/Spinner.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <string_view>
 
 namespace tui
@@ -59,6 +60,16 @@ class AgentResponseRenderer
     /// @brief Returns whether the response is still in the thinking phase.
     [[nodiscard]] auto isThinking() const noexcept -> bool { return _thinking; }
 
+    /// Callback invoked when the response line count changes.
+    using LineCallback = std::function<void(int lineCount)>;
+
+    /// @brief Sets a callback invoked whenever the response emits a new line.
+    /// @param cb The callback receiving the current total line count.
+    void setLineCallback(LineCallback cb);
+
+    /// @brief Returns the current number of output lines emitted by the response.
+    [[nodiscard]] auto lineCount() const noexcept -> int { return _lineCount; }
+
     /// @brief Renders a plan for user review with chrome and action hints.
     /// @param plan The plan to render.
     void renderPlan(Plan const& plan);
@@ -74,6 +85,8 @@ class AgentResponseRenderer
     tui::Spinner _spinner;
     bool _thinking = false;
     bool _firstToken = true;
+    int _lineCount = 1;         ///< Number of output lines (starts at 1 for spinner/first line).
+    LineCallback _lineCallback; ///< Optional callback for line count changes.
 };
 
 } // namespace endo::agent

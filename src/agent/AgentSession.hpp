@@ -30,6 +30,7 @@ enum class AgentErrorCode : uint8_t
     ProviderError,    ///< The LLM provider returned an error.
     NoProvider,       ///< No provider is configured or authenticated.
     ToolLoopExceeded, ///< The tool call loop exceeded the maximum number of iterations.
+    Cancelled,        ///< The user cancelled the streaming response.
 };
 
 /// Error information from an agent session operation.

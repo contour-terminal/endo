@@ -535,6 +535,9 @@ int Shell::run()
         return EXIT_FAILURE;
     }
 
+    // Load API keys from agent.yml (init.endo overrides all other settings).
+    agentConfig = agent::loadAgentConfig();
+
     // Auto-execute init.endo if it exists (only in interactive mode)
     if (auto const* home = std::getenv("HOME"))
     {
@@ -1055,6 +1058,228 @@ namespace
         T*& _target;
     };
 
+    /// @brief RAII guard that resets the terminal scroll region on destruction.
+    class ScrollRegionGuard
+    {
+      public:
+        tui::TerminalOutput& output;
+        bool active = false;
+
+        explicit ScrollRegionGuard(tui::TerminalOutput& out): output(out) {}
+
+        ~ScrollRegionGuard()
+        {
+            if (active)
+                output.resetScrollRegion();
+        }
+
+        ScrollRegionGuard(ScrollRegionGuard const&) = delete;
+        ScrollRegionGuard& operator=(ScrollRegionGuard const&) = delete;
+        ScrollRegionGuard(ScrollRegionGuard&&) = delete;
+        ScrollRegionGuard& operator=(ScrollRegionGuard&&) = delete;
+    };
+
+    /// @brief Manages the agent prompt display during LLM streaming.
+    ///
+    /// Keeps the prompt visible while the response streams above it.
+    /// Two phases:
+    /// - **Drifting**: Response + prompt fit on screen; prompt is re-rendered below the response.
+    /// - **Stuck**: Response exceeds available space; a scroll region is set up and the prompt
+    ///   is rendered in a fixed area below the scroll region.
+    class StreamingPromptManager
+    {
+      public:
+        tui::Terminal& terminal;
+        agent::AgentInputComponent& inputComponent;
+        tui::TerminalOutput& output;
+
+        int responseLineCount = 0;
+        bool scrollRegionActive = false;
+        bool cancelled = false;
+        int promptHeight = 0;
+
+        StreamingPromptManager(tui::Terminal& term,
+                               agent::AgentInputComponent& input,
+                               tui::TerminalOutput& out):
+            terminal(term), inputComponent(input), output(out), _scrollGuard(out)
+        {
+        }
+
+        /// @brief Called when the response emits new lines.
+        /// @param lineCount Total lines emitted so far.
+        void onNewResponseLine(int lineCount)
+        {
+            responseLineCount = lineCount;
+            promptHeight = inputComponent.preferredSize().height;
+
+            if (promptHeight >= terminal.rows())
+                return; // Degenerate case: prompt taller than terminal.
+
+            auto const totalNeeded = responseLineCount + promptHeight;
+            if (!scrollRegionActive && totalNeeded >= terminal.rows())
+                enterScrollRegion();
+            else if (!scrollRegionActive)
+                renderPromptBelow();
+            // In scroll region mode, the prompt stays fixed — no re-render needed per line.
+        }
+
+        /// @brief Non-blocking poll for user input during streaming.
+        void pollInput()
+        {
+            auto events = terminal.poll(0);
+            for (auto const& event: events)
+            {
+                if (std::holds_alternative<tui::ResizeEvent>(event))
+                {
+                    handleResize();
+                    continue;
+                }
+
+                auto const action = inputComponent.processInput(event);
+                switch (action)
+                {
+                    case agent::AgentInputComponent::Action::Abort: cancelled = true; return;
+                    case agent::AgentInputComponent::Action::ClearScreen: handleClearScreen(); break;
+                    case agent::AgentInputComponent::Action::Changed: renderPromptAtCurrentPosition(); break;
+                    default: break;
+                }
+            }
+        }
+
+        /// @brief Cleans up scroll region state. Must be called when streaming ends.
+        void teardown()
+        {
+            if (scrollRegionActive)
+            {
+                output.resetScrollRegion();
+                _scrollGuard.active = false;
+                scrollRegionActive = false;
+
+                // Move cursor past the prompt area so subsequent output starts clean.
+                output.moveTo(terminal.rows(), 1);
+                output.linefeed();
+            }
+            // Clear the prompt we rendered during streaming (the Screen system will re-render).
+            if (promptHeight > 0 && !scrollRegionActive)
+            {
+                // The prompt was rendered directly; clear it so the Screen can take over.
+                output.saveCursor();
+                for (auto i = 0; i < promptHeight; ++i)
+                {
+                    output.moveDown(1);
+                    output.carriageReturn();
+                    output.clearToEndOfLine();
+                }
+                output.restoreCursor();
+            }
+            output.flush();
+        }
+
+      private:
+        void enterScrollRegion()
+        {
+            promptHeight = inputComponent.preferredSize().height;
+            auto const scrollBottom = terminal.rows() - promptHeight;
+            if (scrollBottom < 1)
+                return;
+
+            output.setScrollRegion(1, scrollBottom);
+            _scrollGuard.active = true;
+            scrollRegionActive = true;
+
+            renderPromptFixed();
+        }
+
+        /// @brief Renders the prompt below the response (drifting phase).
+        void renderPromptBelow()
+        {
+            // In drifting mode we don't re-render the prompt on every line —
+            // only when the user types (Changed action). This avoids flicker.
+        }
+
+        /// @brief Renders the prompt in the fixed area below the scroll region.
+        void renderPromptFixed()
+        {
+            auto const scrollBottom = terminal.rows() - promptHeight;
+            auto guard = output.syncGuard();
+            output.saveCursor();
+
+            // Clear the fixed prompt area and render the prompt header + input.
+            for (auto row = scrollBottom + 1; row <= terminal.rows(); ++row)
+            {
+                output.moveTo(row, 1);
+                output.clearToEndOfLine();
+            }
+
+            renderPromptDirect(scrollBottom + 1);
+            output.restoreCursor();
+            output.flush();
+        }
+
+        /// @brief Renders the prompt at the current position (for Changed events).
+        void renderPromptAtCurrentPosition()
+        {
+            if (scrollRegionActive)
+                renderPromptFixed();
+        }
+
+        /// @brief Renders a minimal version of the prompt directly via TerminalOutput.
+        /// @param startRow The 1-based row to start rendering at.
+        void renderPromptDirect(int startRow)
+        {
+            auto const& theme = tui::currentTheme();
+            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+            auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
+            auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
+
+            // Header line: ╭─ agent
+            output.moveTo(startRow, 1);
+            output.writeText("\xe2\x95\xad\xe2\x94\x80 ", barStyle);
+            output.writeText("agent", labelStyle);
+
+            // Input line: ╰─ ❯ <input text>
+            output.moveTo(startRow + 1, 1);
+            output.writeText("\xe2\x95\xb0\xe2\x94\x80 ", barStyle);
+            output.writeText("\xe2\x9d\xaf ", statusStyle);
+
+            auto const text = inputComponent.text();
+            if (!text.empty())
+                output.writeText(text);
+        }
+
+        void handleClearScreen()
+        {
+            if (scrollRegionActive)
+            {
+                output.resetScrollRegion();
+                _scrollGuard.active = false;
+                scrollRegionActive = false;
+            }
+            output.clearScreen();
+            output.flush();
+            responseLineCount = 0;
+        }
+
+        void handleResize()
+        {
+            terminal.output().updateDimensions();
+            if (scrollRegionActive)
+            {
+                output.resetScrollRegion();
+                _scrollGuard.active = false;
+                scrollRegionActive = false;
+
+                // Re-evaluate whether we need a scroll region with new dimensions.
+                promptHeight = inputComponent.preferredSize().height;
+                auto const totalNeeded = responseLineCount + promptHeight;
+                if (totalNeeded >= terminal.rows())
+                    enterScrollRegion();
+            }
+        }
+
+        ScrollRegionGuard _scrollGuard;
+    };
+
     /// @brief Formats tool call arguments as a compact, truncated string for display.
     /// @param arguments The JSON arguments from a tool call.
     /// @return A compact string representation, truncated at ~120 characters.
@@ -1234,8 +1459,6 @@ namespace
 
 void Shell::runAgentMode()
 {
-    auto const agentConfig = agent::loadAgentConfig();
-
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
     {
@@ -1251,7 +1474,7 @@ void Shell::runAgentMode()
         auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
         auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
         out.writeText("No AI provider configured or authenticated.\n", errorStyle);
-        out.writeText("Create ~/.config/endo/agent.yml or set ANTHROPIC_API_KEY / OPENAI_API_KEY.\n",
+        out.writeText("Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n",
                       mutedStyle);
         out.flush();
         return;
@@ -1665,12 +1888,28 @@ void Shell::runAgentMode()
     auto executePlanFlow = [&](std::string const& planQuery) {
         auto renderer = agent::AgentResponseRenderer(out);
         auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
+
+        auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
+        renderer.setLineCallback([&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
         renderer.begin();
 
-        auto planResult = _agentSession->processMessageForPlan(
-            planQuery, [&](std::string_view token) { renderer.feedToken(token); });
+        auto planResult =
+            _agentSession->processMessageForPlan(planQuery, [&](std::string_view token) -> bool {
+                renderer.feedToken(token);
+                promptMgr.pollInput();
+                return !promptMgr.cancelled;
+            });
 
+        promptMgr.teardown();
         renderer.end();
+
+        if (promptMgr.cancelled)
+        {
+            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+            out.writeText("(cancelled)\n", infoStyle);
+            out.flush();
+            return;
+        }
 
         if (!planResult.has_value())
         {
@@ -1703,11 +1942,19 @@ void Shell::runAgentMode()
 
                         auto stepRenderer = agent::AgentResponseRenderer(out);
                         auto const stepGuard = ScopedAssign(activeRenderer, stepRenderer);
+
+                        auto stepPromptMgr = StreamingPromptManager(terminal, inputComponent, out);
+                        stepRenderer.setLineCallback(
+                            [&stepPromptMgr](int lineCount) { stepPromptMgr.onNewResponseLine(lineCount); });
                         stepRenderer.begin();
 
-                        auto stepResult = executor.executeNextStep(
-                            [&](std::string_view token) { stepRenderer.feedToken(token); });
+                        auto stepResult = executor.executeNextStep([&](std::string_view token) -> bool {
+                            stepRenderer.feedToken(token);
+                            stepPromptMgr.pollInput();
+                            return !stepPromptMgr.cancelled;
+                        });
 
+                        stepPromptMgr.teardown();
                         stepRenderer.end();
 
                         if (!stepResult.has_value())
@@ -1896,15 +2143,30 @@ void Shell::runAgentMode()
                                 // PromptRewrite: send the rewritten prompt through normal message processing
                                 auto renderer = agent::AgentResponseRenderer(out);
                                 auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
+
+                                auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
+                                renderer.setLineCallback(
+                                    [&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
                                 renderer.begin();
 
                                 auto result = _agentSession->processMessage(
-                                    r->prompt, [&](std::string_view token) { renderer.feedToken(token); });
+                                    r->prompt, [&](std::string_view token) -> bool {
+                                        renderer.feedToken(token);
+                                        promptMgr.pollInput();
+                                        return !promptMgr.cancelled;
+                                    });
 
+                                promptMgr.teardown();
                                 renderer.end();
                                 saveHistory();
 
-                                if (!result.has_value())
+                                if (promptMgr.cancelled)
+                                {
+                                    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                                    out.writeText("(cancelled)\n", infoStyle);
+                                    out.flush();
+                                }
+                                else if (!result.has_value())
                                 {
                                     auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
                                     out.writeText("Error: " + result.error().message + "\n", errorStyle);
@@ -1930,15 +2192,30 @@ void Shell::runAgentMode()
                         // Normal (non-slash) message processing
                         auto renderer = agent::AgentResponseRenderer(out);
                         auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
+
+                        auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
+                        renderer.setLineCallback(
+                            [&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
                         renderer.begin();
 
-                        auto result = _agentSession->processMessage(
-                            query, [&](std::string_view token) { renderer.feedToken(token); });
+                        auto result =
+                            _agentSession->processMessage(query, [&](std::string_view token) -> bool {
+                                renderer.feedToken(token);
+                                promptMgr.pollInput();
+                                return !promptMgr.cancelled;
+                            });
 
+                        promptMgr.teardown();
                         renderer.end();
                         saveHistory();
 
-                        if (!result.has_value())
+                        if (promptMgr.cancelled)
+                        {
+                            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            out.writeText("(cancelled)\n", infoStyle);
+                            out.flush();
+                        }
+                        else if (!result.has_value())
                         {
                             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
                             out.writeText("Error: " + result.error().message + "\n", errorStyle);

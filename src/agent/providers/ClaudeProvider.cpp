@@ -45,7 +45,10 @@ auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
                 return false;
 
             if (!parsed->textDelta.empty() && streamCb)
-                streamCb(parsed->textDelta);
+            {
+                if (!streamCb(parsed->textDelta))
+                    return false; // Abort streaming on cancellation.
+            }
 
             for (auto& block: parsed->completedBlocks)
                 result.content.push_back(std::move(block));

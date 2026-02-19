@@ -178,7 +178,8 @@ struct GenerateResult
 };
 
 /// Callback invoked for each text token as it is streamed from the model.
-using StreamCallback = std::function<void(std::string_view token)>;
+/// @return true to continue streaming, false to abort.
+using StreamCallback = std::function<bool(std::string_view token)>;
 
 /// Information about a model's capabilities.
 struct ModelInfo

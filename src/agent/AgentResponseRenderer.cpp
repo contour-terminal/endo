@@ -39,8 +39,24 @@ void AgentResponseRenderer::feedToken(std::string_view token)
         _markdownRenderer.beginStream();
     }
 
+    // Count newlines in the token to track response height.
+    auto const previousLineCount = _lineCount;
+    for (auto const ch: token)
+    {
+        if (ch == '\n')
+            ++_lineCount;
+    }
+
     _markdownRenderer.feedToken(token);
     _output.flush();
+
+    if (_lineCount != previousLineCount && _lineCallback)
+        _lineCallback(_lineCount);
+}
+
+void AgentResponseRenderer::setLineCallback(LineCallback cb)
+{
+    _lineCallback = std::move(cb);
 }
 
 void AgentResponseRenderer::end()
