@@ -297,6 +297,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
     _env.setAndExport("SHELL", "endo");
+    updateTerminalSizeEnv();
 
     // Capture the shell's process ID at startup
 #if !defined(_WIN32)
@@ -448,6 +449,15 @@ void Shell::setPositionalParameters(std::vector<std::string> params)
     _positionalParameters = std::move(params);
 }
 
+void Shell::updateTerminalSizeEnv()
+{
+    if (auto const size = _tty.getSize(); size.has_value())
+    {
+        _env.set("LINES", std::to_string(size->rows));
+        _env.set("COLUMNS", std::to_string(size->cols));
+    }
+}
+
 // ========================================================================
 // Shell integration (OSC 133) and CWD propagation (OSC 7)
 // ========================================================================
@@ -548,6 +558,7 @@ int Shell::run()
     {
         // Check for pending signals on non-signalfd platforms
         SignalHandler::processPendingSignals();
+        updateTerminalSizeEnv();
 
         // Report completed jobs before prompting
         reportJobStatus();
@@ -663,6 +674,8 @@ int Shell::run()
     // Windows: simple loop without poll/signalfd
     while (!_quit && prompt.ready())
     {
+        updateTerminalSizeEnv();
+
         // Report completed jobs before prompting
         reportJobStatus();
 

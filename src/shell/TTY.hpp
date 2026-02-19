@@ -148,6 +148,9 @@ class WindowsTestPTY final: public TTY
     /// Returns the output that was written to the TTY.
     [[nodiscard]] std::string_view output() const noexcept;
 
+    /// Sets the terminal size for testing resize behavior.
+    void setSize(uint16_t rows, uint16_t cols);
+
   private:
     void outputCaptureLoop();
 
@@ -228,6 +231,9 @@ class TestPTY final: public TTY
 
     // Returns the output that was written to the TTY.
     [[nodiscard]] std::string_view output() const noexcept;
+
+    /// Sets the terminal size for testing resize behavior.
+    void setSize(uint16_t rows, uint16_t cols);
 
   private:
     void outputUpdateLoop();

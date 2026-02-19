@@ -254,6 +254,13 @@ void TestPTY::writeToStdin(std::string_view str) const
         throw std::runtime_error("write: " + std::string(strerror(errno)));
 }
 
+void TestPTY::setSize(uint16_t rows, uint16_t cols)
+{
+    _windowSize.ws_row = rows;
+    _windowSize.ws_col = cols;
+    ioctl(_ptySlave, TIOCSWINSZ, &_windowSize);
+}
+
 std::string_view TestPTY::output() const noexcept
 {
     // Give the output thread time to read remaining data from the PTY

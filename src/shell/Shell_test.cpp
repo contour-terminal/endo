@@ -2638,3 +2638,43 @@ TEST_CASE("shell.exec.program_not_found_does_not_persist_to_history")
 
     std::filesystem::remove_all(dir);
 }
+
+// ============================================================================
+// LINES / COLUMNS environment variables
+// ============================================================================
+
+TEST_CASE("shell.env.lines_columns_initial")
+{
+    TestShell shell;
+    // TestPTY defaults to 25 rows x 80 columns
+    CHECK(shell.env.get("LINES").value_or("") == "25");
+    CHECK(shell.env.get("COLUMNS").value_or("") == "80");
+}
+
+TEST_CASE("shell.env.lines_columns_after_resize")
+{
+    TestShell shell;
+    shell.pty.setSize(40, 120);
+    shell.shell.updateTerminalSizeEnv();
+    CHECK(shell.env.get("LINES").value_or("") == "40");
+    CHECK(shell.env.get("COLUMNS").value_or("") == "120");
+}
+
+TEST_CASE("shell.env.lines_columns_accessible_via_expansion")
+{
+    TestShell shell;
+    shell("echo $LINES");
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("25") != std::string::npos);
+}
+
+TEST_CASE("shell.env.lines_columns_echo_both")
+{
+    TestShell shell;
+    shell("echo $LINES $COLUMNS");
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("25") != std::string::npos);
+    CHECK(out.find("80") != std::string::npos);
+}

@@ -86,6 +86,9 @@ class Shell final: public SignalCallback
     int run();
     int execute(std::string const& lineBuffer);
 
+    /// Updates LINES and COLUMNS environment variables from current TTY size.
+    void updateTerminalSizeEnv();
+
     /// Called when SIGCHLD is received to reap child processes.
     void onSigchld() override;
 

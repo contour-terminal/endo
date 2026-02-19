@@ -46,7 +46,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | Process execution (fork/exec) | ✅ |
 | Multi-process pipes | ✅ |
 | Builtins: `exit`, `true`, `false`, `read` (-p/-r/-s/-n/-t/-d, IFS splitting), `cd` (incl. `cd -`), `set`, `unset`, `export`, `bind`, `echo`, `which`, `cat`, `sleep`, `fetch`, `rm` (-r/-R/-f/-d/-v/-i/--recursive/--force/--dir/--verbose/--help/--) | ✅ |
-| Environment variables (set/get/export) | ✅ |
+| Environment variables (set/get/export, LINES/COLUMNS from TTY) | ✅ |
 | Variable substitution (`$VAR`, `${VAR}`, `$?`, `$$`, `$!`, `$0-$9`) | ✅ |
 | String interpolation in double-quoted strings (`"hello $USER"`) | ✅ |
 | Command substitution (`$(cmd)`, `` `cmd` ``) | ✅ |

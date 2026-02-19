@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "../TTY.hpp"
-
 #include <chrono>
 #include <format>
 #include <mutex>
@@ -8,6 +6,8 @@
 #include <thread>
 
 #include <Windows.h>
+
+#include "../TTY.hpp"
 
 namespace endo
 {
@@ -47,8 +47,8 @@ WindowsTestPTY::WindowsTestPTY()
         CloseHandle(_writeInputHandle);
         CloseHandle(_readOutputHandle);
         CloseHandle(_writeOutputHandle);
-        throw std::runtime_error(std::format("SetHandleInformation failed: {}",
-                                              static_cast<int>(GetLastError())));
+        throw std::runtime_error(
+            std::format("SetHandleInformation failed: {}", static_cast<int>(GetLastError())));
     }
 
     // Make sure the read end of the output pipe is not inherited
@@ -58,8 +58,8 @@ WindowsTestPTY::WindowsTestPTY()
         CloseHandle(_writeInputHandle);
         CloseHandle(_readOutputHandle);
         CloseHandle(_writeOutputHandle);
-        throw std::runtime_error(std::format("SetHandleInformation failed: {}",
-                                              static_cast<int>(GetLastError())));
+        throw std::runtime_error(
+            std::format("SetHandleInformation failed: {}", static_cast<int>(GetLastError())));
     }
 
     // Start background thread to capture output
@@ -176,6 +176,11 @@ void WindowsTestPTY::writeToStdin(std::string_view str) const
         throw std::runtime_error(
             std::format("WriteFile (input) failed: {}", static_cast<int>(GetLastError())));
     }
+}
+
+void WindowsTestPTY::setSize(uint16_t rows, uint16_t cols)
+{
+    _terminalSize = TerminalSize { .rows = rows, .cols = cols };
 }
 
 std::string_view WindowsTestPTY::output() const noexcept
