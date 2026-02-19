@@ -320,6 +320,15 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             }
             generator.compileFunctionBody(name, func);
         }
+
+        // Restore persisted properties
+        for (auto const& [name, prop]: persistentState->properties)
+        {
+            FSharpProperty fsProp;
+            fsProp.getter = prop.getter;
+            fsProp.setter = prop.setter;
+            generator._fsharpProperties[name] = fsProp;
+        }
     }
 
     // Pre-register well-known structured command record types so that
@@ -4200,6 +4209,180 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
     return false;
 }
 
+bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::string const& fieldName)
+{
+    // Determine the object's type ID
+    auto const objTypeId = getObjectTypeId(obj);
+    auto const objLiteralType = obj->type();
+
+    // --- String dot properties ---
+    if (objLiteralType == CoreVM::LiteralType::String)
+    {
+        if (fieldName == "length")
+        {
+            _result = _builder.createSLen(obj, "string.length");
+            return true;
+        }
+        return false;
+    }
+
+    if (!objTypeId)
+        return false;
+
+    // --- List dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::List)
+    {
+        if (fieldName == "length")
+        {
+            auto* callback = findCallback("list_length(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_length builtin not found");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, "list.length");
+            return true;
+        }
+        if (fieldName == "isEmpty")
+        {
+            auto* callback = findCallback("list_isEmpty(I)B");
+            if (!callback)
+            {
+                reportTypeError("list_isEmpty builtin not found");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, "list.isEmpty");
+            return true;
+        }
+        if (fieldName == "head")
+        {
+            auto* callback = findCallback("list_head(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_head builtin not found");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, "list.head");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            if (auto elemTypeId = getListElementTypeId(obj))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
+            return true;
+        }
+        if (fieldName == "tail")
+        {
+            auto* callback = findCallback("list_tail(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_tail builtin not found");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, "list.tail");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            if (auto elemTypeId = getListElementTypeId(obj))
+                annotateListElementTypeId(_result, *elemTypeId);
+            if (auto elt = getListElementLiteralType(obj))
+                annotateListElementLiteralType(_result, *elt);
+            return true;
+        }
+        if (fieldName == "last")
+        {
+            auto* callback = findCallback("list_last(I)I");
+            if (!callback)
+            {
+                reportTypeError("list_last builtin not found");
+                return true;
+            }
+            _result =
+                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { obj }, "list.last");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+            if (auto elemTypeId = getListElementTypeId(obj))
+                annotateInnerObjectTypeId(_result, *elemTypeId);
+            return true;
+        }
+        return false;
+    }
+
+    // --- Option dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::Option)
+    {
+        if (fieldName == "isSome")
+        {
+            auto* tag = _builder.createObjGetTag(obj, "option.tag");
+            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "option.isSome");
+            return true;
+        }
+        if (fieldName == "isNone")
+        {
+            auto* tag = _builder.createObjGetTag(obj, "option.tag");
+            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "option.isNone");
+            return true;
+        }
+        return false;
+    }
+
+    // --- Result dot properties ---
+    // Result convention: Ok = tag 1, Error = tag 0
+    if (*objTypeId == CoreVM::BuiltinTypeId::Result)
+    {
+        if (fieldName == "isOk")
+        {
+            auto* tag = _builder.createObjGetTag(obj, "result.tag");
+            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "result.isOk");
+            return true;
+        }
+        if (fieldName == "isError")
+        {
+            auto* tag = _builder.createObjGetTag(obj, "result.tag");
+            _result = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(0)), "result.isError");
+            return true;
+        }
+        return false;
+    }
+
+    // --- Tuple2 dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::Tuple2)
+    {
+        if (fieldName == "fst" || fieldName == "0")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "tuple.fst");
+            return true;
+        }
+        if (fieldName == "snd" || fieldName == "1")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), "tuple.snd");
+            return true;
+        }
+        return false;
+    }
+
+    // --- Tuple3 dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::Tuple3)
+    {
+        if (fieldName == "fst" || fieldName == "0")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(0)), "tuple.fst");
+            return true;
+        }
+        if (fieldName == "snd" || fieldName == "1")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(1)), "tuple.snd");
+            return true;
+        }
+        if (fieldName == "trd" || fieldName == "2")
+        {
+            _result = _builder.createObjGetSlot(obj, _builder.get(CoreVM::CoreNumber(2)), "tuple.trd");
+            return true;
+        }
+        return false;
+    }
+
+    return false;
+}
+
 bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<CoreVM::Value*> const& args)
 {
     // Search runtime builtins for a function matching by name and argument count.
@@ -4424,6 +4607,7 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
         auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
         _result = emitTuple2(e0, e1, elemAllocas[0]->type(), elemAllocas[1]->type(), "tuple");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple2);
     }
     else
     {
@@ -4432,12 +4616,37 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         auto* e2 = _builder.createLoad(elemAllocas[2], "tuple.elem.reload.2");
         _result = emitTuple3(
             e0, e1, e2, elemAllocas[0]->type(), elemAllocas[1]->type(), elemAllocas[2]->type(), "tuple");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple3);
     }
 }
 
 void IRGenerator::visit(ast::MutAssignStmt const& node)
 {
     TRACE_SCOPE("visit(MutAssignStmt)");
+
+    // Check if this is a property setter invocation
+    if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
+    {
+        if (!it->second.setter)
+        {
+            reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
+            return;
+        }
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for assignment value");
+            return;
+        }
+        pushFSharpScope();
+        auto* paramStorage = createAllocaInEntryBlock(newValue->type(), it->second.setter->paramName);
+        _builder.createStore(paramStorage, newValue, it->second.setter->paramName + ".store");
+        bindFSharpVariable(it->second.setter->paramName, paramStorage, false);
+        codegen(it->second.setter->body.get());
+        popFSharpScope();
+        _result = nullptr;
+        return;
+    }
 
     // Look up the binding
     auto const* binding = lookupFSharpBinding(node.name);
@@ -4476,6 +4685,30 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
 void IRGenerator::visit(ast::MutAssignExpr const& node)
 {
     TRACE_SCOPE("visit(MutAssignExpr)");
+
+    // Check if this is a property setter invocation
+    if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
+    {
+        if (!it->second.setter)
+        {
+            reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
+            return;
+        }
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for assignment value");
+            return;
+        }
+        pushFSharpScope();
+        auto* paramStorage = createAllocaInEntryBlock(newValue->type(), it->second.setter->paramName);
+        _builder.createStore(paramStorage, newValue, it->second.setter->paramName + ".store");
+        bindFSharpVariable(it->second.setter->paramName, paramStorage, false);
+        codegen(it->second.setter->body.get());
+        popFSharpScope();
+        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+        return;
+    }
 
     // Look up the binding
     auto const* binding = lookupFSharpBinding(node.name);
@@ -4601,6 +4834,30 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                 if (auto it = recTypeInfo->fieldTypes.find(name); it != recTypeInfo->fieldTypes.end())
                     annotateInnerType(bindingStorage[name], it->second);
             }
+        }
+
+        _result = nullptr;
+        return;
+    }
+
+    // Property definition: let Name with get () = ... and set (v) = ...
+    if (node.isProperty())
+    {
+        FSharpProperty prop;
+        if (node.getter)
+            prop.getter = node.getter.get();
+        if (node.setter)
+            prop.setter = node.setter.get();
+        _fsharpProperties[node.name] = prop;
+
+        // Persist property for REPL sessions
+        // (AST is retained by the caller — Shell/TestHelper push the full statement into retainedASTs)
+        if (_persistentState)
+        {
+            _persistentState->properties[node.name] = FSharpPersistentState::PersistedProperty {
+                node.getter.get(),
+                node.setter.get(),
+            };
         }
 
         _result = nullptr;
@@ -6910,6 +7167,20 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
 {
     TRACE_SCOPE("visit(IdentifierExpr)");
 
+    // Check if identifier is a property (getter invocation)
+    if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
+    {
+        if (!it->second.getter)
+        {
+            reportTypeError("Property '{}' is write-only (has no getter)", std::string_view(node.name));
+            return;
+        }
+        pushFSharpScope();
+        codegen(it->second.getter->body.get());
+        popFSharpScope();
+        return;
+    }
+
     // Look up in F# scope
     CoreVM::Value* storage = lookupFSharpVariable(node.name);
     if (!storage)
@@ -9154,6 +9425,15 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         return;
     }
 
+    // String dot properties (e.g., s.length) — check before record/union lookup
+    if (obj->type() == CoreVM::LiteralType::String)
+    {
+        if (tryGenerateBuiltinPropertyAccess(obj, node.fieldName))
+            return;
+        reportTypeError("String has no property '{}'", std::string_view(node.fieldName));
+        return;
+    }
+
     // Look up the record type from the object's type ID annotation
     RecordTypeInfo const* typeInfo = nullptr;
     if (auto objTypeId = getObjectTypeId(obj))
@@ -9225,11 +9505,31 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                     obj, _builder.get(CoreVM::CoreNumber(slotOffset)), "union." + node.fieldName);
                 return;
             }
+            // Try function-as-method on union type: obj.funcName → funcName(obj)
+            if (auto const* func = lookupFSharpFunction(node.fieldName))
+            {
+                if (!func->parameters.empty() && !func->parameterTypes.empty() && func->parameterTypes[0])
+                {
+                    auto const* paramType = func->parameterTypes[0]->get();
+                    bool typeMatches = false;
+                    if (auto const* uType = std::get_if<UnionType>(&paramType->node))
+                        typeMatches = (uType->name == unionInfo->name);
+                    if (typeMatches)
+                    {
+                        generateFSharpCall(func, node.fieldName, { obj });
+                        return;
+                    }
+                }
+            }
             reportTypeError("Union type '{}' has no field '{}'",
                             std::string_view(unionInfo->name),
                             std::string_view(node.fieldName));
             return;
         }
+
+        // Try built-in type property access (list.length, option.isSome, etc.)
+        if (tryGenerateBuiltinPropertyAccess(obj, node.fieldName))
+            return;
 
         reportTypeError("Field access requires a known record or union type, got unknown object for '.{}'",
                         std::string_view(node.fieldName));
@@ -9256,6 +9556,23 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
 
     if (!found)
     {
+        // Try function-as-method dot access: obj.funcName → funcName(obj)
+        if (auto const* func = lookupFSharpFunction(node.fieldName))
+        {
+            if (!func->parameters.empty() && !func->parameterTypes.empty() && func->parameterTypes[0])
+            {
+                // Check if the first parameter type matches the object's record type
+                auto const* paramType = func->parameterTypes[0]->get();
+                bool typeMatches = false;
+                if (auto const* recType = std::get_if<RecordType>(&paramType->node))
+                    typeMatches = (recType->name == typeInfo->name);
+                if (typeMatches)
+                {
+                    generateFSharpCall(func, node.fieldName, { obj });
+                    return;
+                }
+            }
+        }
         reportTypeError("Record type '{}' has no field '{}'",
                         std::string_view(typeInfo->name),
                         std::string_view(node.fieldName));

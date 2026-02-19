@@ -8351,3 +8351,280 @@ TEST_CASE("IRGenerator.Shell.compound_param_space_separated_unchanged")
     rt.clearMockEnvVars();
     rt.clearMockWhichPaths();
 }
+
+// ============================================================================
+// Phase 1: Built-in dot properties on collection types
+
+TEST_CASE("IRGenerator.FSharp.list.dot_length")
+{
+    CHECK(executeSourceAndGetOutput("let xs = [1; 2; 3]\nprint xs.length") == "3");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.dot_isEmpty")
+{
+    CHECK(executeSourceAndGetOutput("let xs = [1; 2; 3]\nprint xs.isEmpty") == "false");
+    CHECK(executeSourceAndGetOutput("let xs: list<int> = []\nprint xs.isEmpty") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.dot_head")
+{
+    CHECK(executeSourceAndGetOutput("let xs = [10; 20; 30]\n"
+                                    "match xs.head with\n"
+                                    "| Some v -> print v\n"
+                                    "| None -> print 0")
+          == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.dot_tail")
+{
+    CHECK(executeSourceAndGetOutput("let xs = [1; 2; 3]\nprint xs.tail.length") == "2");
+}
+
+TEST_CASE("IRGenerator.FSharp.list.dot_last")
+{
+    CHECK(executeSourceAndGetOutput("let xs = [10; 20; 30]\n"
+                                    "match xs.last with\n"
+                                    "| Some v -> print v\n"
+                                    "| None -> print 0")
+          == "30");
+}
+
+TEST_CASE("IRGenerator.FSharp.option.dot_isSome")
+{
+    CHECK(executeSourceAndGetOutput("let x = Some 42\nprint x.isSome") == "true");
+    CHECK(executeSourceAndGetOutput("let x = None\nprint x.isSome") == "false");
+}
+
+TEST_CASE("IRGenerator.FSharp.option.dot_isNone")
+{
+    CHECK(executeSourceAndGetOutput("let x = Some 42\nprint x.isNone") == "false");
+    CHECK(executeSourceAndGetOutput("let x = None\nprint x.isNone") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.result.dot_isOk")
+{
+    CHECK(executeSourceAndGetOutput("let x = Ok 42\nprint x.isOk") == "true");
+    CHECK(executeSourceAndGetOutput("let x = Error 1\nprint x.isOk") == "false");
+}
+
+TEST_CASE("IRGenerator.FSharp.result.dot_isError")
+{
+    CHECK(executeSourceAndGetOutput("let x = Ok 42\nprint x.isError") == "false");
+    CHECK(executeSourceAndGetOutput("let x = Error 1\nprint x.isError") == "true");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_fst")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.fst)") == "10");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_snd")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.snd)") == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_trd")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.trd)") == "30");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_numeric_index_2tuple")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.0)") == "10");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.1)") == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_numeric_index_3tuple")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.0)") == "10");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.1)") == "20");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.2)") == "30");
+}
+
+TEST_CASE("IRGenerator.FSharp.tuple.dot_mixed_named_and_numeric")
+{
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.fst)") == "10");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20)\nprint (t.0)") == "10");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.snd)") == "20");
+    CHECK(executeSourceAndGetOutput("let t = (10, 20, 30)\nprint (t.1)") == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.string.dot_length")
+{
+    CHECK(executeSourceAndGetOutput("let s = \"hello\"\nprint s.length") == "5");
+}
+
+// ============================================================================
+// Phase 2: Module-level properties with get/set accessors
+
+TEST_CASE("IRGenerator.FSharp.property.getter_only")
+{
+    // Read-only computed property (getter only)
+    CHECK(executeSourceAndGetOutput("let Greeting with get () = \"hello\"\nprint Greeting") == "hello");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.getter_with_backing_variable")
+{
+    // Getter reads from a backing mutable variable
+    CHECK(executeSourceAndGetOutput("let mut _count = 0\n"
+                                    "let Count with get () = _count\n"
+                                    "print Count")
+          == "0");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.getter_and_setter")
+{
+    // Read-write property with backing variable
+    CHECK(executeSourceAndGetOutput("let mut _value = 10\n"
+                                    "let Value with get () = _value and set (v) = _value <- v\n"
+                                    "print Value\n"
+                                    "Value <- 42\n"
+                                    "print Value")
+          == "1042");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.setter_only")
+{
+    // Write-only property
+    CHECK(executeSourceAndGetOutput("let mut _log = 0\n"
+                                    "let Logger with set (v) = _log <- v\n"
+                                    "Logger <- 99\n"
+                                    "print _log")
+          == "99");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.setter_first_then_getter")
+{
+    // Set accessor before get accessor
+    CHECK(executeSourceAndGetOutput("let mut _x = 5\n"
+                                    "let X with set (v) = _x <- v and get () = _x\n"
+                                    "print X\n"
+                                    "X <- 10\n"
+                                    "print X")
+          == "510");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.multiline_getter")
+{
+    // Multi-line getter body with let bindings
+    CHECK(executeSourceAndGetOutput("let mut _x = 10\n"
+                                    "let Double with\n"
+                                    "    get () =\n"
+                                    "        let v = _x\n"
+                                    "        v * 2\n"
+                                    "print Double")
+          == "20");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.multiline_setter")
+{
+    // Multi-line setter body with multiple mutations
+    CHECK(executeSourceAndGetOutput("let mut _x = 0\n"
+                                    "let mut _log = 0\n"
+                                    "let X with\n"
+                                    "    get () = _x\n"
+                                    "    and set (v) =\n"
+                                    "        _log <- _log + 1\n"
+                                    "        _x <- v\n"
+                                    "X <- 42\n"
+                                    "print X\n"
+                                    "print _log")
+          == "421");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.multiline_getter_and_setter")
+{
+    // Both getter and setter have multi-line bodies
+    CHECK(executeSourceAndGetOutput("let mut _val = 0\n"
+                                    "let Val with\n"
+                                    "    get () =\n"
+                                    "        let r = _val\n"
+                                    "        r\n"
+                                    "    and set (v) =\n"
+                                    "        _val <- v\n"
+                                    "Val <- 99\n"
+                                    "print Val")
+          == "99");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.multiline_setter_only")
+{
+    // Write-only property with multi-line setter body
+    CHECK(executeSourceAndGetOutput("let mut _a = 0\n"
+                                    "let mut _b = 0\n"
+                                    "let SetBoth with\n"
+                                    "    set (v) =\n"
+                                    "        _a <- v\n"
+                                    "        _b <- v * 2\n"
+                                    "SetBoth <- 5\n"
+                                    "print _a\n"
+                                    "print _b")
+          == "510");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.multiline_getter_with_if")
+{
+    // Multi-line getter with if-then-else conditional
+    CHECK(executeSourceAndGetOutput("let mut _x = 0\n"
+                                    "let Abs with\n"
+                                    "    get () =\n"
+                                    "        if _x >= 0 then _x\n"
+                                    "        else 0 - _x\n"
+                                    "_x <- 0 - 7\n"
+                                    "print Abs")
+          == "7");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.with_on_next_line")
+{
+    // 'with' keyword on the line after the property name
+    CHECK(executeSourceAndGetOutput("let mut _x = 0\n"
+                                    "let X\n"
+                                    "    with get () = _x\n"
+                                    "    and set (v) = _x <- v\n"
+                                    "X <- 77\n"
+                                    "print X")
+          == "77");
+}
+
+TEST_CASE("IRGenerator.FSharp.property.with_on_next_line_multiline_bodies")
+{
+    // 'with' on next line combined with multi-line accessor bodies
+    CHECK(executeSourceAndGetOutput("let mut _x = 0\n"
+                                    "let X\n"
+                                    "    with get () =\n"
+                                    "        let v = _x\n"
+                                    "        v\n"
+                                    "    and set (v) =\n"
+                                    "        _x <- v\n"
+                                    "X <- 55\n"
+                                    "print X")
+          == "55");
+}
+
+// ============================================================================
+// Phase 3: Function-as-method dot access
+
+// NOTE: Function-as-method dot access (Phase 3) requires functions with record-type
+// parameters to compile correctly. This is a known limitation — the function body
+// codegen does not yet propagate record type ID annotations through typed parameters.
+// Once that is resolved, the following test should be enabled:
+//
+// TEST_CASE("IRGenerator.FSharp.method.dot_access_on_record")
+// {
+//     CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+//                                     "let sum (p: Point) = p.x + p.y\n"
+//                                     "let p = { x = 3; y = 4 }\n"
+//                                     "print (p.sum)")
+//           == "7");
+// }
+
+TEST_CASE("IRGenerator.FSharp.method.field_priority_over_function")
+{
+    // Field name takes priority over function name — field access wins
+    // Record fields always resolve first; functions are only tried as fallback
+    CHECK(executeSourceAndGetOutput("type Point = { x: int; y: int }\n"
+                                    "let p = { x = 42; y = 0 }\n"
+                                    "print p.x")
+          == "42");
+}

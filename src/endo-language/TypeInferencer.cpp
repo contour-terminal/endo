@@ -1203,6 +1203,10 @@ std::expected<Substitution, std::string> TypeInferencer::inferStmt(ast::Statemen
     // --- Let binding statement ---
     if (auto const* letStmt = dynamic_cast<ast::LetBindingStmt const*>(&stmt))
     {
+        // Property definitions have no value expression to infer
+        if (letStmt->isProperty())
+            return subst;
+
         if (letStmt->isFunction())
         {
             // Function definition

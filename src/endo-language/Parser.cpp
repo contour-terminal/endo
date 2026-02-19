@@ -3175,6 +3175,19 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         }
     }
 
+    // Property syntax: let Name with get/set ...
+    // Unambiguous: Token::With after a property name with no parameters is distinct from match-with
+    // Allow 'with' on the next line after the property name (consume newlines with pushback)
+    auto const skippedNewlinesBeforeWith = consumeNewlines();
+    if (_lexer.currentToken() == Token::With && parameters.empty() && !isRecursive)
+    {
+        return parsePropertyAccessors(
+            isExported, isMutable, std::move(name), std::move(returnType), letColumn);
+    }
+    // Not a property — push back newline to preserve statement boundary
+    if (skippedNewlinesBeforeWith > 0)
+        _lexer.pushBackToken(Token::LineFeed, "\n");
+
     // Validate: 'let rec' requires parameters (must be a function definition)
     if (isRecursive && parameters.empty())
     {
@@ -3329,6 +3342,191 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     {
         _knownFSharpFunctions.insert(result->name);
     }
+
+    _lexer.leaveFSharpExpr();
+    return result;
+}
+
+std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
+    bool isExported, bool isMutable, std::string name, std::optional<TypePtr> returnType, size_t letColumn)
+{
+    TRACE_SCOPE("parsePropertyAccessors");
+
+    // We're at Token::With, F# mode is already active from parseLet()
+    _lexer.nextToken(); // consume 'with'
+    consumeNewlines();  // allow 'get'/'set' on the next line after 'with'
+
+    auto result = std::make_unique<ast::LetBindingStmt>(isExported,
+                                                        isMutable,
+                                                        false,
+                                                        std::move(name),
+                                                        std::vector<ast::TypedParameter> {},
+                                                        std::move(returnType),
+                                                        nullptr);
+
+    // Parse first accessor: must be 'get' or 'set'
+    if (_lexer.currentToken() != Token::Identifier
+        || (_lexer.currentLiteral() != "get" && _lexer.currentLiteral() != "set"))
+    {
+        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                           { "Use 'get' or 'set' after 'with'" },
+                                           currentContextSnippet(),
+                                           "Expected 'get' or 'set' after 'with', got '{}'",
+                                           _lexer.currentLiteral());
+        _lexer.leaveFSharpExpr();
+        return nullptr;
+    }
+
+    auto const parseAccessor = [&](bool isSetter) -> std::unique_ptr<ast::PropertyAccessor> {
+        _lexer.nextToken(); // consume 'get'/'set'
+
+        // Expect '('
+        if (_lexer.currentToken() != Token::RndOpen)
+        {
+            _report.syntaxErrorWithSuggestions(
+                currentLocation(),
+                { isSetter ? "Use 'set (value) = ...'" : "Use 'get () = ...'" },
+                currentContextSnippet(),
+                "Expected '(' after '{}', got '{}'",
+                isSetter ? "set" : "get",
+                _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume '('
+
+        auto accessor = std::make_unique<ast::PropertyAccessor>();
+
+        if (isSetter)
+        {
+            // Parse parameter name
+            if (_lexer.currentToken() != Token::Identifier)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   { "Provide a parameter name: 'set (value) = ...'" },
+                                                   currentContextSnippet(),
+                                                   "Expected parameter name in setter, got '{}'",
+                                                   _lexer.currentLiteral());
+                return nullptr;
+            }
+            accessor->paramName = consumeLiteral();
+
+            // Optional type annotation: (value: int)
+            if (_lexer.currentToken() == Token::Colon)
+            {
+                _lexer.nextToken(); // consume ':'
+                accessor->paramType = parseType();
+                if (!accessor->paramType)
+                    return nullptr;
+            }
+        }
+
+        // Expect ')'
+        if (_lexer.currentToken() != Token::RndClose)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Close the parameter list with ')'" },
+                                               currentContextSnippet(),
+                                               "Expected ')' in {} accessor, got '{}'",
+                                               isSetter ? "set" : "get",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        _lexer.nextToken(); // consume ')'
+
+        // Optional return type annotation
+        if (_lexer.currentToken() == Token::Colon)
+        {
+            _lexer.nextToken(); // consume ':'
+            accessor->returnType = parseType();
+            if (!accessor->returnType)
+                return nullptr;
+        }
+
+        // Expect '='
+        if (_lexer.currentToken() != Token::Equal)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { "Add '=' followed by the accessor body" },
+                                               currentContextSnippet(),
+                                               "Expected '=' in {} accessor, got '{}'",
+                                               isSetter ? "set" : "get",
+                                               _lexer.currentLiteral());
+            return nullptr;
+        }
+        auto const eqLine = _lexer.currentRange().begin.line;
+        _lexer.nextToken(); // consume '='
+        consumeNewlines();
+
+        // Multi-line body support: use sequence parsing when body starts on a new line
+        auto const bodyOnNewLine = _lexer.currentRange().begin.line > eqLine;
+        accessor->body = bodyOnNewLine ? parseFSharpExprSequence(letColumn) : parseFSharpExpr();
+        if (!accessor->body)
+            return nullptr;
+
+        return accessor;
+    };
+
+    auto const firstIsGet = _lexer.currentLiteral() == "get";
+    if (firstIsGet)
+    {
+        result->getter = parseAccessor(false);
+        if (!result->getter)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+    }
+    else
+    {
+        result->setter = parseAccessor(true);
+        if (!result->setter)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+    }
+
+    // Check for 'and' second accessor
+    auto const skippedNewlines = consumeNewlines();
+    if (_lexer.currentToken() == Token::And)
+    {
+        _lexer.nextToken(); // consume 'and'
+
+        std::string const expectSecond = firstIsGet ? "set" : "get";
+        if (_lexer.currentToken() != Token::Identifier || _lexer.currentLiteral() != expectSecond)
+        {
+            _report.syntaxErrorWithSuggestions(currentLocation(),
+                                               { std::format("Use 'and {}' after the {} accessor",
+                                                             expectSecond,
+                                                             firstIsGet ? "get" : "set") },
+                                               currentContextSnippet(),
+                                               "Expected '{}' after 'and', got '{}'",
+                                               expectSecond,
+                                               _lexer.currentLiteral());
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        auto const secondIsSetter = (expectSecond == "set");
+        auto secondAccessor = parseAccessor(secondIsSetter);
+        if (!secondAccessor)
+        {
+            _lexer.leaveFSharpExpr();
+            return nullptr;
+        }
+
+        if (secondIsSetter)
+            result->setter = std::move(secondAccessor);
+        else
+            result->getter = std::move(secondAccessor);
+    }
+    else if (skippedNewlines)
+    {
+        _lexer.pushBackToken(Token::LineFeed, "\n");
+    }
+
+    // Register property name as known F# function for completion/dispatch
+    _knownFSharpFunctions.insert(result->name);
 
     _lexer.leaveFSharpExpr();
     return result;
@@ -3963,16 +4161,16 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
         if (_lexer.currentToken() == Token::Dot)
         {
             _lexer.nextToken(); // consume '.'
-            if (_lexer.currentToken() != Token::Identifier)
+            if (_lexer.currentToken() != Token::Identifier && _lexer.currentToken() != Token::Number)
             {
                 _report.syntaxErrorWithSuggestions(currentLocation(),
-                                                   { "Provide a field name after '.'" },
+                                                   { "Provide a field name or numeric index after '.'" },
                                                    currentContextSnippet(),
-                                                   "Expected field name after '.', got '{}'",
+                                                   "Expected field name or index after '.', got '{}'",
                                                    _lexer.currentLiteral());
                 return nullptr;
             }
-            auto fieldName = _lexer.currentLiteral();
+            auto fieldName = std::string(_lexer.currentLiteral());
             auto const fieldLoc = _lexer.currentRange();
             _lexer.nextToken(); // consume field name
             auto const beginLoc = expr->location;

@@ -92,6 +92,16 @@ struct FSharpPersistentState
 
     /// Key format: "docker\0ps" (command + NUL + args joined by NUL)
     std::unordered_map<std::string, StructuredCommandInfo> structuredCommands;
+
+    /// A persisted property definition with get/set accessor AST pointers.
+    struct PersistedProperty
+    {
+        ast::PropertyAccessor const* getter = nullptr; ///< Getter body (for read access)
+        ast::PropertyAccessor const* setter = nullptr; ///< Setter body (for write access)
+    };
+
+    /// Properties persisted across REPL prompts (name -> accessor metadata).
+    std::unordered_map<std::string, PersistedProperty> properties;
 };
 
 /// Generates IR code from an AST.
@@ -272,6 +282,13 @@ class IRGenerator final: public ast::Visitor
     /// Tries to generate IR for a builtin function call (string_length, etc.).
     /// @return true if the name matched a builtin and code was generated
     bool tryGenerateBuiltinCall(std::string const& name, std::vector<ast::Expr const*> const& argExprs);
+
+    /// Tries to generate IR for a built-in property access on collection types.
+    /// Dispatches on the object's type ID and field name to emit the appropriate IR.
+    /// @param obj The object value being accessed
+    /// @param fieldName The property name (e.g., "length", "isSome")
+    /// @return true if the property was handled, false if not a known built-in property
+    bool tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::string const& fieldName);
 
     /// @brief Tries to generate a call to a native runtime function by name.
     /// @param name The function name to look up in the runtime.
@@ -634,6 +651,16 @@ class IRGenerator final: public ast::Visitor
 
     // F# function table (name -> function metadata)
     std::unordered_map<std::string, FSharpFunction> _fsharpFunctions;
+
+    /// Property definition with get/set accessor AST pointers for inline codegen.
+    struct FSharpProperty
+    {
+        ast::PropertyAccessor const* getter = nullptr; ///< Getter body (for read access)
+        ast::PropertyAccessor const* setter = nullptr; ///< Setter body (for write access)
+    };
+
+    /// Properties defined via `let Name with get/set ...` syntax.
+    std::unordered_map<std::string, FSharpProperty> _fsharpProperties;
 
     // Lambda counter for generating unique anonymous function names
     size_t _lambdaCounter = 0;

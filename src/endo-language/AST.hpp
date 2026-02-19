@@ -878,6 +878,17 @@ struct AndBinding
     std::unique_ptr<Expr> value;            ///< Function body
 };
 
+/// Property accessor definition for F# property syntax.
+///
+/// Used in `let Name with get () = ... and set (v) = ...` declarations.
+struct PropertyAccessor
+{
+    std::string paramName;             ///< Setter parameter name (empty for getter)
+    std::optional<TypePtr> paramType;  ///< Optional parameter type annotation
+    std::optional<TypePtr> returnType; ///< Optional return type annotation
+    std::unique_ptr<Expr> body;        ///< Accessor body expression
+};
+
 struct LetBindingStmt final: public Statement
 {
     bool isExported;                        ///< True for `let export`
@@ -889,6 +900,8 @@ struct LetBindingStmt final: public Statement
     std::unique_ptr<Expr> value;            ///< Value expression or function body
     std::vector<AndBinding> andBindings;    ///< Additional mutually recursive bindings (`and` keyword)
     std::unique_ptr<pattern::Pattern> destructurePattern; ///< Optional pattern for `let (x, y) = expr`
+    std::unique_ptr<PropertyAccessor> getter;             ///< `with get () = expr`
+    std::unique_ptr<PropertyAccessor> setter;             ///< `and set (value) = expr`
 
     LetBindingStmt(bool exported,
                    bool mut,
@@ -924,6 +937,9 @@ struct LetBindingStmt final: public Statement
 
     /// Is this a destructuring binding?
     [[nodiscard]] bool isDestructuring() const noexcept { return destructurePattern != nullptr; }
+
+    /// Is this a property definition (has get/set accessors)?
+    [[nodiscard]] bool isProperty() const noexcept { return getter != nullptr || setter != nullptr; }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

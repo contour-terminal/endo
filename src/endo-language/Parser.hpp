@@ -98,6 +98,13 @@ class Parser
 
     // F# style let bindings and expressions
     std::unique_ptr<ast::LetBindingStmt> parseLet();
+    /// Parses `let Name with get () = ... and set (v) = ...` property syntax.
+    /// @param letColumn The column of the `let` keyword, used as indentation reference for multi-line bodies.
+    std::unique_ptr<ast::LetBindingStmt> parsePropertyAccessors(bool isExported,
+                                                                bool isMutable,
+                                                                std::string name,
+                                                                std::optional<TypePtr> returnType,
+                                                                size_t letColumn);
     std::unique_ptr<ast::LetInExpr> parseLetInExpr();
     std::unique_ptr<ast::LambdaExpr> parseLambda();
     std::unique_ptr<ast::MatchExpr> parseMatch();

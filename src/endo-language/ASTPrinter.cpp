@@ -603,9 +603,28 @@ void ASTPrinter::visit(LetBindingStmt const& node)
     }
     if (node.returnType)
         _result += ": " + endo::toString(*node.returnType);
-    _result += " = ";
-    if (node.value)
-        node.value->accept(*this);
+    if (node.isProperty())
+    {
+        _result += " with ";
+        if (node.getter)
+        {
+            _result += "get () = ";
+            node.getter->body->accept(*this);
+        }
+        if (node.getter && node.setter)
+            _result += " and ";
+        if (node.setter)
+        {
+            _result += "set (" + node.setter->paramName + ") = ";
+            node.setter->body->accept(*this);
+        }
+    }
+    else
+    {
+        _result += " = ";
+        if (node.value)
+            node.value->accept(*this);
+    }
 
     for (auto const& ab: node.andBindings)
     {
