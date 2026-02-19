@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <chrono>
 #include <format>
 #include <span>
 
@@ -21,6 +22,13 @@ namespace
         auto const omitted = result.content.size() - maxSize;
         result.content.resize(maxSize);
         result.content += std::format("\n\n[truncated -- {} bytes omitted]", omitted);
+    }
+
+    /// Returns the current UTC time as an ISO 8601 timestamp string.
+    auto utcTimestampNow() -> std::string
+    {
+        auto const now = std::chrono::system_clock::now();
+        return std::format("{:%FT%TZ}", std::chrono::floor<std::chrono::milliseconds>(now));
     }
 } // namespace
 
@@ -254,6 +262,11 @@ void AgentSession::setCompactionConfig(CompactionConfig const& config)
     _compactor = std::make_unique<ConversationCompactor>(_provider, config);
 }
 
+void AgentSession::setToolTraceCallback(ToolTraceCallback callback)
+{
+    _toolTraceCallback = std::move(callback);
+}
+
 auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>
 {
     auto results = std::vector<ToolResult> {};
@@ -264,8 +277,26 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
         if (_toolStatusCallback)
             _toolStatusCallback(call);
 
+        auto const startTime = std::chrono::steady_clock::now();
         auto result = _toolRegistry->execute(call);
+        auto const elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime);
+
         truncateToolResult(result, _maxToolResultSize);
+
+        if (_toolTraceCallback)
+        {
+            _toolTraceCallback(ToolTraceEntry {
+                .timestamp = utcTimestampNow(),
+                .callId = call.id,
+                .toolName = call.name,
+                .arguments = call.arguments,
+                .resultContent = result.content,
+                .resultIsError = result.isError,
+                .duration = elapsed,
+            });
+        }
+
         results.push_back(std::move(result));
     }
 

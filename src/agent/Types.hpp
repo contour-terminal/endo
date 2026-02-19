@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -128,6 +129,18 @@ struct ToolResult
     std::string callId;   ///< ID of the corresponding ToolCall.
     std::string content;  ///< Tool output as text.
     bool isError = false; ///< Whether the tool execution resulted in an error.
+};
+
+/// A single recorded tool invocation trace entry.
+struct ToolTraceEntry
+{
+    std::string timestamp;                    ///< ISO 8601 UTC timestamp.
+    std::string callId;                       ///< Unique tool call identifier.
+    std::string toolName;                     ///< Name of the invoked tool.
+    nlohmann::json arguments;                 ///< Tool input arguments.
+    std::string resultContent;                ///< Tool output content (post-truncation).
+    bool resultIsError = false;               ///< Whether the tool returned an error.
+    std::chrono::milliseconds duration { 0 }; ///< Execution duration.
 };
 
 /// Definition of a tool that the model can invoke.

@@ -42,6 +42,10 @@ struct AgentError
 /// @param call The tool call being executed, including name and arguments.
 using ToolStatusCallback = std::function<void(ToolCall const& call)>;
 
+/// Callback invoked after a tool finishes execution with full trace data.
+/// @param entry The completed trace entry with timing and result information.
+using ToolTraceCallback = std::function<void(ToolTraceEntry const& entry)>;
+
 /// Manages a conversation with an LLM provider.
 ///
 /// AgentSession maintains conversation history and delegates generation
@@ -100,6 +104,10 @@ class AgentSession
     /// @param callback Callback invoked with the tool name when a tool starts executing.
     void setToolStatusCallback(ToolStatusCallback callback);
 
+    /// @brief Sets an optional callback for tool I/O tracing.
+    /// @param callback Callback invoked after each tool execution with full trace data.
+    void setToolTraceCallback(ToolTraceCallback callback);
+
     /// @brief Sets or replaces the system prompt.
     /// @param systemPrompt The system prompt text.
     void setSystemPrompt(std::string systemPrompt);
@@ -138,6 +146,7 @@ class AgentSession
     size_t _maxExplorationIterations = 15;
     size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
+    ToolTraceCallback _toolTraceCallback;
     std::unique_ptr<ConversationCompactor> _compactor;
 };
 

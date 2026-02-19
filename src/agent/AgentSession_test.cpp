@@ -436,6 +436,78 @@ TEST_CASE("AgentSession.tool_result_at_limit_unchanged", "[agent]")
 }
 
 // ============================================================================
+// Tool trace callback tests
+// ============================================================================
+
+TEST_CASE("AgentSession.tool_trace_callback_fires", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    auto mockTool = std::make_unique<MockTool>();
+    mockTool->resultContent = "tool output for trace";
+    registry.registerTool(std::move(mockTool));
+    session.setToolRegistry(&registry);
+
+    auto traceEntries = std::vector<ToolTraceEntry> {};
+    session.setToolTraceCallback([&](ToolTraceEntry const& entry) { traceEntries.push_back(entry); });
+
+    provider.pendingToolCalls = { ToolCall {
+        .id = "trace-call-1",
+        .name = "mock_tool",
+        .arguments = nlohmann::json { { "key", "value" } },
+    } };
+
+    (void) session.processMessage("Test trace", nullptr);
+
+    REQUIRE(traceEntries.size() == 1);
+    CHECK(traceEntries[0].callId == "trace-call-1");
+    CHECK(traceEntries[0].toolName == "mock_tool");
+    CHECK(traceEntries[0].arguments == nlohmann::json { { "key", "value" } });
+    CHECK(traceEntries[0].resultContent == "tool output for trace");
+    CHECK_FALSE(traceEntries[0].resultIsError);
+    CHECK_FALSE(traceEntries[0].timestamp.empty());
+}
+
+TEST_CASE("AgentSession.tool_trace_callback_duration_positive", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>());
+    session.setToolRegistry(&registry);
+
+    auto recordedDuration = std::chrono::milliseconds { -1 };
+    session.setToolTraceCallback([&](ToolTraceEntry const& entry) { recordedDuration = entry.duration; });
+
+    provider.pendingToolCalls = { ToolCall { .id = "tc-dur", .name = "mock_tool", .arguments = {} } };
+
+    (void) session.processMessage("Test duration", nullptr);
+
+    CHECK(recordedDuration >= std::chrono::milliseconds { 0 });
+}
+
+TEST_CASE("AgentSession.tool_trace_callback_not_called_without_registration", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Done";
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>());
+    session.setToolRegistry(&registry);
+
+    // No trace callback set — should not crash
+    provider.pendingToolCalls = { ToolCall { .id = "tc", .name = "mock_tool", .arguments = {} } };
+    auto result = session.processMessage("Test no trace", nullptr);
+    REQUIRE(result.has_value());
+}
+
+// ============================================================================
 // Plan mode tests
 // ============================================================================
 
