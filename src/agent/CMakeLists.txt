@@ -44,6 +44,7 @@ add_library(endo-agent STATIC
     tools/ExploreTool.hpp tools/ExploreTool.cpp
     tools/GitTool.hpp tools/GitTool.cpp
     tools/SaveMemoryTool.hpp tools/SaveMemoryTool.cpp
+    tools/WebSearchTool.hpp tools/WebSearchTool.cpp
 )
 
 target_link_libraries(endo-agent PUBLIC
@@ -88,6 +89,7 @@ add_executable(test-endo-agent
     tools/ExploreTool_test.cpp
     tools/GitTool_test.cpp
     tools/SaveMemoryTool_test.cpp
+    tools/WebSearchTool_test.cpp
     SlashCommandRegistry_test.cpp
     SlashCommands_test.cpp
     SlashCommandCompleter_test.cpp

@@ -56,6 +56,7 @@
 #include <agent/tools/ShellExecuteTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
+#include <agent/tools/WebSearchTool.hpp>
 #include <agent/tools/WriteFileTool.hpp>
 #include <nlohmann/json.hpp>
 #include <platform/Pipe.hpp>
@@ -1451,6 +1452,8 @@ void Shell::runAgentMode()
     toolRegistry.registerTool(std::make_unique<agent::SubmitPlanTool>());
     toolRegistry.registerTool(
         std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
+    toolRegistry.registerTool(
+        std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
 
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);

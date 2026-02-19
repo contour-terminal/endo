@@ -1082,6 +1082,19 @@ Component (base class)
 - [x] Completion items show `"directory"` description for entries ending with `/`, `"file"` otherwise
 - [x] 15 unit tests (42 assertions) for FilePathCompleter + 1 new ProjectFileTree test: all-entries trigger, prefix/fuzzy matching, mid-input trigger, whitespace guards, directory descriptions, edge cases
 
+### Phase 3.15: Agent Web Search Tool ✅
+
+- [x] `WebSearchTool`: agent tool for web search with three backend engines
+  - [x] DuckDuckGo (default, zero-config, no API key required) — HTML scraping of `html.duckduckgo.com/html/`
+  - [x] Brave Search (optional, needs API key) — JSON API at `api.search.brave.com`
+  - [x] Google Custom Search (optional, needs API key + CX ID) — JSON API at `googleapis.com/customsearch/v1`
+- [x] `WebSearchConfig` struct: engine selection, API key, CX ID, max results (default 5)
+- [x] Shell builtins for runtime configuration: `set_web_search_engine`, `set_web_search_api_key`, `set_web_search_cx`, `set_web_search_max_results`
+- [x] DI via const reference: tool sees live config changes immediately
+- [x] HTML parsing helpers: `stripHtmlTags()`, `decodeHtmlEntities()`, `urlEncode()`, DDG tracking URL unwrapping
+- [x] Formatted markdown output: numbered results with title, URL, and description
+- [x] 8 unit tests: definition schema, name, missing/empty query, Brave/Google missing credentials, config reference semantics
+
 ---
 
 ## Milestone 4: Windows Support

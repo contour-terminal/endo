@@ -29,6 +29,8 @@ class AgentSession;
 class ProviderFactory;
 } // namespace endo::agent
 
+#include <agent/tools/WebSearchTool.hpp>
+
 #include "Completer.hpp"
 #include "History.hpp"
 #include "Job.hpp"
@@ -119,6 +121,10 @@ class Shell final: public SignalCallback
     PersistentHistory history;            ///< Command history for completion (persisted to disk)
     std::unique_ptr<Completer> completer; ///< Completion system
 
+    /// Web search configuration for the agent web_search tool.
+    /// Configurable at runtime via set_web_search_* builtins.
+    agent::WebSearchConfig webSearchConfig;
+
   private:
     // --- Registration (builtins/Registration.cpp) ---
     void registerBuiltinFunctions();
@@ -134,6 +140,7 @@ class Shell final: public SignalCallback
     void registerLanguageBuiltins();
     void registerStructuredBuiltins();
     void registerPromptBuiltins();
+    void registerAgentConfigBuiltins();
 
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.

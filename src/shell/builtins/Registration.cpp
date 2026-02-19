@@ -7,6 +7,8 @@
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
 
+#include <agent/tools/WebSearchTool.hpp>
+
 #include <endo-language/BuiltinImpls.hpp>
 
 #include <platform/Process.hpp>
@@ -41,6 +43,7 @@ void Shell::registerBuiltinFunctions()
     registerLanguageBuiltins();
     registerStructuredBuiltins();
     registerPromptBuiltins();
+    registerAgentConfigBuiltins();
 }
 
 void Shell::registerEnvironmentBuiltins()
@@ -1115,6 +1118,43 @@ void Shell::registerPromptBuiltins()
             config.promptSpacing =
                 static_cast<int>(std::clamp(args.getInt(1), int64_t { 0 }, int64_t { 1 }));
             prompt.setPromptConfig(std::move(config));
+        });
+    // clang-format on
+}
+
+void Shell::registerAgentConfigBuiltins()
+{
+    // clang-format off
+    _runtime.registerFunction("set_web_search_engine")
+        .param<CoreVM::CoreString>("engine")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& engine = args.getString(1);
+            if (engine == "duckduckgo" || engine == "brave" || engine == "google")
+                webSearchConfig.engine = std::string(engine);
+        });
+
+    _runtime.registerFunction("set_web_search_api_key")
+        .param<CoreVM::CoreString>("key")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            webSearchConfig.apiKey = std::string(args.getString(1));
+        });
+
+    _runtime.registerFunction("set_web_search_cx")
+        .param<CoreVM::CoreString>("cx")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            webSearchConfig.cx = std::string(args.getString(1));
+        });
+
+    _runtime.registerFunction("set_web_search_max_results")
+        .param<CoreVM::CoreNumber>("count")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const count = args.getInt(1);
+            if (count > 0 && count <= 20)
+                webSearchConfig.maxResults = static_cast<size_t>(count);
         });
     // clang-format on
 }
