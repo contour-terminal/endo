@@ -1133,6 +1133,41 @@ Component (base class)
   - [x] Shell callback: numbered option display, stdin input, numeric-to-option mapping
 - [x] 51 new unit tests across 4 test files (138 assertions)
 
+### Phase 3.18: Interactive Agent Prompt During LLM Streaming ✅
+
+- [x] `StreamCallback` returns `bool` for cancellation support (Types.hpp); all providers (Claude, OpenAI, Gemini) check return value and abort SSE on `false`
+- [x] `AgentErrorCode::Cancelled` for user-initiated cancellation
+- [x] `AgentResponseRenderer::setLineCallback()` and `lineCount()` for tracking response height during streaming
+- [x] `StreamingPromptManager` in Shell.cpp: cooperative input polling during streaming with scroll region management
+  - Drifting phase: response + prompt fit on screen (natural positioning)
+  - Stuck phase: DECSTBM scroll region keeps prompt fixed at bottom while response scrolls above
+  - Ctrl+C (Escape) cancels streaming mid-response
+  - Ctrl+L clears screen and continues streaming
+  - Terminal resize recalculates scroll region boundaries
+- [x] `ScrollRegionGuard` RAII wrapper ensures scroll region is always reset on early return or exception
+- [x] All 4 `processMessage` call sites wired: normal message, PromptRewrite, plan exploration, plan step execution
+
+### Phase 3.19: Agent Configuration via init.endo ✅
+
+- [x] Demote `agent.yml` to API-key-only store (`saveAgentConfig` only persists `api_key`/`api_key_env` per provider)
+- [x] `Shell::agentConfig` public member: loaded from `agent.yml` at startup, overridden by `init.endo` builtins
+- [x] 30+ new `init.endo` builtins for full agent configuration:
+  - General: `set_agent_provider`, `set_agent_prompt_indicator`, `set_agent_max_tool_result_size`, `set_agent_log_tool_uses`
+  - Claude: `set_claude_api_key`, `set_claude_api_key_env`, `set_claude_model`, `set_claude_max_tokens`
+  - OpenAI: `set_openai_api_key`, `set_openai_api_key_env`, `set_openai_model`, `set_openai_base_url`, `set_openai_max_tokens`
+  - OpenAI-compat: `set_openai_compat_api_key`, `set_openai_compat_api_key_env`, `set_openai_compat_model`, `set_openai_compat_base_url`, `set_openai_compat_max_tokens`
+  - Gemini: `set_gemini_api_key`, `set_gemini_api_key_env`, `set_gemini_model`, `set_gemini_max_tokens`
+  - Plan mode: `set_plan_mode_enabled`, `set_plan_mode_pause_between_steps`, `set_plan_mode_max_exploration_turns`
+  - Explore: `set_explore_max_turns`
+  - Trace: `set_trace_enabled`, `set_trace_default_path`
+- [x] Provider factory invalidation: provider-changing builtins call `_agentProviderFactory.reset()`
+- [x] `activeProvider` default changed to empty string (auto-detect from authenticated providers)
+- [x] Removed `endo agent switch` command (provider selection now via `set_agent_provider` in init.endo)
+- [x] Login no longer sets `activeProvider`; status display shows auth status without "Active" column
+- [x] Backward compatibility: `loadAgentConfig()` still reads all fields from existing `agent.yml`
+- [x] Updated documentation: `configuration.md` rewritten with full builtin reference, `index.md` updated
+- [x] Updated test suites: `AgentConfig_test.cpp` (18 cases), `LoginCommand_test.cpp` (5 cases)
+
 ---
 
 ## Milestone 4: Windows Support

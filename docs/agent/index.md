@@ -20,16 +20,20 @@ and connect to external tool servers via [MCP](configuration.md#mcp-server-confi
     This walks you through selecting a provider and entering an API key. The key is stored
     in `~/.config/endo/agent.yml`.
 
-2. **Enter agent mode** from the shell prompt:
+2. **Configure the provider** in `~/.config/endo/init.endo`:
 
     ```endo
-    /agent
+    set_agent_provider "claude"
     ```
 
-3. **Ask a question** -- the agent can read files, run commands, and make edits on your
+    If you only have one provider authenticated, this step is optional -- Endo auto-detects it.
+
+3. **Enter agent mode** by pressing `Ctrl+T` at the shell prompt.
+
+4. **Ask a question** -- the agent can read files, run commands, and make edits on your
    behalf.
 
-4. **Exit** with `Ctrl+D` or `/exit`.
+5. **Exit** with `Ctrl+D` or `/exit`.
 
 ## Supported Providers
 
@@ -52,12 +56,8 @@ Manage provider authentication from the terminal without entering agent mode:
 endo agent login
 endo agent login claude
 
-# Show configured providers and active selection
+# Show configured providers and authentication status
 endo agent status
-
-# Switch the active provider
-endo agent switch
-endo agent switch openai
 
 # Remove a stored API key
 endo agent logout
@@ -68,7 +68,7 @@ endo agent logout gemini
 
 | Action | Key / Command |
 |--------|---------------|
-| Enter agent mode | `/agent` |
+| Enter agent mode | `Ctrl+T` (default, customizable via keybindings) |
 | Exit agent mode | `Ctrl+D` or `/exit` |
 
 Once inside agent mode the prompt changes to the configured indicator (default `❯`) and
@@ -77,9 +77,10 @@ directly -- the agent decides when to invoke tools on your behalf.
 
 !!! tip
     You can customize the agent prompt indicator in
-    [`agent.yml`](configuration.md#agentyml-reference).
+    [`init.endo`](configuration.md#general):
+    `set_agent_prompt_indicator ">"`.
 
 ## Further Reading
 
-- [Configuration](configuration.md) -- `agent.yml` reference, MCP servers, web search
+- [Configuration](configuration.md) -- `init.endo` reference, MCP servers, web search
 - [Tools & Commands](tools.md) -- Built-in tools, slash commands, plan mode
