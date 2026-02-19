@@ -65,6 +65,14 @@ class MarkdownRenderer
     /// rendering to the full terminal width.
     void setFullWidthMode(bool enabled) noexcept;
 
+    /// @brief Sets the maximum width for table rendering with word wrapping.
+    ///
+    /// When set to a positive value, table columns are constrained to fit within
+    /// this width, and cell text is word-wrapped as needed. A value of 0 disables
+    /// width constraining (default).
+    /// @param width Maximum table width in columns (0 = unconstrained).
+    void setMaxWidth(int width) noexcept;
+
     /// @brief Returns the default theme with sensible terminal colors.
     [[nodiscard]] static auto defaultTheme() -> MarkdownTheme;
 
@@ -76,6 +84,7 @@ class MarkdownRenderer
     std::string _streamBuffer;
     bool _streaming = false;
     bool _fullWidthMode = false;
+    int _maxWidth = 0; ///< Maximum width for table rendering (0 = unconstrained).
     bool _inCodeBlock = false;
     bool _inThinkBlock = false;
     std::string _codeFence; ///< The fence string (e.g. "```") that opened the current code block.
