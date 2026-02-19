@@ -63,6 +63,24 @@ namespace
         EnumValueEntry { "arrow", "Arrow transient prompt" },
     };
 
+    constexpr std::array providerValues = {
+        EnumValueEntry { "claude", "Anthropic Claude" },
+        EnumValueEntry { "openai", "OpenAI" },
+        EnumValueEntry { "gemini", "Google Gemini" },
+        EnumValueEntry { "openai_compat", "OpenAI-compatible endpoint" },
+    };
+
+    constexpr std::array boolValues = {
+        EnumValueEntry { "true", "Enable" },
+        EnumValueEntry { "false", "Disable" },
+    };
+
+    constexpr std::array webSearchEngineValues = {
+        EnumValueEntry { "duckduckgo", "DuckDuckGo (no API key required)" },
+        EnumValueEntry { "brave", "Brave Search" },
+        EnumValueEntry { "google", "Google Custom Search" },
+    };
+
     /// @brief Standard library function entry with name and signature description.
     struct StdLibEntry
     {
@@ -241,6 +259,168 @@ std::vector<CompletionCandidate> builtinCandidates()
           "Set blank lines above/below prompt (0 or 1)",
           "",
           CompletionKind::Builtin },
+        // Agent configuration builtins
+        { "set_agent_provider", "set_agent_provider", "Set active AI provider", "", CompletionKind::Builtin },
+        { "set_agent_prompt_indicator",
+          "set_agent_prompt_indicator",
+          "Set agent prompt indicator character(s)",
+          "",
+          CompletionKind::Builtin },
+        { "set_agent_max_tool_result_size",
+          "set_agent_max_tool_result_size",
+          "Set max bytes for tool result truncation",
+          "",
+          CompletionKind::Builtin },
+        { "set_agent_log_tool_uses",
+          "set_agent_log_tool_uses",
+          "Enable/disable tool invocation logging",
+          "",
+          CompletionKind::Builtin },
+        // Claude provider
+        { "set_claude_api_key", "set_claude_api_key", "Set Claude API key", "", CompletionKind::Builtin },
+        { "set_claude_api_key_env",
+          "set_claude_api_key_env",
+          "Set Claude API key environment variable",
+          "",
+          CompletionKind::Builtin },
+        { "set_claude_model",
+          "set_claude_model",
+          "Set Claude model identifier",
+          "",
+          CompletionKind::Builtin },
+        { "set_claude_max_tokens",
+          "set_claude_max_tokens",
+          "Set Claude max output tokens",
+          "",
+          CompletionKind::Builtin },
+        // OpenAI provider
+        { "set_openai_api_key", "set_openai_api_key", "Set OpenAI API key", "", CompletionKind::Builtin },
+        { "set_openai_api_key_env",
+          "set_openai_api_key_env",
+          "Set OpenAI API key environment variable",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_model",
+          "set_openai_model",
+          "Set OpenAI model identifier",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_base_url", "set_openai_base_url", "Set OpenAI base URL", "", CompletionKind::Builtin },
+        { "set_openai_max_tokens",
+          "set_openai_max_tokens",
+          "Set OpenAI max output tokens",
+          "",
+          CompletionKind::Builtin },
+        // OpenAI-compatible provider
+        { "set_openai_compat_api_key",
+          "set_openai_compat_api_key",
+          "Set OpenAI-compatible API key",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_compat_api_key_env",
+          "set_openai_compat_api_key_env",
+          "Set OpenAI-compatible API key environment variable",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_compat_model",
+          "set_openai_compat_model",
+          "Set OpenAI-compatible model identifier",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_compat_base_url",
+          "set_openai_compat_base_url",
+          "Set OpenAI-compatible base URL",
+          "",
+          CompletionKind::Builtin },
+        { "set_openai_compat_max_tokens",
+          "set_openai_compat_max_tokens",
+          "Set OpenAI-compatible max output tokens",
+          "",
+          CompletionKind::Builtin },
+        // Gemini provider
+        { "set_gemini_api_key", "set_gemini_api_key", "Set Gemini API key", "", CompletionKind::Builtin },
+        { "set_gemini_api_key_env",
+          "set_gemini_api_key_env",
+          "Set Gemini API key environment variable",
+          "",
+          CompletionKind::Builtin },
+        { "set_gemini_model",
+          "set_gemini_model",
+          "Set Gemini model identifier",
+          "",
+          CompletionKind::Builtin },
+        { "set_gemini_max_tokens",
+          "set_gemini_max_tokens",
+          "Set Gemini max output tokens",
+          "",
+          CompletionKind::Builtin },
+        // Plan mode
+        { "set_plan_mode_enabled",
+          "set_plan_mode_enabled",
+          "Enable/disable plan mode",
+          "",
+          CompletionKind::Builtin },
+        { "set_plan_mode_pause_between_steps",
+          "set_plan_mode_pause_between_steps",
+          "Pause for confirmation between plan steps",
+          "",
+          CompletionKind::Builtin },
+        { "set_plan_mode_max_exploration_turns",
+          "set_plan_mode_max_exploration_turns",
+          "Set max exploration iterations",
+          "",
+          CompletionKind::Builtin },
+        // Explore sub-agent
+        { "set_explore_max_turns",
+          "set_explore_max_turns",
+          "Set max explore sub-agent iterations",
+          "",
+          CompletionKind::Builtin },
+        // Tracing
+        { "set_trace_enabled",
+          "set_trace_enabled",
+          "Enable/disable trace logging",
+          "",
+          CompletionKind::Builtin },
+        { "set_trace_default_path",
+          "set_trace_default_path",
+          "Set trace file path",
+          "",
+          CompletionKind::Builtin },
+        // MCP server management
+        { "add_mcp_server", "add_mcp_server", "Register an MCP server", "", CompletionKind::Builtin },
+        { "set_mcp_env",
+          "set_mcp_env",
+          "Set environment variable for an MCP server",
+          "",
+          CompletionKind::Builtin },
+        { "remove_mcp_server", "remove_mcp_server", "Remove an MCP server", "", CompletionKind::Builtin },
+        // Web search configuration
+        { "set_web_search_engine",
+          "set_web_search_engine",
+          "Set web search engine",
+          "",
+          CompletionKind::Builtin },
+        { "set_web_search_api_key",
+          "set_web_search_api_key",
+          "Set web search API key",
+          "",
+          CompletionKind::Builtin },
+        { "set_web_search_max_results",
+          "set_web_search_max_results",
+          "Set max web search results per query",
+          "",
+          CompletionKind::Builtin },
+        { "set_web_search_cx",
+          "set_web_search_cx",
+          "Set Google Custom Search Engine ID",
+          "",
+          CompletionKind::Builtin },
+        { "set_exit_confirm_timeout",
+          "set_exit_confirm_timeout",
+          "Set exit confirmation timeout (ms)",
+          "",
+          CompletionKind::Builtin },
     };
 }
 
@@ -364,8 +544,12 @@ std::vector<CompletionCandidate> dotAccessCandidates(
 bool isBuiltinWithArgumentCompletion(std::string const& commandName)
 {
     static auto const names = std::set<std::string> {
-        "set_prompt_preset",    "set_prompt_indicator", "set_prompt_layout",
-        "set_prompt_separator", "set_prompt_transient", "set_prompt_duration_threshold",
+        "set_prompt_preset",     "set_prompt_indicator",
+        "set_prompt_layout",     "set_prompt_separator",
+        "set_prompt_transient",  "set_prompt_duration_threshold",
+        "set_agent_provider",    "set_agent_log_tool_uses",
+        "set_plan_mode_enabled", "set_plan_mode_pause_between_steps",
+        "set_trace_enabled",     "set_web_search_engine",
     };
     return names.contains(commandName);
 }
@@ -397,6 +581,13 @@ std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& co
         return collectValues(separatorValues);
     if (commandName == "set_prompt_transient")
         return collectValues(transientValues);
+    if (commandName == "set_agent_provider")
+        return collectValues(providerValues);
+    if (commandName == "set_web_search_engine")
+        return collectValues(webSearchEngineValues);
+    if (commandName == "set_agent_log_tool_uses" || commandName == "set_plan_mode_enabled"
+        || commandName == "set_plan_mode_pause_between_steps" || commandName == "set_trace_enabled")
+        return collectValues(boolValues);
 
     return {};
 }
