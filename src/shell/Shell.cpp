@@ -1447,6 +1447,7 @@ void Shell::runAgentMode()
     };
     auto screen = tui::Screen(terminal, screenConfig);
     auto inputComponent = agent::AgentInputComponent {};
+    inputComponent.setTopPadding(prompt.promptConfig().promptSpacing);
     inputComponent.setPromptIndicator(agentConfig.promptIndicator);
     auto const modelInfo = provider->modelInfo();
     inputComponent.setProviderName(modelInfo.providerName);

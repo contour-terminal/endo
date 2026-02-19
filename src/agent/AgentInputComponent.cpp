@@ -35,27 +35,30 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     auto const area = screenBounds();
     auto const lineCount = _inputField.lineCount();
 
-    // Row 0: Header line  ╭─ agent │ provider/model
-    canvas.putString(0, 0, "\xe2\x95\xad", barStyle);           // ╭
-    canvas.putString(0, 1, "\xe2\x94\x80", barStyle);           // ─
-    canvas.put(0, 2, " ", {});                                  // padding
-    auto col = 3 + canvas.putString(0, 3, "agent", labelStyle); // "agent" label
+    // Top padding rows are left blank (promptSpacing)
+    auto const rowOff = _topPadding;
+
+    // Row rowOff: Header line  ╭─ agent │ provider/model
+    canvas.putString(rowOff, 0, "\xe2\x95\xad", barStyle);           // ╭
+    canvas.putString(rowOff, 1, "\xe2\x94\x80", barStyle);           // ─
+    canvas.put(rowOff, 2, " ", {});                                  // padding
+    auto col = 3 + canvas.putString(rowOff, 3, "agent", labelStyle); // "agent" label
 
     // Show provider and model info if available
     if (!_providerName.empty() || !_modelName.empty())
     {
         auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
-        col += canvas.putString(0, col, " ", {});
-        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
-        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(rowOff, col, " ", {});
+        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(rowOff, col, " ", {});
 
         if (!_providerName.empty() && !_modelName.empty())
-            col += canvas.putString(0, col, _providerName + "/" + _modelName, infoStyle);
+            col += canvas.putString(rowOff, col, _providerName + "/" + _modelName, infoStyle);
         else if (!_providerName.empty())
-            col += canvas.putString(0, col, _providerName, infoStyle);
+            col += canvas.putString(rowOff, col, _providerName, infoStyle);
         else
-            col += canvas.putString(0, col, _modelName, infoStyle);
+            col += canvas.putString(rowOff, col, _modelName, infoStyle);
     }
 
     // Show git branch and/or project path (appears after background context loading completes)
@@ -63,25 +66,25 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     {
         auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
-        col += canvas.putString(0, col, " ", {});
-        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
-        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(rowOff, col, " ", {});
+        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(rowOff, col, " ", {});
 
         auto dimTextStyle = tui::Style { .fg = theme.agentColors.statusText };
         dimTextStyle.dim = true;
 
         if (!_gitBranch.empty())
         {
-            col += canvas.putString(0, col, _gitBranch, dimTextStyle);
+            col += canvas.putString(rowOff, col, _gitBranch, dimTextStyle);
             if (!_projectPath.empty())
             {
-                col += canvas.putString(0, col, " @ ", dimPipeStyle);
-                col += canvas.putString(0, col, _projectPath, dimTextStyle);
+                col += canvas.putString(rowOff, col, " @ ", dimPipeStyle);
+                col += canvas.putString(rowOff, col, _projectPath, dimTextStyle);
             }
         }
         else
         {
-            col += canvas.putString(0, col, _projectPath, dimTextStyle);
+            col += canvas.putString(rowOff, col, _projectPath, dimTextStyle);
         }
     }
 
@@ -89,21 +92,21 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     {
         auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
         dimPipeStyle.dim = true;
-        col += canvas.putString(0, col, " ", {});
-        col += canvas.putString(0, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
-        col += canvas.putString(0, col, " ", {});
+        col += canvas.putString(rowOff, col, " ", {});
+        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
+        col += canvas.putString(rowOff, col, " ", {});
         auto modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.statusText }
                                    : tui::Style { .fg = theme.agentColors.statusText, .dim = true };
-        col += canvas.putString(0, col, _planMode ? "plan" : "execute", modeStyle);
+        col += canvas.putString(rowOff, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
     // Draw left chrome for each visible input line (accounting for scroll offset)
     auto const scrollOff = _inputField.scrollOffset();
-    auto const fieldHeight = area.height - HeaderHeight;
+    auto const fieldHeight = area.height - rowOff - HeaderHeight;
     auto const visibleLines = std::min(lineCount - scrollOff, fieldHeight);
-    for (auto row = 0; row < visibleLines && (row + HeaderHeight) < area.height; ++row)
+    for (auto row = 0; row < visibleLines && (rowOff + row + HeaderHeight) < area.height; ++row)
     {
-        auto const canvasRow = row + HeaderHeight;
+        auto const canvasRow = rowOff + row + HeaderHeight;
         auto const logicalLine = row + scrollOff;
         if (logicalLine == 0)
         {
@@ -118,10 +121,10 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Render InputField offset by header height and left chrome
+    // Render InputField offset by top padding, header height, and left chrome
     auto const fieldArea = tui::Rect {
         .x = LeftBarWidth + BarPadding,
-        .y = HeaderHeight,
+        .y = rowOff + HeaderHeight,
         .width = area.width - LeftBarWidth - BarPadding,
         .height = fieldHeight,
     };
@@ -132,7 +135,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
     if (_completionPopup.visible())
     {
         auto const popupSize = _completionPopup.preferredSize();
-        auto const cursorRow = HeaderHeight + _inputField.cursorLine() - scrollOff;
+        auto const cursorRow = rowOff + HeaderHeight + _inputField.cursorLine() - scrollOff;
         auto const popupRow = cursorRow + 1; // Below the cursor line
         auto const popupCol = LeftBarWidth + BarPadding;
         auto const popupHeight = std::min(popupSize.height, area.height - popupRow);
@@ -158,7 +161,7 @@ tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
 tui::Size AgentInputComponent::preferredSize() const
 {
     auto const fieldSize = _inputField.preferredSize();
-    auto totalHeight = fieldSize.height + HeaderHeight;
+    auto totalHeight = _topPadding + fieldSize.height + HeaderHeight;
 
     // Add space for completion popup if visible
     if (_completionPopup.visible())

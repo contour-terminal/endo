@@ -98,6 +98,13 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns whether plan mode is currently active.
     [[nodiscard]] bool planMode() const noexcept { return _planMode; }
 
+    /// @brief Sets the number of blank rows above the component content.
+    /// @param padding Number of blank rows (typically 0 or 1, from promptSpacing).
+    void setTopPadding(int padding) noexcept { _topPadding = padding; }
+
+    /// @brief Returns the current top padding.
+    [[nodiscard]] int topPadding() const noexcept { return _topPadding; }
+
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] auto inputField() noexcept -> tui::InputField& { return _inputField; }
 
@@ -136,6 +143,7 @@ class AgentInputComponent: public tui::Component
     std::string _gitBranch;    ///< Current git branch for header display.
     std::string _projectPath;  ///< Tilde-contracted project path for header display.
     bool _planMode = false;    ///< Whether plan mode is active (vs execute mode).
+    int _topPadding = 0;       ///< Blank rows above content (from promptSpacing).
 
     static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
     static constexpr int BarPadding = 1;   ///< Padding after the bar.
