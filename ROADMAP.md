@@ -1047,6 +1047,17 @@ Component (base class)
 - [x] Up/Down history navigation fed from persisted queries via `InputField::addHistory()`
 - [x] Event loop poll timeout respects ghost text debounce for responsive updates
 
+### Phase 3.13: Agent Tool I/O Tracing ✅
+
+- [x] `ToolTraceEntry` struct in `Types.hpp`: timestamp, callId, toolName, arguments, resultContent, resultIsError, duration
+- [x] `ToolTraceCallback` in `AgentSession`: post-execution callback with timing instrumentation in `executeToolCalls()`
+- [x] `ToolTracer` class: JSONL writer with session header and tool call entries, parent directory creation, append mode
+- [x] `TraceConfig` in `AgentConfig`: `enabled` flag and `default_path` with YAML persistence
+- [x] CLI integration: `--agent-trace[=FILE]` flag, `Shell::setAgentTracePath()`, auto-generated timestamped paths
+- [x] `TraceReplay`: `endo agent trace replay <FILE>` subcommand for replaying JSONL trace files
+- [x] Wired in `Shell::runAgentMode()`: tracer creation from CLI/config, session header, trace callback
+- [x] Comprehensive test coverage (14 trace-related test cases): ToolTracer (8 cases), AgentSession trace callback (3 cases), AgentConfig trace roundtrip (3 cases)
+
 ---
 
 ## Milestone 4: Windows Support
