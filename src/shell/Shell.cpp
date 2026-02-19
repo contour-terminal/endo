@@ -45,6 +45,7 @@
 #include <agent/SlashCommands.hpp>
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/providers/ProviderFactory.hpp>
+#include <agent/mcp/McpToolAdapter.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ExploreTool.hpp>
@@ -1454,6 +1455,17 @@ void Shell::runAgentMode()
         std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
     toolRegistry.registerTool(
         std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
+
+    // Start MCP servers and register their tools
+    auto mcpServerManager = agent::mcp::ServerManager {};
+    for (auto const& config: mcpServerConfigs)
+    {
+        auto result = mcpServerManager.addServer(config);
+        if (!result)
+            std::println(stderr, "MCP: Failed to connect server '{}': {}", config.name, result.error());
+    }
+    for (auto const& toolDef: mcpServerManager.allTools())
+        toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, toolDef));
 
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);

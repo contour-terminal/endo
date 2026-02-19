@@ -45,6 +45,13 @@ add_library(endo-agent STATIC
     tools/GitTool.hpp tools/GitTool.cpp
     tools/SaveMemoryTool.hpp tools/SaveMemoryTool.cpp
     tools/WebSearchTool.hpp tools/WebSearchTool.cpp
+    mcp/McpError.hpp
+    mcp/Transport.hpp
+    mcp/StdioTransport.hpp mcp/StdioTransport.cpp
+    mcp/JsonRpc.hpp mcp/JsonRpc.cpp
+    mcp/McpClient.hpp mcp/McpClient.cpp
+    mcp/ServerManager.hpp mcp/ServerManager.cpp
+    mcp/McpToolAdapter.hpp mcp/McpToolAdapter.cpp
 )
 
 target_link_libraries(endo-agent PUBLIC
@@ -94,6 +101,10 @@ add_executable(test-endo-agent
     SlashCommands_test.cpp
     SlashCommandCompleter_test.cpp
     FilePathCompleter_test.cpp
+    mcp/JsonRpc_test.cpp
+    mcp/McpClient_test.cpp
+    mcp/ServerManager_test.cpp
+    mcp/McpToolAdapter_test.cpp
 )
 target_link_libraries(test-endo-agent endo-agent Catch2::Catch2)
 add_test(NAME test-endo-agent COMMAND test-endo-agent)

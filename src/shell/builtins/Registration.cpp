@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 namespace endo
 {
@@ -43,6 +44,7 @@ void Shell::registerBuiltinFunctions()
     registerStructuredBuiltins();
     registerPromptBuiltins();
     registerAgentConfigBuiltins();
+    registerMcpBuiltins();
 }
 
 void Shell::registerEnvironmentBuiltins()
@@ -1163,6 +1165,62 @@ void Shell::registerAgentConfigBuiltins()
             auto const count = args.getInt(1);
             if (count > 0 && count <= 20)
                 webSearchConfig.maxResults = static_cast<size_t>(count);
+        });
+    // clang-format on
+}
+
+void Shell::registerMcpBuiltins()
+{
+    // clang-format off
+    _runtime.registerFunction("add_mcp_server")
+        .param<CoreVM::CoreString>("name")
+        .param<CoreVM::CoreString>("command_line")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& name = args.getString(1);
+            auto const& commandLine = args.getString(2);
+
+            // Split command line on spaces: first token is command, rest are args
+            auto config = agent::mcp::McpServerConfig {};
+            config.name = std::string(name);
+
+            auto iss = std::istringstream(std::string(commandLine));
+            auto token = std::string {};
+            if (iss >> token)
+                config.command = std::move(token);
+            while (iss >> token)
+                config.args.push_back(std::move(token));
+
+            mcpServerConfigs.push_back(std::move(config));
+        });
+
+    _runtime.registerFunction("set_mcp_env")
+        .param<CoreVM::CoreString>("server_name")
+        .param<CoreVM::CoreString>("key")
+        .param<CoreVM::CoreString>("value")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& serverName = args.getString(1);
+            auto const& key = args.getString(2);
+            auto const& value = args.getString(3);
+
+            for (auto& config: mcpServerConfigs)
+            {
+                if (config.name == serverName)
+                {
+                    config.env[std::string(key)] = std::string(value);
+                    return;
+                }
+            }
+        });
+
+    _runtime.registerFunction("remove_mcp_server")
+        .param<CoreVM::CoreString>("name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const& name = args.getString(1);
+            std::erase_if(mcpServerConfigs,
+                          [&name](auto const& config) { return config.name == name; });
         });
     // clang-format on
 }

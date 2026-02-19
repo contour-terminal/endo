@@ -29,6 +29,7 @@ class AgentSession;
 class ProviderFactory;
 } // namespace endo::agent
 
+#include <agent/mcp/ServerManager.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 
 #include "Completer.hpp"
@@ -125,6 +126,10 @@ class Shell final: public SignalCallback
     /// Configurable at runtime via set_web_search_* builtins.
     agent::WebSearchConfig webSearchConfig;
 
+    /// MCP server configurations collected from init.endo builtins.
+    /// Servers are spawned when entering agent mode.
+    std::vector<agent::mcp::McpServerConfig> mcpServerConfigs;
+
   private:
     // --- Registration (builtins/Registration.cpp) ---
     void registerBuiltinFunctions();
@@ -141,6 +146,7 @@ class Shell final: public SignalCallback
     void registerStructuredBuiltins();
     void registerPromptBuiltins();
     void registerAgentConfigBuiltins();
+    void registerMcpBuiltins();
 
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
