@@ -1096,6 +1096,13 @@ Component (base class)
 - [x] Formatted markdown output: numbered results with title, URL, and description
 - [x] 8 unit tests: definition schema, name, missing/empty query, Brave/Google missing credentials, config reference semantics
 
+### Phase 3.16: Agent Documentation ✅
+
+- [x] Agent overview page (`docs/agent/index.md`): quick start, providers, CLI commands, entering/exiting agent mode
+- [x] Configuration reference (`docs/agent/configuration.md`): `agent.yml` fields, MCP server setup via `init.endo`, web search config
+- [x] Tools & commands page (`docs/agent/tools.md`): 12 built-in tools, slash commands, plan mode workflow, agent memory
+- [x] `mkdocs.yml` nav updated with "AI Agent" section between Shell and Roadmap
+
 ---
 
 ## Milestone 4: Windows Support

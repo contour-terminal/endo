@@ -105,6 +105,10 @@ nav:
     - Configuration: shell/configuration.md
     - Builtins: shell/builtins.md
     - Structured Output: shell/structured-output.md
+  - AI Agent:
+    - Overview: agent/index.md
+    - Configuration: agent/configuration.md
+    - Tools & Commands: agent/tools.md
   - Roadmap:
     - Overview: roadmap/index.md
     - Language Features: roadmap/language-features.md

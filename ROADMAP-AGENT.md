@@ -1789,6 +1789,16 @@ src/agent/
 
 ---
 
+## Documentation (**COMPLETE**)
+
+Agent documentation added to the mkdocs site under `docs/agent/`:
+
+- **Overview** (`agent/index.md`) — What the agent is, providers, quick start, CLI commands
+- **Configuration** (`agent/configuration.md`) — `agent.yml` reference, MCP server setup, web search config
+- **Tools & Commands** (`agent/tools.md`) — Built-in tools table, slash commands, plan mode
+
+---
+
 ## Non-Goals (Out of Scope)
 
 - **Separate agent binary** — agent mode is integrated into the endo shell, not a standalone tool
