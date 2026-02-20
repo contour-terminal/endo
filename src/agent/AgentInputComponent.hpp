@@ -11,6 +11,8 @@
 #include <optional>
 #include <string>
 
+#include <agent/Types.hpp>
+
 namespace tui
 {
 class CompletionProvider;
@@ -33,12 +35,14 @@ class AgentInputComponent: public tui::Component
     /// @brief Result of processing input.
     enum class Action
     {
-        None,        ///< No action needed.
-        Changed,     ///< Content changed, re-render needed.
-        Submit,      ///< User pressed Enter on non-empty input.
-        Abort,       ///< User pressed Escape to exit agent mode.
-        CycleMode,   ///< User toggled agent sub-mode (plan/execute).
-        ClearScreen, ///< User requested screen clear (Ctrl+L).
+        None,              ///< No action needed.
+        Changed,           ///< Content changed, re-render needed.
+        Submit,            ///< User pressed Enter on non-empty input.
+        Abort,             ///< User pressed Escape to exit agent mode.
+        CycleMode,         ///< User toggled agent sub-mode (plan/execute).
+        CycleThinkingMode, ///< User cycled thinking mode (off/normal/extended).
+        CycleModel,        ///< User cycled through available models.
+        ClearScreen,       ///< User requested screen clear (Ctrl+L).
     };
 
     AgentInputComponent();
@@ -99,6 +103,13 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns whether plan mode is currently active.
     [[nodiscard]] bool planMode() const noexcept { return _planMode; }
 
+    /// @brief Sets the thinking mode displayed in the header line.
+    /// @param mode The active thinking mode.
+    void setThinkingMode(ThinkingMode mode) { _thinkingMode = mode; }
+
+    /// @brief Returns the current thinking mode.
+    [[nodiscard]] ThinkingMode thinkingMode() const noexcept { return _thinkingMode; }
+
     /// @brief Sets the number of blank rows above the component content.
     /// @param padding Number of blank rows (typically 0 or 1, from promptSpacing).
     void setTopPadding(int padding) noexcept { _topPadding = padding; }
@@ -145,12 +156,13 @@ class AgentInputComponent: public tui::Component
     tui::Completer _completer;             ///< Orchestrates completion providers.
     bool _completionPopupDirty = false;    ///< Completion popup needs re-filtering.
 
-    std::string _providerName; ///< Active provider name for header display.
-    std::string _modelName;    ///< Active model name for header display.
-    std::string _gitBranch;    ///< Current git branch for header display.
-    std::string _projectPath;  ///< Tilde-contracted project path for header display.
-    bool _planMode = false;    ///< Whether plan mode is active (vs execute mode).
-    int _topPadding = 0;       ///< Blank rows above content (from promptSpacing).
+    std::string _providerName;                      ///< Active provider name for header display.
+    std::string _modelName;                         ///< Active model name for header display.
+    std::string _gitBranch;                         ///< Current git branch for header display.
+    std::string _projectPath;                       ///< Tilde-contracted project path for header display.
+    bool _planMode = false;                         ///< Whether plan mode is active (vs execute mode).
+    ThinkingMode _thinkingMode = ThinkingMode::Off; ///< Active thinking mode for header display.
+    int _topPadding = 0;                            ///< Blank rows above content (from promptSpacing).
 
     static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
     static constexpr int BarPadding = 1;   ///< Padding after the bar.

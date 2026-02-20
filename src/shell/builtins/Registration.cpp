@@ -1214,15 +1214,48 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.claude.maxTokens)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.claude.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
+    _runtime.registerProperty("agent_claude_thinking_mode", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::thinkingModeToString(agentConfig.claude.thinkingMode))); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.claude.thinkingMode = agent::thinkingModeFromString(args.getString(1)); _agentProviderFactory.reset(); });
+
     _runtime.registerProperty("agent_claude_auth_type", CoreVM::LiteralType::String)
         .onGet([this](CoreVM::Params& args) {
-            auto const oauthStore = agent::loadOAuthStore();
-            if (oauthStore.claude.has_value() && !agent::isTokenExpired(*oauthStore.claude))
-                args.setResult(std::string("oauth"));
-            else if (agent::resolveProviderApiKey(agentConfig.claude.apiKey, agentConfig.claude.apiKeyEnv).has_value())
-                args.setResult(std::string("api_key"));
+            // Return the effective auth type based on the current preference.
+            auto const& pref = agentConfig.claude.authPreference;
+            if (pref == "oauth")
+            {
+                auto const oauthStore = agent::loadOAuthStore();
+                if (oauthStore.claude.has_value() && !agent::isTokenExpired(*oauthStore.claude))
+                    args.setResult(std::string("oauth"));
+                else
+                    args.setResult(std::string("none"));
+            }
+            else if (pref == "api_key")
+            {
+                if (agent::resolveProviderApiKey(agentConfig.claude.apiKey, agentConfig.claude.apiKeyEnv).has_value())
+                    args.setResult(std::string("api_key"));
+                else
+                    args.setResult(std::string("none"));
+            }
             else
-                args.setResult(std::string("none"));
+            {
+                // "auto": report what would actually be used.
+                auto const oauthStore = agent::loadOAuthStore();
+                if (oauthStore.claude.has_value() && !agent::isTokenExpired(*oauthStore.claude))
+                    args.setResult(std::string("oauth"));
+                else if (agent::resolveProviderApiKey(agentConfig.claude.apiKey, agentConfig.claude.apiKeyEnv).has_value())
+                    args.setResult(std::string("api_key"));
+                else
+                    args.setResult(std::string("none"));
+            }
+        })
+        .onSet([this](CoreVM::Params& args) {
+            auto const value = std::string(args.getString(1));
+            if (value == "oauth" || value == "api_key" || value == "auto")
+            {
+                agentConfig.claude.authPreference = value;
+                _agentProviderFactory.reset();
+            }
         });
 
     // --- OpenAI provider ---
@@ -1247,6 +1280,10 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.openai.maxTokens)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.openai.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
+    _runtime.registerProperty("agent_openai_thinking_mode", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::thinkingModeToString(agentConfig.openai.thinkingMode))); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openai.thinkingMode = agent::thinkingModeFromString(args.getString(1)); _agentProviderFactory.reset(); });
+
     // --- OpenAI-compatible provider ---
 
     _runtime.registerProperty("agent_openai_compat_api_key", CoreVM::LiteralType::String)
@@ -1269,6 +1306,10 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.openaiCompat.maxTokens)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.openaiCompat.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
+    _runtime.registerProperty("agent_openai_compat_thinking_mode", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::thinkingModeToString(agentConfig.openaiCompat.thinkingMode))); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openaiCompat.thinkingMode = agent::thinkingModeFromString(args.getString(1)); _agentProviderFactory.reset(); });
+
     // --- Gemini provider ---
 
     _runtime.registerProperty("agent_gemini_api_key", CoreVM::LiteralType::String)
@@ -1286,6 +1327,10 @@ void Shell::registerAgentConfigBuiltins()
     _runtime.registerProperty("agent_gemini_max_tokens", CoreVM::LiteralType::Number)
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.gemini.maxTokens)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.gemini.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
+
+    _runtime.registerProperty("agent_gemini_thinking_mode", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::thinkingModeToString(agentConfig.gemini.thinkingMode))); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.gemini.thinkingMode = agent::thinkingModeFromString(args.getString(1)); _agentProviderFactory.reset(); });
 
     // --- Plan mode ---
 

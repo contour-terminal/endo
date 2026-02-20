@@ -73,6 +73,20 @@ void AgentInputComponent::render(tui::Canvas& canvas)
             col += canvas.putString(rowOff, col, _modelName, infoStyle);
     }
 
+    // Show thinking mode if not off
+    if (_thinkingMode != ThinkingMode::Off)
+    {
+        auto dimPipeStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        dimPipeStyle.dim = true;
+        col += canvas.putString(rowOff, col, " ", {});
+        col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // | separator
+        col += canvas.putString(rowOff, col, " ", {});
+
+        auto const modeStr = std::string("thinking:") + std::string(thinkingModeToString(_thinkingMode));
+        auto thinkingStyle = tui::Style { .fg = theme.agentColors.statusText };
+        col += canvas.putString(rowOff, col, modeStr, thinkingStyle);
+    }
+
     // Show git branch and/or project path (appears after background context loading completes)
     if (!_gitBranch.empty() || !_projectPath.empty())
     {
@@ -357,6 +371,14 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             _inputField.clearGhostText();
             dismissPopup();
             return Action::CycleMode;
+        case tui::InputFieldAction::CycleThinkingMode:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::CycleThinkingMode;
+        case tui::InputFieldAction::CycleModel:
+            _inputField.clearGhostText();
+            dismissPopup();
+            return Action::CycleModel;
         case tui::InputFieldAction::None:
             // If dismissed but text didn't change (e.g., Escape), hide popup
             if (popupDismissedByTyping)

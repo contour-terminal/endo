@@ -52,6 +52,7 @@
 #include <agent/SystemPromptBuilder.hpp>
 #include <agent/mcp/McpToolAdapter.hpp>
 #include <agent/providers/ProviderFactory.hpp>
+#include <agent/providers/ProviderModels.hpp>
 #include <agent/tools/AskUserTool.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
@@ -1787,6 +1788,19 @@ void Shell::runAgentMode()
     inputComponent.setProviderName(modelInfo.providerName);
     inputComponent.setModelName(modelInfo.modelName);
 
+    // Set initial thinking mode from config for the active provider.
+    auto const& providerName = _agentProviderFactory->activeProviderName();
+    auto initialThinkingMode = agent::ThinkingMode::Off;
+    if (providerName == "claude")
+        initialThinkingMode = agentConfig.claude.thinkingMode;
+    else if (providerName == "openai")
+        initialThinkingMode = agentConfig.openai.thinkingMode;
+    else if (providerName == "openai_compat")
+        initialThinkingMode = agentConfig.openaiCompat.thinkingMode;
+    else if (providerName == "gemini")
+        initialThinkingMode = agentConfig.gemini.thinkingMode;
+    inputComponent.setThinkingMode(initialThinkingMode);
+
     // Set up slash command registry
     auto slashRegistry = agent::SlashCommandRegistry {};
     agent::registerBuiltinSlashCommands(slashRegistry);
@@ -2470,6 +2484,70 @@ void Shell::runAgentMode()
                 case agent::AgentInputComponent::Action::CycleMode: {
                     planModeActive = !planModeActive;
                     inputComponent.setPlanMode(planModeActive);
+                    needsRedraw = true;
+                    break;
+                }
+                case agent::AgentInputComponent::Action::CycleThinkingMode: {
+                    // Cycle thinking mode for the active provider.
+                    auto const& pName = _agentProviderFactory->activeProviderName();
+                    auto* thinkingModePtr = static_cast<agent::ThinkingMode*>(nullptr);
+                    if (pName == "claude")
+                        thinkingModePtr = &agentConfig.claude.thinkingMode;
+                    else if (pName == "openai")
+                        thinkingModePtr = &agentConfig.openai.thinkingMode;
+                    else if (pName == "openai_compat")
+                        thinkingModePtr = &agentConfig.openaiCompat.thinkingMode;
+                    else if (pName == "gemini")
+                        thinkingModePtr = &agentConfig.gemini.thinkingMode;
+
+                    if (thinkingModePtr)
+                    {
+                        *thinkingModePtr = agent::nextThinkingMode(*thinkingModePtr);
+                        inputComponent.setThinkingMode(*thinkingModePtr);
+                        // Stop worker before replacing factory to avoid use-after-free:
+                        // the worker thread holds a reference to the provider via AgentSession.
+                        worker.stop();
+                        _agentProviderFactory =
+                            std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
+                        if (auto* newProvider = _agentProviderFactory->activeProvider())
+                            _agentSession->setProvider(*newProvider);
+                        worker.start();
+                        (void) agent::saveAgentConfig(agentConfig);
+                    }
+                    needsRedraw = true;
+                    break;
+                }
+                case agent::AgentInputComponent::Action::CycleModel: {
+                    // Cycle through hardcoded model list for the active provider.
+                    auto const& pName = _agentProviderFactory->activeProviderName();
+                    auto const models = agent::modelsForProvider(pName);
+                    if (!models.empty())
+                    {
+                        std::string* modelPtr = nullptr;
+                        if (pName == "claude")
+                            modelPtr = &agentConfig.claude.model;
+                        else if (pName == "openai")
+                            modelPtr = &agentConfig.openai.model;
+                        else if (pName == "openai_compat")
+                            modelPtr = &agentConfig.openaiCompat.model;
+                        else if (pName == "gemini")
+                            modelPtr = &agentConfig.gemini.model;
+
+                        if (modelPtr)
+                        {
+                            *modelPtr = std::string(agent::nextModel(models, *modelPtr));
+                            inputComponent.setModelName(*modelPtr);
+                            // Stop worker before replacing factory to avoid use-after-free:
+                            // the worker thread holds a reference to the provider via AgentSession.
+                            worker.stop();
+                            _agentProviderFactory =
+                                std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
+                            if (auto* newProvider = _agentProviderFactory->activeProvider())
+                                _agentSession->setProvider(*newProvider);
+                            worker.start();
+                            (void) agent::saveAgentConfig(agentConfig);
+                        }
+                    }
                     needsRedraw = true;
                     break;
                 }
