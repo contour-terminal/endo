@@ -39,21 +39,21 @@ namespace
     };
 
     constexpr auto KnownProviders = std::array<ProviderInfo, 3> { {
-        { "claude"sv,
-          "Claude (Anthropic)"sv,
-          "https://console.anthropic.com/settings/keys"sv,
-          "https://api.anthropic.com/v1/models"sv,
-          true },
-        { "openai"sv,
-          "OpenAI"sv,
-          "https://platform.openai.com/api-keys"sv,
-          "https://api.openai.com/v1/models"sv,
-          false },
-        { "gemini"sv,
-          "Gemini (Google)"sv,
-          "https://aistudio.google.com/apikey"sv,
-          "https://generativelanguage.googleapis.com/v1beta/models"sv,
-          false },
+        { .name = "claude"sv,
+          .label = "Claude (Anthropic)"sv,
+          .apiKeyUrl = "https://console.anthropic.com/settings/keys"sv,
+          .validateUrl = "https://api.anthropic.com/v1/models"sv,
+          .supportsOAuth = true },
+        { .name = "openai"sv,
+          .label = "OpenAI"sv,
+          .apiKeyUrl = "https://platform.openai.com/api-keys"sv,
+          .validateUrl = "https://api.openai.com/v1/models"sv,
+          .supportsOAuth = false },
+        { .name = "gemini"sv,
+          .label = "Gemini (Google)"sv,
+          .apiKeyUrl = "https://aistudio.google.com/apikey"sv,
+          .validateUrl = "https://generativelanguage.googleapis.com/v1beta/models"sv,
+          .supportsOAuth = false },
     } };
 
     /// Finds a ProviderInfo by name, or nullptr if not found.
