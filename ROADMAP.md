@@ -887,17 +887,25 @@ Component (base class)
 
 ### Phase 3.1: Provider Abstraction
 
+**Status:** Largely Complete (local LLM backend deferred)
+
 **Dependency:** None (can develop in parallel with Milestone 1)
 
 **Tasks:**
-- [ ] Design AI provider interface
-- [ ] Implement local LLM backend (llama.cpp, ollama)
-- [ ] Implement Claude API backend
-- [ ] Implement Gemini API backend
-- [ ] Implement OpenAI API backend
-- [ ] Implement provider configuration and selection
-- [ ] Handle API keys securely
-- [ ] Add provider abstraction tests
+- [x] Design AI provider interface
+- [ ] Implement local LLM backend (llama.cpp, ollama) → Deferred
+- [x] Implement Claude API backend
+- [x] Implement Gemini API backend
+- [x] Implement OpenAI API backend (including OpenAI-compatible endpoint support)
+- [x] Implement provider configuration and selection
+- [x] Handle API keys securely
+- [x] Add provider abstraction tests
+- [x] Adaptive thinking mode support — all three LLM providers (Claude, OpenAI, Gemini) support configurable thinking/reasoning modes (off/normal/extended)
+  - [x] Claude: adaptive thinking with effort levels (`budget_tokens` mapped to off/normal/extended)
+  - [x] OpenAI: `reasoning_effort` parameter (low/medium/high)
+  - [x] Gemini: `thinkingConfig` with `thinkingBudget` (0/1024/8192)
+- [x] Claude SSE thinking block handling — streaming parser correctly handles `thinking`, `redacted_thinking`, `thinking_delta`, and `signature_delta` SSE events from the Claude API
+- [x] Default Claude model updated from `claude-sonnet-4-5-20250929` to `claude-sonnet-4-6`
 
 ### Phase 3.2: Natural Language Commands
 
@@ -1167,6 +1175,22 @@ Component (base class)
 - [x] Backward compatibility: `loadAgentConfig()` still reads all fields from existing `agent.yml`
 - [x] Updated documentation: `configuration.md` rewritten with full builtin reference, `index.md` updated
 - [x] Updated test suites: `AgentConfig_test.cpp` (18 cases), `LoginCommand_test.cpp` (5 cases)
+- [x] Thinking mode builtins for `init.endo` configuration:
+  - [x] `agent_claude_thinking_mode` — set Claude thinking mode (off/normal/extended)
+  - [x] `agent_openai_thinking_mode` — set OpenAI thinking mode (off/normal/extended)
+  - [x] `agent_openai_compat_thinking_mode` — set OpenAI-compatible endpoint thinking mode (off/normal/extended)
+  - [x] `agent_gemini_thinking_mode` — set Gemini thinking mode (off/normal/extended)
+
+### Phase 3.20: Runtime Agent Controls ✅
+
+**Dependency:** Phase 3.1, Phase 3.19
+
+**Tasks:**
+- [x] Runtime thinking mode cycling — Ctrl+/ in agent mode cycles through thinking modes (off → normal → extended); active thinking mode displayed in agent prompt header
+- [x] Runtime model cycling — Ctrl+. in agent mode cycles through hardcoded model lists per provider
+  - [x] Claude models: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-5-20250929`, `claude-opus-4-20250514`
+  - [x] OpenAI, Gemini, and OpenAI-compatible providers have their own model lists
+- [x] Persistence — both thinking mode and model choices persisted to `~/.config/endo/agent.yml` across sessions
 
 ---
 
