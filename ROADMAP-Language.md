@@ -381,6 +381,14 @@ Consult this section to determine what to work on next.
 - [x] Function-as-method dot access: `obj.funcName` resolves to `funcName(obj)` when first parameter type matches (field names take priority)
 - [x] Tuple objectTypeId annotation: `visit(TupleExpr)` now annotates results for dot property propagation
 
+### Phase 6.6 — Builtin Properties ✅
+- [x] `NativeProperty` class in CoreVM with getter/setter callbacks
+- [x] `Runtime::registerProperty()` auto-creates getter+setter `NativeCallback` entries (no new opcodes)
+- [x] IRGenerator resolves properties in `IdentifierExpr` (getter) and `MutAssignStmt`/`MutAssignExpr` (setter)
+- [x] Convert all single-value `set_*` builtins to read/write properties (e.g., `set_agent_provider` → `agent_provider`)
+- [x] Property write syntax: `agent_provider <- "claude"`, read syntax: `print agent_provider`
+- [x] LSP, completions, hover info, diagnostics updated for new property names
+
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
 - [ ] File: `File.read`, `File.write`, `File.list` returning Result types

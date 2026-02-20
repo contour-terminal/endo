@@ -148,6 +148,26 @@ let X
     and set (v) = _x <- v
 ```
 
+### 4.3.2 Builtin Properties
+
+The shell provides builtin properties for configuration that use the same `<-` assignment
+syntax as mutable variables. Unlike user-defined properties, these are registered by the
+runtime and available without declaration.
+
+```endo
+# Write a builtin property
+shell_prompt_preset <- "endo-signature"
+agent_provider <- "claude"
+
+# Read a builtin property (returns its current value)
+print shell_prompt_preset
+print agent_provider
+```
+
+Builtin properties behave like read/write variables but invoke getter/setter callbacks
+internally. See [Shell Configuration](../shell/configuration.md) and
+[Agent Configuration](../agent/configuration.md) for the full list of available properties.
+
 ### 4.4 Destructuring
 
 Extract values from compound types directly in bindings.

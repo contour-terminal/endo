@@ -1,13 +1,13 @@
 ---
 title: Agent Configuration
-description: Configure the Endo AI agent -- init.endo builtins, API key management, MCP servers, and web search.
+description: Configure the Endo AI agent -- init.endo properties, API key management, MCP servers, and web search.
 ---
 
 # Agent Configuration
 
 The AI agent is configured through two mechanisms:
 
-1. **`init.endo`** -- primary configuration via shell builtins (provider, model, limits, MCP servers, web search).
+1. **`init.endo`** -- primary configuration via builtin properties (provider, model, limits, MCP servers, web search).
 2. **`agent.yml`** -- API key store managed exclusively by `endo agent login` / `endo agent logout`.
 
 All agent settings (provider selection, model, limits, plan mode, tracing) are configured in
@@ -31,7 +31,7 @@ endo agent logout gemini
 ```
 
 API keys are stored in `~/.config/endo/agent.yml`. You can also set keys directly in
-`init.endo` (e.g., `set_claude_api_key "sk-ant-..."`) or via environment variables
+`init.endo` (e.g., `agent_claude_api_key <- "sk-ant-..."`) or via environment variables
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`).
 
 !!! note
@@ -42,76 +42,77 @@ API keys are stored in `~/.config/endo/agent.yml`. You can also set keys directl
 
 ## Agent Settings (init.endo)
 
-All builtins are called from `~/.config/endo/init.endo`. They execute at shell startup and
-configure the agent before you enter agent mode.
+All properties are set from `~/.config/endo/init.endo` using `<-` assignment syntax.
+They execute at shell startup and configure the agent before you enter agent mode.
+Properties can also be read as expressions (e.g., `print agent_provider`).
 
 ### General
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_agent_provider` | `name` | Active provider: `"claude"`, `"openai"`, `"gemini"`, `"openai_compat"`. If not set, auto-detects from authenticated providers. |
-| `set_agent_prompt_indicator` | `chars` | Character(s) shown at the agent prompt (default: `"❯"`) |
-| `set_agent_max_tool_result_size` | `bytes` | Max bytes from a single tool call before truncation (default: 30720) |
-| `set_agent_log_tool_uses` | `true`\|`false` | Print tool invocations to the terminal (default: `true`) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_provider` | string | Active provider: `"claude"`, `"openai"`, `"gemini"`, `"openai_compat"`. If not set, auto-detects from authenticated providers. |
+| `agent_prompt_indicator` | string | Character(s) shown at the agent prompt (default: `"❯"`) |
+| `agent_max_tool_result_size` | int | Max bytes from a single tool call before truncation (default: 30720) |
+| `agent_log_tool_uses` | bool | Print tool invocations to the terminal (default: `true`) |
 
 ### Claude (Anthropic)
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_claude_api_key` | `key` | API key (alternative to `endo agent login claude`) |
-| `set_claude_api_key_env` | `env_var` | Environment variable holding the API key (default: `"ANTHROPIC_API_KEY"`) |
-| `set_claude_model` | `model` | Model identifier (default: `"claude-sonnet-4-5-20250929"`) |
-| `set_claude_max_tokens` | `n` | Maximum output tokens per request (default: 8192) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_claude_api_key` | string | API key (alternative to `endo agent login claude`) |
+| `agent_claude_api_key_env` | string | Environment variable holding the API key (default: `"ANTHROPIC_API_KEY"`) |
+| `agent_claude_model` | string | Model identifier (default: `"claude-sonnet-4-5-20250929"`) |
+| `agent_claude_max_tokens` | int | Maximum output tokens per request (default: 8192) |
 
 ### OpenAI
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_openai_api_key` | `key` | API key (alternative to `endo agent login openai`) |
-| `set_openai_api_key_env` | `env_var` | Environment variable holding the API key (default: `"OPENAI_API_KEY"`) |
-| `set_openai_model` | `model` | Model identifier (default: `"gpt-4o"`) |
-| `set_openai_base_url` | `url` | Custom base URL |
-| `set_openai_max_tokens` | `n` | Maximum output tokens per request (default: 4096) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_openai_api_key` | string | API key (alternative to `endo agent login openai`) |
+| `agent_openai_api_key_env` | string | Environment variable holding the API key (default: `"OPENAI_API_KEY"`) |
+| `agent_openai_model` | string | Model identifier (default: `"gpt-4o"`) |
+| `agent_openai_base_url` | string | Custom base URL |
+| `agent_openai_max_tokens` | int | Maximum output tokens per request (default: 4096) |
 
 ### OpenAI-Compatible
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_openai_compat_api_key` | `key` | API key |
-| `set_openai_compat_api_key_env` | `env_var` | Environment variable holding the API key |
-| `set_openai_compat_model` | `model` | Model identifier |
-| `set_openai_compat_base_url` | `url` | Endpoint base URL (e.g. `"http://localhost:11434/v1"`) |
-| `set_openai_compat_max_tokens` | `n` | Maximum output tokens per request (default: 4096) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_openai_compat_api_key` | string | API key |
+| `agent_openai_compat_api_key_env` | string | Environment variable holding the API key |
+| `agent_openai_compat_model` | string | Model identifier |
+| `agent_openai_compat_base_url` | string | Endpoint base URL (e.g. `"http://localhost:11434/v1"`) |
+| `agent_openai_compat_max_tokens` | int | Maximum output tokens per request (default: 4096) |
 
 ### Google Gemini
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_gemini_api_key` | `key` | API key (alternative to `endo agent login gemini`) |
-| `set_gemini_api_key_env` | `env_var` | Environment variable holding the API key (default: `"GEMINI_API_KEY"`) |
-| `set_gemini_model` | `model` | Model identifier (default: `"gemini-2.5-flash"`) |
-| `set_gemini_max_tokens` | `n` | Maximum output tokens per request (default: 8192) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_gemini_api_key` | string | API key (alternative to `endo agent login gemini`) |
+| `agent_gemini_api_key_env` | string | Environment variable holding the API key (default: `"GEMINI_API_KEY"`) |
+| `agent_gemini_model` | string | Model identifier (default: `"gemini-2.5-flash"`) |
+| `agent_gemini_max_tokens` | int | Maximum output tokens per request (default: 8192) |
 
 ### Plan Mode
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_plan_mode_enabled` | `true`\|`false` | Whether `/plan` is available (default: `true`) |
-| `set_plan_mode_pause_between_steps` | `true`\|`false` | Pause for confirmation between plan steps (default: `false`) |
-| `set_plan_mode_max_exploration_turns` | `n` | Max exploration iterations before requiring a plan (default: 15) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_plan_mode_enabled` | bool | Whether `/plan` is available (default: `true`) |
+| `agent_plan_mode_pause_between_steps` | bool | Pause for confirmation between plan steps (default: `false`) |
+| `agent_plan_mode_max_exploration_turns` | int | Max exploration iterations before requiring a plan (default: 15) |
 
 ### Explore Sub-Agent
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_explore_max_turns` | `n` | Maximum iterations for the explore sub-agent (default: 10) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_explore_max_turns` | int | Maximum iterations for the explore sub-agent (default: 10) |
 
 ### Tracing
 
-| Builtin | Arguments | Description |
-|---------|-----------|-------------|
-| `set_trace_enabled` | `true`\|`false` | Enable tool I/O trace logging (default: `false`) |
-| `set_trace_default_path` | `path` | Trace file path (empty = auto-generated) |
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_trace_enabled` | bool | Enable tool I/O trace logging (default: `false`) |
+| `agent_trace_default_path` | string | Trace file path (empty = auto-generated) |
 
 ---
 
@@ -166,18 +167,18 @@ Google Custom Search. Configure it in `init.endo`:
 
 ```endo
 # Select search engine
-set_web_search_engine "duckduckgo"   # default, no key required
-set_web_search_engine "brave"
-set_web_search_engine "google"
+agent_web_search_engine <- "duckduckgo"   # default, no key required
+agent_web_search_engine <- "brave"
+agent_web_search_engine <- "google"
 
 # API key (required for Brave and Google)
-set_web_search_api_key "your-api-key"
+agent_web_search_api_key <- "your-api-key"
 
 # Maximum results per query (default: 5, max: 20)
-set_web_search_max_results 5
+agent_web_search_max_results <- 5
 
 # Google Custom Search Engine ID (required for Google)
-set_web_search_cx "your-cx-id"
+agent_web_search_cx <- "your-cx-id"
 ```
 
 ---
@@ -188,19 +189,19 @@ set_web_search_cx "your-cx-id"
 # ~/.config/endo/init.endo
 
 # Agent provider and model
-set_agent_provider "claude"
-set_claude_model "claude-sonnet-4-5-20250929"
-set_agent_log_tool_uses true
+agent_provider <- "claude"
+agent_claude_model <- "claude-sonnet-4-5-20250929"
+agent_log_tool_uses <- true
 
 # Plan mode
-set_plan_mode_enabled true
-set_plan_mode_max_exploration_turns 20
+agent_plan_mode_enabled <- true
+agent_plan_mode_max_exploration_turns <- 20
 
 # Explore sub-agent
-set_explore_max_turns 15
+agent_explore_max_turns <- 15
 
 # Shell prompt
-set_prompt_preset "endo-signature"
+shell_prompt_preset <- "endo-signature"
 
 # MCP servers
 add_mcp_server "filesystem" "npx -y @modelcontextprotocol/server-filesystem /home/user"
@@ -208,7 +209,7 @@ add_mcp_server "github" "npx -y @modelcontextprotocol/server-github"
 set_mcp_env "github" "GITHUB_TOKEN" "$GITHUB_TOKEN"
 
 # Web search
-set_web_search_engine "duckduckgo"
+agent_web_search_engine <- "duckduckgo"
 ```
 
 ## Further Reading

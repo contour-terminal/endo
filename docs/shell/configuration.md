@@ -17,8 +17,8 @@ regular Endo code, so you can use any shell commands or F# expressions.
 # ~/.config/endo/init.endo
 
 # Prompt configuration
-set_prompt_preset "endo-signature"
-set_prompt_layout "two-line"
+shell_prompt_preset <- "endo-signature"
+shell_prompt_layout <- "two-line"
 
 # Aliases
 let ll ...args = & exa -l ...args
@@ -73,15 +73,16 @@ match (env "HOME") with
 ## Prompt Customization
 
 Endo provides a modular prompt system with built-in presets and fine-grained controls.
+Prompt settings are **builtin properties** -- assign with `<-` and read as expressions.
 
 ### Presets
 
 ```endo
-set_prompt_preset "minimal-arrow"
-set_prompt_preset "lambda-clean"
-set_prompt_preset "powerline"
-set_prompt_preset "endo-signature"
-set_prompt_preset "dashboard"
+shell_prompt_preset <- "minimal-arrow"
+shell_prompt_preset <- "lambda-clean"
+shell_prompt_preset <- "powerline"
+shell_prompt_preset <- "endo-signature"
+shell_prompt_preset <- "dashboard"
 ```
 
 Available presets: `minimal-arrow`, `lambda-clean`, `opencode-bar`, `powerline`,
@@ -92,30 +93,30 @@ Available presets: `minimal-arrow`, `lambda-clean`, `opencode-bar`, `powerline`,
 
 ```endo
 # Single line prompt
-set_prompt_layout "single-line"
+shell_prompt_layout <- "single-line"
 
 # Two-line prompt (info on top, input below)
-set_prompt_layout "two-line"
+shell_prompt_layout <- "two-line"
 
 # Boxed prompt with borders
-set_prompt_layout "boxed"
+shell_prompt_layout <- "boxed"
 ```
 
 ### Prompt Indicator
 
 ```endo
 # Change the input indicator character
-set_prompt_indicator "> "
-set_prompt_indicator "$ "
+shell_prompt_indicator <- "> "
+shell_prompt_indicator <- "$ "
 ```
 
 ### Separator Style
 
 ```endo
-set_prompt_separator "powerline"
-set_prompt_separator "arrow"
-set_prompt_separator "rounded"
-set_prompt_separator "none"
+shell_prompt_separator <- "powerline"
+shell_prompt_separator <- "arrow"
+shell_prompt_separator <- "rounded"
+shell_prompt_separator <- "none"
 ```
 
 ### Transient Prompt
@@ -124,8 +125,8 @@ When enabled, the full prompt is replaced with a compact indicator after a comma
 submitted, keeping the scrollback clean:
 
 ```endo
-set_prompt_transient "enabled"
-set_prompt_transient "disabled"
+shell_prompt_transient <- "enabled"
+shell_prompt_transient <- "disabled"
 ```
 
 ### Prompt Spacing
@@ -134,10 +135,10 @@ Control the number of blank lines above and below the prompt:
 
 ```endo
 # Add a blank line above and below the prompt (default)
-set_prompt_spacing 1
+shell_prompt_spacing <- 1
 
 # No blank lines around the prompt
-set_prompt_spacing 0
+shell_prompt_spacing <- 0
 ```
 
 ### Command Duration Threshold
@@ -146,7 +147,7 @@ Control when the command duration module appears:
 
 ```endo
 # Show duration for commands taking longer than 2 seconds
-set_prompt_duration_threshold 2000
+shell_prompt_duration_threshold <- 2000
 ```
 
 ### Exit Confirmation
@@ -156,13 +157,26 @@ a hint; only a second press within the timeout exits the shell:
 
 ```endo
 # Set a 2-second confirmation window
-set_exit_confirm_timeout 2000
+shell_exit_confirm_timeout <- 2000
 
 # Disable confirmation (immediate exit on first Ctrl+D)
-set_exit_confirm_timeout 0
+shell_exit_confirm_timeout <- 0
 ```
 
 The default timeout is 1000 ms.
+
+### Reading Property Values
+
+All prompt properties can be read as expressions:
+
+```endo
+# Print current preset
+print shell_prompt_preset
+
+# Use in conditionals
+if shell_prompt_spacing = 0 then
+    println "Compact mode"
+```
 
 ## Aliases
 
