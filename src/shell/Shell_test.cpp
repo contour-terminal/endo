@@ -14,14 +14,15 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
+#include <shell/completion/FileCompleter.hpp>
+#include <shell/completion/LetBindingCompleter.hpp>
+#include <shell/history/PersistentHistory.hpp>
+#include <shell/output/TableFormatter.hpp>
+
 #include <endo-language/ide/CompletionContext.hpp>
 
-#include "CompletionProviders/FileCompleter.hpp"
-#include "CompletionProviders/LetBindingCompleter.hpp"
-#include "PersistentHistory.hpp"
 #include "Shell.hpp"
 #include "TTY.hpp"
-#include "TableFormatter.hpp"
 #include <platform/testing/TestEnvironmentProvider.hpp>
 
 namespace
@@ -3045,7 +3046,8 @@ TEST_CASE("table.terminalWidth.minimum_column_width")
 // Partial-line indicator
 // ============================================================================
 
-#include "Prompt.hpp"
+#include <shell/ui/Prompt.hpp>
+
 #include <platform/Pipe.hpp>
 
 namespace
@@ -3247,7 +3249,7 @@ TEST_CASE("shell.env.endo_shlvl_handles_malformed")
 // ShellLevelModule
 // ============================================================================
 
-#include "modules/ShellLevelModule.hpp"
+#include <shell/ui/modules/ShellLevelModule.hpp>
 
 TEST_CASE("module.shell_level.hidden_at_level_zero")
 {

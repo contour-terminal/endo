@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
-#include <shell/TableFormatter.hpp>
+#include <shell/output/TableFormatter.hpp>
 
 #include <endo-language/builtins/BuiltinImpls.hpp>
 

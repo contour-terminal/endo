@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/CommandResolver.hpp>
 #include <shell/Shell.hpp>
+#include <shell/util/CommandResolver.hpp>
 
 #include <crispy/utils.h>
 

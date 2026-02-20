@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/ui/Prompt.hpp>
 
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
@@ -32,7 +33,6 @@
 #include <unordered_set>
 
 #include "Error.hpp"
-#include "Prompt.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
 #include <agent/commands/AgentHistoryProvider.hpp>

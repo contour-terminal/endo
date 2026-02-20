@@ -32,12 +32,13 @@ class AgentWorker;
 class ProviderFactory;
 } // namespace endo::agent
 
-#include "Completer.hpp"
-#include "History.hpp"
+#include <shell/completion/Completer.hpp>
+#include <shell/history/History.hpp>
+#include <shell/history/PersistentHistory.hpp>
+#include <shell/output/OutputDefinitionRegistry.hpp>
+#include <shell/ui/Prompt.hpp>
+
 #include "Job.hpp"
-#include "OutputDefinitionRegistry.hpp"
-#include "PersistentHistory.hpp"
-#include "Prompt.hpp"
 #include "TTY.hpp"
 #include <agent/mcp/ServerManager.hpp>
 #include <agent/tools/WebSearchTool.hpp>

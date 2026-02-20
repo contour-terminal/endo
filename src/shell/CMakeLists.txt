@@ -3,69 +3,124 @@
 # It depends on the endo language library for parsing and IR generation.
 
 add_library(endo-shell STATIC
-    CrashHandler.hpp
-    CrashHandler.cpp
-    CommandResolver.hpp
-    CommandResolver.cpp
-    Completer.hpp
-    Completer.cpp
-    CompletionAdapter.hpp
-    CompletionAdapter.cpp
-    CompletionProvider.hpp
-    CompletionProviders/BuiltinArgumentCompleter.hpp
-    CompletionProviders/BuiltinArgumentCompleter.cpp
-    CompletionProviders/CommandCompleter.hpp
-    CompletionProviders/CommandCompleter.cpp
-    CompletionProviders/FSharpCompleter.hpp
-    CompletionProviders/FSharpCompleter.cpp
-    CompletionProviders/FileCompleter.hpp
-    CompletionProviders/FileCompleter.cpp
-    CompletionProviders/CommandLineParser.hpp
-    CompletionProviders/CommandLineParser.cpp
-    CompletionProviders/CommandQueryProvider.hpp
-    CompletionProviders/CommandSpec.hpp
-    CompletionProviders/CmakeSpec.hpp
-    CompletionProviders/CmakeSpec.cpp
-    CompletionProviders/CommandSpecCompleter.hpp
-    CompletionProviders/CommandSpecCompleter.cpp
-    CompletionProviders/GitSpec.hpp
-    CompletionProviders/GitSpec.cpp
-    CompletionProviders/SshSpec.hpp
-    CompletionProviders/SshSpec.cpp
-    CompletionProviders/QueryCache.hpp
-    CompletionProviders/QueryCache.cpp
-    CompletionProviders/HistoryCompleter.hpp
-    CompletionProviders/HistoryCompleter.cpp
-    CompletionProviders/OptionCompleter.hpp
-    CompletionProviders/OptionCompleter.cpp
-    CompletionProviders/LetBindingCompleter.hpp
-    CompletionProviders/LetBindingCompleter.cpp
-    CompletionProviders/VariableCompleter.hpp
-    CompletionProviders/VariableCompleter.cpp
+    # Core
+    Shell.hpp
+    Shell.cpp
     Error.hpp
-    Gradient.hpp
-    Gradient.cpp
-    History.hpp
-    History.cpp
-    PersistentHistory.hpp
-    PersistentHistory.cpp
     Job.hpp
     Job.cpp
     ProcessGroup.hpp
-    Prompt.hpp
-    Prompt.cpp
-    PromptComponent.hpp
-    PromptComponent.cpp
-    PromptConfig.hpp
-    PromptLayoutEngine.hpp
-    PromptLayoutEngine.cpp
-    PromptModule.hpp
-    PromptPresets.hpp
-    PromptPresets.cpp
-    Shell.hpp
-    Shell.cpp
-    GlobMatcher.hpp
-    GlobMatcher.cpp
+    TTY.hpp
+    TTY.cpp
+    CrashHandler.hpp
+    CrashHandler.cpp
+
+    # UI (Prompt, Syntax Highlighting, Grapheme Handling)
+    ui/Prompt.hpp
+    ui/Prompt.cpp
+    ui/PromptComponent.hpp
+    ui/PromptComponent.cpp
+    ui/PromptConfig.hpp
+    ui/PromptLayoutEngine.hpp
+    ui/PromptLayoutEngine.cpp
+    ui/PromptModule.hpp
+    ui/PromptPresets.hpp
+    ui/PromptPresets.cpp
+    ui/Gradient.hpp
+    ui/Gradient.cpp
+    ui/SyntaxHighlighter.hpp
+    ui/SyntaxHighlighter.cpp
+    ui/SourceOffsetUtils.hpp
+    ui/SourceOffsetUtils.cpp
+    ui/GraphemeCluster.hpp
+
+    # UI Modules
+    ui/modules/BatteryModule.hpp
+    ui/modules/BatteryModule.cpp
+    ui/modules/ClockModule.hpp
+    ui/modules/ClockModule.cpp
+    ui/modules/DurationModule.hpp
+    ui/modules/DurationModule.cpp
+    ui/modules/ExitStatusModule.hpp
+    ui/modules/ExitStatusModule.cpp
+    ui/modules/FSharpModeModule.hpp
+    ui/modules/FSharpModeModule.cpp
+    ui/modules/GitModule.hpp
+    ui/modules/GitModule.cpp
+    ui/modules/HostnameModule.hpp
+    ui/modules/HostnameModule.cpp
+    ui/modules/IndicatorModule.hpp
+    ui/modules/IndicatorModule.cpp
+    ui/modules/PathModule.hpp
+    ui/modules/PathModule.cpp
+    ui/modules/ShellLevelModule.hpp
+    ui/modules/ShellLevelModule.cpp
+    ui/modules/StructuredOutputModule.hpp
+    ui/modules/StructuredOutputModule.cpp
+    ui/modules/ToolchainModule.hpp
+    ui/modules/ToolchainModule.cpp
+
+    # Completion
+    completion/Completer.hpp
+    completion/Completer.cpp
+    completion/CompletionProvider.hpp
+    completion/CompletionAdapter.hpp
+    completion/CompletionAdapter.cpp
+    completion/BuiltinArgumentCompleter.hpp
+    completion/BuiltinArgumentCompleter.cpp
+    completion/CommandCompleter.hpp
+    completion/CommandCompleter.cpp
+    completion/CommandSpecCompleter.hpp
+    completion/CommandSpecCompleter.cpp
+    completion/FileCompleter.hpp
+    completion/FileCompleter.cpp
+    completion/FSharpCompleter.hpp
+    completion/FSharpCompleter.cpp
+    completion/HistoryCompleter.hpp
+    completion/HistoryCompleter.cpp
+    completion/LetBindingCompleter.hpp
+    completion/LetBindingCompleter.cpp
+    completion/OptionCompleter.hpp
+    completion/OptionCompleter.cpp
+    completion/VariableCompleter.hpp
+    completion/VariableCompleter.cpp
+    completion/CommandLineParser.hpp
+    completion/CommandLineParser.cpp
+    completion/CommandQueryProvider.hpp
+    completion/CommandSpec.hpp
+    completion/QueryCache.hpp
+    completion/QueryCache.cpp
+    completion/CmakeSpec.hpp
+    completion/CmakeSpec.cpp
+    completion/GitSpec.hpp
+    completion/GitSpec.cpp
+    completion/SshSpec.hpp
+    completion/SshSpec.cpp
+
+    # History
+    history/History.hpp
+    history/History.cpp
+    history/PersistentHistory.hpp
+    history/PersistentHistory.cpp
+
+    # Structured Output
+    output/OutputDefinition.hpp
+    output/OutputDefinitionRegistry.hpp
+    output/OutputDefinitionRegistry.cpp
+    output/OutputParser.hpp
+    output/OutputParser.cpp
+    output/TableFormatter.hpp
+    output/TableFormatter.cpp
+
+    # Utilities
+    util/CommandResolver.hpp
+    util/CommandResolver.cpp
+    util/GlobMatcher.hpp
+    util/GlobMatcher.cpp
+    util/Suggestions.hpp
+    util/Suggestions.cpp
+
+    # Builtins
     builtins/InlineCommands.cpp
     builtins/Registration.cpp
     builtins/ProcessExecution.cpp
@@ -79,14 +134,8 @@ add_library(endo-shell STATIC
     builtins/ReadCommand.cpp
     builtins/UserCommands.cpp
     builtins/Output.cpp
-    SourceOffsetUtils.hpp
-    SourceOffsetUtils.cpp
-    SyntaxHighlighter.hpp
-    SyntaxHighlighter.cpp
-    Suggestions.hpp
-    Suggestions.cpp
-    TTY.hpp
-    TTY.cpp
+
+    # Structured Commands
     commands/StructuredCommand.hpp
     commands/PsCommand.hpp
     commands/PsCommand.cpp
@@ -95,37 +144,6 @@ add_library(endo-shell STATIC
     commands/JobProvider.hpp
     commands/JobsCommand.hpp
     commands/JobsCommand.cpp
-    modules/BatteryModule.hpp
-    modules/BatteryModule.cpp
-    modules/ClockModule.hpp
-    modules/ClockModule.cpp
-    modules/DurationModule.hpp
-    modules/DurationModule.cpp
-    modules/ExitStatusModule.hpp
-    modules/ExitStatusModule.cpp
-    modules/FSharpModeModule.hpp
-    modules/FSharpModeModule.cpp
-    modules/GitModule.hpp
-    modules/GitModule.cpp
-    modules/HostnameModule.hpp
-    modules/HostnameModule.cpp
-    modules/IndicatorModule.hpp
-    modules/IndicatorModule.cpp
-    modules/PathModule.hpp
-    modules/PathModule.cpp
-    modules/StructuredOutputModule.hpp
-    modules/StructuredOutputModule.cpp
-    modules/ShellLevelModule.hpp
-    modules/ShellLevelModule.cpp
-    modules/ToolchainModule.hpp
-    modules/ToolchainModule.cpp
-    OutputDefinition.hpp
-    OutputDefinitionRegistry.hpp
-    OutputDefinitionRegistry.cpp
-    OutputParser.hpp
-    OutputParser.cpp
-    TableFormatter.hpp
-    TableFormatter.cpp
 )
 
 # Platform-specific implementations
@@ -187,19 +205,19 @@ enable_static_linking(endo-bin)
 
 add_executable(test-endo-shell
     test_main.cpp
-    CrashHandler_test.cpp
-    Completer_test.cpp
-    FSharpCompleter_test.cpp
-    CommandSpecCompleter_test.cpp
-    Gradient_test.cpp
-    History_test.cpp
-    OutputDefinitionRegistry_test.cpp
-    OutputParser_test.cpp
-    PersistentHistory_test.cpp
-    PromptComponent_test.cpp
-    Suggestions_test.cpp
-    SyntaxHighlighter_test.cpp
     Shell_test.cpp
+    CrashHandler_test.cpp
+    ui/PromptComponent_test.cpp
+    ui/Gradient_test.cpp
+    completion/Completer_test.cpp
+    completion/FSharpCompleter_test.cpp
+    completion/CommandSpecCompleter_test.cpp
+    history/History_test.cpp
+    history/PersistentHistory_test.cpp
+    output/OutputDefinitionRegistry_test.cpp
+    output/OutputParser_test.cpp
+    util/Suggestions_test.cpp
+    ui/SyntaxHighlighter_test.cpp
 )
 
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)

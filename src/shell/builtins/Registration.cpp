@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/CommandResolver.hpp>
-#include <shell/OutputParser.hpp>
-#include <shell/PromptPresets.hpp>
 #include <shell/Shell.hpp>
 #include <shell/commands/JobsCommand.hpp>
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
+#include <shell/output/OutputParser.hpp>
+#include <shell/ui/PromptPresets.hpp>
+#include <shell/util/CommandResolver.hpp>
 
 #include <endo-language/builtins/BuiltinImpls.hpp>
 

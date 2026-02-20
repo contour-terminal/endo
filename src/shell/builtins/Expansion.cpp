@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
-#include <shell/GlobMatcher.hpp>
 #include <shell/Shell.hpp>
+#include <shell/util/GlobMatcher.hpp>
 
 #include <charconv>
 #include <cmath>
