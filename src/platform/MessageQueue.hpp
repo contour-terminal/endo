@@ -122,6 +122,16 @@ class MessageQueue
             _wakeup->signal();
     }
 
+    /// @brief Resets the queue, clearing the shutdown flag and discarding any remaining messages.
+    ///
+    /// Call this only when no other threads are accessing the queue (e.g., after joining workers).
+    void reset()
+    {
+        auto lock = std::unique_lock(_mutex);
+        _shutdown = false;
+        _queue = {};
+    }
+
     /// @brief Returns whether the queue has been shut down.
     [[nodiscard]] auto isShutdown() const -> bool
     {

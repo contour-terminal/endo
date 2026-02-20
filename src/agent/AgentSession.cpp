@@ -42,11 +42,16 @@ namespace
     }
 } // namespace
 
-AgentSession::AgentSession(LlmProvider& provider): _provider(provider)
+AgentSession::AgentSession(LlmProvider& provider): _provider(&provider)
 {
 }
 
 AgentSession::~AgentSession() = default;
+
+void AgentSession::setProvider(LlmProvider& provider)
+{
+    _provider = &provider;
+}
 
 auto AgentSession::processMessage(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<std::string, AgentError>
@@ -89,7 +94,7 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
             _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
 
         auto const generateStart = std::chrono::steady_clock::now();
-        auto result = _provider.generate(_history.messages(), tools, streamCb);
+        auto result = _provider->generate(_history.messages(), tools, streamCb);
         auto const generateElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - generateStart);
 
@@ -251,7 +256,7 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
             _tracer->writeLlmRequest(iteration, _history.size(), _history.estimatedTokenCount());
 
         auto const generateStart = std::chrono::steady_clock::now();
-        auto result = _provider.generate(_history.messages(), tools, streamCb);
+        auto result = _provider->generate(_history.messages(), tools, streamCb);
         auto const generateElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now() - generateStart);
 
@@ -352,7 +357,7 @@ void AgentSession::setMaxToolResultSize(size_t maxBytes)
 
 void AgentSession::setCompactionConfig(CompactionConfig const& config)
 {
-    _compactor = std::make_unique<ConversationCompactor>(_provider, config);
+    _compactor = std::make_unique<ConversationCompactor>(*_provider, config);
 }
 
 void AgentSession::setTracer(AgentTracer* tracer)

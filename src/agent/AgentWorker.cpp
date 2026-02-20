@@ -21,6 +21,10 @@ AgentWorker::~AgentWorker()
 
 void AgentWorker::start()
 {
+    // Reset queues in case they were shut down by a previous stop() call.
+    _inbound.reset();
+    _askUserResponses.reset();
+    _cancelled.store(false, std::memory_order_relaxed);
     _thread = std::jthread([this](std::stop_token st) { run(std::move(st)); });
 }
 

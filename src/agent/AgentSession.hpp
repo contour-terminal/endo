@@ -62,6 +62,12 @@ class AgentSession
 
     ~AgentSession();
 
+    /// @brief Rebinds the session to a different provider.
+    ///
+    /// The caller must ensure no concurrent access (e.g., stop any worker thread first).
+    /// @param provider The new LLM provider to use for generation.
+    void setProvider(LlmProvider& provider);
+
     /// @brief Processes a user message and generates a response.
     ///
     /// Adds the user message to history, calls the provider with streaming,
@@ -137,7 +143,7 @@ class AgentSession
     /// Executes a batch of tool calls and returns results.
     [[nodiscard]] auto executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>;
 
-    LlmProvider& _provider;
+    LlmProvider* _provider;
     ConversationHistory _history;
     ToolRegistry* _toolRegistry = nullptr;
     AgentTracer* _tracer = nullptr;
