@@ -10,6 +10,7 @@
 
 #include <tui/Canvas.hpp>
 #include <tui/MarkdownRenderer.hpp>
+#include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
 
@@ -1819,6 +1820,12 @@ void Shell::runAgentMode()
     auto streamCancelled = false;
     std::optional<agent::AgentResponseRenderer> currentRenderer;
 
+    // --- Ask-user state ---
+    auto askUserActive = false;
+    auto askUserRequestId = uint64_t { 0 };
+    std::optional<tui::QuestionComponent> askUserComponent;
+    auto askUserPromptVisible = false;
+
     // Helper: teardown streaming state after response completes.
     auto streamingPromptVisible = false;
     auto teardownStreaming = [&] {
@@ -1869,6 +1876,46 @@ void Shell::runAgentMode()
         renderComponentDirect();
         out.flush();
         streamingPromptVisible = true;
+    };
+
+    /// Clear the ask-user prompt, restoring cursor to content end position.
+    auto clearAskUserPrompt = [&] {
+        if (!askUserPromptVisible)
+            return;
+        out.restoreCursor();
+        out.clearToEndOfDisplay();
+        out.flush();
+        askUserPromptVisible = false;
+    };
+
+    /// Render the ask-user question component below the current content position.
+    auto renderAskUserPrompt = [&] {
+        if (!askUserActive || !askUserComponent)
+            return;
+        auto const& theme = tui::currentTheme();
+        auto const prefSize = askUserComponent->preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
+
+        // Pre-scroll to make room.
+        for (auto i = 0; i < height; ++i)
+            out.linefeed();
+        out.moveUp(height);
+        out.saveCursor();
+        out.linefeed();
+
+        // Render to off-screen buffer and write.
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
+        askUserComponent->setArea(tui::Rect { 0, 0, width, height });
+        askUserComponent->setScreenBounds(tui::Rect { 0, 0, width, height });
+        askUserComponent->render(canvas);
+        buffer.writeTo(out);
+
+        if (askUserComponent->cursorShape() == tui::CursorShape::SteadyBar)
+            out.showCursor();
+        out.flush();
+        askUserPromptVisible = true;
     };
 
     // --- Main event loop ---
@@ -1956,6 +2003,14 @@ void Shell::runAgentMode()
                             out.flush();
                         }
 
+                        // Clean up any active ask-user prompt.
+                        if (askUserActive)
+                        {
+                            clearAskUserPrompt();
+                            askUserActive = false;
+                            askUserComponent.reset();
+                        }
+
                         teardownStreaming();
                         saveHistory();
 
@@ -1967,39 +2022,16 @@ void Shell::runAgentMode()
                     }
                     else if constexpr (std::is_same_v<T, agent::AskUserRequest>)
                     {
-                        // TODO: Render question in TUI and collect answer.
-                        // For now, fall back to console I/O (preserving current behavior).
-                        std::println(stderr, "\n{}", m.question.text);
-                        if (!m.question.options.empty())
-                        {
-                            for (size_t i = 0; i < m.question.options.size(); ++i)
-                                std::println(stderr, "  {}. {}", i + 1, m.question.options[i]);
-                            std::print(stderr, "Choice (1-{}): ", m.question.options.size());
-                        }
-                        else
-                        {
-                            std::print(stderr, "> ");
-                        }
-                        auto answer = std::string {};
-                        auto cancelled = false;
-                        if (!std::getline(std::cin, answer))
-                            cancelled = true;
-                        if (!cancelled && !m.question.options.empty())
-                        {
-                            try
-                            {
-                                if (auto const idx = std::stoi(answer) - 1;
-                                    idx >= 0 && static_cast<size_t>(idx) < m.question.options.size())
-                                    answer = m.question.options[static_cast<size_t>(idx)];
-                            }
-                            catch (std::exception const&)
-                            {
-                            }
-                        }
-                        worker.inbound().push(agent::UserAnswerMessage {
-                            .requestId = m.requestId,
-                            .answer =
-                                agent::UserAnswer { .answer = std::move(answer), .cancelled = cancelled } });
+                        clearStreamingPrompt();
+                        askUserComponent.emplace(tui::QuestionConfig {
+                            .questionText = m.question.text,
+                            .options = m.question.options,
+                            .multiSelect = m.question.multiSelect,
+                            .allowOther = m.question.allowOther,
+                        });
+                        askUserRequestId = m.requestId;
+                        askUserActive = true;
+                        renderAskUserPrompt();
                     }
                     else if constexpr (std::is_same_v<T, agent::PlanGeneratedMessage>)
                     {
@@ -2017,7 +2049,8 @@ void Shell::runAgentMode()
         }
 
         // Re-render the streaming prompt after each message batch that produced content.
-        if (streaming && !streamingPromptVisible)
+        // Suppress while ask-user is active — only one inline prompt at a time.
+        if (streaming && !streamingPromptVisible && !askUserActive)
             renderStreamingPrompt();
 
         // 2. Determine poll timeout.
@@ -2072,6 +2105,10 @@ void Shell::runAgentMode()
                 }
             }
 
+            // Re-render ask-user prompt if it was cleared (e.g., by resize).
+            if (askUserActive && !askUserPromptVisible)
+                renderAskUserPrompt();
+
             // Ghost text debounce.
             if (!streaming)
             {
@@ -2099,6 +2136,39 @@ void Shell::runAgentMode()
 
             if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
                 continue;
+
+            // During ask-user, route input to the question component.
+            if (askUserActive && askUserComponent)
+            {
+                auto const action = askUserComponent->processInput(event);
+                switch (action)
+                {
+                    case tui::QuestionAction::Confirmed:
+                        worker.inbound().push(agent::UserAnswerMessage {
+                            .requestId = askUserRequestId,
+                            .answer = agent::UserAnswer { .answer = askUserComponent->answer() } });
+                        clearAskUserPrompt();
+                        askUserActive = false;
+                        askUserComponent.reset();
+                        break;
+                    case tui::QuestionAction::Cancelled:
+                        worker.inbound().push(agent::UserAnswerMessage {
+                            .requestId = askUserRequestId,
+                            .answer = agent::UserAnswer { .cancelled = true } });
+                        clearAskUserPrompt();
+                        askUserActive = false;
+                        askUserComponent.reset();
+                        break;
+                    case tui::QuestionAction::Changed: {
+                        auto guard = out.syncGuard();
+                        clearAskUserPrompt();
+                        renderAskUserPrompt();
+                        break;
+                    }
+                    case tui::QuestionAction::None: break;
+                }
+                continue;
+            }
 
             // During streaming, only handle Escape (cancel) and Ctrl+L (clear).
             if (streaming)
@@ -2296,6 +2366,14 @@ void Shell::runAgentMode()
             auto const newPrefSize = inputComponent.preferredSize();
             inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
             screen.draw();
+        }
+
+        // Re-render ask-user prompt on resize.
+        if (needsRedraw && askUserActive)
+        {
+            auto guard = out.syncGuard();
+            clearAskUserPrompt();
+            renderAskUserPrompt();
         }
     }
 }
