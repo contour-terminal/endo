@@ -36,6 +36,16 @@ auto AskUserTool::definition() const -> ToolDefinition
                             { "items", nlohmann::json { { "type", "string" } } },
                             { "description", "Optional choices (2-6 items). Omit for free-text input." },
                         } },
+                      { "multiSelect",
+                        nlohmann::json {
+                            { "type", "boolean" },
+                            { "description", "Allow selecting multiple options (default: false)." },
+                        } },
+                      { "allowOther",
+                        nlohmann::json {
+                            { "type", "boolean" },
+                            { "description", "Show 'Other' option for free-text fallback (default: true)." },
+                        } },
                   } },
                 { "required", nlohmann::json::array({ "question" }) },
             },
@@ -69,7 +79,15 @@ auto AskUserTool::execute(nlohmann::json const& arguments) -> std::expected<Tool
             return std::unexpected(ToolError { .message = "Options must contain at most 6 choices" });
     }
 
-    auto const answer = _askCallback(UserQuestion { .text = question, .options = std::move(options) });
+    auto const multiSelect = arguments.value("multiSelect", false);
+    auto const allowOther = arguments.value("allowOther", true);
+
+    auto const answer = _askCallback(UserQuestion {
+        .text = question,
+        .options = std::move(options),
+        .multiSelect = multiSelect,
+        .allowOther = allowOther,
+    });
 
     if (answer.cancelled)
         return ToolResult { .content = "User cancelled the question.", .isError = true };

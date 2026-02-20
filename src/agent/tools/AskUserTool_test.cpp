@@ -142,3 +142,50 @@ TEST_CASE("AskUserTool.null_callback_error", "[agent][tools]")
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().message.find("callback") != std::string::npos);
 }
+
+TEST_CASE("AskUserTool.multiSelect_passed_through", "[agent][tools]")
+{
+    auto tool = AskUserTool([](UserQuestion const& q) -> UserAnswer {
+        CHECK(q.multiSelect == true);
+        CHECK(q.allowOther == true); // default
+        return { .answer = "A, B" };
+    });
+
+    auto const args = nlohmann::json {
+        { "question", "Select features" },
+        { "options", nlohmann::json::array({ "A", "B", "C" }) },
+        { "multiSelect", true },
+    };
+    auto const result = tool.execute(args);
+    REQUIRE(result.has_value());
+    CHECK(result->content == "A, B");
+}
+
+TEST_CASE("AskUserTool.allowOther_false_passed_through", "[agent][tools]")
+{
+    auto tool = AskUserTool([](UserQuestion const& q) -> UserAnswer {
+        CHECK(q.allowOther == false);
+        CHECK(q.multiSelect == false); // default
+        return { .answer = "X" };
+    });
+
+    auto const args = nlohmann::json {
+        { "question", "Pick one" },
+        { "options", nlohmann::json::array({ "X", "Y" }) },
+        { "allowOther", false },
+    };
+    auto const result = tool.execute(args);
+    REQUIRE(result.has_value());
+    CHECK(result->content == "X");
+}
+
+TEST_CASE("AskUserTool.definition_includes_new_params", "[agent][tools]")
+{
+    auto const tool = AskUserTool([](auto const&) -> UserAnswer { return {}; });
+    auto const def = tool.definition();
+
+    CHECK(def.inputSchema["properties"].contains("multiSelect"));
+    CHECK(def.inputSchema["properties"].contains("allowOther"));
+    CHECK(def.inputSchema["properties"]["multiSelect"]["type"] == "boolean");
+    CHECK(def.inputSchema["properties"]["allowOther"]["type"] == "boolean");
+}

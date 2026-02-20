@@ -15,6 +15,8 @@ struct UserQuestion
 {
     std::string text;                 ///< The question text.
     std::vector<std::string> options; ///< Optional choices (empty for free-text input).
+    bool multiSelect = false;         ///< Allow selecting multiple options.
+    bool allowOther = true;           ///< Show "Other..." for free-text fallback.
 };
 
 /// The user's answer to a question.
