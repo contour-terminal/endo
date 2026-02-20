@@ -192,6 +192,7 @@ print shell_prompt_preset
 # Use in conditionals
 if shell_prompt_spacing = 0 then
     println "Compact mode"
+fi
 ```
 
 ## Aliases

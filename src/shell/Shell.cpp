@@ -2179,11 +2179,15 @@ void Shell::runAgentMode()
             if (askUserActive && !askUserPromptVisible)
                 renderAskUserPrompt();
 
-            // Ghost text debounce.
+            // Ghost text debounce and escape hint auto-clear.
             if (!streaming)
             {
+                // Capture pre-flush state: flushDeferredUpdates() may clear the escape hint,
+                // and we still need to redraw to show the restored input text.
+                auto const wasEscapeHintVisible = inputComponent.escapeHintTimeoutMs() >= 0;
                 inputComponent.flushDeferredUpdates();
-                if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0
+                if (wasEscapeHintVisible || inputComponent.inputField().hasGhostText()
+                    || inputComponent.ghostTextTimeoutMs() >= 0
                     || inputComponent.escapeHintTimeoutMs() >= 0)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();

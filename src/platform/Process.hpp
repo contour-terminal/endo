@@ -205,7 +205,11 @@ class PosixProcessManager final: public ProcessManager
 // Backward-compatible aliases in the endo namespace
 namespace endo
 {
+#if defined(_WIN32)
+using endo::platform::WindowsProcessManager;
+#else
 using endo::platform::PosixProcessManager;
+#endif
 using endo::platform::ProcessManager;
 using endo::platform::SpawnConfig;
 using endo::platform::WaitFlag;
