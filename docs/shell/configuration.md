@@ -39,11 +39,9 @@ export PAGER=less
 
 <!-- endo-no-check -->
 ```endo
-# Shell-style export
-export PATH="/usr/local/bin:$PATH"
-export EDITOR=nvim
-
 # F#-style export binding
+let export PATH = $"/usr/local/bin:{(env 'PATH')?}"
+let export EDITOR = "nvim"
 let export MY_VAR = "some value"
 ```
 
@@ -190,9 +188,7 @@ All prompt properties can be read as expressions:
 print shell_prompt_preset
 
 # Use in conditionals
-if shell_prompt_spacing = 0 then
-    println "Compact mode"
-fi
+if shell_prompt_spacing == 0 then println "Compact mode"
 ```
 
 ## Aliases
