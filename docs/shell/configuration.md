@@ -165,6 +165,22 @@ shell_exit_confirm_timeout <- 0
 
 The default timeout is 1000 ms.
 
+### Interactive Mode Detection
+
+The read-only property `shell_is_interactive` indicates whether the shell is running
+interactively (REPL) or non-interactively (script or `-c` command):
+
+```endo
+# In init.endo — only apply interactive settings when appropriate
+if shell_is_interactive then
+    shell_prompt_preset <- "endo-signature"
+    shell_prompt_layout <- "two-line"
+```
+
+This is useful in `init.endo` to conditionally apply settings that only make sense in
+interactive mode (prompt customization, key bindings, etc.). The property is read-only;
+attempting to assign to it produces a compile-time error.
+
 ### Reading Property Values
 
 All prompt properties can be read as expressions:

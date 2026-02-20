@@ -388,6 +388,7 @@ Consult this section to determine what to work on next.
 - [x] Convert all single-value `set_*` builtins to read/write properties (e.g., `set_agent_provider` → `agent_provider`)
 - [x] Property write syntax: `agent_provider <- "claude"`, read syntax: `print agent_provider`
 - [x] LSP, completions, hover info, diagnostics updated for new property names
+- [x] `shell_is_interactive` read-only builtin property (true for REPL, false for scripts and `-c`)
 
 ### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
