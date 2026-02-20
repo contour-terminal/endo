@@ -1489,16 +1489,39 @@ void Shell::runAgentMode()
         return;
     }
 
-    // Create or reuse agent session (preserves conversation history)
-    if (!_agentSession)
+    // Create or reuse agent session (preserves conversation history).
+    // Only load persisted history from disk for a brand-new session.
+    // When reusing an existing session, the in-memory history is the source of truth;
+    // re-loading from disk would re-inject old conversation turns that the LLM
+    // already responded to, causing it to answer stale questions again.
+    auto const freshSession = !_agentSession;
+    if (freshSession)
         _agentSession = std::make_unique<agent::AgentSession>(*provider);
 
-    // Load persisted conversation history from project-local store.
     auto const historyStore = agent::ConversationHistoryStore(".endo/agent-history.json");
     auto historyProvider = std::make_unique<agent::AgentHistoryProvider>();
-    if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
+    if (freshSession)
     {
-        for (auto const& msg: *loaded)
+        // Load persisted conversation history from project-local store.
+        if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
+        {
+            for (auto const& msg: *loaded)
+            {
+                if (msg.role == agent::Role::User)
+                {
+                    auto const text = msg.textContent();
+                    if (!text.empty())
+                        historyProvider->addEntry(text);
+                }
+            }
+            _agentSession->loadPersistedMessages(std::move(*loaded));
+        }
+    }
+    else
+    {
+        // Reusing existing session — populate history provider from in-memory history
+        // so that ghost-text completion of past queries still works.
+        for (auto const& msg: _agentSession->history().messages())
         {
             if (msg.role == agent::Role::User)
             {
@@ -1507,7 +1530,6 @@ void Shell::runAgentMode()
                     historyProvider->addEntry(text);
             }
         }
-        _agentSession->loadPersistedMessages(std::move(*loaded));
     }
     auto* historyProviderPtr = historyProvider.get();
 
