@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PromptComponent.hpp"
 
-#include <endo-language/HoverProvider.hpp>
+#include <endo-language/ide/HoverProvider.hpp>
 
 #include <tui/Canvas.hpp>
 #include <tui/Screen.hpp>

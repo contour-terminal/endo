@@ -3,7 +3,7 @@
 
 #include <shell/ProcessGroup.hpp>
 
-#include <endo-language/IRGenerator.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
 
 #include <http/HttpClient.hpp>
 

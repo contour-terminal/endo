@@ -7,7 +7,7 @@
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
 
-#include <endo-language/BuiltinImpls.hpp>
+#include <endo-language/builtins/BuiltinImpls.hpp>
 
 #include <agent/auth/OAuthFlow.hpp>
 #include <agent/providers/ProviderFactory.hpp>

@@ -5,9 +5,9 @@
 #include <shell/PromptLayoutEngine.hpp>
 #include <shell/PromptModule.hpp>
 
-#include <endo-language/DiagnosticsCollector.hpp>
-#include <endo-language/HoverInfo.hpp>
-#include <endo-language/TokenClassification.hpp>
+#include <endo-language/ide/DiagnosticsCollector.hpp>
+#include <endo-language/ide/HoverInfo.hpp>
+#include <endo-language/lexer/TokenClassification.hpp>
 
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>

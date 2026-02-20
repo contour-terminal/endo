@@ -13,7 +13,7 @@
 #include <shell/CompletionProviders/VariableCompleter.hpp>
 #include <shell/History.hpp>
 
-#include <endo-language/CompletionContext.hpp>
+#include <endo-language/ide/CompletionContext.hpp>
 
 #include <memory>
 #include <optional>

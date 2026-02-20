@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FileCompleter.hpp"
 
-#include <endo-language/CompletionCandidates.hpp>
+#include <endo-language/ide/CompletionCandidates.hpp>
 
 #include <tui/completer/FuzzyMatch.hpp>
 #include <tui/completer/SmartCaseMatch.hpp>

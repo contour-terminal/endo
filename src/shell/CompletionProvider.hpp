@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <endo-language/CompletionContext.hpp>
+#include <endo-language/ide/CompletionContext.hpp>
 
 #include <tui/completer/CompletionItem.hpp>
 

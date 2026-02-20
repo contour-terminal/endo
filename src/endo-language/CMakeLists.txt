@@ -4,68 +4,62 @@
 
 add_library(endo STATIC
     # Lexical Analysis
-    Lexer.hpp
-    Lexer.cpp
-    TokenClassification.hpp
-    ContextAwareTokenizer.hpp
-    ContextAwareTokenizer.cpp
+    lexer/Lexer.hpp
+    lexer/Lexer.cpp
+    lexer/TokenClassification.hpp
+    lexer/ContextAwareTokenizer.hpp
+    lexer/ContextAwareTokenizer.cpp
 
     # AST
-    AST.hpp
-    Visitor.hpp
-    ASTPrinter.hpp
-    ASTPrinter.cpp
+    ast/AST.hpp
+    ast/Visitor.hpp
+    ast/ASTPrinter.hpp
+    ast/ASTPrinter.cpp
+    ast/Pattern.hpp
+    ast/Pattern.cpp
 
     # Parser
-    Parser.hpp
-    Parser.cpp
-
-    # IR Generation
-    IRGenerator.hpp
-    IRGenerator.cpp
-    PatternIRGenerator.hpp
-    PatternIRGenerator.cpp
+    parser/Parser.hpp
+    parser/Parser.cpp
+    parser/DiagnosticsAdapter.hpp
+    parser/DiagnosticsAdapter.cpp
 
     # Type System
-    Type.hpp
-    Type.cpp
-    TypeEnv.hpp
-    TypeEnv.cpp
-    TypeInferencer.hpp
-    TypeInferencer.cpp
-    Unification.hpp
-    Unification.cpp
+    types/Type.hpp
+    types/Type.cpp
+    types/TypeEnv.hpp
+    types/TypeEnv.cpp
+    types/TypeInferencer.hpp
+    types/TypeInferencer.cpp
+    types/Unification.hpp
+    types/Unification.cpp
 
-    # Pattern AST
-    Pattern.hpp
-    Pattern.cpp
+    # IR Generation
+    codegen/IRGenerator.hpp
+    codegen/IRGenerator.cpp
+    codegen/PatternIRGenerator.hpp
+    codegen/PatternIRGenerator.cpp
 
-    # Diagnostics
-    DiagnosticsAdapter.hpp
-    DiagnosticsAdapter.cpp
-    DiagnosticsCollector.hpp
-    DiagnosticsCollector.cpp
+    # IDE Intelligence (completion, hover, diagnostics)
+    ide/CompletionItem.hpp
+    ide/CompletionContext.hpp
+    ide/CompletionContext.cpp
+    ide/CompletionCandidates.hpp
+    ide/CompletionCandidates.cpp
+    ide/Completer.hpp
+    ide/Completer.cpp
+    ide/HoverInfo.hpp
+    ide/HoverProvider.hpp
+    ide/HoverProvider.cpp
+    ide/DiagnosticsCollector.hpp
+    ide/DiagnosticsCollector.cpp
 
     # Builtin Registration (single source of truth for signatures + shared implementations)
-    BuiltinSignatures.hpp
-    BuiltinSignatures.cpp
-    BuiltinImpls.hpp
-    BuiltinImpls.cpp
-
-    # Hover & Stub Runtime
-    HoverInfo.hpp
-    HoverProvider.hpp
-    HoverProvider.cpp
-    StubRuntime.hpp
-
-    # Completion (shared between shell and LSP)
-    CompletionItem.hpp
-    CompletionContext.hpp
-    CompletionContext.cpp
-    CompletionCandidates.hpp
-    CompletionCandidates.cpp
-    Completer.hpp
-    Completer.cpp
+    builtins/BuiltinSignatures.hpp
+    builtins/BuiltinSignatures.cpp
+    builtins/BuiltinImpls.hpp
+    builtins/BuiltinImpls.cpp
+    builtins/StubRuntime.hpp
 
     # Logging (used by parser tracing)
     LogCategories.hpp
@@ -91,18 +85,18 @@ if(ENDO_TESTING)
         test_main.cpp
         TestHelper.hpp
         TestHelper.cpp
-        Lexer_test.cpp
-        Diagnostics_test.cpp
-        DiagnosticsCollector_test.cpp
-        HoverProvider_test.cpp
-        Type_test.cpp
-        Pattern_test.cpp
-        Parser_test.cpp
-        IRGenerator_test.cpp
-        TypeInferencer_test.cpp
-        CompletionCandidates_test.cpp
-        CompletionContext_test.cpp
-        Completer_test.cpp
+        lexer/Lexer_test.cpp
+        ast/Pattern_test.cpp
+        parser/Parser_test.cpp
+        parser/Diagnostics_test.cpp
+        types/Type_test.cpp
+        types/TypeInferencer_test.cpp
+        codegen/IRGenerator_test.cpp
+        ide/CompletionCandidates_test.cpp
+        ide/CompletionContext_test.cpp
+        ide/Completer_test.cpp
+        ide/HoverProvider_test.cpp
+        ide/DiagnosticsCollector_test.cpp
     )
     target_link_libraries(test-endo-language endo Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE

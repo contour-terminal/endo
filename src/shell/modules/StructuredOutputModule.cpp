@@ -2,7 +2,7 @@
 #include "StructuredOutputModule.hpp"
 #include <shell/OutputDefinitionRegistry.hpp>
 
-#include <endo-language/IRGenerator.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
 
 #include <tui/Theme.hpp>
 

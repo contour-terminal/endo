@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <endo-language/ast/AST.hpp>
+#include <endo-language/ast/ASTPrinter.hpp>
+#include <endo-language/builtins/BuiltinImpls.hpp>
+#include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/parser/Parser.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -8,13 +16,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "AST.hpp"
-#include "ASTPrinter.hpp"
-#include "BuiltinImpls.hpp"
-#include "BuiltinSignatures.hpp"
-#include "IRGenerator.hpp"
-#include "Lexer.hpp"
-#include "Parser.hpp"
 #include <emscripten/emscripten.h>
 
 namespace

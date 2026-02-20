@@ -2,7 +2,7 @@
 #include <shell/Shell.hpp>
 #include <shell/TableFormatter.hpp>
 
-#include <endo-language/BuiltinImpls.hpp>
+#include <endo-language/builtins/BuiltinImpls.hpp>
 
 #include <http/HttpClient.hpp>
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SyntaxHighlighter.hpp"
 
-#include <endo-language/ContextAwareTokenizer.hpp>
+#include <endo-language/lexer/ContextAwareTokenizer.hpp>
 
 #if defined(__clang__)
     #pragma clang diagnostic push

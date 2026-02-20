@@ -14,7 +14,7 @@ using namespace std::string_view_literals;
 
 using crispy::escape;
 
-#include <endo-language/CompletionContext.hpp>
+#include <endo-language/ide/CompletionContext.hpp>
 
 #include "CompletionProviders/FileCompleter.hpp"
 #include "CompletionProviders/LetBindingCompleter.hpp"

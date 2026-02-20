@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "DiagnosticsProvider.hpp"
 
-#include <endo-language/DiagnosticsCollector.hpp>
+#include <endo-language/ide/DiagnosticsCollector.hpp>
 
 namespace endo::lsp
 {

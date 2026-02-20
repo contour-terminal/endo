@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TestHelper.hpp"
 
+#include <endo-language/ast/AST.hpp>
+#include <endo-language/ast/ASTPrinter.hpp>
+#include <endo-language/builtins/BuiltinImpls.hpp>
+#include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/parser/Parser.hpp>
+
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <bit>
-
-#include "AST.hpp"
-#include "ASTPrinter.hpp"
-#include "BuiltinImpls.hpp"
-#include "BuiltinSignatures.hpp"
-#include "IRGenerator.hpp"
-#include "Lexer.hpp"
-#include "Parser.hpp"
 
 namespace endo::test
 {

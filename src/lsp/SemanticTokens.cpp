@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SemanticTokens.hpp"
 
-#include <endo-language/ContextAwareTokenizer.hpp>
-#include <endo-language/Lexer.hpp>
-#include <endo-language/TokenClassification.hpp>
+#include <endo-language/lexer/ContextAwareTokenizer.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/lexer/TokenClassification.hpp>
 
 namespace endo::lsp
 {

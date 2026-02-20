@@ -3,7 +3,7 @@
 
 #include <shell/CompletionProvider.hpp>
 
-#include <endo-language/IRGenerator.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
 
 #include <string>
 #include <vector>

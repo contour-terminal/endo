@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "HoverProvider.hpp"
 
-#include <endo-language/HoverProvider.hpp>
+#include <endo-language/ide/HoverProvider.hpp>
 
 namespace endo::lsp
 {

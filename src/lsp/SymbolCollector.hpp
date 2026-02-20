@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <endo-language/Lexer.hpp>
+#include <endo-language/lexer/Lexer.hpp>
 
 #include <optional>
 #include <string>

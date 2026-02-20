@@ -3,8 +3,8 @@
 #include <shell/CompletionAdapter.hpp>
 #include <shell/Shell.hpp>
 
-#include <endo-language/BuiltinSignatures.hpp>
-#include <endo-language/CompletionCandidates.hpp>
+#include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/ide/CompletionCandidates.hpp>
 
 #include <crispy/utils.h>
 

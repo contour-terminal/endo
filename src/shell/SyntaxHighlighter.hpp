@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <endo-language/TokenClassification.hpp>
+#include <endo-language/lexer/TokenClassification.hpp>
 
 #include <tui/TerminalOutput.hpp>
 #include <tui/Theme.hpp>

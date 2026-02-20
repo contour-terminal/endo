@@ -2,9 +2,9 @@
 #include "LetBindingCompleter.hpp"
 #include <shell/CompletionAdapter.hpp>
 
-#include <endo-language/CompletionCandidates.hpp>
-#include <endo-language/CompletionItem.hpp>
-#include <endo-language/Type.hpp>
+#include <endo-language/ide/CompletionCandidates.hpp>
+#include <endo-language/ide/CompletionItem.hpp>
+#include <endo-language/types/Type.hpp>
 
 #include <algorithm>
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FSharpModeModule.hpp"
 
-#include <endo-language/IRGenerator.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
 
 #include <tui/Theme.hpp>
 

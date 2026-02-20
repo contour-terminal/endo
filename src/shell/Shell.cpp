@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
 
-#include <endo-language/ASTPrinter.hpp>
-#include <endo-language/IRGenerator.hpp>
-#include <endo-language/Lexer.hpp>
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
-#include <endo-language/Parser.hpp>
+#include <endo-language/ast/ASTPrinter.hpp>
+#include <endo-language/codegen/IRGenerator.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/parser/Parser.hpp>
 
 #include <tui/Canvas.hpp>
 #include <tui/MarkdownRenderer.hpp>

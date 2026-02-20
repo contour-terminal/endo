@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "SignatureHelpProvider.hpp"
 
-#include <endo-language/AST.hpp>
-#include <endo-language/Lexer.hpp>
-#include <endo-language/Parser.hpp>
-#include <endo-language/Type.hpp>
+#include <endo-language/ast/AST.hpp>
+#include <endo-language/lexer/Lexer.hpp>
+#include <endo-language/parser/Parser.hpp>
+#include <endo-language/types/Type.hpp>
 
 #include <vector>
 

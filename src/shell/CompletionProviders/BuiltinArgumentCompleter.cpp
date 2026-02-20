@@ -2,7 +2,7 @@
 #include "BuiltinArgumentCompleter.hpp"
 #include <shell/CompletionAdapter.hpp>
 
-#include <endo-language/CompletionCandidates.hpp>
+#include <endo-language/ide/CompletionCandidates.hpp>
 
 namespace endo
 {
