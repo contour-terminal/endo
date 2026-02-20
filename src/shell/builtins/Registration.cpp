@@ -1156,6 +1156,9 @@ void Shell::registerPromptBuiltins()
             config.exitConfirmTimeoutMs = std::max(int64_t { 0 }, args.getInt(1));
             prompt.setPromptConfig(std::move(config));
         });
+
+    _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });
     // clang-format on
 }
 

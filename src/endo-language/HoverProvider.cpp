@@ -152,6 +152,9 @@ namespace
             { "shell_prompt_spacing",
               "`shell_prompt_spacing` : `int`\n\nBlank lines above and below the "
               "prompt (0 or 1, default 1). Read or write with `<-`." },
+            { "shell_is_interactive",
+              "`shell_is_interactive` : `bool`\n\nWhether the shell is running in interactive mode "
+              "(true for REPL, false for scripts and `-c` commands). Read-only." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

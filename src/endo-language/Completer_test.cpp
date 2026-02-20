@@ -433,3 +433,10 @@ TEST_CASE("Completer.stdlib.empty_input_includes_stdlib", "[completion][complete
     CHECK(hasCandidate(results, "head"));
     CHECK(hasCandidate(results, "trim"));
 }
+
+TEST_CASE("Completer.shell_is_interactive_prefix_completion", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    auto results = computeCompletions("shell_is", 8, dataSource);
+    CHECK(hasCandidate(results, "shell_is_interactive"));
+}

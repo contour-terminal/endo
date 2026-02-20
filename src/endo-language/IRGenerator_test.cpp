@@ -8628,3 +8628,22 @@ TEST_CASE("IRGenerator.FSharp.method.field_priority_over_function")
                                     "print p.x")
           == "42");
 }
+
+// ============================================================================
+// Builtin property: shell_is_interactive
+// ============================================================================
+
+TEST_CASE("IRGenerator.FSharp.shell_is_interactive.read")
+{
+    CHECK(generatesIRSuccessfully("print shell_is_interactive"));
+}
+
+TEST_CASE("IRGenerator.FSharp.shell_is_interactive.read_only_rejection")
+{
+    CHECK(generatesIRWithError("shell_is_interactive <- true", "read-only property"));
+}
+
+TEST_CASE("IRGenerator.FSharp.shell_is_interactive.conditional")
+{
+    CHECK(generatesIRSuccessfully("if shell_is_interactive then print \"yes\" else print \"no\""));
+}

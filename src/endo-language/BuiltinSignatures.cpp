@@ -779,6 +779,22 @@ namespace
         else
             prop.onSet([](CoreVM::Params&) {});
     }
+
+    /// Registers a read-only property (getter only, no setter).
+    /// The IRGenerator checks `NativeProperty::hasSetter()` and emits a compile-time
+    /// "Cannot assign to read-only property" error when assignment is attempted.
+    void registerReadOnlyPropertyResolved(CoreVM::Runtime& rt,
+                                          CallbackResolver const& resolve,
+                                          std::string_view name,
+                                          CoreVM::LiteralType type)
+    {
+        auto& prop = rt.registerProperty(std::string(name), type);
+        if (auto getterCb = resolve(name, 0))
+            prop.onGet(*getterCb);
+        else
+            prop.onGet([](CoreVM::Params&) {});
+        // No onSet() — property remains read-only
+    }
 } // namespace
 
 void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
@@ -792,6 +808,7 @@ void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const&
     registerPropertyResolved(rt, resolve, "shell_prompt_duration_threshold", CoreVM::LiteralType::Number);
     registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number);
     registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number);
+    registerReadOnlyPropertyResolved(rt, resolve, "shell_is_interactive", CoreVM::LiteralType::Boolean);
     // clang-format on
 }
 

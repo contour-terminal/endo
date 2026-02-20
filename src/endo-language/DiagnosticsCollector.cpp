@@ -83,6 +83,7 @@ namespace
             "shell_prompt_transient",
             "shell_prompt_duration_threshold",
             "shell_prompt_spacing",
+            "shell_is_interactive",
         };
         return names;
     }

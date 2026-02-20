@@ -73,6 +73,7 @@ TEST_CASE("CompletionCandidates.builtinCandidates.returns_expected_builtins", "[
     CHECK(hasCandidate(builtins, "shell_prompt_separator"));
     CHECK(hasCandidate(builtins, "shell_prompt_transient"));
     CHECK(hasCandidate(builtins, "shell_prompt_duration_threshold"));
+    CHECK(hasCandidate(builtins, "shell_is_interactive"));
 }
 
 TEST_CASE("CompletionCandidates.builtinCandidates.kind_is_builtin_or_property", "[completion]")
