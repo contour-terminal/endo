@@ -2,6 +2,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +17,16 @@ class HttpClient;
 
 namespace endo::agent
 {
+
+/// Owned provider with its own HttpClient, suitable for use on a worker thread.
+///
+/// Each worker thread needs its own CURL handle (HttpClient) since CURL easy handles
+/// are not thread-safe. This struct bundles both together with proper ownership.
+struct OwnedProvider
+{
+    std::unique_ptr<http::HttpClient> httpClient; ///< Owned HTTP client with its own CURL handle.
+    std::unique_ptr<LlmProvider> provider;        ///< The LLM provider instance.
+};
 
 /// Manages all authenticated LLM providers and enables runtime switching.
 ///
@@ -44,9 +55,17 @@ class ProviderFactory
     /// Returns the name of the currently active provider.
     [[nodiscard]] auto activeProviderName() const -> std::string const&;
 
+    /// Creates a fresh provider instance with its own HttpClient for use on a worker thread.
+    ///
+    /// Returns the active provider type with a separate CURL handle, or nullopt if
+    /// no provider is authenticated.
+    /// @return An OwnedProvider with independent HttpClient and LlmProvider.
+    [[nodiscard]] auto createProvider() const -> std::optional<OwnedProvider>;
+
   private:
     std::unordered_map<std::string, std::unique_ptr<LlmProvider>> _providers;
     std::string _activeProviderName;
+    AgentConfig _config; ///< Saved config for createProvider().
 };
 
 } // namespace endo::agent

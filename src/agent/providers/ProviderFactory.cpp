@@ -10,7 +10,8 @@
 namespace endo::agent
 {
 
-ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig const& config)
+ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig const& config):
+    _config(config)
 {
     // Try to create Claude provider (stored key takes priority over env var)
     if (auto key = resolveProviderApiKey(config.claude.apiKey, config.claude.apiKeyEnv))
@@ -98,6 +99,74 @@ auto ProviderFactory::authenticatedProviders() const -> std::vector<std::string>
 auto ProviderFactory::activeProviderName() const -> std::string const&
 {
     return _activeProviderName;
+}
+
+auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
+{
+    if (_activeProviderName.empty())
+        return std::nullopt;
+
+    auto httpClient = std::make_unique<http::HttpClient>();
+    auto& httpRef = *httpClient; // Stable reference — unique_ptr move doesn't invalidate the pointee.
+
+    if (_activeProviderName == "claude")
+    {
+        if (auto key = resolveProviderApiKey(_config.claude.apiKey, _config.claude.apiKeyEnv))
+        {
+            auto providerConfig = ClaudeProviderConfig {
+                .apiKey = std::move(*key),
+                .model = _config.claude.model,
+                .maxTokens = _config.claude.maxTokens,
+            };
+            auto provider = std::make_unique<ClaudeProvider>(httpRef, std::move(providerConfig));
+            return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
+        }
+    }
+    else if (_activeProviderName == "openai")
+    {
+        if (auto key = resolveProviderApiKey(_config.openai.apiKey, _config.openai.apiKeyEnv))
+        {
+            auto providerConfig = OpenAiProviderConfig {
+                .apiKey = std::move(*key),
+                .model = _config.openai.model,
+                .baseUrl =
+                    _config.openai.baseUrl.empty() ? "https://api.openai.com/v1" : _config.openai.baseUrl,
+                .maxTokens = _config.openai.maxTokens,
+            };
+            auto provider = std::make_unique<OpenAiProvider>(httpRef, std::move(providerConfig));
+            return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
+        }
+    }
+    else if (_activeProviderName == "openai_compat")
+    {
+        if (!_config.openaiCompat.baseUrl.empty())
+        {
+            auto providerConfig = OpenAiProviderConfig {
+                .apiKey = resolveProviderApiKey(_config.openaiCompat.apiKey, _config.openaiCompat.apiKeyEnv)
+                              .value_or(""),
+                .model = _config.openaiCompat.model,
+                .baseUrl = _config.openaiCompat.baseUrl,
+                .maxTokens = _config.openaiCompat.maxTokens,
+            };
+            auto provider = std::make_unique<OpenAiProvider>(httpRef, std::move(providerConfig));
+            return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
+        }
+    }
+    else if (_activeProviderName == "gemini")
+    {
+        if (auto key = resolveProviderApiKey(_config.gemini.apiKey, _config.gemini.apiKeyEnv))
+        {
+            auto providerConfig = GeminiProviderConfig {
+                .apiKey = std::move(*key),
+                .model = _config.gemini.model,
+                .maxTokens = _config.gemini.maxTokens,
+            };
+            auto provider = std::make_unique<GeminiProvider>(httpRef, std::move(providerConfig));
+            return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
+        }
+    }
+
+    return std::nullopt;
 }
 
 } // namespace endo::agent

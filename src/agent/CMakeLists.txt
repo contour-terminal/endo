@@ -3,6 +3,9 @@
 
 add_library(endo-agent STATIC
     Types.hpp
+    AgentMessages.hpp
+    AgentManager.hpp
+    AgentWorker.hpp AgentWorker.cpp
     providers/LlmProvider.hpp
     AgentConfig.hpp AgentConfig.cpp
     TerminalInput.hpp TerminalInput.cpp
@@ -61,6 +64,7 @@ add_library(endo-agent STATIC
 
 target_link_libraries(endo-agent PUBLIC
     endo-http
+    endo-platform
     tui
     nlohmann_json::nlohmann_json
     yaml-cpp::yaml-cpp
@@ -73,6 +77,7 @@ add_executable(test-endo-agent
     test_main.cpp
     Types_test.cpp
     AgentConfig_test.cpp
+    AgentWorker_test.cpp
     LoginCommand_test.cpp
     providers/ClaudeProvider_test.cpp
     providers/OpenAiProvider_test.cpp
