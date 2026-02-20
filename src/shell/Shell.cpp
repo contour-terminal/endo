@@ -1286,43 +1286,29 @@ namespace
         ScrollRegionGuard _scrollGuard;
     };
 
-    /// @brief Formats tool call arguments as a compact, truncated string for display.
+    /// @brief Formats tool call arguments as a compact string for display.
     /// @param arguments The JSON arguments from a tool call.
-    /// @return A compact string representation, truncated at ~120 characters.
+    /// @return A compact string representation with large content fields replaced by size placeholders.
     [[nodiscard]] auto formatToolCallArgs(nlohmann::json const& arguments) -> std::string
     {
         if (arguments.is_null() || (arguments.is_object() && arguments.empty()))
             return {};
 
-        // Build compact JSON with truncated string values
         auto truncated = arguments;
         for (auto& [key, value]: truncated.items())
         {
             if (value.is_string())
             {
-                // Replace "content" fields (write_file/edit_file payloads) with size placeholder
+                // Replace large content fields (write_file/edit_file payloads) with size placeholder
                 if (key == "content" || key == "new_string" || key == "old_string")
                 {
                     auto const len = value.get<std::string>().size();
                     value = std::format("<{} chars>", len);
                 }
-                else if (auto const& s = value.get<std::string>(); s.size() > 60)
-                {
-                    value = s.substr(0, 57) + "...";
-                }
             }
         }
 
-        auto result = truncated.dump(-1);
-
-        static constexpr auto maxLen = size_t { 120 };
-        if (result.size() > maxLen)
-        {
-            result.resize(maxLen - 3);
-            result += "...";
-        }
-
-        return result;
+        return truncated.dump(-1);
     }
 
     /// @brief Formats a tool status line for terminal display.
@@ -2093,8 +2079,8 @@ void Shell::runAgentMode()
                 screen.draw();
             }
 
-            // Tick spinner during thinking phase.
-            if (activeRenderer && activeRenderer->isThinking())
+            // Tick spinner during thinking phase (but not while ask-user prompt is active).
+            if (activeRenderer && activeRenderer->isThinking() && !askUserActive)
             {
                 if (activeRenderer->tickSpinner())
                 {
