@@ -149,6 +149,10 @@ class Component
     /// Only valid after the component has been rendered.
     [[nodiscard]] Rect screenBounds() const noexcept { return _screenBounds; }
 
+    /// Sets the absolute screen bounds of this component.
+    /// Used by Screen during rendering, and for off-screen component rendering.
+    void setScreenBounds(Rect bounds);
+
     /// Sets the z-index (stacking order) of this component.
     void setZIndex(int z);
 
@@ -214,9 +218,6 @@ class Component
 
     /// Called by Screen to update focus state.
     void setFocused(bool focused);
-
-    /// Called by Screen to update screen bounds during rendering.
-    void setScreenBounds(Rect bounds);
 };
 
 /// Implicit root component used by Screen.

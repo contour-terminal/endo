@@ -8,6 +8,7 @@
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/Parser.hpp>
 
+#include <tui/Canvas.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/Screen.hpp>
 #include <tui/Theme.hpp>
@@ -1828,28 +1829,19 @@ void Shell::runAgentMode()
         activeRenderer = nullptr;
     };
 
-    // Render a simplified prompt directly via TerminalOutput (no Screen involvement).
-    auto renderPromptDirect = [&] {
+    // Render inputComponent to an off-screen buffer and write to TerminalOutput.
+    auto renderComponentDirect = [&] {
         auto const& theme = tui::currentTheme();
-        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-        auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
-        auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const prefSize = inputComponent.preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
 
-        // Header line: ╭─ agent
-        out.carriageReturn();
-        out.writeText("\xe2\x95\xad\xe2\x94\x80 ", barStyle);
-        out.writeText("agent", labelStyle);
-        out.clearToEndOfLine();
-        out.linefeed();
-
-        // Input line: ╰─ ❯ <input>
-        out.carriageReturn();
-        out.writeText("\xe2\x95\xb0\xe2\x94\x80 ", barStyle);
-        out.writeText("\xe2\x9d\xaf ", statusStyle);
-        auto const text = inputComponent.text();
-        if (!text.empty())
-            out.writeText(text);
-        out.clearToEndOfLine();
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
+        inputComponent.setArea(tui::Rect { 0, 0, width, height });
+        inputComponent.setScreenBounds(tui::Rect { 0, 0, width, height });
+        inputComponent.render(canvas);
+        buffer.writeTo(out);
     };
 
     /// Clear the streaming prompt, restoring cursor to content end position.
@@ -1866,14 +1858,15 @@ void Shell::runAgentMode()
     auto renderStreamingPrompt = [&] {
         if (!streaming)
             return;
-        // Pre-scroll: emit linefeeds matching the prompt's total LF count (gap + header→input).
+        // Pre-scroll: emit linefeeds matching the prompt height.
         // This forces any terminal scrolling BEFORE saveCursor, keeping the saved position valid.
-        out.linefeed();
-        out.linefeed();
-        out.moveUp(2);
+        auto const promptHeight = inputComponent.preferredSize().height;
+        for (auto i = 0; i < promptHeight; ++i)
+            out.linefeed();
+        out.moveUp(promptHeight);
         out.saveCursor();
         out.linefeed();
-        renderPromptDirect();
+        renderComponentDirect();
         out.flush();
         streamingPromptVisible = true;
     };

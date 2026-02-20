@@ -12,6 +12,8 @@
 namespace tui
 {
 
+class TerminalOutput;
+
 /// @brief An image region stored in the buffer.
 ///
 /// Represents a pre-encoded sixel image covering a rectangular region of terminal cells.
@@ -135,6 +137,13 @@ class Buffer
 
     /// @brief Clears all image regions.
     void clearImages() noexcept;
+
+    /// Writes buffer content to a terminal output stream.
+    ///
+    /// Iterates rows/cells and emits text with styling, handling wide characters
+    /// and continuation cells. Uses carriageReturn + clearToEndOfLine per row.
+    /// @param out The terminal output to write to.
+    void writeTo(TerminalOutput& out) const;
 
   private:
     std::vector<Cell> _cells;

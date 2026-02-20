@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Buffer.hpp"
 
+#include <tui/TerminalOutput.hpp>
+
 #include <stdexcept>
 
 #include "Unicode.hpp"
@@ -223,6 +225,28 @@ std::span<ImageRegion const> Buffer::images() const noexcept
 void Buffer::clearImages() noexcept
 {
     _images.clear();
+}
+
+void Buffer::writeTo(TerminalOutput& out) const
+{
+    for (auto row = 0; row < _rows; ++row)
+    {
+        out.carriageReturn();
+        for (auto col = 0; col < _cols;)
+        {
+            auto const& cell = at(row, col);
+            if (cell.isContinuation())
+            {
+                ++col;
+                continue;
+            }
+            out.writeText(cell.grapheme, cell.style);
+            col += std::max(1, static_cast<int>(cell.width));
+        }
+        out.clearToEndOfLine();
+        if (row < _rows - 1)
+            out.linefeed();
+    }
 }
 
 } // namespace tui
