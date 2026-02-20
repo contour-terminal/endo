@@ -23,15 +23,26 @@ auto GeminiProvider::buildUrl() const -> std::string
         _config.apiKey);
 }
 
-auto GeminiProvider::mapHttpError(long statusCode) -> ProviderErrorCode
+auto GeminiProvider::mapHttpError(long statusCode, std::string const& body) -> ProviderError
 {
+    auto message = std::format("HTTP {}", statusCode);
+
+    // Try to extract error message from response body.
+    auto const parsed = nlohmann::json::parse(body, nullptr, false);
+    if (!parsed.is_discarded() && parsed.contains("error") && parsed["error"].contains("message"))
+        message = parsed["error"]["message"].get<std::string>();
+
+    auto code = ProviderErrorCode::Unknown;
     if (statusCode == 401 || statusCode == 403)
-        return ProviderErrorCode::AuthenticationError;
-    if (statusCode == 429)
-        return ProviderErrorCode::RateLimitError;
-    if (statusCode >= 500)
-        return ProviderErrorCode::ServerError;
-    return ProviderErrorCode::Unknown;
+        code = ProviderErrorCode::AuthenticationError;
+    else if (statusCode == 429)
+        code = ProviderErrorCode::RateLimitError;
+    else if (statusCode >= 500)
+        code = ProviderErrorCode::ServerError;
+
+    return ProviderError { .code = code,
+                           .message = std::move(message),
+                           .httpStatus = static_cast<int>(statusCode) };
 }
 
 auto GeminiProvider::findToolName(std::span<ChatMessage const> messages, std::string_view toolUseId)
@@ -180,8 +191,11 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
     auto accumulatedText = std::string {};
     auto toolCallIdCounter = 0;
 
-    auto const sseResult =
-        _httpClient.executeStreaming(httpRequest, [&](http::SseEvent const& event) -> bool {
+    auto errorBody = std::string {};
+
+    auto const sseResult = _httpClient.executeStreaming(
+        httpRequest,
+        [&](http::SseEvent const& event) -> bool {
             if (event.data.empty() || event.data == "[DONE]")
                 return true;
 
@@ -243,7 +257,8 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
             }
 
             return true;
-        });
+        },
+        &errorBody);
 
     if (!sseResult.has_value())
     {
@@ -255,12 +270,7 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
 
     auto const statusCode = sseResult.value();
     if (statusCode != 200)
-    {
-        return std::unexpected(
-            ProviderError { .code = mapHttpError(statusCode),
-                            .message = std::format("Gemini API returned HTTP {}", statusCode),
-                            .httpStatus = static_cast<int>(statusCode) });
-    }
+        return std::unexpected(mapHttpError(statusCode, errorBody));
 
     if (!accumulatedText.empty())
         result.content.emplace_back(TextBlock { .text = std::move(accumulatedText) });

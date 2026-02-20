@@ -4,8 +4,8 @@
 #include <span>
 #include <string>
 
-#include <agent/providers/LlmProvider.hpp>
 #include <agent/Types.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <nlohmann/json.hpp>
 
 namespace endo::http
@@ -74,10 +74,11 @@ class GeminiProvider final: public LlmProvider
     /// Builds the full API endpoint URL including the API key.
     [[nodiscard]] auto buildUrl() const -> std::string;
 
-    /// Maps an HTTP status code to the appropriate ProviderErrorCode.
+    /// Maps an HTTP status code and response body to a ProviderError.
     /// @param statusCode The HTTP response status code.
-    /// @return The corresponding error code.
-    [[nodiscard]] static auto mapHttpError(long statusCode) -> ProviderErrorCode;
+    /// @param body       The raw HTTP response body (may contain JSON error details).
+    /// @return The corresponding provider error with extracted message.
+    [[nodiscard]] static auto mapHttpError(long statusCode, std::string const& body) -> ProviderError;
 
     /// Finds the tool name for a given tool use ID by searching backwards through messages.
     /// @param messages  The conversation history to search.

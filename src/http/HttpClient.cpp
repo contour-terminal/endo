@@ -109,6 +109,7 @@ namespace
         std::string currentId;    ///< Current "id:" value.
         SseCallback const* callback = nullptr;
         bool aborted = false;
+        std::string* rawCapture = nullptr; ///< If set, all incoming raw data is appended here.
 
         /// Processes a single line of SSE input.
         void processLine(std::string_view line)
@@ -178,6 +179,8 @@ namespace
         /// Feeds raw data from curl into the parser, extracting complete lines.
         void feed(std::string_view chunk)
         {
+            if (rawCapture)
+                *rawCapture += chunk;
             buffer += chunk;
 
             // Process all complete lines in the buffer
@@ -433,6 +436,8 @@ std::expected<long, HttpError> HttpClient::executeStreaming(HttpRequest const& r
     // SSE streaming write callback
     auto parserState = SseParserState {};
     parserState.callback = &callback;
+    if (errorBody)
+        parserState.rawCapture = errorBody;
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, sseWriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &parserState);
 
@@ -451,10 +456,9 @@ std::expected<long, HttpError> HttpClient::executeStreaming(HttpRequest const& r
     long statusCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &statusCode);
 
-    // On non-200 responses, the body is plain JSON (not SSE-framed),
-    // so it accumulates in the parser buffer without being dispatched.
-    if (statusCode != 200 && errorBody)
-        *errorBody = std::move(parserState.buffer);
+    // On success, clear any captured raw data (only needed for error responses).
+    if (statusCode == 200 && errorBody)
+        errorBody->clear();
 
     return statusCode;
 }

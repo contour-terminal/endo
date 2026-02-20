@@ -334,7 +334,8 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
         return true;
     };
 
-    auto const streamResult = _httpClient.executeStreaming(request, sseCallback);
+    auto errorBody = std::string {};
+    auto const streamResult = _httpClient.executeStreaming(request, sseCallback, &errorBody);
     if (!streamResult.has_value())
     {
         return std::unexpected(ProviderError { .code = ProviderErrorCode::NetworkError,
@@ -343,7 +344,7 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
 
     auto const httpStatus = streamResult.value();
     if (httpStatus < 200 || httpStatus >= 300)
-        return std::unexpected(mapHttpError(httpStatus, {}));
+        return std::unexpected(mapHttpError(httpStatus, errorBody));
 
     // Assemble text content.
     if (!textAccumulator.empty())
