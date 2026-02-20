@@ -9,6 +9,7 @@
 
 #include <endo-language/BuiltinImpls.hpp>
 
+#include <agent/OAuthFlow.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 #include <platform/Process.hpp>
@@ -1212,6 +1213,17 @@ void Shell::registerAgentConfigBuiltins()
     _runtime.registerProperty("agent_claude_max_tokens", CoreVM::LiteralType::Number)
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.claude.maxTokens)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.claude.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
+
+    _runtime.registerProperty("agent_claude_auth_type", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            auto const oauthStore = agent::loadOAuthStore();
+            if (oauthStore.claude.has_value() && !agent::isTokenExpired(*oauthStore.claude))
+                args.setResult(std::string("oauth"));
+            else if (agent::resolveProviderApiKey(agentConfig.claude.apiKey, agentConfig.claude.apiKeyEnv).has_value())
+                args.setResult(std::string("api_key"));
+            else
+                args.setResult(std::string("none"));
+        });
 
     // --- OpenAI provider ---
 

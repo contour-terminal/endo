@@ -5,34 +5,60 @@
 
 #include <format>
 
+#include <agent/OAuthFlow.hpp>
+
 namespace endo::agent
 {
+
+namespace
+{
+    // OAuth-specific constants for request headers.
+    constexpr auto OAuthBetaHeader = "oauth-2025-04-20";
+    constexpr auto ClaudeCodeBetaHeader = "claude-code-20250219";
+    constexpr auto ClaudeCodeUserAgent = "claude-code/2.1.49 (external, cli)";
+} // namespace
 
 ClaudeProvider::ClaudeProvider(http::HttpClient const& httpClient, ClaudeProviderConfig config):
     _httpClient(httpClient), _config(std::move(config))
 {
 }
 
-auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
-                              std::span<ToolDefinition const> tools,
-                              StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
+auto ClaudeProvider::buildRequest(std::span<ChatMessage const> messages,
+                                  std::span<ToolDefinition const> tools) const -> http::HttpRequest
 {
-    if (_config.apiKey.empty())
-        return std::unexpected(
-            ProviderError { .code = ProviderErrorCode::ConfigError, .message = "API key is not configured" });
-
     auto const requestBody = serializeRequest(messages, tools, _config.model, _config.maxTokens);
 
     auto request = http::HttpRequest {};
     request.url = std::format("{}/v1/messages", _config.baseUrl);
     request.method = http::HttpMethod::Post;
-    request.headers = {
-        "Content-Type: application/json",
-        std::format("x-api-key: {}", _config.apiKey),
-        std::format("anthropic-version: {}", _config.apiVersion),
-    };
     request.body = requestBody.dump();
 
+    // Build headers based on token type (OAuth vs API key).
+    request.headers = { "Content-Type: application/json" };
+
+    if (isOAuthToken(_config.apiKey))
+    {
+        // OAuth token: Bearer auth with Claude Code identity headers.
+        request.headers.push_back(std::format("Authorization: Bearer {}", _config.apiKey));
+        request.headers.push_back(std::format("anthropic-version: {}", _config.apiVersion));
+        request.headers.push_back(
+            std::format("anthropic-beta: {},{}", ClaudeCodeBetaHeader, OAuthBetaHeader));
+        request.headers.push_back(std::format("user-agent: {}", ClaudeCodeUserAgent));
+        request.headers.push_back("x-app: cli");
+    }
+    else
+    {
+        // Standard API key auth.
+        request.headers.push_back(std::format("x-api-key: {}", _config.apiKey));
+        request.headers.push_back(std::format("anthropic-version: {}", _config.apiVersion));
+    }
+
+    return request;
+}
+
+auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCallback const& streamCb)
+    -> std::expected<GenerateResult, ProviderError>
+{
     auto result = GenerateResult {};
     auto accumulators = std::vector<ContentBlockAccumulator> {};
 
@@ -86,6 +112,34 @@ auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
             }
         }
         return std::unexpected(mapHttpError(statusCode, std::move(message)));
+    }
+
+    return result;
+}
+
+auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
+                              std::span<ToolDefinition const> tools,
+                              StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
+{
+    if (_config.apiKey.empty())
+        return std::unexpected(
+            ProviderError { .code = ProviderErrorCode::ConfigError, .message = "API key is not configured" });
+
+    auto request = buildRequest(messages, tools);
+    auto result = executeStreaming(request, streamCb);
+
+    // On 401 with an OAuth token and a token refresher, attempt refresh and retry once.
+    if (!result.has_value() && result.error().httpStatus == 401 && isOAuthToken(_config.apiKey)
+        && _config.tokenRefresher)
+    {
+        auto refreshed = _config.tokenRefresher();
+        if (refreshed.has_value())
+        {
+            _config.apiKey = std::move(*refreshed);
+            request = buildRequest(messages, tools);
+            result = executeStreaming(request, streamCb);
+        }
+        // If refresh failed, fall through and return the original 401 error.
     }
 
     return result;

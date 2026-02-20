@@ -799,6 +799,88 @@ Lightweight `GET` request to each provider's models endpoint before saving:
 
 ---
 
+## Phase 7c: OAuth 2.0 PKCE Authentication (**COMPLETE**)
+
+**Goal:** Enable users with Claude MAX, Pro, Teams, or Enterprise subscriptions to authenticate
+via OAuth 2.0 (PKCE flow) instead of requiring a standalone API key. The design is
+provider-agnostic to support future OAuth providers.
+
+**Status:** Fully implemented. `endo agent login claude` now offers a choice between API key
+and OAuth login. OAuth flow: generate PKCE verifier/challenge, start localhost callback server,
+open browser for claude.ai or console.anthropic.com authorization, exchange code for tokens,
+persist to `~/.config/endo/agent-oauth.yaml` with 0600 permissions. Transparent token refresh
+on HTTP 401 inside `ClaudeProvider::generate()`. Both `agent.yml` and `agent-oauth.yaml` now
+use restricted file permissions (0600). OAuth authorize URL includes `code=true` parameter
+(required by Anthropic's consent page), uses `http://localhost:<port>/callback` redirect URI
+format, full scope set (`org:create_api_key user:profile user:inference user:sessions:claude_code
+user:mcp_servers`), and `platform.claude.com` token endpoint. 13 new test cases (9 OAuthFlow +
+4 OAuthCallbackServer), 440 total agent test cases (1596 assertions), all passing.
+
+### 7c.1 OAuth Infrastructure
+
+- `OAuthFlow.hpp/cpp` — provider-independent OAuth types, PKCE generation (self-contained SHA-256
+  + base64url), token exchange/refresh via Anthropic token endpoint, credential store I/O
+- `OAuthCallbackServer.hpp/cpp` — minimal localhost HTTP server (POSIX sockets) for receiving
+  browser redirect callbacks with code+state extraction
+- Credential store: `~/.config/endo/agent-oauth.yaml` (YAML, provider-keyed, 0600 permissions)
+
+### 7c.2 Authentication Priority
+
+For each provider, credentials are resolved in this order:
+1. OAuth access token from `agent-oauth.yaml` (if present and not expired)
+2. API key from `agent.yml` (stored key)
+3. API key from environment variable (fallback)
+
+### 7c.3 OAuth-Aware API Requests
+
+Token type auto-detected by `sk-ant-oat` prefix (no explicit config flag needed):
+- **OAuth tokens:** `Authorization: Bearer`, `anthropic-beta: claude-code-20250219,oauth-2025-04-20`,
+  `user-agent: claude-code/2.1.49`, `x-app: cli`
+- **API keys:** `x-api-key` header (unchanged behavior)
+
+### 7c.4 Transparent Token Refresh
+
+On HTTP 401 with an OAuth token, `ClaudeProvider::generate()` attempts a single token refresh
+via the `TokenRefresher` callback, persists the new credentials to disk, and retries the request.
+This handles long-running agent sessions where tokens expire mid-conversation.
+
+### 7c.5 Login Flow UX
+
+```
+$ endo agent login claude
+Select authentication method for Claude (Anthropic):
+  [1] API Key (from https://console.anthropic.com/settings/keys)
+  [2] OAuth (Claude MAX/Pro/Teams subscription)
+Enter choice [1-2]: 2
+
+Select account type:
+  [1] Claude.ai (MAX/Pro subscription)
+  [2] Anthropic Console (Teams/Enterprise)
+Enter choice [1-2]: 1
+
+Opening browser for authentication...
+Waiting for browser callback on http://localhost:52341/callback...
+Received authorization callback.
+Exchanging authorization code for tokens... OK
+Login successful! OAuth credentials saved to ~/.config/endo/agent-oauth.yaml
+```
+
+Manual code-paste fallback available when localhost redirect fails (firewall, WSL, etc.).
+
+### 7c.6 Shell Integration
+
+- `agent_claude_auth_type` read-only property: returns `"oauth"`, `"api_key"`, or `"none"`
+- `endo agent status` shows OAuth source and expiry status alongside API key status
+- `endo agent logout` removes both OAuth credentials and stored API key
+
+**Files:** `src/agent/OAuthFlow.hpp/cpp`, `src/agent/OAuthCallbackServer.hpp/cpp`,
+`src/agent/LoginCommand.cpp` (extended), `src/agent/providers/ClaudeProvider.hpp/cpp` (extended),
+`src/agent/providers/ProviderFactory.cpp` (extended), `src/agent/AgentConfig.cpp` (0600 perms),
+`src/shell/builtins/Registration.cpp` (`agent_claude_auth_type`),
+`src/shell/main.cpp` (help text update)
+
+---
+
 ## Phase 8: MCP Support
 
 **Goal:** Enable the agent to use external MCP (Model Context Protocol) servers alongside

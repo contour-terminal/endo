@@ -52,9 +52,10 @@ Options:
 
 Agent Commands:
   agent login [PROVIDER]    Authenticate with an LLM provider (claude, openai, gemini)
+                            For Claude, offers OAuth (MAX/Pro/Teams) or API key login
   agent status              Show configured providers and active selection
   agent switch [PROVIDER]   Switch the active LLM provider
-  agent logout [PROVIDER]   Remove stored API key for a provider
+  agent logout [PROVIDER]   Remove stored credentials for a provider (OAuth and API key)
   agent trace replay <FILE> Replay a tool trace JSONL file
 
 Agent Options:

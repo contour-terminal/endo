@@ -3,6 +3,7 @@
 
 #include <http/HttpClient.hpp>
 
+#include <agent/OAuthFlow.hpp>
 #include <agent/providers/ClaudeProvider.hpp>
 #include <agent/providers/GeminiProvider.hpp>
 #include <agent/providers/OpenAiProvider.hpp>
@@ -10,17 +11,78 @@
 namespace endo::agent
 {
 
+namespace
+{
+    /// Resolves the Claude API token: OAuth credentials take priority, then API key.
+    /// @return The token string (OAuth access token or API key), or nullopt.
+    auto resolveClaudeToken(AgentConfig const& config, OAuthStore const& oauthStore)
+        -> std::optional<std::string>
+    {
+        // Priority 1: OAuth credentials from agent-oauth.yaml.
+        if (oauthStore.claude.has_value() && !oauthStore.claude->accessToken.empty())
+        {
+            if (!isTokenExpired(*oauthStore.claude))
+                return oauthStore.claude->accessToken;
+
+            // Token expired — attempt refresh.
+            auto refreshClient = http::HttpClient {};
+            auto refreshed = refreshOAuthToken(refreshClient, oauthStore.claude->refreshToken);
+            if (refreshed.has_value())
+            {
+                // Persist the refreshed token.
+                auto store = oauthStore;
+                store.claude = std::move(*refreshed);
+                (void) saveOAuthStore(store);
+                return store.claude->accessToken;
+            }
+            // Refresh failed — fall through to API key.
+        }
+
+        // Priority 2: API key (stored or env var).
+        return resolveProviderApiKey(config.claude.apiKey, config.claude.apiKeyEnv);
+    }
+
+    /// Creates a TokenRefresher callback that refreshes the Claude OAuth token
+    /// and persists the new credentials to disk.
+    auto makeClaudeTokenRefresher() -> TokenRefresher
+    {
+        return []() -> std::expected<std::string, std::string> {
+            auto store = loadOAuthStore();
+            if (!store.claude.has_value())
+                return std::unexpected(std::string("No OAuth credentials stored"));
+
+            auto httpClient = http::HttpClient {};
+            auto refreshed = refreshOAuthToken(httpClient, store.claude->refreshToken);
+            if (!refreshed.has_value())
+                return std::unexpected(refreshed.error());
+
+            auto const newAccessToken = refreshed->accessToken;
+            store.claude = std::move(*refreshed);
+            (void) saveOAuthStore(store);
+            return newAccessToken;
+        };
+    }
+} // namespace
+
 ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig const& config):
     _config(config)
 {
-    // Try to create Claude provider (stored key takes priority over env var)
-    if (auto key = resolveProviderApiKey(config.claude.apiKey, config.claude.apiKeyEnv))
+    // Load OAuth credentials for all providers.
+    auto const oauthStore = loadOAuthStore();
+
+    // Try to create Claude provider (OAuth > stored key > env var).
+    if (auto token = resolveClaudeToken(config, oauthStore))
     {
         auto providerConfig = ClaudeProviderConfig {
-            .apiKey = std::move(*key),
+            .apiKey = std::move(*token),
             .model = config.claude.model,
             .maxTokens = config.claude.maxTokens,
         };
+
+        // If we're using an OAuth token, attach a refresher.
+        if (oauthStore.claude.has_value())
+            providerConfig.tokenRefresher = makeClaudeTokenRefresher();
+
         _providers.emplace("claude", std::make_unique<ClaudeProvider>(httpClient, std::move(providerConfig)));
     }
 
@@ -111,13 +173,16 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
 
     if (_activeProviderName == "claude")
     {
-        if (auto key = resolveProviderApiKey(_config.claude.apiKey, _config.claude.apiKeyEnv))
+        auto const oauthStore = loadOAuthStore();
+        if (auto token = resolveClaudeToken(_config, oauthStore))
         {
             auto providerConfig = ClaudeProviderConfig {
-                .apiKey = std::move(*key),
+                .apiKey = std::move(*token),
                 .model = _config.claude.model,
                 .maxTokens = _config.claude.maxTokens,
             };
+            if (oauthStore.claude.has_value())
+                providerConfig.tokenRefresher = makeClaudeTokenRefresher();
             auto provider = std::make_unique<ClaudeProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
         }

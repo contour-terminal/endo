@@ -5,27 +5,33 @@
 
 #include <cstddef>
 #include <expected>
+#include <functional>
 #include <span>
 #include <string>
 #include <variant>
 #include <vector>
 
-#include <agent/providers/LlmProvider.hpp>
 #include <agent/Types.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <nlohmann/json.hpp>
 
 namespace endo::agent
 {
 
+/// Callback type for refreshing an expired OAuth token.
+/// Returns the new access token on success, or an error message.
+using TokenRefresher = std::function<std::expected<std::string, std::string>()>;
+
 /// Configuration for the Claude provider.
 struct ClaudeProviderConfig
 {
-    std::string apiKey;                                ///< API key for authentication.
+    std::string apiKey;                                ///< API key or OAuth access token.
     std::string model = "claude-sonnet-4-5-20250929";  ///< Model identifier.
     std::string baseUrl = "https://api.anthropic.com"; ///< Base URL for the API.
     std::string apiVersion = "2023-06-01";             ///< Anthropic API version header.
     size_t maxTokens = 8192;                           ///< Maximum output tokens per request.
     size_t contextWindowSize = 200000;                 ///< Maximum context window in tokens.
+    TokenRefresher tokenRefresher;                     ///< Optional: refreshes OAuth token on 401.
 };
 
 /// Represents a parsed SSE event from the Claude streaming API.
@@ -116,6 +122,14 @@ class ClaudeProvider final: public LlmProvider
         -> std::expected<ClaudeSseResult, ProviderError>;
 
   private:
+    /// Builds an HTTP request with appropriate auth headers (OAuth vs API key).
+    [[nodiscard]] auto buildRequest(std::span<ChatMessage const> messages,
+                                    std::span<ToolDefinition const> tools) const -> http::HttpRequest;
+
+    /// Executes a streaming request and collects the result.
+    [[nodiscard]] auto executeStreaming(http::HttpRequest const& request, StreamCallback const& streamCb)
+        -> std::expected<GenerateResult, ProviderError>;
+
     /// Maps an HTTP status code to a ProviderError.
     [[nodiscard]] static auto mapHttpError(long statusCode, std::string message) -> ProviderError;
 

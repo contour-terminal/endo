@@ -8,6 +8,8 @@ add_library(endo-agent STATIC
     AgentWorker.hpp AgentWorker.cpp
     providers/LlmProvider.hpp
     AgentConfig.hpp AgentConfig.cpp
+    OAuthFlow.hpp OAuthFlow.cpp
+    OAuthCallbackServer.hpp OAuthCallbackServer.cpp
     TerminalInput.hpp TerminalInput.cpp
     LoginCommand.hpp LoginCommand.cpp
     providers/ClaudeProvider.hpp providers/ClaudeProvider.cpp
@@ -78,6 +80,8 @@ add_executable(test-endo-agent
     Types_test.cpp
     AgentConfig_test.cpp
     AgentWorker_test.cpp
+    OAuthFlow_test.cpp
+    OAuthCallbackServer_test.cpp
     LoginCommand_test.cpp
     providers/ClaudeProvider_test.cpp
     providers/OpenAiProvider_test.cpp

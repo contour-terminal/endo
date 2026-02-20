@@ -206,6 +206,14 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
         }
 
         std::filesystem::rename(tmpPath, path);
+
+        // Set restrictive permissions (owner-only read/write) since the file contains API keys.
+#if !defined(_WIN32)
+        std::filesystem::permissions(path,
+                                     std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                                     std::filesystem::perm_options::replace);
+#endif
+
         return std::nullopt;
     }
     catch (std::exception const& e)
