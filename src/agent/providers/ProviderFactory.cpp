@@ -3,7 +3,7 @@
 
 #include <http/HttpClient.hpp>
 
-#include <agent/OAuthFlow.hpp>
+#include <agent/auth/OAuthFlow.hpp>
 #include <agent/providers/ClaudeProvider.hpp>
 #include <agent/providers/GeminiProvider.hpp>
 #include <agent/providers/OpenAiProvider.hpp>

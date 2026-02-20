@@ -9,7 +9,7 @@
 
 #include <endo-language/BuiltinImpls.hpp>
 
-#include <agent/OAuthFlow.hpp>
+#include <agent/auth/OAuthFlow.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 #include <platform/Process.hpp>

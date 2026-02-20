@@ -21,7 +21,7 @@
 #include <vector>
 
 #include <agent/AgentConfig.hpp>
-#include <agent/ProjectContextLoader.hpp>
+#include <agent/context/ProjectContextLoader.hpp>
 #include <platform/EnvironmentProvider.hpp>
 #include <platform/Wakeup.hpp>
 

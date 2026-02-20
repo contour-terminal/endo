@@ -23,8 +23,8 @@
 
 #include "CrashHandler.hpp"
 #include "Shell.hpp"
-#include <agent/LoginCommand.hpp>
-#include <agent/TraceReplay.hpp>
+#include <agent/auth/LoginCommand.hpp>
+#include <agent/tracing/TraceReplay.hpp>
 
 using namespace std::string_view_literals;
 

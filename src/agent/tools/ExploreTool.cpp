@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <format>
 
-#include <agent/AgentSession.hpp>
+#include <agent/session/AgentSession.hpp>
 #include <agent/tools/ExploreTool.hpp>
 #include <agent/tools/GitTool.hpp>
 #include <agent/tools/GlobTool.hpp>

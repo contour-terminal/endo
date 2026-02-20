@@ -35,24 +35,21 @@
 #include "Prompt.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
-#include <agent/AgentHistoryProvider.hpp>
-#include <agent/AgentInputComponent.hpp>
-#include <agent/AgentMessages.hpp>
-#include <agent/AgentResponseRenderer.hpp>
-#include <agent/AgentSession.hpp>
-#include <agent/AgentTracer.hpp>
-#include <agent/AgentWorker.hpp>
-#include <agent/ConversationHistoryStore.hpp>
-#include <agent/FilePathCompleter.hpp>
-#include <agent/PlanExecutor.hpp>
-#include <agent/ProjectContextLoader.hpp>
-#include <agent/SlashCommandCompleter.hpp>
-#include <agent/SlashCommandRegistry.hpp>
-#include <agent/SlashCommands.hpp>
-#include <agent/SystemPromptBuilder.hpp>
+#include <agent/commands/AgentHistoryProvider.hpp>
+#include <agent/commands/FilePathCompleter.hpp>
+#include <agent/commands/SlashCommandCompleter.hpp>
+#include <agent/commands/SlashCommandRegistry.hpp>
+#include <agent/commands/SlashCommands.hpp>
+#include <agent/context/ProjectContextLoader.hpp>
+#include <agent/context/SystemPromptBuilder.hpp>
+#include <agent/conversation/ConversationHistoryStore.hpp>
 #include <agent/mcp/McpToolAdapter.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/providers/ProviderModels.hpp>
+#include <agent/session/AgentMessages.hpp>
+#include <agent/session/AgentSession.hpp>
+#include <agent/session/AgentWorker.hpp>
+#include <agent/session/PlanExecutor.hpp>
 #include <agent/tools/AskUserTool.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
@@ -70,6 +67,9 @@
 #include <agent/tools/WebFetchTool.hpp>
 #include <agent/tools/WebSearchTool.hpp>
 #include <agent/tools/WriteFileTool.hpp>
+#include <agent/tracing/AgentTracer.hpp>
+#include <agent/ui/AgentInputComponent.hpp>
+#include <agent/ui/AgentResponseRenderer.hpp>
 #include <nlohmann/json.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
@@ -2187,8 +2187,7 @@ void Shell::runAgentMode()
                 auto const wasEscapeHintVisible = inputComponent.escapeHintTimeoutMs() >= 0;
                 inputComponent.flushDeferredUpdates();
                 if (wasEscapeHintVisible || inputComponent.inputField().hasGhostText()
-                    || inputComponent.ghostTextTimeoutMs() >= 0
-                    || inputComponent.escapeHintTimeoutMs() >= 0)
+                    || inputComponent.ghostTextTimeoutMs() >= 0 || inputComponent.escapeHintTimeoutMs() >= 0)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
                     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });

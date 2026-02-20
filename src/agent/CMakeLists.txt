@@ -3,39 +3,57 @@
 
 add_library(endo-agent STATIC
     Types.hpp
-    AgentMessages.hpp
-    AgentManager.hpp
-    AgentWorker.hpp AgentWorker.cpp
-    providers/LlmProvider.hpp
+    Plan.hpp
     AgentConfig.hpp AgentConfig.cpp
-    OAuthFlow.hpp OAuthFlow.cpp
-    OAuthCallbackServer.hpp OAuthCallbackServer.cpp
-    TerminalInput.hpp TerminalInput.cpp
-    LoginCommand.hpp LoginCommand.cpp
+
+    # Auth
+    auth/OAuthFlow.hpp auth/OAuthFlow.cpp
+    auth/OAuthCallbackServer.hpp auth/OAuthCallbackServer.cpp
+    auth/TerminalInput.hpp auth/TerminalInput.cpp
+    auth/LoginCommand.hpp auth/LoginCommand.cpp
+
+    # Conversation
+    conversation/ConversationHistory.hpp conversation/ConversationHistory.cpp
+    conversation/ConversationHistoryStore.hpp conversation/ConversationHistoryStore.cpp
+    conversation/TokenEstimator.hpp conversation/TokenEstimator.cpp
+    conversation/ConversationCompactor.hpp conversation/ConversationCompactor.cpp
+
+    # Context
+    context/ProjectFileTree.hpp context/ProjectFileTree.cpp
+    context/ProjectContextLoader.hpp context/ProjectContextLoader.cpp
+    context/SystemPromptBuilder.hpp context/SystemPromptBuilder.cpp
+
+    # Commands
+    commands/SlashCommand.hpp
+    commands/SlashCommandRegistry.hpp commands/SlashCommandRegistry.cpp
+    commands/SlashCommands.hpp commands/SlashCommands.cpp
+    commands/SlashCommandCompleter.hpp commands/SlashCommandCompleter.cpp
+    commands/FilePathCompleter.hpp commands/FilePathCompleter.cpp
+    commands/AgentHistoryProvider.hpp commands/AgentHistoryProvider.cpp
+
+    # Session
+    session/AgentMessages.hpp
+    session/AgentManager.hpp
+    session/AgentWorker.hpp session/AgentWorker.cpp
+    session/AgentSession.hpp session/AgentSession.cpp
+    session/PlanExecutor.hpp session/PlanExecutor.cpp
+
+    # Tracing
+    tracing/AgentTracer.hpp tracing/AgentTracer.cpp
+    tracing/TraceReplay.hpp tracing/TraceReplay.cpp
+
+    # UI
+    ui/AgentInputComponent.hpp ui/AgentInputComponent.cpp
+    ui/AgentResponseRenderer.hpp ui/AgentResponseRenderer.cpp
+
+    # Providers
+    providers/LlmProvider.hpp
     providers/ClaudeProvider.hpp providers/ClaudeProvider.cpp
     providers/OpenAiProvider.hpp providers/OpenAiProvider.cpp
     providers/GeminiProvider.hpp providers/GeminiProvider.cpp
     providers/ProviderFactory.hpp providers/ProviderFactory.cpp
-    ConversationHistory.hpp ConversationHistory.cpp
-    ConversationHistoryStore.hpp ConversationHistoryStore.cpp
-    AgentHistoryProvider.hpp AgentHistoryProvider.cpp
-    TokenEstimator.hpp TokenEstimator.cpp
-    ConversationCompactor.hpp ConversationCompactor.cpp
-    ProjectFileTree.hpp ProjectFileTree.cpp
-    ProjectContextLoader.hpp ProjectContextLoader.cpp
-    SystemPromptBuilder.hpp SystemPromptBuilder.cpp
-    Plan.hpp
-    AgentTracer.hpp AgentTracer.cpp
-    TraceReplay.hpp TraceReplay.cpp
-    AgentSession.hpp AgentSession.cpp
-    PlanExecutor.hpp PlanExecutor.cpp
-    AgentInputComponent.hpp AgentInputComponent.cpp
-    AgentResponseRenderer.hpp AgentResponseRenderer.cpp
-    SlashCommand.hpp
-    SlashCommandRegistry.hpp SlashCommandRegistry.cpp
-    SlashCommands.hpp SlashCommands.cpp
-    SlashCommandCompleter.hpp SlashCommandCompleter.cpp
-    FilePathCompleter.hpp FilePathCompleter.cpp
+
+    # Tools
     tools/AgentTool.hpp
     tools/ToolRegistry.hpp tools/ToolRegistry.cpp
     tools/SubmitPlanTool.hpp tools/SubmitPlanTool.cpp
@@ -55,6 +73,8 @@ add_library(endo-agent STATIC
     tools/WebFetchTool.hpp tools/WebFetchTool.cpp
     tools/ListDirectoryTool.hpp tools/ListDirectoryTool.cpp
     tools/AskUserTool.hpp tools/AskUserTool.cpp
+
+    # MCP
     mcp/McpError.hpp
     mcp/Transport.hpp
     mcp/StdioTransport.hpp mcp/StdioTransport.cpp
@@ -79,25 +99,45 @@ add_executable(test-endo-agent
     test_main.cpp
     Types_test.cpp
     AgentConfig_test.cpp
-    AgentWorker_test.cpp
-    OAuthFlow_test.cpp
-    OAuthCallbackServer_test.cpp
-    LoginCommand_test.cpp
+
+    # Auth tests
+    auth/OAuthFlow_test.cpp
+    auth/OAuthCallbackServer_test.cpp
+    auth/LoginCommand_test.cpp
+
+    # Conversation tests
+    conversation/ConversationHistory_test.cpp
+    conversation/ConversationHistoryStore_test.cpp
+    conversation/TokenEstimator_test.cpp
+    conversation/ConversationCompactor_test.cpp
+
+    # Context tests
+    context/ProjectFileTree_test.cpp
+    context/ProjectContextLoader_test.cpp
+    context/SystemPromptBuilder_test.cpp
+
+    # Commands tests
+    commands/SlashCommandRegistry_test.cpp
+    commands/SlashCommands_test.cpp
+    commands/SlashCommandCompleter_test.cpp
+    commands/FilePathCompleter_test.cpp
+    commands/AgentHistoryProvider_test.cpp
+
+    # Session tests
+    session/AgentWorker_test.cpp
+    session/AgentSession_test.cpp
+    session/PlanExecutor_test.cpp
+
+    # Tracing tests
+    tracing/AgentTracer_test.cpp
+
+    # Provider tests
     providers/ClaudeProvider_test.cpp
     providers/OpenAiProvider_test.cpp
     providers/GeminiProvider_test.cpp
     providers/ProviderFactory_test.cpp
-    ConversationHistory_test.cpp
-    ConversationHistoryStore_test.cpp
-    AgentHistoryProvider_test.cpp
-    TokenEstimator_test.cpp
-    ConversationCompactor_test.cpp
-    ProjectFileTree_test.cpp
-    ProjectContextLoader_test.cpp
-    SystemPromptBuilder_test.cpp
-    AgentSession_test.cpp
-    AgentTracer_test.cpp
-    PlanExecutor_test.cpp
+
+    # Tool tests
     tools/ToolRegistry_test.cpp
     tools/SubmitPlanTool_test.cpp
     tools/ReadFileTool_test.cpp
@@ -116,10 +156,8 @@ add_executable(test-endo-agent
     tools/WebFetchTool_test.cpp
     tools/ListDirectoryTool_test.cpp
     tools/AskUserTool_test.cpp
-    SlashCommandRegistry_test.cpp
-    SlashCommands_test.cpp
-    SlashCommandCompleter_test.cpp
-    FilePathCompleter_test.cpp
+
+    # MCP tests
     mcp/JsonRpc_test.cpp
     mcp/McpClient_test.cpp
     mcp/ServerManager_test.cpp

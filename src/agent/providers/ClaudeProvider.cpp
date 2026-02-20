@@ -5,7 +5,7 @@
 
 #include <format>
 
-#include <agent/OAuthFlow.hpp>
+#include <agent/auth/OAuthFlow.hpp>
 
 namespace endo::agent
 {
