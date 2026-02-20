@@ -1157,7 +1157,7 @@ Component (base class)
 
 ### Phase 3.19: Agent Configuration via init.endo ✅
 
-- [x] Demote `agent.yml` to API-key-only store (`saveAgentConfig` only persists `api_key`/`api_key_env` per provider)
+- [x] `saveAgentConfig` persists API keys only (`api_key`, `api_key_env`); all other config via `init.endo`
 - [x] `Shell::agentConfig` public member: loaded from `agent.yml` at startup, overridden by `init.endo` builtins
 - [x] 30+ new `init.endo` builtins for full agent configuration:
   - General: `set_agent_provider`, `set_agent_prompt_indicator`, `set_agent_max_tool_result_size`, `set_agent_log_tool_uses`
@@ -1190,7 +1190,8 @@ Component (base class)
 - [x] Runtime model cycling — Ctrl+. in agent mode cycles through hardcoded model lists per provider
   - [x] Claude models: `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`, `claude-sonnet-4-5-20250929`, `claude-opus-4-20250514`
   - [x] OpenAI, Gemini, and OpenAI-compatible providers have their own model lists
-- [x] Persistence — both thinking mode and model choices persisted to `~/.config/endo/agent.yml` across sessions
+- [x] Session-only cycling — Ctrl+./Ctrl+/ changes are session-only; users persist via `init.endo`
+- [x] Auto-completion for model names, thinking modes, and auth types in shell and LSP
 
 ---
 
