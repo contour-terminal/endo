@@ -409,8 +409,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
 
     generator.codegen(&rootNode);
 
-    // Persist newly defined functions back to persistent state
-    if (persistentState)
+    // Persist newly defined functions and value bindings back to persistent state.
+    // Only persist when there are no errors — on error the AST won't be retained
+    // (see Shell::execute()), so persisted raw pointers (body, value) would dangle.
+    if (persistentState && !generator._hasErrors)
     {
         for (auto const& [name, func]: generator._fsharpFunctions)
         {
@@ -4663,12 +4665,10 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
             return;
         }
         // Emit call to setter callback: name(T)V
-        auto const setterSig =
-            node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
+        auto const setterSig = node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
         if (auto* cb = findCallback(setterSig))
         {
-            _builder.createCallFunction(
-                _builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
         }
         _result = nullptr;
         return;
@@ -4751,12 +4751,10 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
             return;
         }
         // Emit call to setter callback: name(T)V
-        auto const setterSig =
-            node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
+        auto const setterSig = node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
         if (auto* cb = findCallback(setterSig))
         {
-            _builder.createCallFunction(
-                _builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
         }
         _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
         return;
@@ -7245,8 +7243,7 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
         auto const getterSig = node.name + "()" + CoreVM::signatureType(prop->type());
         if (auto* cb = findCallback(getterSig))
         {
-            _result = _builder.createCallFunction(
-                _builder.getBuiltinFunction(*cb), {}, node.name + ".get");
+            _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, node.name + ".get");
             return;
         }
     }
