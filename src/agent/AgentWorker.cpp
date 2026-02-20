@@ -42,16 +42,32 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
         _outbound.push(AskUserRequest { .requestId = requestId, .question = question });
 
         // Block until the main thread provides an answer.
+        // The run() loop is blocked inside handlePrompt() during tool execution,
+        // so we must drain _inbound ourselves to route UserAnswerMessage → _askUserResponses.
         while (true)
         {
+            // Drain _inbound: route UserAnswerMessage, handle Cancel/Shutdown.
+            while (auto inMsg = _inbound.tryPop())
+            {
+                std::visit(
+                    [this](auto const& m) {
+                        using MsgType = std::decay_t<decltype(m)>;
+                        if constexpr (std::is_same_v<MsgType, CancelMessage>)
+                            _cancelled.store(true, std::memory_order_relaxed);
+                        else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
+                            _askUserResponses.push(m);
+                        else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
+                            _cancelled.store(true, std::memory_order_relaxed);
+                    },
+                    *inMsg);
+            }
+
+            if (_cancelled.load(std::memory_order_relaxed))
+                return UserAnswer { .cancelled = true };
+
             auto response = _askUserResponses.popFor(std::chrono::milliseconds(200));
             if (!response.has_value())
-            {
-                // Check if we should give up (shutdown).
-                if (_cancelled.load(std::memory_order_relaxed))
-                    return UserAnswer { .cancelled = true };
                 continue;
-            }
             if (response->requestId == requestId)
                 return response->answer;
             // Wrong request ID — shouldn't happen but handle gracefully.
