@@ -6,6 +6,8 @@ add_library(endo-platform STATIC
     PlatformError.hpp
     Types.hpp
     WaitResult.hpp
+    Wakeup.hpp
+    MessageQueue.hpp
     Process.hpp
     Process.cpp
     Pipe.hpp
@@ -27,6 +29,7 @@ if(WIN32)
     target_sources(endo-platform PRIVATE
         windows/WindowsProcess.cpp
         windows/WindowsPipe.cpp
+        windows/WindowsWakeup.cpp
         windows/WindowsEnvironmentProvider.hpp
         windows/WindowsEnvironmentProvider.cpp
         windows/WindowsProcessProvider.hpp
@@ -34,8 +37,19 @@ if(WIN32)
         windows/WindowsFileInfoProvider.hpp
         windows/WindowsFileInfoProvider.cpp
     )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(endo-platform PRIVATE
+        linux/LinuxWakeup.cpp
+        posix/PosixEnvironmentProvider.hpp
+        posix/PosixEnvironmentProvider.cpp
+        linux/LinuxProcessProvider.hpp
+        linux/LinuxProcessProvider.cpp
+        linux/LinuxFileInfoProvider.hpp
+        linux/LinuxFileInfoProvider.cpp
+    )
 else()
     target_sources(endo-platform PRIVATE
+        posix/PosixWakeup.cpp
         posix/PosixEnvironmentProvider.hpp
         posix/PosixEnvironmentProvider.cpp
         linux/LinuxProcessProvider.hpp
@@ -57,6 +71,8 @@ add_executable(test-endo-platform
     Process_test.cpp
     Pipe_test.cpp
     EnvironmentProvider_test.cpp
+    Wakeup_test.cpp
+    MessageQueue_test.cpp
 )
 
 target_include_directories(test-endo-platform PRIVATE ${CMAKE_SOURCE_DIR}/src)

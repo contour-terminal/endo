@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <stdexcept>
+
+#include <windows.h>
+
+#include <platform/Wakeup.hpp>
+
+namespace endo::platform
+{
+
+Wakeup::Wakeup()
+{
+    // Manual-reset event: stays signaled until ResetEvent() is called.
+    _handle = CreateEvent(nullptr, TRUE, FALSE, nullptr);
+    if (_handle == nullptr || _handle == INVALID_HANDLE_VALUE)
+        throw std::runtime_error("Failed to create Wakeup event");
+}
+
+Wakeup::~Wakeup()
+{
+    if (_handle != InvalidHandle)
+        CloseHandle(_handle);
+}
+
+void Wakeup::signal()
+{
+    SetEvent(_handle);
+}
+
+void Wakeup::reset()
+{
+    ResetEvent(_handle);
+}
+
+auto Wakeup::nativeHandle() const noexcept -> NativeHandle
+{
+    return _handle;
+}
+
+} // namespace endo::platform
