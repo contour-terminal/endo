@@ -27,6 +27,7 @@
 #include "modules/HostnameModule.hpp"
 #include "modules/IndicatorModule.hpp"
 #include "modules/PathModule.hpp"
+#include "modules/ShellLevelModule.hpp"
 #include "modules/StructuredOutputModule.hpp"
 #include "modules/ToolchainModule.hpp"
 
@@ -100,6 +101,7 @@ void PromptComponent::initializeModules()
     add(std::make_unique<ClockModule>());
     add(std::make_unique<BatteryModule>());
     add(std::make_unique<FSharpModeModule>());
+    add(std::make_unique<ShellLevelModule>());
     add(std::make_unique<StructuredOutputModule>());
     add(std::make_unique<ToolchainModule>());
     add(std::make_unique<IndicatorModule>(_config.indicator));

@@ -310,6 +310,21 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     _currentPipelineBuilder.defaultStdoutFd = _tty.outputFd();
 
     _env.setAndExport("SHELL", "endo");
+
+    // Track shell nesting level (0 = outermost)
+    if (auto const shlvl = _env.get("ENDO_SHLVL"); shlvl.has_value())
+    {
+        try
+        {
+            _shellLevel = std::stoi(std::string(*shlvl)) + 1;
+        }
+        catch (...)
+        {
+            _shellLevel = 0;
+        }
+    }
+    _env.setAndExport("ENDO_SHLVL", std::to_string(_shellLevel));
+
     updateTerminalSizeEnv();
 
     // Capture the shell's process ID at startup
@@ -614,6 +629,7 @@ int Shell::run()
             ctx.theme = &tui::currentTheme();
             ctx.fsharpState = &_fsharpState;
             ctx.outputDefs = &_outputDefinitions;
+            ctx.shellLevel = _shellLevel;
             ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
             ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
             prompt.setPromptContext(std::move(ctx));
@@ -723,6 +739,7 @@ int Shell::run()
             ctx.theme = &tui::currentTheme();
             ctx.fsharpState = &_fsharpState;
             ctx.outputDefs = &_outputDefinitions;
+            ctx.shellLevel = _shellLevel;
             ctx.cellPixelWidth = prompt.terminal().cellPixelWidth();
             ctx.cellPixelHeight = prompt.terminal().cellPixelHeight();
             prompt.setPromptContext(std::move(ctx));

@@ -115,6 +115,8 @@ add_library(endo-shell STATIC
     modules/PathModule.cpp
     modules/StructuredOutputModule.hpp
     modules/StructuredOutputModule.cpp
+    modules/ShellLevelModule.hpp
+    modules/ShellLevelModule.cpp
     modules/ToolchainModule.hpp
     modules/ToolchainModule.cpp
     OutputDefinition.hpp

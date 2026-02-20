@@ -3213,3 +3213,68 @@ TEST_CASE("shell.env.lines_columns_echo_both")
     CHECK(out.find("25") != std::string::npos);
     CHECK(out.find("80") != std::string::npos);
 }
+
+// ============================================================================
+// ENDO_SHLVL (shell nesting level)
+// ============================================================================
+
+TEST_CASE("shell.env.endo_shlvl_defaults_to_zero")
+{
+    TestShell shell;
+    shell("echo $ENDO_SHLVL");
+    CHECK(shell.exitCode == 0);
+    CHECK(std::string(shell.output()).find("0") != std::string::npos);
+}
+
+TEST_CASE("shell.env.endo_shlvl_increments_when_preset")
+{
+    TestShell shell;
+    shell.env.set("ENDO_SHLVL", "0");
+    // Re-create the shell so it picks up the pre-set env
+    endo::Shell nested(shell.pty, shell.env);
+    CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "1");
+}
+
+TEST_CASE("shell.env.endo_shlvl_handles_malformed")
+{
+    TestShell shell;
+    shell.env.set("ENDO_SHLVL", "not_a_number");
+    endo::Shell nested(shell.pty, shell.env);
+    CHECK(shell.env.get("ENDO_SHLVL").value_or("") == "0");
+}
+
+// ============================================================================
+// ShellLevelModule
+// ============================================================================
+
+#include "modules/ShellLevelModule.hpp"
+
+TEST_CASE("module.shell_level.hidden_at_level_zero")
+{
+    endo::ShellLevelModule module;
+    endo::PromptContext ctx;
+    ctx.shellLevel = 0;
+    CHECK_FALSE(module.shouldShow(ctx));
+}
+
+TEST_CASE("module.shell_level.visible_at_level_one")
+{
+    endo::ShellLevelModule module;
+    endo::PromptContext ctx;
+    ctx.shellLevel = 1;
+    CHECK(module.shouldShow(ctx));
+    auto const segments = module.evaluate(ctx);
+    REQUIRE(!segments.empty());
+    CHECK(segments[0].text.find("L1") != std::string::npos);
+}
+
+TEST_CASE("module.shell_level.shows_correct_level")
+{
+    endo::ShellLevelModule module;
+    endo::PromptContext ctx;
+    ctx.shellLevel = 3;
+    CHECK(module.shouldShow(ctx));
+    auto const segments = module.evaluate(ctx);
+    REQUIRE(!segments.empty());
+    CHECK(segments[0].text.find("L3") != std::string::npos);
+}

@@ -56,7 +56,7 @@ static std::vector<PromptConfig> presets = {
         .separator = SeparatorStyle::None,
         .indicator = "\xe2\x9d\xaf ", // ❯
         .infoLineModules = { "path", "git" },
-        .rightPromptModules = { "duration", "battery", "clock" },
+        .rightPromptModules = { "duration", "shell_level", "battery", "clock" },
     },
     PromptConfig {
         .name = "boxed-module"sv,
@@ -91,7 +91,7 @@ static std::vector<PromptConfig> presets = {
         .separator = SeparatorStyle::Rounded,
         .indicator = "|> ",
         .infoLineModules = { "path", "git", "fsharp_mode", "structured_output" },
-        .rightPromptModules = { "duration", "exit_status", "battery", "clock" },
+        .rightPromptModules = { "duration", "exit_status", "shell_level", "battery", "clock" },
         .useGradientPath = true,
         .gradientStart = 0x5078FF_rgb, // Blue
         .gradientEnd = 0x00DCC8_rgb,   // Teal

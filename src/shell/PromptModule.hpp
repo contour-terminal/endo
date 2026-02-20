@@ -44,6 +44,7 @@ struct PromptContext
     OutputDefinitionRegistry const* outputDefs = nullptr; ///< Output definitions for structured commands.
     int cellPixelWidth = 0;                               ///< Cell width in pixels (0 if unknown).
     int cellPixelHeight = 0;                              ///< Cell height in pixels (0 if unknown).
+    int shellLevel = 0;                                   ///< Shell nesting depth (0 = outermost).
 };
 
 /// @brief Abstract interface for a pluggable prompt module.

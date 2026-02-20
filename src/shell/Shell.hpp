@@ -358,6 +358,7 @@ class Shell final: public SignalCallback
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID
     int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise
+    int _shellLevel = 0;      ///< Shell nesting depth (0 = outermost)
     std::optional<ProcessId> _lastBackgroundPid;
     std::vector<std::string> _positionalParameters;
     std::vector<std::vector<std::string>> _cmdBuilderStack;
