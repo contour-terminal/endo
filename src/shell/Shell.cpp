@@ -1925,26 +1925,29 @@ void Shell::runAgentMode()
                     {
                         if (currentRenderer)
                             currentRenderer->end();
-                        teardownStreaming();
-                        saveHistory();
 
+                        // Render error/cancel text while streaming state is still valid.
+                        auto const wasCancelled = streamCancelled;
                         if (!m.success)
                         {
-                            if (!streamCancelled)
+                            if (!wasCancelled)
                             {
                                 auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                out.writeText("Error: " + m.errorMessage + "\n", errorStyle);
-                                out.flush();
+                                out.writeText("\nError: " + m.errorMessage + "\n", errorStyle);
                             }
                             else
                             {
                                 auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                                out.writeText("(cancelled)\n", infoStyle);
-                                out.flush();
+                                out.writeText("\n(cancelled)\n", infoStyle);
                             }
+                            out.flush();
                         }
 
+                        teardownStreaming();
+                        saveHistory();
+
                         // Re-render input component for next query.
+                        screen.releaseCursor();
                         auto const newPrefSize = inputComponent.preferredSize();
                         inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
                         screen.draw();
