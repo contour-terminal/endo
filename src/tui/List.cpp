@@ -36,6 +36,7 @@ namespace
 List::List(std::vector<ListItem> items): _items(std::move(items))
 {
     _style = defaultListStyle();
+    _checked.assign(_items.size(), false);
     rebuildVisibleIndices();
 }
 
@@ -85,9 +86,17 @@ void List::render(Canvas& canvas)
         // Fill row background
         canvas.fill(Rect { row, 0, width, 1 }, ' ', itemStyle);
 
-        // Cursor indicator
+        // Cursor / checkbox indicator
         auto col = 0;
-        if (isSelected)
+        if (_multiSelect)
+        {
+            // Multi-select: show checkbox prefix, highlight current row
+            auto const itemChecked = (itemIdx < _checked.size()) && _checked[itemIdx];
+            auto const prefix = itemChecked ? _style.checked : _style.unchecked;
+            auto const& prefixStyle = isSelected ? _style.selected : _style.normal;
+            col = canvas.putString(row, col, prefix, prefixStyle);
+        }
+        else if (isSelected)
         {
             col = canvas.putString(row, col, _style.cursor, _style.selected);
         }
@@ -131,7 +140,8 @@ EventResult List::onEvent(InputEvent const& event)
     {
         case ListAction::Changed:
         case ListAction::Selected:
-        case ListAction::Cancelled: invalidate(); return EventResult::Handled;
+        case ListAction::Cancelled:
+        case ListAction::Toggled: invalidate(); return EventResult::Handled;
         case ListAction::None: return EventResult::Ignored;
     }
     return EventResult::Ignored;
@@ -159,6 +169,7 @@ Size List::preferredSize() const
 void List::setItems(std::vector<ListItem> items)
 {
     _items = std::move(items);
+    _checked.assign(_items.size(), false);
     _selectedVisibleIndex = 0;
     _scrollOffset = 0;
     rebuildVisibleIndices();
@@ -240,9 +251,14 @@ auto List::processEvent(InputEvent const& event) -> ListAction
 
 auto List::handleKey(KeyEvent const& key) -> ListAction
 {
-    // Handle vim-style navigation (j/k) for printable keys
+    // Handle vim-style navigation (j/k) and multi-select toggle (Space) for printable keys
     if (isPrintable(key.key) && withoutLockKeys(key.modifiers) == Modifier::None)
     {
+        if (key.codepoint == ' ' && _multiSelect && !_visibleIndices.empty())
+        {
+            toggleChecked();
+            return ListAction::Toggled;
+        }
         if (key.codepoint == 'j')
         {
             selectNext();
@@ -414,6 +430,50 @@ auto List::matchesFilter(ListItem const& item) const -> bool
 
     auto const& text = item.filterText.empty() ? item.label : item.filterText;
     return containsIgnoreCase(text, _filter);
+}
+
+void List::setMultiSelect(bool enabled)
+{
+    _multiSelect = enabled;
+}
+
+bool List::multiSelect() const noexcept
+{
+    return _multiSelect;
+}
+
+auto List::checkedIndices() const -> std::vector<std::size_t>
+{
+    auto result = std::vector<std::size_t> {};
+    for (auto i = std::size_t { 0 }; i < _checked.size(); ++i)
+    {
+        if (_checked[i])
+            result.push_back(i);
+    }
+    return result;
+}
+
+bool List::isChecked(std::size_t index) const
+{
+    if (index >= _checked.size())
+        return false;
+    return _checked[index];
+}
+
+void List::setChecked(std::size_t index, bool checked)
+{
+    if (index < _checked.size())
+        _checked[index] = checked;
+}
+
+void List::toggleChecked()
+{
+    if (_visibleIndices.empty() || _selectedVisibleIndex >= _visibleIndices.size())
+        return;
+
+    auto const itemIdx = _visibleIndices[_selectedVisibleIndex];
+    if (itemIdx < _checked.size() && _items[itemIdx].enabled)
+        _checked[itemIdx] = !_checked[itemIdx];
 }
 
 auto defaultListStyle() -> ListStyle

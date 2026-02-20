@@ -91,7 +91,8 @@ auto SelectDialog::processEvent(InputEvent const& event) -> DialogResult
     {
         case ListAction::Selected: return DialogResult::Confirmed;
         case ListAction::Cancelled: return DialogResult::Cancelled;
-        case ListAction::Changed: return DialogResult::Changed;
+        case ListAction::Changed:
+        case ListAction::Toggled: return DialogResult::Changed;
         case ListAction::None: break;
     }
 

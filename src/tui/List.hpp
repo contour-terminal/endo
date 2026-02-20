@@ -30,6 +30,7 @@ enum class ListAction : std::uint8_t
     Changed,   ///< Selection or scroll position changed, re-render needed.
     Selected,  ///< User selected an item (Enter pressed).
     Cancelled, ///< User cancelled (Escape pressed).
+    Toggled,   ///< An item was toggled (multi-select Space key).
 };
 
 /// @brief Configuration for List styling.
@@ -41,6 +42,8 @@ struct ListStyle
     Style description;                   ///< Style for item descriptions.
     std::string_view cursor = "\u25B6 "; ///< Cursor indicator (▶ )
     std::string_view noCursor = "  ";    ///< Padding when not selected.
+    std::string_view checked = "[x] ";   ///< Multi-select: checked prefix.
+    std::string_view unchecked = "[ ] "; ///< Multi-select: unchecked prefix.
     bool showDescription = true;         ///< Whether to show descriptions.
 };
 
@@ -144,6 +147,28 @@ class List: public Component
     /// @param pageSize Number of items per page.
     void pageUp(int pageSize);
 
+    /// @brief Enables or disables multi-select mode.
+    /// @param enabled True to enable multi-select (checkbox) mode.
+    void setMultiSelect(bool enabled);
+
+    /// @brief Returns whether multi-select mode is enabled.
+    [[nodiscard]] bool multiSelect() const noexcept;
+
+    /// @brief Returns indices of all checked items.
+    [[nodiscard]] auto checkedIndices() const -> std::vector<std::size_t>;
+
+    /// @brief Returns whether the item at the given index is checked.
+    /// @param index The item index.
+    [[nodiscard]] bool isChecked(std::size_t index) const;
+
+    /// @brief Sets the checked state of an item.
+    /// @param index The item index.
+    /// @param checked True to check, false to uncheck.
+    void setChecked(std::size_t index, bool checked);
+
+    /// @brief Toggles the checked state of the currently selected item.
+    void toggleChecked();
+
   private:
     std::vector<ListItem> _items;
     std::vector<std::size_t> _visibleIndices; ///< Indices of items matching the filter.
@@ -151,6 +176,8 @@ class List: public Component
     mutable std::size_t _scrollOffset = 0;    ///< First visible item in scroll window.
     std::string _filter;
     ListStyle _style;
+    bool _multiSelect = false;  ///< Whether multi-select (checkbox) mode is enabled.
+    std::vector<bool> _checked; ///< Parallel to _items, tracks checked state.
 
     void rebuildVisibleIndices();
     void ensureSelectionVisible(int maxRows) const;
