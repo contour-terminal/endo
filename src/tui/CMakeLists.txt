@@ -7,6 +7,7 @@ add_library(tui
     CompletionPopup.cpp
     Dialog.cpp
     HoverState.cpp
+    QuestionComponent.cpp
     InputField.cpp
     KeyBindings.cpp
     List.cpp
@@ -70,6 +71,7 @@ add_executable(test-tui
     FuzzyMatch_test.cpp
     MarkdownTable_test.cpp
     MarkdownRenderer_test.cpp
+    QuestionComponent_test.cpp
     StyledText_test.cpp
     Unicode_test.cpp
     VtParser_test.cpp

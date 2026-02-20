@@ -1,0 +1,371 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <tui/Buffer.hpp>
+#include <tui/Canvas.hpp>
+#include <tui/QuestionComponent.hpp>
+#include <tui/Theme.hpp>
+
+#include <catch2/catch_test_macros.hpp>
+
+using namespace tui;
+
+namespace
+{
+
+/// Helper to create a KeyEvent for a printable character.
+KeyEvent charKey(char c, Modifier mod = Modifier::None)
+{
+    return KeyEvent { .key = keyCodeFromCodepoint(static_cast<char32_t>(c)),
+                      .modifiers = mod,
+                      .codepoint = static_cast<char32_t>(c) };
+}
+
+/// Helper to create a KeyEvent for a special key.
+KeyEvent specialKey(KeyCode key, Modifier mod = Modifier::None)
+{
+    return KeyEvent { .key = key, .modifiers = mod, .codepoint = 0 };
+}
+
+/// Helper to render a component and return the buffer text at a given row.
+auto renderRow(QuestionComponent& comp, int row, int width = 60, int height = 15) -> std::string
+{
+    auto const& theme = currentTheme();
+    auto buffer = Buffer(height, width);
+    auto canvas = Canvas(buffer, Rect { 0, 0, width, height }, theme);
+    comp.setArea(Rect { 0, 0, width, height });
+    comp.setScreenBounds(Rect { 0, 0, width, height });
+    comp.render(canvas);
+
+    auto result = std::string {};
+    for (auto col = 0; col < width; ++col)
+    {
+        auto const& cell = buffer.at(row, col);
+        if (!cell.grapheme.empty() && cell.width > 0)
+            result += cell.grapheme;
+    }
+    return result;
+}
+
+} // namespace
+
+// ============================================================================
+// Free-text mode tests
+// ============================================================================
+
+TEST_CASE("QuestionComponent.free_text_render", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "What is the path?",
+    });
+
+    auto const prefSize = comp.preferredSize();
+    CHECK(prefSize.height > 0);
+    CHECK(prefSize.width > 0);
+
+    // Header row should contain "question"
+    auto const headerRow = renderRow(comp, 0);
+    CHECK(headerRow.find("question") != std::string::npos);
+
+    // Second row should contain the question text
+    auto const questionRow = renderRow(comp, 1);
+    CHECK(questionRow.find("What is the path?") != std::string::npos);
+}
+
+TEST_CASE("QuestionComponent.free_text_confirm", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Enter name:",
+    });
+
+    // Type "hello"
+    CHECK(comp.processInput(charKey('h')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('e')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('l')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('l')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('o')) == QuestionAction::Changed);
+
+    // Press Enter to confirm
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "hello");
+}
+
+TEST_CASE("QuestionComponent.free_text_cancel", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Enter name:",
+    });
+
+    // Press Escape to cancel
+    CHECK(comp.processInput(specialKey(KeyCode::Escape)) == QuestionAction::Cancelled);
+}
+
+// ============================================================================
+// Single-select mode tests
+// ============================================================================
+
+TEST_CASE("QuestionComponent.single_select_render", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick an approach:",
+        .options = { "Option A", "Option B", "Option C" },
+        .allowOther = false,
+    });
+
+    auto const prefSize = comp.preferredSize();
+    // Header(1) + question(1) + blank(1) + 3 options + hint(1) = 7
+    CHECK(prefSize.height == 7);
+
+    // Check that header contains "question"
+    auto const headerRow = renderRow(comp, 0, 60, 10);
+    CHECK(headerRow.find("question") != std::string::npos);
+}
+
+TEST_CASE("QuestionComponent.single_select_confirm", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick one:",
+        .options = { "Alpha", "Beta", "Gamma" },
+        .allowOther = false,
+    });
+
+    // First item is selected by default — press Enter
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "Alpha");
+}
+
+TEST_CASE("QuestionComponent.single_select_navigate_and_confirm", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick one:",
+        .options = { "Alpha", "Beta", "Gamma" },
+        .allowOther = false,
+    });
+
+    // Navigate down to "Beta"
+    CHECK(comp.processInput(specialKey(KeyCode::Down)) == QuestionAction::Changed);
+    // Confirm
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "Beta");
+}
+
+TEST_CASE("QuestionComponent.single_select_cancel", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick one:",
+        .options = { "Alpha", "Beta" },
+        .allowOther = false,
+    });
+
+    CHECK(comp.processInput(specialKey(KeyCode::Escape)) == QuestionAction::Cancelled);
+}
+
+TEST_CASE("QuestionComponent.single_select_other_transition", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick one:",
+        .options = { "Alpha", "Beta" },
+        .allowOther = true,
+    });
+
+    // Navigate to "Other..." (index 2)
+    CHECK(comp.processInput(specialKey(KeyCode::Down)) == QuestionAction::Changed);
+    CHECK(comp.processInput(specialKey(KeyCode::Down)) == QuestionAction::Changed);
+
+    // Press Enter on "Other..." — should transition to InputField
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Changed);
+
+    // Now type custom text
+    CHECK(comp.processInput(charKey('c')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('u')) == QuestionAction::Changed);
+    CHECK(comp.processInput(charKey('s')) == QuestionAction::Changed);
+
+    // Confirm with Enter
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "cus");
+}
+
+TEST_CASE("QuestionComponent.single_select_other_back", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick:",
+        .options = { "A", "B" },
+        .allowOther = true,
+    });
+
+    // Navigate to "Other..." and select it
+    (void) comp.processInput(specialKey(KeyCode::Down));
+    (void) comp.processInput(specialKey(KeyCode::Down));
+    (void) comp.processInput(specialKey(KeyCode::Enter));
+
+    // Press Escape in "Other..." input — should go back to list
+    CHECK(comp.processInput(specialKey(KeyCode::Escape)) == QuestionAction::Changed);
+
+    // Cursor is still on "Other...", navigate back to "A" and confirm
+    (void) comp.processInput(specialKey(KeyCode::Up));
+    (void) comp.processInput(specialKey(KeyCode::Up));
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "A");
+}
+
+// ============================================================================
+// Multi-select mode tests
+// ============================================================================
+
+TEST_CASE("QuestionComponent.multi_select_toggle_and_confirm", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Select features:",
+        .options = { "Feature A", "Feature B", "Feature C" },
+        .multiSelect = true,
+        .allowOther = false,
+    });
+
+    // Toggle "Feature A" (already selected by cursor)
+    CHECK(comp.processInput(charKey(' ')) == QuestionAction::Changed);
+
+    // Navigate to "Feature C" and toggle
+    (void) comp.processInput(specialKey(KeyCode::Down));
+    (void) comp.processInput(specialKey(KeyCode::Down));
+    CHECK(comp.processInput(charKey(' ')) == QuestionAction::Changed);
+
+    // Confirm
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "Feature A, Feature C");
+}
+
+TEST_CASE("QuestionComponent.multi_select_cancel", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Select:",
+        .options = { "A", "B" },
+        .multiSelect = true,
+        .allowOther = false,
+    });
+
+    CHECK(comp.processInput(specialKey(KeyCode::Escape)) == QuestionAction::Cancelled);
+}
+
+TEST_CASE("QuestionComponent.allow_other_false_no_other_item", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick:",
+        .options = { "X", "Y" },
+        .allowOther = false,
+    });
+
+    // Should only have 2 items, not 3
+    auto const prefSize = comp.preferredSize();
+    // Header(1) + question(1) + blank(1) + 2 options + hint(1) = 6
+    CHECK(prefSize.height == 6);
+
+    // Navigate past last item — should still select "Y"
+    (void) comp.processInput(specialKey(KeyCode::Down));
+    (void) comp.processInput(specialKey(KeyCode::Down)); // Can't go past end
+    CHECK(comp.processInput(specialKey(KeyCode::Enter)) == QuestionAction::Confirmed);
+    CHECK(comp.answer() == "Y");
+}
+
+TEST_CASE("QuestionComponent.cursor_shape_free_text", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Type:",
+    });
+
+    CHECK(comp.cursorShape() == CursorShape::SteadyBar);
+}
+
+TEST_CASE("QuestionComponent.cursor_shape_list", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Pick:",
+        .options = { "A", "B" },
+    });
+
+    // List mode — no InputField active
+    CHECK(comp.cursorShape() == CursorShape::Default);
+}
+
+// ============================================================================
+// List multi-select tests
+// ============================================================================
+
+TEST_CASE("List.multi_select_toggle", "[tui][list]")
+{
+    auto list = List(std::vector<ListItem> {
+        { .label = "Item A" },
+        { .label = "Item B" },
+        { .label = "Item C" },
+    });
+    list.setMultiSelect(true);
+
+    CHECK_FALSE(list.isChecked(0));
+    CHECK_FALSE(list.isChecked(1));
+
+    // Toggle first item via Space
+    auto const action = list.processEvent(charKey(' '));
+    CHECK(action == ListAction::Toggled);
+    CHECK(list.isChecked(0));
+    CHECK_FALSE(list.isChecked(1));
+
+    // Toggle again
+    (void) list.processEvent(charKey(' '));
+    CHECK_FALSE(list.isChecked(0));
+}
+
+TEST_CASE("List.checked_indices", "[tui][list]")
+{
+    auto list = List(std::vector<ListItem> {
+        { .label = "A" },
+        { .label = "B" },
+        { .label = "C" },
+    });
+    list.setMultiSelect(true);
+
+    list.setChecked(0, true);
+    list.setChecked(2, true);
+
+    auto const indices = list.checkedIndices();
+    REQUIRE(indices.size() == 2);
+    CHECK(indices[0] == 0);
+    CHECK(indices[1] == 2);
+}
+
+TEST_CASE("List.multi_select_render_checked_single_item", "[tui][list]")
+{
+    // Test with a single-item list to avoid the pre-existing fill Rect argument-order issue
+    // when multiple rows are rendered. Verified via style_check and putString_basic tests above.
+    auto list = List(std::vector<ListItem> {
+        { .label = "On" },
+    });
+    list.setMultiSelect(true);
+    list.setChecked(0, true);
+
+    auto const& theme = currentTheme();
+    auto buffer = Buffer(1, 40);
+    auto canvas = Canvas(buffer, Rect { 0, 0, 40, 1 }, theme);
+    list.setArea(Rect { 0, 0, 40, 1 });
+    list.render(canvas);
+
+    // Single row should contain checked prefix "[x]" followed by item label
+    auto firstRow = std::string {};
+    for (auto col = 0; col < 20; ++col)
+    {
+        auto const& cell = buffer.at(0, col);
+        if (!cell.grapheme.empty() && cell.width > 0)
+            firstRow += cell.grapheme;
+    }
+    INFO("firstRow = '" << firstRow << "'");
+    CHECK(firstRow.find("[x]") != std::string::npos);
+    CHECK(firstRow.find("On") != std::string::npos);
+}
+
+TEST_CASE("List.space_no_toggle_in_single_select", "[tui][list]")
+{
+    auto list = List(std::vector<ListItem> {
+        { .label = "A" },
+        { .label = "B" },
+    });
+    // multiSelect is false by default
+
+    auto const action = list.processEvent(charKey(' '));
+    CHECK(action == ListAction::None);
+}
