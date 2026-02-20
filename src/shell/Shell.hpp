@@ -23,10 +23,12 @@
 #include <agent/AgentConfig.hpp>
 #include <agent/ProjectContextLoader.hpp>
 #include <platform/EnvironmentProvider.hpp>
+#include <platform/Wakeup.hpp>
 
 namespace endo::agent
 {
 class AgentSession;
+class AgentWorker;
 class ProviderFactory;
 } // namespace endo::agent
 
@@ -305,6 +307,7 @@ class Shell final: public SignalCallback
     std::unique_ptr<http::HttpClient> _agentHttpClient;
     std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
     std::unique_ptr<agent::AgentSession> _agentSession;
+    platform::Wakeup _agentWakeup; ///< Wakeup primitive for agent event loop integration.
     std::optional<agent::ProjectContext>
         _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
     std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.

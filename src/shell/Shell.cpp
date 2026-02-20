@@ -35,9 +35,11 @@
 #include <agent/AgentConfig.hpp>
 #include <agent/AgentHistoryProvider.hpp>
 #include <agent/AgentInputComponent.hpp>
+#include <agent/AgentMessages.hpp>
 #include <agent/AgentResponseRenderer.hpp>
 #include <agent/AgentSession.hpp>
 #include <agent/AgentTracer.hpp>
+#include <agent/AgentWorker.hpp>
 #include <agent/ConversationHistoryStore.hpp>
 #include <agent/FilePathCompleter.hpp>
 #include <agent/PlanExecutor.hpp>
@@ -1491,7 +1493,6 @@ void Shell::runAgentMode()
     auto historyProvider = std::make_unique<agent::AgentHistoryProvider>();
     if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
     {
-        // Extract user query strings for history navigation and ghost text.
         for (auto const& msg: *loaded)
         {
             if (msg.role == agent::Role::User)
@@ -1505,7 +1506,6 @@ void Shell::runAgentMode()
     }
     auto* historyProviderPtr = historyProvider.get();
 
-    // Lambda to save history after each successful exchange.
     auto const saveHistory = [&] {
         (void) historyStore.save(_agentSession->history().messages());
     };
@@ -1513,7 +1513,6 @@ void Shell::runAgentMode()
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
 
-    // Resolve shell path: prefer bash, fall back to sh
     auto const shellPath = [&]() -> std::string {
         if (access("/bin/bash", X_OK) == 0)
             return "/bin/bash";
@@ -1524,7 +1523,6 @@ void Shell::runAgentMode()
 
     auto shellExecCb = [shellPath](std::string const& command,
                                    std::chrono::milliseconds timeout) -> agent::ShellExecResult {
-        // Create pipe for capturing stdout+stderr
         auto pipeFds = std::array<int, 2> {};
         if (pipe(pipeFds.data()) != 0)
             return agent::ShellExecResult { .output = "Failed to create pipe", .exitCode = -1 };
@@ -1539,13 +1537,11 @@ void Shell::runAgentMode()
 
         if (pid == 0)
         {
-            // Child process: redirect stdout+stderr to pipe write-end
             close(pipeFds[0]);
             dup2(pipeFds[1], STDOUT_FILENO);
             dup2(pipeFds[1], STDERR_FILENO);
             close(pipeFds[1]);
 
-            // Unblock signals blocked by the shell for signalfd (matching Process.cpp:48-57)
             sigset_t mask;
             sigemptyset(&mask);
             sigaddset(&mask, SIGCHLD);
@@ -1554,16 +1550,14 @@ void Shell::runAgentMode()
             sigaddset(&mask, SIGINT);
             sigprocmask(SIG_UNBLOCK, &mask, nullptr);
 
-            // Reset signal handlers to default (matching Process.cpp:60-64)
             signal(SIGINT, SIG_DFL);
             signal(SIGTSTP, SIG_DFL);
             signal(SIGPIPE, SIG_DFL);
 
             execl(shellPath.c_str(), shellPath.c_str(), "-c", command.c_str(), nullptr);
-            _exit(127); // execl failed
+            _exit(127);
         }
 
-        // Parent process: read from pipe read-end
         close(pipeFds[1]);
 
         auto output = std::string {};
@@ -1571,7 +1565,6 @@ void Shell::runAgentMode()
         auto const deadline = std::chrono::steady_clock::now() + timeout;
         auto timedOut = false;
 
-        // Non-blocking read with timeout via poll()
         auto pfd = pollfd { .fd = pipeFds[0], .events = POLLIN, .revents = 0 };
         for (;;)
         {
@@ -1586,8 +1579,8 @@ void Shell::runAgentMode()
             if (pollResult < 0)
             {
                 if (errno == EINTR)
-                    continue; // Signal interrupted poll — retry
-                break;        // Actual error
+                    continue;
+                break;
             }
             if (pollResult == 0)
             {
@@ -1598,11 +1591,11 @@ void Shell::runAgentMode()
             if (bytesRead < 0)
             {
                 if (errno == EINTR)
-                    continue; // Signal interrupted read — retry
-                break;        // Actual error
+                    continue;
+                break;
             }
             if (bytesRead == 0)
-                break; // EOF — child closed pipe
+                break;
             output.append(buffer.data(), static_cast<size_t>(bytesRead));
         }
         close(pipeFds[0]);
@@ -1623,27 +1616,21 @@ void Shell::runAgentMode()
 
     auto endoExecCb = [this](std::string const& source,
                              std::chrono::milliseconds /*timeout*/) -> agent::EndoExecResult {
-        // Create a temporary file for capturing output
         auto* tmpFile = tmpfile();
         if (!tmpFile)
             return agent::EndoExecResult { .output = "Failed to create temporary file", .exitCode = -1 };
 
         auto const tmpFd = fileno(tmpFile);
-
-        // Save original stdout/stderr
         auto const savedStdout = dup(STDOUT_FILENO);
         auto const savedStderr = dup(STDERR_FILENO);
 
-        // Redirect stdout/stderr to tmpfile
         fflush(stdout);
         fflush(stderr);
         dup2(tmpFd, STDOUT_FILENO);
         dup2(tmpFd, STDERR_FILENO);
 
-        // Execute the endo source
         auto const exitCode = this->execute(source);
 
-        // Flush and restore stdout/stderr
         fflush(stdout);
         fflush(stderr);
         dup2(savedStdout, STDOUT_FILENO);
@@ -1651,7 +1638,6 @@ void Shell::runAgentMode()
         close(savedStdout);
         close(savedStderr);
 
-        // Read captured output
         fflush(tmpFile);
         auto const outputSize = lseek(tmpFd, 0, SEEK_END);
         lseek(tmpFd, 0, SEEK_SET);
@@ -1691,38 +1677,6 @@ void Shell::runAgentMode()
     auto const webFetchConfig = agent::WebFetchConfig {};
     toolRegistry.registerTool(std::make_unique<agent::WebFetchTool>(*_agentHttpClient, webFetchConfig));
 
-    auto askUserCb = [](agent::UserQuestion const& q) -> agent::UserAnswer {
-        std::println(stderr, "\n{}", q.text);
-        if (!q.options.empty())
-        {
-            for (size_t i = 0; i < q.options.size(); ++i)
-                std::println(stderr, "  {}. {}", i + 1, q.options[i]);
-            std::print(stderr, "Choice (1-{}): ", q.options.size());
-        }
-        else
-        {
-            std::print(stderr, "> ");
-        }
-        auto answer = std::string {};
-        if (!std::getline(std::cin, answer))
-            return { .cancelled = true };
-        if (!q.options.empty())
-        {
-            try
-            {
-                if (auto const idx = std::stoi(answer) - 1;
-                    idx >= 0 && static_cast<size_t>(idx) < q.options.size())
-                    answer = q.options[static_cast<size_t>(idx)];
-            }
-            catch (std::exception const&)
-            {
-                // Not a number — treat as raw text answer
-            }
-        }
-        return { .answer = std::move(answer) };
-    };
-    toolRegistry.registerTool(std::make_unique<agent::AskUserTool>(std::move(askUserCb)));
-
     // Start MCP servers and register their tools
     auto mcpServerManager = agent::mcp::ServerManager {};
     for (auto const& config: mcpServerConfigs)
@@ -1737,10 +1691,6 @@ void Shell::runAgentMode()
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
     _agentSession->setMaxExplorationIterations(agentConfig.planMode.maxExplorationTurns);
-
-    // Always reset tracer and tool status callback — they are conditionally re-set below.
-    // This ensures config changes (via init.endo or interactive builtins) take effect
-    // on each agent mode entry, and avoids dangling pointers from previous sessions.
     _agentSession->setTracer(nullptr);
     _agentSession->setToolStatusCallback(nullptr);
 
@@ -1765,8 +1715,8 @@ void Shell::runAgentMode()
         if (tracerResult.has_value())
         {
             agentTracer.emplace(std::move(*tracerResult));
-            auto const modelInfo = provider->modelInfo();
-            agentTracer->writeSessionHeader(modelInfo.providerName, modelInfo.modelName);
+            auto const tracerModelInfo = provider->modelInfo();
+            agentTracer->writeSessionHeader(tracerModelInfo.providerName, tracerModelInfo.modelName);
             _agentSession->setTracer(&*agentTracer);
         }
         else
@@ -1775,56 +1725,29 @@ void Shell::runAgentMode()
         }
     }
 
-    // Agent input loop
+    // --- Set up outbound queue and AgentWorker ---
+    auto agentOutbound = platform::MessageQueue<agent::FromAgentMessage> {};
+    agentOutbound.setWakeup(&_agentWakeup);
+
+    auto worker = agent::AgentWorker(*_agentSession, agentOutbound);
+
+    // Register AskUserTool with a callback that routes through the worker's message queues.
+    toolRegistry.registerTool(std::make_unique<agent::AskUserTool>(worker.makeAskUserCallback()));
+
+    worker.start();
+
+    // --- Agent input loop ---
     auto& terminal = prompt.terminal();
     auto& out = terminal.output();
     auto const& theme = tui::currentTheme();
 
-    // Track the active renderer so tool-use lines can re-render the spinner
+    // Connect wakeup to terminal input so poll() wakes on agent messages.
+    terminal.input().setWakeup(&_agentWakeup);
+
+    // Track the active renderer for tool-use line re-rendering of spinner.
     agent::AgentResponseRenderer* activeRenderer = nullptr;
 
-    // Set up tool-use logging callback
-    if (agentConfig.logToolUses)
-    {
-        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-        auto const toolNameStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
-        auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
-        auto const shellPromptStyle = tui::Style { .fg = theme.colors.accent, .bold = true };
-        auto const shellCommandStyle = tui::Style { .fg = theme.colors.text };
-
-        _agentSession->setToolStatusCallback(
-            [&out, &activeRenderer, barStyle, toolNameStyle, argsStyle, shellPromptStyle, shellCommandStyle](
-                agent::ToolCall const& call) {
-                // Clear spinner line
-                out.carriageReturn();
-                out.clearToEndOfLine();
-
-                auto const [prefix, text] = formatToolStatusLine(call);
-
-                out.writeText("\u2502 ", barStyle);
-                if (call.name == "shell_execute" || call.name == "endo_execute")
-                {
-                    // Shell-prompt style: "│ $ command"
-                    out.writeText(prefix, shellPromptStyle);
-                    out.writeText(text, shellCommandStyle);
-                }
-                else
-                {
-                    // Tool style: "│ ⚙ tool_name { args... }"
-                    out.writeText(prefix, toolNameStyle);
-                    if (!text.empty())
-                        out.writeText(text, argsStyle);
-                }
-                out.linefeed();
-
-                // Re-render spinner if still in thinking phase
-                if (activeRenderer && activeRenderer->isThinking())
-                    activeRenderer->renderSpinner();
-                out.flush();
-            });
-    }
-
-    // Create inline Screen with AgentInputComponent — prompt visible instantly
+    // Create inline Screen with AgentInputComponent
     auto screenConfig = tui::ScreenConfig {
         .viewport = tui::Viewport::Inline,
         .inhibitReflow = true,
@@ -1837,11 +1760,10 @@ void Shell::runAgentMode()
     inputComponent.setProviderName(modelInfo.providerName);
     inputComponent.setModelName(modelInfo.modelName);
 
-    // Set up slash command registry with built-in commands and completion
+    // Set up slash command registry
     auto slashRegistry = agent::SlashCommandRegistry {};
     agent::registerBuiltinSlashCommands(slashRegistry);
 
-    // Register /reset command to clear conversation history.
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "reset", "Clear conversation history", [&](std::string_view) -> agent::SlashCommandResult {
             _agentSession->reset();
@@ -1869,7 +1791,6 @@ void Shell::runAgentMode()
     inputComponent.addCompletionProvider(std::move(filePathProvider));
     inputComponent.addCompletionProvider(std::move(historyProvider));
 
-    // Feed persisted history entries to InputField for Up/Down navigation.
     for (auto const& entry: historyProviderPtr->entries())
         inputComponent.inputField().addHistory(entry);
 
@@ -1881,8 +1802,7 @@ void Shell::runAgentMode()
     screen.draw();
     out.flush();
 
-    // Launch background thread for heavy context loading (git queries, project file scanning).
-    // Reuse cached project context if cwd hasn't changed (avoids re-scanning file tree/rules/memory).
+    // Launch background context loading.
     auto const cwd = std::filesystem::current_path();
     auto cachedCtx = (_cachedProjectContextCwd == cwd) ? std::move(_cachedProjectContext) : std::nullopt;
     _cachedProjectContext.reset();
@@ -1891,127 +1811,211 @@ void Shell::runAgentMode()
     auto systemPromptReady = false;
     auto planModeActive = false;
 
-    // Lambda to handle plan exploration and user decision after a plan is generated.
-    // Used by both `/plan <task>` and persistent plan mode.
-    auto executePlanFlow = [&](std::string const& planQuery) {
-        auto renderer = agent::AgentResponseRenderer(out);
-        auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
+    // --- Streaming state ---
+    // When the worker is processing, we track the renderer and scroll region for the response.
+    auto streaming = false;
+    auto streamCancelled = false;
+    std::optional<agent::AgentResponseRenderer> currentRenderer;
+    auto scrollGuard = ScrollRegionGuard(out);
+    auto streamResponseLineCount = 0;
+    auto streamPromptHeight = 0;
 
-        auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
-        renderer.setLineCallback([&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
-        renderer.begin();
+    // Helper: manage scroll region for streaming response with prompt visible below.
+    auto updateScrollRegion = [&](int lineCount) {
+        streamResponseLineCount = lineCount;
+        streamPromptHeight = inputComponent.preferredSize().height;
 
-        auto planResult =
-            _agentSession->processMessageForPlan(planQuery, [&](std::string_view token) -> bool {
-                renderer.feedToken(token);
-                promptMgr.pollInput();
-                return !promptMgr.cancelled;
-            });
-
-        promptMgr.teardown();
-        renderer.end();
-
-        if (promptMgr.cancelled)
-        {
-            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-            out.writeText("(cancelled)\n", infoStyle);
-            out.flush();
+        if (streamPromptHeight >= terminal.rows())
             return;
-        }
 
-        if (!planResult.has_value())
+        auto const totalNeeded = streamResponseLineCount + streamPromptHeight;
+        if (!scrollGuard.active && totalNeeded >= terminal.rows())
         {
-            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-            out.writeText("Error: " + planResult.error().message + "\n", errorStyle);
-            out.flush();
-            return;
-        }
-
-        // Render plan for review
-        renderer.renderPlan(*planResult);
-
-        // Wait for user decision
-        auto decided = false;
-        while (!decided)
-        {
-            auto decisionEvents = terminal.poll(0);
-            for (auto const& decisionEvent: decisionEvents)
+            auto const scrollBottom = terminal.rows() - streamPromptHeight;
+            if (scrollBottom >= 1)
             {
-                auto const* keyEvent = std::get_if<tui::KeyEvent>(&decisionEvent);
-                if (!keyEvent)
-                    continue;
-
-                if (keyEvent->codepoint == U'y' || keyEvent->codepoint == U'Y')
-                {
-                    auto executor = agent::PlanExecutor(*_agentSession, std::move(*planResult));
-                    while (!executor.isComplete())
-                    {
-                        renderer.renderPlanProgress(executor.plan(), executor.currentStepIndex());
-
-                        auto stepRenderer = agent::AgentResponseRenderer(out);
-                        auto const stepGuard = ScopedAssign(activeRenderer, stepRenderer);
-
-                        auto stepPromptMgr = StreamingPromptManager(terminal, inputComponent, out);
-                        stepRenderer.setLineCallback(
-                            [&stepPromptMgr](int lineCount) { stepPromptMgr.onNewResponseLine(lineCount); });
-                        stepRenderer.begin();
-
-                        auto stepResult = executor.executeNextStep([&](std::string_view token) -> bool {
-                            stepRenderer.feedToken(token);
-                            stepPromptMgr.pollInput();
-                            return !stepPromptMgr.cancelled;
-                        });
-
-                        stepPromptMgr.teardown();
-                        stepRenderer.end();
-
-                        if (!stepResult.has_value())
-                        {
-                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.writeText("Step failed: " + stepResult.error().message + "\n", errorStyle);
-                            out.flush();
-                            break;
-                        }
-
-                        if (agentConfig.planMode.pauseBetweenSteps && !executor.isComplete())
-                        {
-                            auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.writeText("Press any key to continue...\n", labelStyle);
-                            out.flush();
-                            (void) terminal.poll(0);
-                        }
-                    }
-
-                    renderer.renderPlanProgress(executor.plan(), executor.currentStepIndex());
-                    decided = true;
-                }
-                else if (keyEvent->codepoint == U'n' || keyEvent->codepoint == U'N')
-                {
-                    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                    out.writeText("Plan rejected.\n", labelStyle);
-                    out.flush();
-                    decided = true;
-                }
-                else if (keyEvent->codepoint == U'r' || keyEvent->codepoint == U'R')
-                {
-                    auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
-                    out.writeText("Enter revision feedback:\n", labelStyle);
-                    out.flush();
-                    decided = true;
-                }
+                out.setScrollRegion(1, scrollBottom);
+                scrollGuard.active = true;
             }
         }
     };
 
+    // Helper: teardown streaming state after response completes.
+    auto teardownStreaming = [&] {
+        if (scrollGuard.active)
+        {
+            out.resetScrollRegion();
+            scrollGuard.active = false;
+            out.moveTo(terminal.rows(), 1);
+            out.linefeed();
+        }
+        out.flush();
+        streaming = false;
+        streamCancelled = false;
+        currentRenderer.reset();
+        activeRenderer = nullptr;
+        streamResponseLineCount = 0;
+        streamPromptHeight = 0;
+    };
+
+    // --- Main event loop ---
     while (true)
     {
-        auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();
-        auto const pollTimeout = ghostTimeout >= 0 ? std::min(ghostTimeout, 80) : 80;
+        // 1. Drain agent outbound messages (non-blocking).
+        auto agentMessages = std::vector<agent::FromAgentMessage> {};
+        agentOutbound.drainTo(agentMessages);
+
+        for (auto& agentMsg: agentMessages)
+        {
+            std::visit(
+                [&](auto& m) {
+                    using T = std::decay_t<decltype(m)>;
+                    if constexpr (std::is_same_v<T, agent::ThinkingStartMessage>)
+                    {
+                        streaming = true;
+                        streamCancelled = false;
+                        currentRenderer.emplace(out);
+                        activeRenderer = &*currentRenderer;
+                        currentRenderer->setLineCallback(
+                            [&](int lineCount) { updateScrollRegion(lineCount); });
+                        currentRenderer->begin();
+                    }
+                    else if constexpr (std::is_same_v<T, agent::TokenMessage>)
+                    {
+                        if (currentRenderer)
+                            currentRenderer->feedToken(m.token);
+                    }
+                    else if constexpr (std::is_same_v<T, agent::ToolStatusMessage>)
+                    {
+                        if (agentConfig.logToolUses)
+                        {
+                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                            auto const toolNameStyle =
+                                tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+                            auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            auto const shellPromptStyle =
+                                tui::Style { .fg = theme.colors.accent, .bold = true };
+                            auto const shellCommandStyle = tui::Style { .fg = theme.colors.text };
+
+                            out.carriageReturn();
+                            out.clearToEndOfLine();
+
+                            auto const [prefix, text] = formatToolStatusLine(m.call);
+
+                            out.writeText("\u2502 ", barStyle);
+                            if (m.call.name == "shell_execute" || m.call.name == "endo_execute")
+                            {
+                                out.writeText(prefix, shellPromptStyle);
+                                out.writeText(text, shellCommandStyle);
+                            }
+                            else
+                            {
+                                out.writeText(prefix, toolNameStyle);
+                                if (!text.empty())
+                                    out.writeText(text, argsStyle);
+                            }
+                            out.linefeed();
+
+                            if (activeRenderer && activeRenderer->isThinking())
+                                activeRenderer->renderSpinner();
+                            out.flush();
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, agent::CompletionMessage>)
+                    {
+                        if (currentRenderer)
+                            currentRenderer->end();
+                        teardownStreaming();
+                        saveHistory();
+
+                        if (!m.success)
+                        {
+                            if (!streamCancelled)
+                            {
+                                auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                                out.writeText("Error: " + m.errorMessage + "\n", errorStyle);
+                                out.flush();
+                            }
+                            else
+                            {
+                                auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                                out.writeText("(cancelled)\n", infoStyle);
+                                out.flush();
+                            }
+                        }
+
+                        // Re-render input component for next query.
+                        auto const newPrefSize = inputComponent.preferredSize();
+                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        screen.draw();
+                    }
+                    else if constexpr (std::is_same_v<T, agent::AskUserRequest>)
+                    {
+                        // TODO: Render question in TUI and collect answer.
+                        // For now, fall back to console I/O (preserving current behavior).
+                        std::println(stderr, "\n{}", m.question.text);
+                        if (!m.question.options.empty())
+                        {
+                            for (size_t i = 0; i < m.question.options.size(); ++i)
+                                std::println(stderr, "  {}. {}", i + 1, m.question.options[i]);
+                            std::print(stderr, "Choice (1-{}): ", m.question.options.size());
+                        }
+                        else
+                        {
+                            std::print(stderr, "> ");
+                        }
+                        auto answer = std::string {};
+                        auto cancelled = false;
+                        if (!std::getline(std::cin, answer))
+                            cancelled = true;
+                        if (!cancelled && !m.question.options.empty())
+                        {
+                            try
+                            {
+                                if (auto const idx = std::stoi(answer) - 1;
+                                    idx >= 0 && static_cast<size_t>(idx) < m.question.options.size())
+                                    answer = m.question.options[static_cast<size_t>(idx)];
+                            }
+                            catch (std::exception const&)
+                            {
+                            }
+                        }
+                        worker.inbound().push(agent::UserAnswerMessage {
+                            .requestId = m.requestId,
+                            .answer =
+                                agent::UserAnswer { .answer = std::move(answer), .cancelled = cancelled } });
+                    }
+                    else if constexpr (std::is_same_v<T, agent::PlanGeneratedMessage>)
+                    {
+                        if (currentRenderer)
+                            currentRenderer->renderPlan(m.plan);
+                        // TODO: Wait for user plan approval (y/n/r) and execute.
+                    }
+                    else if constexpr (std::is_same_v<T, agent::AgentShutdownComplete>)
+                    {
+                        // Worker thread exited. Clean up if needed.
+                    }
+                },
+                agentMsg);
+        }
+
+        // 2. Determine poll timeout.
+        auto pollTimeout = 80; // Default: 80ms for ghost text and spinner.
+        if (streaming)
+            pollTimeout = 5; // Fast polling during streaming for responsive cancellation.
+        else
+        {
+            auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();
+            if (ghostTimeout >= 0)
+                pollTimeout = std::min(ghostTimeout, 80);
+        }
+
+        // 3. Poll terminal input.
         auto events = terminal.poll(pollTimeout);
 
         if (events.empty())
         {
-            // Check if background context loading has completed
+            // Check background context loading.
             if (!systemPromptReady
                 && contextFuture.wait_for(std::chrono::seconds(0)) == std::future_status::ready)
             {
@@ -2032,35 +2036,84 @@ void Shell::runAgentMode()
                 screen.draw();
             }
 
-            // Flush ghost text updates on debounce timeout expiry.
-            inputComponent.flushDeferredUpdates();
-            if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0)
+            // Tick spinner during thinking phase.
+            if (activeRenderer && activeRenderer->isThinking())
             {
-                auto const newPrefSize = inputComponent.preferredSize();
-                inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
-                screen.draw();
+                if (activeRenderer->tickSpinner())
+                {
+                    activeRenderer->renderSpinner();
+                    out.flush();
+                }
+            }
+
+            // Ghost text debounce.
+            if (!streaming)
+            {
+                inputComponent.flushDeferredUpdates();
+                if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0)
+                {
+                    auto const newPrefSize = inputComponent.preferredSize();
+                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                    screen.draw();
+                }
             }
             continue;
         }
 
+        // 4. Process terminal input events.
         auto needsRedraw = false;
         for (auto const& event: events)
         {
             if (std::holds_alternative<tui::ResizeEvent>(event))
             {
+                if (scrollGuard.active)
+                {
+                    out.resetScrollRegion();
+                    scrollGuard.active = false;
+                    // Re-evaluate scroll region with new dimensions.
+                    updateScrollRegion(streamResponseLineCount);
+                }
                 needsRedraw = true;
                 continue;
             }
 
-            // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
             if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
                 continue;
 
+            // During streaming, only handle Escape (cancel) and Ctrl+L (clear).
+            if (streaming)
+            {
+                auto const action = inputComponent.processInput(event);
+                switch (action)
+                {
+                    case agent::AgentInputComponent::Action::Abort:
+                        streamCancelled = true;
+                        worker.inbound().push(agent::CancelMessage {});
+                        break;
+                    case agent::AgentInputComponent::Action::ClearScreen:
+                        if (scrollGuard.active)
+                        {
+                            out.resetScrollRegion();
+                            scrollGuard.active = false;
+                        }
+                        out.clearScreen();
+                        out.flush();
+                        streamResponseLineCount = 0;
+                        break;
+                    case agent::AgentInputComponent::Action::Changed:
+                        // User typed during streaming — input is captured for next query.
+                        break;
+                    default: break;
+                }
+                continue;
+            }
+
+            // Not streaming — handle full input.
             auto const action = inputComponent.processInput(event);
             switch (action)
             {
                 case agent::AgentInputComponent::Action::Submit: {
-                    // Ensure system prompt is ready before sending a message
+                    // Ensure system prompt is ready.
                     if (!systemPromptReady)
                     {
                         auto result = contextFuture.get();
@@ -2080,14 +2133,13 @@ void Shell::runAgentMode()
 
                     auto const query = std::string(inputComponent.text());
 
-                    // Feed query to input history (Up/Down navigation) and history provider (ghost text).
                     if (!query.starts_with("/"))
                     {
                         inputComponent.inputField().addHistory(query);
                         historyProviderPtr->addEntry(query);
                     }
 
-                    // Move cursor past the input component while text is still visible
+                    // Move cursor past the input component.
                     auto const totalLines = inputComponent.inputField().lineCount();
                     auto const cursorLine = inputComponent.inputField().cursorLine();
                     inputComponent.clear();
@@ -2098,10 +2150,9 @@ void Shell::runAgentMode()
                     out.linefeed();
                     out.flush();
 
-                    // Release the screen before streaming the response
                     screen.releaseCursor();
 
-                    // Dispatch slash commands via registry
+                    // Dispatch slash commands.
                     if (query.starts_with("/"))
                     {
                         auto const spacePos = query.find(' ');
@@ -2119,9 +2170,9 @@ void Shell::runAgentMode()
                             }
                             else if (auto const* m = std::get_if<agent::MarkdownOutput>(&commandResult))
                             {
-                                auto renderer = tui::MarkdownRenderer(out);
-                                renderer.setMaxWidth(terminal.columns());
-                                renderer.render(m->markdown);
+                                auto mdRenderer = tui::MarkdownRenderer(out);
+                                mdRenderer.setMaxWidth(terminal.columns());
+                                mdRenderer.render(m->markdown);
                                 out.flush();
                             }
                             else if (auto const* p = std::get_if<agent::PlanModeRequest>(&commandResult))
@@ -2134,7 +2185,6 @@ void Shell::runAgentMode()
                                 }
                                 else if (p->query.empty())
                                 {
-                                    // Idempotently enter plan mode
                                     if (!planModeActive)
                                     {
                                         planModeActive = true;
@@ -2147,43 +2197,15 @@ void Shell::runAgentMode()
                                 }
                                 else
                                 {
-                                    executePlanFlow(p->query);
+                                    // Send plan query to worker.
+                                    worker.inbound().push(
+                                        agent::UserPromptMessage { .text = p->query, .planMode = true });
                                 }
                             }
                             else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
                             {
-                                // PromptRewrite: send the rewritten prompt through normal message processing
-                                auto renderer = agent::AgentResponseRenderer(out);
-                                auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
-
-                                auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
-                                renderer.setLineCallback(
-                                    [&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
-                                renderer.begin();
-
-                                auto result = _agentSession->processMessage(
-                                    r->prompt, [&](std::string_view token) -> bool {
-                                        renderer.feedToken(token);
-                                        promptMgr.pollInput();
-                                        return !promptMgr.cancelled;
-                                    });
-
-                                promptMgr.teardown();
-                                renderer.end();
-                                saveHistory();
-
-                                if (promptMgr.cancelled)
-                                {
-                                    auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                                    out.writeText("(cancelled)\n", infoStyle);
-                                    out.flush();
-                                }
-                                else if (!result.has_value())
-                                {
-                                    auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                    out.writeText("Error: " + result.error().message + "\n", errorStyle);
-                                    out.flush();
-                                }
+                                // Send rewritten prompt to worker.
+                                worker.inbound().push(agent::UserPromptMessage { .text = r->prompt });
                             }
                         }
                         else
@@ -2195,53 +2217,29 @@ void Shell::runAgentMode()
                     }
                     else if (planModeActive && agentConfig.planMode.enabled)
                     {
-                        // Plan mode: route through plan exploration
-                        executePlanFlow(query);
+                        // Plan mode: send to worker with planMode flag.
+                        worker.inbound().push(agent::UserPromptMessage { .text = query, .planMode = true });
                         saveHistory();
                     }
                     else
                     {
-                        // Normal (non-slash) message processing
-                        auto renderer = agent::AgentResponseRenderer(out);
-                        auto const rendererGuard = ScopedAssign(activeRenderer, renderer);
-
-                        auto promptMgr = StreamingPromptManager(terminal, inputComponent, out);
-                        renderer.setLineCallback(
-                            [&promptMgr](int lineCount) { promptMgr.onNewResponseLine(lineCount); });
-                        renderer.begin();
-
-                        auto result =
-                            _agentSession->processMessage(query, [&](std::string_view token) -> bool {
-                                renderer.feedToken(token);
-                                promptMgr.pollInput();
-                                return !promptMgr.cancelled;
-                            });
-
-                        promptMgr.teardown();
-                        renderer.end();
-                        saveHistory();
-
-                        if (promptMgr.cancelled)
-                        {
-                            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            out.writeText("(cancelled)\n", infoStyle);
-                            out.flush();
-                        }
-                        else if (!result.has_value())
-                        {
-                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                            out.writeText("Error: " + result.error().message + "\n", errorStyle);
-                            out.flush();
-                        }
+                        // Normal message: send to worker.
+                        worker.inbound().push(agent::UserPromptMessage { .text = query });
                     }
 
-                    // Re-render the input component for the next query
+                    // Re-render input component.
                     auto const newPrefSize = inputComponent.preferredSize();
                     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
                     screen.draw();
                     break;
                 }
                 case agent::AgentInputComponent::Action::Abort: {
+                    // Stop worker before exiting agent mode.
+                    worker.stop();
+                    _agentSession->setToolRegistry(nullptr);
+                    _agentSession->setToolStatusCallback(nullptr);
+                    _agentSession->setTracer(nullptr);
+                    terminal.input().setWakeup(nullptr);
                     screen.clearAndRelease();
                     return;
                 }
@@ -2263,7 +2261,7 @@ void Shell::runAgentMode()
             }
         }
 
-        if (needsRedraw)
+        if (needsRedraw && !streaming)
         {
             inputComponent.flushDeferredUpdates();
             auto const newPrefSize = inputComponent.preferredSize();
