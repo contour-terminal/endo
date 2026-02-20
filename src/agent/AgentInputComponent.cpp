@@ -116,7 +116,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
     // Draw left chrome for each visible input line (accounting for scroll offset)
     auto const scrollOff = _inputField.scrollOffset();
-    auto const fieldHeight = area.height - rowOff - HeaderHeight;
+    auto const fieldHeight = std::max(1, area.height - rowOff - HeaderHeight - FooterHeight);
     auto const visibleLines = std::min(lineCount - scrollOff, fieldHeight);
     for (auto row = 0; row < visibleLines && (rowOff + row + HeaderHeight) < area.height; ++row)
     {
@@ -164,6 +164,15 @@ void AgentInputComponent::render(tui::Canvas& canvas)
             _completionPopup.render(popupCanvas);
         }
     }
+
+    // Render info line below the input field
+    auto const infoLineRow = rowOff + HeaderHeight + fieldHeight;
+    if (infoLineRow < area.height)
+        renderInfoLine(canvas, infoLineRow);
+    // Bottom padding: write a non-breaking space so Screen counts this row as content.
+    auto const paddingRow = infoLineRow + 1;
+    if (paddingRow < area.height)
+        canvas.put(paddingRow, 0, "\xc2\xa0", {}); // U+00A0 non-breaking space
 }
 
 tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
@@ -175,7 +184,7 @@ tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
 tui::Size AgentInputComponent::preferredSize() const
 {
     auto const fieldSize = _inputField.preferredSize();
-    auto totalHeight = _topPadding + fieldSize.height + HeaderHeight;
+    auto totalHeight = _topPadding + fieldSize.height + HeaderHeight + FooterHeight;
 
     // Add space for completion popup if visible
     if (_completionPopup.visible())
@@ -596,6 +605,79 @@ bool AgentInputComponent::isInAtMentionContext(std::string_view input, size_t cu
     // No whitespace between '@' and cursor
     auto const afterAt = upToCursor.substr(atPos + 1);
     return afterAt.find_first_of(" \t\n") == std::string_view::npos;
+}
+
+void AgentInputComponent::setThinkingActive(bool active)
+{
+    _thinkingActive = active;
+    if (active)
+        _spinner.reset();
+}
+
+void AgentInputComponent::setActivityLabel(std::string label)
+{
+    _activityLabel = std::move(label);
+}
+
+bool AgentInputComponent::tickSpinner()
+{
+    if (!_thinkingActive)
+        return false;
+    return _spinner.tick();
+}
+
+int AgentInputComponent::spinnerTimeoutMs() const
+{
+    if (!_thinkingActive)
+        return -1;
+    return static_cast<int>(_spinner.interval().count());
+}
+
+void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
+{
+    auto const& theme = tui::currentTheme();
+    auto const area = screenBounds();
+    auto col = 1; // Indent to align with content (past the left bar chrome).
+
+    if (_thinkingActive)
+    {
+        // Spinner + activity label
+        auto const spinnerStyle = tui::Style { .fg = theme.agentColors.spinnerColor };
+        auto const labelStyle = tui::Style { .fg = theme.agentColors.statusText };
+        col += canvas.putString(row, col, _spinner.currentFrame(), spinnerStyle);
+        col += canvas.putString(row, col, " ", {});
+        canvas.putString(row, col, _activityLabel, labelStyle);
+    }
+    else
+    {
+        // Shortcut hints
+        auto const keyStyle = tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
+        auto const descStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+
+        struct Hint
+        {
+            std::string_view key;
+            std::string_view desc;
+        };
+
+        static constexpr std::array hints = {
+            Hint { "Esc", "exit" },
+            Hint { "S-Tab", "mode" },
+            Hint { "C-/", "thinking" },
+            Hint { "C-.", "model" },
+        };
+
+        for (auto const& [key, desc]: hints)
+        {
+            if (col > 1)
+                col += canvas.putString(row, col, "  ", {}); // gap between hints
+            col += canvas.putString(row, col, key, keyStyle);
+            col += canvas.putString(row, col, " ", {});
+            col += canvas.putString(row, col, desc, descStyle);
+            if (col >= area.width)
+                break;
+        }
+    }
 }
 
 } // namespace endo::agent

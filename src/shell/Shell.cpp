@@ -1873,6 +1873,7 @@ void Shell::runAgentMode()
         streamingPromptVisible = false;
         currentRenderer.reset();
         activeRenderer = nullptr;
+        inputComponent.setThinkingActive(false);
     };
 
     // Render inputComponent to an off-screen buffer and write to TerminalOutput.
@@ -1982,6 +1983,8 @@ void Shell::runAgentMode()
                         currentRenderer.emplace(out);
                         activeRenderer = &*currentRenderer;
                         currentRenderer->begin();
+                        inputComponent.setThinkingActive(true);
+                        inputComponent.setActivityLabel("Thinking...");
                     }
                     else if constexpr (std::is_same_v<T, agent::TokenMessage>)
                     {
@@ -1992,6 +1995,7 @@ void Shell::runAgentMode()
                     else if constexpr (std::is_same_v<T, agent::ToolStatusMessage>)
                     {
                         clearStreamingPrompt();
+                        inputComponent.setActivityLabel("Running " + m.call.name + "...");
                         // Skip ask_user — the QuestionComponent renders the question text.
                         if (agentConfig.logToolUses && m.call.name != "ask_user")
                         {
@@ -2057,6 +2061,7 @@ void Shell::runAgentMode()
                         }
 
                         teardownStreaming();
+                        inputComponent.setThinkingActive(false);
                         saveHistory();
 
                         // Re-render input component for next query.
@@ -2111,6 +2116,9 @@ void Shell::runAgentMode()
             if (escapeTimeout >= 0)
                 pollTimeout = std::min(escapeTimeout, pollTimeout);
         }
+        // Include input component spinner timeout for info line animation.
+        if (auto const spinnerTimeout = inputComponent.spinnerTimeoutMs(); spinnerTimeout >= 0)
+            pollTimeout = std::min(spinnerTimeout, pollTimeout);
 
         // 3. Poll terminal input.
         auto events = terminal.poll(pollTimeout);
@@ -2147,6 +2155,23 @@ void Shell::runAgentMode()
                     clearStreamingPrompt();
                     activeRenderer->renderSpinner();
                     renderStreamingPrompt();
+                }
+            }
+
+            // Tick the input component's info line spinner.
+            if (inputComponent.tickSpinner())
+            {
+                if (streaming)
+                {
+                    auto guard = out.syncGuard();
+                    clearStreamingPrompt();
+                    renderStreamingPrompt();
+                }
+                else
+                {
+                    auto const newPrefSize = inputComponent.preferredSize();
+                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                    screen.draw();
                 }
             }
 

@@ -4,6 +4,7 @@
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
+#include <tui/Spinner.hpp>
 #include <tui/completer/Completer.hpp>
 
 #include <chrono>
@@ -150,6 +151,29 @@ class AgentInputComponent: public tui::Component
     /// without requiring additional keystrokes.
     [[nodiscard]] int escapeHintTimeoutMs() const;
 
+    // --- Thinking/Activity State ---
+
+    /// @brief Sets whether the agent is actively thinking/processing.
+    ///
+    /// When active, the info line below the input shows a spinner with the activity label.
+    /// When inactive, the info line shows shortcut hints.
+    /// @param active True to show spinner, false to show hints.
+    void setThinkingActive(bool active);
+
+    /// @brief Returns whether the agent is actively thinking.
+    [[nodiscard]] bool thinkingActive() const noexcept { return _thinkingActive; }
+
+    /// @brief Sets the activity label shown next to the spinner.
+    /// @param label The label text (e.g., "Thinking...", "Running shell_execute...").
+    void setActivityLabel(std::string label);
+
+    /// @brief Advances the spinner animation.
+    /// @return True if the frame changed and a re-render is needed.
+    [[nodiscard]] bool tickSpinner();
+
+    /// @brief Returns milliseconds until the next spinner frame, or -1 if not active.
+    [[nodiscard]] int spinnerTimeoutMs() const;
+
   private:
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup; ///< Popup widget for slash command completion.
@@ -164,9 +188,12 @@ class AgentInputComponent: public tui::Component
     ThinkingMode _thinkingMode = ThinkingMode::Off; ///< Active thinking mode for header display.
     int _topPadding = 0;                            ///< Blank rows above content (from promptSpacing).
 
-    static constexpr int LeftBarWidth = 2; ///< Width of the left bar chrome (╭─, ╰─, │).
-    static constexpr int BarPadding = 1;   ///< Padding after the bar.
-    static constexpr int HeaderHeight = 1; ///< Height of the header line (shows agent/provider/model).
+    static constexpr int LeftBarWidth = 2;   ///< Width of the left bar chrome (╭─, ╰─, │).
+    static constexpr int BarPadding = 1;     ///< Padding after the bar.
+    static constexpr int HeaderHeight = 1;   ///< Height of the header line (shows agent/provider/model).
+    static constexpr int InfoLineHeight = 1; ///< Height of the info/status line below input.
+    static constexpr int BottomPadding = 1;  ///< Empty padding line at the page bottom.
+    static constexpr int FooterHeight = InfoLineHeight + BottomPadding; ///< Total footer height.
 
     // Completion helpers
     void triggerCompletion(bool forceShowPopup);
@@ -185,6 +212,14 @@ class AgentInputComponent: public tui::Component
     static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
     std::string _suggestCacheText;                  ///< Last input text for suggest cache.
     std::optional<std::string> _suggestCacheResult; ///< Cached suggest result.
+
+    // Info line rendering
+    void renderInfoLine(tui::Canvas& canvas, int row);
+
+    // Thinking/activity state
+    tui::Spinner _spinner { tui::SpinnerType::Dots }; ///< Spinner for thinking animation.
+    bool _thinkingActive = false;                     ///< Whether agent is thinking/processing.
+    std::string _activityLabel;                       ///< Label shown next to spinner.
 
     // Escape double-press confirmation state
     void restoreFromEscapeHint();
