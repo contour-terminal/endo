@@ -247,6 +247,19 @@ void Buffer::writeTo(TerminalOutput& out) const
         if (row < _rows - 1)
             out.linefeed();
     }
+
+    // Position terminal cursor at the buffer's logical cursor location.
+    if (_cursorVisible)
+    {
+        // After the loop, terminal cursor is at row (_rows - 1), end of content.
+        auto const rowsUp = _rows - 1 - _cursor.y;
+        if (rowsUp > 0)
+            out.moveUp(rowsUp);
+        out.carriageReturn();
+        if (_cursor.x > 0)
+            out.moveRight(_cursor.x);
+        out.showCursor();
+    }
 }
 
 } // namespace tui
