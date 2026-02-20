@@ -1812,50 +1812,70 @@ void Shell::runAgentMode()
     auto planModeActive = false;
 
     // --- Streaming state ---
-    // When the worker is processing, we track the renderer and scroll region for the response.
+    // When the worker is processing, we track the renderer for the response.
+    // Agent output flows naturally into terminal scrollback; no scroll regions needed.
     auto streaming = false;
     auto streamCancelled = false;
     std::optional<agent::AgentResponseRenderer> currentRenderer;
-    auto scrollGuard = ScrollRegionGuard(out);
-    auto streamResponseLineCount = 0;
-    auto streamPromptHeight = 0;
-
-    // Helper: manage scroll region for streaming response with prompt visible below.
-    auto updateScrollRegion = [&](int lineCount) {
-        streamResponseLineCount = lineCount;
-        streamPromptHeight = inputComponent.preferredSize().height;
-
-        if (streamPromptHeight >= terminal.rows())
-            return;
-
-        auto const totalNeeded = streamResponseLineCount + streamPromptHeight;
-        if (!scrollGuard.active && totalNeeded >= terminal.rows())
-        {
-            auto const scrollBottom = terminal.rows() - streamPromptHeight;
-            if (scrollBottom >= 1)
-            {
-                out.setScrollRegion(1, scrollBottom);
-                scrollGuard.active = true;
-            }
-        }
-    };
 
     // Helper: teardown streaming state after response completes.
+    auto streamingPromptVisible = false;
     auto teardownStreaming = [&] {
-        if (scrollGuard.active)
-        {
-            out.resetScrollRegion();
-            scrollGuard.active = false;
-            out.moveTo(terminal.rows(), 1);
-            out.linefeed();
-        }
-        out.flush();
         streaming = false;
         streamCancelled = false;
+        streamingPromptVisible = false;
         currentRenderer.reset();
         activeRenderer = nullptr;
-        streamResponseLineCount = 0;
-        streamPromptHeight = 0;
+    };
+
+    // Render a simplified prompt directly via TerminalOutput (no Screen involvement).
+    auto renderPromptDirect = [&] {
+        auto const& theme = tui::currentTheme();
+        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto const labelStyle = tui::Style { .fg = theme.agentColors.leftBar };
+        auto const statusStyle = tui::Style { .fg = theme.agentColors.statusText };
+
+        // Header line: ╭─ agent
+        out.carriageReturn();
+        out.writeText("\xe2\x95\xad\xe2\x94\x80 ", barStyle);
+        out.writeText("agent", labelStyle);
+        out.clearToEndOfLine();
+        out.linefeed();
+
+        // Input line: ╰─ ❯ <input>
+        out.carriageReturn();
+        out.writeText("\xe2\x95\xb0\xe2\x94\x80 ", barStyle);
+        out.writeText("\xe2\x9d\xaf ", statusStyle);
+        auto const text = inputComponent.text();
+        if (!text.empty())
+            out.writeText(text);
+        out.clearToEndOfLine();
+    };
+
+    /// Clear the streaming prompt, restoring cursor to content end position.
+    auto clearStreamingPrompt = [&] {
+        if (!streamingPromptVisible)
+            return;
+        out.restoreCursor();
+        out.clearToEndOfDisplay();
+        out.flush();
+        streamingPromptVisible = false;
+    };
+
+    /// Render the streaming prompt below the current content position.
+    auto renderStreamingPrompt = [&] {
+        if (!streaming)
+            return;
+        // Pre-scroll: emit linefeeds matching the prompt's total LF count (gap + header→input).
+        // This forces any terminal scrolling BEFORE saveCursor, keeping the saved position valid.
+        out.linefeed();
+        out.linefeed();
+        out.moveUp(2);
+        out.saveCursor();
+        out.linefeed();
+        renderPromptDirect();
+        out.flush();
+        streamingPromptVisible = true;
     };
 
     // --- Main event loop ---
@@ -1872,21 +1892,22 @@ void Shell::runAgentMode()
                     using T = std::decay_t<decltype(m)>;
                     if constexpr (std::is_same_v<T, agent::ThinkingStartMessage>)
                     {
+                        clearStreamingPrompt();
                         streaming = true;
                         streamCancelled = false;
                         currentRenderer.emplace(out);
                         activeRenderer = &*currentRenderer;
-                        currentRenderer->setLineCallback(
-                            [&](int lineCount) { updateScrollRegion(lineCount); });
                         currentRenderer->begin();
                     }
                     else if constexpr (std::is_same_v<T, agent::TokenMessage>)
                     {
+                        clearStreamingPrompt();
                         if (currentRenderer)
                             currentRenderer->feedToken(m.token);
                     }
                     else if constexpr (std::is_same_v<T, agent::ToolStatusMessage>)
                     {
+                        clearStreamingPrompt();
                         if (agentConfig.logToolUses)
                         {
                             auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
@@ -1923,6 +1944,7 @@ void Shell::runAgentMode()
                     }
                     else if constexpr (std::is_same_v<T, agent::CompletionMessage>)
                     {
+                        clearStreamingPrompt();
                         if (currentRenderer)
                             currentRenderer->end();
 
@@ -1990,6 +2012,7 @@ void Shell::runAgentMode()
                     }
                     else if constexpr (std::is_same_v<T, agent::PlanGeneratedMessage>)
                     {
+                        clearStreamingPrompt();
                         if (currentRenderer)
                             currentRenderer->renderPlan(m.plan);
                         // TODO: Wait for user plan approval (y/n/r) and execute.
@@ -2001,6 +2024,10 @@ void Shell::runAgentMode()
                 },
                 agentMsg);
         }
+
+        // Re-render the streaming prompt after each message batch that produced content.
+        if (streaming && !streamingPromptVisible)
+            renderStreamingPrompt();
 
         // 2. Determine poll timeout.
         auto pollTimeout = 80; // Default: 80ms for ghost text and spinner.
@@ -2044,8 +2071,10 @@ void Shell::runAgentMode()
             {
                 if (activeRenderer->tickSpinner())
                 {
+                    auto guard = out.syncGuard();
+                    clearStreamingPrompt();
                     activeRenderer->renderSpinner();
-                    out.flush();
+                    renderStreamingPrompt();
                 }
             }
 
@@ -2069,13 +2098,6 @@ void Shell::runAgentMode()
         {
             if (std::holds_alternative<tui::ResizeEvent>(event))
             {
-                if (scrollGuard.active)
-                {
-                    out.resetScrollRegion();
-                    scrollGuard.active = false;
-                    // Re-evaluate scroll region with new dimensions.
-                    updateScrollRegion(streamResponseLineCount);
-                }
                 needsRedraw = true;
                 continue;
             }
@@ -2094,18 +2116,17 @@ void Shell::runAgentMode()
                         worker.inbound().push(agent::CancelMessage {});
                         break;
                     case agent::AgentInputComponent::Action::ClearScreen:
-                        if (scrollGuard.active)
-                        {
-                            out.resetScrollRegion();
-                            scrollGuard.active = false;
-                        }
                         out.clearScreen();
                         out.flush();
-                        streamResponseLineCount = 0;
+                        streamingPromptVisible = false;
+                        renderStreamingPrompt();
                         break;
-                    case agent::AgentInputComponent::Action::Changed:
-                        // User typed during streaming — input is captured for next query.
+                    case agent::AgentInputComponent::Action::Changed: {
+                        auto guard = out.syncGuard();
+                        clearStreamingPrompt();
+                        renderStreamingPrompt();
                         break;
+                    }
                     default: break;
                 }
                 continue;
@@ -2116,6 +2137,8 @@ void Shell::runAgentMode()
             switch (action)
             {
                 case agent::AgentInputComponent::Action::Submit: {
+                    auto sentToWorker = false;
+
                     // Ensure system prompt is ready.
                     if (!systemPromptReady)
                     {
@@ -2203,12 +2226,14 @@ void Shell::runAgentMode()
                                     // Send plan query to worker.
                                     worker.inbound().push(
                                         agent::UserPromptMessage { .text = p->query, .planMode = true });
+                                    sentToWorker = true;
                                 }
                             }
                             else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
                             {
                                 // Send rewritten prompt to worker.
                                 worker.inbound().push(agent::UserPromptMessage { .text = r->prompt });
+                                sentToWorker = true;
                             }
                         }
                         else
@@ -2222,18 +2247,24 @@ void Shell::runAgentMode()
                     {
                         // Plan mode: send to worker with planMode flag.
                         worker.inbound().push(agent::UserPromptMessage { .text = query, .planMode = true });
+                        sentToWorker = true;
                         saveHistory();
                     }
                     else
                     {
                         // Normal message: send to worker.
                         worker.inbound().push(agent::UserPromptMessage { .text = query });
+                        sentToWorker = true;
                     }
 
-                    // Re-render input component.
-                    auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
-                    screen.draw();
+                    // Re-render input component only for non-streaming commands.
+                    // Streaming responses re-render via CompletionMessage handler.
+                    if (!sentToWorker)
+                    {
+                        auto const newPrefSize = inputComponent.preferredSize();
+                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        screen.draw();
+                    }
                     break;
                 }
                 case agent::AgentInputComponent::Action::Abort: {
