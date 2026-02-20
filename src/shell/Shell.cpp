@@ -1943,18 +1943,16 @@ void Shell::runAgentMode()
 
                         // Render error/cancel text while streaming state is still valid.
                         auto const wasCancelled = streamCancelled;
-                        if (!m.success)
+                        if (wasCancelled)
                         {
-                            if (!wasCancelled)
-                            {
-                                auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
-                                out.writeText("\nError: " + m.errorMessage + "\n", errorStyle);
-                            }
-                            else
-                            {
-                                auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
-                                out.writeText("\n(cancelled)\n", infoStyle);
-                            }
+                            auto const infoStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            out.writeText("\n(Operation cancelled by user)\n", infoStyle);
+                            out.flush();
+                        }
+                        else if (!m.success)
+                        {
+                            auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                            out.writeText("\nError: " + m.errorMessage + "\n", errorStyle);
                             out.flush();
                         }
 
