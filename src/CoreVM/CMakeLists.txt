@@ -12,6 +12,7 @@ target_sources(CoreVM PRIVATE
     SourceLocation.cpp
     TargetCodeGenerator.cpp
     NativeCallback.cpp
+    NativeProperty.cpp
     ir/BasicBlock.cpp
     ir/Constant.cpp
     ir/ConstantArray.cpp

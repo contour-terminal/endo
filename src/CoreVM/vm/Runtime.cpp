@@ -28,6 +28,40 @@ NativeCallback& Runtime::registerFunction(const std::string& name, LiteralType r
     return *_builtins[_builtins.size() - 1];
 }
 
+NativeProperty& Runtime::registerProperty(std::string const& name, LiteralType type)
+{
+    _properties.push_back(std::make_unique<NativeProperty>(name, type));
+    auto& prop = *_properties.back();
+
+    // Register getter callback: name()T — 0 args, returns the property type
+    auto& getter = registerFunction(name, type);
+    getter.bind([&prop](Params& args) { prop.invokeGet(args); });
+
+    // Register setter callback: name(T)V — 1 arg (the new value), returns void
+    auto& setter = registerFunction(name);
+    switch (type)
+    {
+        case LiteralType::String: setter.param<CoreString>("value"); break;
+        case LiteralType::Number: setter.param<CoreNumber>("value"); break;
+        case LiteralType::Boolean: setter.param<bool>("value"); break;
+        default: setter.param<CoreNumber>("value"); break;
+    }
+    setter.returnType(LiteralType::Void);
+    setter.bind([&prop](Params& args) { prop.invokeSet(args); });
+
+    return prop;
+}
+
+NativeProperty* Runtime::findProperty(std::string const& name) const noexcept
+{
+    for (auto const& prop: _properties)
+    {
+        if (prop->name() == name)
+            return prop.get();
+    }
+    return nullptr;
+}
+
 NativeCallback* Runtime::find(const std::string& signature) const noexcept
 {
     for (const auto& callback: _builtins)

@@ -1190,6 +1190,66 @@ class NativeCallback
     void invoke(Params& args) const;
 };
 
+/// A builtin property with getter and/or setter callbacks.
+///
+/// Properties are syntactic sugar over native callbacks. When registered via
+/// Runtime::registerProperty(), both a getter callback (name()T) and a setter
+/// callback (name(T)V) are created automatically so the existing CALL bytecode
+/// works without VM changes.
+class NativeProperty
+{
+  public:
+    using Getter = std::function<void(Params& args)>;
+    using Setter = std::function<void(Params& args)>;
+
+    /// Constructs a named property with the given value type.
+    NativeProperty(std::string name, LiteralType type);
+
+    /// @return The property name.
+    [[nodiscard]] std::string const& name() const noexcept { return _name; }
+
+    /// @return The value type of this property.
+    [[nodiscard]] LiteralType type() const noexcept { return _type; }
+
+    /// @return true if a getter callback is set.
+    [[nodiscard]] bool hasGetter() const noexcept { return _getter != nullptr; }
+
+    /// @return true if a setter callback is set.
+    [[nodiscard]] bool hasSetter() const noexcept { return _setter != nullptr; }
+
+    /// Sets the getter callback. Returns *this for chaining.
+    NativeProperty& onGet(Getter cb);
+
+    /// Sets the setter callback. Returns *this for chaining.
+    NativeProperty& onSet(Setter cb);
+
+    /// Sets the getter callback using a member function pointer. Returns *this for chaining.
+    template <typename Class>
+    NativeProperty& onGet(void (Class::*method)(Params&), Class* obj)
+    {
+        return onGet([obj, method](Params& args) { (obj->*method)(args); });
+    }
+
+    /// Sets the setter callback using a member function pointer. Returns *this for chaining.
+    template <typename Class>
+    NativeProperty& onSet(void (Class::*method)(Params&), Class* obj)
+    {
+        return onSet([obj, method](Params& args) { (obj->*method)(args); });
+    }
+
+    /// Invokes the getter callback.
+    void invokeGet(Params& args) const;
+
+    /// Invokes the setter callback.
+    void invokeSet(Params& args) const;
+
+  private:
+    std::string _name;
+    LiteralType _type;
+    Getter _getter;
+    Setter _setter;
+};
+
 /// Runtime error with source location for user-friendly error reporting.
 ///
 /// Used when the VM encounters an error during execution (e.g., type mismatch,
@@ -2895,6 +2955,23 @@ class Runtime
     NativeCallback& registerFunction(const std::string& name);
     NativeCallback& registerFunction(const std::string& name, LiteralType returnType);
 
+    /// Registers a builtin property with getter/setter.
+    ///
+    /// Automatically creates two NativeCallback entries (getter + setter signatures)
+    /// so the existing CALL bytecode works without VM changes.
+    ///
+    /// @param name The property name (e.g., "agent_provider").
+    /// @param type The value type of the property.
+    /// @return Reference to the NativeProperty for chaining onGet/onSet calls.
+    NativeProperty& registerProperty(std::string const& name, LiteralType type);
+
+    /// Finds a registered property by name.
+    /// @return Pointer to the property, or nullptr if not found.
+    [[nodiscard]] NativeProperty* findProperty(std::string const& name) const noexcept;
+
+    /// Returns an iterable view of all registered properties.
+    [[nodiscard]] auto const& properties() const noexcept { return _properties; }
+
     void invoke(int id, int argc, Value* argv, Runner* cx);
 
     /**
@@ -2909,6 +2986,7 @@ class Runtime
 
   private:
     std::vector<std::unique_ptr<NativeCallback>> _builtins;
+    std::vector<std::unique_ptr<NativeProperty>> _properties;
 };
 
 template <typename T, typename U>
