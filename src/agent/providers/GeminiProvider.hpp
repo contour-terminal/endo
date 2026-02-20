@@ -19,10 +19,11 @@ namespace endo::agent
 /// Configuration for the Google Gemini provider.
 struct GeminiProviderConfig
 {
-    std::string apiKey;                     ///< API key for authentication.
-    std::string model = "gemini-2.5-flash"; ///< Model identifier.
-    size_t maxTokens = 8192;                ///< Maximum output tokens per request.
-    size_t contextWindowSize = 1000000;     ///< Maximum context window in tokens.
+    std::string apiKey;                            ///< API key for authentication.
+    std::string model = "gemini-2.5-flash";        ///< Model identifier.
+    size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
+    size_t contextWindowSize = 1000000;            ///< Maximum context window in tokens.
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
 /// LLM provider implementation for Google Gemini API.
@@ -59,13 +60,15 @@ class GeminiProvider final: public LlmProvider
     [[nodiscard]] auto modelInfo() const -> ModelInfo override;
 
     /// Serializes messages and tools into the Gemini API request JSON format.
-    /// @param messages  Conversation history to serialize.
-    /// @param tools     Tool definitions to include in the request.
-    /// @param maxTokens Maximum output tokens for generation config.
+    /// @param messages     Conversation history to serialize.
+    /// @param tools        Tool definitions to include in the request.
+    /// @param maxTokens    Maximum output tokens for generation config.
+    /// @param thinkingMode Thinking/reasoning mode to apply.
     /// @return The serialized JSON request body.
     [[nodiscard]] static auto serializeRequest(std::span<ChatMessage const> messages,
                                                std::span<ToolDefinition const> tools,
-                                               size_t maxTokens) -> nlohmann::json;
+                                               size_t maxTokens,
+                                               ThinkingMode thinkingMode) -> nlohmann::json;
 
   private:
     http::HttpClient const& _httpClient;

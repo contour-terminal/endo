@@ -13,32 +13,55 @@ namespace endo::agent
 
 namespace
 {
-    /// Resolves the Claude API token: OAuth credentials take priority, then API key.
+    /// Attempts to resolve an OAuth access token, refreshing if expired.
+    /// @return The access token, or nullopt if unavailable/refresh failed.
+    auto resolveOAuthToken(OAuthStore const& oauthStore) -> std::optional<std::string>
+    {
+        if (!oauthStore.claude.has_value() || oauthStore.claude->accessToken.empty())
+            return std::nullopt;
+
+        if (!isTokenExpired(*oauthStore.claude))
+            return oauthStore.claude->accessToken;
+
+        // Token expired — attempt refresh.
+        auto refreshClient = http::HttpClient {};
+        auto refreshed = refreshOAuthToken(refreshClient, oauthStore.claude->refreshToken);
+        if (refreshed.has_value())
+        {
+            // Persist the refreshed token.
+            auto store = oauthStore;
+            store.claude = std::move(*refreshed);
+            (void) saveOAuthStore(store);
+            return store.claude->accessToken;
+        }
+        return std::nullopt;
+    }
+
+    /// Resolves the Claude API token respecting the auth preference.
+    /// @param config Agent configuration (contains authPreference: "auto", "oauth", "api_key").
+    /// @param oauthStore Loaded OAuth credential store.
     /// @return The token string (OAuth access token or API key), or nullopt.
     auto resolveClaudeToken(AgentConfig const& config, OAuthStore const& oauthStore)
         -> std::optional<std::string>
     {
-        // Priority 1: OAuth credentials from agent-oauth.yaml.
-        if (oauthStore.claude.has_value() && !oauthStore.claude->accessToken.empty())
-        {
-            if (!isTokenExpired(*oauthStore.claude))
-                return oauthStore.claude->accessToken;
+        auto const& pref = config.claude.authPreference;
 
-            // Token expired — attempt refresh.
-            auto refreshClient = http::HttpClient {};
-            auto refreshed = refreshOAuthToken(refreshClient, oauthStore.claude->refreshToken);
-            if (refreshed.has_value())
-            {
-                // Persist the refreshed token.
-                auto store = oauthStore;
-                store.claude = std::move(*refreshed);
-                (void) saveOAuthStore(store);
-                return store.claude->accessToken;
-            }
-            // Refresh failed — fall through to API key.
+        if (pref == "api_key")
+        {
+            // User explicitly wants API key — skip OAuth entirely.
+            return resolveProviderApiKey(config.claude.apiKey, config.claude.apiKeyEnv);
         }
 
-        // Priority 2: API key (stored or env var).
+        if (pref == "oauth")
+        {
+            // User explicitly wants OAuth — skip API key entirely.
+            return resolveOAuthToken(oauthStore);
+        }
+
+        // "auto" (default): OAuth > API key > env var.
+        if (auto token = resolveOAuthToken(oauthStore))
+            return token;
+
         return resolveProviderApiKey(config.claude.apiKey, config.claude.apiKeyEnv);
     }
 
@@ -77,10 +100,11 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
             .apiKey = std::move(*token),
             .model = config.claude.model,
             .maxTokens = config.claude.maxTokens,
+            .thinkingMode = config.claude.thinkingMode,
         };
 
-        // If we're using an OAuth token, attach a refresher.
-        if (oauthStore.claude.has_value())
+        // Attach a token refresher when using an OAuth token.
+        if (isOAuthToken(providerConfig.apiKey))
             providerConfig.tokenRefresher = makeClaudeTokenRefresher();
 
         _providers.emplace("claude", std::make_unique<ClaudeProvider>(httpClient, std::move(providerConfig)));
@@ -94,6 +118,7 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
             .model = config.openai.model,
             .baseUrl = config.openai.baseUrl.empty() ? "https://api.openai.com/v1" : config.openai.baseUrl,
             .maxTokens = config.openai.maxTokens,
+            .thinkingMode = config.openai.thinkingMode,
         };
         _providers.emplace("openai", std::make_unique<OpenAiProvider>(httpClient, std::move(providerConfig)));
     }
@@ -107,6 +132,7 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
             .model = config.openaiCompat.model,
             .baseUrl = config.openaiCompat.baseUrl,
             .maxTokens = config.openaiCompat.maxTokens,
+            .thinkingMode = config.openaiCompat.thinkingMode,
         };
         _providers.emplace("openai_compat",
                            std::make_unique<OpenAiProvider>(httpClient, std::move(providerConfig)));
@@ -119,6 +145,7 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
             .apiKey = std::move(*key),
             .model = config.gemini.model,
             .maxTokens = config.gemini.maxTokens,
+            .thinkingMode = config.gemini.thinkingMode,
         };
         _providers.emplace("gemini", std::make_unique<GeminiProvider>(httpClient, std::move(providerConfig)));
     }
@@ -180,8 +207,9 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 .apiKey = std::move(*token),
                 .model = _config.claude.model,
                 .maxTokens = _config.claude.maxTokens,
+                .thinkingMode = _config.claude.thinkingMode,
             };
-            if (oauthStore.claude.has_value())
+            if (isOAuthToken(providerConfig.apiKey))
                 providerConfig.tokenRefresher = makeClaudeTokenRefresher();
             auto provider = std::make_unique<ClaudeProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
@@ -197,6 +225,7 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 .baseUrl =
                     _config.openai.baseUrl.empty() ? "https://api.openai.com/v1" : _config.openai.baseUrl,
                 .maxTokens = _config.openai.maxTokens,
+                .thinkingMode = _config.openai.thinkingMode,
             };
             auto provider = std::make_unique<OpenAiProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
@@ -212,6 +241,7 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 .model = _config.openaiCompat.model,
                 .baseUrl = _config.openaiCompat.baseUrl,
                 .maxTokens = _config.openaiCompat.maxTokens,
+                .thinkingMode = _config.openaiCompat.thinkingMode,
             };
             auto provider = std::make_unique<OpenAiProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
@@ -225,6 +255,7 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 .apiKey = std::move(*key),
                 .model = _config.gemini.model,
                 .maxTokens = _config.gemini.maxTokens,
+                .thinkingMode = _config.gemini.thinkingMode,
             };
             auto provider = std::make_unique<GeminiProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };

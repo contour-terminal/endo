@@ -23,6 +23,10 @@ namespace
             config.model = node["model"].as<std::string>();
         if (node["max_tokens"])
             config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["auth_preference"])
+            config.authPreference = node["auth_preference"].as<std::string>();
+        if (node["thinking_mode"])
+            config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }
 
     void parseOpenAiConfig(YAML::Node const& node, OpenAiConfig& config)
@@ -39,6 +43,8 @@ namespace
             config.baseUrl = node["base_url"].as<std::string>();
         if (node["max_tokens"])
             config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["thinking_mode"])
+            config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }
 
     void parseGeminiConfig(YAML::Node const& node, GeminiConfig& config)
@@ -53,6 +59,8 @@ namespace
             config.model = node["model"].as<std::string>();
         if (node["max_tokens"])
             config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["thinking_mode"])
+            config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }
 
     void parsePlanModeConfig(YAML::Node const& node, PlanModeConfig& config)
@@ -85,20 +93,34 @@ namespace
             config.defaultPath = node["default_path"].as<std::string>();
     }
 
-    /// Emits API key fields for a provider section (key-store only).
-    void emitApiKeySection(YAML::Emitter& emitter,
-                           std::string_view sectionName,
-                           std::string const& apiKey,
-                           std::string const& apiKeyEnv,
-                           std::string const& defaultApiKeyEnv)
+    /// Emits a provider section with API keys, model, and thinking mode preferences.
+    void emitProviderSection(YAML::Emitter& emitter,
+                             std::string_view sectionName,
+                             std::string const& apiKey,
+                             std::string const& apiKeyEnv,
+                             std::string const& defaultApiKeyEnv,
+                             std::string const& model,
+                             std::string const& defaultModel,
+                             ThinkingMode thinkingMode)
     {
-        if (apiKey.empty() && apiKeyEnv == defaultApiKeyEnv)
+        bool const hasApiKey = !apiKey.empty();
+        bool const hasCustomApiKeyEnv = apiKeyEnv != defaultApiKeyEnv;
+        bool const hasCustomModel = model != defaultModel;
+        bool const hasThinking = thinkingMode != ThinkingMode::Off;
+
+        if (!hasApiKey && !hasCustomApiKeyEnv && !hasCustomModel && !hasThinking)
             return;
+
         emitter << YAML::Key << std::string(sectionName) << YAML::Value << YAML::BeginMap;
-        if (!apiKey.empty())
+        if (hasApiKey)
             emitter << YAML::Key << "api_key" << YAML::Value << apiKey;
-        if (apiKeyEnv != defaultApiKeyEnv)
+        if (hasCustomApiKeyEnv)
             emitter << YAML::Key << "api_key_env" << YAML::Value << apiKeyEnv;
+        if (hasCustomModel)
+            emitter << YAML::Key << "model" << YAML::Value << model;
+        if (hasThinking)
+            emitter << YAML::Key << "thinking_mode" << YAML::Value
+                    << std::string(thinkingModeToString(thinkingMode));
         emitter << YAML::EndMap;
     }
 } // namespace
@@ -180,19 +202,40 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
         auto emitter = YAML::Emitter {};
         emitter << YAML::BeginMap;
 
-        // Only persist API key fields — all other settings are managed via init.endo.
+        // Persist API keys, model preferences, and thinking mode per provider.
         auto const defaults = AgentConfig {};
-        emitApiKeySection(
-            emitter, "claude", config.claude.apiKey, config.claude.apiKeyEnv, defaults.claude.apiKeyEnv);
-        emitApiKeySection(
-            emitter, "openai", config.openai.apiKey, config.openai.apiKeyEnv, defaults.openai.apiKeyEnv);
-        emitApiKeySection(emitter,
-                          "openai_compat",
-                          config.openaiCompat.apiKey,
-                          config.openaiCompat.apiKeyEnv,
-                          defaults.openaiCompat.apiKeyEnv);
-        emitApiKeySection(
-            emitter, "gemini", config.gemini.apiKey, config.gemini.apiKeyEnv, defaults.gemini.apiKeyEnv);
+        emitProviderSection(emitter,
+                            "claude",
+                            config.claude.apiKey,
+                            config.claude.apiKeyEnv,
+                            defaults.claude.apiKeyEnv,
+                            config.claude.model,
+                            defaults.claude.model,
+                            config.claude.thinkingMode);
+        emitProviderSection(emitter,
+                            "openai",
+                            config.openai.apiKey,
+                            config.openai.apiKeyEnv,
+                            defaults.openai.apiKeyEnv,
+                            config.openai.model,
+                            defaults.openai.model,
+                            config.openai.thinkingMode);
+        emitProviderSection(emitter,
+                            "openai_compat",
+                            config.openaiCompat.apiKey,
+                            config.openaiCompat.apiKeyEnv,
+                            defaults.openaiCompat.apiKeyEnv,
+                            config.openaiCompat.model,
+                            defaults.openaiCompat.model,
+                            config.openaiCompat.thinkingMode);
+        emitProviderSection(emitter,
+                            "gemini",
+                            config.gemini.apiKey,
+                            config.gemini.apiKeyEnv,
+                            defaults.gemini.apiKeyEnv,
+                            config.gemini.model,
+                            defaults.gemini.model,
+                            config.gemini.thinkingMode);
 
         emitter << YAML::EndMap;
 

@@ -16,7 +16,8 @@ TEST_CASE("agent.claude.serialize_simple_message")
         ChatMessage::text(Role::User, "Hello!"),
     };
 
-    auto const json = ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024);
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
 
     CHECK(json["model"] == "claude-sonnet-4-5-20250929");
     CHECK(json["max_tokens"] == 1024);
@@ -39,7 +40,8 @@ TEST_CASE("agent.claude.serialize_system_message_extracted")
         ChatMessage::text(Role::User, "Hi"),
     };
 
-    auto const json = ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024);
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
 
     CHECK(json["system"] == "You are a helpful assistant.");
 
@@ -56,7 +58,8 @@ TEST_CASE("agent.claude.serialize_multiple_system_messages")
         ChatMessage::text(Role::User, "Hello"),
     };
 
-    auto const json = ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024);
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
     CHECK(json["system"] == "First instruction.\nSecond instruction.");
 }
 
@@ -76,7 +79,8 @@ TEST_CASE("agent.claude.serialize_with_tools")
               } },
     };
 
-    auto const json = ClaudeProvider::serializeRequest(messages, tools, "claude-sonnet-4-5-20250929", 1024);
+    auto const json = ClaudeProvider::serializeRequest(
+        messages, tools, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
 
     REQUIRE(json.contains("tools"));
     auto const& toolsArr = json["tools"];
@@ -96,7 +100,8 @@ TEST_CASE("agent.claude.serialize_tool_use_block")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024);
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
 
     auto const& content = json["messages"][0]["content"];
     REQUIRE(content.size() == 1);
@@ -116,7 +121,8 @@ TEST_CASE("agent.claude.serialize_tool_result_block")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024);
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-5-20250929", 1024, ThinkingMode::Off);
 
     auto const& content = json["messages"][0]["content"];
     REQUIRE(content.size() == 1);
@@ -282,5 +288,5 @@ TEST_CASE("agent.claude.capabilities")
 
     auto info = provider.modelInfo();
     CHECK(info.providerName == "claude");
-    CHECK(info.modelName == "claude-sonnet-4-5-20250929");
+    CHECK(info.modelName == "claude-sonnet-4-6");
 }

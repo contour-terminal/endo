@@ -66,7 +66,8 @@ auto GeminiProvider::findToolName(std::span<ChatMessage const> messages, std::st
 
 auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
                                       std::span<ToolDefinition const> tools,
-                                      size_t maxTokens) -> nlohmann::json
+                                      size_t maxTokens,
+                                      ThinkingMode thinkingMode) -> nlohmann::json
 {
     auto request = nlohmann::json::object();
 
@@ -169,8 +170,16 @@ auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
             nlohmann::json::array({ { { "functionDeclarations", std::move(functionDeclarations) } } });
     }
 
-    // Generation config.
-    request["generationConfig"] = nlohmann::json { { "maxOutputTokens", maxTokens } };
+    // Generation config with optional thinking budget.
+    auto genConfig = nlohmann::json { { "maxOutputTokens", maxTokens } };
+    if (thinkingMode != ThinkingMode::Off)
+    {
+        // Gemini thinkingConfig: thinkingBudget controls how many tokens for thinking.
+        // 0 = disabled, positive value = budget. -1 = dynamic (let the model decide).
+        int thinkingBudget = (thinkingMode == ThinkingMode::Extended) ? 24576 : 8192;
+        genConfig["thinkingConfig"] = { { "thinkingBudget", thinkingBudget } };
+    }
+    request["generationConfig"] = std::move(genConfig);
 
     return request;
 }
@@ -179,7 +188,7 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
                               std::span<ToolDefinition const> tools,
                               StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
 {
-    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens);
+    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens, _config.thinkingMode);
 
     auto httpRequest = http::HttpRequest {};
     httpRequest.url = buildUrl();

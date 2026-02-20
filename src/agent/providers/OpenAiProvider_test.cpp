@@ -15,7 +15,7 @@ TEST_CASE("agent.openai.serialize_simple_message")
         ChatMessage::text(Role::User, "Hello!"),
     };
 
-    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024);
+    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024, ThinkingMode::Off);
 
     CHECK(json["model"] == "gpt-4o");
     CHECK(json["max_tokens"] == 1024);
@@ -38,7 +38,7 @@ TEST_CASE("agent.openai.serialize_system_message_inline")
         ChatMessage::text(Role::User, "Hi"),
     };
 
-    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024);
+    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024, ThinkingMode::Off);
 
     // System messages are inline (not extracted like Claude)
     CHECK(!json.contains("system"));
@@ -65,7 +65,7 @@ TEST_CASE("agent.openai.serialize_with_tools")
               } },
     };
 
-    auto const json = OpenAiProvider::serializeRequest(messages, tools, "gpt-4o", 1024);
+    auto const json = OpenAiProvider::serializeRequest(messages, tools, "gpt-4o", 1024, ThinkingMode::Off);
 
     REQUIRE(json.contains("tools"));
     auto const& toolsArr = json["tools"];
@@ -87,7 +87,7 @@ TEST_CASE("agent.openai.serialize_tool_calls_in_assistant")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024);
+    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024, ThinkingMode::Off);
 
     auto const& assistantMsg = json["messages"][0];
     CHECK(assistantMsg["role"] == "assistant");
@@ -108,7 +108,7 @@ TEST_CASE("agent.openai.serialize_tool_result")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024);
+    auto const json = OpenAiProvider::serializeRequest(messages, {}, "gpt-4o", 1024, ThinkingMode::Off);
 
     auto const& toolMsg = json["messages"][0];
     CHECK(toolMsg["role"] == "tool");

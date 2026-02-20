@@ -17,7 +17,7 @@ TEST_CASE("agent.config.defaults")
     auto config = AgentConfig {};
     CHECK(config.activeProvider.empty()); // empty = auto-detect
     CHECK(config.claude.apiKeyEnv == "ANTHROPIC_API_KEY");
-    CHECK(config.claude.model == "claude-sonnet-4-5-20250929");
+    CHECK(config.claude.model == "claude-sonnet-4-6");
     CHECK(config.claude.maxTokens == 8192);
     CHECK(config.openai.apiKeyEnv == "OPENAI_API_KEY");
     CHECK(config.openai.model == "gpt-4o");
@@ -120,7 +120,7 @@ openai:
     CHECK(config.openai.model == "gpt-4o-mini");
     CHECK(config.openai.apiKeyEnv == "OPENAI_API_KEY"); // default preserved
     // Others at defaults
-    CHECK(config.claude.model == "claude-sonnet-4-5-20250929");
+    CHECK(config.claude.model == "claude-sonnet-4-6");
     CHECK(config.gemini.model == "gemini-2.5-flash");
 
     std::filesystem::remove_all(tmpDir);
@@ -221,13 +221,13 @@ TEST_CASE("agent.config.save_only_persists_api_keys")
     CHECK(loaded.openai.apiKey == "sk-openai-test-roundtrip");
     CHECK(loaded.gemini.apiKey == "AIzaSy-test-roundtrip");
 
-    // Non-key fields are NOT persisted — they revert to defaults on reload
-    CHECK(loaded.activeProvider.empty());                       // not saved
-    CHECK(loaded.claude.model == "claude-sonnet-4-5-20250929"); // default, not "claude-opus"
-    CHECK(loaded.openai.model == "gpt-4o");                     // default, not "gpt-4-turbo"
-    CHECK(loaded.openai.baseUrl.empty());                       // not saved
-    CHECK(loaded.gemini.model == "gemini-2.5-flash");           // default
-    CHECK(loaded.maxToolResultSize == 30720);                   // default
+    // Model and thinking_mode are now persisted; other non-key fields revert to defaults.
+    CHECK(loaded.activeProvider.empty());                   // not saved
+    CHECK(loaded.claude.model == "claude-opus-4-20250514"); // persisted
+    CHECK(loaded.openai.model == "gpt-4-turbo");            // persisted
+    CHECK(loaded.openai.baseUrl.empty());                   // not saved
+    CHECK(loaded.gemini.model == "gemini-2.5-pro");         // persisted
+    CHECK(loaded.maxToolResultSize == 30720);               // default
 
     std::filesystem::remove_all(tmpDir);
 }
@@ -266,7 +266,7 @@ TEST_CASE("agent.config.save_only_non_defaults")
     REQUIRE(loadResult.has_value());
     CHECK(loadResult->activeProvider.empty());
     CHECK(loadResult->claude.apiKey.empty());
-    CHECK(loadResult->claude.model == "claude-sonnet-4-5-20250929");
+    CHECK(loadResult->claude.model == "claude-sonnet-4-6");
 
     std::filesystem::remove_all(tmpDir);
 }

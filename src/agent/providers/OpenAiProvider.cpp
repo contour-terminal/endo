@@ -173,7 +173,8 @@ OpenAiProvider::OpenAiProvider(http::HttpClient const& httpClient, OpenAiProvide
 auto OpenAiProvider::serializeRequest(std::span<ChatMessage const> messages,
                                       std::span<ToolDefinition const> tools,
                                       std::string const& model,
-                                      size_t maxTokens) -> nlohmann::json
+                                      size_t maxTokens,
+                                      ThinkingMode thinkingMode) -> nlohmann::json
 {
     auto body = nlohmann::json {
         { "model", model },
@@ -181,6 +182,16 @@ auto OpenAiProvider::serializeRequest(std::span<ChatMessage const> messages,
         { "stream", true },
         { "stream_options", { { "include_usage", true } } },
     };
+
+    // Apply reasoning_effort for models that support it (o-series, etc.).
+    switch (thinkingMode)
+    {
+        case ThinkingMode::Off: body["reasoning_effort"] = "low"; break;
+        case ThinkingMode::Normal:
+            // Omit reasoning_effort to use the model's default behavior.
+            break;
+        case ThinkingMode::Extended: body["reasoning_effort"] = "high"; break;
+    }
 
     auto messagesArray = nlohmann::json::array();
     for (auto const& msg: messages)
@@ -238,7 +249,8 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
                               std::span<ToolDefinition const> tools,
                               StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
 {
-    auto const requestBody = serializeRequest(messages, tools, _config.model, _config.maxTokens);
+    auto const requestBody =
+        serializeRequest(messages, tools, _config.model, _config.maxTokens, _config.thinkingMode);
 
     auto headers = std::vector<std::string> { "Content-Type: application/json" };
     if (!_config.apiKey.empty())

@@ -6,8 +6,8 @@
 #include <span>
 #include <string>
 
-#include <agent/providers/LlmProvider.hpp>
 #include <agent/Types.hpp>
+#include <agent/providers/LlmProvider.hpp>
 #include <nlohmann/json.hpp>
 
 namespace endo::agent
@@ -23,6 +23,7 @@ struct OpenAiProviderConfig
     size_t contextWindowSize = 128000;                 ///< Context window size in tokens.
     bool supportsImages = true;                        ///< Whether the model accepts image inputs.
     bool supportsTools = true;                         ///< Whether the model supports tool calling.
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode (maps to reasoning_effort).
 };
 
 /// LLM provider implementation for the OpenAI Chat Completions API.
@@ -60,15 +61,17 @@ class OpenAiProvider final: public LlmProvider
     [[nodiscard]] auto modelInfo() const -> ModelInfo override;
 
     /// Serializes messages and tools into an OpenAI Chat Completions request body.
-    /// @param messages   Conversation messages to include.
-    /// @param tools      Tool definitions available to the model.
-    /// @param model      Model identifier string.
-    /// @param maxTokens  Maximum output tokens.
+    /// @param messages     Conversation messages to include.
+    /// @param tools        Tool definitions available to the model.
+    /// @param model        Model identifier string.
+    /// @param maxTokens    Maximum output tokens.
+    /// @param thinkingMode Thinking/reasoning mode (maps to reasoning_effort).
     /// @return JSON object suitable for POST to /chat/completions.
     [[nodiscard]] static auto serializeRequest(std::span<ChatMessage const> messages,
                                                std::span<ToolDefinition const> tools,
                                                std::string const& model,
-                                               size_t maxTokens) -> nlohmann::json;
+                                               size_t maxTokens,
+                                               ThinkingMode thinkingMode) -> nlohmann::json;
 
     /// Parses an SSE data payload from the OpenAI streaming response.
     /// @param data  The JSON string from an SSE data line.

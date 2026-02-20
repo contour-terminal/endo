@@ -26,11 +26,12 @@ using TokenRefresher = std::function<std::expected<std::string, std::string>()>;
 struct ClaudeProviderConfig
 {
     std::string apiKey;                                ///< API key or OAuth access token.
-    std::string model = "claude-sonnet-4-5-20250929";  ///< Model identifier.
+    std::string model = "claude-sonnet-4-6";           ///< Model identifier.
     std::string baseUrl = "https://api.anthropic.com"; ///< Base URL for the API.
     std::string apiVersion = "2023-06-01";             ///< Anthropic API version header.
     size_t maxTokens = 8192;                           ///< Maximum output tokens per request.
     size_t contextWindowSize = 200000;                 ///< Maximum context window in tokens.
+    ThinkingMode thinkingMode = ThinkingMode::Off;     ///< Thinking/reasoning mode.
     TokenRefresher tokenRefresher;                     ///< Optional: refreshes OAuth token on 401.
 };
 
@@ -103,15 +104,17 @@ class ClaudeProvider final: public LlmProvider
     [[nodiscard]] auto modelInfo() const -> ModelInfo override;
 
     /// Serializes a conversation and tools into a Claude API request body.
-    /// @param messages  Conversation history.
-    /// @param tools     Tool definitions available to the model.
-    /// @param model     Model identifier string.
-    /// @param maxTokens Maximum output tokens.
+    /// @param messages     Conversation history.
+    /// @param tools        Tool definitions available to the model.
+    /// @param model        Model identifier string.
+    /// @param maxTokens    Maximum output tokens.
+    /// @param thinkingMode Thinking/reasoning mode to apply.
     /// @return JSON request body ready for the Claude Messages API.
     [[nodiscard]] static auto serializeRequest(std::span<ChatMessage const> messages,
                                                std::span<ToolDefinition const> tools,
                                                std::string const& model,
-                                               size_t maxTokens) -> nlohmann::json;
+                                               size_t maxTokens,
+                                               ThinkingMode thinkingMode) -> nlohmann::json;
 
     /// Parses a single SSE event from the Claude streaming API.
     /// @param event        The SSE event to parse.

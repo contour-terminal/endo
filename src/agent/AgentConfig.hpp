@@ -7,35 +7,41 @@
 #include <optional>
 #include <string>
 
+#include <agent/Types.hpp>
+
 namespace endo::agent
 {
 
 /// Configuration for the Anthropic Claude provider.
 struct ClaudeConfig
 {
-    std::string apiKey;                               ///< Stored API key (from config file).
-    std::string apiKeyEnv = "ANTHROPIC_API_KEY";      ///< Environment variable holding the API key.
-    std::string model = "claude-sonnet-4-5-20250929"; ///< Model identifier.
-    size_t maxTokens = 8192;                          ///< Maximum output tokens per request.
+    std::string apiKey;                            ///< Stored API key (from config file).
+    std::string apiKeyEnv = "ANTHROPIC_API_KEY";   ///< Environment variable holding the API key.
+    std::string model = "claude-sonnet-4-6";       ///< Model identifier.
+    size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
+    std::string authPreference = "auto";           ///< Auth method: "auto", "oauth", "api_key".
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
 /// Configuration for OpenAI-compatible providers.
 struct OpenAiConfig
 {
-    std::string apiKey;                       ///< Stored API key (from config file).
-    std::string apiKeyEnv = "OPENAI_API_KEY"; ///< Environment variable holding the API key.
-    std::string model = "gpt-4o";             ///< Model identifier.
-    std::string baseUrl;                      ///< Base URL (empty = https://api.openai.com/v1).
-    size_t maxTokens = 4096;                  ///< Maximum output tokens per request.
+    std::string apiKey;                            ///< Stored API key (from config file).
+    std::string apiKeyEnv = "OPENAI_API_KEY";      ///< Environment variable holding the API key.
+    std::string model = "gpt-4o";                  ///< Model identifier.
+    std::string baseUrl;                           ///< Base URL (empty = https://api.openai.com/v1).
+    size_t maxTokens = 4096;                       ///< Maximum output tokens per request.
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
 /// Configuration for the Google Gemini provider.
 struct GeminiConfig
 {
-    std::string apiKey;                       ///< Stored API key (from config file).
-    std::string apiKeyEnv = "GEMINI_API_KEY"; ///< Environment variable holding the API key.
-    std::string model = "gemini-2.5-flash";   ///< Model identifier.
-    size_t maxTokens = 8192;                  ///< Maximum output tokens per request.
+    std::string apiKey;                            ///< Stored API key (from config file).
+    std::string apiKeyEnv = "GEMINI_API_KEY";      ///< Environment variable holding the API key.
+    std::string model = "gemini-2.5-flash";        ///< Model identifier.
+    size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
 /// Configuration for agent plan mode.

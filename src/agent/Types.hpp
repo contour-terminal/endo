@@ -192,6 +192,54 @@ struct ModelInfo
     bool supportsImageOutput = false; ///< Whether the model can generate images.
 };
 
+/// Thinking/reasoning mode for LLM providers that support adaptive or extended thinking.
+///
+/// Maps to provider-specific parameters:
+/// - Claude: `thinking` field with `budget_tokens`
+/// - OpenAI: `reasoning_effort` parameter
+/// - Gemini: `thinkingConfig` with `thinkingBudget`
+enum class ThinkingMode : uint8_t
+{
+    Off,      ///< No thinking parameters sent (provider default behavior).
+    Normal,   ///< Moderate thinking budget / effort.
+    Extended, ///< Maximum thinking budget / high reasoning effort.
+};
+
+/// Converts a ThinkingMode to its string representation (for config persistence).
+[[nodiscard]] constexpr auto thinkingModeToString(ThinkingMode mode) noexcept -> std::string_view
+{
+    switch (mode)
+    {
+        case ThinkingMode::Off: return "off";
+        case ThinkingMode::Normal: return "normal";
+        case ThinkingMode::Extended: return "extended";
+    }
+    return "off";
+}
+
+/// Parses a string into a ThinkingMode enum.
+/// @return The matching ThinkingMode, or ThinkingMode::Off if unrecognized.
+[[nodiscard]] constexpr auto thinkingModeFromString(std::string_view str) noexcept -> ThinkingMode
+{
+    if (str == "normal")
+        return ThinkingMode::Normal;
+    if (str == "extended")
+        return ThinkingMode::Extended;
+    return ThinkingMode::Off;
+}
+
+/// Advances to the next thinking mode in the cycle: Off -> Normal -> Extended -> Off.
+[[nodiscard]] constexpr auto nextThinkingMode(ThinkingMode mode) noexcept -> ThinkingMode
+{
+    switch (mode)
+    {
+        case ThinkingMode::Off: return ThinkingMode::Normal;
+        case ThinkingMode::Normal: return ThinkingMode::Extended;
+        case ThinkingMode::Extended: return ThinkingMode::Off;
+    }
+    return ThinkingMode::Off;
+}
+
 /// Error code categories for provider errors.
 enum class ProviderErrorCode : uint8_t
 {

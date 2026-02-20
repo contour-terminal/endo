@@ -26,7 +26,8 @@ ClaudeProvider::ClaudeProvider(http::HttpClient const& httpClient, ClaudeProvide
 auto ClaudeProvider::buildRequest(std::span<ChatMessage const> messages,
                                   std::span<ToolDefinition const> tools) const -> http::HttpRequest
 {
-    auto const requestBody = serializeRequest(messages, tools, _config.model, _config.maxTokens);
+    auto const requestBody =
+        serializeRequest(messages, tools, _config.model, _config.maxTokens, _config.thinkingMode);
 
     auto request = http::HttpRequest {};
     request.url = std::format("{}/v1/messages", _config.baseUrl);
@@ -223,13 +224,39 @@ namespace
 auto ClaudeProvider::serializeRequest(std::span<ChatMessage const> messages,
                                       std::span<ToolDefinition const> tools,
                                       std::string const& model,
-                                      size_t maxTokens) -> nlohmann::json
+                                      size_t maxTokens,
+                                      ThinkingMode thinkingMode) -> nlohmann::json
 {
     auto body = nlohmann::json {
         { "model", model },
         { "max_tokens", maxTokens },
         { "stream", true },
     };
+
+    // Apply thinking mode if enabled.
+    // Claude 4.6 models use adaptive thinking; older models use manual budget_tokens.
+    if (thinkingMode != ThinkingMode::Off)
+    {
+        bool const isAdaptiveModel = model.find("4-6") != std::string::npos;
+        if (isAdaptiveModel)
+        {
+            // Adaptive thinking (recommended for 4.6 models).
+            body["thinking"] = { { "type", "adaptive" } };
+            // Map ThinkingMode to effort level via output_config.
+            if (thinkingMode == ThinkingMode::Normal)
+                body["output_config"] = { { "effort", "medium" } };
+            // Extended = high effort (the default for adaptive), no output_config needed.
+        }
+        else
+        {
+            // Manual extended thinking for older models.
+            size_t budgetTokens = (thinkingMode == ThinkingMode::Extended) ? 32000 : 10000;
+            body["thinking"] = { { "type", "enabled" }, { "budget_tokens", budgetTokens } };
+        }
+        // Extended thinking requires temperature = 1 for non-adaptive mode.
+        if (!body.contains("output_config"))
+            body["temperature"] = 1;
+    }
 
     // Extract system messages into a single top-level "system" string.
     auto systemText = std::string {};
@@ -362,6 +389,15 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
             acc.text += text;
             result.textDelta = text;
         }
+        else if (deltaType == "thinking_delta")
+        {
+            // Accumulate thinking text silently (not streamed to user).
+            acc.text += delta.value("thinking", std::string {});
+        }
+        else if (deltaType == "signature_delta")
+        {
+            // Thinking block signature — ignored (we don't pass thinking blocks back).
+        }
         else if (deltaType == "input_json_delta")
         {
             acc.toolArgumentsJson += delta.value("partial_json", std::string {});
@@ -381,7 +417,11 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
         auto& acc = accumulators[index];
 
-        if (acc.type == "text")
+        if (acc.type == "thinking" || acc.type == "redacted_thinking")
+        {
+            // Thinking blocks are internal reasoning — not included in output content.
+        }
+        else if (acc.type == "text")
         {
             result.completedBlocks.emplace_back(TextBlock { .text = std::move(acc.text) });
         }

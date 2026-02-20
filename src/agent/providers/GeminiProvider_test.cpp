@@ -14,7 +14,7 @@ using namespace endo::agent;
 TEST_CASE("agent.gemini.serialize_simple_user_message")
 {
     auto messages = std::vector<ChatMessage> { ChatMessage::text(Role::User, "Hello") };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     CHECK(json.contains("contents"));
     CHECK(json["contents"].size() == 1);
@@ -31,7 +31,7 @@ TEST_CASE("agent.gemini.serialize_system_message")
         ChatMessage::text(Role::System, "You are a helpful assistant."),
         ChatMessage::text(Role::User, "Hi"),
     };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 2048);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 2048, ThinkingMode::Off);
 
     CHECK(json.contains("systemInstruction"));
     CHECK(json["systemInstruction"]["parts"][0]["text"] == "You are a helpful assistant.");
@@ -46,7 +46,7 @@ TEST_CASE("agent.gemini.serialize_assistant_role_as_model")
         ChatMessage::text(Role::Assistant, "Hi there!"),
         ChatMessage::text(Role::User, "How are you?"),
     };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 4096);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 4096, ThinkingMode::Off);
 
     CHECK(json["contents"].size() == 3);
     CHECK(json["contents"][0]["role"] == "user");
@@ -62,7 +62,7 @@ TEST_CASE("agent.gemini.serialize_multiple_system_messages")
         ChatMessage::text(Role::System, "Second instruction."),
         ChatMessage::text(Role::User, "Go"),
     };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     CHECK(json["systemInstruction"]["parts"][0]["text"] == "First instruction.\nSecond instruction.");
     CHECK(json["contents"].size() == 1);
@@ -75,7 +75,7 @@ TEST_CASE("agent.gemini.serialize_image_block")
     msg.content.emplace_back(ImageBlock { .data = { 0x89, 0x50, 0x4E, 0x47 }, .mediaType = "image/png" });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     auto const& parts = json["contents"][0]["parts"];
     CHECK(parts.size() == 2);
@@ -95,7 +95,7 @@ TEST_CASE("agent.gemini.serialize_tool_use_block")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     auto const& parts = json["contents"][0]["parts"];
     CHECK(parts.size() == 1);
@@ -122,7 +122,7 @@ TEST_CASE("agent.gemini.serialize_tool_result_block")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(assistantMsg), std::move(toolMsg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     // Tool result should be a "user" role with functionResponse.
     CHECK(json["contents"].size() == 2);
@@ -144,7 +144,7 @@ TEST_CASE("agent.gemini.serialize_tool_result_fallback_name")
     });
 
     auto messages = std::vector<ChatMessage> { std::move(toolMsg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     auto const& funcResp = json["contents"][0]["parts"][0]["functionResponse"];
     CHECK(funcResp["name"] == "unknown_call_id");
@@ -170,7 +170,7 @@ TEST_CASE("agent.gemini.serialize_tool_definitions")
     };
 
     auto messages = std::vector<ChatMessage> { ChatMessage::text(Role::User, "Weather?") };
-    auto const json = GeminiProvider::serializeRequest(messages, tools, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, tools, 1024, ThinkingMode::Off);
 
     CHECK(json.contains("tools"));
     auto const& funcDecls = json["tools"][0]["functionDeclarations"];
@@ -186,7 +186,7 @@ TEST_CASE("agent.gemini.serialize_tool_definitions")
 TEST_CASE("agent.gemini.serialize_no_tools_omits_key")
 {
     auto messages = std::vector<ChatMessage> { ChatMessage::text(Role::User, "Hello") };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     CHECK(!json.contains("tools"));
 }
@@ -194,7 +194,7 @@ TEST_CASE("agent.gemini.serialize_no_tools_omits_key")
 TEST_CASE("agent.gemini.serialize_generation_config")
 {
     auto messages = std::vector<ChatMessage> { ChatMessage::text(Role::User, "Hello") };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 16384);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 16384, ThinkingMode::Off);
 
     CHECK(json["generationConfig"]["maxOutputTokens"] == 16384);
 }
@@ -237,7 +237,7 @@ TEST_CASE("agent.gemini.capabilities")
 
 TEST_CASE("agent.gemini.serialize_empty_messages")
 {
-    auto const json = GeminiProvider::serializeRequest({}, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest({}, {}, 1024, ThinkingMode::Off);
 
     CHECK(json["contents"].empty());
     CHECK(!json.contains("systemInstruction"));
@@ -250,7 +250,7 @@ TEST_CASE("agent.gemini.serialize_message_with_empty_text_block")
     msg.content.emplace_back(TextBlock { .text = "" });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     // Even empty text blocks are serialized (Gemini API accepts them).
     CHECK(json["contents"].size() == 1);
@@ -265,7 +265,7 @@ TEST_CASE("agent.gemini.serialize_mixed_content_message")
     msg.content.emplace_back(TextBlock { .text = "What do you see?" });
 
     auto messages = std::vector<ChatMessage> { std::move(msg) };
-    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024);
+    auto const json = GeminiProvider::serializeRequest(messages, {}, 1024, ThinkingMode::Off);
 
     auto const& parts = json["contents"][0]["parts"];
     CHECK(parts.size() == 3);

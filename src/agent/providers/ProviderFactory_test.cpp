@@ -23,6 +23,7 @@ TEST_CASE("agent.factory.no_keys_no_providers")
 
     auto config = AgentConfig {};
     config.claude.apiKeyEnv = "ENDO_TEST_CLAUDE_KEY";
+    config.claude.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openai.apiKeyEnv = "ENDO_TEST_OPENAI_KEY";
     config.gemini.apiKeyEnv = "ENDO_TEST_GEMINI_KEY";
     config.openaiCompat.baseUrl = ""; // no compat provider
@@ -97,6 +98,7 @@ TEST_CASE("agent.factory.fallback_when_active_not_available")
     auto config = AgentConfig {};
     config.activeProvider = "claude"; // Claude key not available
     config.claude.apiKeyEnv = "ENDO_TEST_NONEXISTENT_4";
+    config.claude.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openai.apiKeyEnv = "ENDO_TEST_FALLBACK_KEY";
     config.gemini.apiKeyEnv = "ENDO_TEST_NONEXISTENT_5";
     config.openaiCompat.baseUrl = "";
