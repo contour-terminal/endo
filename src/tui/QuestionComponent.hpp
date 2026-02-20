@@ -83,6 +83,15 @@ class QuestionComponent: public Component
     /// @brief Returns the question configuration.
     [[nodiscard]] auto config() const noexcept -> QuestionConfig const& { return _config; }
 
+    /// @brief Returns the selected option index (single-select mode).
+    [[nodiscard]] auto selectedIndex() const -> std::size_t { return _list.selectedIndex(); }
+
+    /// @brief Returns the indices of checked options (multi-select mode).
+    [[nodiscard]] auto checkedIndices() const -> std::vector<std::size_t> { return _list.checkedIndices(); }
+
+    /// @brief Returns whether the "Other..." free-text input is active.
+    [[nodiscard]] bool isOtherActive() const noexcept { return _otherActive; }
+
   private:
     QuestionConfig _config;
     List _list;

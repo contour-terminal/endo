@@ -1868,6 +1868,7 @@ void Shell::runAgentMode()
     auto clearAskUserPrompt = [&] {
         if (!askUserPromptVisible)
             return;
+        out.hideCursor();
         out.restoreCursor();
         out.clearToEndOfDisplay();
         out.flush();
@@ -1900,6 +1901,8 @@ void Shell::runAgentMode()
 
         if (askUserComponent->cursorShape() == tui::CursorShape::SteadyBar)
             out.showCursor();
+        else
+            out.hideCursor();
         out.flush();
         askUserPromptVisible = true;
     };
@@ -1936,7 +1939,8 @@ void Shell::runAgentMode()
                     else if constexpr (std::is_same_v<T, agent::ToolStatusMessage>)
                     {
                         clearStreamingPrompt();
-                        if (agentConfig.logToolUses)
+                        // Skip ask_user — the QuestionComponent renders the question text.
+                        if (agentConfig.logToolUses && m.call.name != "ask_user")
                         {
                             auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
                             auto const toolNameStyle =
@@ -2133,17 +2137,70 @@ void Shell::runAgentMode()
                 {
                     case tui::QuestionAction::Confirmed: {
                         auto const answerText = askUserComponent->answer();
+                        auto const qConfig = askUserComponent->config();
+                        auto const selectedIdx = askUserComponent->selectedIndex();
+                        auto const checkedIdx = askUserComponent->checkedIndices();
+                        auto const otherActive = askUserComponent->isOtherActive();
                         worker.inbound().push(agent::UserAnswerMessage {
                             .requestId = askUserRequestId,
                             .answer = agent::UserAnswer { .answer = answerText } });
                         clearAskUserPrompt();
-                        // Echo the answer to scrollback
+                        // Echo question + options with selection to scrollback
                         {
                             auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const answerStyle = tui::Style { .fg = theme.colors.text };
+                            auto const questionStyle = tui::Style { .fg = theme.colors.text };
+                            auto const normalStyle =
+                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                            auto const selectedStyle =
+                                tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+                            // Question text
                             out.writeText("\u2502 ", barStyle);
-                            out.writeText("> ", barStyle);
-                            out.writeText(answerText, answerStyle);
+                            out.writeText(qConfig.questionText, questionStyle);
+                            out.linefeed();
+                            // Options
+                            if (qConfig.multiSelect)
+                            {
+                                auto const checkedSet =
+                                    std::set<std::size_t>(checkedIdx.begin(), checkedIdx.end());
+                                for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                {
+                                    auto const checked = checkedSet.contains(i);
+                                    out.writeText("\u2502 ", barStyle);
+                                    if (checked)
+                                    {
+                                        out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
+                                    }
+                                    else
+                                    {
+                                        out.writeText("   " + qConfig.options[i], normalStyle);
+                                    }
+                                    out.linefeed();
+                                }
+                            }
+                            else
+                            {
+                                for (auto i = std::size_t { 0 }; i < qConfig.options.size(); ++i)
+                                {
+                                    out.writeText("\u2502 ", barStyle);
+                                    if (!otherActive && i == selectedIdx)
+                                    {
+                                        out.writeText(" \xe2\x96\xb6 " + qConfig.options[i], selectedStyle);
+                                    }
+                                    else
+                                    {
+                                        out.writeText("   " + qConfig.options[i], normalStyle);
+                                    }
+                                    out.linefeed();
+                                }
+                            }
+                            // Custom "Other..." text
+                            if (otherActive)
+                            {
+                                out.writeText("\u2502 ", barStyle);
+                                out.writeText(" \xe2\x96\xb6 " + answerText, selectedStyle);
+                                out.linefeed();
+                            }
+                            out.writeText("\u2502", barStyle);
                             out.linefeed();
                             out.flush();
                         }
@@ -2152,17 +2209,35 @@ void Shell::runAgentMode()
                         break;
                     }
                     case tui::QuestionAction::Cancelled: {
+                        auto const qConfig = askUserComponent->config();
                         worker.inbound().push(
                             agent::UserAnswerMessage { .requestId = askUserRequestId,
                                                        .answer = agent::UserAnswer { .cancelled = true } });
                         clearAskUserPrompt();
-                        // Echo cancellation to scrollback
+                        // Echo question + options with cancellation to scrollback
                         {
                             auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                            auto const questionStyle = tui::Style { .fg = theme.colors.text };
+                            auto const normalStyle =
+                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
                             auto const dimStyle =
                                 tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                            // Question text
                             out.writeText("\u2502 ", barStyle);
-                            out.writeText("> (cancelled)", dimStyle);
+                            out.writeText(qConfig.questionText, questionStyle);
+                            out.linefeed();
+                            // Options (all unselected)
+                            for (auto const& opt: qConfig.options)
+                            {
+                                out.writeText("\u2502 ", barStyle);
+                                out.writeText("   " + opt, normalStyle);
+                                out.linefeed();
+                            }
+                            // Cancellation notice
+                            out.writeText("\u2502 ", barStyle);
+                            out.writeText(" (cancelled)", dimStyle);
+                            out.linefeed();
+                            out.writeText("\u2502", barStyle);
                             out.linefeed();
                             out.flush();
                         }
