@@ -10,6 +10,9 @@ QuestionComponent::QuestionComponent(QuestionConfig config): _config(std::move(c
 {
     _inputField.setPrompt("\xe2\x9d\xaf "); // ❯
 
+    if (_config.masked)
+        _inputField.setMasked(true);
+
     if (!isFreeTextOnly())
     {
         auto items = std::vector<ListItem> {};

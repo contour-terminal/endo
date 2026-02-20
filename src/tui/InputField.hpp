@@ -137,6 +137,15 @@ class InputField: public Component
     /// @param n Maximum history size.
     void setMaxHistory(std::size_t n);
 
+    /// @brief Enables or disables masked (password) mode.
+    ///
+    /// When masked, each grapheme cluster is rendered as '*' and ghost text is suppressed.
+    /// @param masked True to enable masked input.
+    void setMasked(bool masked);
+
+    /// @brief Returns whether masked mode is enabled.
+    [[nodiscard]] auto isMasked() const noexcept -> bool;
+
     /// @brief Enables or disables multiline mode.
     /// @param enable True to enable multiline editing.
     void setMultiline(bool enable);
@@ -339,6 +348,7 @@ class InputField: public Component
     std::string _ghostText;                        ///< Ghost text suggestion (displayed dimmed after cursor)
     TextDecorator const* _textDecorator = nullptr; ///< Optional decorator for custom rendering.
     std::string _continuationPrompt;               ///< Continuation prompt for non-first lines.
+    bool _masked = false;
     bool _multiline = false;
     int _maxLines = 0;     ///< 0 = unlimited
     int _scrollOffset = 0; ///< Scroll offset for multiline mode

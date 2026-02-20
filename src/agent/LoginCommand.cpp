@@ -6,7 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
-#include <iostream>
+#include <format>
 #include <print>
 #include <string>
 #include <string_view>
@@ -63,26 +63,19 @@ namespace
         return (it != KnownProviders.end()) ? &(*it) : nullptr;
     }
 
-    /// Prompts the user to select a provider from a numbered menu.
-    /// @return The selected provider name, or empty on error.
+    /// Prompts the user to select a provider using TUI single-select.
+    /// @return The selected provider name, or empty on cancel.
     auto promptProviderSelection() -> std::string
     {
-        std::print("\nSelect a provider to authenticate:\n");
-        for (size_t i = 0; i < KnownProviders.size(); ++i)
-            std::print("  [{}] {}\n", i + 1, KnownProviders[i].label);
-        std::print("\nEnter choice [1-{}]: ", KnownProviders.size());
-
-        auto input = std::string {};
-        if (!std::getline(std::cin, input) || input.empty())
+        constexpr auto labels = std::array {
+            "Claude (Anthropic)"sv,
+            "OpenAI"sv,
+            "Gemini (Google)"sv,
+        };
+        auto const sel = askSingleSelect("Select a provider to authenticate:", labels);
+        if (!sel)
             return {};
-
-        auto const choice = std::strtol(input.c_str(), nullptr, 10);
-        if (choice < 1 || static_cast<size_t>(choice) > KnownProviders.size())
-        {
-            std::print(stderr, "Invalid choice.\n");
-            return {};
-        }
-        return std::string(KnownProviders[static_cast<size_t>(choice - 1)].name);
+        return std::string(KnownProviders[*sel].name);
     }
 
     /// Builds the validation request headers for a provider.
@@ -231,8 +224,8 @@ namespace
         if (!openBrowser(info.apiKeyUrl))
             std::print("Could not open browser. Please visit: {}\n", info.apiKeyUrl);
 
-        // Read the API key with hidden input.
-        auto const apiKey = readSecretLine("\nPaste your API key: ");
+        // Read the API key with masked input.
+        auto const apiKey = askFreeText("Paste your API key:", /*masked=*/true);
         if (!apiKey.has_value() || apiKey->empty())
         {
             std::print(stderr, "No API key provided.\n");
@@ -275,17 +268,15 @@ namespace
         }
 
         // Ask which account type.
-        std::print("\nSelect account type:\n");
-        std::print("  [1] Claude.ai (MAX/Pro subscription)\n");
-        std::print("  [2] Anthropic Console (Teams/Enterprise)\n");
-        std::print("\nEnter choice [1-2]: ");
-
-        auto input = std::string {};
-        if (!std::getline(std::cin, input) || input.empty())
+        constexpr auto accountTypes = std::array {
+            "Claude.ai (MAX/Pro subscription)"sv,
+            "Anthropic Console (Teams/Enterprise)"sv,
+        };
+        auto const accountSel = askSingleSelect("Select account type:", accountTypes);
+        if (!accountSel)
             return EXIT_FAILURE;
 
-        auto const modeChoice = std::strtol(input.c_str(), nullptr, 10);
-        auto const mode = (modeChoice == 2) ? OAuthMode::Console : OAuthMode::ClaudeAi;
+        auto const mode = (*accountSel == 1) ? OAuthMode::Console : OAuthMode::ClaudeAi;
 
         // Generate PKCE parameters.
         auto const pkce = generatePkce();
@@ -333,24 +324,23 @@ namespace
             }
             else
             {
-                // Callback server timed out — try reading from stdin as fallback.
-                std::print("\nCallback timed out. Paste the authorization code manually:\n> ");
-                auto manualCode = std::string {};
-                if (!std::getline(std::cin, manualCode) || manualCode.empty())
+                // Callback server timed out — ask for manual code entry.
+                auto const manualCode = askFreeText("Callback timed out. Paste the authorization code:");
+                if (!manualCode.has_value() || manualCode->empty())
                 {
                     std::print(stderr, "No authorization code provided.\n");
                     return EXIT_FAILURE;
                 }
 
                 // The manual code may be in the form "code#state".
-                if (auto const hashPos = manualCode.find('#'); hashPos != std::string::npos)
+                if (auto const hashPos = manualCode->find('#'); hashPos != std::string::npos)
                 {
-                    code = manualCode.substr(0, hashPos);
-                    state = manualCode.substr(hashPos + 1);
+                    code = manualCode->substr(0, hashPos);
+                    state = manualCode->substr(hashPos + 1);
                 }
                 else
                 {
-                    code = std::move(manualCode);
+                    code = *manualCode;
                     state = pkce.state;
                 }
             }
@@ -358,22 +348,21 @@ namespace
         else
         {
             // No callback server — manual entry only.
-            std::print("Paste the authorization code (code#state) after authorizing:\n> ");
-            auto manualCode = std::string {};
-            if (!std::getline(std::cin, manualCode) || manualCode.empty())
+            auto const manualCode = askFreeText("Paste the authorization code (code#state):");
+            if (!manualCode.has_value() || manualCode->empty())
             {
                 std::print(stderr, "No authorization code provided.\n");
                 return EXIT_FAILURE;
             }
 
-            if (auto const hashPos = manualCode.find('#'); hashPos != std::string::npos)
+            if (auto const hashPos = manualCode->find('#'); hashPos != std::string::npos)
             {
-                code = manualCode.substr(0, hashPos);
-                state = manualCode.substr(hashPos + 1);
+                code = manualCode->substr(0, hashPos);
+                state = manualCode->substr(hashPos + 1);
             }
             else
             {
-                code = std::move(manualCode);
+                code = *manualCode;
                 state = pkce.state;
             }
         }
@@ -420,7 +409,10 @@ auto runLoginCommand(std::string_view providerHint) -> int
 {
     auto const providerName = providerHint.empty() ? promptProviderSelection() : std::string(providerHint);
     if (providerName.empty())
+    {
+        std::print(stderr, "No provider selected.\n");
         return EXIT_FAILURE;
+    }
 
     auto const* info = findProvider(providerName);
     if (!info)
@@ -433,19 +425,17 @@ auto runLoginCommand(std::string_view providerHint) -> int
     // If this provider supports OAuth, offer the choice.
     if (info->supportsOAuth)
     {
-        std::print("\nSelect authentication method for {}:\n", info->label);
-        std::print("  [1] API Key (from {})\n", info->apiKeyUrl);
-        std::print("  [2] OAuth (Claude MAX/Pro/Teams subscription)\n");
-        std::print("\nEnter choice [1-2]: ");
-
-        auto input = std::string {};
-        if (!std::getline(std::cin, input) || input.empty())
+        auto const authLabels = std::array {
+            "API Key"sv,
+            "OAuth (Claude MAX/Pro/Teams subscription)"sv,
+        };
+        auto const authSel =
+            askSingleSelect(std::format("Select authentication method for {}:", info->label), authLabels);
+        if (!authSel)
             return EXIT_FAILURE;
-
-        auto const choice = std::strtol(input.c_str(), nullptr, 10);
-        if (choice == 2)
+        if (*authSel == 1)
             return runOAuthLoginFlow(providerName);
-        // choice == 1 or invalid falls through to API key flow.
+        // index 0 = API Key, falls through.
     }
 
     return runApiKeyLoginFlow(providerName, *info);

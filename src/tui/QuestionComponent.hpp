@@ -28,6 +28,7 @@ struct QuestionConfig
     std::vector<std::string> options; ///< Choices (empty for free-text-only mode).
     bool multiSelect = false;         ///< Single-select vs multi-select.
     bool allowOther = true;           ///< Show "Other..." for free-text fallback.
+    bool masked = false;              ///< Mask input in free-text mode (for passwords/API keys).
 };
 
 /// @brief Inline question component for asking the user a question.

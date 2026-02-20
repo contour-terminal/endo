@@ -223,14 +223,22 @@ void InputField::render(Canvas& canvas)
             }
 
             std::string_view clusterView(clusterStart, static_cast<std::size_t>(clusterEnd - clusterStart));
-            canvas.putString(0, col, clusterView, style);
-            col += clusterWidth;
+            if (_masked)
+            {
+                canvas.putString(0, col, "*", style);
+                col += 1;
+            }
+            else
+            {
+                canvas.putString(0, col, clusterView, style);
+                col += clusterWidth;
+            }
         }
 
         if (!cursorFound || _cursor >= _buffer.size())
             cursorDisplayCol = col;
 
-        if (!_ghostText.empty() && _cursor >= _buffer.size())
+        if (!_masked && !_ghostText.empty() && _cursor >= _buffer.size())
             renderGhostText(canvas, 0, col, ghostStyle);
 
         canvas.setCursor(0, cursorDisplayCol);
@@ -1257,6 +1265,16 @@ auto InputField::lineStartOffset(int lineIndex) const -> std::size_t
         ++pos;
     }
     return pos;
+}
+
+void InputField::setMasked(bool masked)
+{
+    _masked = masked;
+}
+
+auto InputField::isMasked() const noexcept -> bool
+{
+    return _masked;
 }
 
 void InputField::setMultiline(bool enable)

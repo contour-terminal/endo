@@ -1,73 +1,117 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TerminalInput.hpp"
 
-#include <cstdio>
-#include <cstdlib>
-#include <iostream>
-#include <print>
-#include <string>
+#include <tui/QuestionComponent.hpp>
+#include <tui/Screen.hpp>
+#include <tui/Terminal.hpp>
 
-#if defined(_WIN32)
-    #include <conio.h>
-    #include <windows.h>
-#else
-    #include <termios.h>
-    #include <unistd.h>
-#endif
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace endo::agent
 {
 
-auto readSecretLine(std::string_view prompt) -> std::optional<std::string>
+namespace
 {
-    if (!prompt.empty())
-        std::print("{}", prompt);
-
-#if defined(_WIN32)
-    auto result = std::string {};
-    while (true)
+    /// @brief Result from the TUI question event loop.
+    struct QuestionResult
     {
-        auto const ch = _getch();
-        if (ch == '\r' || ch == '\n')
-            break;
-        if (ch == 3) // Ctrl+C
-            return std::nullopt;
-        if (ch == '\b' || ch == 127) // Backspace
+        bool confirmed = false;
+        std::size_t selectedIndex = 0;
+        std::string answer;
+    };
+
+    /// @brief Runs a QuestionComponent in an inline Terminal+Screen event loop.
+    /// @param config The question configuration.
+    /// @return The result of the question interaction.
+    auto runQuestion(tui::QuestionConfig config) -> QuestionResult
+    {
+        auto terminal = tui::Terminal {};
+        if (auto err = terminal.initialize(); err.has_value())
+            return {};
+
+        auto screen = tui::Screen(terminal, { .viewport = tui::Viewport::Inline });
+
+        auto question = tui::QuestionComponent(std::move(config));
+
+        auto const prefSize = question.preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
+        auto const area = tui::Rect { .x = 0, .y = 0, .width = width, .height = height };
+
+        question.setArea(area);
+        screen.root().addChild(question, { .area = area });
+        screen.setFocus(&question);
+
+        auto result = QuestionResult {};
+        auto running = true;
+        while (running)
         {
-            if (!result.empty())
-                result.pop_back();
+            screen.draw();
+
+            for (auto const& event: terminal.poll(-1))
+            {
+                auto const action = question.processInput(event);
+                switch (action)
+                {
+                    case tui::QuestionAction::Confirmed:
+                        result.confirmed = true;
+                        result.selectedIndex = question.selectedIndex();
+                        result.answer = question.answer();
+                        running = false;
+                        break;
+                    case tui::QuestionAction::Cancelled: running = false; break;
+                    case tui::QuestionAction::Changed: screen.invalidate(question); break;
+                    case tui::QuestionAction::None: break;
+                }
+                if (!running)
+                    break;
+            }
         }
-        else
-        {
-            result += static_cast<char>(ch);
-        }
+
+        screen.clearAndRelease();
+        terminal.shutdown();
+
+        return result;
     }
-    std::print("\n");
-    return result;
-#else
-    // Save current terminal settings
-    struct termios oldSettings {};
-    if (tcgetattr(STDIN_FILENO, &oldSettings) != 0)
+} // namespace
+
+auto askSingleSelect(std::string_view question, std::span<std::string_view const> options)
+    -> std::optional<std::size_t>
+{
+    auto optionStrings = std::vector<std::string> {};
+    optionStrings.reserve(options.size());
+    for (auto const& opt: options)
+        optionStrings.emplace_back(opt);
+
+    auto result = runQuestion(tui::QuestionConfig {
+        .questionText = std::string(question),
+        .options = std::move(optionStrings),
+        .multiSelect = false,
+        .allowOther = false,
+    });
+
+    if (!result.confirmed)
         return std::nullopt;
 
-    // Disable echo
-    auto newSettings = oldSettings;
-    newSettings.c_lflag &= ~static_cast<tcflag_t>(ECHO);
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &newSettings) != 0)
+    return result.selectedIndex;
+}
+
+auto askFreeText(std::string_view question, bool masked) -> std::optional<std::string>
+{
+    auto result = runQuestion(tui::QuestionConfig {
+        .questionText = std::string(question),
+        .options = {},
+        .multiSelect = false,
+        .allowOther = true,
+        .masked = masked,
+    });
+
+    if (!result.confirmed)
         return std::nullopt;
 
-    auto result = std::string {};
-    auto const success = static_cast<bool>(std::getline(std::cin, result));
-
-    // Restore terminal settings
-    tcsetattr(STDIN_FILENO, TCSANOW, &oldSettings);
-
-    std::print("\n");
-
-    if (!success)
-        return std::nullopt;
-    return result;
-#endif
+    return std::move(result.answer);
 }
 
 auto openBrowser(std::string_view url) -> bool
