@@ -133,6 +133,12 @@ class AgentInputComponent: public tui::Component
     /// after the debounce period without requiring additional keystrokes.
     [[nodiscard]] int ghostTextTimeoutMs() const;
 
+    /// @brief Returns milliseconds until the Escape hint expires, or -1 if idle.
+    ///
+    /// Use this to set the event loop poll timeout so the hint auto-restores
+    /// without requiring additional keystrokes.
+    [[nodiscard]] int escapeHintTimeoutMs() const;
+
   private:
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup; ///< Popup widget for slash command completion.
@@ -167,6 +173,15 @@ class AgentInputComponent: public tui::Component
     static constexpr auto GhostTextDebounceMs = std::chrono::milliseconds(100);
     std::string _suggestCacheText;                  ///< Last input text for suggest cache.
     std::optional<std::string> _suggestCacheResult; ///< Cached suggest result.
+
+    // Escape double-press confirmation state
+    void restoreFromEscapeHint();
+
+    static constexpr auto EscapeHintTimeout = std::chrono::milliseconds(1000);
+    std::chrono::steady_clock::time_point _lastEscapeTime;
+    bool _escapeHintVisible = false;
+    std::string _savedTextBeforeEscape;
+    size_t _savedCursorBeforeEscape = 0;
 };
 
 } // namespace endo::agent

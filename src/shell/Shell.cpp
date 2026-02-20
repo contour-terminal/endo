@@ -2029,8 +2029,11 @@ void Shell::runAgentMode()
         else
         {
             auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();
+            auto const escapeTimeout = inputComponent.escapeHintTimeoutMs();
             if (ghostTimeout >= 0)
                 pollTimeout = std::min(ghostTimeout, 80);
+            if (escapeTimeout >= 0)
+                pollTimeout = std::min(escapeTimeout, pollTimeout);
         }
 
         // 3. Poll terminal input.
@@ -2075,7 +2078,8 @@ void Shell::runAgentMode()
             if (!streaming)
             {
                 inputComponent.flushDeferredUpdates();
-                if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0)
+                if (inputComponent.inputField().hasGhostText() || inputComponent.ghostTextTimeoutMs() >= 0
+                    || inputComponent.escapeHintTimeoutMs() >= 0)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
                     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });

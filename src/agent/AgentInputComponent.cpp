@@ -240,9 +240,37 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
                 dismissPopup();
                 return Action::Changed;
             }
-            _inputField.clearGhostText();
-            return Action::Abort;
+
+            if (_escapeHintVisible)
+            {
+                // Second press within timeout — abort.
+                auto const now = std::chrono::steady_clock::now();
+                auto const elapsed =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - _lastEscapeTime);
+                if (elapsed < EscapeHintTimeout)
+                {
+                    _escapeHintVisible = false;
+                    _inputField.clearGhostText();
+                    _savedTextBeforeEscape.clear();
+                    return Action::Abort;
+                }
+                // Timeout already expired but flush hasn't run yet — restore, then start new cycle.
+                restoreFromEscapeHint();
+            }
+
+            // First press: save text, clear field, show hint.
+            _lastEscapeTime = std::chrono::steady_clock::now();
+            _escapeHintVisible = true;
+            _savedTextBeforeEscape = std::string(_inputField.text());
+            _savedCursorBeforeEscape = _inputField.cursor();
+            _inputField.clear();
+            _inputField.setGhostText("Press Escape again to cancel");
+            return Action::Changed;
         }
+
+        // Any other key while escape hint is visible — restore and continue.
+        if (_escapeHintVisible)
+            restoreFromEscapeHint();
 
         // Tab with ghost text: accept ghost text before trying completion
         if (key->key == tui::KeyCode::Tab && tui::withoutLockKeys(key->modifiers) == tui::Modifier::None
@@ -473,6 +501,11 @@ void AgentInputComponent::updateGhostText()
 
 void AgentInputComponent::flushDeferredUpdates()
 {
+    if (_escapeHintVisible)
+    {
+        if ((std::chrono::steady_clock::now() - _lastEscapeTime) >= EscapeHintTimeout)
+            restoreFromEscapeHint();
+    }
     if (_ghostTextDirty)
     {
         // Only flush once debounce period has elapsed.
@@ -503,6 +536,28 @@ int AgentInputComponent::ghostTextTimeoutMs() const
         return 0;
 
     return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+}
+
+int AgentInputComponent::escapeHintTimeoutMs() const
+{
+    if (!_escapeHintVisible)
+        return -1;
+
+    auto const elapsed = std::chrono::steady_clock::now() - _lastEscapeTime;
+    auto const remaining = EscapeHintTimeout - elapsed;
+    if (remaining <= std::chrono::milliseconds::zero())
+        return 0;
+
+    return static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(remaining).count());
+}
+
+void AgentInputComponent::restoreFromEscapeHint()
+{
+    _escapeHintVisible = false;
+    _inputField.clearGhostText();
+    _inputField.setText(_savedTextBeforeEscape);
+    _inputField.setCursor(_savedCursorBeforeEscape);
+    _savedTextBeforeEscape.clear();
 }
 
 bool AgentInputComponent::isInAtMentionContext(std::string_view input, size_t cursorPosition)
