@@ -2512,7 +2512,6 @@ void Shell::runAgentMode()
                         if (auto* newProvider = _agentProviderFactory->activeProvider())
                             _agentSession->setProvider(*newProvider);
                         worker.start();
-                        (void) agent::saveAgentConfig(agentConfig);
                     }
                     needsRedraw = true;
                     break;
@@ -2545,7 +2544,6 @@ void Shell::runAgentMode()
                             if (auto* newProvider = _agentProviderFactory->activeProvider())
                                 _agentSession->setProvider(*newProvider);
                             worker.start();
-                            (void) agent::saveAgentConfig(agentConfig);
                         }
                     }
                     needsRedraw = true;

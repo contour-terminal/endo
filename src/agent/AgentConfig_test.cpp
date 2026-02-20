@@ -192,22 +192,28 @@ gemini:
 // Config save/load round-trip tests (key-store only)
 // =============================================================================
 
-TEST_CASE("agent.config.save_only_persists_api_keys")
+TEST_CASE("agent.config.save_round_trip_api_keys_only")
 {
     auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-config-save";
     std::filesystem::create_directories(tmpDir);
     auto const configPath = tmpDir / "agent.yml";
 
+    // Set API keys AND non-key fields
     auto original = AgentConfig {};
     original.activeProvider = "openai";
+    original.promptIndicator = ">";
     original.claude.apiKey = "sk-ant-test-roundtrip";
     original.claude.model = "claude-opus-4-20250514";
+    original.claude.maxTokens = 16384;
+    original.claude.authPreference = "oauth";
+    original.claude.thinkingMode = ThinkingMode::Extended;
     original.openai.apiKey = "sk-openai-test-roundtrip";
     original.openai.model = "gpt-4-turbo";
-    original.openai.baseUrl = "https://custom.openai.com/v1";
+    original.openaiCompat.apiKey = "sk-compat-roundtrip";
+    original.openaiCompat.apiKeyEnv = "LOCAL_KEY";
     original.gemini.apiKey = "AIzaSy-test-roundtrip";
-    original.gemini.model = "gemini-2.5-pro";
     original.maxToolResultSize = 65536;
+    original.trace.enabled = true;
 
     auto saveError = saveAgentConfig(original, configPath);
     REQUIRE(!saveError.has_value());
@@ -216,18 +222,25 @@ TEST_CASE("agent.config.save_only_persists_api_keys")
     REQUIRE(loadResult.has_value());
     auto const& loaded = *loadResult;
 
-    // API keys are persisted
+    auto const defaults = AgentConfig {};
+
+    // API keys survive the round-trip
     CHECK(loaded.claude.apiKey == "sk-ant-test-roundtrip");
     CHECK(loaded.openai.apiKey == "sk-openai-test-roundtrip");
+    CHECK(loaded.openaiCompat.apiKey == "sk-compat-roundtrip");
+    CHECK(loaded.openaiCompat.apiKeyEnv == "LOCAL_KEY");
     CHECK(loaded.gemini.apiKey == "AIzaSy-test-roundtrip");
 
-    // Model and thinking_mode are now persisted; other non-key fields revert to defaults.
-    CHECK(loaded.activeProvider.empty());                   // not saved
-    CHECK(loaded.claude.model == "claude-opus-4-20250514"); // persisted
-    CHECK(loaded.openai.model == "gpt-4-turbo");            // persisted
-    CHECK(loaded.openai.baseUrl.empty());                   // not saved
-    CHECK(loaded.gemini.model == "gemini-2.5-pro");         // persisted
-    CHECK(loaded.maxToolResultSize == 30720);               // default
+    // Non-key fields revert to defaults (not persisted)
+    CHECK(loaded.activeProvider.empty());
+    CHECK(loaded.promptIndicator == defaults.promptIndicator);
+    CHECK(loaded.claude.model == defaults.claude.model);
+    CHECK(loaded.claude.maxTokens == defaults.claude.maxTokens);
+    CHECK(loaded.claude.authPreference == defaults.claude.authPreference);
+    CHECK(loaded.claude.thinkingMode == defaults.claude.thinkingMode);
+    CHECK(loaded.openai.model == defaults.openai.model);
+    CHECK(loaded.maxToolResultSize == defaults.maxToolResultSize);
+    CHECK(loaded.trace.enabled == defaults.trace.enabled);
 
     std::filesystem::remove_all(tmpDir);
 }

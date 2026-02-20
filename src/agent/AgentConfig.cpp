@@ -93,22 +93,23 @@ namespace
             config.defaultPath = node["default_path"].as<std::string>();
     }
 
-    /// Emits a provider section with API keys, model, and thinking mode preferences.
-    void emitProviderSection(YAML::Emitter& emitter,
-                             std::string_view sectionName,
-                             std::string const& apiKey,
-                             std::string const& apiKeyEnv,
-                             std::string const& defaultApiKeyEnv,
-                             std::string const& model,
-                             std::string const& defaultModel,
-                             ThinkingMode thinkingMode)
+    /// @brief Emits a provider section containing only api_key and api_key_env.
+    ///
+    /// @param emitter       YAML emitter to write to.
+    /// @param sectionName   Provider section name (e.g. "claude", "openai").
+    /// @param apiKey        Stored API key (empty = not set).
+    /// @param apiKeyEnv     Environment variable name for API key lookup.
+    /// @param defaultApiKeyEnv  Default environment variable name (to skip if unchanged).
+    void emitProviderKeys(YAML::Emitter& emitter,
+                          std::string_view sectionName,
+                          std::string const& apiKey,
+                          std::string const& apiKeyEnv,
+                          std::string const& defaultApiKeyEnv)
     {
-        bool const hasApiKey = !apiKey.empty();
-        bool const hasCustomApiKeyEnv = apiKeyEnv != defaultApiKeyEnv;
-        bool const hasCustomModel = model != defaultModel;
-        bool const hasThinking = thinkingMode != ThinkingMode::Off;
+        auto const hasApiKey = !apiKey.empty();
+        auto const hasCustomApiKeyEnv = apiKeyEnv != defaultApiKeyEnv;
 
-        if (!hasApiKey && !hasCustomApiKeyEnv && !hasCustomModel && !hasThinking)
+        if (!hasApiKey && !hasCustomApiKeyEnv)
             return;
 
         emitter << YAML::Key << std::string(sectionName) << YAML::Value << YAML::BeginMap;
@@ -116,11 +117,6 @@ namespace
             emitter << YAML::Key << "api_key" << YAML::Value << apiKey;
         if (hasCustomApiKeyEnv)
             emitter << YAML::Key << "api_key_env" << YAML::Value << apiKeyEnv;
-        if (hasCustomModel)
-            emitter << YAML::Key << "model" << YAML::Value << model;
-        if (hasThinking)
-            emitter << YAML::Key << "thinking_mode" << YAML::Value
-                    << std::string(thinkingModeToString(thinkingMode));
         emitter << YAML::EndMap;
     }
 } // namespace
@@ -202,40 +198,21 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
         auto emitter = YAML::Emitter {};
         emitter << YAML::BeginMap;
 
-        // Persist API keys, model preferences, and thinking mode per provider.
         auto const defaults = AgentConfig {};
-        emitProviderSection(emitter,
-                            "claude",
-                            config.claude.apiKey,
-                            config.claude.apiKeyEnv,
-                            defaults.claude.apiKeyEnv,
-                            config.claude.model,
-                            defaults.claude.model,
-                            config.claude.thinkingMode);
-        emitProviderSection(emitter,
-                            "openai",
-                            config.openai.apiKey,
-                            config.openai.apiKeyEnv,
-                            defaults.openai.apiKeyEnv,
-                            config.openai.model,
-                            defaults.openai.model,
-                            config.openai.thinkingMode);
-        emitProviderSection(emitter,
-                            "openai_compat",
-                            config.openaiCompat.apiKey,
-                            config.openaiCompat.apiKeyEnv,
-                            defaults.openaiCompat.apiKeyEnv,
-                            config.openaiCompat.model,
-                            defaults.openaiCompat.model,
-                            config.openaiCompat.thinkingMode);
-        emitProviderSection(emitter,
-                            "gemini",
-                            config.gemini.apiKey,
-                            config.gemini.apiKeyEnv,
-                            defaults.gemini.apiKeyEnv,
-                            config.gemini.model,
-                            defaults.gemini.model,
-                            config.gemini.thinkingMode);
+
+        // Only persist API keys and custom api_key_env — all other settings
+        // belong in init.endo and are session-only at runtime.
+        emitProviderKeys(
+            emitter, "claude", config.claude.apiKey, config.claude.apiKeyEnv, defaults.claude.apiKeyEnv);
+        emitProviderKeys(
+            emitter, "openai", config.openai.apiKey, config.openai.apiKeyEnv, defaults.openai.apiKeyEnv);
+        emitProviderKeys(emitter,
+                         "openai_compat",
+                         config.openaiCompat.apiKey,
+                         config.openaiCompat.apiKeyEnv,
+                         defaults.openaiCompat.apiKeyEnv);
+        emitProviderKeys(
+            emitter, "gemini", config.gemini.apiKey, config.gemini.apiKeyEnv, defaults.gemini.apiKeyEnv);
 
         emitter << YAML::EndMap;
 

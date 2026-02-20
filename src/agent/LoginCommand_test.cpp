@@ -126,7 +126,7 @@ TEST_CASE("agent.login.openai_compat_api_key")
     auto loaded = loadAgentConfig(configPath);
     REQUIRE(loaded.has_value());
     CHECK(loaded->openaiCompat.apiKey == "sk-compat-key");
-    // Non-key fields are not saved by saveAgentConfig; they revert to defaults
+    // Non-key fields are not saved to agent.yml (configured via init.endo)
     CHECK(loaded->openaiCompat.baseUrl.empty());
     CHECK(loaded->openaiCompat.model == "gpt-4o");
 
