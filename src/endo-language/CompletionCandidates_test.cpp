@@ -381,6 +381,81 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.unknown_command_return
     CHECK(candidates.empty());
 }
 
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.claude_model_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_claude_model", "");
+    CHECK(candidates.size() == 5);
+    CHECK(hasCandidate(candidates, "claude-opus-4-6"));
+    CHECK(hasCandidate(candidates, "claude-sonnet-4-6"));
+    CHECK(hasCandidate(candidates, "claude-haiku-4-5-20251001"));
+    CHECK(hasCandidate(candidates, "claude-sonnet-4-5-20250929"));
+    CHECK(hasCandidate(candidates, "claude-opus-4-20250514"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.openai_model_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_openai_model", "");
+    CHECK(candidates.size() == 4);
+    CHECK(hasCandidate(candidates, "gpt-4o"));
+    CHECK(hasCandidate(candidates, "gpt-4o-mini"));
+    CHECK(hasCandidate(candidates, "o3-mini"));
+    CHECK(hasCandidate(candidates, "o1"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.openai_compat_model_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_openai_compat_model", "");
+    CHECK(candidates.size() == 4);
+    CHECK(hasCandidate(candidates, "gpt-4o"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.gemini_model_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_gemini_model", "");
+    CHECK(candidates.size() == 3);
+    CHECK(hasCandidate(candidates, "gemini-2.5-flash"));
+    CHECK(hasCandidate(candidates, "gemini-2.5-pro"));
+    CHECK(hasCandidate(candidates, "gemini-2.0-flash"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.thinking_mode_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_claude_thinking_mode", "");
+    CHECK(candidates.size() == 3);
+    CHECK(hasCandidate(candidates, "off"));
+    CHECK(hasCandidate(candidates, "normal"));
+    CHECK(hasCandidate(candidates, "extended"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.thinking_mode_all_providers", "[completion]")
+{
+    for (auto const* prop: { "agent_claude_thinking_mode",
+                             "agent_openai_thinking_mode",
+                             "agent_openai_compat_thinking_mode",
+                             "agent_gemini_thinking_mode" })
+    {
+        auto candidates = builtinArgumentCandidates(prop, "");
+        CHECK(candidates.size() == 3);
+    }
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.auth_type_returns_values", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_claude_auth_type", "");
+    CHECK(candidates.size() == 3);
+    CHECK(hasCandidate(candidates, "auto"));
+    CHECK(hasCandidate(candidates, "oauth"));
+    CHECK(hasCandidate(candidates, "api_key"));
+}
+
+TEST_CASE("CompletionCandidates.builtinArgumentCandidates.model_filters_by_prefix", "[completion]")
+{
+    auto candidates = builtinArgumentCandidates("agent_claude_model", "claude-opus");
+    REQUIRE(candidates.size() == 2);
+    CHECK(hasCandidate(candidates, "claude-opus-4-6"));
+    CHECK(hasCandidate(candidates, "claude-opus-4-20250514"));
+}
+
 // =============================================================================
 // isBuiltinWithArgumentCompletion tests
 // =============================================================================
@@ -393,6 +468,19 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.set_prompt_comma
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_separator"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_transient"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold"));
+}
+
+TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.agent_model_and_thinking", "[completion]")
+{
+    CHECK(isBuiltinWithArgumentCompletion("agent_claude_model"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_openai_model"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_openai_compat_model"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_gemini_model"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_claude_thinking_mode"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_openai_thinking_mode"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_openai_compat_thinking_mode"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_gemini_thinking_mode"));
+    CHECK(isBuiltinWithArgumentCompletion("agent_claude_auth_type"));
 }
 
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_return_false", "[completion]")

@@ -81,6 +81,39 @@ namespace
         EnumValueEntry { "google", "Google Custom Search" },
     };
 
+    constexpr std::array claudeModelValues = {
+        EnumValueEntry { "claude-opus-4-6", "Claude Opus 4.6" },
+        EnumValueEntry { "claude-sonnet-4-6", "Claude Sonnet 4.6" },
+        EnumValueEntry { "claude-haiku-4-5-20251001", "Claude Haiku 4.5" },
+        EnumValueEntry { "claude-sonnet-4-5-20250929", "Claude Sonnet 4.5" },
+        EnumValueEntry { "claude-opus-4-20250514", "Claude Opus 4" },
+    };
+
+    constexpr std::array openaiModelValues = {
+        EnumValueEntry { "gpt-4o", "GPT-4o" },
+        EnumValueEntry { "gpt-4o-mini", "GPT-4o Mini" },
+        EnumValueEntry { "o3-mini", "O3 Mini" },
+        EnumValueEntry { "o1", "O1" },
+    };
+
+    constexpr std::array geminiModelValues = {
+        EnumValueEntry { "gemini-2.5-flash", "Gemini 2.5 Flash" },
+        EnumValueEntry { "gemini-2.5-pro", "Gemini 2.5 Pro" },
+        EnumValueEntry { "gemini-2.0-flash", "Gemini 2.0 Flash" },
+    };
+
+    constexpr std::array thinkingModeValues = {
+        EnumValueEntry { "off", "No thinking (provider default)" },
+        EnumValueEntry { "normal", "Moderate thinking budget" },
+        EnumValueEntry { "extended", "Maximum thinking budget" },
+    };
+
+    constexpr std::array authTypeValues = {
+        EnumValueEntry { "auto", "Auto-detect (OAuth preferred)" },
+        EnumValueEntry { "oauth", "OAuth authentication" },
+        EnumValueEntry { "api_key", "API key authentication" },
+    };
+
     /// @brief Standard library function entry with name and signature description.
     struct StdLibEntry
     {
@@ -304,6 +337,16 @@ std::vector<CompletionCandidate> builtinCandidates()
           "Claude max output tokens",
           "",
           CompletionKind::Property },
+        { "agent_claude_thinking_mode",
+          "agent_claude_thinking_mode",
+          "Claude thinking/reasoning mode (off/normal/extended)",
+          "",
+          CompletionKind::Property },
+        { "agent_claude_auth_type",
+          "agent_claude_auth_type",
+          "Claude auth method (auto/oauth/api_key)",
+          "",
+          CompletionKind::Property },
         // OpenAI provider properties
         { "agent_openai_api_key", "agent_openai_api_key", "OpenAI API key", "", CompletionKind::Property },
         { "agent_openai_api_key_env",
@@ -320,6 +363,11 @@ std::vector<CompletionCandidate> builtinCandidates()
         { "agent_openai_max_tokens",
           "agent_openai_max_tokens",
           "OpenAI max output tokens",
+          "",
+          CompletionKind::Property },
+        { "agent_openai_thinking_mode",
+          "agent_openai_thinking_mode",
+          "OpenAI thinking/reasoning mode",
           "",
           CompletionKind::Property },
         // OpenAI-compatible provider properties
@@ -348,6 +396,11 @@ std::vector<CompletionCandidate> builtinCandidates()
           "OpenAI-compatible max output tokens",
           "",
           CompletionKind::Property },
+        { "agent_openai_compat_thinking_mode",
+          "agent_openai_compat_thinking_mode",
+          "OpenAI-compatible thinking mode",
+          "",
+          CompletionKind::Property },
         // Gemini provider properties
         { "agent_gemini_api_key", "agent_gemini_api_key", "Gemini API key", "", CompletionKind::Property },
         { "agent_gemini_api_key_env",
@@ -363,6 +416,11 @@ std::vector<CompletionCandidate> builtinCandidates()
         { "agent_gemini_max_tokens",
           "agent_gemini_max_tokens",
           "Gemini max output tokens",
+          "",
+          CompletionKind::Property },
+        { "agent_gemini_thinking_mode",
+          "agent_gemini_thinking_mode",
+          "Gemini thinking/reasoning mode",
           "",
           CompletionKind::Property },
         // Plan mode properties
@@ -550,12 +608,27 @@ std::vector<CompletionCandidate> dotAccessCandidates(
 bool isBuiltinWithArgumentCompletion(std::string const& commandName)
 {
     static auto const names = std::set<std::string> {
-        "shell_prompt_preset",     "shell_prompt_indicator",
-        "shell_prompt_layout",     "shell_prompt_separator",
-        "shell_prompt_transient",  "shell_prompt_duration_threshold",
-        "agent_provider",          "agent_log_tool_uses",
-        "agent_plan_mode_enabled", "agent_plan_mode_pause_between_steps",
-        "agent_trace_enabled",     "agent_web_search_engine",
+        "shell_prompt_preset",
+        "shell_prompt_indicator",
+        "shell_prompt_layout",
+        "shell_prompt_separator",
+        "shell_prompt_transient",
+        "shell_prompt_duration_threshold",
+        "agent_provider",
+        "agent_log_tool_uses",
+        "agent_plan_mode_enabled",
+        "agent_plan_mode_pause_between_steps",
+        "agent_trace_enabled",
+        "agent_web_search_engine",
+        "agent_claude_model",
+        "agent_openai_model",
+        "agent_openai_compat_model",
+        "agent_gemini_model",
+        "agent_claude_thinking_mode",
+        "agent_openai_thinking_mode",
+        "agent_openai_compat_thinking_mode",
+        "agent_gemini_thinking_mode",
+        "agent_claude_auth_type",
     };
     return names.contains(commandName);
 }
@@ -594,6 +667,17 @@ std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& co
     if (commandName == "agent_log_tool_uses" || commandName == "agent_plan_mode_enabled"
         || commandName == "agent_plan_mode_pause_between_steps" || commandName == "agent_trace_enabled")
         return collectValues(boolValues);
+    if (commandName == "agent_claude_model")
+        return collectValues(claudeModelValues);
+    if (commandName == "agent_openai_model" || commandName == "agent_openai_compat_model")
+        return collectValues(openaiModelValues);
+    if (commandName == "agent_gemini_model")
+        return collectValues(geminiModelValues);
+    if (commandName == "agent_claude_thinking_mode" || commandName == "agent_openai_thinking_mode"
+        || commandName == "agent_openai_compat_thinking_mode" || commandName == "agent_gemini_thinking_mode")
+        return collectValues(thinkingModeValues);
+    if (commandName == "agent_claude_auth_type")
+        return collectValues(authTypeValues);
 
     return {};
 }
