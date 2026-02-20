@@ -2429,6 +2429,38 @@ namespace
 
 void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
 {
+    // Handle builtin structured commands (find, etc.) before output definitions
+    if (node.command)
+    {
+        if (auto const* call = dynamic_cast<ast::ProgramCall const*>(node.command.get()))
+        {
+            if (call->program == "find")
+            {
+                // Serialize find args as null-separated string
+                std::string serializedArgs;
+                for (auto const& param: call->parameters)
+                {
+                    if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(param.get()))
+                    {
+                        if (!serializedArgs.empty())
+                            serializedArgs += '\0';
+                        serializedArgs += lit->value;
+                    }
+                }
+                auto* callback = findCallback("structured_find(S)I");
+                if (callback)
+                {
+                    auto* argsVal = _builder.get(serializedArgs);
+                    _result = _builder.createCallFunction(
+                        _builder.getBuiltinFunction(*callback), { argsVal }, "find");
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+                    annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::FileInfo);
+                    return;
+                }
+            }
+        }
+    }
+
     // Try to match against output definitions from persistent state
     if (_persistentState && node.command)
     {

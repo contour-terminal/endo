@@ -141,6 +141,10 @@ add_library(endo-shell STATIC
     commands/PsCommand.cpp
     commands/LsCommand.hpp
     commands/LsCommand.cpp
+    commands/FindExpression.hpp
+    commands/FindExpression.cpp
+    commands/FindCommand.hpp
+    commands/FindCommand.cpp
     commands/JobProvider.hpp
     commands/JobsCommand.hpp
     commands/JobsCommand.cpp
@@ -206,6 +210,7 @@ enable_static_linking(endo-bin)
 add_executable(test-endo-shell
     test_main.cpp
     Shell_test.cpp
+    commands/FindExpression_test.cpp
     CrashHandler_test.cpp
     ui/PromptComponent_test.cpp
     ui/Gradient_test.cpp

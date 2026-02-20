@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/commands/FindCommand.hpp>
+#include <shell/commands/FindExpression.hpp>
 #include <shell/commands/JobsCommand.hpp>
 #include <shell/commands/LsCommand.hpp>
 #include <shell/commands/PsCommand.hpp>
@@ -769,6 +771,39 @@ void Shell::registerStructuredBuiltins()
 
             ShellJobProvider provider(jobTable);
             JobsCommand cmd(provider);
+            auto* result = cmd.execute(*_runner);
+            args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        });
+
+    // F# structured_find builtin: returns list<FileInfo> from find command
+    _runtime.registerFunction("structured_find")
+        .param<CoreVM::CoreString>("args")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind([this](CoreVM::Params& args) {
+            auto const argsStr = std::string(args.getString(1));
+            // Split null-separated args string
+            std::vector<std::string> findArgs;
+            size_t start = 0;
+            for (size_t i = 0; i <= argsStr.size(); ++i)
+            {
+                if (i == argsStr.size() || argsStr[i] == '\0')
+                {
+                    if (i > start)
+                        findArgs.emplace_back(argsStr.substr(start, i - start));
+                    start = i + 1;
+                }
+            }
+            auto parsed = find::parseFindArgs(findArgs);
+            if (!parsed.has_value())
+            {
+                // On parse error, return empty list
+                auto* list = _runner->allocObject(CoreVM::BuiltinTypeId::List);
+                list->tag = 0; // Nil
+                args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+                return;
+            }
+            auto& [options, expression] = parsed.value();
+            FindCommand cmd(std::move(options), std::move(expression));
             auto* result = cmd.execute(*_runner);
             args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
         });

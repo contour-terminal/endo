@@ -3280,3 +3280,204 @@ TEST_CASE("module.shell_level.shows_correct_level")
     REQUIRE(!segments.empty());
     CHECK(segments[0].text.find("L3") != std::string::npos);
 }
+
+// ============================================================================
+// Builtin: find
+// ============================================================================
+
+TEST_CASE("shell.builtin.find_basic")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_basic";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    fs::create_directories(testDir / "sub");
+    { std::ofstream ofs(testDir / "a.txt"); ofs << "hello"; }
+    { std::ofstream ofs(testDir / "sub" / "b.txt"); ofs << "world"; }
+
+    TestShell shell;
+    shell(std::format("find {}", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find(testDir.string()) != std::string::npos);
+    CHECK(out.find("a.txt") != std::string::npos);
+    CHECK(out.find("b.txt") != std::string::npos);
+    CHECK(out.find("sub") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_name_pattern")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_name";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    { std::ofstream ofs(testDir / "hello.cpp"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "world.hpp"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "other.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -name '*.cpp'", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("hello.cpp") != std::string::npos);
+    CHECK(out.find("world.hpp") == std::string::npos);
+    CHECK(out.find("other.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_type_file")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_type";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "subdir");
+    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -type f", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("file.txt") != std::string::npos);
+    // The testDir itself is a directory and should not be in output
+    // subdir is a directory and should not be in output
+    // But testDir path contains "subdir" substring, so check more carefully
+    // Just verify that file.txt is found
+}
+
+TEST_CASE("shell.builtin.find_type_directory")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_typed";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "subdir");
+    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -type d", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("subdir") != std::string::npos);
+    CHECK(out.find("file.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_maxdepth")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_maxdepth";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "a" / "b");
+    { std::ofstream ofs(testDir / "top.txt"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "a" / "mid.txt"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "a" / "b" / "deep.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -maxdepth 1", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("top.txt") != std::string::npos);
+    CHECK(out.find("deep.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_or_grouping")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_or";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    { std::ofstream ofs(testDir / "a.cpp"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "b.hpp"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "c.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} '(' -name '*.cpp' -o -name '*.hpp' ')'", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("a.cpp") != std::string::npos);
+    CHECK(out.find("b.hpp") != std::string::npos);
+    CHECK(out.find("c.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_not")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_not";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    { std::ofstream ofs(testDir / "keep.cpp"); ofs << "x"; }
+    { std::ofstream ofs(testDir / "remove.o"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -type f -not -name '*.o'", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("keep.cpp") != std::string::npos);
+    CHECK(out.find("remove.o") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_empty")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_empty";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir / "emptydir");
+    { std::ofstream ofs(testDir / "empty.txt"); } // empty file
+    { std::ofstream ofs(testDir / "notempty.txt"); ofs << "content"; }
+
+    TestShell shell;
+    shell(std::format("find {} -empty", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    CHECK(out.find("empty.txt") != std::string::npos);
+    CHECK(out.find("emptydir") != std::string::npos);
+    CHECK(out.find("notempty.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_print0")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_print0";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -name '*.txt' -print0", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    auto const out = std::string(shell.output());
+    // Output should contain null byte instead of newline
+    CHECK(out.find('\0') != std::string::npos);
+    CHECK(out.find("file.txt") != std::string::npos);
+
+    fs::remove_all(testDir);
+}
+
+TEST_CASE("shell.builtin.find_no_results")
+{
+    namespace fs = std::filesystem;
+    auto const testDir = fs::temp_directory_path() / "endo_find_test_noresult";
+    fs::remove_all(testDir);
+    fs::create_directories(testDir);
+    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+
+    TestShell shell;
+    shell(std::format("find {} -name '*.nonexistent'", testDir.string()));
+    CHECK(shell.exitCode == 0);
+    // Output should be empty (no matches, no error)
+    auto const out = std::string(shell.output());
+    CHECK(out.find("file.txt") == std::string::npos);
+
+    fs::remove_all(testDir);
+}

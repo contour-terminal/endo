@@ -703,6 +703,11 @@ void registerStructuredBuiltins(CoreVM::Runtime& rt, CallbackResolver const& res
     bindResolved(rt.registerFunction("structured_jobs")
         .returnType(CoreVM::LiteralType::Number), resolve, "structured_jobs", 0);
 
+    // structured_find(args: string) -> number (list)
+    bindResolved(rt.registerFunction("structured_find")
+        .param<CoreVM::CoreString>("args")
+        .returnType(CoreVM::LiteralType::Number), resolve, "structured_find", 1);
+
     // --- Output definition commands ---
 
     // structured_docker_ps() -> number (list)

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
+#include <shell/commands/FindExpression.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -1148,6 +1149,102 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
     }
 
     context.setResult(CoreVM::CoreNumber(_exitCode));
+}
+
+int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    namespace fs = std::filesystem;
+
+    // Parse arguments (skip args[0] which is "find")
+    std::vector<std::string> findArgs;
+    for (size_t i = 1; i < args.size(); ++i)
+        findArgs.push_back(args.at(i));
+
+    auto parsed = find::parseFindArgs(findArgs);
+    if (!parsed.has_value())
+    {
+        error("find: {}", parsed.error());
+        return 1;
+    }
+
+    auto& [options, expression] = parsed.value();
+
+    auto const separator = options.print0 ? std::string_view("\0", 1) : std::string_view("\n");
+
+    for (auto const& searchPath: options.searchPaths)
+    {
+        std::error_code ec;
+
+        // Output the search path itself (depth 0)
+        if (!options.minDepth.has_value() || options.minDepth.value() <= 0)
+        {
+            auto const status = fs::symlink_status(searchPath, ec);
+            if (ec)
+            {
+                error("find: '{}': {}", searchPath.string(), ec.message());
+                continue;
+            }
+
+            find::FindEntry entry {
+                .path = searchPath,
+                .filename = searchPath.filename().string(),
+                .type = status.type(),
+                .size = fs::is_regular_file(status) ? fs::file_size(searchPath, ec) : 0,
+                .mtime = fs::last_write_time(searchPath, ec),
+                .depth = 0,
+            };
+
+            if (!expression || expression->evaluate(entry))
+            {
+                auto const output = searchPath.string() + std::string(separator);
+                platformWrite(outputFd, output.data(), output.size());
+            }
+        }
+
+        // Skip recursion if maxdepth is 0
+        if (options.maxDepth.has_value() && options.maxDepth.value() == 0)
+            continue;
+
+        auto dirIter =
+            fs::recursive_directory_iterator(searchPath, fs::directory_options::skip_permission_denied, ec);
+        if (ec)
+            continue;
+
+        for (auto const& dirEntry: dirIter)
+        {
+            auto const depth = dirIter.depth() + 1;
+
+            if (options.maxDepth.has_value() && depth > options.maxDepth.value())
+            {
+                dirIter.disable_recursion_pending();
+                continue;
+            }
+
+            if (options.minDepth.has_value() && depth < options.minDepth.value())
+                continue;
+
+            auto const status = dirEntry.symlink_status(ec);
+            if (ec)
+                continue;
+
+            find::FindEntry entry {
+                .path = dirEntry.path(),
+                .filename = dirEntry.path().filename().string(),
+                .type = status.type(),
+                .size = dirEntry.is_regular_file(ec) ? dirEntry.file_size(ec) : 0,
+                .mtime = dirEntry.last_write_time(ec),
+                .depth = depth,
+            };
+
+            if (!expression || expression->evaluate(entry))
+            {
+                auto const output = dirEntry.path().string() + std::string(separator);
+                platformWrite(outputFd, output.data(), output.size());
+            }
+        }
+    }
+
+    return 0;
 }
 
 } // namespace endo
