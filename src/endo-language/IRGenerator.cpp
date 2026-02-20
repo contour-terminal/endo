@@ -4624,7 +4624,7 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
 {
     TRACE_SCOPE("visit(MutAssignStmt)");
 
-    // Check if this is a property setter invocation
+    // Check if this is a user-defined property setter invocation
     if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
     {
         if (!it->second.setter)
@@ -4644,6 +4644,32 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
         bindFSharpVariable(it->second.setter->paramName, paramStorage, false);
         codegen(it->second.setter->body.get());
         popFSharpScope();
+        _result = nullptr;
+        return;
+    }
+
+    // Check if this is a builtin property setter invocation
+    if (auto const* prop = _runtime.findProperty(node.name))
+    {
+        if (!prop->hasSetter())
+        {
+            reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
+            return;
+        }
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for assignment value");
+            return;
+        }
+        // Emit call to setter callback: name(T)V
+        auto const setterSig =
+            node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
+        if (auto* cb = findCallback(setterSig))
+        {
+            _builder.createCallFunction(
+                _builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
+        }
         _result = nullptr;
         return;
     }
@@ -4686,7 +4712,7 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
 {
     TRACE_SCOPE("visit(MutAssignExpr)");
 
-    // Check if this is a property setter invocation
+    // Check if this is a user-defined property setter invocation
     if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
     {
         if (!it->second.setter)
@@ -4706,6 +4732,32 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
         bindFSharpVariable(it->second.setter->paramName, paramStorage, false);
         codegen(it->second.setter->body.get());
         popFSharpScope();
+        _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+        return;
+    }
+
+    // Check if this is a builtin property setter invocation
+    if (auto const* prop = _runtime.findProperty(node.name))
+    {
+        if (!prop->hasSetter())
+        {
+            reportTypeError("Cannot assign to read-only property '{}'", std::string_view(node.name));
+            return;
+        }
+        auto* newValue = codegen(node.value.get());
+        if (!newValue)
+        {
+            reportTypeError("Failed to generate code for assignment value");
+            return;
+        }
+        // Emit call to setter callback: name(T)V
+        auto const setterSig =
+            node.name + "(" + CoreVM::signatureType(prop->type()) + ")V";
+        if (auto* cb = findCallback(setterSig))
+        {
+            _builder.createCallFunction(
+                _builder.getBuiltinFunction(*cb), { newValue }, node.name + ".set");
+        }
         _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
         return;
     }
@@ -6433,7 +6485,7 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             }
             if (!func)
             {
-                // Fallback: try native runtime function (e.g., set_prompt_preset)
+                // Fallback: try native runtime function (e.g., add_mcp_server)
                 if (tryGenerateNativeCall(funcIdent->name, args))
                     return;
                 reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
@@ -7167,7 +7219,7 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
 {
     TRACE_SCOPE("visit(IdentifierExpr)");
 
-    // Check if identifier is a property (getter invocation)
+    // Check if identifier is a user-defined property (getter invocation)
     if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())
     {
         if (!it->second.getter)
@@ -7179,6 +7231,24 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
         codegen(it->second.getter->body.get());
         popFSharpScope();
         return;
+    }
+
+    // Check if identifier is a builtin property (getter callback)
+    if (auto const* prop = _runtime.findProperty(node.name))
+    {
+        if (!prop->hasGetter())
+        {
+            reportTypeError("Property '{}' is write-only (has no getter)", std::string_view(node.name));
+            return;
+        }
+        // Emit call to the zero-arg getter callback: name()T
+        auto const getterSig = node.name + "()" + CoreVM::signatureType(prop->type());
+        if (auto* cb = findCallback(getterSig))
+        {
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*cb), {}, node.name + ".get");
+            return;
+        }
     }
 
     // Look up in F# scope
