@@ -47,6 +47,7 @@ namespace
             case endo::CompletionKind::Module: return CompletionItemKind::Module;
             case endo::CompletionKind::Field: return CompletionItemKind::Field;
             case endo::CompletionKind::Builtin: return CompletionItemKind::Function;
+            case endo::CompletionKind::Property: return CompletionItemKind::Property;
             case endo::CompletionKind::Command: return CompletionItemKind::Text;
             case endo::CompletionKind::EnumValue: return CompletionItemKind::EnumMember;
             case endo::CompletionKind::Other: return CompletionItemKind::Text;

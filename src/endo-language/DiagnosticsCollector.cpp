@@ -76,13 +76,13 @@ namespace
             "until",
             "print",
             "println",
-            "set_prompt_preset",
-            "set_prompt_indicator",
-            "set_prompt_layout",
-            "set_prompt_separator",
-            "set_prompt_transient",
-            "set_prompt_duration_threshold",
-            "set_prompt_spacing",
+            "shell_prompt_preset",
+            "shell_prompt_indicator",
+            "shell_prompt_layout",
+            "shell_prompt_separator",
+            "shell_prompt_transient",
+            "shell_prompt_duration_threshold",
+            "shell_prompt_spacing",
         };
         return names;
     }

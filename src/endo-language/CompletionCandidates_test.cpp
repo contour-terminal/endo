@@ -67,19 +67,19 @@ TEST_CASE("CompletionCandidates.builtinCandidates.returns_expected_builtins", "[
     CHECK(hasCandidate(builtins, "print"));
     CHECK(hasCandidate(builtins, "println"));
     CHECK(hasCandidate(builtins, "echo"));
-    CHECK(hasCandidate(builtins, "set_prompt_preset"));
-    CHECK(hasCandidate(builtins, "set_prompt_indicator"));
-    CHECK(hasCandidate(builtins, "set_prompt_layout"));
-    CHECK(hasCandidate(builtins, "set_prompt_separator"));
-    CHECK(hasCandidate(builtins, "set_prompt_transient"));
-    CHECK(hasCandidate(builtins, "set_prompt_duration_threshold"));
+    CHECK(hasCandidate(builtins, "shell_prompt_preset"));
+    CHECK(hasCandidate(builtins, "shell_prompt_indicator"));
+    CHECK(hasCandidate(builtins, "shell_prompt_layout"));
+    CHECK(hasCandidate(builtins, "shell_prompt_separator"));
+    CHECK(hasCandidate(builtins, "shell_prompt_transient"));
+    CHECK(hasCandidate(builtins, "shell_prompt_duration_threshold"));
 }
 
-TEST_CASE("CompletionCandidates.builtinCandidates.kind_is_builtin", "[completion]")
+TEST_CASE("CompletionCandidates.builtinCandidates.kind_is_builtin_or_property", "[completion]")
 {
     auto builtins = builtinCandidates();
     for (auto const& b: builtins)
-        CHECK(b.kind == CompletionKind::Builtin);
+        CHECK((b.kind == CompletionKind::Builtin || b.kind == CompletionKind::Property));
 }
 
 // =============================================================================
@@ -316,7 +316,7 @@ TEST_CASE("CompletionCandidates.symbolCandidates.formats_recursive_function", "[
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.preset_returns_all_values", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_preset", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_preset", "");
     CHECK(candidates.size() == 10);
     CHECK(hasCandidate(candidates, "minimal-arrow"));
     CHECK(hasCandidate(candidates, "powerline"));
@@ -327,14 +327,14 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.preset_returns_all_val
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.preset_filters_by_prefix", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_preset", "pow");
+    auto candidates = builtinArgumentCandidates("shell_prompt_preset", "pow");
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].text == "powerline");
 }
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.layout_returns_values", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_layout", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_layout", "");
     CHECK(candidates.size() == 4);
     CHECK(hasCandidate(candidates, "single-line"));
     CHECK(hasCandidate(candidates, "two-line"));
@@ -344,7 +344,7 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.layout_returns_values"
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.separator_returns_values", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_separator", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_separator", "");
     CHECK(candidates.size() == 5);
     CHECK(hasCandidate(candidates, "none"));
     CHECK(hasCandidate(candidates, "bar"));
@@ -355,7 +355,7 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.separator_returns_valu
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.transient_returns_values", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_transient", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_transient", "");
     CHECK(candidates.size() == 3);
     CHECK(hasCandidate(candidates, "off"));
     CHECK(hasCandidate(candidates, "minimal"));
@@ -364,13 +364,13 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.transient_returns_valu
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.indicator_returns_empty", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_indicator", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_indicator", "");
     CHECK(candidates.empty());
 }
 
 TEST_CASE("CompletionCandidates.builtinArgumentCandidates.duration_threshold_returns_empty", "[completion]")
 {
-    auto candidates = builtinArgumentCandidates("set_prompt_duration_threshold", "");
+    auto candidates = builtinArgumentCandidates("shell_prompt_duration_threshold", "");
     CHECK(candidates.empty());
 }
 
@@ -386,12 +386,12 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.unknown_command_return
 
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.set_prompt_commands", "[completion]")
 {
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_preset"));
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_indicator"));
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_layout"));
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_separator"));
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_transient"));
-    CHECK(isBuiltinWithArgumentCompletion("set_prompt_duration_threshold"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_preset"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_indicator"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_layout"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_separator"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_transient"));
+    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold"));
 }
 
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_return_false", "[completion]")
@@ -399,7 +399,7 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
     CHECK_FALSE(isBuiltinWithArgumentCompletion("echo"));
     CHECK_FALSE(isBuiltinWithArgumentCompletion("ls"));
     CHECK_FALSE(isBuiltinWithArgumentCompletion("cd"));
-    CHECK_FALSE(isBuiltinWithArgumentCompletion("set_prompt"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("shell_prompt"));
 }
 
 // =============================================================================

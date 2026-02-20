@@ -47,8 +47,8 @@ namespace endo
 
 /// @brief Checks if a command is a builtin whose argument space is fully handled.
 ///
-/// Returns true for builtins that either accept enumerated values (e.g., set_prompt_preset)
-/// or free-form input (e.g., set_prompt_indicator), indicating that generic constructor
+/// Returns true for builtins/properties that either accept enumerated values (e.g., shell_prompt_preset)
+/// or free-form input (e.g., shell_prompt_indicator), indicating that generic constructor
 /// and symbol candidates should not be offered.
 ///
 /// @param commandName The command name to check.
@@ -57,10 +57,10 @@ namespace endo
 
 /// @brief Returns argument value completion candidates for a given builtin command.
 ///
-/// For builtins that accept enumerated string values (e.g., set_prompt_preset, set_prompt_layout),
+/// For properties/builtins that accept enumerated string values (e.g., shell_prompt_preset, shell_prompt_layout),
 /// returns matching value candidates filtered by prefix.
 ///
-/// @param commandName The builtin command name (e.g., "set_prompt_preset").
+/// @param commandName The property or builtin command name (e.g., "shell_prompt_preset").
 /// @param prefix The argument prefix to filter by (may be empty for all values).
 /// @return Matching completion candidates with CompletionKind::EnumValue.
 [[nodiscard]] std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& commandName,

@@ -242,57 +242,57 @@ TEST_CASE("Completer.collectRecordInfo.no_type_for_anonymous_record", "[completi
 // Builtin argument completion integration tests
 // =============================================================================
 
-TEST_CASE("Completer.set_prompt_preset_offers_presets", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_preset_offers_presets", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    auto results = computeCompletions("shell_prompt_preset ", 20, dataSource);
     CHECK(hasCandidate(results, "minimal-arrow"));
     CHECK(hasCandidate(results, "powerline"));
     CHECK(hasCandidate(results, "endo-signature"));
 }
 
-TEST_CASE("Completer.set_prompt_preset_filters_by_prefix", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_preset_filters_by_prefix", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_preset pow", 21, dataSource);
+    auto results = computeCompletions("shell_prompt_preset pow", 23, dataSource);
     CHECK(hasCandidate(results, "powerline"));
     CHECK(!hasCandidate(results, "minimal-arrow"));
 }
 
-TEST_CASE("Completer.set_prompt_layout_offers_values", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_layout_offers_values", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_layout ", 18, dataSource);
+    auto results = computeCompletions("shell_prompt_layout ", 20, dataSource);
     CHECK(hasCandidate(results, "single-line"));
     CHECK(hasCandidate(results, "two-line"));
     CHECK(hasCandidate(results, "boxed"));
     CHECK(hasCandidate(results, "powerline"));
 }
 
-TEST_CASE("Completer.set_prompt_prefix_offers_builtins", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_prefix_offers_builtins", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_", 11, dataSource);
-    CHECK(hasCandidate(results, "set_prompt_preset"));
-    CHECK(hasCandidate(results, "set_prompt_layout"));
-    CHECK(hasCandidate(results, "set_prompt_separator"));
-    CHECK(hasCandidate(results, "set_prompt_transient"));
-    CHECK(hasCandidate(results, "set_prompt_indicator"));
-    CHECK(hasCandidate(results, "set_prompt_duration_threshold"));
+    auto results = computeCompletions("shell_prompt_", 13, dataSource);
+    CHECK(hasCandidate(results, "shell_prompt_preset"));
+    CHECK(hasCandidate(results, "shell_prompt_layout"));
+    CHECK(hasCandidate(results, "shell_prompt_separator"));
+    CHECK(hasCandidate(results, "shell_prompt_transient"));
+    CHECK(hasCandidate(results, "shell_prompt_indicator"));
+    CHECK(hasCandidate(results, "shell_prompt_duration_threshold"));
 }
 
-TEST_CASE("Completer.set_prompt_indicator_no_candidates", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_indicator_no_candidates", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_indicator ", 21, dataSource);
+    auto results = computeCompletions("shell_prompt_indicator ", 23, dataSource);
     // Free-form string argument: no enum values, no constructors, no symbols
     CHECK(results.empty());
 }
 
-TEST_CASE("Completer.set_prompt_preset_no_constructors", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_preset_no_constructors", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    auto results = computeCompletions("shell_prompt_preset ", 20, dataSource);
     // Should have enum values but NOT constructors
     CHECK(!hasCandidate(results, "Some"));
     CHECK(!hasCandidate(results, "None"));
@@ -319,55 +319,55 @@ TEST_CASE("Completer.non_builtin_argument_still_has_constructors", "[completion]
 
 TEST_CASE("CompletionContext.quoted_argument_detects_command", "[completion][context]")
 {
-    // Cursor after opening quote: set_prompt_preset "
-    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_preset \"", 19);
+    // Cursor after opening quote: shell_prompt_preset "
+    auto ctx = CompletionContextAnalyzer::analyze("shell_prompt_preset \"", 21);
     CHECK(ctx.type == CompletionContextType::Argument);
     CHECK(ctx.command.has_value());
-    CHECK(*ctx.command == "set_prompt_preset");
+    CHECK(*ctx.command == "shell_prompt_preset");
 }
 
 TEST_CASE("CompletionContext.quoted_argument_with_partial_text", "[completion][context]")
 {
-    // Cursor after partial text inside quote: set_prompt_preset "pow
-    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_preset \"pow", 22);
+    // Cursor after partial text inside quote: shell_prompt_preset "pow
+    auto ctx = CompletionContextAnalyzer::analyze("shell_prompt_preset \"pow", 24);
     CHECK(ctx.type == CompletionContextType::Argument);
     CHECK(ctx.prefix == "pow");
     CHECK(ctx.command.has_value());
-    CHECK(*ctx.command == "set_prompt_preset");
+    CHECK(*ctx.command == "shell_prompt_preset");
 }
 
 TEST_CASE("CompletionContext.single_quoted_argument_detects_command", "[completion][context]")
 {
-    // Single-quoted variant: set_prompt_layout '
-    auto ctx = CompletionContextAnalyzer::analyze("set_prompt_layout '", 19);
+    // Single-quoted variant: shell_prompt_layout '
+    auto ctx = CompletionContextAnalyzer::analyze("shell_prompt_layout '", 21);
     CHECK(ctx.type == CompletionContextType::Argument);
     CHECK(ctx.command.has_value());
-    CHECK(*ctx.command == "set_prompt_layout");
+    CHECK(*ctx.command == "shell_prompt_layout");
 }
 
-TEST_CASE("Completer.quoted_set_prompt_preset_offers_all_presets", "[completion][completer]")
+TEST_CASE("Completer.quoted_shell_prompt_preset_offers_all_presets", "[completion][completer]")
 {
     CompletionDataSource dataSource;
     // Cursor after opening quote — empty prefix, all presets
-    auto results = computeCompletions("set_prompt_preset \"", 19, dataSource);
+    auto results = computeCompletions("shell_prompt_preset \"", 21, dataSource);
     CHECK(hasCandidate(results, "minimal-arrow"));
     CHECK(hasCandidate(results, "powerline"));
     CHECK(hasCandidate(results, "endo-signature"));
 }
 
-TEST_CASE("Completer.quoted_set_prompt_preset_filters_by_prefix", "[completion][completer]")
+TEST_CASE("Completer.quoted_shell_prompt_preset_filters_by_prefix", "[completion][completer]")
 {
     CompletionDataSource dataSource;
     // Cursor after partial text inside quote
-    auto results = computeCompletions("set_prompt_preset \"pow", 22, dataSource);
+    auto results = computeCompletions("shell_prompt_preset \"pow", 24, dataSource);
     CHECK(hasCandidate(results, "powerline"));
     CHECK(!hasCandidate(results, "minimal-arrow"));
 }
 
-TEST_CASE("Completer.quoted_set_prompt_layout_offers_values", "[completion][completer]")
+TEST_CASE("Completer.quoted_shell_prompt_layout_offers_values", "[completion][completer]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_layout \"", 19, dataSource);
+    auto results = computeCompletions("shell_prompt_layout \"", 21, dataSource);
     CHECK(hasCandidate(results, "single-line"));
     CHECK(hasCandidate(results, "two-line"));
     CHECK(hasCandidate(results, "boxed"));
@@ -407,10 +407,10 @@ TEST_CASE("Completer.stdlib.user_symbol_deduplicates_with_stdlib", "[completion]
     CHECK(mapCount == 1);
 }
 
-TEST_CASE("Completer.stdlib.set_prompt_preset_does_not_show_stdlib", "[completion][completer][stdlib]")
+TEST_CASE("Completer.stdlib.shell_prompt_preset_does_not_show_stdlib", "[completion][completer][stdlib]")
 {
     CompletionDataSource dataSource;
-    auto results = computeCompletions("set_prompt_preset ", 18, dataSource);
+    auto results = computeCompletions("shell_prompt_preset ", 20, dataSource);
     CHECK(!hasCandidate(results, "map"));
     CHECK(!hasCandidate(results, "filter"));
     CHECK(!hasCandidate(results, "fold"));

@@ -131,27 +131,27 @@ namespace
             { "env",
               "`env` : `string -> option<string>`\n\nReturns `Some value` if the environment variable is "
               "set, `None` if not found." },
-            { "set_prompt_preset",
-              "`set_prompt_preset` : `string -> unit`\n\nApply a named prompt theme preset (e.g. "
-              "`\"endo-signature\"`, `\"minimal-arrow\"`)." },
-            { "set_prompt_indicator",
-              "`set_prompt_indicator` : `string -> unit`\n\nSet the prompt indicator character(s) shown "
-              "before user input." },
-            { "set_prompt_layout",
-              "`set_prompt_layout` : `string -> unit`\n\nSet prompt layout: `\"single-line\"`, "
-              "`\"two-line\"`, `\"boxed\"`, `\"powerline\"`." },
-            { "set_prompt_separator",
-              "`set_prompt_separator` : `string -> unit`\n\nSet separator style: `\"none\"`, `\"bar\"`, "
-              "`\"rounded\"`, `\"powerline\"`, `\"boxed\"`." },
-            { "set_prompt_transient",
-              "`set_prompt_transient` : `string -> unit`\n\nSet transient prompt mode: `\"off\"`, "
-              "`\"minimal\"`, `\"arrow\"`." },
-            { "set_prompt_duration_threshold",
-              "`set_prompt_duration_threshold` : `int -> unit`\n\nSet minimum command duration (ms) before "
-              "showing elapsed time." },
-            { "set_prompt_spacing",
-              "`set_prompt_spacing` : `int -> unit`\n\nSet the number of blank lines above and below the "
-              "prompt (0 or 1, default 1)." },
+            { "shell_prompt_preset",
+              "`shell_prompt_preset` : `string`\n\nPrompt theme preset (e.g. "
+              "`\"endo-signature\"`, `\"minimal-arrow\"`). Read or write with `<-`." },
+            { "shell_prompt_indicator",
+              "`shell_prompt_indicator` : `string`\n\nPrompt indicator character(s) shown "
+              "before user input. Read or write with `<-`." },
+            { "shell_prompt_layout",
+              "`shell_prompt_layout` : `string`\n\nPrompt layout: `\"single-line\"`, "
+              "`\"two-line\"`, `\"boxed\"`, `\"powerline\"`. Read or write with `<-`." },
+            { "shell_prompt_separator",
+              "`shell_prompt_separator` : `string`\n\nSeparator style: `\"none\"`, `\"bar\"`, "
+              "`\"rounded\"`, `\"powerline\"`, `\"boxed\"`. Read or write with `<-`." },
+            { "shell_prompt_transient",
+              "`shell_prompt_transient` : `string`\n\nTransient prompt mode: `\"off\"`, "
+              "`\"minimal\"`, `\"arrow\"`. Read or write with `<-`." },
+            { "shell_prompt_duration_threshold",
+              "`shell_prompt_duration_threshold` : `int`\n\nMinimum command duration (ms) before "
+              "showing elapsed time. Read or write with `<-`." },
+            { "shell_prompt_spacing",
+              "`shell_prompt_spacing` : `int`\n\nBlank lines above and below the "
+              "prompt (0 or 1, default 1). Read or write with `<-`." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

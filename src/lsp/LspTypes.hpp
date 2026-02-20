@@ -320,6 +320,7 @@ enum class CompletionItemKind : int
     Field = 5,
     Variable = 6,
     Module = 9,
+    Property = 10,
     Keyword = 14,
     Snippet = 15,
     EnumMember = 20,
