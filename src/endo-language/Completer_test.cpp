@@ -440,3 +440,104 @@ TEST_CASE("Completer.shell_is_interactive_prefix_completion", "[completion][comp
     auto results = computeCompletions("shell_is", 8, dataSource);
     CHECK(hasCandidate(results, "shell_is_interactive"));
 }
+
+// =============================================================================
+// Left-arrow (<-) assignment value completion tests
+// =============================================================================
+
+TEST_CASE("Completer.left_arrow_shell_prompt_preset_offers_presets", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "shell_prompt_preset <- " = 23 chars
+    auto results = computeCompletions("shell_prompt_preset <- ", 23, dataSource);
+    CHECK(hasCandidate(results, "minimal-arrow"));
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(hasCandidate(results, "endo-signature"));
+}
+
+TEST_CASE("Completer.left_arrow_shell_prompt_preset_filters_by_prefix", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "shell_prompt_preset <- pow" = 26 chars
+    auto results = computeCompletions("shell_prompt_preset <- pow", 26, dataSource);
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(!hasCandidate(results, "minimal-arrow"));
+}
+
+TEST_CASE("Completer.left_arrow_shell_prompt_preset_no_constructors", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "shell_prompt_preset <- " = 23 chars
+    auto results = computeCompletions("shell_prompt_preset <- ", 23, dataSource);
+    CHECK(!hasCandidate(results, "Some"));
+    CHECK(!hasCandidate(results, "None"));
+    CHECK(!hasCandidate(results, "Ok"));
+    CHECK(!hasCandidate(results, "Error"));
+}
+
+TEST_CASE("Completer.left_arrow_agent_claude_model_offers_models", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "agent_claude_model <- " = 22 chars
+    auto results = computeCompletions("agent_claude_model <- ", 22, dataSource);
+    CHECK(hasCandidate(results, "claude-opus-4-6"));
+    CHECK(hasCandidate(results, "claude-sonnet-4-6"));
+}
+
+TEST_CASE("Completer.left_arrow_agent_trace_enabled_offers_booleans", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "agent_trace_enabled <- " = 23 chars
+    auto results = computeCompletions("agent_trace_enabled <- ", 23, dataSource);
+    CHECK(hasCandidate(results, "true"));
+    CHECK(hasCandidate(results, "false"));
+}
+
+TEST_CASE("Completer.left_arrow_shell_prompt_layout_offers_layouts", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "shell_prompt_layout <- " = 23 chars
+    auto results = computeCompletions("shell_prompt_layout <- ", 23, dataSource);
+    CHECK(hasCandidate(results, "single-line"));
+    CHECK(hasCandidate(results, "two-line"));
+    CHECK(hasCandidate(results, "boxed"));
+    CHECK(hasCandidate(results, "powerline"));
+}
+
+TEST_CASE("Completer.left_arrow_quoted_shell_prompt_preset_filters", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "shell_prompt_preset <- \"pow" = 27 chars in memory
+    auto results = computeCompletions("shell_prompt_preset <- \"pow", 27, dataSource);
+    CHECK(hasCandidate(results, "powerline"));
+    CHECK(!hasCandidate(results, "minimal-arrow"));
+}
+
+TEST_CASE("Completer.left_arrow_agent_claude_thinking_mode_offers_modes", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "agent_claude_thinking_mode <- " = 30 chars
+    auto results = computeCompletions("agent_claude_thinking_mode <- ", 30, dataSource);
+    CHECK(hasCandidate(results, "off"));
+    CHECK(hasCandidate(results, "normal"));
+    CHECK(hasCandidate(results, "extended"));
+}
+
+TEST_CASE("Completer.left_arrow_agent_claude_auth_type_offers_auth_types", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // "agent_claude_auth_type <- " = 26 chars
+    auto results = computeCompletions("agent_claude_auth_type <- ", 26, dataSource);
+    CHECK(hasCandidate(results, "auto"));
+    CHECK(hasCandidate(results, "oauth"));
+    CHECK(hasCandidate(results, "api_key"));
+}
+
+TEST_CASE("Completer.left_arrow_multiline_agent_model_offers_models", "[completion][completer]")
+{
+    CompletionDataSource dataSource;
+    // Multi-line: previous lines must not interfere with property resolution
+    auto results = computeCompletions("let x = 5\nagent_claude_model <- ", 32, dataSource);
+    CHECK(hasCandidate(results, "claude-opus-4-6"));
+    CHECK(hasCandidate(results, "claude-sonnet-4-6"));
+}

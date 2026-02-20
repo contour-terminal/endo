@@ -3,6 +3,7 @@
 
 #include <sstream>
 
+#include "CompletionProvider.hpp"
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentStore.hpp"
@@ -1636,7 +1637,16 @@ TEST_CASE("Completion.initialize_advertises_completion", "[lsp][completion]")
     REQUIRE(responses.size() >= 1);
     auto const& caps = responses[0]["result"]["capabilities"];
     CHECK(caps.contains("completionProvider"));
-    CHECK(caps["completionProvider"]["triggerCharacters"].is_array());
+    auto const& triggers = caps["completionProvider"]["triggerCharacters"];
+    CHECK(triggers.is_array());
+    // Verify space is a trigger character (needed for <- assignment completion)
+    bool hasSpace = false;
+    for (auto const& t: triggers)
+    {
+        if (t.get<std::string>() == " ")
+            hasSpace = true;
+    }
+    CHECK(hasSpace);
 }
 
 TEST_CASE("Completion.basic_request_returns_json_array", "[lsp][completion]")
@@ -1897,6 +1907,191 @@ TEST_CASE("Completion.record_variable_specific_fields", "[lsp][completion]")
             CHECK(hasAge);
             CHECK_FALSE(hasPid);
             CHECK_FALSE(hasCpu);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+// =============================================================================
+// Completion: left-arrow (<-) assignment value tests
+// =============================================================================
+
+TEST_CASE("Completion.left_arrow_model_candidates", "[lsp][completion][left-arrow]")
+{
+    // "agent_claude_model <- " = 22 chars
+    auto result = computeCompletion("agent_claude_model <- ", Position { 0, 22 });
+    CHECK(result.is_array());
+    bool hasOpus = false;
+    bool hasSonnet = false;
+    for (auto const& item: result)
+    {
+        auto const label = item["label"].get<std::string>();
+        if (label.find("opus") != std::string::npos)
+            hasOpus = true;
+        if (label.find("sonnet") != std::string::npos)
+            hasSonnet = true;
+    }
+    CHECK(hasOpus);
+    CHECK(hasSonnet);
+}
+
+TEST_CASE("Completion.left_arrow_preset_prefix_filter", "[lsp][completion][left-arrow]")
+{
+    // "shell_prompt_preset <- pow" = 26 chars — should filter to powerline
+    auto result = computeCompletion("shell_prompt_preset <- pow", Position { 0, 26 });
+    CHECK(result.is_array());
+    bool hasPowerline = false;
+    bool hasMinimalArrow = false;
+    for (auto const& item: result)
+    {
+        auto const label = item["label"].get<std::string>();
+        if (label == "powerline")
+            hasPowerline = true;
+        if (label == "minimal-arrow")
+            hasMinimalArrow = true;
+    }
+    CHECK(hasPowerline);
+    CHECK_FALSE(hasMinimalArrow);
+}
+
+TEST_CASE("Completion.left_arrow_boolean_candidates", "[lsp][completion][left-arrow]")
+{
+    // "agent_trace_enabled <- " = 23 chars
+    auto result = computeCompletion("agent_trace_enabled <- ", Position { 0, 23 });
+    CHECK(result.is_array());
+    bool hasTrue = false;
+    bool hasFalse = false;
+    for (auto const& item: result)
+    {
+        auto const label = item["label"].get<std::string>();
+        if (label == "true")
+            hasTrue = true;
+        if (label == "false")
+            hasFalse = true;
+    }
+    CHECK(hasTrue);
+    CHECK(hasFalse);
+}
+
+TEST_CASE("Completion.left_arrow_auth_type_candidates", "[lsp][completion][left-arrow]")
+{
+    // "agent_claude_auth_type <- " = 26 chars
+    auto result = computeCompletion("agent_claude_auth_type <- ", Position { 0, 26 });
+    CHECK(result.is_array());
+    bool hasAuto = false;
+    bool hasOauth = false;
+    bool hasApiKey = false;
+    for (auto const& item: result)
+    {
+        auto const label = item["label"].get<std::string>();
+        if (label == "auto")
+            hasAuto = true;
+        if (label == "oauth")
+            hasOauth = true;
+        if (label == "api_key")
+            hasApiKey = true;
+    }
+    CHECK(hasAuto);
+    CHECK(hasOauth);
+    CHECK(hasApiKey);
+}
+
+TEST_CASE("E2E.completion_left_arrow_multiline_model_values", "[lsp][e2e][completion][left-arrow]")
+{
+    // Multi-line document: <- on a non-first line must resolve the correct property
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "let x = 5\nagent_claude_model <- " },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 1 }, { "character", 22 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            bool hasOpus = false;
+            bool hasSonnet = false;
+            for (auto const& item: msg["result"])
+            {
+                auto const label = item["label"].get<std::string>();
+                if (label.find("opus") != std::string::npos)
+                    hasOpus = true;
+                if (label.find("sonnet") != std::string::npos)
+                    hasSonnet = true;
+            }
+            CHECK(hasOpus);
+            CHECK(hasSonnet);
+            break;
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("E2E.completion_left_arrow_preset_values", "[lsp][e2e][completion][left-arrow]")
+{
+    auto responses = runSession({
+        sendRequest("initialize", json::object()),
+        sendNotification("initialized", json::object()),
+        sendNotification("textDocument/didOpen",
+                         json {
+                             { "textDocument",
+                               json {
+                                   { "uri", "file:///test.endo" },
+                                   { "languageId", "endo" },
+                                   { "version", 1 },
+                                   { "text", "shell_prompt_preset <- " },
+                               } },
+                         }),
+        sendRequest("textDocument/completion",
+                    json {
+                        { "textDocument", json { { "uri", "file:///test.endo" } } },
+                        { "position", json { { "line", 0 }, { "character", 23 } } },
+                    },
+                    3),
+        sendRequest("shutdown", json::object(), 4),
+        sendNotification("exit", json::object()),
+    });
+
+    bool found = false;
+    for (auto const& msg: responses)
+    {
+        if (msg.value("id", -1) == 3)
+        {
+            found = true;
+            CHECK(msg["result"].is_array());
+            bool hasPowerline = false;
+            bool hasMinimalArrow = false;
+            for (auto const& item: msg["result"])
+            {
+                auto const label = item["label"].get<std::string>();
+                if (label == "powerline")
+                    hasPowerline = true;
+                if (label == "minimal-arrow")
+                    hasMinimalArrow = true;
+            }
+            CHECK(hasPowerline);
+            CHECK(hasMinimalArrow);
             break;
         }
     }

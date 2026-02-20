@@ -113,3 +113,47 @@ TEST_CASE("CompletionContext.analyze.git_checkout_with_slash_is_argument", "[com
     CHECK(ctx.prefix == "feature/my");
     CHECK(ctx.command == "git");
 }
+
+// =============================================================================
+// Left-arrow (<-) assignment context analysis tests
+// =============================================================================
+
+TEST_CASE("CompletionContext.analyze.left_arrow_empty_value", "[completion][context]")
+{
+    // "shell_prompt_preset <- " = 23 chars, cursor past end
+    auto ctx = CompletionContextAnalyzer::analyze("shell_prompt_preset <- ", 23);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix.empty());
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "shell_prompt_preset");
+}
+
+TEST_CASE("CompletionContext.analyze.left_arrow_partial_value", "[completion][context]")
+{
+    // "shell_prompt_preset <- pow" = 26 chars, cursor past end
+    auto ctx = CompletionContextAnalyzer::analyze("shell_prompt_preset <- pow", 26);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix == "pow");
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "shell_prompt_preset");
+}
+
+TEST_CASE("CompletionContext.analyze.left_arrow_agent_model", "[completion][context]")
+{
+    // "agent_claude_model <- " = 22 chars, cursor past end
+    auto ctx = CompletionContextAnalyzer::analyze("agent_claude_model <- ", 22);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix.empty());
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "agent_claude_model");
+}
+
+TEST_CASE("CompletionContext.analyze.left_arrow_multiline_resolves_correct_property", "[completion][context]")
+{
+    // Multi-line document: the property on the second line must be resolved, not the first identifier
+    auto ctx = CompletionContextAnalyzer::analyze("let x = 5\nagent_claude_model <- ", 32);
+    CHECK(ctx.type == CompletionContextType::Argument);
+    CHECK(ctx.prefix.empty());
+    CHECK(ctx.command.has_value());
+    CHECK(*ctx.command == "agent_claude_model");
+}

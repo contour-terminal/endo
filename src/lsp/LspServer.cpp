@@ -172,7 +172,7 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
               { "documentSymbolProvider", true },
               { "completionProvider",
                 nlohmann::json {
-                    { "triggerCharacters", nlohmann::json::array({ ".", "$" }) },
+                    { "triggerCharacters", nlohmann::json::array({ ".", "$", " " }) },
                 } },
               { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",

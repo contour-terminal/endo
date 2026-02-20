@@ -146,6 +146,15 @@ CompletionContext CompletionContextAnalyzer::analyze(std::string_view input, siz
             }
         }
 
+        // If last token was a left-arrow assignment (<-), the preceding identifier is the property
+        if (lastToken == Token::LeftArrow)
+        {
+            ctx.type = CompletionContextType::Argument;
+            if (!lastIdentifier.empty())
+                ctx.command = lastIdentifier;
+            return ctx;
+        }
+
         // If last token was a redirect, we need a file
         if (isRedirectToken(lastToken))
         {
