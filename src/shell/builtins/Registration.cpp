@@ -1047,27 +1047,36 @@ void Shell::registerStructuredBuiltins()
 void Shell::registerPromptBuiltins()
 {
     // clang-format off
-    _runtime.registerFunction("set_prompt_preset")
-        .param<CoreVM::CoreString>("name")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_preset", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(std::string(prompt.promptConfig().name));
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto const& name = args.getString(1);
             prompt.setPromptConfig(promptPreset(name));
         });
 
-    _runtime.registerFunction("set_prompt_indicator")
-        .param<CoreVM::CoreString>("chars")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_indicator", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(std::string(prompt.promptConfig().indicator));
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto config = prompt.promptConfig();
             config.indicator = std::string(args.getString(1)) + " ";
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_prompt_layout")
-        .param<CoreVM::CoreString>("kind")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_layout", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& config = prompt.promptConfig();
+            switch (config.layout) {
+                case PromptLayoutKind::SingleLine: args.setResult(std::string("single-line")); break;
+                case PromptLayoutKind::TwoLine: args.setResult(std::string("two-line")); break;
+                case PromptLayoutKind::Boxed: args.setResult(std::string("boxed")); break;
+                case PromptLayoutKind::Powerline: args.setResult(std::string("powerline")); break;
+            }
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto const& kind = args.getString(1);
             auto config = prompt.promptConfig();
             if (kind == "single-line") config.layout = PromptLayoutKind::SingleLine;
@@ -1077,10 +1086,18 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_prompt_separator")
-        .param<CoreVM::CoreString>("style")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_separator", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& config = prompt.promptConfig();
+            switch (config.separator) {
+                case SeparatorStyle::None: args.setResult(std::string("none")); break;
+                case SeparatorStyle::Bar: args.setResult(std::string("bar")); break;
+                case SeparatorStyle::Powerline: args.setResult(std::string("powerline")); break;
+                case SeparatorStyle::Rounded: args.setResult(std::string("rounded")); break;
+                case SeparatorStyle::Boxed: args.setResult(std::string("boxed")); break;
+            }
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto const& style = args.getString(1);
             auto config = prompt.promptConfig();
             if (style == "none") config.separator = SeparatorStyle::None;
@@ -1091,10 +1108,16 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_prompt_transient")
-        .param<CoreVM::CoreString>("mode")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_transient", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& config = prompt.promptConfig();
+            switch (config.transient) {
+                case TransientMode::Off: args.setResult(std::string("off")); break;
+                case TransientMode::Minimal: args.setResult(std::string("minimal")); break;
+                case TransientMode::Arrow: args.setResult(std::string("arrow")); break;
+            }
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto const& mode = args.getString(1);
             auto config = prompt.promptConfig();
             if (mode == "off") config.transient = TransientMode::Off;
@@ -1103,29 +1126,32 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_prompt_duration_threshold")
-        .param<CoreVM::CoreNumber>("ms")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_duration_threshold", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(prompt.promptConfig().durationThresholdMs));
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto config = prompt.promptConfig();
             config.durationThresholdMs = args.getInt(1);
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_prompt_spacing")
-        .param<CoreVM::CoreNumber>("lines")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_prompt_spacing", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(prompt.promptConfig().promptSpacing));
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto config = prompt.promptConfig();
             config.promptSpacing =
                 static_cast<int>(std::clamp(args.getInt(1), int64_t { 0 }, int64_t { 1 }));
             prompt.setPromptConfig(std::move(config));
         });
 
-    _runtime.registerFunction("set_exit_confirm_timeout")
-        .param<CoreVM::CoreNumber>("ms")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("shell_exit_confirm_timeout", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(static_cast<CoreVM::CoreNumber>(prompt.promptConfig().exitConfirmTimeoutMs));
+        })
+        .onSet([this](CoreVM::Params& args) {
             auto config = prompt.promptConfig();
             config.exitConfirmTimeoutMs = std::max(int64_t { 0 }, args.getInt(1));
             prompt.setPromptConfig(std::move(config));
@@ -1139,10 +1165,9 @@ void Shell::registerAgentConfigBuiltins()
 
     // --- Top-level agent settings ---
 
-    _runtime.registerFunction("set_agent_provider")
-        .param<CoreVM::CoreString>("name")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("agent_provider", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.activeProvider)); })
+        .onSet([this](CoreVM::Params& args) {
             auto const& name = args.getString(1);
             if (name == "claude" || name == "openai" || name == "gemini" || name == "openai_compat")
             {
@@ -1151,278 +1176,153 @@ void Shell::registerAgentConfigBuiltins()
             }
         });
 
-    _runtime.registerFunction("set_agent_prompt_indicator")
-        .param<CoreVM::CoreString>("chars")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.promptIndicator = std::string(args.getString(1));
-        });
+    _runtime.registerProperty("agent_prompt_indicator", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.promptIndicator)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.promptIndicator = std::string(args.getString(1)); });
 
-    _runtime.registerFunction("set_agent_max_tool_result_size")
-        .param<CoreVM::CoreNumber>("bytes")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("agent_max_tool_result_size", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.maxToolResultSize)); })
+        .onSet([this](CoreVM::Params& args) {
             auto const bytes = args.getInt(1);
             if (bytes > 0)
                 agentConfig.maxToolResultSize = static_cast<size_t>(bytes);
         });
 
-    _runtime.registerFunction("set_agent_log_tool_uses")
-        .param<bool>("enabled")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.logToolUses = args.getBool(1);
-        });
+    _runtime.registerProperty("agent_log_tool_uses", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.logToolUses); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.logToolUses = args.getBool(1); });
 
     // --- Claude provider ---
 
-    _runtime.registerFunction("set_claude_api_key")
-        .param<CoreVM::CoreString>("key")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.claude.apiKey = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_claude_api_key", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.claude.apiKey)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.claude.apiKey = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_claude_api_key_env")
-        .param<CoreVM::CoreString>("env_var")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.claude.apiKeyEnv = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_claude_api_key_env", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.claude.apiKeyEnv)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.claude.apiKeyEnv = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_claude_model")
-        .param<CoreVM::CoreString>("model")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.claude.model = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_claude_model", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.claude.model)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.claude.model = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_claude_max_tokens")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-            {
-                agentConfig.claude.maxTokens = static_cast<size_t>(n);
-                _agentProviderFactory.reset();
-            }
-        });
+    _runtime.registerProperty("agent_claude_max_tokens", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.claude.maxTokens)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.claude.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
     // --- OpenAI provider ---
 
-    _runtime.registerFunction("set_openai_api_key")
-        .param<CoreVM::CoreString>("key")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openai.apiKey = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_api_key", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openai.apiKey)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openai.apiKey = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_api_key_env")
-        .param<CoreVM::CoreString>("env_var")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openai.apiKeyEnv = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_api_key_env", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openai.apiKeyEnv)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openai.apiKeyEnv = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_model")
-        .param<CoreVM::CoreString>("model")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openai.model = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_model", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openai.model)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openai.model = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_base_url")
-        .param<CoreVM::CoreString>("url")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openai.baseUrl = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_base_url", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openai.baseUrl)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openai.baseUrl = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_max_tokens")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-            {
-                agentConfig.openai.maxTokens = static_cast<size_t>(n);
-                _agentProviderFactory.reset();
-            }
-        });
+    _runtime.registerProperty("agent_openai_max_tokens", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.openai.maxTokens)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.openai.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
     // --- OpenAI-compatible provider ---
 
-    _runtime.registerFunction("set_openai_compat_api_key")
-        .param<CoreVM::CoreString>("key")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openaiCompat.apiKey = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_compat_api_key", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openaiCompat.apiKey)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openaiCompat.apiKey = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_compat_api_key_env")
-        .param<CoreVM::CoreString>("env_var")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openaiCompat.apiKeyEnv = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_compat_api_key_env", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openaiCompat.apiKeyEnv)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openaiCompat.apiKeyEnv = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_compat_model")
-        .param<CoreVM::CoreString>("model")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openaiCompat.model = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_compat_model", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openaiCompat.model)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openaiCompat.model = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_compat_base_url")
-        .param<CoreVM::CoreString>("url")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.openaiCompat.baseUrl = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_openai_compat_base_url", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.openaiCompat.baseUrl)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.openaiCompat.baseUrl = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_openai_compat_max_tokens")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-            {
-                agentConfig.openaiCompat.maxTokens = static_cast<size_t>(n);
-                _agentProviderFactory.reset();
-            }
-        });
+    _runtime.registerProperty("agent_openai_compat_max_tokens", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.openaiCompat.maxTokens)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.openaiCompat.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
     // --- Gemini provider ---
 
-    _runtime.registerFunction("set_gemini_api_key")
-        .param<CoreVM::CoreString>("key")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.gemini.apiKey = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_gemini_api_key", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.gemini.apiKey)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.gemini.apiKey = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_gemini_api_key_env")
-        .param<CoreVM::CoreString>("env_var")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.gemini.apiKeyEnv = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_gemini_api_key_env", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.gemini.apiKeyEnv)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.gemini.apiKeyEnv = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_gemini_model")
-        .param<CoreVM::CoreString>("model")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.gemini.model = std::string(args.getString(1));
-            _agentProviderFactory.reset();
-        });
+    _runtime.registerProperty("agent_gemini_model", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.gemini.model)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.gemini.model = std::string(args.getString(1)); _agentProviderFactory.reset(); });
 
-    _runtime.registerFunction("set_gemini_max_tokens")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-            {
-                agentConfig.gemini.maxTokens = static_cast<size_t>(n);
-                _agentProviderFactory.reset();
-            }
-        });
+    _runtime.registerProperty("agent_gemini_max_tokens", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.gemini.maxTokens)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.gemini.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
 
     // --- Plan mode ---
 
-    _runtime.registerFunction("set_plan_mode_enabled")
-        .param<bool>("enabled")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.planMode.enabled = args.getBool(1);
-        });
+    _runtime.registerProperty("agent_plan_mode_enabled", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.planMode.enabled); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.planMode.enabled = args.getBool(1); });
 
-    _runtime.registerFunction("set_plan_mode_pause_between_steps")
-        .param<bool>("enabled")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.planMode.pauseBetweenSteps = args.getBool(1);
-        });
+    _runtime.registerProperty("agent_plan_mode_pause_between_steps", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.planMode.pauseBetweenSteps); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.planMode.pauseBetweenSteps = args.getBool(1); });
 
-    _runtime.registerFunction("set_plan_mode_max_exploration_turns")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-                agentConfig.planMode.maxExplorationTurns = static_cast<size_t>(n);
-        });
+    _runtime.registerProperty("agent_plan_mode_max_exploration_turns", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.planMode.maxExplorationTurns)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.planMode.maxExplorationTurns = static_cast<size_t>(n); });
 
     // --- Explore sub-agent ---
 
-    _runtime.registerFunction("set_explore_max_turns")
-        .param<CoreVM::CoreNumber>("n")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const n = args.getInt(1);
-            if (n > 0)
-                agentConfig.explore.maxTurns = static_cast<size_t>(n);
-        });
+    _runtime.registerProperty("agent_explore_max_turns", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.explore.maxTurns)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.explore.maxTurns = static_cast<size_t>(n); });
 
     // --- Trace ---
 
-    _runtime.registerFunction("set_trace_enabled")
-        .param<bool>("enabled")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.trace.enabled = args.getBool(1);
-        });
+    _runtime.registerProperty("agent_trace_enabled", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.trace.enabled); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.trace.enabled = args.getBool(1); });
 
-    _runtime.registerFunction("set_trace_default_path")
-        .param<CoreVM::CoreString>("path")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            agentConfig.trace.defaultPath = std::string(args.getString(1));
-        });
+    _runtime.registerProperty("agent_trace_default_path", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.trace.defaultPath)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.trace.defaultPath = std::string(args.getString(1)); });
 
     // --- Web search ---
 
-    _runtime.registerFunction("set_web_search_engine")
-        .param<CoreVM::CoreString>("engine")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("agent_web_search_engine", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(webSearchConfig.engine)); })
+        .onSet([this](CoreVM::Params& args) {
             auto const& engine = args.getString(1);
             if (engine == "duckduckgo" || engine == "brave" || engine == "google")
                 webSearchConfig.engine = std::string(engine);
         });
 
-    _runtime.registerFunction("set_web_search_api_key")
-        .param<CoreVM::CoreString>("key")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            webSearchConfig.apiKey = std::string(args.getString(1));
-        });
+    _runtime.registerProperty("agent_web_search_api_key", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(webSearchConfig.apiKey)); })
+        .onSet([this](CoreVM::Params& args) { webSearchConfig.apiKey = std::string(args.getString(1)); });
 
-    _runtime.registerFunction("set_web_search_cx")
-        .param<CoreVM::CoreString>("cx")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            webSearchConfig.cx = std::string(args.getString(1));
-        });
+    _runtime.registerProperty("agent_web_search_cx", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(webSearchConfig.cx)); })
+        .onSet([this](CoreVM::Params& args) { webSearchConfig.cx = std::string(args.getString(1)); });
 
-    _runtime.registerFunction("set_web_search_max_results")
-        .param<CoreVM::CoreNumber>("count")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
+    _runtime.registerProperty("agent_web_search_max_results", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(webSearchConfig.maxResults)); })
+        .onSet([this](CoreVM::Params& args) {
             auto const count = args.getInt(1);
             if (count > 0 && count <= 20)
                 webSearchConfig.maxResults = static_cast<size_t>(count);

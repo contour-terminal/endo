@@ -755,47 +755,103 @@ void registerStructuredBuiltins(CoreVM::Runtime& rt, CallbackResolver const& res
 }
 
 // ---------------------------------------------------------------------------
-// Prompt configuration builtins
+// Prompt configuration properties
 // ---------------------------------------------------------------------------
 
-void registerPromptBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
+namespace
+{
+    /// Registers a property and binds getter/setter via the CallbackResolver.
+    /// The property name is passed once to avoid duplication.
+    void registerPropertyResolved(CoreVM::Runtime& rt,
+                                  CallbackResolver const& resolve,
+                                  std::string_view name,
+                                  CoreVM::LiteralType type)
+    {
+        auto& prop = rt.registerProperty(std::string(name), type);
+
+        if (auto getterCb = resolve(name, 0))
+            prop.onGet(*getterCb);
+        else
+            prop.onGet([](CoreVM::Params&) {});
+
+        if (auto setterCb = resolve(name, 1))
+            prop.onSet(*setterCb);
+        else
+            prop.onSet([](CoreVM::Params&) {});
+    }
+} // namespace
+
+void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
+{
+    // clang-format off
+    registerPropertyResolved(rt, resolve, "shell_prompt_preset", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "shell_prompt_indicator", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "shell_prompt_layout", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "shell_prompt_separator", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "shell_prompt_transient", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "shell_prompt_duration_threshold", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number);
+    // clang-format on
+}
+
+// ---------------------------------------------------------------------------
+// Agent configuration properties
+// ---------------------------------------------------------------------------
+
+void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
 {
     // clang-format off
 
-    // set_prompt_preset(name: string) -> void
-    bindResolved(rt.registerFunction("set_prompt_preset")
-        .param<CoreVM::CoreString>("name")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_preset", 1);
+    // --- Top-level agent settings ---
+    registerPropertyResolved(rt, resolve, "agent_provider", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_prompt_indicator", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_max_tool_result_size", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_log_tool_uses", CoreVM::LiteralType::Boolean);
 
-    // set_prompt_indicator(chars: string) -> void
-    bindResolved(rt.registerFunction("set_prompt_indicator")
-        .param<CoreVM::CoreString>("chars")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_indicator", 1);
+    // --- Claude provider ---
+    registerPropertyResolved(rt, resolve, "agent_claude_api_key", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_api_key_env", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number);
 
-    // set_prompt_layout(kind: string) -> void
-    bindResolved(rt.registerFunction("set_prompt_layout")
-        .param<CoreVM::CoreString>("kind")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_layout", 1);
+    // --- OpenAI provider ---
+    registerPropertyResolved(rt, resolve, "agent_openai_api_key", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_api_key_env", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_model", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_base_url", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_max_tokens", CoreVM::LiteralType::Number);
 
-    // set_prompt_separator(style: string) -> void
-    bindResolved(rt.registerFunction("set_prompt_separator")
-        .param<CoreVM::CoreString>("style")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_separator", 1);
+    // --- OpenAI-compatible provider ---
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key_env", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_model", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_base_url", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_max_tokens", CoreVM::LiteralType::Number);
 
-    // set_prompt_transient(mode: string) -> void
-    bindResolved(rt.registerFunction("set_prompt_transient")
-        .param<CoreVM::CoreString>("mode")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_transient", 1);
+    // --- Gemini provider ---
+    registerPropertyResolved(rt, resolve, "agent_gemini_api_key", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_gemini_api_key_env", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_gemini_model", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_gemini_max_tokens", CoreVM::LiteralType::Number);
 
-    // set_prompt_duration_threshold(ms: number) -> void
-    bindResolved(rt.registerFunction("set_prompt_duration_threshold")
-        .param<CoreVM::CoreNumber>("ms")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_duration_threshold", 1);
+    // --- Plan mode ---
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_enabled", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_pause_between_steps", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_max_exploration_turns", CoreVM::LiteralType::Number);
 
-    // set_prompt_spacing(lines: number) -> void
-    bindResolved(rt.registerFunction("set_prompt_spacing")
-        .param<CoreVM::CoreNumber>("lines")
-        .returnType(CoreVM::LiteralType::Void), resolve, "set_prompt_spacing", 1);
+    // --- Explore sub-agent ---
+    registerPropertyResolved(rt, resolve, "agent_explore_max_turns", CoreVM::LiteralType::Number);
+
+    // --- Trace ---
+    registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String);
+
+    // --- Web search ---
+    registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_web_search_api_key", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_web_search_cx", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_web_search_max_results", CoreVM::LiteralType::Number);
 
     // clang-format on
 }

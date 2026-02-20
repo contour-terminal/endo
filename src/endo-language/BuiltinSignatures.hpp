@@ -41,8 +41,13 @@ void registerInternalBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resol
 /// structured_docker_*, structured_git_*, open_json, open_csv, from_json, from_csv.
 void registerStructuredBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
-/// Registers prompt configuration builtins: set_prompt_*.
-void registerPromptBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
+/// Registers prompt configuration properties: shell_prompt_*, shell_exit_confirm_timeout.
+void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
+
+/// Registers agent configuration properties: agent_*, agent_claude_*, agent_openai_*,
+/// agent_openai_compat_*, agent_gemini_*, agent_plan_mode_*, agent_explore_*,
+/// agent_trace_*, agent_web_search_*.
+void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
 /// Returns the list of user-facing builtin command names for shell completion.
 /// Includes shell builtins (cd, exit, ...) and control flow keywords.

@@ -24,7 +24,8 @@ inline void registerStubRuntime(CoreVM::Runtime& runtime)
     registerShellBuiltins(runtime, noOpResolver);
     registerInternalBuiltins(runtime, noOpResolver);
     registerStructuredBuiltins(runtime, noOpResolver);
-    registerPromptBuiltins(runtime, noOpResolver);
+    registerPromptPropertyBuiltins(runtime, noOpResolver);
+    registerAgentConfigPropertyBuiltins(runtime, noOpResolver);
 }
 
 } // namespace endo

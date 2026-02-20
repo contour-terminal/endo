@@ -443,7 +443,8 @@ TestRuntime::TestRuntime()
     registerShellBuiltins(runtime, resolver);
     registerInternalBuiltins(runtime, resolver);
     registerStructuredBuiltins(runtime, resolver);
-    registerPromptBuiltins(runtime, resolver);
+    registerPromptPropertyBuiltins(runtime, resolver);
+    registerAgentConfigPropertyBuiltins(runtime, resolver);
 }
 
 void TestRuntime::dummyCallProc(CoreVM::Params& params)

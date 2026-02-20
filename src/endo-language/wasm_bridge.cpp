@@ -226,7 +226,8 @@ class PlaygroundRuntime
         endo::registerShellBuiltins(runtime, resolver);
         endo::registerInternalBuiltins(runtime, resolver);
         endo::registerStructuredBuiltins(runtime, resolver);
-        endo::registerPromptBuiltins(runtime, resolver);
+        endo::registerPromptPropertyBuiltins(runtime, resolver);
+        endo::registerAgentConfigPropertyBuiltins(runtime, resolver);
     }
 
     /// Returns the singleton instance of PlaygroundRuntime.
