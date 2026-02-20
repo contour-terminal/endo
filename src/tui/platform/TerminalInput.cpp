@@ -12,6 +12,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include <platform/Wakeup.hpp>
+
 namespace tui
 {
 
@@ -116,12 +118,18 @@ void TerminalInput::shutdown()
 
 auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
 {
-    auto fds = std::array<struct pollfd, 2> {};
+    auto fds = std::array<struct pollfd, 3> {};
     fds[0] = { .fd = _fd, .events = POLLIN, .revents = 0 };
     fds[1] = { .fd = _resizePipe[0], .events = POLLIN, .revents = 0 };
+    fds[2] = { .fd = _wakeup ? _wakeup->nativeHandle() : -1, .events = POLLIN, .revents = 0 };
 
-    auto const nfds = (_resizePipe[0] != -1) ? 2 : 1;
-    auto const pollResult = ::poll(fds.data(), static_cast<nfds_t>(nfds), timeoutMs);
+    auto nfds = nfds_t { 1 };
+    if (_resizePipe[0] != -1)
+        nfds = 2;
+    if (_wakeup)
+        nfds = 3;
+
+    auto const pollResult = ::poll(fds.data(), nfds, timeoutMs);
 
     if (pollResult <= 0)
     {
@@ -147,6 +155,10 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
             events.emplace_back(ResizeEvent { .columns = ws.ws_col, .rows = ws.ws_row });
     }
 
+    // Check wakeup fd — just drain it; the actual messages are in the MessageQueue.
+    if (nfds >= 3 && (fds[2].revents & POLLIN) != 0)
+        _wakeup->reset();
+
     // Check stdin
     if ((fds[0].revents & POLLIN) != 0)
     {
@@ -161,6 +173,11 @@ auto TerminalInput::poll(int timeoutMs) -> std::vector<InputEvent>
     }
 
     return events;
+}
+
+void TerminalInput::setWakeup(endo::platform::Wakeup* wakeup)
+{
+    _wakeup = wakeup;
 }
 
 void TerminalInput::notifyResize(int /*cols*/, int /*rows*/)

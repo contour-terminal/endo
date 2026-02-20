@@ -7,11 +7,18 @@
 
 #include <vector>
 
+#include <platform/Types.hpp>
+
 #if defined(_WIN32)
     #include <windows.h>
 #else
     #include <termios.h>
 #endif
+
+namespace endo::platform
+{
+class Wakeup;
+} // namespace endo::platform
 
 namespace tui
 {
@@ -72,6 +79,14 @@ class TerminalInput
     /// @brief Returns whether the terminal is currently suspended.
     [[nodiscard]] auto isSuspended() const noexcept -> bool;
 
+    /// @brief Sets a cross-platform wakeup handle for poll() integration.
+    ///
+    /// When set, poll() will also monitor the wakeup's native handle alongside
+    /// stdin and the resize pipe/event. This allows a background thread to wake
+    /// the poll() call by signaling the wakeup.
+    /// @param wakeup Pointer to the wakeup primitive (must outlive this object), or nullptr to disable.
+    void setWakeup(endo::platform::Wakeup* wakeup);
+
   private:
     VtParser _parser;
     bool _rawMode = false;
@@ -88,6 +103,8 @@ class TerminalInput
     struct termios _origTermios {};
     int _resizePipe[2] = { -1, -1 }; ///< Self-pipe for SIGWINCH.
 #endif
+
+    endo::platform::Wakeup* _wakeup = nullptr; ///< Optional cross-thread wakeup handle.
 
     void enableRawMode();
     void disableRawMode();

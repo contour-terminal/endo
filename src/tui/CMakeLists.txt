@@ -49,6 +49,7 @@ target_include_directories(tui PUBLIC
 
 target_link_libraries(tui PUBLIC
     unicode::unicode
+    endo-platform
 )
 
 target_compile_features(tui PUBLIC cxx_std_23)
