@@ -67,7 +67,7 @@ void List::render(Canvas& canvas)
         if (i >= visibleCount)
         {
             // Clear remaining rows
-            canvas.fill(Rect { row, 0, width, 1 }, ' ', _style.normal);
+            canvas.fill(Rect { .x = 0, .y = row, .width = width, .height = 1 }, ' ', _style.normal);
             continue;
         }
 
@@ -84,7 +84,7 @@ void List::render(Canvas& canvas)
         }();
 
         // Fill row background
-        canvas.fill(Rect { row, 0, width, 1 }, ' ', itemStyle);
+        canvas.fill(Rect { .x = 0, .y = row, .width = width, .height = 1 }, ' ', itemStyle);
 
         // Cursor / checkbox indicator
         auto col = 0;

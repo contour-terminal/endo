@@ -1919,6 +1919,8 @@ void Shell::runAgentMode()
                     if constexpr (std::is_same_v<T, agent::ThinkingStartMessage>)
                     {
                         clearStreamingPrompt();
+                        if (currentRenderer)
+                            currentRenderer->end();
                         streaming = true;
                         streamCancelled = false;
                         currentRenderer.emplace(out);
@@ -2129,22 +2131,45 @@ void Shell::runAgentMode()
                 auto const action = askUserComponent->processInput(event);
                 switch (action)
                 {
-                    case tui::QuestionAction::Confirmed:
+                    case tui::QuestionAction::Confirmed: {
+                        auto const answerText = askUserComponent->answer();
                         worker.inbound().push(agent::UserAnswerMessage {
                             .requestId = askUserRequestId,
-                            .answer = agent::UserAnswer { .answer = askUserComponent->answer() } });
+                            .answer = agent::UserAnswer { .answer = answerText } });
                         clearAskUserPrompt();
+                        // Echo the answer to scrollback
+                        {
+                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                            auto const answerStyle = tui::Style { .fg = theme.colors.text };
+                            out.writeText("\u2502 ", barStyle);
+                            out.writeText("> ", barStyle);
+                            out.writeText(answerText, answerStyle);
+                            out.linefeed();
+                            out.flush();
+                        }
                         askUserActive = false;
                         askUserComponent.reset();
                         break;
-                    case tui::QuestionAction::Cancelled:
-                        worker.inbound().push(agent::UserAnswerMessage {
-                            .requestId = askUserRequestId,
-                            .answer = agent::UserAnswer { .cancelled = true } });
+                    }
+                    case tui::QuestionAction::Cancelled: {
+                        worker.inbound().push(
+                            agent::UserAnswerMessage { .requestId = askUserRequestId,
+                                                       .answer = agent::UserAnswer { .cancelled = true } });
                         clearAskUserPrompt();
+                        // Echo cancellation to scrollback
+                        {
+                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                            auto const dimStyle =
+                                tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+                            out.writeText("\u2502 ", barStyle);
+                            out.writeText("> (cancelled)", dimStyle);
+                            out.linefeed();
+                            out.flush();
+                        }
                         askUserActive = false;
                         askUserComponent.reset();
                         break;
+                    }
                     case tui::QuestionAction::Changed: {
                         auto guard = out.syncGuard();
                         clearAskUserPrompt();
