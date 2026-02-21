@@ -252,7 +252,8 @@ LLM turn in the agent event loop.
 The conversation persistence infrastructure exists but could be enhanced:
 
 - Auto-save on each turn (not just on exit)
-- Multiple named sessions (`/save-session  <name>`, `/load-session <name>`).
+- Multiple named sessions (`/save-session  <name>`, `/load-session [<name>]`).
+- If on `/load-session` without a name, list available sessions with timestamps and token counts. Use QuestionComponent from tui library for that, allowing the user to select which session to load.
 - Session list with timestamps and token counts
 - Auto-resume last session on agent mode entry (configurable)
 - On session load, replay the history for context (configurable).
@@ -366,7 +367,7 @@ Leverage provider-specific prompt caching to reduce costs and latency for long c
 
 Allow users to paste images from the clipboard into agent mode queries:
 
-- Extend `PasteEvent` to detect image data (OSC 52 or `xclip`/`wl-paste` fallback)
+- Extend `PasteEvent` to detect image data (OSC 52)
 - Decode PNG/JPEG via `stb_image` (new header-only dependency) into `tui::ImageData`
 - Show downscaled sixel preview inline in `AgentInputComponent`
 - Store original bytes as `ImageBlock` attachment, serialize per-provider on submit
@@ -376,8 +377,10 @@ Allow users to paste images from the clipboard into agent mode queries:
 
 **Status:** Not started | **Effort:** Medium
 
-Render LLM-generated images inline using existing sixel infrastructure:
+Render LLM-generated images inline using existing TUI library:
 
+- TUI library supports at least Sixel format for images.
+- TUI library provides an `Image` API (inheriting from Component) for rendering images in the terminal. This can accept PNG, JPEG, raw RGB/RGBA data, Sixel, etc., and handles the actual rendering logic.
 - Decode `ImageBlock` from `GenerateResult::content` (Gemini native, OpenAI tool result)
 - Render via `tui::encodeSixel()` + `Canvas::drawImage()`, scaled to terminal width
 - Fallback for non-sixel terminals: `[Image: 1024x768, 245 KB]` + `/save-image <path>`
