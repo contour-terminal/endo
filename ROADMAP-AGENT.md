@@ -202,8 +202,24 @@ before writing the file.
 - Generate unified diff from `old_string`/`new_string` ✅
 - Render colored diff inline in `ToolStatusMessage` handler ✅
 - Large edit threshold (`LargeEditThreshold = 50` changed lines) with truncation notice ✅
-- Syntax highlighting for diff content (v2 — requires multi-language tokenizer, deferred to Phase 12A)
+- Syntax highlighting for diff content (see "Syntax Highlighting for Agent Output" below) ✅
 - Optional approval prompt for large edits (infrastructure prepared, not enforced yet) ✅
+
+### Syntax Highlighting for Agent Output
+
+**Status:** Done | **Effort:** Medium
+
+Multi-language syntax highlighting for diffs and markdown code blocks in agent mode.
+Regex/pattern-based highlighter in `src/tui/` supporting C++, CMake, Python, bash/sh,
+Markdown, JSON, YAML, and git diff. Endo language support via callback registration
+(avoids `tui` → `endo-language` dependency).
+
+- Generic syntax highlighter (`tui::GenericSyntaxHighlighter`) with per-line scanning ✅
+- Syntax-highlighted diffs in `edit_file` tool (additions: full color, context: dim, deletions: red) ✅
+- Syntax-highlighted markdown code blocks (batch + streaming, language from fence tag) ✅
+- Endo language highlighting via `registerEndoHighlighter()` callback from shell startup (deferred)
+- Key files: `src/tui/GenericSyntaxHighlighter.hpp/cpp`, `src/tui/MarkdownRenderer.cpp`,
+  `src/agent/tools/DiffRenderer.cpp`, `src/shell/Shell.cpp`
 
 ### @-file Context Injection ✅
 
