@@ -3,10 +3,16 @@
 
 #include <tui/completer/CompletionProvider.hpp>
 
+#include <functional>
+#include <vector>
+
 namespace endo::agent
 {
 
 class SlashCommandRegistry;
+
+/// @brief Callback type that returns session names for tab completion.
+using SessionNameProvider = std::function<std::vector<std::string>()>;
 
 /// @brief Completion provider for slash commands in agent mode.
 ///
@@ -15,13 +21,18 @@ class SlashCommandRegistry;
 /// commands in the registry. Dynamically added commands appear immediately since
 /// the registry is read on each completion request.
 ///
-/// Also provides argument completion for specific commands (e.g. `/model <name>`).
+/// Also provides argument completion for specific commands (e.g. `/model <name>`,
+/// `/load-session <name>`, `/delete-session <name>`).
 class SlashCommandCompleter final: public tui::CompletionProvider
 {
   public:
     /// @brief Constructs a completer backed by the given command registry.
     /// @param registry The registry to read commands from (must outlive this object).
     explicit SlashCommandCompleter(SlashCommandRegistry const& registry);
+
+    /// @brief Sets the session name provider for session argument completion.
+    /// @param provider A callback that returns available session names.
+    void setSessionNameProvider(SessionNameProvider provider) { _sessionNameProvider = std::move(provider); }
 
     /// @brief Generates completions for slash command input.
     /// @param input The full input text.
@@ -39,7 +50,15 @@ class SlashCommandCompleter final: public tui::CompletionProvider
     /// @return Completion items for matching model names.
     [[nodiscard]] std::vector<tui::CompletionItem> completeModelArgument(std::string_view prefix);
 
+    /// @brief Generates session name completions for `/load-session` and `/delete-session`.
+    /// @param cmdName The command name (for generating full completion text).
+    /// @param prefix The prefix to filter session names by.
+    /// @return Completion items for matching session names.
+    [[nodiscard]] std::vector<tui::CompletionItem> completeSessionArgument(std::string_view cmdName,
+                                                                           std::string_view prefix);
+
     SlashCommandRegistry const& _registry;
+    SessionNameProvider _sessionNameProvider;
 };
 
 } // namespace endo::agent

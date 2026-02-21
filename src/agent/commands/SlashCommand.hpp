@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 namespace endo::agent
 {
@@ -32,8 +33,17 @@ struct MarkdownOutput
     std::string markdown;
 };
 
+/// @brief Result type: present a session picker to the user.
+struct SessionPickerRequest
+{
+    std::string questionText;              ///< Question text shown in the picker header.
+    std::vector<std::string> options;      ///< Formatted display labels for each session.
+    std::vector<std::string> sessionNames; ///< Raw session names for lookup after selection.
+};
+
 /// @brief The result of executing a slash command.
-using SlashCommandResult = std::variant<PromptRewrite, PlanModeRequest, DirectOutput, MarkdownOutput>;
+using SlashCommandResult =
+    std::variant<PromptRewrite, PlanModeRequest, DirectOutput, MarkdownOutput, SessionPickerRequest>;
 
 /// @brief Abstract interface for slash commands in agent mode.
 ///

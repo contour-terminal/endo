@@ -46,6 +46,7 @@
 #include <agent/context/ProjectContextLoader.hpp>
 #include <agent/context/SystemPromptBuilder.hpp>
 #include <agent/conversation/ConversationHistoryStore.hpp>
+#include <agent/conversation/SessionManager.hpp>
 #include <agent/mcp/McpToolAdapter.hpp>
 #include <agent/providers/ProviderFactory.hpp>
 #include <agent/providers/ProviderModels.hpp>
@@ -1515,22 +1516,59 @@ void Shell::runAgentMode()
         _agentSession = std::make_unique<agent::AgentSession>(*provider);
 
     auto const historyStore = agent::ConversationHistoryStore(".endo/agent-history.json");
+    auto const sessionManager = agent::SessionManager(".endo");
+    auto activeSessionName = std::string {};
+    auto sessionCreatedAt = std::chrono::system_clock::time_point {};
+
     auto historyProvider = std::make_unique<agent::AgentHistoryProvider>();
+    auto loadedFromNamedSession = false;
+
     if (freshSession)
     {
-        // Load persisted conversation history from project-local store.
-        if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
+        // Try auto-resume of last named session first.
+        if (agentConfig.session.autoResume)
         {
-            for (auto const& msg: *loaded)
+            auto const lastSession = sessionManager.lastActiveSession();
+            if (!lastSession.empty() && sessionManager.sessionExists(lastSession))
             {
-                if (msg.role == agent::Role::User)
+                if (auto loaded = sessionManager.loadSession(lastSession); loaded.has_value())
                 {
-                    auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
-                    if (!text.empty())
-                        historyProvider->addEntry(text);
+                    auto& [meta, messages] = *loaded;
+                    for (auto const& msg: messages)
+                    {
+                        if (msg.role == agent::Role::User)
+                        {
+                            auto const text =
+                                agent::FileReferenceExpander::stripExpansions(msg.textContent());
+                            if (!text.empty())
+                                historyProvider->addEntry(text);
+                        }
+                    }
+                    _agentSession->loadPersistedMessages(std::move(messages));
+                    activeSessionName = lastSession;
+                    sessionCreatedAt = meta.createdAt;
+                    loadedFromNamedSession = true;
                 }
             }
-            _agentSession->loadPersistedMessages(std::move(*loaded));
+        }
+
+        // Fall through to anonymous history load if no named session was resumed.
+        if (!loadedFromNamedSession)
+        {
+            if (auto loaded = historyStore.load(); loaded.has_value() && !loaded->empty())
+            {
+                for (auto const& msg: *loaded)
+                {
+                    if (msg.role == agent::Role::User)
+                    {
+                        auto const text =
+                            agent::FileReferenceExpander::stripExpansions(msg.textContent());
+                        if (!text.empty())
+                            historyProvider->addEntry(text);
+                    }
+                }
+                _agentSession->loadPersistedMessages(std::move(*loaded));
+            }
         }
     }
     else
@@ -1551,6 +1589,24 @@ void Shell::runAgentMode()
 
     auto const saveHistory = [&] {
         (void) historyStore.save(_agentSession->history().messages());
+        // Also save to named session if active.
+        if (!activeSessionName.empty())
+        {
+            auto const now = std::chrono::system_clock::now();
+            auto const metadata = agent::SessionMetadata {
+                .name = activeSessionName,
+                .createdAt = sessionCreatedAt == std::chrono::system_clock::time_point {}
+                                 ? now
+                                 : sessionCreatedAt,
+                .updatedAt = now,
+                .provider = _agentProviderFactory->activeProviderName(),
+                .model = provider->modelInfo().modelName,
+                .turnCount = static_cast<int>(_agentSession->turnCount()),
+                .tokenUsage = _agentSession->sessionUsage(),
+            };
+            (void) sessionManager.saveSession(activeSessionName, _agentSession->history().messages(), metadata);
+            sessionManager.setLastActiveSession(activeSessionName);
+        }
     };
 
     // Set up tool registry with built-in tools
@@ -1840,7 +1896,182 @@ void Shell::runAgentMode()
             _agentSession->reset();
             (void) historyStore.remove();
             historyProviderPtr->setEntries({});
+            activeSessionName.clear();
+            sessionCreatedAt = {};
+            sessionManager.clearLastActiveSession();
             return agent::DirectOutput { .text = "Conversation history cleared.\n" };
+        }));
+
+    // --- Session management slash commands ---
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "save-session",
+        "Save current session with a name",
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
+            auto name = std::string(arguments);
+            // Trim whitespace.
+            while (!name.empty() && name.front() == ' ')
+                name.erase(name.begin());
+            while (!name.empty() && name.back() == ' ')
+                name.pop_back();
+
+            // Auto-generate name from first user message if none given.
+            if (name.empty())
+            {
+                for (auto const& msg: _agentSession->history().messages())
+                {
+                    if (msg.role == agent::Role::User)
+                    {
+                        name = sessionManager.generateSessionName(msg.textContent());
+                        break;
+                    }
+                }
+                if (name.empty())
+                    name = sessionManager.generateSessionName("untitled");
+            }
+
+            auto const now = std::chrono::system_clock::now();
+            auto const metadata = agent::SessionMetadata {
+                .name = name,
+                .createdAt = sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : sessionCreatedAt,
+                .updatedAt = now,
+                .provider = _agentProviderFactory->activeProviderName(),
+                .model = provider->modelInfo().modelName,
+                .turnCount = static_cast<int>(_agentSession->turnCount()),
+                .tokenUsage = _agentSession->sessionUsage(),
+            };
+
+            auto result =
+                sessionManager.saveSession(name, _agentSession->history().messages(), metadata);
+            if (!result.has_value())
+                return agent::DirectOutput { .text = "Failed to save session: " + result.error().message + "\n" };
+
+            activeSessionName = name;
+            if (sessionCreatedAt == std::chrono::system_clock::time_point {})
+                sessionCreatedAt = now;
+            sessionManager.setLastActiveSession(name);
+            return agent::DirectOutput { .text = "Session saved as '" + name + "'.\n" };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "load-session",
+        "Load a saved session",
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
+            auto name = std::string(arguments);
+            while (!name.empty() && name.front() == ' ')
+                name.erase(name.begin());
+            while (!name.empty() && name.back() == ' ')
+                name.pop_back();
+
+            if (name.empty())
+            {
+                // No name given — show interactive session picker.
+                auto sessionsResult = sessionManager.listSessions();
+                if (!sessionsResult.has_value() || sessionsResult->empty())
+                    return agent::DirectOutput { .text = "No saved sessions found.\n" };
+
+                auto options = std::vector<std::string> {};
+                auto names = std::vector<std::string> {};
+                for (auto const& meta: *sessionsResult)
+                {
+                    auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
+                    auto label = std::format("{} ({} turns, ~{}k tokens)",
+                                             meta.name,
+                                             meta.turnCount,
+                                             total / 1000);
+                    options.push_back(std::move(label));
+                    names.push_back(meta.name);
+                }
+                return agent::SessionPickerRequest {
+                    .questionText = "Select a session to load:",
+                    .options = std::move(options),
+                    .sessionNames = std::move(names),
+                };
+            }
+
+            // Load by name.
+            auto loaded = sessionManager.loadSession(name);
+            if (!loaded.has_value())
+                return agent::DirectOutput { .text = "Failed to load session: " + loaded.error().message + "\n" };
+
+            auto& [meta, messages] = *loaded;
+            _agentSession->reset();
+            historyProviderPtr->setEntries({});
+            for (auto const& msg: messages)
+            {
+                if (msg.role == agent::Role::User)
+                {
+                    auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
+                    if (!text.empty())
+                        historyProviderPtr->addEntry(text);
+                }
+            }
+            _agentSession->loadPersistedMessages(std::move(messages));
+            activeSessionName = name;
+            sessionCreatedAt = meta.createdAt;
+            sessionManager.setLastActiveSession(name);
+            return agent::DirectOutput { .text = "Session '" + name + "' loaded (" + std::to_string(meta.turnCount) + " turns).\n" };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "delete-session",
+        "Delete a saved session",
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
+            auto name = std::string(arguments);
+            while (!name.empty() && name.front() == ' ')
+                name.erase(name.begin());
+            while (!name.empty() && name.back() == ' ')
+                name.pop_back();
+
+            if (name.empty())
+                return agent::DirectOutput { .text = "Usage: /delete-session <name>\n" };
+
+            if (!sessionManager.sessionExists(name))
+                return agent::DirectOutput { .text = "Session '" + name + "' not found.\n" };
+
+            auto result = sessionManager.removeSession(name);
+            if (!result.has_value())
+                return agent::DirectOutput { .text = "Failed to delete session: " + result.error().message + "\n" };
+
+            if (activeSessionName == name)
+            {
+                activeSessionName.clear();
+                sessionCreatedAt = {};
+                sessionManager.clearLastActiveSession();
+            }
+            return agent::DirectOutput { .text = "Session '" + name + "' deleted.\n" };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "sessions",
+        "List saved sessions",
+        [&](std::string_view) -> agent::SlashCommandResult {
+            auto sessionsResult = sessionManager.listSessions();
+            if (!sessionsResult.has_value())
+                return agent::DirectOutput { .text = "Failed to list sessions: " + sessionsResult.error().message + "\n" };
+
+            if (sessionsResult->empty())
+                return agent::DirectOutput { .text = "No saved sessions.\n" };
+
+            auto md = std::string { "| Name | Turns | Tokens | Updated | Active |\n"
+                                    "|:-----|------:|-------:|:--------|:-------|\n" };
+            for (auto const& meta: *sessionsResult)
+            {
+                auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
+                auto const active = (meta.name == activeSessionName) ? "\xe2\x97\x8f" : "";
+                auto const tt = std::chrono::system_clock::to_time_t(meta.updatedAt);
+                auto tm = std::tm {};
+                localtime_r(&tt, &tm);
+                auto timeBuf = std::array<char, 32> {};
+                std::strftime(timeBuf.data(), timeBuf.size(), "%Y-%m-%d %H:%M", &tm);
+                md += std::format("| {} | {} | ~{}k | {} | {} |\n",
+                                  meta.name,
+                                  meta.turnCount,
+                                  total / 1000,
+                                  timeBuf.data(),
+                                  active);
+            }
+            return agent::MarkdownOutput { .markdown = std::move(md) };
         }));
 
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
@@ -1997,7 +2228,9 @@ void Shell::runAgentMode()
             return agent::MarkdownOutput { .markdown = agent::formatCapabilityDiff(oldInfo, newInfo) };
         }));
 
-    inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
+    auto slashCompleter = std::make_unique<agent::SlashCommandCompleter>(slashRegistry);
+    slashCompleter->setSessionNameProvider([&sessionManager] { return sessionManager.sessionNames(); });
+    inputComponent.addCompletionProvider(std::move(slashCompleter));
     auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
     auto* filePathProviderPtr = filePathProvider.get();
     inputComponent.addCompletionProvider(std::move(filePathProvider));
@@ -2035,6 +2268,12 @@ void Shell::runAgentMode()
     auto askUserRequestId = uint64_t { 0 };
     std::optional<tui::QuestionComponent> askUserComponent;
     auto askUserPromptVisible = false;
+
+    // --- Session picker state ---
+    auto sessionPickerActive = false;
+    std::optional<tui::QuestionComponent> sessionPickerComponent;
+    auto sessionPickerNames = std::vector<std::string> {};
+    auto sessionPickerVisible = false;
 
     // Helper: teardown streaming state after response completes.
     auto streamingPromptVisible = false;
@@ -2131,6 +2370,59 @@ void Shell::runAgentMode()
         out.flush();
         askUserPromptVisible = true;
     };
+
+    auto clearSessionPicker = [&] {
+        if (!sessionPickerVisible)
+            return;
+        out.hideCursor();
+        out.restoreCursor();
+        out.clearToEndOfDisplay();
+        out.flush();
+        sessionPickerVisible = false;
+    };
+
+    auto renderSessionPicker = [&] {
+        if (!sessionPickerActive || !sessionPickerComponent)
+            return;
+        auto const& spTheme = tui::currentTheme();
+        auto const prefSize = sessionPickerComponent->preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
+
+        // Pre-scroll to make room.
+        for (auto i = 0; i < height; ++i)
+            out.linefeed();
+        out.moveUp(height);
+        out.saveCursor();
+        out.linefeed();
+
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, spTheme);
+        sessionPickerComponent->setArea(tui::Rect { 0, 0, width, height });
+        sessionPickerComponent->setScreenBounds(tui::Rect { 0, 0, width, height });
+        sessionPickerComponent->render(canvas);
+        buffer.writeTo(out);
+
+        if (sessionPickerComponent->cursorShape() == tui::CursorShape::SteadyBar)
+            out.showCursor();
+        else
+            out.hideCursor();
+        out.flush();
+        sessionPickerVisible = true;
+    };
+
+    // Show auto-resume context message if a named session was loaded.
+    if (loadedFromNamedSession && agentConfig.session.showResumeContext)
+    {
+        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+        auto const total = _agentSession->sessionUsage().inputTokens + _agentSession->sessionUsage().outputTokens;
+        out.writeText(std::format("Resumed session '{}' ({} turns, ~{}k tokens).\n",
+                                  activeSessionName,
+                                  _agentSession->turnCount(),
+                                  total / 1000),
+                      dimStyle);
+        out.flush();
+    }
 
     // --- Main event loop ---
     while (true)
@@ -2549,6 +2841,70 @@ void Shell::runAgentMode()
                 continue;
             }
 
+            // During session picker, route input to the session picker component.
+            if (sessionPickerActive && sessionPickerComponent)
+            {
+                auto const action = sessionPickerComponent->processInput(event);
+                switch (action)
+                {
+                    case tui::QuestionAction::Confirmed: {
+                        auto const selectedIdx = sessionPickerComponent->selectedIndex();
+                        clearSessionPicker();
+                        if (selectedIdx < sessionPickerNames.size())
+                        {
+                            auto const& name = sessionPickerNames[selectedIdx];
+                            auto loaded = sessionManager.loadSession(name);
+                            if (loaded.has_value())
+                            {
+                                auto& [meta, messages] = *loaded;
+                                _agentSession->reset();
+                                historyProviderPtr->setEntries({});
+                                for (auto const& msg: messages)
+                                {
+                                    if (msg.role == agent::Role::User)
+                                    {
+                                        auto const text =
+                                            agent::FileReferenceExpander::stripExpansions(msg.textContent());
+                                        if (!text.empty())
+                                            historyProviderPtr->addEntry(text);
+                                    }
+                                }
+                                _agentSession->loadPersistedMessages(std::move(messages));
+                                activeSessionName = name;
+                                sessionCreatedAt = meta.createdAt;
+                                sessionManager.setLastActiveSession(name);
+                                out.writeText("Session '" + name + "' loaded.\n");
+                            }
+                            else
+                            {
+                                auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
+                                out.writeText("Failed to load session: " + loaded.error().message + "\n",
+                                              errorStyle);
+                            }
+                        }
+                        sessionPickerActive = false;
+                        sessionPickerComponent.reset();
+                        sessionPickerNames.clear();
+                        out.flush();
+                        break;
+                    }
+                    case tui::QuestionAction::Cancelled:
+                        clearSessionPicker();
+                        sessionPickerActive = false;
+                        sessionPickerComponent.reset();
+                        sessionPickerNames.clear();
+                        break;
+                    case tui::QuestionAction::Changed: {
+                        auto guard = out.syncGuard();
+                        clearSessionPicker();
+                        renderSessionPicker();
+                        break;
+                    }
+                    case tui::QuestionAction::None: break;
+                }
+                continue;
+            }
+
             // During streaming, only handle Escape (cancel) and Ctrl+L (clear).
             if (streaming)
             {
@@ -2690,6 +3046,20 @@ void Shell::runAgentMode()
                                 worker.inbound().push(
                                     agent::UserPromptMessage { .text = expandFileRefs(r->prompt) });
                                 sentToWorker = true;
+                            }
+                            else if (auto const* sp =
+                                         std::get_if<agent::SessionPickerRequest>(&commandResult))
+                            {
+                                // Show interactive session picker using QuestionComponent.
+                                sessionPickerNames = sp->sessionNames;
+                                sessionPickerComponent.emplace(tui::QuestionConfig {
+                                    .questionText = sp->questionText,
+                                    .options = sp->options,
+                                    .multiSelect = false,
+                                    .allowOther = false,
+                                });
+                                sessionPickerActive = true;
+                                renderSessionPicker();
                             }
                         }
                         else

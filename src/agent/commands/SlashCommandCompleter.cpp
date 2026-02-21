@@ -30,11 +30,11 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
     if (spacePos != std::string_view::npos)
     {
         auto const cmdName = inputUpToCursor.substr(1, spacePos - 1);
+        auto const argPrefix = inputUpToCursor.substr(spacePos + 1);
         if (cmdName == "model")
-        {
-            auto const argPrefix = inputUpToCursor.substr(spacePos + 1);
             return completeModelArgument(argPrefix);
-        }
+        if (cmdName == "load-session" || cmdName == "delete-session")
+            return completeSessionArgument(cmdName, argPrefix);
         return {};
     }
 
@@ -137,6 +137,64 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(st
     }
 
     // Sort by score descending, then alphabetically
+    std::ranges::sort(items, [](auto const& a, auto const& b) {
+        if (a.score != b.score)
+            return a.score > b.score;
+        return a.text < b.text;
+    });
+
+    return items;
+}
+
+std::vector<tui::CompletionItem> SlashCommandCompleter::completeSessionArgument(std::string_view cmdName,
+                                                                                std::string_view prefix)
+{
+    if (!_sessionNameProvider)
+        return {};
+
+    auto const names = _sessionNameProvider();
+    auto items = std::vector<tui::CompletionItem> {};
+
+    for (auto const& name: names)
+    {
+        auto const fullText = "/" + std::string(cmdName) + " " + name;
+
+        if (prefix.empty())
+        {
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = "session",
+                .score = 100,
+            });
+            continue;
+        }
+
+        // Try smart-case prefix match.
+        if (tui::SmartCaseMatch::matchesPrefix(name, prefix))
+        {
+            auto const score = tui::SmartCaseMatch::adjustScore(100, name, prefix);
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = "session",
+                .score = score,
+            });
+            continue;
+        }
+
+        // Fall back to fuzzy match.
+        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
+        if (fuzzyResult.matches)
+        {
+            auto const score = tui::FuzzyMatch::calculateScore(50, name, prefix, fuzzyResult);
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = "session",
+                .score = score,
+            });
+        }
+    }
+
+    // Sort by score descending, then alphabetically.
     std::ranges::sort(items, [](auto const& a, auto const& b) {
         if (a.score != b.score)
             return a.score > b.score;

@@ -66,6 +66,13 @@ struct TraceConfig
     size_t maxFiles = 20;    ///< Maximum number of trace files to retain (oldest pruned first).
 };
 
+/// Configuration for agent session management.
+struct SessionConfig
+{
+    bool autoResume = false;       ///< Whether to auto-resume the last named session on agent mode entry.
+    bool showResumeContext = true; ///< Whether to show a summary message when resuming a session.
+};
+
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
@@ -83,6 +90,7 @@ struct AgentConfig
     PlanModeConfig planMode; ///< Plan mode configuration.
     ExploreConfig explore;   ///< Explore sub-agent configuration.
     TraceConfig trace;       ///< Tool I/O tracing configuration.
+    SessionConfig session;   ///< Session management configuration.
 };
 
 /// Loads agent configuration from a YAML file.

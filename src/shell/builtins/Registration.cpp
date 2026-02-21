@@ -1387,6 +1387,16 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.explore.maxTurns)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.explore.maxTurns = static_cast<size_t>(n); });
 
+    // --- Session ---
+
+    _runtime.registerProperty("agent_auto_resume", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.session.autoResume); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.session.autoResume = args.getBool(1); });
+
+    _runtime.registerProperty("agent_session_replay", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.session.showResumeContext); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.session.showResumeContext = args.getBool(1); });
+
     // --- Trace ---
 
     _runtime.registerProperty("agent_trace_enabled", CoreVM::LiteralType::Boolean)
