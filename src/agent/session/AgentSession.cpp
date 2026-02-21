@@ -73,6 +73,8 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
     auto const toolDefs = _toolRegistry ? _toolRegistry->definitions() : std::vector<ToolDefinition> {};
     auto const tools = std::span<ToolDefinition const>(toolDefs);
 
+    _lastTurnUsage = {};
+
     for (auto iteration = size_t { 0 }; iteration < _maxToolIterations; ++iteration)
     {
         // Compact conversation if needed before calling the provider
@@ -122,7 +124,14 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
+        {
             _sessionUsage += *result->usage;
+            // Per-turn: input/cache reflect last call's context, output is summed.
+            _lastTurnUsage.inputTokens = result->usage->inputTokens;
+            _lastTurnUsage.cacheReadTokens = result->usage->cacheReadTokens;
+            _lastTurnUsage.cacheCreationTokens = result->usage->cacheCreationTokens;
+            _lastTurnUsage.outputTokens += result->usage->outputTokens;
+        }
 
         // Add the full assistant message (including ToolUseBlocks) to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
@@ -189,12 +198,18 @@ void AgentSession::reset()
 {
     _history.clear();
     _sessionUsage = {};
+    _lastTurnUsage = {};
     _turnCount = 0;
 }
 
 auto AgentSession::sessionUsage() const noexcept -> TokenUsage const&
 {
     return _sessionUsage;
+}
+
+auto AgentSession::lastTurnUsage() const noexcept -> TokenUsage const&
+{
+    return _lastTurnUsage;
 }
 
 auto AgentSession::turnCount() const noexcept -> int
@@ -257,6 +272,8 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
     });
     auto const tools = std::span<ToolDefinition const>(filteredDefs);
 
+    _lastTurnUsage = {};
+
     for (auto iteration = size_t { 0 }; iteration < _maxExplorationIterations; ++iteration)
     {
         // Compact conversation if needed
@@ -304,7 +321,14 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
+        {
             _sessionUsage += *result->usage;
+            // Per-turn: input/cache reflect last call's context, output is summed.
+            _lastTurnUsage.inputTokens = result->usage->inputTokens;
+            _lastTurnUsage.cacheReadTokens = result->usage->cacheReadTokens;
+            _lastTurnUsage.cacheCreationTokens = result->usage->cacheCreationTokens;
+            _lastTurnUsage.outputTokens += result->usage->outputTokens;
+        }
 
         // Add assistant message to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };

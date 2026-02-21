@@ -122,22 +122,15 @@ void AgentWorker::handlePrompt(UserPromptMessage const& msg, std::stop_token con
 
     auto streamCb = makeStreamCallback(stopToken);
 
-    // Capture session usage before processing to compute per-turn delta.
-    auto const usageBefore = _session.sessionUsage();
-
     if (msg.planMode)
     {
         auto planResult = _session.processMessageForPlan(msg.text, std::move(streamCb));
         if (planResult.has_value())
         {
             _outbound.push(PlanGeneratedMessage { .plan = std::move(*planResult) });
-            auto turnDelta = _session.sessionUsage();
-            turnDelta.inputTokens -= usageBefore.inputTokens;
-            turnDelta.outputTokens -= usageBefore.outputTokens;
-            turnDelta.cacheReadTokens -= usageBefore.cacheReadTokens;
-            turnDelta.cacheCreationTokens -= usageBefore.cacheCreationTokens;
-            _outbound.push(CompletionMessage {
-                .success = true, .turnUsage = turnDelta, .sessionUsage = _session.sessionUsage() });
+            _outbound.push(CompletionMessage { .success = true,
+                                               .turnUsage = _session.lastTurnUsage(),
+                                               .sessionUsage = _session.sessionUsage() });
         }
         else
         {
@@ -151,14 +144,9 @@ void AgentWorker::handlePrompt(UserPromptMessage const& msg, std::stop_token con
         auto result = _session.processMessage(msg.text, std::move(streamCb));
         if (result.has_value())
         {
-            auto turnDelta = _session.sessionUsage();
-            turnDelta.inputTokens -= usageBefore.inputTokens;
-            turnDelta.outputTokens -= usageBefore.outputTokens;
-            turnDelta.cacheReadTokens -= usageBefore.cacheReadTokens;
-            turnDelta.cacheCreationTokens -= usageBefore.cacheCreationTokens;
             _outbound.push(CompletionMessage { .fullResponse = std::move(*result),
                                                .success = true,
-                                               .turnUsage = turnDelta,
+                                               .turnUsage = _session.lastTurnUsage(),
                                                .sessionUsage = _session.sessionUsage() });
         }
         else

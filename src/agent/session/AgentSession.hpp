@@ -122,6 +122,12 @@ class AgentSession
     /// @brief Returns cumulative token usage across all turns in this session.
     [[nodiscard]] auto sessionUsage() const noexcept -> TokenUsage const&;
 
+    /// @brief Returns token usage for the most recent turn.
+    ///
+    /// Input/cache tokens reflect the last generate() call's context size,
+    /// while output tokens are summed across all generate() calls in the turn.
+    [[nodiscard]] auto lastTurnUsage() const noexcept -> TokenUsage const&;
+
     /// @brief Returns the number of completed turns in this session.
     [[nodiscard]] auto turnCount() const noexcept -> int;
 
@@ -159,6 +165,7 @@ class AgentSession
     ToolStatusCallback _toolStatusCallback;
     std::unique_ptr<ConversationCompactor> _compactor;
     TokenUsage _sessionUsage;
+    TokenUsage _lastTurnUsage;
     int _turnCount = 0;
 };
 

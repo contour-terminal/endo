@@ -815,3 +815,135 @@ TEST_CASE("AgentSession.reset_clears_usage", "[agent]")
     CHECK(session.sessionUsage().inputTokens == 0);
     CHECK(session.sessionUsage().outputTokens == 0);
 }
+
+// =============================================================================
+// Per-turn usage (lastTurnUsage) tests
+// =============================================================================
+
+TEST_CASE("AgentSession.last_turn_usage_single_call", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    provider.mockUsage = TokenUsage { .inputTokens = 200, .outputTokens = 80 };
+
+    auto session = AgentSession(provider);
+    auto result = session.processMessage("Hello", nullptr);
+    REQUIRE(result.has_value());
+
+    // Single generate() call: lastTurnUsage should equal the usage from that call.
+    CHECK(session.lastTurnUsage().inputTokens == 200);
+    CHECK(session.lastTurnUsage().outputTokens == 80);
+}
+
+TEST_CASE("AgentSession.last_turn_usage_multi_call_tool_loop", "[agent]")
+{
+    // Provider that returns a tool call on the first generate(), then text on the second.
+    // Each call reports different usage to verify input=last, output=sum semantics.
+    struct MultiCallProvider final: public LlmProvider
+    {
+        int callCount = 0;
+
+        [[nodiscard]] auto generate(std::span<ChatMessage const>,
+                                    std::span<ToolDefinition const>,
+                                    StreamCallback) -> std::expected<GenerateResult, ProviderError> override
+        {
+            ++callCount;
+            auto result = GenerateResult {};
+            if (callCount == 1)
+            {
+                // First call: tool use, input=1000, output=50
+                result.toolCalls = { ToolCall { .id = "tc1", .name = "mock_tool", .arguments = {} } };
+                result.content.emplace_back(
+                    ToolUseBlock { .id = "tc1", .name = "mock_tool", .arguments = {} });
+                result.usage = TokenUsage { .inputTokens = 1000, .outputTokens = 50 };
+            }
+            else
+            {
+                // Second call: text response, input=1200 (context grew), output=100
+                result.content.emplace_back(TextBlock { .text = "Done" });
+                result.usage = TokenUsage { .inputTokens = 1200, .outputTokens = 100 };
+            }
+            return result;
+        }
+
+        [[nodiscard]] auto supportsToolUse() const noexcept -> bool override { return true; }
+        [[nodiscard]] auto supportsImageInput() const noexcept -> bool override { return false; }
+        [[nodiscard]] auto supportsImageOutput() const noexcept -> bool override { return false; }
+        [[nodiscard]] auto contextSize() const noexcept -> size_t override { return 8192; }
+
+        [[nodiscard]] auto modelInfo() const -> ModelInfo override
+        {
+            return ModelInfo { .providerName = "mock", .modelName = "mock-1" };
+        }
+    };
+
+    auto provider = MultiCallProvider {};
+    auto session = AgentSession(provider);
+
+    auto registry = ToolRegistry {};
+    registry.registerTool(std::make_unique<MockTool>());
+    session.setToolRegistry(&registry);
+
+    auto result = session.processMessage("Test", nullptr);
+    REQUIRE(result.has_value());
+
+    // inputTokens should be from the LAST call (1200), not the sum (2200).
+    CHECK(session.lastTurnUsage().inputTokens == 1200);
+    // outputTokens should be the SUM across both calls (50 + 100 = 150).
+    CHECK(session.lastTurnUsage().outputTokens == 150);
+
+    // sessionUsage should be the full sum of everything.
+    CHECK(session.sessionUsage().inputTokens == 2200);
+    CHECK(session.sessionUsage().outputTokens == 150);
+}
+
+TEST_CASE("AgentSession.last_turn_usage_resets_per_turn", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    provider.mockUsage = TokenUsage { .inputTokens = 300, .outputTokens = 60 };
+
+    auto session = AgentSession(provider);
+
+    // First turn
+    (void) session.processMessage("First", nullptr);
+    CHECK(session.lastTurnUsage().inputTokens == 300);
+    CHECK(session.lastTurnUsage().outputTokens == 60);
+
+    // Second turn with different usage
+    provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 40 };
+    (void) session.processMessage("Second", nullptr);
+
+    // lastTurnUsage should reflect only the second turn's values.
+    CHECK(session.lastTurnUsage().inputTokens == 500);
+    CHECK(session.lastTurnUsage().outputTokens == 40);
+}
+
+TEST_CASE("AgentSession.last_turn_usage_no_usage_from_provider", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    // mockUsage is nullopt by default.
+
+    auto session = AgentSession(provider);
+    auto result = session.processMessage("Hello", nullptr);
+    REQUIRE(result.has_value());
+
+    CHECK(session.lastTurnUsage().inputTokens == 0);
+    CHECK(session.lastTurnUsage().outputTokens == 0);
+}
+
+TEST_CASE("AgentSession.reset_clears_last_turn_usage", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 200 };
+
+    auto session = AgentSession(provider);
+    (void) session.processMessage("Hello", nullptr);
+    CHECK(session.lastTurnUsage().inputTokens == 500);
+
+    session.reset();
+    CHECK(session.lastTurnUsage().inputTokens == 0);
+    CHECK(session.lastTurnUsage().outputTokens == 0);
+}
