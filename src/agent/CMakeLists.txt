@@ -15,6 +15,7 @@ add_library(endo-agent STATIC
     # Conversation
     conversation/ConversationHistory.hpp conversation/ConversationHistory.cpp
     conversation/ConversationHistoryStore.hpp conversation/ConversationHistoryStore.cpp
+    conversation/SessionManager.hpp conversation/SessionManager.cpp
     conversation/TokenEstimator.hpp conversation/TokenEstimator.cpp
     conversation/ConversationCompactor.hpp conversation/ConversationCompactor.cpp
 
@@ -110,6 +111,7 @@ add_executable(test-endo-agent
     # Conversation tests
     conversation/ConversationHistory_test.cpp
     conversation/ConversationHistoryStore_test.cpp
+    conversation/SessionManager_test.cpp
     conversation/TokenEstimator_test.cpp
     conversation/ConversationCompactor_test.cpp
 
