@@ -49,6 +49,9 @@ struct ClaudeSseResult
 
     /// Tool calls extracted when tool_use blocks are finalized.
     std::vector<ToolCall> completedToolCalls;
+
+    /// Token usage statistics extracted from message_start or message_delta events.
+    std::optional<TokenUsage> usage;
 };
 
 /// Tracks the state of an in-progress content block during SSE streaming.

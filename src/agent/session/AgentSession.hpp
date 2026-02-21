@@ -119,6 +119,12 @@ class AgentSession
     /// @brief Returns the conversation history (read-only).
     [[nodiscard]] auto history() const -> ConversationHistory const&;
 
+    /// @brief Returns cumulative token usage across all turns in this session.
+    [[nodiscard]] auto sessionUsage() const noexcept -> TokenUsage const&;
+
+    /// @brief Returns the number of completed turns in this session.
+    [[nodiscard]] auto turnCount() const noexcept -> int;
+
     /// @brief Resets the conversation, clearing all history.
     void reset();
 
@@ -152,6 +158,8 @@ class AgentSession
     size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
     std::unique_ptr<ConversationCompactor> _compactor;
+    TokenUsage _sessionUsage;
+    int _turnCount = 0;
 };
 
 } // namespace endo::agent

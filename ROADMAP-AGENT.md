@@ -134,8 +134,8 @@ and `McpToolAdapter` that bridges MCP tools into the `ToolRegistry`. Configured 
 
 ### Phase 9.1: Slash Commands ✅
 
-`SlashCommandRegistry` with built-in commands (`/help`, `/plan`, `/reset`, `/tools`) and
-`CallbackSlashCommand` for dynamic registration. Tab completion via `SlashCommandCompleter`.
+`SlashCommandRegistry` with built-in commands (`/help`, `/plan`, `/reset`, `/tools`, `/status`)
+and `CallbackSlashCommand` for dynamic registration. Tab completion via `SlashCommandCompleter`.
 
 - **Key files:** `src/agent/commands/`
 
@@ -178,18 +178,18 @@ from intermediate grep/read results. Configurable max turns.
 
 ## Priority 1: Quick Wins (Low effort, High impact)
 
-### Token & Cost Display
+### Token & Cost Display ✅
 
-**Status:** Not started | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
-Show token usage and estimated cost after each agent turn. Data is already available from
-provider responses (`usage` fields in Claude/OpenAI/Gemini APIs) — just needs extraction
-and display.
+Show token usage and estimated cost after each agent turn. Token usage is extracted from
+all three providers (Claude, OpenAI, Gemini) and displayed after each response with
+per-turn and cumulative tracking. `/status` slash command shows full session statistics.
 
-- Extract `input_tokens`, `output_tokens`, `cache_read_tokens` from provider responses
-- Display in agent header or after each response: `↑1.2k ↓3.4k tokens (~$0.02)`
-- Cumulative session totals in `/status` or header
-- Per-provider cost models (configurable rates in `agent.yml`)
+- Extract `input_tokens`, `output_tokens`, `cache_read_tokens` from provider responses ✅
+- Display after each response: `100 in / 50 out (80 cached) ~$0.0012` ✅
+- Cumulative session totals in `/status` command ✅
+- Hardcoded per-provider cost models with cache discount support ✅
 
 ### Diff Preview for edit_file
 
@@ -231,9 +231,10 @@ of tool set changes.
 The conversation persistence infrastructure exists but could be enhanced:
 
 - Auto-save on each turn (not just on exit)
-- Multiple named sessions (`/session save <name>`, `/session load <name>`)
+- Multiple named sessions (`/save-session  <name>`, `/load-session <name>`).
 - Session list with timestamps and token counts
 - Auto-resume last session on agent mode entry (configurable)
+- On session load, replay the history for context (configurable).
 
 ### Model Switching at Runtime Enhancement
 
@@ -939,7 +940,7 @@ The roadmap is complete when a user can:
 5. **Today:** Work through long sessions without context window issues ✅
 6. **Today:** Authenticate via OAuth (Claude MAX/Pro) or API keys ✅
 7. **Today:** Use web search and fetch within agent conversations ✅
-8. See token usage and cost estimates after each turn
+8. See token usage and cost estimates after each turn ✅
 9. Paste an image from the clipboard and ask the agent about it — with inline sixel preview
 10. See LLM-generated images rendered inline (Gemini, OpenAI)
 11. Run a local LLM via llama.cpp (`provider: local`) — fully offline, no API key required

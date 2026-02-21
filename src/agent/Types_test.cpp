@@ -136,3 +136,113 @@ TEST_CASE("agent.types.content_block_variant_tool_result")
     CHECK(result.toolUseId == "call_1");
     CHECK(!result.isError);
 }
+
+// =============================================================================
+// TokenUsage tests
+// =============================================================================
+
+TEST_CASE("agent.types.token_usage_default_zero")
+{
+    auto usage = TokenUsage {};
+    CHECK(usage.inputTokens == 0);
+    CHECK(usage.outputTokens == 0);
+    CHECK(usage.cacheReadTokens == 0);
+    CHECK(usage.cacheCreationTokens == 0);
+}
+
+TEST_CASE("agent.types.token_usage_accumulate")
+{
+    auto total = TokenUsage {};
+    auto turn1 = TokenUsage { .inputTokens = 100, .outputTokens = 50, .cacheReadTokens = 20 };
+    auto turn2 = TokenUsage { .inputTokens = 200, .outputTokens = 75, .cacheCreationTokens = 30 };
+    total += turn1;
+    total += turn2;
+    CHECK(total.inputTokens == 300);
+    CHECK(total.outputTokens == 125);
+    CHECK(total.cacheReadTokens == 20);
+    CHECK(total.cacheCreationTokens == 30);
+}
+
+// =============================================================================
+// estimateCost tests
+// =============================================================================
+
+TEST_CASE("agent.types.estimate_cost_claude_sonnet")
+{
+    auto usage = TokenUsage { .inputTokens = 1'000'000, .outputTokens = 1'000'000 };
+    auto cost = estimateCost(usage, "claude", "claude-sonnet-4-6");
+    // Sonnet: $3/M input + $15/M output = $18
+    CHECK(cost > 17.0);
+    CHECK(cost < 19.0);
+}
+
+TEST_CASE("agent.types.estimate_cost_claude_opus")
+{
+    auto usage = TokenUsage { .inputTokens = 1'000'000, .outputTokens = 1'000'000 };
+    auto cost = estimateCost(usage, "claude", "claude-opus-4-6");
+    // Opus: $15/M input + $75/M output = $90
+    CHECK(cost > 89.0);
+    CHECK(cost < 91.0);
+}
+
+TEST_CASE("agent.types.estimate_cost_claude_with_cache")
+{
+    auto usage = TokenUsage {
+        .inputTokens = 1'000'000,
+        .outputTokens = 100'000,
+        .cacheReadTokens = 800'000,
+    };
+    // 200k regular input at $3/M = $0.60
+    // 800k cache read at $0.30/M (10% of $3) = $0.24
+    // 100k output at $15/M = $1.50
+    auto cost = estimateCost(usage, "claude", "claude-sonnet-4-6");
+    CHECK(cost > 2.0);
+    CHECK(cost < 3.0);
+}
+
+TEST_CASE("agent.types.estimate_cost_openai_gpt4o")
+{
+    auto usage = TokenUsage { .inputTokens = 1'000'000, .outputTokens = 1'000'000 };
+    auto cost = estimateCost(usage, "openai", "gpt-4o");
+    // $2.50/M input + $10/M output = $12.50
+    CHECK(cost > 12.0);
+    CHECK(cost < 13.0);
+}
+
+TEST_CASE("agent.types.estimate_cost_unknown_model")
+{
+    auto usage = TokenUsage { .inputTokens = 1000, .outputTokens = 500 };
+    auto cost = estimateCost(usage, "unknown", "unknown-model");
+    CHECK(cost == 0.0);
+}
+
+// =============================================================================
+// formatTokenCount tests
+// =============================================================================
+
+TEST_CASE("agent.types.format_token_count_small")
+{
+    CHECK(formatTokenCount(0) == "0");
+    CHECK(formatTokenCount(42) == "42");
+    CHECK(formatTokenCount(999) == "999");
+}
+
+TEST_CASE("agent.types.format_token_count_thousands")
+{
+    CHECK(formatTokenCount(1000) == "1.0k");
+    CHECK(formatTokenCount(1234) == "1.2k");
+    CHECK(formatTokenCount(9999) == "10.0k");
+}
+
+TEST_CASE("agent.types.format_token_count_large")
+{
+    CHECK(formatTokenCount(10000) == "10k");
+    CHECK(formatTokenCount(123456) == "123k");
+    CHECK(formatTokenCount(999999) == "1000k");
+}
+
+TEST_CASE("agent.types.format_token_count_millions")
+{
+    CHECK(formatTokenCount(1'000'000) == "1.0M");
+    CHECK(formatTokenCount(2'500'000) == "2.5M");
+}

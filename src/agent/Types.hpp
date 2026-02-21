@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -143,6 +144,25 @@ struct ToolTraceEntry
     std::chrono::milliseconds duration { 0 }; ///< Execution duration.
 };
 
+/// Token usage statistics from an LLM API response.
+struct TokenUsage
+{
+    int64_t inputTokens = 0;         ///< Prompt/input tokens consumed.
+    int64_t outputTokens = 0;        ///< Completion/output tokens generated.
+    int64_t cacheReadTokens = 0;     ///< Tokens served from prompt cache (cost reduction).
+    int64_t cacheCreationTokens = 0; ///< Tokens written into prompt cache.
+
+    /// Accumulates another usage record into this one.
+    constexpr auto operator+=(TokenUsage const& other) noexcept -> TokenUsage&
+    {
+        inputTokens += other.inputTokens;
+        outputTokens += other.outputTokens;
+        cacheReadTokens += other.cacheReadTokens;
+        cacheCreationTokens += other.cacheCreationTokens;
+        return *this;
+    }
+};
+
 /// Definition of a tool that the model can invoke.
 struct ToolDefinition
 {
@@ -156,6 +176,7 @@ struct GenerateResult
 {
     std::vector<ContentBlock> content; ///< Generated content blocks.
     std::vector<ToolCall> toolCalls;   ///< Tool calls extracted from the response.
+    std::optional<TokenUsage> usage;   ///< Token usage statistics, if available.
 
     /// Returns true if the model requested any tool calls.
     [[nodiscard]] auto hasToolCalls() const noexcept -> bool { return !toolCalls.empty(); }
@@ -259,5 +280,19 @@ struct ProviderError
     std::string message;
     int httpStatus = 0;
 };
+
+/// Estimates the cost of a turn based on token usage and model name.
+/// @param usage        Token usage statistics.
+/// @param providerName Provider identifier (e.g. "claude", "openai", "gemini").
+/// @param modelName    Model identifier (e.g. "claude-sonnet-4-6").
+/// @return Estimated cost in USD, or 0.0 if the model is unknown.
+[[nodiscard]] auto estimateCost(TokenUsage const& usage,
+                                std::string_view providerName,
+                                std::string_view modelName) -> double;
+
+/// Formats a token count for human-readable display.
+/// @param count Token count to format.
+/// @return Formatted string (e.g. "456", "1.2k", "12.3k", "1.2M").
+[[nodiscard]] auto formatTokenCount(int64_t count) -> std::string;
 
 } // namespace endo::agent

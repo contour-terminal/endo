@@ -2,7 +2,7 @@
 # LLM provider abstraction layer and agent mode UX for multi-provider AI agent support.
 
 add_library(endo-agent STATIC
-    Types.hpp
+    Types.hpp Types.cpp
     Plan.hpp
     AgentConfig.hpp AgentConfig.cpp
 

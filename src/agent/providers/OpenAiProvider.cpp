@@ -295,6 +295,19 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
             return false;
         }
 
+        // Extract usage from the final chunk (when include_usage is enabled).
+        if (json.contains("usage") && !json["usage"].is_null())
+        {
+            auto const& u = json["usage"];
+            auto usage = TokenUsage {};
+            usage.inputTokens = u.value("prompt_tokens", int64_t { 0 });
+            usage.outputTokens = u.value("completion_tokens", int64_t { 0 });
+            // OpenAI provides cached tokens in prompt_tokens_details.
+            if (u.contains("prompt_tokens_details") && !u["prompt_tokens_details"].is_null())
+                usage.cacheReadTokens = u["prompt_tokens_details"].value("cached_tokens", int64_t { 0 });
+            result.usage = usage;
+        }
+
         if (!json.contains("choices") || json["choices"].empty())
             return true;
 

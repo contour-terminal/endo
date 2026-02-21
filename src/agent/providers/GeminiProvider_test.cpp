@@ -274,3 +274,35 @@ TEST_CASE("agent.gemini.serialize_mixed_content_message")
     CHECK(parts[1]["inlineData"]["mimeType"] == "image/jpeg");
     CHECK(parts[2]["text"] == "What do you see?");
 }
+
+// =============================================================================
+// Usage metadata tests
+// =============================================================================
+
+TEST_CASE("agent.gemini.usage_metadata_field_structure")
+{
+    // Verify that Gemini usageMetadata JSON is correctly shaped for parsing.
+    auto json = nlohmann::json::parse(R"({
+        "candidates": [{"content": {"parts": [{"text": "Hi"}]}}],
+        "usageMetadata": {
+            "promptTokenCount": 42,
+            "candidatesTokenCount": 10,
+            "cachedContentTokenCount": 5
+        }
+    })");
+
+    REQUIRE(json.contains("usageMetadata"));
+    auto const& u = json["usageMetadata"];
+    CHECK(u.value("promptTokenCount", int64_t { 0 }) == 42);
+    CHECK(u.value("candidatesTokenCount", int64_t { 0 }) == 10);
+    CHECK(u.value("cachedContentTokenCount", int64_t { 0 }) == 5);
+}
+
+TEST_CASE("agent.gemini.usage_metadata_missing")
+{
+    auto json = nlohmann::json::parse(R"({
+        "candidates": [{"content": {"parts": [{"text": "Hi"}]}}]
+    })");
+
+    CHECK(!json.contains("usageMetadata"));
+}

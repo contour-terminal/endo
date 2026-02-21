@@ -224,6 +224,17 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
                 return false;
             }
 
+            // Extract usage metadata (appears in each chunk, last one has final counts).
+            if (parsed.contains("usageMetadata"))
+            {
+                auto const& u = parsed["usageMetadata"];
+                auto usage = TokenUsage {};
+                usage.inputTokens = u.value("promptTokenCount", int64_t { 0 });
+                usage.outputTokens = u.value("candidatesTokenCount", int64_t { 0 });
+                usage.cacheReadTokens = u.value("cachedContentTokenCount", int64_t { 0 });
+                result.usage = usage;
+            }
+
             // Extract parts from candidates[0].content.parts[].
             if (!parsed.contains("candidates") || parsed["candidates"].empty())
                 return true;

@@ -168,6 +168,51 @@ TEST_CASE("agent.openai.parse_malformed_json")
 }
 
 // =============================================================================
+// Usage parsing tests
+// =============================================================================
+
+TEST_CASE("agent.openai.parse_usage_in_final_chunk")
+{
+    // Simulate the final chunk from OpenAI that contains usage data.
+    auto data = R"({
+        "id": "chatcmpl-abc",
+        "choices": [],
+        "usage": {
+            "prompt_tokens": 1500,
+            "completion_tokens": 300,
+            "prompt_tokens_details": {
+                "cached_tokens": 400
+            }
+        }
+    })";
+    auto parsed = OpenAiProvider::parseSseData(data);
+    REQUIRE(parsed.has_value());
+    auto const& json = *parsed;
+    REQUIRE(json.contains("usage"));
+
+    auto const& u = json["usage"];
+    CHECK(u["prompt_tokens"].get<int64_t>() == 1500);
+    CHECK(u["completion_tokens"].get<int64_t>() == 300);
+    CHECK(u["prompt_tokens_details"]["cached_tokens"].get<int64_t>() == 400);
+}
+
+TEST_CASE("agent.openai.parse_usage_without_cache_details")
+{
+    auto data = R"({
+        "choices": [],
+        "usage": {
+            "prompt_tokens": 800,
+            "completion_tokens": 200
+        }
+    })";
+    auto parsed = OpenAiProvider::parseSseData(data);
+    REQUIRE(parsed.has_value());
+    auto const& json = *parsed;
+    REQUIRE(json.contains("usage"));
+    CHECK(!json["usage"].contains("prompt_tokens_details"));
+}
+
+// =============================================================================
 // Capability tests
 // =============================================================================
 

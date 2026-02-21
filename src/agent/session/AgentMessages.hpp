@@ -80,9 +80,11 @@ struct ToolResultMessage
 /// The agent has completed processing a message.
 struct CompletionMessage
 {
-    std::string fullResponse; ///< The complete response text.
-    bool success = true;      ///< Whether processing succeeded.
-    std::string errorMessage; ///< Error details if success is false.
+    std::string fullResponse;            ///< The complete response text.
+    bool success = true;                 ///< Whether processing succeeded.
+    std::string errorMessage;            ///< Error details if success is false.
+    std::optional<TokenUsage> turnUsage; ///< Token usage for this turn.
+    TokenUsage sessionUsage;             ///< Cumulative session token usage.
 };
 
 /// The agent needs user input via AskUserTool.

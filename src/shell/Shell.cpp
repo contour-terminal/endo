@@ -1826,6 +1826,41 @@ void Shell::runAgentMode()
             return agent::MarkdownOutput { .markdown = std::move(md) };
         }));
 
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "status",
+        "Show session status (tokens, cost, provider)",
+        [&](std::string_view) -> agent::SlashCommandResult {
+            auto const& usage = _agentSession->sessionUsage();
+            auto const turns = _agentSession->turnCount();
+            auto const messageCount = _agentSession->history().size();
+            auto const contextTokens = _agentSession->history().estimatedTokenCount();
+            auto const& pName = _agentProviderFactory->activeProviderName();
+            auto const mInfo = provider->modelInfo();
+            auto const cost = agent::estimateCost(usage, pName, mInfo.modelName);
+            auto const contextPct =
+                mInfo.contextSize > 0 ? static_cast<int>((contextTokens * 100) / mInfo.contextSize) : 0;
+
+            auto md = std::string { "| Metric | Value |\n|:-------|:------|\n" };
+            md += std::format("| Provider | {} |\n", pName);
+            md += std::format("| Model | {} |\n", mInfo.modelName);
+            md += std::format("| Turns | {} |\n", turns);
+            md += std::format("| Messages | {} |\n", messageCount);
+            md += std::format("| Input tokens | {} |\n", agent::formatTokenCount(usage.inputTokens));
+            md += std::format("| Output tokens | {} |\n", agent::formatTokenCount(usage.outputTokens));
+            if (usage.cacheReadTokens > 0)
+                md += std::format("| Cache read | {} |\n", agent::formatTokenCount(usage.cacheReadTokens));
+            if (usage.cacheCreationTokens > 0)
+                md +=
+                    std::format("| Cache write | {} |\n", agent::formatTokenCount(usage.cacheCreationTokens));
+            md += std::format("| Context usage | ~{} / {} ({}%) |\n",
+                              agent::formatTokenCount(static_cast<int64_t>(contextTokens)),
+                              agent::formatTokenCount(static_cast<int64_t>(mInfo.contextSize)),
+                              contextPct);
+            if (cost > 0.0)
+                md += std::format("| Est. cost | ${:.4f} |\n", cost);
+            return agent::MarkdownOutput { .markdown = std::move(md) };
+        }));
+
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
     auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
     auto* filePathProviderPtr = filePathProvider.get();
@@ -2049,6 +2084,26 @@ void Shell::runAgentMode()
                         {
                             auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
                             out.writeText("\nError: " + m.errorMessage + "\n", errorStyle);
+                            out.flush();
+                        }
+
+                        // Display token usage for this turn.
+                        if (m.success && m.turnUsage.has_value())
+                        {
+                            auto const& tu = *m.turnUsage;
+                            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            auto const cost =
+                                agent::estimateCost(tu, modelInfo.providerName, modelInfo.modelName);
+                            auto usageLine = std::format("\n  {} in / {} out",
+                                                         agent::formatTokenCount(tu.inputTokens),
+                                                         agent::formatTokenCount(tu.outputTokens));
+                            if (tu.cacheReadTokens > 0)
+                                usageLine +=
+                                    std::format(" ({} cached)", agent::formatTokenCount(tu.cacheReadTokens));
+                            if (cost > 0.0)
+                                usageLine += std::format(" ~${:.4f}", cost);
+                            usageLine += "\n";
+                            out.writeText(usageLine, dimStyle);
                             out.flush();
                         }
 

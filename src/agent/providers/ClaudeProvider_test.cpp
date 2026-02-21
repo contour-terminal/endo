@@ -272,6 +272,66 @@ TEST_CASE("agent.claude.parse_ping_event")
 }
 
 // =============================================================================
+// Usage parsing tests
+// =============================================================================
+
+TEST_CASE("agent.claude.parse_message_start_usage")
+{
+    auto accumulators = std::vector<ContentBlockAccumulator> {};
+    auto event = SseEvent {
+        .event = "message_start",
+        .data = R"({
+            "type": "message_start",
+            "message": {
+                "usage": {
+                    "input_tokens": 1234,
+                    "output_tokens": 0,
+                    "cache_read_input_tokens": 500,
+                    "cache_creation_input_tokens": 100
+                }
+            }
+        })",
+    };
+    auto result = ClaudeProvider::parseSseEvent(event, accumulators);
+    REQUIRE(result.has_value());
+    REQUIRE(result->usage.has_value());
+    CHECK(result->usage->inputTokens == 1234);
+    CHECK(result->usage->outputTokens == 0);
+    CHECK(result->usage->cacheReadTokens == 500);
+    CHECK(result->usage->cacheCreationTokens == 100);
+}
+
+TEST_CASE("agent.claude.parse_message_delta_usage")
+{
+    auto accumulators = std::vector<ContentBlockAccumulator> {};
+    auto event = SseEvent {
+        .event = "message_delta",
+        .data = R"({
+            "type": "message_delta",
+            "usage": {
+                "output_tokens": 567
+            }
+        })",
+    };
+    auto result = ClaudeProvider::parseSseEvent(event, accumulators);
+    REQUIRE(result.has_value());
+    REQUIRE(result->usage.has_value());
+    CHECK(result->usage->outputTokens == 567);
+}
+
+TEST_CASE("agent.claude.parse_message_start_no_usage")
+{
+    auto accumulators = std::vector<ContentBlockAccumulator> {};
+    auto event = SseEvent {
+        .event = "message_start",
+        .data = R"({"type": "message_start", "message": {}})",
+    };
+    auto result = ClaudeProvider::parseSseEvent(event, accumulators);
+    REQUIRE(result.has_value());
+    CHECK(!result->usage.has_value());
+}
+
+// =============================================================================
 // Capability tests
 // =============================================================================
 

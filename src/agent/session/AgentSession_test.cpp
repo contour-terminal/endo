@@ -28,6 +28,9 @@ class MockProvider final: public LlmProvider
     std::vector<ToolCall> pendingToolCalls;
     int generateCallCount = 0;
 
+    /// Optional token usage to return from generate().
+    std::optional<TokenUsage> mockUsage;
+
     [[nodiscard]] auto generate(std::span<ChatMessage const> messages,
                                 std::span<ToolDefinition const> /*tools*/,
                                 StreamCallback streamCb)
@@ -65,6 +68,8 @@ class MockProvider final: public LlmProvider
         {
             result.content.emplace_back(TextBlock { .text = responseText });
         }
+
+        result.usage = mockUsage;
 
         return result;
     }
@@ -751,4 +756,62 @@ TEST_CASE("AgentSession.plan_mode_exceeded_iterations", "[agent]")
     REQUIRE_FALSE(result.has_value());
     CHECK(result.error().code == AgentErrorCode::ToolLoopExceeded);
     CHECK(result.error().message.find("3") != std::string::npos);
+}
+
+// =============================================================================
+// Token usage accumulation tests
+// =============================================================================
+
+TEST_CASE("AgentSession.session_usage_accumulates_across_turns", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    provider.mockUsage = TokenUsage { .inputTokens = 100, .outputTokens = 50 };
+
+    auto session = AgentSession(provider);
+    CHECK(session.sessionUsage().inputTokens == 0);
+    CHECK(session.turnCount() == 0);
+
+    auto r1 = session.processMessage("First", nullptr);
+    REQUIRE(r1.has_value());
+    CHECK(session.sessionUsage().inputTokens == 100);
+    CHECK(session.sessionUsage().outputTokens == 50);
+    CHECK(session.turnCount() == 1);
+
+    auto r2 = session.processMessage("Second", nullptr);
+    REQUIRE(r2.has_value());
+    CHECK(session.sessionUsage().inputTokens == 200);
+    CHECK(session.sessionUsage().outputTokens == 100);
+    CHECK(session.turnCount() == 2);
+}
+
+TEST_CASE("AgentSession.session_usage_no_usage_from_provider", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    // mockUsage is nullopt by default.
+
+    auto session = AgentSession(provider);
+    auto result = session.processMessage("Hello", nullptr);
+    REQUIRE(result.has_value());
+    CHECK(session.sessionUsage().inputTokens == 0);
+    CHECK(session.sessionUsage().outputTokens == 0);
+    CHECK(session.turnCount() == 1);
+}
+
+TEST_CASE("AgentSession.reset_clears_usage", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    provider.mockUsage = TokenUsage { .inputTokens = 500, .outputTokens = 200 };
+
+    auto session = AgentSession(provider);
+    (void) session.processMessage("First", nullptr);
+    CHECK(session.turnCount() == 1);
+    CHECK(session.sessionUsage().inputTokens == 500);
+
+    session.reset();
+    CHECK(session.turnCount() == 0);
+    CHECK(session.sessionUsage().inputTokens == 0);
+    CHECK(session.sessionUsage().outputTokens == 0);
 }

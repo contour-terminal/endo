@@ -117,6 +117,10 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
                                       result->textContent().size(),
                                       generateElapsed);
 
+        // Accumulate token usage from this generate() call.
+        if (result->usage.has_value())
+            _sessionUsage += *result->usage;
+
         // Add the full assistant message (including ToolUseBlocks) to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
         _history.addMessage(std::move(assistantMsg));
@@ -124,6 +128,7 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
         // If no tool calls or no registry, return the text response
         if (!result->hasToolCalls() || !_toolRegistry)
         {
+            ++_turnCount;
             return result->textContent();
         }
 
@@ -180,6 +185,18 @@ auto AgentSession::history() const -> ConversationHistory const&
 void AgentSession::reset()
 {
     _history.clear();
+    _sessionUsage = {};
+    _turnCount = 0;
+}
+
+auto AgentSession::sessionUsage() const noexcept -> TokenUsage const&
+{
+    return _sessionUsage;
+}
+
+auto AgentSession::turnCount() const noexcept -> int
+{
+    return _turnCount;
 }
 
 void AgentSession::loadPersistedMessages(std::vector<ChatMessage> messages)
@@ -279,6 +296,10 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
                                       result->textContent().size(),
                                       generateElapsed);
 
+        // Accumulate token usage from this generate() call.
+        if (result->usage.has_value())
+            _sessionUsage += *result->usage;
+
         // Add assistant message to history
         auto assistantMsg = ChatMessage { .role = Role::Assistant, .content = result->content };
         _history.addMessage(std::move(assistantMsg));
@@ -315,6 +336,7 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
 
             auto plan = *submitPlanTool->lastParsedPlan();
             submitPlanTool->clearParsedPlan();
+            ++_turnCount;
             return plan;
         }
 

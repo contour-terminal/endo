@@ -62,6 +62,8 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
 {
     auto result = GenerateResult {};
     auto accumulators = std::vector<ContentBlockAccumulator> {};
+    auto accumulatedUsage = TokenUsage {};
+    auto hasUsage = false;
 
     auto errorBody = std::string {};
     auto const sseResult = _httpClient.executeStreaming(
@@ -82,6 +84,21 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
 
             for (auto& toolCall: parsed->completedToolCalls)
                 result.toolCalls.push_back(std::move(toolCall));
+
+            // Merge usage from message_start (input counts) and message_delta (final output count).
+            if (parsed->usage.has_value())
+            {
+                auto const& u = *parsed->usage;
+                if (u.inputTokens > 0)
+                    accumulatedUsage.inputTokens = u.inputTokens;
+                if (u.outputTokens > 0)
+                    accumulatedUsage.outputTokens = u.outputTokens;
+                if (u.cacheReadTokens > 0)
+                    accumulatedUsage.cacheReadTokens = u.cacheReadTokens;
+                if (u.cacheCreationTokens > 0)
+                    accumulatedUsage.cacheCreationTokens = u.cacheCreationTokens;
+                hasUsage = true;
+            }
 
             return !parsed->done;
         },
@@ -114,6 +131,9 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
         }
         return std::unexpected(mapHttpError(statusCode, std::move(message)));
     }
+
+    if (hasUsage)
+        result.usage = accumulatedUsage;
 
     return result;
 }
@@ -316,7 +336,27 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
     if (event.event == "message_start")
     {
-        // Initialize — nothing specific to track at message level.
+        // Extract initial token usage from message.usage.
+        auto data = nlohmann::json {};
+        try
+        {
+            data = nlohmann::json::parse(event.data);
+        }
+        catch (nlohmann::json::parse_error const&)
+        {
+            return result;
+        }
+
+        if (data.contains("message") && data["message"].contains("usage"))
+        {
+            auto const& u = data["message"]["usage"];
+            auto usage = TokenUsage {};
+            usage.inputTokens = u.value("input_tokens", int64_t { 0 });
+            usage.outputTokens = u.value("output_tokens", int64_t { 0 });
+            usage.cacheReadTokens = u.value("cache_read_input_tokens", int64_t { 0 });
+            usage.cacheCreationTokens = u.value("cache_creation_input_tokens", int64_t { 0 });
+            result.usage = usage;
+        }
         return result;
     }
 
@@ -328,7 +368,23 @@ auto ClaudeProvider::parseSseEvent(http::SseEvent const& event,
 
     if (event.event == "message_delta")
     {
-        // May contain stop_reason; we handle completion via message_stop.
+        // Extract final output token count from usage.
+        auto data = nlohmann::json {};
+        try
+        {
+            data = nlohmann::json::parse(event.data);
+        }
+        catch (nlohmann::json::parse_error const&)
+        {
+            return result;
+        }
+
+        if (data.contains("usage"))
+        {
+            auto usage = TokenUsage {};
+            usage.outputTokens = data["usage"].value("output_tokens", int64_t { 0 });
+            result.usage = usage;
+        }
         return result;
     }
 
