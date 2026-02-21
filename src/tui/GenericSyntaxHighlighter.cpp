@@ -5,7 +5,9 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <format>
 #include <functional>
+#include <string>
 #include <string_view>
 
 namespace tui
@@ -1766,6 +1768,43 @@ void renderHighlightedLine(TerminalOutput& output,
         output.writeText(text.substr(pos, spanEnd - pos), style);
         pos = spanEnd;
     }
+}
+
+auto renderHighlightedLineToString(std::string_view text, HighlightMap const& highlights, Theme const& theme)
+    -> std::string
+{
+    if (text.empty())
+        return {};
+
+    auto result = std::string {};
+    result.reserve(text.size() * 2); // rough estimate for ANSI overhead
+
+    auto const hlSize = highlights.size();
+    auto pos = std::size_t { 0 };
+
+    while (pos < text.size())
+    {
+        auto const cat = (pos < hlSize) ? highlights[pos] : HighlightCategory::Default;
+
+        // Find the end of the span with the same category
+        auto spanEnd = pos + 1;
+        while (spanEnd < text.size() && spanEnd < hlSize && highlights[spanEnd] == cat)
+            ++spanEnd;
+        if (spanEnd >= hlSize && pos < hlSize)
+        {
+            while (spanEnd < text.size())
+                ++spanEnd;
+        }
+
+        auto const color = categoryColor(cat, theme);
+        result += std::format("\033[38;2;{};{};{}m", color.r, color.g, color.b);
+        result.append(text.substr(pos, spanEnd - pos));
+
+        pos = spanEnd;
+    }
+
+    result += "\033[m";
+    return result;
 }
 
 } // namespace tui

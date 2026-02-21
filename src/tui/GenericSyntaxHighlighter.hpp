@@ -111,6 +111,19 @@ void renderHighlightedLine(TerminalOutput& output,
                            Style baseStyle,
                            Theme const& theme);
 
+/// @brief Renders a syntax-highlighted line to a string with ANSI SGR color codes.
+///
+/// Produces a string with embedded true-color ANSI escape sequences
+/// (\033[38;2;r;g;bm) for each colored span, terminated with a reset (\033[m).
+///
+/// @param text The source text.
+/// @param highlights Per-character highlight categories (must be same length as text).
+/// @param theme The current theme for color lookup.
+/// @return A string containing the text with embedded ANSI color codes.
+[[nodiscard]] auto renderHighlightedLineToString(std::string_view text,
+                                                 HighlightMap const& highlights,
+                                                 Theme const& theme) -> std::string;
+
 /// @brief Callback type for external language highlighters.
 using HighlightFunction =
     std::function<std::pair<HighlightMap, HighlightState>(std::string_view line, HighlightState state)>;

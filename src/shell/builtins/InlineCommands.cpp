@@ -2,6 +2,9 @@
 #include <shell/Shell.hpp>
 #include <shell/commands/FindExpression.hpp>
 
+#include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/Theme.hpp>
+
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -13,6 +16,10 @@
 
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
+
+#if !defined(_WIN32)
+    #include <unistd.h>
+#endif
 
 namespace
 {
@@ -312,10 +319,22 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         return 0;
     }
 
+    // Detect whether output goes to a TTY for syntax highlighting
+#if defined(_WIN32)
+    DWORD consoleMode = 0;
+    bool const outputIsTty = GetConsoleMode(outputFd, &consoleMode) != 0;
+#else
+    bool const outputIsTty = isatty(outputFd) != 0;
+#endif
+
     int lineNumber = 1;
     bool lastLineWasBlank = false;
 
-    auto processContent = [&](std::string const& content) {
+    auto processContent = [&](std::string const& content, tui::LanguageId language) {
+        auto highlightState = tui::HighlightState::Normal;
+        auto const& theme = tui::currentTheme();
+        auto const highlight = outputIsTty && language != tui::LanguageId::None;
+
         std::string line;
         for (size_t i = 0; i < content.size(); ++i)
         {
@@ -331,17 +350,30 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 }
                 lastLineWasBlank = isBlank;
 
+                // Apply syntax highlighting before flag processing
+                auto displayLine = std::string {};
+                if (highlight && !isBlank)
+                {
+                    auto [highlights, nextState] = tui::highlightLine(line, language, highlightState);
+                    highlightState = nextState;
+                    displayLine = tui::renderHighlightedLineToString(line, highlights, theme);
+                }
+                else
+                {
+                    displayLine = line;
+                }
+
                 if (showTabs)
                 {
                     std::string processed;
-                    for (char ch: line)
+                    for (char ch: displayLine)
                     {
                         if (ch == '\t')
                             processed += "^I";
                         else
                             processed += ch;
                     }
-                    line = std::move(processed);
+                    displayLine = std::move(processed);
                 }
 
                 std::string output;
@@ -349,7 +381,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                     output = std::format("{:>6}\t", lineNumber++);
                 else if (numberLines)
                     output = std::format("{:>6}\t", lineNumber++);
-                output += line;
+                output += displayLine;
                 if (showEnds)
                     output += '$';
                 output += '\n';
@@ -364,17 +396,28 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         // Handle last line without newline
         if (!line.empty())
         {
+            auto displayLine = std::string {};
+            if (highlight)
+            {
+                auto [highlights, nextState] = tui::highlightLine(line, language, highlightState);
+                displayLine = tui::renderHighlightedLineToString(line, highlights, theme);
+            }
+            else
+            {
+                displayLine = line;
+            }
+
             if (showTabs)
             {
                 std::string processed;
-                for (char ch: line)
+                for (char ch: displayLine)
                 {
                     if (ch == '\t')
                         processed += "^I";
                     else
                         processed += ch;
                 }
-                line = std::move(processed);
+                displayLine = std::move(processed);
             }
 
             std::string output;
@@ -382,7 +425,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 output = std::format("{:>6}\t", lineNumber++);
             else if (numberLines)
                 output = std::format("{:>6}\t", lineNumber++);
-            output += line;
+            output += displayLine;
             writeOutput(output);
         }
     };
@@ -405,8 +448,8 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     {
         if (file == "-")
         {
-            std::string content = readFromFd(stdinFd);
-            processContent(content);
+            auto const content = readFromFd(stdinFd);
+            processContent(content, tui::LanguageId::None);
         }
         else
         {
@@ -417,10 +460,11 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                 success = false;
                 continue;
             }
-            NativeHandle fd = result.value();
-            std::string content = readFromFd(fd);
+            auto const fd = result.value();
+            auto const content = readFromFd(fd);
             _processManager.closeHandle(fd);
-            processContent(content);
+            auto const language = tui::detectLanguageFromPath(file);
+            processContent(content, language);
         }
     }
 
