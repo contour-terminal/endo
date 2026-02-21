@@ -60,6 +60,15 @@ class FileReferenceExpander
     [[nodiscard]] static auto readFile(FileReference const& ref, int maxLines = maxLinesPerFile)
         -> std::expected<std::string, std::string>;
 
+    /// Strip previously expanded <file> blocks from a message, returning the original user text.
+    ///
+    /// The expand() method appends file contents after "\n\n<file ..." — this method
+    /// truncates at that boundary and trims trailing whitespace.
+    ///
+    /// @param text The potentially expanded message text.
+    /// @return The original user text without file expansion blocks.
+    [[nodiscard]] static auto stripExpansions(std::string_view text) -> std::string;
+
     /// Expand all @-file references: parse, read files, append contents.
     ///
     /// The original message text is preserved unchanged; file contents

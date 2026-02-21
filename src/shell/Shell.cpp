@@ -1525,7 +1525,7 @@ void Shell::runAgentMode()
             {
                 if (msg.role == agent::Role::User)
                 {
-                    auto const text = msg.textContent();
+                    auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
                     if (!text.empty())
                         historyProvider->addEntry(text);
                 }
@@ -1541,7 +1541,7 @@ void Shell::runAgentMode()
         {
             if (msg.role == agent::Role::User)
             {
-                auto const text = msg.textContent();
+                auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
                 if (!text.empty())
                     historyProvider->addEntry(text);
             }

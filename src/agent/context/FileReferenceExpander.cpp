@@ -172,6 +172,19 @@ auto FileReferenceExpander::readFile(FileReference const& ref, int const maxLine
     return content;
 }
 
+auto FileReferenceExpander::stripExpansions(std::string_view text) -> std::string
+{
+    if (auto const pos = text.find("\n\n<file "); pos != std::string_view::npos)
+    {
+        // Trim trailing whitespace from the original portion
+        auto end = pos;
+        while (end > 0 && std::isspace(static_cast<unsigned char>(text[end - 1])))
+            --end;
+        return std::string(text.substr(0, end));
+    }
+    return std::string(text);
+}
+
 auto FileReferenceExpander::expand(std::string_view message, std::filesystem::path const& cwd)
     -> FileExpansionResult
 {
