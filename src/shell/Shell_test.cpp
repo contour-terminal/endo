@@ -601,6 +601,113 @@ TEST_CASE("shell.builtin.cat_nonexistent_file")
 }
 
 // ============================================================================
+// Cat Range Tests
+// ============================================================================
+
+TEST_CASE("shell.builtin.cat_range_basic")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat --range 2..4").output();
+    CHECK(output == "b\nc\nd\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_short")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r 2..3").output();
+    CHECK(output == "b\nc\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_open_end")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r 3..").output();
+    CHECK(output == "c\nd\ne\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_open_start")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -r ..2").output();
+    CHECK(output == "a\nb\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_with_line_numbers")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -nr 3..4").output();
+    CHECK(output.find("3\t") != std::string::npos);
+    CHECK(output.find("4\t") != std::string::npos);
+    CHECK(output.find("1\t") == std::string::npos);
+    CHECK(output.find("c") != std::string::npos);
+    CHECK(output.find("d") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_range_combined_flags")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\\ne\" | cat -nr 2..2").output();
+    CHECK(output.find("2\t") != std::string::npos);
+    CHECK(output.find("b") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_range_single_line")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\" | cat --range 2..2").output();
+    CHECK(output == "b\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_with_squeeze")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\n\\n\\n\\nb\\nc\" | cat -sr 1..6").output();
+    CHECK(output == "a\n\nb\nc\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_error_empty")
+{
+    TestShell shell;
+    shell("echo hello | cat --range ..");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cat_range_error_inverted")
+{
+    TestShell shell;
+    shell("echo hello | cat --range 5..2");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cat_range_error_nonnumeric")
+{
+    TestShell shell;
+    shell("echo hello | cat --range abc..5");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cat_range_error_missing_arg")
+{
+    TestShell shell;
+    shell("echo hello | cat -r");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.cat_range_equals_syntax")
+{
+    TestShell shell;
+    auto output = shell("echo -e \"a\\nb\\nc\\nd\" | cat --range=2..3").output();
+    CHECK(output == "b\nc\n");
+}
+
+TEST_CASE("shell.builtin.cat_range_in_help")
+{
+    TestShell shell;
+    auto output = shell("cat --help").output();
+    CHECK(output.find("--range") != std::string::npos);
+}
+
+// ============================================================================
 // Sleep Builtin
 // ============================================================================
 
@@ -3292,8 +3399,14 @@ TEST_CASE("shell.builtin.find_basic")
     fs::remove_all(testDir);
     fs::create_directories(testDir);
     fs::create_directories(testDir / "sub");
-    { std::ofstream ofs(testDir / "a.txt"); ofs << "hello"; }
-    { std::ofstream ofs(testDir / "sub" / "b.txt"); ofs << "world"; }
+    {
+        std::ofstream ofs(testDir / "a.txt");
+        ofs << "hello";
+    }
+    {
+        std::ofstream ofs(testDir / "sub" / "b.txt");
+        ofs << "world";
+    }
 
     TestShell shell;
     shell(std::format("find {}", testDir.string()));
@@ -3313,9 +3426,18 @@ TEST_CASE("shell.builtin.find_name_pattern")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_name";
     fs::remove_all(testDir);
     fs::create_directories(testDir);
-    { std::ofstream ofs(testDir / "hello.cpp"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "world.hpp"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "other.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "hello.cpp");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "world.hpp");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "other.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -name '*.cpp'", testDir.string()));
@@ -3334,7 +3456,10 @@ TEST_CASE("shell.builtin.find_type_file")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_type";
     fs::remove_all(testDir);
     fs::create_directories(testDir / "subdir");
-    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "file.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -type f", testDir.string()));
@@ -3353,7 +3478,10 @@ TEST_CASE("shell.builtin.find_type_directory")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_typed";
     fs::remove_all(testDir);
     fs::create_directories(testDir / "subdir");
-    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "file.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -type d", testDir.string()));
@@ -3371,9 +3499,18 @@ TEST_CASE("shell.builtin.find_maxdepth")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_maxdepth";
     fs::remove_all(testDir);
     fs::create_directories(testDir / "a" / "b");
-    { std::ofstream ofs(testDir / "top.txt"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "a" / "mid.txt"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "a" / "b" / "deep.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "top.txt");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "a" / "mid.txt");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "a" / "b" / "deep.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -maxdepth 1", testDir.string()));
@@ -3391,9 +3528,18 @@ TEST_CASE("shell.builtin.find_or_grouping")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_or";
     fs::remove_all(testDir);
     fs::create_directories(testDir);
-    { std::ofstream ofs(testDir / "a.cpp"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "b.hpp"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "c.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "a.cpp");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "b.hpp");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "c.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} '(' -name '*.cpp' -o -name '*.hpp' ')'", testDir.string()));
@@ -3412,8 +3558,14 @@ TEST_CASE("shell.builtin.find_not")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_not";
     fs::remove_all(testDir);
     fs::create_directories(testDir);
-    { std::ofstream ofs(testDir / "keep.cpp"); ofs << "x"; }
-    { std::ofstream ofs(testDir / "remove.o"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "keep.cpp");
+        ofs << "x";
+    }
+    {
+        std::ofstream ofs(testDir / "remove.o");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -type f -not -name '*.o'", testDir.string()));
@@ -3431,8 +3583,13 @@ TEST_CASE("shell.builtin.find_empty")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_empty";
     fs::remove_all(testDir);
     fs::create_directories(testDir / "emptydir");
-    { std::ofstream ofs(testDir / "empty.txt"); } // empty file
-    { std::ofstream ofs(testDir / "notempty.txt"); ofs << "content"; }
+    {
+        std::ofstream ofs(testDir / "empty.txt");
+    } // empty file
+    {
+        std::ofstream ofs(testDir / "notempty.txt");
+        ofs << "content";
+    }
 
     TestShell shell;
     shell(std::format("find {} -empty", testDir.string()));
@@ -3451,7 +3608,10 @@ TEST_CASE("shell.builtin.find_print0")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_print0";
     fs::remove_all(testDir);
     fs::create_directories(testDir);
-    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "file.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -name '*.txt' -print0", testDir.string()));
@@ -3470,7 +3630,10 @@ TEST_CASE("shell.builtin.find_no_results")
     auto const testDir = fs::temp_directory_path() / "endo_find_test_noresult";
     fs::remove_all(testDir);
     fs::create_directories(testDir);
-    { std::ofstream ofs(testDir / "file.txt"); ofs << "x"; }
+    {
+        std::ofstream ofs(testDir / "file.txt");
+        ofs << "x";
+    }
 
     TestShell shell;
     shell(std::format("find {} -name '*.nonexistent'", testDir.string()));

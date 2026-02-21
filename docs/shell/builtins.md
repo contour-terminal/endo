@@ -350,18 +350,44 @@ Concatenate and display files.
 **Syntax:**
 
 ```
-cat [file...]
+cat [OPTIONS] [FILE...]
 ```
 
 **Description:** Reads files sequentially and writes their contents to standard output. If
-no files are given, reads from standard input.
+no files are given (or when FILE is `-`), reads from standard input. When output goes to a
+terminal, syntax highlighting is applied automatically based on the file extension.
 
-**Example:**
+**Options:**
+
+| Option | Long form | Description |
+|--------|-----------|-------------|
+| `-n` | `--number` | Number all output lines |
+| `-b` | `--number-nonblank` | Number non-blank output lines (overrides `-n`) |
+| `-s` | `--squeeze-blank` | Suppress repeated empty output lines |
+| `-E` | `--show-ends` | Display `$` at end of each line |
+| `-T` | `--show-tabs` | Display TAB characters as `^I` |
+| `-A` | `--show-all` | Equivalent to `-ET` |
+| `-r` | `--range START..END` | Show only lines in the given range |
+| `-h` | `--help` | Display help and exit |
+
+**Range syntax:**
+
+- `3..7` — show lines 3 through 7
+- `..5` — show lines 1 through 5
+- `10..` — show from line 10 to the end of the file
+
+When `-n` or `-b` is combined with `--range`, line numbers reflect the original file
+positions (not re-numbered from 1).
+
+**Examples:**
 
 ```endo
 cat README.md
 cat file1.txt file2.txt > combined.txt
 echo "hello" | cat
+cat -n script.sh
+cat --range 10..20 main.cpp
+cat -nr 5..15 data.txt
 ```
 
 ---

@@ -5,6 +5,7 @@
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/Theme.hpp>
 
+#include <charconv>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -129,6 +130,53 @@ std::string processEscapeSequences(std::string_view input)
     return result;
 }
 
+/// Parses a range specification of the form "START..END", "START..", or "..END".
+/// Returns a pair of optional ints representing the start and end of the range.
+/// At least one side must be specified, values must be >= 1, and START <= END.
+std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> parseRange(
+    std::string_view range)
+{
+    auto const dotdot = range.find("..");
+    if (dotdot == std::string_view::npos)
+        return std::unexpected("invalid range format, expected START..END");
+
+    auto const startStr = range.substr(0, dotdot);
+    auto const endStr = range.substr(dotdot + 2);
+
+    if (startStr.empty() && endStr.empty())
+        return std::unexpected("empty range, expected at least START or END");
+
+    std::optional<int> rangeStart;
+    std::optional<int> rangeEnd;
+
+    if (!startStr.empty())
+    {
+        int value = 0;
+        auto const [ptr, ec] = std::from_chars(startStr.data(), startStr.data() + startStr.size(), value);
+        if (ec != std::errc {} || ptr != startStr.data() + startStr.size())
+            return std::unexpected(std::format("invalid start value '{}'", startStr));
+        if (value < 1)
+            return std::unexpected("start value must be >= 1");
+        rangeStart = value;
+    }
+
+    if (!endStr.empty())
+    {
+        int value = 0;
+        auto const [ptr, ec] = std::from_chars(endStr.data(), endStr.data() + endStr.size(), value);
+        if (ec != std::errc {} || ptr != endStr.data() + endStr.size())
+            return std::unexpected(std::format("invalid end value '{}'", endStr));
+        if (value < 1)
+            return std::unexpected("end value must be >= 1");
+        rangeEnd = value;
+    }
+
+    if (rangeStart && rangeEnd && *rangeStart > *rangeEnd)
+        return std::unexpected(std::format("start ({}) must be <= end ({})", *rangeStart, *rangeEnd));
+
+    return std::pair { rangeStart, rangeEnd };
+}
+
 } // namespace
 
 namespace endo
@@ -216,6 +264,9 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     bool showEnds = false;
     bool showTabs = false;
     bool showHelp = false;
+    std::optional<int> rangeStart;
+    std::optional<int> rangeEnd;
+    bool rangeSpecified = false;
     std::vector<std::string> files;
 
     for (size_t i = 0; i < catArgs.size(); ++i)
@@ -265,6 +316,33 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             showTabs = true;
             continue;
         }
+        if (arg == "--range" || arg.starts_with("--range="))
+        {
+            std::string_view rangeValue;
+            if (arg == "--range")
+            {
+                if (i + 1 >= catArgs.size())
+                {
+                    error("cat: --range requires a value");
+                    return 1;
+                }
+                rangeValue = catArgs[++i];
+            }
+            else
+            {
+                rangeValue = arg.substr(8); // skip "--range="
+            }
+            auto const parsed = parseRange(rangeValue);
+            if (!parsed.has_value())
+            {
+                error("cat: --range: {}", parsed.error());
+                return 1;
+            }
+            rangeStart = parsed->first;
+            rangeEnd = parsed->second;
+            rangeSpecified = true;
+            continue;
+        }
 
         if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
         {
@@ -283,6 +361,29 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                         showTabs = true;
                         break;
                     case 'h': showHelp = true; break;
+                    case 'r': {
+                        // -r must be last in the flag cluster since it takes an argument
+                        if (j + 1 != arg.size())
+                        {
+                            error("cat: -r must be last in combined flags (takes an argument)");
+                            return 1;
+                        }
+                        if (i + 1 >= catArgs.size())
+                        {
+                            error("cat: -r requires a value");
+                            return 1;
+                        }
+                        auto const parsed = parseRange(catArgs[++i]);
+                        if (!parsed.has_value())
+                        {
+                            error("cat: -r: {}", parsed.error());
+                            return 1;
+                        }
+                        rangeStart = parsed->first;
+                        rangeEnd = parsed->second;
+                        rangeSpecified = true;
+                        break;
+                    }
                     default: validFlag = false; break;
                 }
                 if (!validFlag)
@@ -315,6 +416,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         writeOutput("  -E, --show-ends        display $ at end of each line\n");
         writeOutput("  -T, --show-tabs        display TAB characters as ^I\n");
         writeOutput("  -A, --show-all         equivalent to -ET\n");
+        writeOutput("  -r, --range START..END show only lines in the given range\n");
         writeOutput("  -h, --help             display this help and exit\n");
         return 0;
     }
@@ -334,6 +436,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         auto highlightState = tui::HighlightState::Normal;
         auto const& theme = tui::currentTheme();
         auto const highlight = outputIsTty && language != tui::LanguageId::None;
+        int physicalLineNumber = 0;
 
         std::string line;
         for (size_t i = 0; i < content.size(); ++i)
@@ -341,6 +444,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             char c = content[i];
             if (c == '\n')
             {
+                ++physicalLineNumber;
                 bool isBlank = line.empty();
 
                 if (squeezeBlank && isBlank && lastLineWasBlank)
@@ -349,6 +453,18 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                     continue;
                 }
                 lastLineWasBlank = isBlank;
+
+                // Range filtering
+                if (rangeSpecified)
+                {
+                    if (rangeEnd && physicalLineNumber > *rangeEnd)
+                        return;
+                    if (rangeStart && physicalLineNumber < *rangeStart)
+                    {
+                        line.clear();
+                        continue;
+                    }
+                }
 
                 // Apply syntax highlighting before flag processing
                 auto displayLine = std::string {};
@@ -378,9 +494,9 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 
                 std::string output;
                 if (numberNonBlank && !isBlank)
-                    output = std::format("{:>6}\t", lineNumber++);
+                    output = std::format("{:>6}\t", rangeSpecified ? physicalLineNumber : lineNumber++);
                 else if (numberLines)
-                    output = std::format("{:>6}\t", lineNumber++);
+                    output = std::format("{:>6}\t", rangeSpecified ? physicalLineNumber : lineNumber++);
                 output += displayLine;
                 if (showEnds)
                     output += '$';
@@ -396,6 +512,17 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         // Handle last line without newline
         if (!line.empty())
         {
+            ++physicalLineNumber;
+
+            // Range filtering for trailing line
+            if (rangeSpecified)
+            {
+                if (rangeEnd && physicalLineNumber > *rangeEnd)
+                    return;
+                if (rangeStart && physicalLineNumber < *rangeStart)
+                    return;
+            }
+
             auto displayLine = std::string {};
             if (highlight)
             {
@@ -422,9 +549,9 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 
             std::string output;
             if (numberNonBlank && !line.empty())
-                output = std::format("{:>6}\t", lineNumber++);
+                output = std::format("{:>6}\t", rangeSpecified ? physicalLineNumber : lineNumber++);
             else if (numberLines)
-                output = std::format("{:>6}\t", lineNumber++);
+                output = std::format("{:>6}\t", rangeSpecified ? physicalLineNumber : lineNumber++);
             output += displayLine;
             writeOutput(output);
         }
