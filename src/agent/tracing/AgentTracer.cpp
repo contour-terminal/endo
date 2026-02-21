@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <format>
+#include <vector>
 
 #include <agent/tracing/AgentTracer.hpp>
 #include <nlohmann/json.hpp>
@@ -161,6 +164,60 @@ void AgentTracer::writeError(std::string_view code, std::string_view message)
 auto AgentTracer::path() const noexcept -> std::filesystem::path const&
 {
     return _path;
+}
+
+auto resolveTraceLogDirectory() -> std::filesystem::path
+{
+    auto ec = std::error_code {};
+    auto current = std::filesystem::current_path(ec);
+    if (!ec)
+    {
+        // Walk upward looking for a .git directory (project root).
+        while (true)
+        {
+            if (std::filesystem::is_directory(current / ".git", ec))
+                return current / ".endo" / "trace-logs";
+
+            auto const parent = current.parent_path();
+            if (parent == current)
+                break;
+            current = parent;
+        }
+    }
+
+    // Fallback: global state directory.
+    auto const* home = std::getenv("HOME");
+    if (home)
+        return std::filesystem::path(home) / ".local" / "state" / "endo" / "trace-logs";
+
+    return std::filesystem::path("/tmp") / "endo" / "trace-logs";
+}
+
+void pruneOldTraceFiles(std::filesystem::path const& dir, size_t maxFiles)
+{
+    auto ec = std::error_code {};
+    if (!std::filesystem::is_directory(dir, ec))
+        return;
+
+    auto files = std::vector<std::filesystem::directory_entry> {};
+    for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
+    {
+        if (entry.is_regular_file(ec) && entry.path().extension() == ".jsonl")
+            files.push_back(entry);
+    }
+
+    if (files.size() <= maxFiles)
+        return;
+
+    // Sort by last-write-time, oldest first.
+    std::ranges::sort(files, [](auto const& a, auto const& b) {
+        auto ec = std::error_code {};
+        return a.last_write_time(ec) < b.last_write_time(ec);
+    });
+
+    auto const toRemove = files.size() - maxFiles;
+    for (size_t i = 0; i < toRemove; ++i)
+        std::filesystem::remove(files[i].path(), ec);
 }
 
 } // namespace endo::agent

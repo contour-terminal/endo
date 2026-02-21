@@ -456,6 +456,11 @@ std::vector<CompletionCandidate> builtinCandidates()
           "Trace file path",
           "",
           CompletionKind::Property },
+        { "agent_trace_max_files",
+          "agent_trace_max_files",
+          "Max trace files to retain",
+          "",
+          CompletionKind::Property },
         // MCP server management (multi-arg functions, not properties)
         { "add_mcp_server", "add_mcp_server", "Register an MCP server", "", CompletionKind::Builtin },
         { "set_mcp_env",

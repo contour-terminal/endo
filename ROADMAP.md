@@ -1072,11 +1072,14 @@ Component (base class)
 - [x] Direct `AgentTracer*` pointer in `AgentSession` (replaced `ToolTraceCallback` `std::function`)
 - [x] Instrumented `processMessage()`: user message, compaction, LLM request/response timing, provider/loop errors
 - [x] Instrumented `processMessageForPlan()`: same event coverage with `mode="plan"`
-- [x] `TraceConfig` in `AgentConfig`: `enabled` flag and `default_path` with YAML persistence
+- [x] `TraceConfig` in `AgentConfig`: `enabled` flag, `default_path`, and `maxFiles` with YAML persistence
 - [x] CLI integration: `--agent-trace[=FILE]` flag, `Shell::setAgentTracePath()`, auto-generated timestamped paths
 - [x] `TraceReplay`: displays all event types with per-type summary counters
 - [x] Wired in `Shell::runAgentMode()`: tracer creation from CLI/config, session header, `setTracer()` pointer
-- [x] Comprehensive test coverage: AgentTracer (13 cases), AgentSession tracer (3 cases), AgentConfig trace roundtrip (3 cases)
+- [x] Project-aware trace directory: `.endo/trace-logs/` in Git projects, `~/.local/state/endo/trace-logs/` globally
+- [x] `pruneOldTraceFiles()`: retains at most `maxFiles` trace files, removing oldest by modification time
+- [x] `agent_trace_max_files` builtin property (default: 20)
+- [x] Comprehensive test coverage: AgentTracer (13 cases + 5 new), AgentSession tracer (3 cases), AgentConfig trace roundtrip (3 cases)
 
 ### Phase 3.14: @-Mention File Path Completion ✅
 

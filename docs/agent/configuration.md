@@ -113,6 +113,12 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 |----------|------|-------------|
 | `agent_trace_enabled` | bool | Enable tool I/O trace logging (default: `false`) |
 | `agent_trace_default_path` | string | Trace file path (empty = auto-generated) |
+| `agent_trace_max_files` | int | Maximum number of auto-generated trace files to retain (default: 20). Oldest files are pruned when the limit is exceeded. Only applies when the trace path is auto-generated. |
+
+!!! note
+    When the trace path is auto-generated (i.e. `agent_trace_default_path` is empty), trace
+    files are written to `<project-root>/.endo/trace-logs/` if a Git repository is detected,
+    or `~/.local/state/endo/trace-logs/` otherwise.
 
 ---
 
@@ -199,6 +205,9 @@ agent_plan_mode_max_exploration_turns <- 20
 
 # Explore sub-agent
 agent_explore_max_turns <- 15
+
+# Tracing
+agent_trace_max_files <- 10
 
 # Shell prompt
 shell_prompt_preset <- "endo-signature"

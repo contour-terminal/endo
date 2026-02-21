@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include <agent/tracing/AgentTracer.hpp>
 #include <nlohmann/json.hpp>
@@ -375,4 +377,114 @@ TEST_CASE("AgentTracer.error_format", "[agent]")
     CHECK(doc.contains("timestamp"));
 
     std::filesystem::remove_all(tmpDir);
+}
+
+// ============================================================================
+// resolveTraceLogDirectory tests
+// ============================================================================
+
+TEST_CASE("resolveTraceLogDirectory.returns_project_dir_in_git_repo", "[agent]")
+{
+    // We're running inside the endo repo, so CWD is under a .git root.
+    auto const dir = resolveTraceLogDirectory();
+    CHECK(dir.filename() == "trace-logs");
+    CHECK(dir.parent_path().filename() == ".endo");
+    // Verify the project root actually has .git
+    CHECK(std::filesystem::is_directory(dir.parent_path().parent_path() / ".git"));
+}
+
+// ============================================================================
+// pruneOldTraceFiles tests
+// ============================================================================
+
+TEST_CASE("pruneOldTraceFiles.noop_when_under_limit", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-prune-noop";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    // Create 3 files, allow 5
+    for (auto i = 0; i < 3; ++i)
+    {
+        auto ofs = std::ofstream(tmpDir / ("trace-" + std::to_string(i) + ".jsonl"));
+        ofs << "{}";
+    }
+
+    pruneOldTraceFiles(tmpDir, 5);
+
+    auto count = 0;
+    for ([[maybe_unused]] auto const& _: std::filesystem::directory_iterator(tmpDir))
+        ++count;
+    CHECK(count == 3);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("pruneOldTraceFiles.removes_oldest_files", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-prune-remove";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    // Create 5 files with distinct modification times
+    for (auto i = 0; i < 5; ++i)
+    {
+        auto const path = tmpDir / ("trace-" + std::to_string(i) + ".jsonl");
+        {
+            auto ofs = std::ofstream(path);
+            ofs << "{}";
+        }
+        // Set modification time so file 0 is oldest, file 4 is newest
+        auto const baseTime = std::filesystem::file_time_type::clock::now();
+        std::filesystem::last_write_time(path, baseTime + std::chrono::seconds(i * 2));
+    }
+
+    pruneOldTraceFiles(tmpDir, 2);
+
+    // Only the 2 newest should remain (trace-3.jsonl and trace-4.jsonl)
+    auto remaining = std::vector<std::string> {};
+    for (auto const& entry: std::filesystem::directory_iterator(tmpDir))
+        remaining.push_back(entry.path().filename().string());
+    std::ranges::sort(remaining);
+
+    REQUIRE(remaining.size() == 2);
+    CHECK(remaining[0] == "trace-3.jsonl");
+    CHECK(remaining[1] == "trace-4.jsonl");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("pruneOldTraceFiles.ignores_non_jsonl_files", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-prune-nonjsonl";
+    std::filesystem::remove_all(tmpDir);
+    std::filesystem::create_directories(tmpDir);
+
+    // Create 3 .jsonl files and 2 .txt files
+    for (auto i = 0; i < 3; ++i)
+    {
+        auto ofs = std::ofstream(tmpDir / ("trace-" + std::to_string(i) + ".jsonl"));
+        ofs << "{}";
+    }
+    for (auto i = 0; i < 2; ++i)
+    {
+        auto ofs = std::ofstream(tmpDir / ("notes-" + std::to_string(i) + ".txt"));
+        ofs << "hello";
+    }
+
+    pruneOldTraceFiles(tmpDir, 1);
+
+    // 1 .jsonl + 2 .txt should remain
+    auto count = 0;
+    for ([[maybe_unused]] auto const& _: std::filesystem::directory_iterator(tmpDir))
+        ++count;
+    CHECK(count == 3);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("pruneOldTraceFiles.noop_for_nonexistent_directory", "[agent]")
+{
+    // Should not throw for a nonexistent directory
+    CHECK_NOTHROW(pruneOldTraceFiles("/nonexistent/path/endo-test", 5));
 }

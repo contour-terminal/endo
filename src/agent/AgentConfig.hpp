@@ -63,6 +63,7 @@ struct TraceConfig
 {
     bool enabled = false;    ///< Whether tracing is enabled by default.
     std::string defaultPath; ///< Default trace file path (empty = auto-generate).
+    size_t maxFiles = 20;    ///< Maximum number of trace files to retain (oldest pruned first).
 };
 
 /// Top-level agent configuration supporting multiple LLM providers.

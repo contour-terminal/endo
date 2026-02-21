@@ -1718,17 +1718,15 @@ void Shell::runAgentMode()
     for (auto const& toolDef: mcpServerManager.allTools())
         toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, toolDef));
 
-    mcpServerManager.setToolsChangedCallback(
-        [&toolRegistry, &mcpServerManager](
-            std::string_view /*serverName*/,
-            std::span<agent::ToolDefinition const> added,
-            std::vector<std::string> const& removed) {
-            for (auto const& name: removed)
-                toolRegistry.unregisterTool(name);
-            for (auto const& def: added)
-                toolRegistry.registerTool(
-                    std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, def));
-        });
+    mcpServerManager.setToolsChangedCallback([&toolRegistry,
+                                              &mcpServerManager](std::string_view /*serverName*/,
+                                                                 std::span<agent::ToolDefinition const> added,
+                                                                 std::vector<std::string> const& removed) {
+        for (auto const& name: removed)
+            toolRegistry.unregisterTool(name);
+        for (auto const& def: added)
+            toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, def));
+    });
 
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
@@ -1747,10 +1745,11 @@ void Shell::runAgentMode()
             tracePath = agentConfig.trace.defaultPath;
         else
         {
+            auto const traceDir = agent::resolveTraceLogDirectory();
             auto const now = std::chrono::system_clock::now();
             auto const timestamp =
                 std::format("{:%Y%m%d-%H%M%S}", std::chrono::floor<std::chrono::seconds>(now));
-            tracePath = ".endo/agent-trace-" + timestamp + ".jsonl";
+            tracePath = (traceDir / ("agent-trace-" + timestamp + ".jsonl")).string();
         }
 
         auto tracerResult = agent::AgentTracer::create(tracePath);
@@ -1760,6 +1759,10 @@ void Shell::runAgentMode()
             auto const tracerModelInfo = provider->modelInfo();
             agentTracer->writeSessionHeader(tracerModelInfo.providerName, tracerModelInfo.modelName);
             _agentSession->setTracer(&*agentTracer);
+
+            // Prune old trace files if auto-generated path was used.
+            if (!_agentTracePath.has_value() && agentConfig.trace.defaultPath.empty())
+                agent::pruneOldTraceFiles(agentTracer->path().parent_path(), agentConfig.trace.maxFiles);
         }
         else
         {
@@ -2080,25 +2083,18 @@ void Shell::runAgentMode()
                                 && m.call.arguments.contains("new_string"))
                             {
                                 auto const oldStr =
-                                    m.call.arguments["old_string"]
-                                        .template get<std::string>();
+                                    m.call.arguments["old_string"].template get<std::string>();
                                 auto const newStr =
-                                    m.call.arguments["new_string"]
-                                        .template get<std::string>();
-                                auto const filePath =
-                                    m.call.arguments.value("path", std::string { "file" });
+                                    m.call.arguments["new_string"].template get<std::string>();
+                                auto const filePath = m.call.arguments.value("path", std::string { "file" });
 
-                                auto diffLines =
-                                    agent::generateUnifiedDiff(oldStr, newStr);
+                                auto diffLines = agent::generateUnifiedDiff(oldStr, newStr);
                                 auto const changedLines =
-                                    static_cast<int>(std::ranges::count_if(
-                                        diffLines,
-                                        [](auto const& l) {
-                                            return l.type == agent::DiffLineType::Addition
-                                                   || l.type == agent::DiffLineType::Deletion;
-                                        }));
-                                auto const truncated =
-                                    changedLines > agent::LargeEditThreshold;
+                                    static_cast<int>(std::ranges::count_if(diffLines, [](auto const& l) {
+                                        return l.type == agent::DiffLineType::Addition
+                                               || l.type == agent::DiffLineType::Deletion;
+                                    }));
+                                auto const truncated = changedLines > agent::LargeEditThreshold;
                                 agent::renderDiff(out, filePath, diffLines, truncated);
                             }
 
@@ -2584,16 +2580,15 @@ void Shell::runAgentMode()
                     else if (planModeActive && agentConfig.planMode.enabled)
                     {
                         // Plan mode: send to worker with planMode flag.
-                        worker.inbound().push(agent::UserPromptMessage {
-                            .text = expandFileRefs(query), .planMode = true });
+                        worker.inbound().push(
+                            agent::UserPromptMessage { .text = expandFileRefs(query), .planMode = true });
                         sentToWorker = true;
                         saveHistory();
                     }
                     else
                     {
                         // Normal message: send to worker.
-                        worker.inbound().push(
-                            agent::UserPromptMessage { .text = expandFileRefs(query) });
+                        worker.inbound().push(agent::UserPromptMessage { .text = expandFileRefs(query) });
                         sentToWorker = true;
                     }
 

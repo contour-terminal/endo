@@ -1397,6 +1397,10 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.trace.defaultPath)); })
         .onSet([this](CoreVM::Params& args) { agentConfig.trace.defaultPath = std::string(args.getString(1)); });
 
+    _runtime.registerProperty("agent_trace_max_files", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.trace.maxFiles)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.trace.maxFiles = static_cast<size_t>(n); });
+
     // --- Web search ---
 
     _runtime.registerProperty("agent_web_search_engine", CoreVM::LiteralType::String)

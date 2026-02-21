@@ -94,4 +94,19 @@ class AgentTracer
     std::ofstream _stream;
 };
 
+/// Resolves the trace log directory based on the current working directory.
+///
+/// Walks from CWD upward looking for a `.git` directory.
+/// If found, returns `<project-root>/.endo/trace-logs/`.
+/// Otherwise, returns `~/.local/state/endo/trace-logs/`.
+[[nodiscard]] auto resolveTraceLogDirectory() -> std::filesystem::path;
+
+/// Removes the oldest trace files exceeding @p maxFiles in the given directory.
+///
+/// Lists `*.jsonl` files in @p dir, sorted by last-write-time, and deletes
+/// the oldest entries so that at most @p maxFiles remain.
+/// @param dir Directory containing trace log files.
+/// @param maxFiles Maximum number of trace files to retain.
+void pruneOldTraceFiles(std::filesystem::path const& dir, size_t maxFiles);
+
 } // namespace endo::agent

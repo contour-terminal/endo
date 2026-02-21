@@ -91,6 +91,8 @@ namespace
             config.enabled = node["enabled"].as<bool>();
         if (node["default_path"])
             config.defaultPath = node["default_path"].as<std::string>();
+        if (node["max_files"])
+            config.maxFiles = node["max_files"].as<size_t>();
     }
 
     /// @brief Emits a provider section containing only api_key and api_key_env.

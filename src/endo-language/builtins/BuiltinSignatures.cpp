@@ -868,6 +868,7 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     // --- Trace ---
     registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean);
     registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_trace_max_files", CoreVM::LiteralType::Number);
 
     // --- Web search ---
     registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String);
