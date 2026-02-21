@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <crispy/base64.h>
 
+#include <array>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 
 #include <agent/conversation/ConversationHistoryStore.hpp>
 #include <nlohmann/json.hpp>
@@ -11,8 +14,65 @@ namespace endo::agent
 
 namespace
 {
-    // Current file format version.
-    constexpr auto FormatVersion = 1;
+    // File format versions.
+    constexpr auto FormatVersionV1 = 1;
+    constexpr auto FormatVersionV2 = 2;
+
+    // --- Time helpers ---
+
+    auto timePointToIso8601(std::chrono::system_clock::time_point tp) -> std::string
+    {
+        auto const tt = std::chrono::system_clock::to_time_t(tp);
+        auto tm = std::tm {};
+        gmtime_r(&tt, &tm);
+        auto buf = std::array<char, 32> {};
+        std::strftime(buf.data(), buf.size(), "%Y-%m-%dT%H:%M:%SZ", &tm);
+        return std::string(buf.data());
+    }
+
+    auto iso8601ToTimePoint(std::string_view str) -> std::chrono::system_clock::time_point
+    {
+        auto tm = std::tm {};
+        auto ss = std::istringstream(std::string(str));
+        ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+        if (ss.fail())
+            return {};
+        return std::chrono::system_clock::from_time_t(timegm(&tm));
+    }
+
+    auto tokenUsageToJson(TokenUsage const& usage) -> nlohmann::json
+    {
+        return nlohmann::json {
+            { "input_tokens", usage.inputTokens },
+            { "output_tokens", usage.outputTokens },
+            { "cache_read_tokens", usage.cacheReadTokens },
+            { "cache_creation_tokens", usage.cacheCreationTokens },
+        };
+    }
+
+    auto tokenUsageFromJson(nlohmann::json const& j) -> TokenUsage
+    {
+        return TokenUsage {
+            .inputTokens = j.value("input_tokens", int64_t { 0 }),
+            .outputTokens = j.value("output_tokens", int64_t { 0 }),
+            .cacheReadTokens = j.value("cache_read_tokens", int64_t { 0 }),
+            .cacheCreationTokens = j.value("cache_creation_tokens", int64_t { 0 }),
+        };
+    }
+
+    auto metadataFromJson(nlohmann::json const& doc) -> SessionMetadata
+    {
+        return SessionMetadata {
+            .name = doc.value("name", std::string {}),
+            .createdAt = iso8601ToTimePoint(doc.value("created_at", std::string {})),
+            .updatedAt = iso8601ToTimePoint(doc.value("updated_at", std::string {})),
+            .provider = doc.value("provider", std::string {}),
+            .model = doc.value("model", std::string {}),
+            .turnCount = doc.value("turn_count", 0),
+            .tokenUsage =
+                doc.contains("token_usage") ? tokenUsageFromJson(doc["token_usage"]) : TokenUsage {},
+        };
+    }
 
     // --- Serialization helpers (standalone, not ADL) ---
 
@@ -193,7 +253,7 @@ auto ConversationHistoryStore::save(std::span<ChatMessage const> messages) const
     }
 
     auto doc = nlohmann::json {
-        { "version", FormatVersion },
+        { "version", FormatVersionV1 },
         { "messages", std::move(jsonMessages) },
     };
 
@@ -231,6 +291,196 @@ auto ConversationHistoryStore::save(std::span<ChatMessage const> messages) const
     }
 
     return {};
+}
+
+auto ConversationHistoryStore::save(std::span<ChatMessage const> messages,
+                                    SessionMetadata const& metadata) const
+    -> std::expected<void, HistoryStoreError>
+{
+    // Create parent directory if needed.
+    auto const parentDir = _path.parent_path();
+    if (!parentDir.empty())
+    {
+        auto ec = std::error_code {};
+        std::filesystem::create_directories(parentDir, ec);
+        if (ec)
+        {
+            return std::unexpected(HistoryStoreError {
+                .code = HistoryStoreErrorCode::IoError,
+                .message = "Failed to create directory: " + parentDir.string() + " (" + ec.message() + ")",
+            });
+        }
+    }
+
+    // Filter out system messages.
+    auto jsonMessages = nlohmann::json::array();
+    for (auto const& msg: messages)
+    {
+        if (msg.role == Role::System)
+            continue;
+        jsonMessages.push_back(chatMessageToJson(msg));
+    }
+
+    auto doc = nlohmann::json {
+        { "version", FormatVersionV2 },
+        { "name", metadata.name },
+        { "created_at", timePointToIso8601(metadata.createdAt) },
+        { "updated_at", timePointToIso8601(metadata.updatedAt) },
+        { "provider", metadata.provider },
+        { "model", metadata.model },
+        { "turn_count", metadata.turnCount },
+        { "token_usage", tokenUsageToJson(metadata.tokenUsage) },
+        { "messages", std::move(jsonMessages) },
+    };
+
+    // Atomic write: write to .tmp file, then rename.
+    auto const tmpPath = std::filesystem::path(_path.string() + ".tmp");
+    {
+        auto ofs = std::ofstream(tmpPath);
+        if (!ofs.is_open())
+        {
+            return std::unexpected(HistoryStoreError {
+                .code = HistoryStoreErrorCode::IoError,
+                .message = "Failed to create temporary file: " + tmpPath.string(),
+            });
+        }
+        ofs << doc.dump(2);
+        if (!ofs.good())
+        {
+            return std::unexpected(HistoryStoreError {
+                .code = HistoryStoreErrorCode::IoError,
+                .message = "Failed to write temporary file: " + tmpPath.string(),
+            });
+        }
+    }
+
+    auto ec = std::error_code {};
+    std::filesystem::rename(tmpPath, _path, ec);
+    if (ec)
+    {
+        std::filesystem::remove(tmpPath, ec);
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Failed to rename temporary file to: " + _path.string(),
+        });
+    }
+
+    return {};
+}
+
+auto ConversationHistoryStore::loadWithMetadata() const
+    -> std::expected<std::pair<SessionMetadata, std::vector<ChatMessage>>, HistoryStoreError>
+{
+    auto ec = std::error_code {};
+    if (!std::filesystem::exists(_path, ec))
+        return std::pair { SessionMetadata {}, std::vector<ChatMessage> {} };
+
+    auto ifs = std::ifstream(_path);
+    if (!ifs.is_open())
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Failed to open history file: " + _path.string(),
+        });
+    }
+
+    auto doc = nlohmann::json {};
+    try
+    {
+        ifs >> doc;
+    }
+    catch (nlohmann::json::parse_error const& e)
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::CorruptJson,
+            .message = std::string("Corrupt JSON: ") + e.what(),
+        });
+    }
+
+    if (!doc.contains("version"))
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::MissingVersion,
+            .message = "Missing 'version' field in history file.",
+        });
+    }
+
+    auto messages = std::vector<ChatMessage> {};
+    if (doc.contains("messages") && doc["messages"].is_array())
+    {
+        for (auto const& msgJson: doc["messages"])
+            messages.push_back(chatMessageFromJson(msgJson));
+    }
+
+    auto const version = doc["version"].get<int>();
+    if (version >= FormatVersionV2)
+    {
+        auto metadata = metadataFromJson(doc);
+        return std::pair { std::move(metadata), std::move(messages) };
+    }
+
+    // Version 1: construct default metadata from file modification time.
+    auto metadata = SessionMetadata {};
+    auto const lwt = std::filesystem::last_write_time(_path, ec);
+    if (!ec)
+    {
+        auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+        metadata.createdAt = sctp;
+        metadata.updatedAt = sctp;
+    }
+    return std::pair { std::move(metadata), std::move(messages) };
+}
+
+auto ConversationHistoryStore::loadMetadataOnly() const -> std::expected<SessionMetadata, HistoryStoreError>
+{
+    auto ec = std::error_code {};
+    if (!std::filesystem::exists(_path, ec))
+        return SessionMetadata {};
+
+    auto ifs = std::ifstream(_path);
+    if (!ifs.is_open())
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Failed to open history file: " + _path.string(),
+        });
+    }
+
+    auto doc = nlohmann::json {};
+    try
+    {
+        ifs >> doc;
+    }
+    catch (nlohmann::json::parse_error const& e)
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::CorruptJson,
+            .message = std::string("Corrupt JSON: ") + e.what(),
+        });
+    }
+
+    if (!doc.contains("version"))
+    {
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::MissingVersion,
+            .message = "Missing 'version' field in history file.",
+        });
+    }
+
+    auto const version = doc["version"].get<int>();
+    if (version >= FormatVersionV2)
+        return metadataFromJson(doc);
+
+    // Version 1: construct default metadata from file modification time.
+    auto metadata = SessionMetadata {};
+    auto const lwt = std::filesystem::last_write_time(_path, ec);
+    if (!ec)
+    {
+        auto const sctp = std::chrono::clock_cast<std::chrono::system_clock>(lwt);
+        metadata.createdAt = sctp;
+        metadata.updatedAt = sctp;
+    }
+    return metadata;
 }
 
 auto ConversationHistoryStore::remove() const -> std::expected<void, HistoryStoreError>

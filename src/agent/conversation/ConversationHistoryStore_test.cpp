@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 
@@ -251,4 +252,115 @@ TEST_CASE("ConversationHistoryStore.round_trip_tool_use_block")
     CHECK(tuBlock->id == "call_456");
     CHECK(tuBlock->name == "read_file");
     CHECK(tuBlock->arguments["path"] == "/tmp/test.txt");
+}
+
+// --- Version 2 (metadata) tests ---
+
+TEST_CASE("ConversationHistoryStore.saveWithMetadata_and_loadWithMetadata_roundTrip")
+{
+    auto const path = tempHistoryPath();
+    auto const guard = FileGuard { path };
+    auto const store = ConversationHistoryStore(path);
+
+    auto messages = std::vector<ChatMessage> {
+        ChatMessage::text(Role::User, "Hello"),
+        ChatMessage::text(Role::Assistant, "Hi there!"),
+    };
+
+    auto const now = std::chrono::system_clock::now();
+    auto const metadata = SessionMetadata {
+        .name = "test-session",
+        .createdAt = now - std::chrono::hours(1),
+        .updatedAt = now,
+        .provider = "claude",
+        .model = "claude-sonnet-4-6",
+        .turnCount = 5,
+        .tokenUsage = TokenUsage { .inputTokens = 1000, .outputTokens = 500, .cacheReadTokens = 200 },
+    };
+
+    auto saveResult = store.save(messages, metadata);
+    REQUIRE(saveResult.has_value());
+
+    auto loadResult = store.loadWithMetadata();
+    REQUIRE(loadResult.has_value());
+    auto const& [loadedMeta, loadedMessages] = *loadResult;
+    CHECK(loadedMeta.name == "test-session");
+    CHECK(loadedMeta.provider == "claude");
+    CHECK(loadedMeta.model == "claude-sonnet-4-6");
+    CHECK(loadedMeta.turnCount == 5);
+    CHECK(loadedMeta.tokenUsage.inputTokens == 1000);
+    CHECK(loadedMeta.tokenUsage.outputTokens == 500);
+    CHECK(loadedMeta.tokenUsage.cacheReadTokens == 200);
+    REQUIRE(loadedMessages.size() == 2);
+    CHECK(loadedMessages.at(0).textContent() == "Hello");
+    CHECK(loadedMessages.at(1).textContent() == "Hi there!");
+}
+
+TEST_CASE("ConversationHistoryStore.loadMetadataOnly_skipsMessages")
+{
+    auto const path = tempHistoryPath();
+    auto const guard = FileGuard { path };
+    auto const store = ConversationHistoryStore(path);
+
+    auto messages = std::vector<ChatMessage> {
+        ChatMessage::text(Role::User, "First message"),
+        ChatMessage::text(Role::Assistant, "Response"),
+    };
+
+    auto const now = std::chrono::system_clock::now();
+    auto const metadata = SessionMetadata {
+        .name = "metadata-only",
+        .createdAt = now,
+        .updatedAt = now,
+        .provider = "openai",
+        .model = "gpt-4o",
+        .turnCount = 2,
+    };
+
+    REQUIRE(store.save(messages, metadata).has_value());
+
+    auto metaResult = store.loadMetadataOnly();
+    REQUIRE(metaResult.has_value());
+    CHECK(metaResult->name == "metadata-only");
+    CHECK(metaResult->provider == "openai");
+    CHECK(metaResult->model == "gpt-4o");
+    CHECK(metaResult->turnCount == 2);
+}
+
+TEST_CASE("ConversationHistoryStore.version1File_loadsWithDefaultMetadata")
+{
+    auto const path = tempHistoryPath();
+    auto const guard = FileGuard { path };
+
+    // Write a version 1 file manually.
+    {
+        auto doc = nlohmann::json {
+            { "version", 1 },
+            { "messages",
+              nlohmann::json::array(
+                  { nlohmann::json { { "role", "user" },
+                                     { "content",
+                                       nlohmann::json::array({ nlohmann::json {
+                                           { "type", "text" }, { "text", "v1 message" } } }) } } }) },
+        };
+        auto ofs = std::ofstream(path);
+        ofs << doc.dump(2);
+    }
+
+    auto const store = ConversationHistoryStore(path);
+
+    // loadWithMetadata should handle v1 gracefully.
+    auto result = store.loadWithMetadata();
+    REQUIRE(result.has_value());
+    auto const& [meta, messages] = *result;
+    CHECK(meta.name.empty());     // No name in v1.
+    CHECK(meta.provider.empty()); // No provider in v1.
+    CHECK(meta.turnCount == 0);   // Default.
+    REQUIRE(messages.size() == 1);
+    CHECK(messages.at(0).textContent() == "v1 message");
+
+    // loadMetadataOnly should also work.
+    auto metaResult = store.loadMetadataOnly();
+    REQUIRE(metaResult.has_value());
+    CHECK(metaResult->name.empty());
 }
