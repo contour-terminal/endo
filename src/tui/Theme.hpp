@@ -130,10 +130,14 @@ struct Theme
     /// @brief Colors used by the agent mode UI (input bar, spinner, status).
     struct AgentColorPalette
     {
-        RgbColor leftBar;      ///< Left bar accent color for agent input/response.
-        RgbColor spinnerColor; ///< Spinner animation color.
-        RgbColor errorText;    ///< Error message text color.
-        RgbColor statusText;   ///< Status/info text color.
+        RgbColor leftBar;           ///< Left bar accent color for agent input/response.
+        RgbColor spinnerColor;      ///< Spinner animation color.
+        RgbColor errorText;         ///< Error message text color.
+        RgbColor statusText;        ///< Status/info text color.
+        RgbColor planModeText;      ///< "plan" mode indicator color (green).
+        RgbColor executeModeText;   ///< "execute" mode indicator color (red).
+        RgbColor pathGradientStart; ///< Path gradient start color (blue).
+        RgbColor pathGradientEnd;   ///< Path gradient end color (teal).
     } agentColors;
 
     // Border style

@@ -51,8 +51,8 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         col += canvas.putString(rowOff, col, " ", {});
         col += canvas.putString(rowOff, col, "\xe2\x94\x82", dimPipeStyle); // │ separator
         col += canvas.putString(rowOff, col, " ", {});
-        auto modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.statusText }
-                                   : tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        auto const modeStyle = _planMode ? tui::Style { .fg = theme.agentColors.planModeText }
+                                         : tui::Style { .fg = theme.agentColors.executeModeText };
         col += canvas.putString(rowOff, col, _planMode ? "plan" : "execute", modeStyle);
     }
 
@@ -99,18 +99,31 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         auto dimTextStyle = tui::Style { .fg = theme.agentColors.statusText };
         dimTextStyle.dim = true;
 
+        // Render project path with blue→teal gradient coloring.
+        auto const renderPathGradient = [&]() {
+            for (std::size_t i = 0; i < _projectPath.size(); ++i)
+            {
+                auto const t = _projectPath.size() == 1
+                                   ? 0.0f
+                                   : static_cast<float>(i) / static_cast<float>(_projectPath.size() - 1);
+                auto const color =
+                    tui::lerpColor(theme.agentColors.pathGradientStart, theme.agentColors.pathGradientEnd, t);
+                col += canvas.putString(rowOff, col, _projectPath.substr(i, 1), tui::Style { .fg = color });
+            }
+        };
+
         if (!_gitBranch.empty())
         {
             col += canvas.putString(rowOff, col, _gitBranch, dimTextStyle);
             if (!_projectPath.empty())
             {
                 col += canvas.putString(rowOff, col, " @ ", dimPipeStyle);
-                col += canvas.putString(rowOff, col, _projectPath, dimTextStyle);
+                renderPathGradient();
             }
         }
         else
         {
-            col += canvas.putString(rowOff, col, _projectPath, dimTextStyle);
+            renderPathGradient();
         }
     }
 

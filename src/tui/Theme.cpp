@@ -123,6 +123,10 @@ auto darkTheme() -> Theme
         .spinnerColor = 0xAA55FF_rgb,
         .errorText = 0xFF5555_rgb,
         .statusText = 0x888888_rgb,
+        .planModeText = 0x4ADE80_rgb,      // Spring green
+        .executeModeText = 0xEF4444_rgb,   // Strong red
+        .pathGradientStart = 0x5078FF_rgb, // Blue (endo-signature)
+        .pathGradientEnd = 0x00DCC8_rgb,   // Teal (endo-signature)
     };
 
     theme.borderStyle = BorderStyle::Rounded;
@@ -240,6 +244,10 @@ auto lightTheme() -> Theme
         .spinnerColor = 0x6400B4_rgb,
         .errorText = 0xC83232_rgb,
         .statusText = 0x787882_rgb,
+        .planModeText = 0x22C55E_rgb,      // Medium green (light-theme friendly)
+        .executeModeText = 0xDC2626_rgb,   // Strong red (light-theme friendly)
+        .pathGradientStart = 0x3060D8_rgb, // Blue (darker for light bg)
+        .pathGradientEnd = 0x009688_rgb,   // Teal (darker for light bg)
     };
 
     theme.borderStyle = BorderStyle::Rounded;
@@ -351,6 +359,10 @@ auto monoTheme() -> Theme
         .spinnerColor = 0xC8C8C8_rgb,
         .errorText = 0xFFFFFF_rgb,
         .statusText = 0x808080_rgb,
+        .planModeText = 0xFFFFFF_rgb,      // White (monochrome)
+        .executeModeText = 0xFFFFFF_rgb,   // White (monochrome)
+        .pathGradientStart = 0xC8C8C8_rgb, // Light gray
+        .pathGradientEnd = 0xFFFFFF_rgb,   // White
     };
 
     theme.borderStyle = BorderStyle::Single;
