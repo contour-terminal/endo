@@ -614,6 +614,9 @@ The library includes:
 - Events with `uiHandled=true` are skipped (terminal UI consumed them, e.g., for scrollback)
 - Scroll wheel scrolls multiline editor content
 - 14 new mouse-related tests added to InputField_test.cpp
+- Mouse events wired from `Screen::dispatchEvent()` → `PromptComponent::onEvent()` → `handleMouseEvent()`
+  → `InputField::handleMouse()` with coordinate translation (component-relative 1-based to buffer
+  line + grapheme index). `Prompt::read()` and `Prompt::processInput()` trigger redraw on handled mouse events.
 
 ### Phase 2.3: Completion and Suggestions
 
@@ -827,8 +830,10 @@ Component (base class)
 - Tooltip automatically hides when user starts typing (via `Screen::dispatchKeyEvent`); all events
   (not just mouse) are routed through `Screen::dispatchEvent()` so key presses auto-hide tooltips
   without PromptComponent needing any tooltip-awareness.
-  `PromptComponent` does **not** override `onEvent()` — key processing is handled solely by
-  `Prompt::read()` calling `processInput()`, avoiding double-dispatch through the event bubble chain.
+  `PromptComponent` overrides `onEvent()` for mouse events only — translating component-relative
+  coordinates to InputField buffer coordinates (line + grapheme index) and calling `handleMouse()`.
+  Key processing is handled solely by `Prompt::read()` calling `processInput()`, avoiding
+  double-dispatch through the event bubble chain.
 - `onHover()` returns the position of the hovered element (not where the tooltip should appear);
   `showTooltip()` adds the +1 row offset for "below cursor" placement
 - Inline mode coordinate tracking handles content shifts caused by tooltip/popup rendering:

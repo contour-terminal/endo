@@ -103,6 +103,14 @@ class PromptComponent: public tui::Component
     /// @brief Sets the history source for inline history cycling.
     void setHistory(History const* history) { _history = history; }
 
+    /// @brief Handles input events dispatched by Screen (mouse events).
+    ///
+    /// Translates component-relative mouse coordinates to InputField buffer coordinates
+    /// and delegates to InputField::handleMouse().
+    /// @param event The input event to process (only MouseEvent is handled).
+    /// @return Handled if the mouse event changed state, Ignored otherwise.
+    [[nodiscard]] tui::EventResult onEvent(tui::InputEvent const& event) override;
+
     /// @brief Called when the user hovers over this component after the hover delay.
     ///
     /// Returns tooltip content for diagnostics, language hover info, or command tooltips.
@@ -217,6 +225,12 @@ class PromptComponent: public tui::Component
     static constexpr int HorizontalMargin = 1; // Left and right margin
     static constexpr int LeftBarWidth = 1;
     static constexpr int PaddingAfterBar = 1;
+
+    /// @brief Translates a component-relative MouseEvent to InputField buffer coordinates
+    /// and delegates to InputField::handleMouse().
+    /// @param mouse The mouse event with component-relative 1-based coordinates.
+    /// @return The InputFieldAction resulting from the mouse event.
+    [[nodiscard]] tui::InputFieldAction handleMouseEvent(tui::MouseEvent const& mouse);
 
     /// @brief Returns the effective left bar width (2 for Rounded separator with ─, 1 otherwise).
     [[nodiscard]] int leftBarWidth() const noexcept

@@ -2,9 +2,9 @@
 #include "PromptComponent.hpp"
 #include <shell/completion/Completer.hpp>
 #include <shell/history/History.hpp>
-#include <shell/util/CommandResolver.hpp>
 #include <shell/ui/SourceOffsetUtils.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
+#include <shell/util/CommandResolver.hpp>
 
 #include <endo-language/ide/HoverProvider.hpp>
 
@@ -640,6 +640,62 @@ int PromptComponent::displayWidth(std::string_view text)
     for (auto const& cluster: segmenter)
         width += tui::graphemeClusterWidth(cluster);
     return width;
+}
+
+tui::EventResult PromptComponent::onEvent(tui::InputEvent const& event)
+{
+    auto const* mouse = std::get_if<tui::MouseEvent>(&event);
+    if (!mouse)
+        return tui::EventResult::Ignored;
+
+    auto const action = handleMouseEvent(*mouse);
+    return (action != tui::InputFieldAction::None) ? tui::EventResult::Handled : tui::EventResult::Ignored;
+}
+
+tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& mouse)
+{
+    // Convert 1-based component-relative to 0-based
+    auto const compCol = mouse.x - 1;
+    auto const compRow = mouse.y - 1;
+
+    // For scroll events, pass through directly
+    if (mouse.type == tui::MouseEvent::Type::ScrollUp || mouse.type == tui::MouseEvent::Type::ScrollDown)
+        return _inputField.handleMouse(mouse.type, 0, 0, mouse.modifiers);
+
+    // Compute which input line this falls on
+    auto const inputLine = compRow - topPadding() - auroraFadeHeight() - chromeHeight();
+    auto const totalLines = _inputField.lineCount();
+
+    // Clamp line to valid range
+    auto const clampedLine = std::clamp(inputLine, 0, std::max(0, totalLines - 1));
+
+    // Compute text start column (prompt prefix area)
+    auto const fieldOriginCol = HorizontalMargin + leftBarWidth() + PaddingAfterBar;
+    auto const promptTextWidth = displayWidth(_promptStr);
+    // Continuation prompt matches prompt text width by construction
+    auto const textStartCol = fieldOriginCol + promptTextWidth;
+
+    // Display column within text area (clamp to 0 if click is in prompt area)
+    auto const textDisplayCol = std::max(0, compCol - textStartCol);
+
+    // Convert display column to grapheme index by walking the line content
+    auto const lineContent = _inputField.lineAt(clampedLine);
+    auto graphemeIndex = 0;
+    if (!lineContent.empty())
+    {
+        auto segmenter = unicode::utf8_grapheme_segmenter(lineContent);
+        auto displayCol = 0;
+        for (auto const& cluster: segmenter)
+        {
+            auto const w = tui::graphemeClusterWidth(cluster);
+            if (displayCol + w > textDisplayCol)
+                break;
+            displayCol += w;
+            ++graphemeIndex;
+        }
+    }
+
+    return _inputField.handleMouse(mouse.type, clampedLine, graphemeIndex, mouse.modifiers);
 }
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)

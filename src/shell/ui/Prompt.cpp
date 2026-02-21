@@ -13,8 +13,8 @@
 #endif
 
 #include <shell/completion/Completer.hpp>
-#include <shell/util/CommandResolver.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
+#include <shell/util/CommandResolver.hpp>
 
 #include "PromptComponent.hpp"
 #if defined(_WIN32)
@@ -164,8 +164,11 @@ std::string Prompt::read()
             if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
                 continue;
 
-            // Dispatch all events through Screen (updates hover state, auto-hides tooltips on key press)
-            (void) _screen->dispatchEvent(event);
+            // Dispatch all events through Screen (updates hover state, auto-hides tooltips on key press,
+            // and routes mouse events to PromptComponent::onEvent for click-to-cursor positioning)
+            auto const screenResult = _screen->dispatchEvent(event);
+            if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(event))
+                needsRedraw = true;
 
             // Process event through PromptComponent
             auto action = _promptComponent->processInput(event);
@@ -290,6 +293,17 @@ std::optional<std::string> Prompt::processInput()
         // Skip modifier-only key events (Ctrl, Alt, Shift, CapsLock, etc. pressed alone).
         if (auto const* key = std::get_if<tui::KeyEvent>(&event); key && tui::isModifierOnlyKey(key->key))
             continue;
+
+        // Dispatch through Screen so mouse events reach PromptComponent::onEvent()
+        auto const screenResult = _screen->dispatchEvent(event);
+        if (screenResult == tui::EventResult::Handled && std::holds_alternative<tui::MouseEvent>(event))
+        {
+            _promptComponent->flushDeferredUpdates();
+            auto pSize = _promptComponent->preferredSize();
+            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _screen->draw();
+            continue;
+        }
 
         auto action = _promptComponent->processInput(event);
 

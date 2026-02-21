@@ -114,6 +114,87 @@ TEST_CASE("PromptComponent.exitHintTimeoutMs_with_active_hint", "[prompt]")
 // onHover position mapping tests (verifies screenToSourcePosition via public API)
 // ============================================================================
 
+// ============================================================================
+// Mouse click-to-cursor positioning tests (verifies onEvent → handleMouseEvent)
+// ============================================================================
+
+TEST_CASE("PromptComponent.mouse_click_positions_cursor", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("Hello World");
+
+    // Layout: HorizontalMargin(1) + leftBarWidth(1) + PaddingAfterBar(1) + promptText("$ "=2) = 5
+    // Input line at row = topPadding(1) + auroraFadeHeight(0) + chromeHeight(0) = 1
+    // Component-relative 1-based: text starts at column 6 (5 + 1 for 1-based)
+    // Click at grapheme 5 ("W") → column = 5 + 5 + 1 = 11
+    auto mousePress = tui::MouseEvent {
+        .type = tui::MouseEvent::Type::Press,
+        .button = 0,
+        .x = 11, // 1-based component-relative: 5 (field origin) + 5 (graphemes) + 1 (1-based)
+        .y = 2,  // 1-based: row 1 (0-based) + 1
+        .modifiers = tui::Modifier::None,
+    };
+    auto const result = comp.onEvent(tui::InputEvent { mousePress });
+    CHECK(result == tui::EventResult::Handled);
+    CHECK(comp.inputField().cursor() == 5); // Byte position of "W" in "Hello World"
+}
+
+TEST_CASE("PromptComponent.mouse_click_in_prompt_area_snaps_to_col0", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("Hello");
+
+    // Click in the prompt decoration area (before text starts)
+    auto mousePress = tui::MouseEvent {
+        .type = tui::MouseEvent::Type::Press,
+        .button = 0,
+        .x = 2, // In the bar/margin area
+        .y = 2,
+        .modifiers = tui::Modifier::None,
+    };
+    auto const result = comp.onEvent(tui::InputEvent { mousePress });
+    CHECK(result == tui::EventResult::Handled);
+    CHECK(comp.inputField().cursor() == 0); // Snapped to beginning
+}
+
+TEST_CASE("PromptComponent.mouse_click_beyond_text_snaps_to_end", "[prompt]")
+{
+    auto comp = PromptComponent();
+    auto config = comp.promptConfig();
+    config.layout = PromptLayoutKind::SingleLine;
+    comp.setPromptConfig(std::move(config));
+    comp.setPrompt("$ ");
+    comp.inputField().setText("Hi");
+
+    // Click far beyond text end
+    auto mousePress = tui::MouseEvent {
+        .type = tui::MouseEvent::Type::Press,
+        .button = 0,
+        .x = 50, // Way past "Hi"
+        .y = 2,
+        .modifiers = tui::Modifier::None,
+    };
+    auto const result = comp.onEvent(tui::InputEvent { mousePress });
+    CHECK(result == tui::EventResult::Handled);
+    CHECK(comp.inputField().cursor() == 2); // End of "Hi"
+}
+
+TEST_CASE("PromptComponent.mouse_non_mouse_event_ignored", "[prompt]")
+{
+    auto comp = PromptComponent();
+    // Key events should be ignored by onEvent (handled by processInput instead)
+    auto const result = comp.onEvent(charEvent('a'));
+    CHECK(result == tui::EventResult::Ignored);
+}
+
 TEST_CASE("PromptComponent.onHover_withinText_returnsHoverInfo", "[prompt]")
 {
     auto comp = PromptComponent();
