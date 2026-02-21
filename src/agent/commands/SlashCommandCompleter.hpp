@@ -14,6 +14,8 @@ class SlashCommandRegistry;
 /// types a '/' prefix. Uses smart-case and fuzzy matching against all registered
 /// commands in the registry. Dynamically added commands appear immediately since
 /// the registry is read on each completion request.
+///
+/// Also provides argument completion for specific commands (e.g. `/model <name>`).
 class SlashCommandCompleter final: public tui::CompletionProvider
 {
   public:
@@ -32,6 +34,11 @@ class SlashCommandCompleter final: public tui::CompletionProvider
     [[nodiscard]] int priority() const override { return 100; }
 
   private:
+    /// @brief Generates model name completions for `/model <prefix>`.
+    /// @param prefix The prefix to filter model names by.
+    /// @return Completion items for matching model names.
+    [[nodiscard]] std::vector<tui::CompletionItem> completeModelArgument(std::string_view prefix);
+
     SlashCommandRegistry const& _registry;
 };
 

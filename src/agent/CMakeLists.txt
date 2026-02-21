@@ -135,6 +135,7 @@ add_executable(test-endo-agent
     tracing/AgentTracer_test.cpp
 
     # Provider tests
+    providers/ProviderModels_test.cpp
     providers/ClaudeProvider_test.cpp
     providers/OpenAiProvider_test.cpp
     providers/GeminiProvider_test.cpp

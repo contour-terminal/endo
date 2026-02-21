@@ -191,7 +191,7 @@ per-turn and cumulative tracking. `/status` slash command shows full session sta
 - Cumulative session totals in `/status` command ✅
 - Hardcoded per-provider cost models with cache discount support ✅
 
-### Diff Preview for edit_file
+### Diff Preview for edit_file ✅
 
 **Status:** Done | **Effort:** Small
 
@@ -205,7 +205,7 @@ before writing the file.
 - Syntax highlighting for diff content (see "Syntax Highlighting for Agent Output" below) ✅
 - Optional approval prompt for large edits (infrastructure prepared, not enforced yet) ✅
 
-### Syntax Highlighting for Agent Output
+### Syntax Highlighting for Agent Output ✅
 
 **Status:** Done | **Effort:** Medium
 
@@ -257,16 +257,18 @@ The conversation persistence infrastructure exists but could be enhanced:
 - Auto-resume last session on agent mode entry (configurable)
 - On session load, replay the history for context (configurable).
 
-### Model Switching at Runtime Enhancement
+### Model Switching at Runtime Enhancement ✅
 
-**Status:** Partial (`CycleModel`, `ProviderFactory::switchProvider()` exist) | **Effort:** Small
+**Status:** Done | **Effort:** Small
 
-The model cycling infrastructure exists. Enhancements:
+Full model switching via `/model` slash command with cross-provider support.
 
-- `/model <name>` slash command for direct model selection
-- `/model` without args shows interactive model picker
-- Cross-provider switching (e.g., Claude → Gemini) within a session
-- Display model change confirmation with capability diff
+- [x] `/model <name>` slash command for direct model selection (substring matching)
+- [x] `/model` without args lists all models grouped by provider, marks active
+- [x] Cross-provider switching (e.g., Claude → Gemini) within a session
+- [x] Display model change confirmation with capability diff table
+- [x] Tab completion for model names (`/model <Tab>`)
+- [x] `Ctrl+.` still cycles models within the active provider (refactored)
 
 ---
 
@@ -300,7 +302,7 @@ src/agent/
 - `ReadOnly` tools: always auto-approved
 - `Mutating` tools: prompt on first use, remember approval for the session
 - `Destructive` tools: always prompt with command preview
-- Permission prompts rendered inline (styled confirmation bar, `[y/n/a]`)
+- Permission prompts rendered inline (use QuestionComponent from tui library for asking the user)
 
 #### 6.3 Shell Command Safety
 
@@ -316,12 +318,9 @@ Special handling for the `shell_execute` tool:
 Configure in `init.endo`:
 
 ```sh
-agent_permissions_policy <- "ask"          # ask | trust_session | trust_all | read_only
-add_trusted_tool "read_file"
-add_trusted_tool "glob"
-add_trusted_tool "grep"
-add_blocked_pattern "rm -rf /"
-add_blocked_pattern ":(){ :|:& };:"
+agent_permissions_policy <- AgentPermission.ask          # ask | trust_session | trust_all | read_only
+agent_trusted_tool <- ["read_file"; "glob"; "grep"]
+agent_blocked_pattern <- ["rm -rf /"; ":(){ :|:& };:"]
 ```
 
 ### Undo/Rollback System

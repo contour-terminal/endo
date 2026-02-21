@@ -1891,6 +1891,112 @@ void Shell::runAgentMode()
             return agent::MarkdownOutput { .markdown = std::move(md) };
         }));
 
+    // Helper lambda to switch the active model and provider, rebuilding the factory.
+    // Used by CycleModel, CycleThinkingMode, and the /model slash command.
+    auto switchToModel = [&](std::string_view targetProvider, std::string_view targetModel) -> bool {
+        // Update the config for the target provider.
+        auto const pName = std::string(targetProvider);
+        std::string* modelPtr = nullptr;
+        if (pName == "claude")
+            modelPtr = &agentConfig.claude.model;
+        else if (pName == "openai")
+            modelPtr = &agentConfig.openai.model;
+        else if (pName == "openai_compat")
+            modelPtr = &agentConfig.openaiCompat.model;
+        else if (pName == "gemini")
+            modelPtr = &agentConfig.gemini.model;
+        else
+            return false;
+
+        if (modelPtr)
+            *modelPtr = std::string(targetModel);
+        agentConfig.activeProvider = pName;
+
+        // Stop worker before replacing factory to avoid use-after-free:
+        // the worker thread holds a reference to the provider via AgentSession.
+        worker.stop();
+        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
+        if (auto* newProvider = _agentProviderFactory->activeProvider())
+        {
+            _agentSession->setProvider(*newProvider);
+            provider = newProvider;
+        }
+        worker.start();
+
+        inputComponent.setProviderName(pName);
+        inputComponent.setModelName(std::string(targetModel));
+        return true;
+    };
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "model",
+        "Switch model (/model <name> or /model to list)",
+        [&](std::string_view args) -> agent::SlashCommandResult {
+            auto const trimmedArgs = [&]() -> std::string_view {
+                auto sv = args;
+                while (!sv.empty() && sv.front() == ' ')
+                    sv.remove_prefix(1);
+                while (!sv.empty() && sv.back() == ' ')
+                    sv.remove_suffix(1);
+                return sv;
+            }();
+
+            if (trimmedArgs.empty())
+            {
+                // List all models grouped by provider, marking the active one.
+                auto const& activePName = _agentProviderFactory->activeProviderName();
+                auto const activeModelInfo = provider->modelInfo();
+
+                auto text = std::string {};
+                for (auto const prov: agent::KnownProviders)
+                {
+                    auto const models = agent::modelsForProvider(prov);
+                    if (models.empty())
+                        continue;
+                    text += std::format("{}:\n", prov);
+                    for (auto const model: models)
+                    {
+                        auto const isActive = (prov == activePName && model == activeModelInfo.modelName);
+                        text += std::format("  {}{}\n", model, isActive ? "  [active]" : "");
+                    }
+                }
+                text += "\nType /model <name> to switch.\n";
+                return agent::DirectOutput { .text = std::move(text) };
+            }
+
+            // Find the model by name.
+            auto const& activePName = _agentProviderFactory->activeProviderName();
+            auto const match = agent::findModelByName(trimmedArgs, activePName);
+            if (!match)
+            {
+                auto text = std::format("No model matching '{}' found.\n\nAvailable models:\n", trimmedArgs);
+                for (auto const& m: agent::allKnownModels())
+                    text += std::format("  {} ({})\n", m.modelName, m.providerName);
+                return agent::DirectOutput { .text = std::move(text) };
+            }
+
+            // Check if the target provider is authenticated.
+            auto const authenticated = _agentProviderFactory->authenticatedProviders();
+            auto const isAuth =
+                std::ranges::find(authenticated, std::string(match->providerName)) != authenticated.end();
+            if (!isAuth)
+            {
+                return agent::DirectOutput {
+                    .text = std::format("Provider '{}' is not authenticated.\n"
+                                        "Run `endo agent login` to configure it.\n",
+                                        match->providerName),
+                };
+            }
+
+            // Capture old model info, switch, capture new.
+            auto const oldInfo = provider->modelInfo();
+            if (!switchToModel(match->providerName, match->modelName))
+                return agent::DirectOutput { .text = "Failed to switch model.\n" };
+            auto const newInfo = provider->modelInfo();
+
+            return agent::MarkdownOutput { .markdown = agent::formatCapabilityDiff(oldInfo, newInfo) };
+        }));
+
     inputComponent.addCompletionProvider(std::make_unique<agent::SlashCommandCompleter>(slashRegistry));
     auto filePathProvider = std::make_unique<agent::FilePathCompleter>();
     auto* filePathProviderPtr = filePathProvider.get();
@@ -2651,14 +2757,8 @@ void Shell::runAgentMode()
                     {
                         *thinkingModePtr = agent::nextThinkingMode(*thinkingModePtr);
                         inputComponent.setThinkingMode(*thinkingModePtr);
-                        // Stop worker before replacing factory to avoid use-after-free:
-                        // the worker thread holds a reference to the provider via AgentSession.
-                        worker.stop();
-                        _agentProviderFactory =
-                            std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
-                        if (auto* newProvider = _agentProviderFactory->activeProvider())
-                            _agentSession->setProvider(*newProvider);
-                        worker.start();
+                        auto const currentModel = provider->modelInfo().modelName;
+                        switchToModel(pName, currentModel);
                     }
                     needsRedraw = true;
                     break;
@@ -2669,29 +2769,9 @@ void Shell::runAgentMode()
                     auto const models = agent::modelsForProvider(pName);
                     if (!models.empty())
                     {
-                        std::string* modelPtr = nullptr;
-                        if (pName == "claude")
-                            modelPtr = &agentConfig.claude.model;
-                        else if (pName == "openai")
-                            modelPtr = &agentConfig.openai.model;
-                        else if (pName == "openai_compat")
-                            modelPtr = &agentConfig.openaiCompat.model;
-                        else if (pName == "gemini")
-                            modelPtr = &agentConfig.gemini.model;
-
-                        if (modelPtr)
-                        {
-                            *modelPtr = std::string(agent::nextModel(models, *modelPtr));
-                            inputComponent.setModelName(*modelPtr);
-                            // Stop worker before replacing factory to avoid use-after-free:
-                            // the worker thread holds a reference to the provider via AgentSession.
-                            worker.stop();
-                            _agentProviderFactory =
-                                std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
-                            if (auto* newProvider = _agentProviderFactory->activeProvider())
-                                _agentSession->setProvider(*newProvider);
-                            worker.start();
-                        }
+                        auto const currentModel = provider->modelInfo().modelName;
+                        auto const nextModelName = agent::nextModel(models, currentModel);
+                        switchToModel(pName, nextModelName);
                     }
                     needsRedraw = true;
                     break;

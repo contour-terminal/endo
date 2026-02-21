@@ -149,3 +149,37 @@ TEST_CASE("SlashCommandCompleter.priority_is_100", "[agent][slash][completer]")
     auto completer = SlashCommandCompleter(registry);
     CHECK(completer.priority() == 100);
 }
+
+TEST_CASE("SlashCommandCompleter.model_argument_completion_with_prefix", "[agent][slash][completer]")
+{
+    auto registry = createTestRegistry();
+    registry.registerCommand(std::make_unique<CallbackSlashCommand>(
+        "model", "Switch model", [](std::string_view) -> SlashCommandResult {
+            return DirectOutput { .text = "ok" };
+        }));
+    auto completer = SlashCommandCompleter(registry);
+
+    // "son" should match "claude-sonnet-4-6" (and possibly others with "sonnet")
+    auto const items = completer.complete("/model son", 10);
+    CHECK(!items.empty());
+    // All items should start with "/model "
+    for (auto const& item: items)
+    {
+        CHECK(item.text.starts_with("/model "));
+        CHECK(!item.description.empty()); // should have provider name
+    }
+}
+
+TEST_CASE("SlashCommandCompleter.model_argument_completion_all_models", "[agent][slash][completer]")
+{
+    auto registry = createTestRegistry();
+    registry.registerCommand(std::make_unique<CallbackSlashCommand>(
+        "model", "Switch model", [](std::string_view) -> SlashCommandResult {
+            return DirectOutput { .text = "ok" };
+        }));
+    auto completer = SlashCommandCompleter(registry);
+
+    // Empty prefix after space should list all models.
+    auto const items = completer.complete("/model ", 7);
+    CHECK(items.size() == 12); // 5 Claude + 4 OpenAI + 3 Gemini
+}

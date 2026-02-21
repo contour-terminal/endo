@@ -7,6 +7,7 @@
 
 #include <agent/commands/SlashCommandCompleter.hpp>
 #include <agent/commands/SlashCommandRegistry.hpp>
+#include <agent/providers/ProviderModels.hpp>
 
 namespace endo::agent
 {
@@ -22,10 +23,20 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
     if (input.empty() || input[0] != '/')
         return {};
 
-    // Only complete the command name, not arguments after the first space
     auto const inputUpToCursor = input.substr(0, cursorPosition);
-    if (inputUpToCursor.find(' ') != std::string_view::npos)
+
+    // Check if we're past the command name (space found) — handle argument completion.
+    auto const spacePos = inputUpToCursor.find(' ');
+    if (spacePos != std::string_view::npos)
+    {
+        auto const cmdName = inputUpToCursor.substr(1, spacePos - 1);
+        if (cmdName == "model")
+        {
+            auto const argPrefix = inputUpToCursor.substr(spacePos + 1);
+            return completeModelArgument(argPrefix);
+        }
         return {};
+    }
 
     // Extract the prefix after '/' up to cursor
     auto const prefix = inputUpToCursor.substr(1);
@@ -64,6 +75,63 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
                 .description = std::string(cmd->description()),
                 .score = score,
                 .matchPositions = std::move(positions),
+            });
+        }
+    }
+
+    // Sort by score descending, then alphabetically
+    std::ranges::sort(items, [](auto const& a, auto const& b) {
+        if (a.score != b.score)
+            return a.score > b.score;
+        return a.text < b.text;
+    });
+
+    return items;
+}
+
+std::vector<tui::CompletionItem> SlashCommandCompleter::completeModelArgument(std::string_view prefix)
+{
+    auto const allModels = allKnownModels();
+    auto items = std::vector<tui::CompletionItem> {};
+
+    for (auto const& m: allModels)
+    {
+        // Case-insensitive prefix/substring matching.
+        auto const modelName = std::string(m.modelName);
+        auto const fullText = "/model " + modelName;
+
+        if (prefix.empty())
+        {
+            // Show all models when no prefix is given.
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = std::string(m.providerName),
+                .score = 100,
+            });
+            continue;
+        }
+
+        // Try smart-case prefix match
+        if (tui::SmartCaseMatch::matchesPrefix(modelName, prefix))
+        {
+            auto score = tui::SmartCaseMatch::adjustScore(100, modelName, prefix);
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = std::string(m.providerName),
+                .score = score,
+            });
+            continue;
+        }
+
+        // Fall back to fuzzy match
+        auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(modelName, prefix);
+        if (fuzzyResult.matches)
+        {
+            auto const score = tui::FuzzyMatch::calculateScore(50, modelName, prefix, fuzzyResult);
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = std::string(m.providerName),
+                .score = score,
             });
         }
     }
