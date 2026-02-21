@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/Box.hpp>
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/MarkdownTable.hpp>
+#include <tui/Theme.hpp>
 
 #include <string>
 #include <string_view>
@@ -36,6 +38,32 @@ namespace
             return line.substr(fenceStart, pos - fenceStart);
 
         return {};
+    }
+
+    /// @brief Extracts the language tag from a code fence line (e.g. "cpp" from "```cpp").
+    /// @param line The fence line.
+    /// @return The language tag, or empty if none.
+    auto extractFenceLanguage(std::string_view line) -> std::string_view
+    {
+        auto pos = std::size_t { 0 };
+        // Skip leading whitespace (up to 3 spaces)
+        while (pos < line.size() && pos < 3 && line[pos] == ' ')
+            ++pos;
+        // Skip fence characters
+        if (pos < line.size() && (line[pos] == '`' || line[pos] == '~'))
+        {
+            auto const fenceChar = line[pos];
+            while (pos < line.size() && line[pos] == fenceChar)
+                ++pos;
+        }
+        // Skip whitespace between fence and language tag
+        while (pos < line.size() && line[pos] == ' ')
+            ++pos;
+        // Extract language tag (everything until whitespace or end of line)
+        auto const tagStart = pos;
+        while (pos < line.size() && line[pos] != ' ' && line[pos] != '\t')
+            ++pos;
+        return line.substr(tagStart, pos - tagStart);
     }
 
     /// @brief Counts the heading level (number of leading '#' chars).
@@ -140,10 +168,21 @@ void MarkdownRenderer::render(std::string_view markdown)
             {
                 _inCodeBlock = false;
                 _codeFence.clear();
+                _codeLanguage = LanguageId::None;
+                _codeHighlightState = HighlightState::Normal;
             }
             else
             {
-                _output.writeText(line, _theme.codeBlock);
+                if (_codeLanguage != LanguageId::None)
+                {
+                    auto [highlights, newState] = highlightLine(line, _codeLanguage, _codeHighlightState);
+                    _codeHighlightState = newState;
+                    renderHighlightedLine(_output, line, highlights, _theme.codeBlock, currentTheme());
+                }
+                else
+                {
+                    _output.writeText(line, _theme.codeBlock);
+                }
                 _output.writeRaw("\n");
             }
         }
@@ -161,6 +200,8 @@ void MarkdownRenderer::render(std::string_view markdown)
                 {
                     _inCodeBlock = true;
                     _codeFence = std::string(fence);
+                    _codeLanguage = detectLanguageFromFenceTag(extractFenceLanguage(line));
+                    _codeHighlightState = HighlightState::Normal;
                 }
                 else
                 {
@@ -184,6 +225,8 @@ void MarkdownRenderer::beginStream()
     _inCodeBlock = false;
     _inThinkBlock = false;
     _codeFence.clear();
+    _codeLanguage = LanguageId::None;
+    _codeHighlightState = HighlightState::Normal;
     _inTable = false;
     _tableLines.clear();
     _tableSeparatorSeen = false;
@@ -477,10 +520,21 @@ void MarkdownRenderer::processStreamBuffer()
             {
                 _inCodeBlock = false;
                 _codeFence.clear();
+                _codeLanguage = LanguageId::None;
+                _codeHighlightState = HighlightState::Normal;
             }
             else
             {
-                _output.writeText(line, _theme.codeBlock);
+                if (_codeLanguage != LanguageId::None)
+                {
+                    auto [highlights, newState] = highlightLine(line, _codeLanguage, _codeHighlightState);
+                    _codeHighlightState = newState;
+                    renderHighlightedLine(_output, line, highlights, _theme.codeBlock, currentTheme());
+                }
+                else
+                {
+                    _output.writeText(line, _theme.codeBlock);
+                }
                 _output.writeRaw("\n");
             }
         }
@@ -497,6 +551,8 @@ void MarkdownRenderer::processStreamBuffer()
                 {
                     _inCodeBlock = true;
                     _codeFence = std::string(fence);
+                    _codeLanguage = detectLanguageFromFenceTag(extractFenceLanguage(line));
+                    _codeHighlightState = HighlightState::Normal;
                 }
                 else
                 {

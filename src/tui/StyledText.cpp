@@ -3,8 +3,10 @@
 
 #include <tui/Box.hpp>
 #include <tui/Canvas.hpp>
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/MarkdownTable.hpp>
+#include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 
 #if defined(__clang__)
@@ -21,6 +23,26 @@ namespace tui
 
 namespace
 {
+    /// @brief Extracts the language tag from a code fence line (e.g. "cpp" from "```cpp").
+    auto extractFenceLanguage(std::string_view line) -> std::string_view
+    {
+        auto pos = std::size_t { 0 };
+        while (pos < line.size() && pos < 3 && line[pos] == ' ')
+            ++pos;
+        if (pos < line.size() && (line[pos] == '`' || line[pos] == '~'))
+        {
+            auto const fenceChar = line[pos];
+            while (pos < line.size() && line[pos] == fenceChar)
+                ++pos;
+        }
+        while (pos < line.size() && line[pos] == ' ')
+            ++pos;
+        auto const tagStart = pos;
+        while (pos < line.size() && line[pos] != ' ' && line[pos] != '\t')
+            ++pos;
+        return line.substr(tagStart, pos - tagStart);
+    }
+
     /// @brief Checks if a line is a code fence (``` or ~~~, optionally with language tag).
     auto detectCodeFence(std::string_view line) -> std::string_view
     {
@@ -234,6 +256,8 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
     StyledText result;
     bool inCodeBlock = false;
     std::string codeFence;
+    auto codeLanguage = LanguageId::None;
+    auto codeHighlightState = HighlightState::Normal;
 
     // Table buffering state
     bool inTable = false;
@@ -404,10 +428,36 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
             {
                 inCodeBlock = false;
                 codeFence.clear();
+                codeLanguage = LanguageId::None;
+                codeHighlightState = HighlightState::Normal;
             }
             else
             {
-                styledLine.push_back({ std::string(line), mdTheme.codeBlock });
+                if (codeLanguage != LanguageId::None)
+                {
+                    auto [highlights, newState] = highlightLine(line, codeLanguage, codeHighlightState);
+                    codeHighlightState = newState;
+                    auto const& currentTh = currentTheme();
+                    // Build styled spans from highlight categories
+                    auto hlPos = std::size_t { 0 };
+                    while (hlPos < line.size())
+                    {
+                        auto const cat =
+                            (hlPos < highlights.size()) ? highlights[hlPos] : HighlightCategory::Default;
+                        auto spanEnd = hlPos + 1;
+                        while (spanEnd < line.size() && spanEnd < highlights.size()
+                               && highlights[spanEnd] == cat)
+                            ++spanEnd;
+                        auto style = mdTheme.codeBlock;
+                        style.fg = categoryColor(cat, currentTh);
+                        styledLine.push_back({ std::string(line.substr(hlPos, spanEnd - hlPos)), style });
+                        hlPos = spanEnd;
+                    }
+                }
+                else
+                {
+                    styledLine.push_back({ std::string(line), mdTheme.codeBlock });
+                }
             }
         }
         else
@@ -417,6 +467,8 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
             {
                 inCodeBlock = true;
                 codeFence = std::string(fence);
+                codeLanguage = detectLanguageFromFenceTag(extractFenceLanguage(line));
+                codeHighlightState = HighlightState::Normal;
             }
             else if (line.empty())
             {

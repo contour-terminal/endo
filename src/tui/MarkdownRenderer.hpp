@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/TerminalOutput.hpp>
 
 #include <string>
@@ -88,6 +89,8 @@ class MarkdownRenderer
     bool _inCodeBlock = false;
     bool _inThinkBlock = false;
     std::string _codeFence; ///< The fence string (e.g. "```") that opened the current code block.
+    LanguageId _codeLanguage = LanguageId::None;                 ///< Detected language of current code block.
+    HighlightState _codeHighlightState = HighlightState::Normal; ///< Multi-line highlight state.
 
     // Table buffering state
     bool _inTable = false;                ///< Currently buffering table rows.
