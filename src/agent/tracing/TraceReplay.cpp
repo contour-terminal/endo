@@ -82,6 +82,40 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
                          toolCount,
                          textLen,
                          durationMs);
+
+            // Display text content preview if available
+            if (doc.contains("text") && doc["text"].is_string())
+            {
+                auto text = doc["text"].get<std::string>();
+                if (text.size() > 120)
+                    text = text.substr(0, 117) + "...";
+                if (!text.empty())
+                    std::println("        text: \"{}\"", text);
+            }
+
+            // Display tool call names if available
+            if (doc.contains("tool_calls") && doc["tool_calls"].is_array() && !doc["tool_calls"].empty())
+            {
+                auto names = std::string {};
+                for (auto const& tc: doc["tool_calls"])
+                {
+                    if (!names.empty())
+                        names += ", ";
+                    names += tc.value("name", "?");
+                }
+                std::println("        tools: [{}]", names);
+            }
+
+            // Display token usage if available
+            if (doc.contains("usage") && doc["usage"].is_object())
+            {
+                auto const& u = doc["usage"];
+                std::println("        usage: in={} out={} cache_read={} cache_write={}",
+                             u.value("input_tokens", 0),
+                             u.value("output_tokens", 0),
+                             u.value("cache_read_tokens", 0),
+                             u.value("cache_creation_tokens", 0));
+            }
         }
         else if (type == "tool_call")
         {

@@ -97,17 +97,40 @@ void AgentTracer::writeLlmResponse(size_t iteration,
                                    bool hasToolCalls,
                                    size_t toolCount,
                                    size_t textLength,
-                                   std::chrono::milliseconds duration)
+                                   std::chrono::milliseconds duration,
+                                   std::string_view textContent,
+                                   std::span<ToolCall const> toolCalls,
+                                   std::optional<TokenUsage> const& usage)
 {
-    writeLine(nlohmann::json {
-        { "type", "llm_response" },
-        { "timestamp", utcTimestamp() },
-        { "iteration", iteration },
-        { "has_tool_calls", hasToolCalls },
-        { "tool_count", toolCount },
-        { "text_length", textLength },
-        { "duration_ms", duration.count() },
-    });
+    auto doc = nlohmann::json {
+        { "type", "llm_response" },  { "timestamp", utcTimestamp() },
+        { "iteration", iteration },  { "has_tool_calls", hasToolCalls },
+        { "tool_count", toolCount }, { "text_length", textLength },
+        { "text", textContent },     { "duration_ms", duration.count() },
+    };
+
+    auto toolCallsArray = nlohmann::json::array();
+    for (auto const& tc: toolCalls)
+    {
+        toolCallsArray.push_back(nlohmann::json {
+            { "id", tc.id },
+            { "name", tc.name },
+            { "arguments", tc.arguments },
+        });
+    }
+    doc["tool_calls"] = std::move(toolCallsArray);
+
+    if (usage.has_value())
+    {
+        doc["usage"] = nlohmann::json {
+            { "input_tokens", usage->inputTokens },
+            { "output_tokens", usage->outputTokens },
+            { "cache_read_tokens", usage->cacheReadTokens },
+            { "cache_creation_tokens", usage->cacheCreationTokens },
+        };
+    }
+
+    writeLine(doc);
 }
 
 void AgentTracer::writeCompaction(size_t beforeMessages,

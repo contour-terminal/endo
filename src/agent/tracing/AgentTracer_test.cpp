@@ -256,7 +256,19 @@ TEST_CASE("AgentTracer.llm_response_format", "[agent]")
     auto tracer = AgentTracer::create(tracePath);
     REQUIRE(tracer.has_value());
 
-    tracer->writeLlmResponse(1, true, 3, 250, std::chrono::milliseconds { 2400 });
+    auto const toolCalls = std::vector<ToolCall> {
+        { .id = "call_0", .name = "read_file", .arguments = nlohmann::json { { "path", "/foo" } } },
+        { .id = "call_1", .name = "glob", .arguments = nlohmann::json { { "pattern", "*.cpp" } } },
+    };
+    auto const usage = TokenUsage {
+        .inputTokens = 1234,
+        .outputTokens = 567,
+        .cacheReadTokens = 100,
+        .cacheCreationTokens = 50,
+    };
+
+    tracer->writeLlmResponse(
+        1, true, 2, 18, std::chrono::milliseconds { 2400 }, "Here is the text.", toolCalls, usage);
 
     auto const lines = readLines(tracePath);
     REQUIRE(lines.size() == 1);
@@ -265,10 +277,54 @@ TEST_CASE("AgentTracer.llm_response_format", "[agent]")
     CHECK(doc.at("type") == "llm_response");
     CHECK(doc.at("iteration") == 1);
     CHECK(doc.at("has_tool_calls") == true);
-    CHECK(doc.at("tool_count") == 3);
-    CHECK(doc.at("text_length") == 250);
+    CHECK(doc.at("tool_count") == 2);
+    CHECK(doc.at("text_length") == 18);
     CHECK(doc.at("duration_ms") == 2400);
     CHECK(doc.contains("timestamp"));
+
+    // New fields: text content
+    CHECK(doc.at("text") == "Here is the text.");
+
+    // New fields: tool calls array
+    REQUIRE(doc.at("tool_calls").is_array());
+    REQUIRE(doc.at("tool_calls").size() == 2);
+    CHECK(doc.at("tool_calls")[0].at("id") == "call_0");
+    CHECK(doc.at("tool_calls")[0].at("name") == "read_file");
+    CHECK(doc.at("tool_calls")[0].at("arguments").at("path") == "/foo");
+    CHECK(doc.at("tool_calls")[1].at("id") == "call_1");
+    CHECK(doc.at("tool_calls")[1].at("name") == "glob");
+
+    // New fields: token usage
+    REQUIRE(doc.contains("usage"));
+    CHECK(doc.at("usage").at("input_tokens") == 1234);
+    CHECK(doc.at("usage").at("output_tokens") == 567);
+    CHECK(doc.at("usage").at("cache_read_tokens") == 100);
+    CHECK(doc.at("usage").at("cache_creation_tokens") == 50);
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.llm_response_without_usage", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-llmres-nousage";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    auto const emptyToolCalls = std::vector<ToolCall> {};
+
+    tracer->writeLlmResponse(
+        0, false, 0, 5, std::chrono::milliseconds { 100 }, "Hello", emptyToolCalls, std::nullopt);
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("text") == "Hello");
+    CHECK(doc.at("tool_calls").empty());
+    CHECK_FALSE(doc.contains("usage"));
 
     std::filesystem::remove_all(tmpDir);
 }

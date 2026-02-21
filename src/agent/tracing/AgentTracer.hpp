@@ -5,6 +5,8 @@
 #include <expected>
 #include <filesystem>
 #include <fstream>
+#include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 
@@ -52,11 +54,17 @@ class AgentTracer
     /// @param toolCount Number of tool calls in the response.
     /// @param textLength Length of the text content in the response.
     /// @param duration Time taken for the provider to generate the response.
+    /// @param textContent The assistant's actual text response.
+    /// @param toolCalls Tool calls the model requested.
+    /// @param usage Token usage statistics, if available.
     void writeLlmResponse(size_t iteration,
                           bool hasToolCalls,
                           size_t toolCount,
                           size_t textLength,
-                          std::chrono::milliseconds duration);
+                          std::chrono::milliseconds duration,
+                          std::string_view textContent,
+                          std::span<ToolCall const> toolCalls,
+                          std::optional<TokenUsage> const& usage);
 
     /// @brief Writes a conversation compaction event.
     /// @param beforeMessages Number of messages before compaction.

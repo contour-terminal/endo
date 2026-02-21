@@ -115,7 +115,10 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
                                       result->hasToolCalls(),
                                       result->toolCalls.size(),
                                       result->textContent().size(),
-                                      generateElapsed);
+                                      generateElapsed,
+                                      result->textContent(),
+                                      result->toolCalls,
+                                      result->usage);
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
@@ -294,7 +297,10 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
                                       result->hasToolCalls(),
                                       result->toolCalls.size(),
                                       result->textContent().size(),
-                                      generateElapsed);
+                                      generateElapsed,
+                                      result->textContent(),
+                                      result->toolCalls,
+                                      result->usage);
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
