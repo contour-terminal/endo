@@ -200,8 +200,9 @@ Show a colored diff preview before applying `edit_file` mutations. The tool alre
 before writing the file.
 
 - Generate unified diff from `old_string`/`new_string`
-- Render in `AgentResponseRenderer` with syntax highlighting
-- Optional approval prompt for large edits
+- Render in `AgentResponseRenderer` with syntax highlighting for the file type
+- Syntax highlighting we want to support in the beginning are: C++, CMake, Python, Endo, bash/sh, Markdown, JSON, YAML, git diff.
+- Optional approval prompt for large edits (at least prepare the infrastructure for this, even if we don't enforce it yet)
 
 ### @-file Context Injection
 
