@@ -249,6 +249,13 @@ TEST_CASE("IRGenerator.FSharp.binary_comparison_ge")
     REQUIRE(generatesIRSuccessfully("let x = 5 >= 3"));
 }
 
+TEST_CASE("IRGenerator.FSharp.binary_comparison_string_vs_bool")
+{
+    // Regression: comparing a string with a boolean in a string comparison context
+    // crashed with assertion failure in createSCmpEQ because Boolean wasn't converted to string.
+    CHECK(executeSourceAndGetOutput("let r = \"true\" == true\nprint r") == "true");
+}
+
 TEST_CASE("IRGenerator.FSharp.binary_logical_and")
 {
     REQUIRE(generatesIRSuccessfully("let x = true && false"));

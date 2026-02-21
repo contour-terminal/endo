@@ -5567,10 +5567,17 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     if (isComparison && hasStringOperand)
     {
         // Convert non-string operands to string for string comparison
-        if (left->type() == CoreVM::LiteralType::Number)
-            left = _builder.createN2S(left);
-        if (right->type() == CoreVM::LiteralType::Number)
-            right = _builder.createN2S(right);
+        auto const ensureStringCompatible = [&](CoreVM::Value* val, std::string_view label) -> CoreVM::Value* {
+            switch (val->type())
+            {
+                case CoreVM::LiteralType::Number: return _builder.createN2S(val, std::string(label) + ".n2s");
+                case CoreVM::LiteralType::Float: return _builder.createF2S(val, std::string(label) + ".f2s");
+                case CoreVM::LiteralType::Boolean: return convertToString(val, label);
+                default: return val; // String, Void, Object are already string-compatible
+            }
+        };
+        left = ensureStringCompatible(left, "lhs");
+        right = ensureStringCompatible(right, "rhs");
 
         // For Void/Object types (e.g., from ObjGetSlot), the runtime value is already a string pointer,
         // so we can compare directly with SCmpXX which handles Void/Object operands.
