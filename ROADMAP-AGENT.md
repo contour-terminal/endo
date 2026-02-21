@@ -193,16 +193,17 @@ per-turn and cumulative tracking. `/status` slash command shows full session sta
 
 ### Diff Preview for edit_file
 
-**Status:** Not started | **Effort:** Small
+**Status:** Done | **Effort:** Small
 
 Show a colored diff preview before applying `edit_file` mutations. The tool already has
 `old_string` and `new_string` — render a unified diff inline (green additions, red deletions)
 before writing the file.
 
-- Generate unified diff from `old_string`/`new_string`
-- Render in `AgentResponseRenderer` with syntax highlighting for the file type
-- Syntax highlighting we want to support in the beginning are: C++, CMake, Python, Endo, bash/sh, Markdown, JSON, YAML, git diff.
-- Optional approval prompt for large edits (at least prepare the infrastructure for this, even if we don't enforce it yet)
+- Generate unified diff from `old_string`/`new_string` ✅
+- Render colored diff inline in `ToolStatusMessage` handler ✅
+- Large edit threshold (`LargeEditThreshold = 50` changed lines) with truncation notice ✅
+- Syntax highlighting for diff content (v2 — requires multi-language tokenizer, deferred to Phase 12A)
+- Optional approval prompt for large edits (infrastructure prepared, not enforced yet) ✅
 
 ### @-file Context Injection
 

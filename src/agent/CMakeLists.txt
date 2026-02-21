@@ -74,6 +74,7 @@ add_library(endo-agent STATIC
     tools/WebFetchTool.hpp tools/WebFetchTool.cpp
     tools/ListDirectoryTool.hpp tools/ListDirectoryTool.cpp
     tools/AskUserTool.hpp tools/AskUserTool.cpp
+    tools/DiffRenderer.hpp tools/DiffRenderer.cpp
 
     # MCP
     mcp/McpError.hpp
@@ -158,6 +159,7 @@ add_executable(test-endo-agent
     tools/WebFetchTool_test.cpp
     tools/ListDirectoryTool_test.cpp
     tools/AskUserTool_test.cpp
+    tools/DiffRenderer_test.cpp
 
     # MCP tests
     mcp/JsonRpc_test.cpp

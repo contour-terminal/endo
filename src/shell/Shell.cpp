@@ -52,6 +52,7 @@
 #include <agent/session/AgentWorker.hpp>
 #include <agent/session/PlanExecutor.hpp>
 #include <agent/tools/AskUserTool.hpp>
+#include <agent/tools/DiffRenderer.hpp>
 #include <agent/tools/EditFileTool.hpp>
 #include <agent/tools/EndoExecuteTool.hpp>
 #include <agent/tools/ExploreTool.hpp>
@@ -2061,6 +2062,33 @@ void Shell::runAgentMode()
                                     out.writeText(text, argsStyle);
                             }
                             out.linefeed();
+
+                            // Render inline diff preview for edit_file.
+                            if (m.call.name == "edit_file" && m.call.arguments.contains("old_string")
+                                && m.call.arguments.contains("new_string"))
+                            {
+                                auto const oldStr =
+                                    m.call.arguments["old_string"]
+                                        .template get<std::string>();
+                                auto const newStr =
+                                    m.call.arguments["new_string"]
+                                        .template get<std::string>();
+                                auto const filePath =
+                                    m.call.arguments.value("path", std::string { "file" });
+
+                                auto diffLines =
+                                    agent::generateUnifiedDiff(oldStr, newStr);
+                                auto const changedLines =
+                                    static_cast<int>(std::ranges::count_if(
+                                        diffLines,
+                                        [](auto const& l) {
+                                            return l.type == agent::DiffLineType::Addition
+                                                   || l.type == agent::DiffLineType::Deletion;
+                                        }));
+                                auto const truncated =
+                                    changedLines > agent::LargeEditThreshold;
+                                agent::renderDiff(out, filePath, diffLines, truncated);
+                            }
 
                             if (activeRenderer && activeRenderer->isThinking())
                                 activeRenderer->renderSpinner();
