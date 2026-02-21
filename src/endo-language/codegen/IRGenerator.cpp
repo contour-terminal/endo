@@ -2455,6 +2455,7 @@ void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
                         _builder.getBuiltinFunction(*callback), { argsVal }, "find");
                     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
                     annotateListElementTypeId(_result, CoreVM::BuiltinTypeId::FileInfo);
+                    annotateListElementLiteralType(_result, CoreVM::LiteralType::Object);
                     return;
                 }
             }
@@ -2483,6 +2484,7 @@ void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
                     _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, key);
                     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
                     annotateListElementTypeId(_result, info.recordTypeId);
+                    annotateListElementLiteralType(_result, CoreVM::LiteralType::Object);
                     return;
                 }
             }
@@ -2509,6 +2511,7 @@ void IRGenerator::visit(ast::StructuredPipelineSourceExpr const& node)
                         _result = _builder.createCallFunction(_builder.getBuiltinFunction(*cb), {}, key);
                         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
                         annotateListElementTypeId(_result, info.recordTypeId);
+                        annotateListElementLiteralType(_result, CoreVM::LiteralType::Object);
                         return;
                     }
                 }

@@ -7326,6 +7326,15 @@ TEST_CASE("IRGenerator.StructuredPipeline.placeholder.git_status_filter_modified
         "git status |> filter (_.status |> contains \"M\") |> map _.path |> print", "[src/main.cpp]"));
 }
 
+TEST_CASE("IRGenerator.StructuredPipeline.placeholder.filter_then_each_field")
+{
+    // Regression: missing annotateListElementLiteralType(Object) caused filter/each to crash
+    // by defaulting element allocas to Number instead of Object.
+    CHECK(structuredExecutesWithOutput(
+        "docker ps |> filter (_.status |> contains \"Up\") |> each (fun c -> println c.names)",
+        "web-server\ndb-main\n"));
+}
+
 // =============================================================================
 // Bare Expression Evaluation Tests
 // =============================================================================
