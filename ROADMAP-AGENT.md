@@ -292,18 +292,15 @@ Special handling for the `shell_execute` tool:
 
 #### 6.4 Configurable Policy
 
-In `~/.config/endo/agent.yml`:
+Configure in `init.endo`:
 
-```yaml
-permissions:
-  policy: ask              # ask | trust_session | trust_all | read_only
-  trusted_tools:           # always auto-approve these specific tools
-    - read_file
-    - glob
-    - grep
-  blocked_patterns:        # always block these shell patterns
-    - "rm -rf /"
-    - ":(){ :|:& };:"
+```sh
+agent_permissions_policy <- "ask"          # ask | trust_session | trust_all | read_only
+add_trusted_tool "read_file"
+add_trusted_tool "glob"
+add_trusted_tool "grep"
+add_blocked_pattern "rm -rf /"
+add_blocked_pattern ":(){ :|:& };:"
 ```
 
 ### Undo/Rollback System
@@ -341,7 +338,7 @@ Leverage provider-specific prompt caching to reduce costs and latency for long c
 - **OpenAI:** Automatic prompt caching (>= 1024 token prefix)
 - **Gemini:** Context caching API for repeated prefixes
 - Track cache hit/miss rates in token display
-- Configure caching strategy in `agent.yml`
+- Configure caching strategy via `init.endo` properties
 
 ### Image Input — Clipboard Paste (Phase 2.6)
 
@@ -465,7 +462,13 @@ A `/review` slash command that analyzes code changes:
 Allow users to define custom hooks triggered by agent events:
 
 - Hook points: `before_tool_call`, `after_tool_call`, `before_edit`, `after_response`
-- Configuration in `agent.yml` or `.endo/agent-hooks.yml`
+- Configure via `init.endo` builtins:
+
+```sh
+add_agent_hook "after_edit" "clang-format -i {file}"
+add_agent_hook "after_response" "notify-send 'Agent done'"
+```
+
 - Run shell commands or endo scripts on events
 - Use cases: auto-format after edits, auto-test after code changes, notifications
 
@@ -562,17 +565,18 @@ src/agent/
 
 #### 3.6 Configuration
 
-```yaml
-provider: local
-local:
-  model_path: ~/.local/share/endo/models/qwen2.5-coder-32b-q4_k_m.gguf
-  model_dir: ~/.local/share/endo/models/
-  n_gpu_layers: -1
-  context_size: 32768
-  threads: 8
-  batch_size: 512
-  temperature: 0.7
-  flash_attention: true
+Configure in `init.endo`:
+
+```sh
+agent_provider <- "local"
+agent_local_model_path <- "~/.local/share/endo/models/qwen2.5-coder-32b-q4_k_m.gguf"
+agent_local_model_dir <- "~/.local/share/endo/models/"
+agent_local_gpu_layers <- -1
+agent_local_context_size <- 32768
+agent_local_threads <- 8
+agent_local_batch_size <- 512
+agent_local_temperature <- 0.7
+agent_local_flash_attention <- true
 ```
 
 ### Voice Input — whisper.cpp + VAD (Phase 4)
@@ -616,16 +620,16 @@ src/agent/voice/
 
 #### 4.5 Configuration
 
-```yaml
-voice:
-  enabled: true
-  model_path: ~/.local/share/endo/models/ggml-large-v3-turbo.bin
-  language: auto
-  vad:
-    backend: silero
-    speech_threshold: 0.5
-    silence_duration_ms: 800
-  input_mode: push_to_talk
+Configure in `init.endo`:
+
+```sh
+agent_voice_enabled <- true
+agent_voice_model_path <- "~/.local/share/endo/models/ggml-large-v3-turbo.bin"
+agent_voice_language <- "auto"
+agent_voice_vad_backend <- "silero"
+agent_voice_vad_speech_threshold <- 0.5
+agent_voice_vad_silence_duration_ms <- 800
+agent_voice_input_mode <- "push_to_talk"
 ```
 
 ### Alt-Screen Fullscreen Agent View (Phase 9.4)
@@ -708,15 +712,14 @@ as normal agent output, collapsed teammate activity. Alt-screen dashboard via `/
 
 #### 11.8 Configuration
 
-```yaml
-teams:
-  max_concurrent_agents: 4
-  default_provider: claude
-  template_dir: ~/.config/endo/team-templates/
-  role_overrides:
-    researcher:
-      provider: openai_compat
-      model: qwen2.5-coder:32b
+Configure in `init.endo`:
+
+```sh
+agent_teams_max_concurrent <- 4
+agent_teams_default_provider <- "claude"
+agent_teams_template_dir <- "~/.config/endo/team-templates/"
+set_team_role_provider "researcher" "openai_compat"
+set_team_role_model "researcher" "qwen2.5-coder:32b"
 ```
 
 ### Codebase Intelligence (Phase 12A/B/D/E)
@@ -755,26 +758,23 @@ New tool: `semantic_search`.
 
 #### 12.6 Configuration
 
-```yaml
-intelligence:
-  tree_sitter:
-    enabled: true
-    languages: auto
-    max_file_size_kb: 512
-  lsp:
-    enabled: false
-    servers:
-      cpp: clangd
-      python: pylsp
-  indexing:
-    enabled: true
-    background: true
-    cache_dir: ~/.cache/endo/index/
-    watch_files: true
-    exclude_patterns: ["build/", "node_modules/", ".git/"]
-  semantic:
-    enabled: false
-    model_path: ~/.local/share/endo/models/nomic-embed-code-q8_0.gguf
+Configure in `init.endo`:
+
+```sh
+agent_treesitter_enabled <- true
+agent_treesitter_languages <- "auto"
+agent_treesitter_max_file_size_kb <- 512
+agent_lsp_enabled <- false
+set_lsp_server "cpp" "clangd"
+set_lsp_server "python" "pylsp"
+agent_indexing_enabled <- true
+agent_indexing_background <- true
+agent_indexing_cache_dir <- "~/.cache/endo/index/"
+add_index_exclude "build/"
+add_index_exclude "node_modules/"
+add_index_exclude ".git/"
+agent_semantic_enabled <- false
+agent_semantic_model_path <- "~/.local/share/endo/models/nomic-embed-code-q8_0.gguf"
 ```
 
 **Recommended implementation order:** 12A → 12D → 12B → 12E
@@ -834,7 +834,7 @@ Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
 
 ```
 src/agent/
-├── AgentConfig.hpp/.cpp            # Configuration data model + YAML loading
+├── AgentConfig.hpp/.cpp            # Configuration data model (agent-keys.yml loading + runtime property binding)
 ├── Plan.hpp                        # Plan data model (PlanStep, Plan, PlanStepStatus)
 ├── Types.hpp                       # Core types: ChatMessage, ContentBlock, ToolCall, etc.
 ├── auth/
@@ -914,7 +914,7 @@ src/agent/
 Agent documentation in the mkdocs site under `docs/agent/`:
 
 - **Overview** (`agent/index.md`) — What the agent is, providers, quick start, CLI commands
-- **Configuration** (`agent/configuration.md`) — `agent.yml` reference, MCP server setup, web search config
+- **Configuration** (`agent/configuration.md`) — `init.endo` properties, `agent-keys.yml` key storage, MCP server setup, web search config
 - **Tools & Commands** (`agent/tools.md`) — Built-in tools table, slash commands, plan mode
 
 ---
