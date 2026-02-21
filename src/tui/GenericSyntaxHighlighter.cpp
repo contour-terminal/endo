@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <string_view>
 
 namespace tui
@@ -12,6 +13,12 @@ namespace tui
 
 namespace
 {
+    auto endoHighlighter() -> HighlightFunction&
+    {
+        static HighlightFunction instance;
+        return instance;
+    }
+
     // -------------------------------------------------------------------------
     // Helper: check if character is part of an identifier
     // -------------------------------------------------------------------------
@@ -1673,6 +1680,11 @@ auto detectLanguageFromPath(std::string_view filePath) -> LanguageId
     return detectLanguageFromExtension(filePath.substr(dotPos));
 }
 
+void registerEndoHighlighter(HighlightFunction fn)
+{
+    endoHighlighter() = std::move(fn);
+}
+
 auto highlightLine(std::string_view line, LanguageId language, HighlightState state)
     -> std::pair<HighlightMap, HighlightState>
 {
@@ -1690,6 +1702,10 @@ auto highlightLine(std::string_view line, LanguageId language, HighlightState st
         case LanguageId::Yaml: return highlightYaml(line, state);
         case LanguageId::GitDiff: return highlightGitDiff(line, state);
         case LanguageId::Assembly: return highlightAssembly(line, state);
+        case LanguageId::Endo:
+            if (endoHighlighter())
+                return endoHighlighter()(line, state);
+            break;
         case LanguageId::None: break;
     }
 

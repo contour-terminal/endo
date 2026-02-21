@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
 #include <shell/ui/Prompt.hpp>
+#include <shell/ui/SyntaxHighlighter.hpp>
 
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
@@ -10,6 +11,7 @@
 #include <endo-language/parser/Parser.hpp>
 
 #include <tui/Canvas.hpp>
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
@@ -433,6 +435,17 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     completer = std::make_unique<Completer>(_env, history, _fsharpState);
     prompt.setCompleter(completer.get());
     prompt.setHistory(&history);
+
+    // Register Endo syntax highlighter for agent-mode code blocks and diffs
+    tui::registerEndoHighlighter(
+        [](std::string_view line,
+           tui::HighlightState /*state*/) -> std::pair<tui::HighlightMap, tui::HighlightState> {
+            auto const endoMap = endo::computeHighlightMap(line);
+            auto map = tui::HighlightMap(line.size(), tui::HighlightCategory::Default);
+            for (std::size_t i = 0; i < endoMap.size() && i < map.size(); ++i)
+                map[i] = static_cast<tui::HighlightCategory>(endoMap[i]);
+            return { std::move(map), tui::HighlightState::Normal };
+        });
 
     // NB: These lines could go away once we have a proper command line parser and
     //     the ability to set these options from the command line.
@@ -2507,9 +2520,9 @@ void Shell::runAgentMode()
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                     out.carriageReturn();
-                    out.clearLine();   // Clear info line (shortcut hints / spinner)
+                    out.clearLine(); // Clear info line (shortcut hints / spinner)
                     out.linefeed();
-                    out.clearLine();   // Clear bottom padding (NBSP marker)
+                    out.clearLine(); // Clear bottom padding (NBSP marker)
                     out.flush();
 
                     screen.releaseCursor();

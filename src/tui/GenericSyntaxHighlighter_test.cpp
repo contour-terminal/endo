@@ -369,6 +369,20 @@ TEST_CASE("GenericSyntaxHighlighter.markdown_code_span", "[tui][highlight]")
 }
 
 // =============================================================================
+// Endo detection
+// =============================================================================
+
+TEST_CASE("GenericSyntaxHighlighter.endo_detection_extension", "[tui][highlight]")
+{
+    CHECK(detectLanguageFromExtension(".endo") == LanguageId::Endo);
+}
+
+TEST_CASE("GenericSyntaxHighlighter.endo_detection_fence", "[tui][highlight]")
+{
+    CHECK(detectLanguageFromFenceTag("endo") == LanguageId::Endo);
+}
+
+// =============================================================================
 // Assembly highlighting — detection
 // =============================================================================
 

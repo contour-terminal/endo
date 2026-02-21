@@ -217,7 +217,7 @@ Markdown, JSON, YAML, and git diff. Endo language support via callback registrat
 - Generic syntax highlighter (`tui::GenericSyntaxHighlighter`) with per-line scanning ✅
 - Syntax-highlighted diffs in `edit_file` tool (additions: full color, context: dim, deletions: red) ✅
 - Syntax-highlighted markdown code blocks (batch + streaming, language from fence tag) ✅
-- Endo language highlighting via `registerEndoHighlighter()` callback from shell startup (deferred)
+- Endo language highlighting via `registerEndoHighlighter()` callback from shell startup ✅
 - Key files: `src/tui/GenericSyntaxHighlighter.hpp/cpp`, `src/tui/MarkdownRenderer.cpp`,
   `src/agent/tools/DiffRenderer.cpp`, `src/shell/Shell.cpp`
 

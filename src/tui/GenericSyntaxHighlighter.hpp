@@ -4,6 +4,7 @@
 #include <tui/TerminalOutput.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -43,6 +44,7 @@ enum class LanguageId : std::uint8_t
     Yaml,     ///< YAML.
     GitDiff,  ///< Git diff output.
     Assembly, ///< x86 assembly (Intel and AT&T syntax).
+    Endo,     ///< Endo shell language (via registered callback).
 };
 
 /// @brief State carried across lines for multi-line constructs.
@@ -109,6 +111,19 @@ void renderHighlightedLine(TerminalOutput& output,
                            Style baseStyle,
                            Theme const& theme);
 
+/// @brief Callback type for external language highlighters.
+using HighlightFunction =
+    std::function<std::pair<HighlightMap, HighlightState>(std::string_view line, HighlightState state)>;
+
+/// @brief Registers the Endo language highlighter callback.
+///
+/// Called once at shell startup to wire the Endo tokenizer into the
+/// generic highlighter without creating a build dependency from tui
+/// to endo-language.
+///
+/// @param fn The highlighting function to call for LanguageId::Endo.
+void registerEndoHighlighter(HighlightFunction fn);
+
 // --- Inline constexpr implementations ---
 
 constexpr auto detectLanguageFromExtension(std::string_view ext) -> LanguageId
@@ -132,6 +147,8 @@ constexpr auto detectLanguageFromExtension(std::string_view ext) -> LanguageId
         return LanguageId::GitDiff;
     if (ext == ".asm" || ext == ".s" || ext == ".S" || ext == ".nasm")
         return LanguageId::Assembly;
+    if (ext == ".endo")
+        return LanguageId::Endo;
     return LanguageId::None;
 }
 
@@ -156,6 +173,8 @@ constexpr auto detectLanguageFromFenceTag(std::string_view tag) -> LanguageId
     if (tag == "asm" || tag == "assembly" || tag == "nasm" || tag == "x86" || tag == "x86asm"
         || tag == "intel" || tag == "att" || tag == "gas")
         return LanguageId::Assembly;
+    if (tag == "endo")
+        return LanguageId::Endo;
     return LanguageId::None;
 }
 
