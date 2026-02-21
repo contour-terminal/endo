@@ -6,6 +6,7 @@ add_library(tui
     Component.cpp
     CompletionPopup.cpp
     Dialog.cpp
+    GenericSyntaxHighlighter.cpp
     HoverState.cpp
     QuestionComponent.cpp
     InputField.cpp
@@ -61,6 +62,7 @@ enable_sanitizers(tui)
 # Tests
 add_executable(test-tui
     test_main.cpp
+    GenericSyntaxHighlighter_test.cpp
     InputField_test.cpp
     KeyBindings_test.cpp
     Renderer_test.cpp
