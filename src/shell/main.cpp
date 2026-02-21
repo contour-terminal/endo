@@ -37,8 +37,8 @@ void printHelp(std::string_view programName)
 {
     std::print(R"(endo - A modern shell written in C++23
 
-Usage: {} [OPTIONS] [SCRIPT [ARGS...]]
-       {} -c <COMMAND> [ARGS...]
+Usage: {0} [OPTIONS] [SCRIPT [ARGS...]]
+       {0} -c <COMMAND> [ARGS...]
 
 Options:
   -h, --help         Show this help message and exit
@@ -80,27 +80,17 @@ Script Execution:
   Scripts may start with a shebang line (#!/usr/bin/env endo) which is ignored.
 
 Examples:
-  {}                              Start interactive shell
-  {} script.sh                    Execute script file
-  {} script.sh arg1 arg2          Execute script with arguments ($1=arg1, $2=arg2)
-  {} -c 'echo hello'              Execute command string
-  {} -c 'echo $1' foo             Execute command with argument ($1=foo)
-  {} --log=shell.debug            Enable shell debug logging
-  {} --log='shell.*,parser'       Enable multiple log categories
-  {} agent login claude           Authenticate with Claude
-  {} agent status                 Show provider status
+  {0}                              Start interactive shell
+  {0} script.sh                    Execute script file
+  {0} script.sh arg1 arg2          Execute script with arguments ($1=arg1, $2=arg2)
+  {0} -c 'echo hello'              Execute command string
+  {0} -c 'echo $1' foo             Execute command with argument ($1=foo)
+  {0} --log=shell.debug            Enable shell debug logging
+  {0} --log='shell.*,parser'       Enable multiple log categories
+  {0} agent login claude           Authenticate with Claude
+  {0} agent status                 Show provider status
 
 )",
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
-               programName,
                programName);
 }
 
@@ -118,7 +108,7 @@ void printLogCategories()
     for (auto const& cat: logstore::get())
     {
         auto const& category = cat.get();
-        auto const state = category.is_enabled() ? "enabled" : "disabled";
+        auto const state = category.is_enabled() ? "enabled"sv : "disabled"sv;
         std::print("  {:<20} {:<10} {}\n", category.name(), state, category.description());
     }
     std::print("\n");
@@ -184,14 +174,14 @@ ParsedArgs parseArguments(std::span<char const* const> args)
             result.command = args[++i];
             // Remaining arguments become $1, $2, ... for the command
             for (size_t j = i + 1; j < args.size(); ++j)
-                result.commandArgs.push_back(args[j]);
+                result.commandArgs.emplace_back(args[j]);
             break; // Stop parsing after -c command and its args
         }
         else if (arg == "--")
         {
             // Everything after -- is script arguments (if script is set)
             for (size_t j = i + 1; j < args.size(); ++j)
-                result.scriptArgs.push_back(args[j]);
+                result.scriptArgs.emplace_back(args[j]);
             break;
         }
         else if (!arg.starts_with("-"))
@@ -199,7 +189,7 @@ ParsedArgs parseArguments(std::span<char const* const> args)
             result.scriptFile = arg;
             // Remaining arguments become $1, $2, ... for the script
             for (size_t j = i + 1; j < args.size(); ++j)
-                result.scriptArgs.push_back(args[j]);
+                result.scriptArgs.emplace_back(args[j]);
             break; // Stop parsing after script file and its args
         }
         else
@@ -246,9 +236,9 @@ int executeScript(endo::Shell& shell,
 
     // 4. Set positional parameters ($0 = script, $1... = args)
     std::vector<std::string> params;
-    params.push_back(std::string(scriptPath));
+    params.emplace_back(scriptPath);
     for (auto const& arg: scriptArgs)
-        params.push_back(std::string(arg));
+        params.emplace_back(arg);
     shell.setPositionalParameters(std::move(params));
 
     // 5. Execute (parser validates entire script before execution)
@@ -362,9 +352,9 @@ int main(int argc, char const* argv[])
 
         // Set positional parameters: $0 = "endo", $1... = commandArgs
         std::vector<std::string> params;
-        params.push_back(std::string(programName));
+        params.emplace_back(programName);
         for (auto const& arg: parsed.commandArgs)
-            params.push_back(std::string(arg));
+            params.emplace_back(arg);
         shell.setPositionalParameters(std::move(params));
 
         return shell.execute(std::string(parsed.command));
