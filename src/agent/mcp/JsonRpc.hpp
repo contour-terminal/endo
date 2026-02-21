@@ -50,4 +50,9 @@ struct Response
 /// @return The parsed response or an McpError.
 [[nodiscard]] auto parseResponse(nlohmann::json const& message) -> McpResult<Response>;
 
+/// @brief Checks if a JSON-RPC message is a notification (has "method" but no "id").
+/// @param message The JSON message to inspect.
+/// @return true if the message is a notification.
+[[nodiscard]] auto isNotification(nlohmann::json const& message) -> bool;
+
 } // namespace endo::agent::mcp::jsonrpc

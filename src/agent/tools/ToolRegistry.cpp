@@ -14,6 +14,28 @@ void ToolRegistry::registerTool(std::unique_ptr<AgentTool> tool)
     _nameIndex[toolName] = index;
 }
 
+auto ToolRegistry::unregisterTool(std::string_view name) -> bool
+{
+    auto const it = _nameIndex.find(std::string(name));
+    if (it == _nameIndex.end())
+        return false;
+
+    auto const index = it->second;
+    auto const lastIndex = _tools.size() - 1;
+
+    if (index != lastIndex)
+    {
+        // Swap with the last element and update its index.
+        auto const movedName = std::string(_tools[lastIndex]->name());
+        _tools[index] = std::move(_tools[lastIndex]);
+        _nameIndex[movedName] = index;
+    }
+
+    _tools.pop_back();
+    _nameIndex.erase(it);
+    return true;
+}
+
 auto ToolRegistry::findTool(std::string_view name) const -> AgentTool*
 {
     auto const it = _nameIndex.find(std::string(name));

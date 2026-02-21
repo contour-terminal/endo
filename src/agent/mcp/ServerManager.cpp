@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ServerManager.hpp"
 
+#include <algorithm>
 #include <format>
 #include <print>
+#include <ranges>
+#include <set>
 
 namespace endo::agent::mcp
 {
@@ -55,6 +58,28 @@ auto ServerManager::addServer(McpServerConfig const& config) -> McpVoidResult
     return {};
 }
 
+auto ServerManager::addServerWithClient(std::string name, std::unique_ptr<McpClient> client) -> McpVoidResult
+{
+    auto toolsResult = client->listTools();
+    if (!toolsResult)
+    {
+        std::println(stderr, "MCP: Failed to list tools for server '{}': {}", name, toolsResult.error());
+    }
+
+    auto entry = ServerEntry {
+        .name = std::move(name),
+        .client = std::move(client),
+        .tools = toolsResult ? std::move(*toolsResult) : std::vector<ToolDefinition> {},
+    };
+
+    auto const serverIdx = _servers.size();
+    for (auto const& tool: entry.tools)
+        _toolToServer[tool.name] = serverIdx;
+
+    _servers.push_back(std::move(entry));
+    return {};
+}
+
 auto ServerManager::allTools() const -> std::vector<ToolDefinition>
 {
     auto result = std::vector<ToolDefinition> {};
@@ -88,10 +113,89 @@ auto ServerManager::serverCount() const noexcept -> size_t
     return _servers.size();
 }
 
+auto ServerManager::refreshTools(std::string_view serverName) -> McpVoidResult
+{
+    auto const it =
+        std::ranges::find_if(_servers, [&](auto const& entry) { return entry.name == serverName; });
+
+    if (it == _servers.end())
+        return makeMcpError(McpErrorCode::ToolCallError, std::format("Unknown server: {}", serverName));
+
+    auto newToolsResult = it->client->listTools();
+    if (!newToolsResult)
+        return std::unexpected(newToolsResult.error());
+
+    // Compute diff: old tool names vs new tool names.
+    auto oldNames = std::set<std::string> {};
+    for (auto const& tool: it->tools)
+        oldNames.insert(tool.name);
+
+    auto newNames = std::set<std::string> {};
+    for (auto const& tool: *newToolsResult)
+        newNames.insert(tool.name);
+
+    auto removed = std::vector<std::string> {};
+    for (auto const& name: oldNames)
+    {
+        if (!newNames.contains(name))
+            removed.push_back(name);
+    }
+
+    auto added = std::vector<ToolDefinition> {};
+    for (auto const& tool: *newToolsResult)
+    {
+        if (!oldNames.contains(tool.name))
+            added.push_back(tool);
+    }
+
+    // Update the entry's tool list and rebuild routing.
+    it->tools = std::move(*newToolsResult);
+    rebuildToolIndex();
+
+    // Notify callback.
+    if (_toolsChangedCallback && (!added.empty() || !removed.empty()))
+        _toolsChangedCallback(serverName, added, removed);
+
+    return {};
+}
+
+void ServerManager::processNotifications()
+{
+    for (auto& server: _servers)
+    {
+        auto notifications = server.client->drainNotifications();
+        for (auto const& notif: notifications)
+        {
+            if (notif.method == "notifications/tools/list_changed")
+            {
+                auto result = refreshTools(server.name);
+                if (!result)
+                    std::println(
+                        stderr, "MCP: Failed to refresh tools for '{}': {}", server.name, result.error());
+            }
+        }
+    }
+}
+
+void ServerManager::setToolsChangedCallback(ToolsChangedCallback callback)
+{
+    _toolsChangedCallback = std::move(callback);
+}
+
 void ServerManager::shutdown()
 {
     _servers.clear();
     _toolToServer.clear();
+}
+
+void ServerManager::rebuildToolIndex()
+{
+    _toolToServer.clear();
+    for (auto const& [idx, server]: _servers | std::views::enumerate)
+    {
+        for (auto const& tool: server.tools)
+            _toolToServer[tool.name] = static_cast<size_t>(idx);
+    }
 }
 
 } // namespace endo::agent::mcp

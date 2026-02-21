@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <functional>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,14 @@ struct McpServerConfig
     std::map<std::string, std::string> env;
 };
 
+/// @brief Callback invoked when a server's tool list changes.
+/// @param serverName The name of the server whose tools changed.
+/// @param added Tool definitions that were added or updated.
+/// @param removed Names of tools that were removed.
+using ToolsChangedCallback = std::function<void(std::string_view serverName,
+                                                std::span<ToolDefinition const> added,
+                                                std::vector<std::string> const& removed)>;
+
 /// @brief Manages multiple MCP server connections and routes tool calls.
 class ServerManager
 {
@@ -38,6 +48,13 @@ class ServerManager
     /// @return Success or an error.
     [[nodiscard]] auto addServer(McpServerConfig const& config) -> McpVoidResult;
 
+    /// @brief Adds a pre-constructed client (for testing without spawning processes).
+    /// @param name The server name.
+    /// @param client The pre-initialized McpClient.
+    /// @return Success or an error.
+    [[nodiscard]] auto addServerWithClient(std::string name, std::unique_ptr<McpClient> client)
+        -> McpVoidResult;
+
     /// @brief Lists all available tools from all connected servers.
     /// @return A vector of tool definitions.
     [[nodiscard]] auto allTools() const -> std::vector<ToolDefinition>;
@@ -52,6 +69,18 @@ class ServerManager
     /// @brief Returns the number of connected servers.
     [[nodiscard]] auto serverCount() const noexcept -> size_t;
 
+    /// @brief Re-fetches the tool list from a server and updates the routing map.
+    /// @param serverName The name of the server to refresh.
+    /// @return Success or an error.
+    [[nodiscard]] auto refreshTools(std::string_view serverName) -> McpVoidResult;
+
+    /// @brief Polls all servers for buffered notifications and processes them.
+    void processNotifications();
+
+    /// @brief Sets a callback for tool list changes.
+    /// @param callback The callback to invoke when tools change.
+    void setToolsChangedCallback(ToolsChangedCallback callback);
+
     /// @brief Shuts down all servers.
     void shutdown();
 
@@ -65,6 +94,10 @@ class ServerManager
 
     std::vector<ServerEntry> _servers;
     std::map<std::string, size_t> _toolToServer; ///< Maps tool name to server index.
+    ToolsChangedCallback _toolsChangedCallback;
+
+    /// @brief Rebuilds _toolToServer from all server entries.
+    void rebuildToolIndex();
 };
 
 } // namespace endo::agent::mcp

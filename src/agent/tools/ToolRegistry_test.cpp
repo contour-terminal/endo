@@ -142,3 +142,82 @@ TEST_CASE("ToolRegistry.filtered_definitions_all_match", "[agent][tools]")
 
     CHECK(filtered.size() == 2);
 }
+
+TEST_CASE("ToolRegistry.unregisterTool", "[agent][tools]")
+{
+    SECTION("removes tool and decreases size")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("tool_a"));
+        registry.registerTool(std::make_unique<MockTool>("tool_b"));
+        REQUIRE(registry.size() == 2);
+
+        CHECK(registry.unregisterTool("tool_a"));
+        CHECK(registry.size() == 1);
+        CHECK(registry.findTool("tool_a") == nullptr);
+        CHECK(registry.findTool("tool_b") != nullptr);
+    }
+
+    SECTION("returns false for unknown tool")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("tool_a"));
+        CHECK_FALSE(registry.unregisterTool("nonexistent"));
+        CHECK(registry.size() == 1);
+    }
+
+    SECTION("updates definitions")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("tool_a"));
+        registry.registerTool(std::make_unique<MockTool>("tool_b"));
+        registry.registerTool(std::make_unique<MockTool>("tool_c"));
+
+        registry.unregisterTool("tool_b");
+
+        auto const defs = registry.definitions();
+        REQUIRE(defs.size() == 2);
+
+        // After swap-and-pop, tool_c takes tool_b's slot.
+        auto hasName = [&](std::string_view n) {
+            return std::ranges::any_of(defs, [&](auto const& d) { return d.name == n; });
+        };
+        CHECK(hasName("tool_a"));
+        CHECK(hasName("tool_c"));
+        CHECK_FALSE(hasName("tool_b"));
+    }
+
+    SECTION("unregister then register")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("tool_a"));
+        registry.unregisterTool("tool_a");
+        CHECK(registry.size() == 0);
+
+        registry.registerTool(std::make_unique<MockTool>("tool_b"));
+        CHECK(registry.size() == 1);
+        CHECK(registry.findTool("tool_b") != nullptr);
+    }
+
+    SECTION("unregister last tool empties registry")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("only_tool"));
+        CHECK(registry.unregisterTool("only_tool"));
+        CHECK(registry.size() == 0);
+        CHECK(registry.definitions().empty());
+    }
+
+    SECTION("execute works after unregister")
+    {
+        auto registry = ToolRegistry {};
+        registry.registerTool(std::make_unique<MockTool>("tool_a"));
+        registry.registerTool(std::make_unique<MockTool>("tool_b"));
+        registry.unregisterTool("tool_a");
+
+        auto const call = ToolCall { .id = "call-1", .name = "tool_b", .arguments = {} };
+        auto const result = registry.execute(call);
+        CHECK(result.content == "mock result");
+        CHECK_FALSE(result.isError);
+    }
+}

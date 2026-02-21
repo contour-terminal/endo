@@ -63,4 +63,9 @@ auto parseResponse(nlohmann::json const& message) -> McpResult<Response>
     return response;
 }
 
+auto isNotification(nlohmann::json const& message) -> bool
+{
+    return message.contains("method") && !message.contains("id");
+}
+
 } // namespace endo::agent::mcp::jsonrpc

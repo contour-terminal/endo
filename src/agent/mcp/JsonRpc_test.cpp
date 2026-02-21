@@ -103,3 +103,47 @@ TEST_CASE("jsonrpc.parseResponse", "[mcp][jsonrpc]")
         CHECK(result.has_value());
     }
 }
+
+TEST_CASE("jsonrpc.isNotification", "[mcp][jsonrpc]")
+{
+    using endo::agent::mcp::jsonrpc::isNotification;
+
+    SECTION("true for notification (method, no id)")
+    {
+        auto const msg = nlohmann::json {
+            { "jsonrpc", "2.0" },
+            { "method", "notifications/tools/list_changed" },
+        };
+        CHECK(isNotification(msg));
+    }
+
+    SECTION("true for notification with params")
+    {
+        auto const msg = nlohmann::json {
+            { "jsonrpc", "2.0" },
+            { "method", "notifications/foo" },
+            { "params", { { "key", "value" } } },
+        };
+        CHECK(isNotification(msg));
+    }
+
+    SECTION("false for response (id, result, no method)")
+    {
+        auto const msg = nlohmann::json {
+            { "jsonrpc", "2.0" },
+            { "id", 1 },
+            { "result", nlohmann::json::object() },
+        };
+        CHECK_FALSE(isNotification(msg));
+    }
+
+    SECTION("false for request (id + method)")
+    {
+        auto const msg = nlohmann::json {
+            { "jsonrpc", "2.0" },
+            { "id", 1 },
+            { "method", "tools/list" },
+        };
+        CHECK_FALSE(isNotification(msg));
+    }
+}

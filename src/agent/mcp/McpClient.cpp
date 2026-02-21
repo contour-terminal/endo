@@ -8,11 +8,49 @@
 namespace endo::agent::mcp
 {
 
-McpClient::McpClient(std::unique_ptr<Transport> transport): _transport(std::move(transport))
+McpClient::McpClient(std::unique_ptr<Transport> transport):
+    _transport(std::move(transport)), _ioThread([this](std::stop_token st) { ioLoop(st); })
 {
 }
 
-McpClient::~McpClient() = default;
+McpClient::~McpClient()
+{
+    _ioThread.request_stop();
+    _transport->close(); // Unblocks the I/O thread's receive() call.
+    _responseQueue.shutdown();
+    _notificationQueue.shutdown();
+    // jthread destructor joins.
+}
+
+void McpClient::ioLoop(std::stop_token stopToken)
+{
+    while (!stopToken.stop_requested())
+    {
+        auto result = _transport->receive(); // Blocking.
+        if (!result.has_value())
+        {
+            // Transport error (closed, EOF) — push error and exit.
+            _responseQueue.push(std::unexpected(result.error()));
+            return;
+        }
+
+        auto const& msg = *result;
+
+        if (jsonrpc::isNotification(msg))
+        {
+            // Notification: route to notification queue.
+            _notificationQueue.push(McpNotification {
+                .method = msg.value("method", std::string {}),
+                .params = msg.value("params", nlohmann::json {}),
+            });
+        }
+        else
+        {
+            // Response: route to response queue.
+            _responseQueue.push(std::move(result));
+        }
+    }
+}
 
 auto McpClient::initialize() -> McpResult<McpServerCapabilities>
 {
@@ -117,25 +155,38 @@ auto McpClient::isInitialized() const -> bool
     return _initialized;
 }
 
+auto McpClient::drainNotifications() -> std::vector<McpNotification>
+{
+    auto result = std::vector<McpNotification> {};
+    _notificationQueue.drainTo(result);
+    return result;
+}
+
 auto McpClient::sendRequest(std::string_view method, nlohmann::json params) -> McpResult<nlohmann::json>
 {
     auto const id = _nextId++;
     auto request = jsonrpc::makeRequest(id, method, std::move(params));
 
-    return _transport->send(request)
-        .and_then([this]() -> McpResult<nlohmann::json> { return _transport->receive(); })
-        .and_then([](nlohmann::json const& msg) -> McpResult<nlohmann::json> {
-            return jsonrpc::parseResponse(msg).and_then(
-                [](jsonrpc::Response const& resp) -> McpResult<nlohmann::json> {
-                    if (resp.error)
-                    {
-                        return makeMcpError(
-                            McpErrorCode::ProtocolError,
-                            std::format("RPC error {}: {}", resp.error->code, resp.error->message));
-                    }
-                    return resp.result.value_or(nlohmann::json::object());
-                });
-        });
+    auto sendResult = _transport->send(request);
+    if (!sendResult)
+        return std::unexpected(sendResult.error());
+
+    // Block until the I/O thread delivers a response.
+    auto response = _responseQueue.pop();
+    if (!response.has_value())
+        return makeMcpError(McpErrorCode::TransportError, "I/O thread shut down");
+
+    // response is McpResult<nlohmann::json> — unwrap and parse.
+    return response->and_then([](nlohmann::json const& respMsg) -> McpResult<nlohmann::json> {
+        return jsonrpc::parseResponse(respMsg).and_then(
+            [](jsonrpc::Response const& resp) -> McpResult<nlohmann::json> {
+                if (resp.error)
+                    return makeMcpError(
+                        McpErrorCode::ProtocolError,
+                        std::format("RPC error {}: {}", resp.error->code, resp.error->message));
+                return resp.result.value_or(nlohmann::json::object());
+            });
+    });
 }
 
 } // namespace endo::agent::mcp

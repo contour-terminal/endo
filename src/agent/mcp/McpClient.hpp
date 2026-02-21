@@ -4,11 +4,13 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <agent/Types.hpp>
 #include <agent/mcp/McpError.hpp>
 #include <agent/mcp/Transport.hpp>
+#include <platform/MessageQueue.hpp>
 
 namespace endo::agent::mcp
 {
@@ -23,9 +25,19 @@ struct McpServerCapabilities
     std::string serverVersion;
 };
 
+/// @brief A notification received from an MCP server.
+struct McpNotification
+{
+    std::string method;    ///< Notification method name.
+    nlohmann::json params; ///< Optional notification parameters.
+};
+
 /// @brief Client for the Model Context Protocol (MCP).
 ///
 /// Handles the MCP lifecycle: initialize, list tools, call tools.
+/// Spawns a background I/O thread that reads from the transport, classifying
+/// incoming messages as responses (routed to the pending request) or
+/// notifications (buffered for later draining).
 class McpClient
 {
   public:
@@ -58,11 +70,27 @@ class McpClient
     /// @brief Returns true if the client has been initialized.
     [[nodiscard]] auto isInitialized() const -> bool;
 
+    /// @brief Drains all buffered notifications received since the last drain.
+    /// @return Notifications accumulated by the I/O thread.
+    [[nodiscard]] auto drainNotifications() -> std::vector<McpNotification>;
+
   private:
     std::unique_ptr<Transport> _transport;
     McpServerCapabilities _capabilities;
     int64_t _nextId = 1;
     bool _initialized = false;
+
+    /// @brief Background I/O thread — reads from transport, classifies, and routes messages.
+    std::jthread _ioThread;
+
+    /// @brief Queue for responses: I/O thread pushes, sendRequest() pops.
+    platform::MessageQueue<McpResult<nlohmann::json>> _responseQueue;
+
+    /// @brief Queue for notifications: I/O thread pushes, drainNotifications() drains.
+    platform::MessageQueue<McpNotification> _notificationQueue;
+
+    /// @brief Background I/O loop — reads from transport, classifies, and routes messages.
+    void ioLoop(std::stop_token stopToken);
 
     [[nodiscard]] auto sendRequest(std::string_view method, nlohmann::json params = nullptr)
         -> McpResult<nlohmann::json>;

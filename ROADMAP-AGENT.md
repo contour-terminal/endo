@@ -205,7 +205,7 @@ before writing the file.
 - Syntax highlighting for diff content (v2 — requires multi-language tokenizer, deferred to Phase 12A)
 - Optional approval prompt for large edits (infrastructure prepared, not enforced yet) ✅
 
-### @-file Context Injection
+### @-file Context Injection ✅
 
 **Status:** Done | **Effort:** Small
 
@@ -219,13 +219,15 @@ reads and attaches file contents when the message is submitted.
 - [x] Truncate large files with `[truncated]` marker
 - [x] Integration in `Shell::runAgentMode()` at all message submission paths
 
-### Dynamic MCP Tool Discovery (Phase 8.4)
+### Dynamic MCP Tool Discovery (Phase 8.4) ✅
 
-**Status:** Not started | **Effort:** Small
+**Status:** Done | **Effort:** Small
 
-Handle `notifications/tools/list_changed` from MCP servers. Re-fetch tool list on
-notification, update `ServerManager` routing map dynamically, notify `AgentSession`
-of tool set changes.
+Background I/O thread per `McpClient` handles transport reads, classifying messages as
+responses (routed to pending request) or notifications (buffered). `ServerManager::processNotifications()`
+polls servers and triggers `refreshTools()` on `notifications/tools/list_changed`. Tool diff
+(added/removed) propagated to `ToolRegistry` via `ToolsChangedCallback`. Polled before each
+LLM turn in the agent event loop.
 
 ### Session Resume Enhancement
 

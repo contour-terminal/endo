@@ -27,6 +27,11 @@ class ToolRegistry
     /// @param tool The tool to register.
     void registerTool(std::unique_ptr<AgentTool> tool);
 
+    /// @brief Unregisters a tool by name.
+    /// @param name The tool name to remove.
+    /// @return true if the tool was found and removed, false if not found.
+    auto unregisterTool(std::string_view name) -> bool;
+
     /// @brief Finds a tool by name.
     /// @param name The tool name to search for.
     /// @return Pointer to the tool, or nullptr if not found.

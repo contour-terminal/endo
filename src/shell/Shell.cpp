@@ -1718,6 +1718,18 @@ void Shell::runAgentMode()
     for (auto const& toolDef: mcpServerManager.allTools())
         toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, toolDef));
 
+    mcpServerManager.setToolsChangedCallback(
+        [&toolRegistry, &mcpServerManager](
+            std::string_view /*serverName*/,
+            std::span<agent::ToolDefinition const> added,
+            std::vector<std::string> const& removed) {
+            for (auto const& name: removed)
+                toolRegistry.unregisterTool(name);
+            for (auto const& def: added)
+                toolRegistry.registerTool(
+                    std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, def));
+        });
+
     _agentSession->setToolRegistry(&toolRegistry);
     _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
     _agentSession->setMaxExplorationIterations(agentConfig.planMode.maxExplorationTurns);
@@ -2453,6 +2465,9 @@ void Shell::runAgentMode()
             switch (action)
             {
                 case agent::AgentInputComponent::Action::Submit: {
+                    // Poll MCP servers for tool list changes before each LLM turn.
+                    mcpServerManager.processNotifications();
+
                     auto sentToWorker = false;
 
                     // Ensure system prompt is ready.
