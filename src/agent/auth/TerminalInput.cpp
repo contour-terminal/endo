@@ -6,6 +6,7 @@
 #include <tui/Terminal.hpp>
 
 #include <cstdlib>
+#include <print>
 #include <string>
 #include <vector>
 
@@ -28,8 +29,11 @@ namespace
     auto runQuestion(tui::QuestionConfig config) -> QuestionResult
     {
         auto terminal = tui::Terminal {};
-        if (auto err = terminal.initialize(); err.has_value())
+        if (auto result = terminal.initialize(); !result)
+        {
+            std::println(stderr, "Terminal initialization failed: {}", result.error());
             return {};
+        }
 
         auto screen = tui::Screen(terminal, { .viewport = tui::Viewport::Inline });
 
