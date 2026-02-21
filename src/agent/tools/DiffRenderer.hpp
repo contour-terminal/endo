@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/TerminalOutput.hpp>
 
 #include <cstdint>
@@ -60,6 +61,24 @@ inline constexpr int LargeEditThreshold = 50;
 void renderDiff(tui::TerminalOutput& output,
                 std::string_view filePath,
                 std::span<DiffLine const> diffLines,
+                bool truncated = false);
+
+/// @brief Renders a syntax-highlighted diff block to the terminal.
+///
+/// Like renderDiff(), but applies syntax highlighting to the diff content:
+/// - Addition lines: full syntax colors (bright).
+/// - Context lines: syntax colors with dim = true.
+/// - Deletion lines: monochrome red (preserves "removed" visual signal).
+///
+/// @param output The terminal output to write to.
+/// @param filePath The file path (displayed in the diff header).
+/// @param diffLines The diff lines to render.
+/// @param language The language for syntax highlighting.
+/// @param truncated If true, appends a truncation notice.
+void renderDiff(tui::TerminalOutput& output,
+                std::string_view filePath,
+                std::span<DiffLine const> diffLines,
+                tui::LanguageId language,
                 bool truncated = false);
 
 } // namespace endo::agent

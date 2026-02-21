@@ -2095,7 +2095,8 @@ void Shell::runAgentMode()
                                                || l.type == agent::DiffLineType::Deletion;
                                     }));
                                 auto const truncated = changedLines > agent::LargeEditThreshold;
-                                agent::renderDiff(out, filePath, diffLines, truncated);
+                                auto const language = tui::detectLanguageFromPath(filePath);
+                                agent::renderDiff(out, filePath, diffLines, language, truncated);
                             }
 
                             if (activeRenderer && activeRenderer->isThinking())

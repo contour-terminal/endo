@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/Theme.hpp>
 
 #include <algorithm>
@@ -322,6 +323,92 @@ void renderDiff(tui::TerminalOutput& output,
                 output.writeText("+ ", addStyle);
                 output.writeText(line.text, addStyle);
                 break;
+        }
+        output.linefeed();
+    }
+
+    if (truncated)
+    {
+        output.writeText("\u2502 ", barStyle);
+        output.writeText("  (diff truncated — large edit)", ctxStyle);
+        output.linefeed();
+    }
+}
+
+void renderDiff(tui::TerminalOutput& output,
+                std::string_view filePath,
+                std::span<DiffLine const> diffLines,
+                tui::LanguageId language,
+                bool truncated)
+{
+    // Fall back to non-highlighted rendering if no language detected
+    if (language == tui::LanguageId::None)
+    {
+        renderDiff(output, filePath, diffLines, truncated);
+        return;
+    }
+
+    if (diffLines.empty())
+        return;
+
+    auto const& theme = tui::currentTheme();
+    auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+    auto const addStyle = tui::Style { .fg = theme.colors.success };
+    auto const delStyle = tui::Style { .fg = theme.colors.error };
+    auto const ctxStyle = tui::Style { .fg = theme.agentColors.statusText };
+    auto const hunkStyle = tui::Style { .fg = theme.agentColors.leftBar, .dim = true };
+    auto const headerStyle = tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
+
+    // Diff header line.
+    output.writeText("\u2502 ", barStyle);
+    output.writeText(std::format("\u2500\u2500 {} \u2500\u2500", filePath), headerStyle);
+    output.linefeed();
+
+    // Compute the max line number width for alignment.
+    auto maxLineNum = 0;
+    for (auto const& line: diffLines)
+    {
+        maxLineNum = std::max(maxLineNum, line.oldLineNum);
+        maxLineNum = std::max(maxLineNum, line.newLineNum);
+    }
+    auto const lineNumWidth = maxLineNum > 0 ? static_cast<int>(std::to_string(maxLineNum).size()) : 1;
+
+    // Track highlight state across lines (reset at hunk boundaries)
+    auto hlState = tui::HighlightState::Normal;
+
+    for (auto const& line: diffLines)
+    {
+        output.writeText("\u2502 ", barStyle);
+
+        switch (line.type)
+        {
+            case DiffLineType::Hunk:
+                output.writeText(std::format("{:>{}}  ", "", lineNumWidth), ctxStyle);
+                output.writeText(line.text, hunkStyle);
+                hlState = tui::HighlightState::Normal; // Reset at hunk boundary
+                break;
+            case DiffLineType::Context: {
+                output.writeText(std::format("{:>{}}  ", line.oldLineNum, lineNumWidth), ctxStyle);
+                output.writeText("  ", ctxStyle);
+                auto [highlights, newState] = tui::highlightLine(line.text, language, hlState);
+                hlState = newState;
+                auto dimStyle = tui::Style { .dim = true };
+                tui::renderHighlightedLine(output, line.text, highlights, dimStyle, theme);
+                break;
+            }
+            case DiffLineType::Deletion:
+                output.writeText(std::format("{:>{}}  ", line.oldLineNum, lineNumWidth), ctxStyle);
+                output.writeText("- ", delStyle);
+                output.writeText(line.text, delStyle);
+                break;
+            case DiffLineType::Addition: {
+                output.writeText(std::format("{:>{}}  ", line.newLineNum, lineNumWidth), ctxStyle);
+                output.writeText("+ ", addStyle);
+                auto [highlights, newState] = tui::highlightLine(line.text, language, hlState);
+                hlState = newState;
+                tui::renderHighlightedLine(output, line.text, highlights, tui::Style {}, theme);
+                break;
+            }
         }
         output.linefeed();
     }
