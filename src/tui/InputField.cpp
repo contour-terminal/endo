@@ -78,6 +78,26 @@ namespace
             --pos;
         return pos;
     }
+
+    /// @brief Sanitizes text for single-line display.
+    /// Replaces '\n' with space and strips '\r' entirely.
+    /// @param text The input text to sanitize.
+    /// @return Sanitized string safe for single-line rendering.
+    auto sanitizeForSingleLine(std::string_view text) -> std::string
+    {
+        auto result = std::string {};
+        result.reserve(text.size());
+        for (auto const ch: text)
+        {
+            if (ch == '\r')
+                continue;
+            if (ch == '\n')
+                result += ' ';
+            else
+                result += ch;
+        }
+        return result;
+    }
 } // namespace
 
 auto InputField::processEvent(InputEvent const& event) -> InputFieldAction
@@ -494,7 +514,7 @@ void InputField::clear()
 
 void InputField::setText(std::string_view text)
 {
-    _buffer = std::string(text);
+    _buffer = _multiline ? std::string(text) : sanitizeForSingleLine(text);
     _cursor = _buffer.size();
     clearSelection();
 }
@@ -1103,7 +1123,7 @@ void InputField::historyPrev()
     if (_historyIndex > 0)
     {
         --_historyIndex;
-        _buffer = _history[_historyIndex];
+        _buffer = _multiline ? _history[_historyIndex] : sanitizeForSingleLine(_history[_historyIndex]);
         _cursor = _buffer.size();
         clearSelection();
     }
@@ -1121,7 +1141,7 @@ void InputField::historyNext()
     }
     else
     {
-        _buffer = _history[_historyIndex];
+        _buffer = _multiline ? _history[_historyIndex] : sanitizeForSingleLine(_history[_historyIndex]);
     }
     _cursor = _buffer.size();
     clearSelection();
@@ -1172,8 +1192,17 @@ void InputField::insertCodepoint(char32_t cp)
 
 void InputField::insertText(std::string_view text)
 {
-    _buffer.insert(_cursor, text);
-    _cursor += text.size();
+    if (!_multiline)
+    {
+        auto const sanitized = sanitizeForSingleLine(text);
+        _buffer.insert(_cursor, sanitized);
+        _cursor += sanitized.size();
+    }
+    else
+    {
+        _buffer.insert(_cursor, text);
+        _cursor += text.size();
+    }
 }
 
 auto InputField::nextGraphemeCluster(std::size_t pos) const -> std::size_t
@@ -1361,6 +1390,8 @@ auto InputField::maxLines() const noexcept -> int
 
 void InputField::setGhostText(std::string_view ghost)
 {
+    if (auto const pos = ghost.find('\n'); pos != std::string_view::npos)
+        ghost = ghost.substr(0, pos);
     _ghostText = std::string(ghost);
 }
 

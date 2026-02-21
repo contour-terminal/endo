@@ -1644,3 +1644,68 @@ TEST_CASE("InputField.multiline_ghost_text_decorator_background_per_column")
     CHECK(bgX.b == 90);  // col 3 * 30
     CHECK(bgY.b == 120); // col 4 * 30
 }
+
+// ============================================================================
+// Newline sanitization tests (single-line mode)
+// ============================================================================
+
+TEST_CASE("InputField.setText_strips_newlines_in_single_line_mode")
+{
+    InputField field;
+    // Single-line mode is the default
+    CHECK_FALSE(field.isMultiline());
+
+    field.setText("hello\nworld\nfoo");
+    CHECK(field.text() == "hello world foo");
+    CHECK(field.cursor() == 15);
+}
+
+TEST_CASE("InputField.setText_preserves_newlines_in_multiline_mode")
+{
+    InputField field;
+    field.setMultiline(true);
+
+    field.setText("hello\nworld\nfoo");
+    CHECK(field.text() == "hello\nworld\nfoo");
+    CHECK(field.lineCount() == 3);
+}
+
+TEST_CASE("InputField.setGhostText_truncates_at_newline")
+{
+    InputField field;
+    field.setGhostText("first line\nsecond line\nthird");
+    CHECK(field.ghostText() == "first line");
+}
+
+TEST_CASE("InputField.paste_strips_newlines_in_single_line_mode")
+{
+    InputField field;
+    CHECK_FALSE(field.isMultiline());
+    field.setText("prefix ");
+
+    PasteEvent paste { .text = "line1\nline2\rline3" };
+    auto action = field.processEvent(paste);
+    CHECK(action == InputFieldAction::Changed);
+    CHECK(field.text() == "prefix line1 line2line3");
+}
+
+TEST_CASE("InputField.history_cycling_strips_newlines_in_single_line_mode")
+{
+    InputField field;
+    CHECK_FALSE(field.isMultiline());
+
+    field.addHistory("single line");
+    field.addHistory("multi\nline\nentry");
+
+    // Up arrow: most recent history entry (multi-line)
+    (void) field.processEvent(specialKey(KeyCode::Up));
+    CHECK(field.text() == "multi line entry");
+
+    // Up arrow: older entry (single-line, unchanged)
+    (void) field.processEvent(specialKey(KeyCode::Up));
+    CHECK(field.text() == "single line");
+
+    // Down arrow: back to multi-line entry (sanitized)
+    (void) field.processEvent(specialKey(KeyCode::Down));
+    CHECK(field.text() == "multi line entry");
+}

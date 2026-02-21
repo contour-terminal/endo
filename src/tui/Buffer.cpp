@@ -145,6 +145,10 @@ int Buffer::putString(int row, int col, std::string_view text, Style const& styl
 
         auto const& cluster = *it;
 
+        // Skip C0 control characters (codepoint < 0x20) to prevent terminal corruption.
+        if (!cluster.empty() && static_cast<char32_t>(cluster[0]) < 0x20)
+            continue;
+
         // Calculate display width for the grapheme cluster
         int const clusterWidth = graphemeClusterWidth(cluster);
 
