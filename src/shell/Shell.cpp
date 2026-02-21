@@ -40,6 +40,7 @@
 #include <agent/commands/SlashCommandCompleter.hpp>
 #include <agent/commands/SlashCommandRegistry.hpp>
 #include <agent/commands/SlashCommands.hpp>
+#include <agent/context/FileReferenceExpander.hpp>
 #include <agent/context/ProjectContextLoader.hpp>
 #include <agent/context/SystemPromptBuilder.hpp>
 #include <agent/conversation/ConversationHistoryStore.hpp>
@@ -2446,6 +2447,12 @@ void Shell::runAgentMode()
 
                     auto const query = std::string(inputComponent.text());
 
+                    // Expand @-file references for agent context injection.
+                    auto const expandFileRefs = [&](std::string_view text) {
+                        return agent::FileReferenceExpander::expand(text, std::filesystem::current_path())
+                            .expandedMessage;
+                    };
+
                     if (!query.starts_with("/"))
                     {
                         inputComponent.inputField().addHistory(query);
@@ -2511,15 +2518,16 @@ void Shell::runAgentMode()
                                 else
                                 {
                                     // Send plan query to worker.
-                                    worker.inbound().push(
-                                        agent::UserPromptMessage { .text = p->query, .planMode = true });
+                                    worker.inbound().push(agent::UserPromptMessage {
+                                        .text = expandFileRefs(p->query), .planMode = true });
                                     sentToWorker = true;
                                 }
                             }
                             else if (auto const* r = std::get_if<agent::PromptRewrite>(&commandResult))
                             {
                                 // Send rewritten prompt to worker.
-                                worker.inbound().push(agent::UserPromptMessage { .text = r->prompt });
+                                worker.inbound().push(
+                                    agent::UserPromptMessage { .text = expandFileRefs(r->prompt) });
                                 sentToWorker = true;
                             }
                         }
@@ -2533,14 +2541,16 @@ void Shell::runAgentMode()
                     else if (planModeActive && agentConfig.planMode.enabled)
                     {
                         // Plan mode: send to worker with planMode flag.
-                        worker.inbound().push(agent::UserPromptMessage { .text = query, .planMode = true });
+                        worker.inbound().push(agent::UserPromptMessage {
+                            .text = expandFileRefs(query), .planMode = true });
                         sentToWorker = true;
                         saveHistory();
                     }
                     else
                     {
                         // Normal message: send to worker.
-                        worker.inbound().push(agent::UserPromptMessage { .text = query });
+                        worker.inbound().push(
+                            agent::UserPromptMessage { .text = expandFileRefs(query) });
                         sentToWorker = true;
                     }
 

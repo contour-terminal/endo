@@ -19,6 +19,7 @@ add_library(endo-agent STATIC
     conversation/ConversationCompactor.hpp conversation/ConversationCompactor.cpp
 
     # Context
+    context/FileReferenceExpander.hpp context/FileReferenceExpander.cpp
     context/ProjectFileTree.hpp context/ProjectFileTree.cpp
     context/ProjectContextLoader.hpp context/ProjectContextLoader.cpp
     context/SystemPromptBuilder.hpp context/SystemPromptBuilder.cpp
@@ -112,6 +113,7 @@ add_executable(test-endo-agent
     conversation/ConversationCompactor_test.cpp
 
     # Context tests
+    context/FileReferenceExpander_test.cpp
     context/ProjectFileTree_test.cpp
     context/ProjectContextLoader_test.cpp
     context/SystemPromptBuilder_test.cpp

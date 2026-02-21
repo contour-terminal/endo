@@ -206,16 +206,17 @@ before writing the file.
 
 ### @-file Context Injection
 
-**Status:** Partial (`FilePathCompleter` exists) | **Effort:** Small
+**Status:** Done | **Effort:** Small
 
 Allow `@path/to/file` in agent queries to automatically inject file contents into the
-message context. The `FilePathCompleter` already provides path completion — extend it
-to read and attach file contents when the message is submitted.
+message context. The `FilePathCompleter` provides path completion; `FileReferenceExpander`
+reads and attaches file contents when the message is submitted.
 
-- Parse `@path/to/file` references in submitted messages
-- Read file contents and append as context blocks
-- Support `@path:10-50` for line ranges
-- Truncate large files with `[truncated]` marker
+- [x] Parse `@path/to/file` references in submitted messages
+- [x] Read file contents and append as XML-style `<file>` context blocks
+- [x] Support `@path:N` and `@path:N-M` for line ranges
+- [x] Truncate large files with `[truncated]` marker
+- [x] Integration in `Shell::runAgentMode()` at all message submission paths
 
 ### Dynamic MCP Tool Discovery (Phase 8.4)
 
