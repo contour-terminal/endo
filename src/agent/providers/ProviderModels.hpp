@@ -185,17 +185,21 @@ struct ModelMatch
         diffs.push_back({ "Context size",
                           std::format(std::locale(""), "{:L}", oldInfo.contextSize),
                           std::format(std::locale(""), "{:L}", newInfo.contextSize) });
+    auto const boolStr = [](bool v) -> std::string_view {
+        return v ? "\u2705" : "\u274C";
+    };
     if (oldInfo.supportsToolUse != newInfo.supportsToolUse)
-        diffs.push_back(
-            { "Tool use", oldInfo.supportsToolUse ? "yes" : "no", newInfo.supportsToolUse ? "yes" : "no" });
+        diffs.push_back({ "Tool use",
+                          std::string(boolStr(oldInfo.supportsToolUse)),
+                          std::string(boolStr(newInfo.supportsToolUse)) });
     if (oldInfo.supportsImageInput != newInfo.supportsImageInput)
         diffs.push_back({ "Image input",
-                          oldInfo.supportsImageInput ? "yes" : "no",
-                          newInfo.supportsImageInput ? "yes" : "no" });
+                          std::string(boolStr(oldInfo.supportsImageInput)),
+                          std::string(boolStr(newInfo.supportsImageInput)) });
     if (oldInfo.supportsImageOutput != newInfo.supportsImageOutput)
         diffs.push_back({ "Image output",
-                          oldInfo.supportsImageOutput ? "yes" : "no",
-                          newInfo.supportsImageOutput ? "yes" : "no" });
+                          std::string(boolStr(oldInfo.supportsImageOutput)),
+                          std::string(boolStr(newInfo.supportsImageOutput)) });
 
     if (!diffs.empty())
     {
