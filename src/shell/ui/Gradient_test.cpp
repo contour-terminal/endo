@@ -44,7 +44,7 @@ TEST_CASE("multiStopGradient.two_stops_matches_lerp", "[gradient]")
 
     // t=0.5 → midpoint
     auto const rMid = endo::multiStopGradient(stops, 0.5f);
-    auto const expected = endo::lerpColor(a, b, 0.5f);
+    auto const expected = tui::lerpColor(a, b, 0.5f);
     CHECK(rMid.r == expected.r);
     CHECK(rMid.g == expected.g);
     CHECK(rMid.b == expected.b);
@@ -99,7 +99,7 @@ TEST_CASE("multiStopGradient.five_stops_midpoint", "[gradient]")
 
     // t=0.125 → midpoint between stops[0] and stops[1]
     auto const r = endo::multiStopGradient(stops, 0.125f);
-    auto const expected = endo::lerpColor(stops[0], stops[1], 0.5f);
+    auto const expected = tui::lerpColor(stops[0], stops[1], 0.5f);
     CHECK(r.r == expected.r);
     CHECK(r.g == expected.g);
     CHECK(r.b == expected.b);
@@ -129,14 +129,14 @@ TEST_CASE("lerpColor.basic", "[gradient]")
     auto const black = tui::RgbColor { 0, 0, 0 };
     auto const white = tui::RgbColor { 255, 255, 255 };
 
-    auto const mid = endo::lerpColor(black, white, 0.5f);
+    auto const mid = tui::lerpColor(black, white, 0.5f);
     // 127 or 128 depending on rounding — allow both
     CHECK(mid.r >= 127);
     CHECK(mid.r <= 128);
 
-    auto const start = endo::lerpColor(black, white, 0.0f);
+    auto const start = tui::lerpColor(black, white, 0.0f);
     CHECK(start.r == 0);
 
-    auto const end = endo::lerpColor(black, white, 1.0f);
+    auto const end = tui::lerpColor(black, white, 1.0f);
     CHECK(end.r == 255);
 }

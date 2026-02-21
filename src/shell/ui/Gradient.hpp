@@ -22,21 +22,6 @@ namespace endo
 /// @return A vector of PromptSegments, one per grapheme cluster.
 [[nodiscard]] PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view text);
 
-/// @brief Linearly interpolates between two RGB colors.
-///
-/// @param a The start color.
-/// @param b The end color.
-/// @param t Interpolation parameter in [0, 1].
-/// @return The interpolated color.
-[[nodiscard]] constexpr tui::RgbColor lerpColor(tui::RgbColor a, tui::RgbColor b, float t) noexcept
-{
-    auto const lerp = [](std::uint8_t x, std::uint8_t y, float s) noexcept -> std::uint8_t {
-        auto const val = static_cast<float>(x) + (static_cast<float>(y) - static_cast<float>(x)) * s;
-        return static_cast<std::uint8_t>(val < 0.0f ? 0.0f : (val > 255.0f ? 255.0f : val));
-    };
-    return { .r = lerp(a.r, b.r, t), .g = lerp(a.g, b.g, t), .b = lerp(a.b, b.b, t) };
-}
-
 /// @brief Interpolates across evenly-spaced color stops at parameter t in [0, 1].
 ///
 /// When stops is empty, returns black. When a single stop, returns that stop for any t.

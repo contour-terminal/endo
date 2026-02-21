@@ -35,7 +35,7 @@ tui::RgbColor multiStopGradient(std::span<tui::RgbColor const> stops, float t) n
     if (idx >= stops.size() - 1)
         return stops.back();
 
-    return lerpColor(stops[idx], stops[idx + 1], frac);
+    return tui::lerpColor(stops[idx], stops[idx + 1], frac);
 }
 
 namespace
@@ -92,7 +92,7 @@ PromptSegments gradient(tui::RgbColor start, tui::RgbColor end, std::string_view
     {
         auto const t = (count == 1) ? 0.0f : static_cast<float>(i) / static_cast<float>(count - 1);
         auto style = tui::Style {};
-        style.fg = lerpColor(start, end, t);
+        style.fg = tui::lerpColor(start, end, t);
         segments.push_back(PromptSegment { .text = std::string(text.substr(spans[i].offset, spans[i].length)),
                                            .style = style });
     }
