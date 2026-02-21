@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
+#include <format>
+#include <locale>
+
 #include <agent/providers/ProviderModels.hpp>
 
 using namespace endo::agent;
@@ -131,8 +134,11 @@ TEST_CASE("ProviderModels.formatCapabilityDiff.different_context_size", "[agent]
 
     auto const result = formatCapabilityDiff(oldInfo, newInfo);
     CHECK(result.find("Context size") != std::string::npos);
-    CHECK(result.find("200000") != std::string::npos);
-    CHECK(result.find("128000") != std::string::npos);
+    // Values are locale-formatted (e.g. "200,000" or "200.000" depending on locale).
+    auto const oldFormatted = std::format(std::locale(""), "{:L}", size_t { 200000 });
+    auto const newFormatted = std::format(std::locale(""), "{:L}", size_t { 128000 });
+    CHECK(result.find(oldFormatted) != std::string::npos);
+    CHECK(result.find(newFormatted) != std::string::npos);
 }
 
 TEST_CASE("ProviderModels.formatCapabilityDiff.cross_provider_all_changes", "[agent][providers][models]")

@@ -5,6 +5,7 @@
 #include <array>
 #include <cctype>
 #include <format>
+#include <locale>
 #include <optional>
 #include <span>
 #include <string>
@@ -182,8 +183,8 @@ struct ModelMatch
 
     if (oldInfo.contextSize != newInfo.contextSize)
         diffs.push_back({ "Context size",
-                          std::format("{}", oldInfo.contextSize),
-                          std::format("{}", newInfo.contextSize) });
+                          std::format(std::locale(""), "{:L}", oldInfo.contextSize),
+                          std::format(std::locale(""), "{:L}", newInfo.contextSize) });
     if (oldInfo.supportsToolUse != newInfo.supportsToolUse)
         diffs.push_back(
             { "Tool use", oldInfo.supportsToolUse ? "yes" : "no", newInfo.supportsToolUse ? "yes" : "no" });
