@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Builtin not false
+# expect: true
+
+let x = not false; print x

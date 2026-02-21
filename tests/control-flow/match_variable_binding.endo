@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match with variable binding
+# expect: 14
+# expect:
+
+let r = match 7 with
+    | n -> n * 2
+println r

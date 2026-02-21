@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract commands
+# expect: [/sbin/init; firefox; vim]
+
+let cmds = ps |> map (fun p -> p.command)
+print cmds

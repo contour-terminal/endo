@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Complex arithmetic with precedence
+# expect: 7
+# expect: 9
+# expect:
+
+println (1 + 2 * 3)
+println ((1 + 2) * 3)

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option.map with a named function
+# expect: 10
+
+let double (x: int) = x * 2
+print (Option.map double (Some 5) ?| 0)

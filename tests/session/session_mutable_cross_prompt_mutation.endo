@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Basic cross-prompt mutation: x <- 5 updates the persisted value
+# expect: 5
+# session-separator: ---
+
+let mut x = 0
+# ---
+x <- 5
+# ---
+print x

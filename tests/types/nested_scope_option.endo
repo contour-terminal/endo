@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option in nested scope - just test that we can match and return the bound value
+# mode: ir-only
+
+let outer = Some 1; let result = match outer with | Some x -> x | None -> 0

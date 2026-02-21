@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Use bound variable in body expression
+# mode: ir-only
+
+let r = match 7 with | x -> x + x + x

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Compose forward
+# expect: 11
+
+let double x = x * 2; let inc x = x + 1; let f = double >> inc; print (f 5)

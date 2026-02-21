@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Functions without type annotations fall back to AST inlining but still work
+# expect: 42
+
+let id x = x; print (id 42)

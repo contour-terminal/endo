@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option type Some and None matching
+# expect: 42
+# expect:
+
+let x = Some 42
+let r = match x with
+    | Some n -> n
+    | None -> 0
+println r

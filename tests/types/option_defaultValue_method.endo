@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Method-style: opt.defaultValue def
+# expect: 42
+
+print ((Some 42).defaultValue 0)

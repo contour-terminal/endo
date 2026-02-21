@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-expression branches with side-effectful expressions (print)
+# expect: 12
+
+if true then
+    print 1
+    print 2
+else
+    print 3
+

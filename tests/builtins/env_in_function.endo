@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Use env inside a user-defined function
+# mock-env: X=42
+# expect: found
+
+let getEnv key = env key; let r = match getEnv "X" with | Some v -> "found" | None -> "none"; print r

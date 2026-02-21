@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation option type
+# mode: ir-only
+
+let x: option<int> = Some 42
+print x

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option inside Result - tests ORELEASE at scope exit
+
+let x = Ok (Some 42)

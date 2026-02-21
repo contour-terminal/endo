@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fixed 3-element list pattern
+# expect: 6
+
+let x = [1; 2; 3]; let r = match x with | [a; b; c] -> a + b + c | _ -> 0; print r

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare call cross prompt
+# expect: 42
+# session-separator: ---
+
+let f x = print x
+# ---
+f 42

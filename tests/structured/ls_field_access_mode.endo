@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract mode values
+# expect: [493; 420; 493]
+
+let modes = ls |> map (fun f -> f.mode)
+print modes

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float pow
+# expect: 8
+
+print (2.0 ** 3.0)

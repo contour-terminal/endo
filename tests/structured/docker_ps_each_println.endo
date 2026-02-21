@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured command records should also format correctly via each println
+# mode: structured
+# expect: { id = abc123def; image = nginx:latest; command = /docker-entrypoint…; created = 2024-01-15 10:00:00; status = Up 3 hours; ports = 80/tcp; names = web-server }
+# expect: { id = def456ghi; image = postgres:16; command = docker-entrypoint.s…; created = 2024-01-14 08:00:00; status = Up 2 days; ports = 5432/tcp; names = db-main }
+# expect: { id = ghi789jkl; image = redis:7; command = docker-entrypoint.s…; created = 2024-01-13 12:00:00; status = Exited (0) 1 hour ago; ports = ; names = cache }
+# expect: 
+
+docker ps |> each println

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String dot length
+# expect: 5
+
+let s = "hello"
+print s.length

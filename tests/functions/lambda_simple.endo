@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda expression
+# expect: 42
+# expect:
+
+let inc = fun x -> x + 1
+println (inc 41)

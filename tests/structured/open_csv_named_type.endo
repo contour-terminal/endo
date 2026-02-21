@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Open csv named type
+# mode: ir-only
+
+type Record = { user: string; pid: int }
+open-csv "data.csv" as Record

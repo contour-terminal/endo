@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Top-level ? with env builtin for missing variable exits with code 1
+# expect-exit: 1
+
+let x = (env "NONEXISTENT_VAR_12345")?

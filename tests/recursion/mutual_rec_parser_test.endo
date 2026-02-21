@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify mutual recursion parses and generates IR
+# mode: ir-only
+
+let rec f n = match n with | 0 -> 0 | _ -> g (n - 1) and g n = match n with | 0 -> 1 | _ -> f (n - 1)

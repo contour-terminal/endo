@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Number
+# expect: 42
+# expect: 
+
+42

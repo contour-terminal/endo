@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match bare tuple numeric
+# expect: 7
+
+let r = match 3, 4 with | a, b -> a + b; print r

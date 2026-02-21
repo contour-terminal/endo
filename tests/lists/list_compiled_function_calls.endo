@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function-compiled (UCALL) function calls as list elements
+# expect: [2; 4; 6]
+
+let f (x: int) : int = x * 2
+let r = [f 1; f 2; f 3]
+print r

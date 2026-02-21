@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation result type
+# mode: ir-only
+
+let x: result<int, str> = Ok 42
+print x

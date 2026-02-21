@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Negative step but start < end — should be empty
+# expect: []
+
+print [1..-1..5]

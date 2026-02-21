@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ensure Option/Result still works alongside user ADTs
+# expect: 42
+
+type Color =
+    | Red
+    | Green
+let c = Red
+let o = Some 42
+let r = match o with
+    | Some x -> x
+    | None -> 0
+print r

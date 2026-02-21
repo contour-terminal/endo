@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mix of named and unnamed variants in the same union (different variants can differ)
+# expect: 10
+
+type Foo =
+    | A of x: int
+    | B of int
+    | C
+let a = A 10
+let r = match a with
+    | A v -> v
+    | B v -> v
+    | C -> 0
+print r

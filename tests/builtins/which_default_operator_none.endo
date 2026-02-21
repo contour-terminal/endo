@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Which default operator none
+# expect: /default
+
+print (which "missing" ?| "/default")

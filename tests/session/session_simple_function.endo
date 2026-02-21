@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Define function in first prompt, call it in second prompt
+# expect: 10
+# session-separator: ---
+
+let double x = x * 2
+# ---
+print (double 5)

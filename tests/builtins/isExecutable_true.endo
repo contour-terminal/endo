@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 0755 = 493 — has execute bits
+# expect: true
+
+print (isExecutable 493)

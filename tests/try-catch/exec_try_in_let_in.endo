@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ? inside let-in expression
+# expect: 12
+
+let inc x = Some (x + 1); let f x = let v = (inc x)? in v * 2; let r = match (f 5) with | Some n -> n | None -> 0; print r

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each println
+# expect: 1
+# expect: 2
+# expect: 3
+# expect: 
+
+let _ = [1; 2; 3] |> each println

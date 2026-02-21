@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ? operator unwraps Ok value
+
+let unwrap res = res?; let r = unwrap (Ok 100)

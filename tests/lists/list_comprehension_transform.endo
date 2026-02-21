@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List comprehension transform
+# expect: [2; 4; 6]
+
+print [for x in [1;2;3] -> x * 2]

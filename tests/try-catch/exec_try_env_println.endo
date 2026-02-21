@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify println also works correctly with unwrapped env string
+# mock-env: USER=testuser
+# expect: testuser
+# expect: 
+
+let name = (env "USER")?; println name

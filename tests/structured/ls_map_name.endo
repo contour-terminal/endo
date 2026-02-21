@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract names from all files
+# expect: [docs; hello.txt; script.sh]
+
+let names = ls |> map (fun f -> f.name)
+print names

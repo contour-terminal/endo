@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline with lambda expression
+# expect: 9
+# expect:
+
+3 |> (fun x -> x * x) |> println

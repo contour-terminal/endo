@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Single-payload constructor, match + extract
+# expect: 42
+
+type Shape =
+    | Circle of int
+    | Point
+let s = Circle 42
+let r = match s with
+    | Circle radius -> radius
+    | Point -> 0
+print r

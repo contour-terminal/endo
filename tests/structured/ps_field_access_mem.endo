@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract memory values
+# expect: [1024; 4096; 2048]
+
+let mems = ps |> map (fun p -> p.mem)
+print mems

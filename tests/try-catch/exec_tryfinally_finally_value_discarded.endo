@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: The finally expression's own value is discarded — result is always the body's value
+# expect: 10
+
+let f x = try 10 finally 999; print (f 0)

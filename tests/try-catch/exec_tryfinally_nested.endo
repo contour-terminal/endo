@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested try-finally: inner and outer finally blocks both run in correct order
+# expect: innerouter1
+
+let f x = try (try 1 finally print "inner") finally print "outer"; print (f 0)

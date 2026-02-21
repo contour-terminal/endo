@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session value binding string
+# expect: hello world
+# session-separator: ---
+
+let name = "world"
+# ---
+print ("hello " + name)

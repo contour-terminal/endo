@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Type tag result with string
+# expect: Ok "success"
+# expect: 
+
+println (Ok "success")

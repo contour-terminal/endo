@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder docker ps map names
+# mode: structured
+# expect: [web-server; db-main; cache]
+
+docker ps |> map _.names |> print

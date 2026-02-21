@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Comment block
+# expect: 42
+
+let x = (* inline *) 42
+print x

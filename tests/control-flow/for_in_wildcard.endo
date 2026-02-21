@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: For in wildcard
+# expect: 13
+
+for (x, _) in [(1, 2); (3, 4)] do
+print x
+end

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Use accumulator style since non-tail recursion (h + sum t) is not supported
+# expect: 10
+
+let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t; print (sumAcc 0 [1; 2; 3; 4])

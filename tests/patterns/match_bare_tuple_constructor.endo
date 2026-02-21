@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match bare tuple constructor
+# expect: 3
+
+let r = match Some 1, Some 2 with | Some a, Some b -> a + b | _, _ -> 0; print r

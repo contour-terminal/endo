@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-with catching Error - should run handler
+
+let getErr x = Error x; let r = try getErr 42 with | Error e -> e

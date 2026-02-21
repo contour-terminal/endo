@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String join basic
+# expect: a-b-c
+
+print (join "-" (split "," "a,b,c"))

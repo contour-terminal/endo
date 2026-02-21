@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match with wildcard fallback
+# expect: 0
+
+type Color =
+    | Red
+    | Green
+    | Blue
+let c = Blue
+let r = match c with
+    | Red -> 1
+    | _ -> 0
+print r

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Step doesn't evenly divide range — should stop before overshooting
+# expect: [1; 4; 7; 10]
+
+print [1..3..10]

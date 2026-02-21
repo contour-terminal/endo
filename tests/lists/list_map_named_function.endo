@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List map named function
+# expect: [2; 4; 6]
+
+let double x = x * 2
+print (map double [1; 2; 3])

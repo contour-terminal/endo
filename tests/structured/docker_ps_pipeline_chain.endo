@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker ps pipeline chain
+# mode: structured
+# expect: [abc123def]
+
+docker ps |> filter (fun c -> c.status |> contains "Up") |> map (fun c -> c.id) |> take 1 |> print

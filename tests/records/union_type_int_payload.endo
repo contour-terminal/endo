@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: int payloads
+# expect: 7
+
+type Expr =
+    | Num of int
+    | Neg of int
+let e = Num 7
+let r = match e with
+    | Num n -> n
+    | Neg n -> 0 - n
+print r

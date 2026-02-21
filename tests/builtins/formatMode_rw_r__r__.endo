@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 0644 = 420 decimal → "rw-r--r--"
+# expect: rw-r--r--
+
+print (formatMode 420)

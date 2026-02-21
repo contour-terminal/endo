@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option.map applies function to Some value, wraps result in Some
+# expect: 42
+
+print (Option.map (fun x -> x * 2) (Some 21) ?| 0)

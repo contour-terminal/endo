@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: All arithmetic operators
+# expect: 8
+# expect: 2
+# expect: 15
+# expect: 3
+# expect: 1
+# expect: 1024
+# expect:
+
+println (5 + 3)
+println (5 - 3)
+println (5 * 3)
+println (15 / 5)
+println (10 % 3)
+println (2 ** 10)

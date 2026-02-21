@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Extract second numeric element via pattern matching
+# expect: 99
+
+let t = ("world", 99); let r = match t with | (_, b) -> b; print r

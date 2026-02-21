@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: env returns None when var is missing
+# expect: none
+
+let r = match env "NONEXISTENT" with | Some v -> "found" | None -> "none"; print r

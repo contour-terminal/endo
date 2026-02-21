@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If expr same type str
+# mode: ir-only
+
+let x = if true then "hello" else "world"

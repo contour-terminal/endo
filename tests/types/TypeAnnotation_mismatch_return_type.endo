@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Should fail IR generation
+# expect-error:
+
+let f (x: int): str = x + 1
+f 1

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit parameter pipeline
+# expect: 42
+
+let f () = 42; f () |> print

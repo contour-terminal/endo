@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple dot numeric index 3tuple
+# expect: 10
+
+let t = (10, 20, 30)
+print (t.0)

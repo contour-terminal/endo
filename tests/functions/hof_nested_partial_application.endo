@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested partial application: (add 1) passed as function arg
+# expect: 6
+
+let add x y = x + y
+let apply f x = f x
+let g = apply (add 1)
+print (g 5)

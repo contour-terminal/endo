@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If expr false
+# expect: 2
+
+let x = if false then 1 else 2; print x

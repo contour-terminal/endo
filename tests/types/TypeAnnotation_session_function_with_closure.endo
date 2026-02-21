@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed function capturing a persisted value binding (closure via function)
+# expect: 15
+# session-separator: ---
+
+let offset = 10
+# ---
+let addOffset (x: int): int = x + offset
+# ---
+print (addOffset 5)

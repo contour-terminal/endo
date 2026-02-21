@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: None ?| default → evaluates to the default
+# expect: 99
+
+print (None ?| 99)

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export string
+# expect: hello
+
+let export X = "hello"; print X

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit parameter side effect
+# expect: hello
+
+let greet () = print "hello"; greet ()

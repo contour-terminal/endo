@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fstring nested string
+# expect: say hello
+
+print $"say {"hello"}"

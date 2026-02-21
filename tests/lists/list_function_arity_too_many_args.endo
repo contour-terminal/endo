@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function taking one list arg, called with two args
+# expect-error: expects 1 argument, got 2
+
+let f xs = match xs with | [] -> 0 | _ -> 1; f [1] [2]

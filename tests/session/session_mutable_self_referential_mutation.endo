@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Self-referential mutation: x <- x + 10
+# expect: 10
+# session-separator: ---
+
+let mut x = 0
+# ---
+x <- x + 10
+# ---
+print x

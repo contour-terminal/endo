@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function with parenthesized body
+# mode: ir-only
+
+let compute x y = (x + y) * 2

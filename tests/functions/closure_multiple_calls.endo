@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Same closure called multiple times with different arguments
+# expect: 101102
+
+let offset = 100; let f (x: int) = x + offset; print (f 1); print (f 2)

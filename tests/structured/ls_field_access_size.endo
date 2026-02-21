@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract sizes from all files
+# expect: [4096; 42; 256]
+
+let sizes = ls |> map (fun f -> f.size)
+print sizes

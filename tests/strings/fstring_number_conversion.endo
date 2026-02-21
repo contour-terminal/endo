@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fstring number conversion
+# expect: n=42
+
+print $"n={42}"

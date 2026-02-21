@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained pipeline operations
+# expect: 12
+# expect:
+
+let double x = x * 2
+let inc x = x + 1
+5 |> inc |> double |> println

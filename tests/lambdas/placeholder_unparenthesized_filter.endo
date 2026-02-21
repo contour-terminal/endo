@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: filter (_ > 2) with list — tests unparenthesized placeholder in pipeline context
+# expect: [3; 4; 5]
+
+let pred = _ > 2; print (filter pred [1; 2; 3; 4; 5])

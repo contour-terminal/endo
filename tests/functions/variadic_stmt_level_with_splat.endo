@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Statement-level shell command via alias function — normal I/O (no capture)
+# expect: hi there
+# expect: 
+
+let say ...args = & echo hi ...args; say "there"

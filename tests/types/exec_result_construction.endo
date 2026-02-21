@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify Result construction executes without error
+
+let a = Ok 100; let b = Error 404

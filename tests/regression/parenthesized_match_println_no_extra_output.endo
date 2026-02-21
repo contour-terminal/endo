@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Parenthesized match println no extra output
+# expect: found
+# expect: 
+
+(match Some 42 with | Some x -> println "found" | None -> println "none")

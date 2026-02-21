@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: For in tuple both
+# expect: 10
+
+let mut r = 0
+for (x, y) in [(1, 2); (3, 4)] do
+r <- r + x + y
+end
+print r

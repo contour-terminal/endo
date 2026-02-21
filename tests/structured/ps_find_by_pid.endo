@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: find the process with pid 42, print its command
+# expect: firefox
+
+match ps |> find (fun p -> p.pid == 42) with
+| Some p -> print p.command
+| None -> print "none"

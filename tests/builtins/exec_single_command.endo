@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Single exec with literal program path and argument
+# expect: hello
+# expect: 
+
+exec "/bin/echo" "hello"

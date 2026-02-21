@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List comprehension nested empty inner
+# expect: []
+
+print [for x in [1;2] -> for y in [] -> x + y]

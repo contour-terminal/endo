@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Git status basic
+# mode: structured
+# expect: [src/main.cpp; README.md; .gitignore]
+
+git status |> map (fun e -> e.path) |> print

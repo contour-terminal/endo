@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare call multi arg
+# expect: 7
+
+let add x y = print (x + y)
+add 3 4

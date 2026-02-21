@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Combined complex
+# mode: ir-only
+
+let x = 10; let y = 20; let sum = x + y; let product = x * y; let check = sum < product

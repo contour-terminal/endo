@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Closure capturing multiple variables
+# expect: 20
+# expect:
+
+let a = 3
+let b = 7
+let f (x: int) = a + b + x
+println (f 10)

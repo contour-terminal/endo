@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Create None value
+# mode: ir-only
+
+let x = None

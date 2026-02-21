@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List nth out of bounds
+# expect: -1
+
+let r = match nth 5 [10; 20; 30] with
+    | Some v -> v
+    | None -> -1
+print r

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match on 3-deep nested cons (a :: b :: c :: rest)
+# expect: 60
+
+let x = [10; 20; 30; 40; 50]
+let r = match x with | a :: b :: c :: _ -> a + b + c | _ -> 0
+print r

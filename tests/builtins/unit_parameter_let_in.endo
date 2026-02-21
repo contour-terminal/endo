@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit parameter let in
+# expect: 42
+
+print (let f () = 42 in f ())

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ps |> toText should produce string representation instead of table
+# mode: ir-only
+
+let r = ps |> toText
+print r

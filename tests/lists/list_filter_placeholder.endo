@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List filter placeholder
+# expect: [3; 4; 5]
+
+print (filter (_ > 2) [1; 2; 3; 4; 5])

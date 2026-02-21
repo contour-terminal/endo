@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List util filter then find
+# expect: 4
+
+match ([1;2;3;4;5] |> filter (fun x -> x > 2) |> find (fun x -> x % 2 == 0)) with | Some v -> print v | None -> print "none"

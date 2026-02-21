@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder docker ps map image
+# mode: structured
+# expect: [nginx:latest; postgres:16; redis:7]
+
+docker ps |> map _.image |> print

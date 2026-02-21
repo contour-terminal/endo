@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Calling a function twice triggers the second call in a non-entry block.
+# expect: 6 10
+
+
+        let double x = x * 2
+        print (double 3)
+        print " "
+        print (double 5)
+    

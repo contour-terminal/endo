@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List map higher-order function
+# expect: [2; 4; 6]
+# expect:
+
+let double x = x * 2
+println ([1; 2; 3] |> map double)

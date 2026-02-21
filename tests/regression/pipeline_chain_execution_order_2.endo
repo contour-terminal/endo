@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify left-to-right execution order: 5 |> f |> g |> h
+# expect: start-f-g-h
+
+let f (s: str) = s + "-f"
+let g (s: str) = s + "-g"
+let h (s: str) = s + "-h"
+print ("start" |> f |> g |> h)

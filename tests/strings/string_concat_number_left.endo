@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String concat number left
+# expect: 42 items
+
+let s = 42 + " items"; print s

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested recursive function captures outer parameter
+# expect: 5
+
+let f (n: int) =
+  let rec count (i: int) = if i >= n then i else count (i + 1)
+  print (count 0)
+f 5

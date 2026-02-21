@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: toText as a direct call
+# mode: ir-only
+
+let r = toText ps
+print r

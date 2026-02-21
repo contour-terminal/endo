@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Command substitution as a let binding value
+# expect: world
+
+let x = $(echo world)
+print x

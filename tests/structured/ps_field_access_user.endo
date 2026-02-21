@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access user field from second element
+# expect: alice
+
+match head (tail ps) with
+| Some p -> print p.user
+| None -> print "empty"

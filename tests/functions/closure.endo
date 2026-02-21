@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Closure capturing from enclosing scope
+# expect: 15
+# expect:
+
+let x = 10
+let addx (y: int) = x + y
+println (addx 5)

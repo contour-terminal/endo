@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variable program path
+# expect: hi
+# expect: 
+
+let p = "/bin/echo"; exec p "hi"

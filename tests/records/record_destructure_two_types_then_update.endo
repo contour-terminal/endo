@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let destructuring on one record type followed by record update on another type
+# expect: { x = 4; y = 6 }
+
+type Person = { name: str; age: int }
+let alice = { name = "Alice"; age = 30 }
+let { name; age } = alice
+type Point = { x: int; y: int }
+let p1 = { x = 3; y = 4 }
+let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }
+print p2

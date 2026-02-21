@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF with lambda argument
+# expect: 10
+
+let apply f x = f x
+print (apply (fun x -> x * 2) 5)

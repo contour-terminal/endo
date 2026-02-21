@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Identity function with type annotation compiles as function (UCALL/URET)
+# expect: 42
+
+let id (x: int) = x; print (id 42)

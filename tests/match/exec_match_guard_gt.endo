@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match expression with guard
+# expect: 100
+
+let getErr x = Error x; let r = match getErr 5 with | Error e when e > 3 -> 100 | _ -> 0; print r

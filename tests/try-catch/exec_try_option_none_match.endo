@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pattern match on ?-returning function with None value (error propagation)
+# expect: 0
+
+let f x = x?; let r = match (f None) with | Some n -> n | None -> 0; print r

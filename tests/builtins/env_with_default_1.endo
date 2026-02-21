@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pattern: provide a default value for missing env vars
+# mock-env: KEY=val
+# expect: 0
+
+let r = match env "MISSING" with | Some v -> 1 | None -> 0; print r

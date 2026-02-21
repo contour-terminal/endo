@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List length basic
+# expect: 3
+
+print (length [1;2;3])

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Regression: missing annotateListElementLiteralType(Object) caused filter/each to crash
+# mode: structured
+# expect: web-server
+# expect: db-main
+# expect: 
+
+docker ps |> filter (_.status |> contains "Up") |> each (fun c -> println c.names)

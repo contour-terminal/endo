@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ? operator on env result: unwraps Some
+# mock-env: HOME=/home/user
+
+let unwrap opt = opt?; let r = unwrap (env "HOME")

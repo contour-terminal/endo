@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit constructor matches correctly, no payload extraction
+# expect: 0
+
+type Option2 =
+    | Nothing
+    | Just of int
+let x = Nothing
+let r = match x with
+    | Nothing -> 0
+    | Just n -> n
+print r

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Method-style: opt.map f
+# expect: 42
+
+let r = (Some 21).map (fun x -> x * 2)
+print (r ?| 0)

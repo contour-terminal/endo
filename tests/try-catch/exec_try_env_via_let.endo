@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-step: bind env result to variable, then unwrap with ?
+# mock-env: HOME=/home/test
+# expect: /home/test
+
+let opt = env "HOME"; let h = opt?; print h

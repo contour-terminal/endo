@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec println multiple
+# expect: a
+# expect: b
+# expect: 
+
+println "a"; println "b"

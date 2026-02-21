@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda applied directly: (fun x -> x * 2) 5
+# mode: ir-only
+
+let result = (fun x -> x * 2) 5

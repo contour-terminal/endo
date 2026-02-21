@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-with with Some value - should extract inner value
+
+let getOpt x = Some x; let r = try getOpt 42 with | None -> 0

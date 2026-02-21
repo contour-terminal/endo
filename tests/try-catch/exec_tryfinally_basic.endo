@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-finally: body returns 42, finally runs print, result is 42
+# expect: cleanup42
+
+let f x = try 42 finally print "cleanup"; print (f 0)

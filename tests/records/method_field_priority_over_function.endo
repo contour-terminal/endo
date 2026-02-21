@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Field name takes priority over function name — field access wins
+# expect: 42
+
+type Point = { x: int; y: int }
+let p = { x = 42; y = 0 }
+print p.x

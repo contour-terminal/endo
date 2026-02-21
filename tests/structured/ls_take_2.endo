@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: take first 2 files, map to names
+# expect: [docs; hello.txt]
+
+print (ls |> take 2 |> map (fun f -> f.name))

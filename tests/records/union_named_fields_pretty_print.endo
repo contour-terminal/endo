@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pretty printing shows field names for named-field variants
+# expect: Circle(radius: 42)
+
+type Shape =
+    | Circle of radius: int
+    | Point
+let c = Circle 42
+print c

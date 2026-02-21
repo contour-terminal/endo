@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple pattern match
+# expect: 7
+
+let t = (3, 4); let r = match t with | (a, b) -> a + b; print r

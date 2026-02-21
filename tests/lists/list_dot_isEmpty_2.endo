@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List dot isEmpty
+# expect: true
+
+let xs: list<int> = []
+print xs.isEmpty

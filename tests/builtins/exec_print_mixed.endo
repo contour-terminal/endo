@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec print mixed
+# expect: hello world
+# expect: 
+
+print "hello "; println "world"

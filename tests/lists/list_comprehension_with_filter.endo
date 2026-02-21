@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List comprehension with filter
+# expect: [3; 4; 5]
+
+print [for x in [1;2;3;4;5] when x > 2 -> x]

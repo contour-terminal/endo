@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Define helper function, then define function using it
+# expect: 12
+# session-separator: ---
+
+let double x = x * 2
+# ---
+let quadruple x = double (double x)
+# ---
+print (quadruple 3)

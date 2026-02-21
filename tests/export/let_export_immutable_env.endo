@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export immutable env
+# expect: 99
+# expect-env: W=99
+
+let export W = 99; print W

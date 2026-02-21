@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float arithmetic sub
+# expect: 2.5
+
+print (5.0 - 2.5)

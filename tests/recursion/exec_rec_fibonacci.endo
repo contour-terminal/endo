@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tail-recursive fibonacci with two accumulators
+# expect: 55
+
+let rec fib n a b = match n with | 0 -> a | _ -> fib (n - 1) b (a + b); print (fib 10 0 1)

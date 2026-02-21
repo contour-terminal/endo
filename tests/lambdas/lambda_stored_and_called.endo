@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Store lambda in variable, then call it
+# mode: ir-only
+
+let f = fun x -> x * 2; let result = f 5

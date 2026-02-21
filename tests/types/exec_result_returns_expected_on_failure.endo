@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Test that executeSource returns an error on parse failure
+# expect-error:
+
+let x = 

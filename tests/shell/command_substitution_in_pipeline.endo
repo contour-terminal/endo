@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Command substitution as pipeline source
+# expect: 2
+
+$(echo 42) |> string_length |> print

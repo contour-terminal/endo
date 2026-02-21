@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Git log basic
+# mode: structured
+# expect: [feat: add login; fix: null check; docs: update README]
+
+git log |> map (fun c -> c.message) |> print

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Should fail IR generation
+# expect-error:
+
+let add (x: int) (y: int) = x + y
+add "a" 1

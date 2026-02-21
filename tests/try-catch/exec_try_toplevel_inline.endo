@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Inline top-level ? (result used directly in function argument)
+# expect: 42
+
+print (Some 42)?

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variable in let-in should not leak to outer scope
+# expect: 6
+
+let x = 100; let r = let x = 5 in x + 1; print r

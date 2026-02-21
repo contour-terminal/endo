@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export option error
+# expect-error: 'let export' requires a scalar type
+
+let export X = Some 42

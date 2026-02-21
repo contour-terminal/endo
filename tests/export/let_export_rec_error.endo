@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export rec is disallowed
+# expect-error: functions cannot be exported
+
+let export rec f x = x + 1; f 1

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Record pattern matching with field punning
+# expect: 15
+
+type Point = { x: int; y: int }
+let p = { x = 5; y = 10 }
+let r = match p with | { x; y } -> x + y
+print r

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List take all
+# expect: [1; 2; 3]
+
+print (take 5 [1;2;3])

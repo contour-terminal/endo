@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Find maximum element in a list
+# expect: 9
+
+let rec maxAcc acc xs = match xs with
+  | [] -> acc
+  | h :: t -> if h > acc then maxAcc h t else maxAcc acc t
+print (maxAcc 0 [3; 7; 2; 9; 1])

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Read-only computed property (getter only)
+# expect: hello
+
+let Greeting with get () = "hello"
+print Greeting

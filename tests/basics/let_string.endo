@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Simple string let binding
+# expect: hello
+# expect:
+
+let x = "hello"
+println x

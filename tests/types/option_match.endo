@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match on Option value and verify correct arm is taken
+# expect: 42
+
+let x = Some 42; let r = match x with | Some n -> n | None -> 0; print r

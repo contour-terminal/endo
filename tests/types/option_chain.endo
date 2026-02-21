@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multiple option bindings
+# mode: ir-only
+
+let a = Some 1; let b = Some 2; let c = None

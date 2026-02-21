@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fixed param + variadic collects remaining into list
+# mode: ir-only
+
+let f x ...rest = x; f 1 2 3

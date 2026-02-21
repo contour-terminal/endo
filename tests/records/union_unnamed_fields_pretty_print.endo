@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pretty printing shows positional values for unnamed-field variants
+# expect: Circle 42
+
+type Shape =
+    | Circle of int
+    | Point
+let c = Circle 42
+print c

@@ -11,6 +11,7 @@ endif()
 add_subdirectory(CoreVM)
 add_subdirectory(crispy)
 add_subdirectory(endo-language)
+add_subdirectory(endo-test)
 
 if(NOT EMSCRIPTEN)
     add_subdirectory(vtparser)

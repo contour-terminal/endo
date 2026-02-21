@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Top-level ? with env builtin for existing variable — prints actual string value
+# mock-env: USER=testuser
+# expect: testuser
+
+let name = (env "USER")?; print name

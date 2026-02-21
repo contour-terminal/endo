@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: head [] → None
+# expect: 0
+
+let r = match head [] with
+    | Some v -> v
+    | None -> 0
+print r

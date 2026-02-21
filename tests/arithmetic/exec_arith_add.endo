@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec arith add
+# expect: 5
+
+let x = 2 + 3; print x

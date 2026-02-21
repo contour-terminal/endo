@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: For in simple variable
+# expect: 102030
+
+for (x, _) in [(10, 0); (20, 0); (30, 0)] do
+print x
+end

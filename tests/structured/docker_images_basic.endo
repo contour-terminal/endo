@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker images basic
+# mode: structured
+# expect: [nginx; postgres; redis]
+
+docker images |> map (fun i -> i.repository) |> print

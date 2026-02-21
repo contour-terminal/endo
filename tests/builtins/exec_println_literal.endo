@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec println literal
+# expect: hello
+# expect: 
+
+println "hello"

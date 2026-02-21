@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation let float
+# expect: 3.14
+
+let f: float = 3.14
+print f

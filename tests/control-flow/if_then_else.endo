@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If-then-else expression
+# expect: positive
+# expect:
+
+let x = 5
+let r = if x > 0 then "positive" else "non-positive"
+println r

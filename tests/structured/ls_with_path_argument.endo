@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with explicit path argument
+# expect: 3
+
+let files = ls "/tmp"
+print (length files)

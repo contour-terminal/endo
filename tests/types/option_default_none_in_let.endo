@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ?| with None in a let binding
+# expect: 42
+
+let x = None ?| 42; print x

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List hof filter length
+# expect: 2
+
+print (length (filter (fun x -> x > 3) [1; 2; 3; 4; 5]))

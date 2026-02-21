@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder ps map user
+# expect: [root; alice; bob]
+
+let users = ps |> map _.user
+print users

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: IR generation succeeds for top-level ? on Some
+# mode: ir-only
+
+let x = (Some 42)?

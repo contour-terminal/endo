@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Two independent placeholder lambdas
+# expect: 7
+
+let f = (_ * 2); let g = (_ + 1); print (g (f 3))

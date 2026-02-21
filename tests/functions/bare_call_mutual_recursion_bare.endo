@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare call mutual recursion bare
+# expect: 1
+
+let rec isEven n =
+  match n with | 0 -> 1 | _ -> isOdd (n - 1)
+and isOdd n =
+  match n with | 0 -> 0 | _ -> isEven (n - 1)
+print (isOdd 3)

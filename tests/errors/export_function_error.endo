@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export with function definition is disallowed
+# expect-error: 'let export' cannot be used with function definitions
+
+let export f x = x + 1
+f 1

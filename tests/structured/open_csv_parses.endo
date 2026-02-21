@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Open csv parses
+# mode: ir-only
+
+open-csv "test.csv" as { name: string; age: int }

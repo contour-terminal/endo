@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mix lambda and named function in pipeline
+# mode: ir-only
+
+let double x = x * 2; let result = 5 |> double |> (fun x -> x + 1)

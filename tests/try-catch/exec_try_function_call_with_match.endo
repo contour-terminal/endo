@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ? on function call result with pattern match
+# expect: 6
+
+let inc x = Ok (x + 1); let f x = (inc x)?; let r = match (f 5) with | Ok n -> n | Error e -> 0; print r

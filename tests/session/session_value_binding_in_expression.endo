@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session value binding in expression
+# expect: 15
+# session-separator: ---
+
+let x = 10
+# ---
+print (x + 5)

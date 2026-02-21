@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF with string function
+# expect: hello!
+
+let shout s = s + "!"
+let apply f x = f x
+print (apply shout "hello")

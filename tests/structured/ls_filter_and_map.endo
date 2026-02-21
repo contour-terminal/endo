@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline: filter by size > 100 then map to name
+# expect: [docs; script.sh]
+
+let names = ls |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)
+print names

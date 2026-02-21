@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Larger range
+# expect: 55
+
+let rec sumAcc acc xs = match xs with | [] -> acc | h :: t -> sumAcc (acc + h) t
+print (sumAcc 0 [1..10])

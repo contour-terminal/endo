@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker images filter by tag
+# mode: structured
+# expect: [nginx]
+
+docker images |> filter (fun i -> i.tag == "latest") |> map (fun i -> i.repository) |> print

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List comprehension nested let binding
+# expect: [4; 5; 5; 6]
+
+let pairs = [for x in [1;2] -> for y in [3;4] -> x + y]
+print pairs

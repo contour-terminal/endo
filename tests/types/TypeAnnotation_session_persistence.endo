@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation session persistence
+# expect: 30
+# session-separator: ---
+
+let add (x: int) (y: int): int = x + y
+# ---
+print (add 10 20)

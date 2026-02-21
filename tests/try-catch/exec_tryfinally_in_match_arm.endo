@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-finally used inside a match arm body
+# expect: arm1100
+
+let f x = match x with | 1 -> try 100 finally print "arm1" | _ -> try 200 finally print "arm2"; print (f 1)

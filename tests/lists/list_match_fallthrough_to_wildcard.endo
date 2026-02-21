@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Non-matching specific pattern falls through to wildcard
+# expect: 42
+
+let x = [1; 2; 3]
+let r = match x with | [a] -> a | _ -> 42
+print r

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Arithmetic using previously bound identifiers
+# mode: ir-only
+
+let a = 10; let b = 5; let c = a + b

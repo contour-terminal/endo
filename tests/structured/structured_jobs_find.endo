@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured jobs find
+# expect: vim
+
+match jobs |> find (fun j -> j.id == 2) with
+| Some j -> print j.command
+| None -> print "none"

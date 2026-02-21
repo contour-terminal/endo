@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Functions without type annotations fall back to AST inlining but still work
+# expect: 7
+
+let double x = x * 2.0; print (double 3.5)

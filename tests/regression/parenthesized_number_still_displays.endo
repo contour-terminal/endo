@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Parenthesized number still displays
+# expect: 8
+# expect: 
+
+(5 + 3)

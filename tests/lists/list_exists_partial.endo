@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List exists partial
+# expect: false
+
+let hasBig = exists (fun x -> x > 10)
+print (hasBig [1;2;3])

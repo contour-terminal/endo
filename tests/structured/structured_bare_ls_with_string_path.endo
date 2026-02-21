@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls with quoted string path should route through F# path
+# mode: structured
+# expect-nonempty
+
+ls "."

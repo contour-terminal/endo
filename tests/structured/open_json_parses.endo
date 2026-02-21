@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Open json parses
+# mode: ir-only
+
+open-json "test.json" as { name: string; age: int }

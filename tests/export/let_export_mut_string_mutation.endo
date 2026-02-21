@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export mut string mutation
+# expect: world
+# expect-env: S=world
+
+let export mut S = "hello"; S <- "world"; print S

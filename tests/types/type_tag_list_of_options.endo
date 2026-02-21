@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Type tag list of options
+# expect: [Some "a"; None]
+# expect: 
+
+println [Some "a", None]

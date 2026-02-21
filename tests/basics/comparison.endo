@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Comparison operators
+# expect: true
+# expect: true
+# expect: true
+# expect: true
+# expect:
+
+println (5 == 5)
+println (5 != 3)
+println (3 < 5)
+println (5 > 3)

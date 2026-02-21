@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multiple record types in the same program
+# expect: 11
+
+type Point = { x: int; y: int }
+type Size = { w: int; h: int }
+let p = { x = 1; y = 2 }
+let s = { w = 10; h = 20 }
+print (p.x + s.w)

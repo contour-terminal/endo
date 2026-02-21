@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List dot tail
+# expect: 2
+
+let xs = [1; 2; 3]
+print xs.tail.length

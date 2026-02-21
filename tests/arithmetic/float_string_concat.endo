@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float string concat
+# expect: pi=3.14
+
+print ("pi=" + 3.14)

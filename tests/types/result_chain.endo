@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multiple result bindings
+# mode: ir-only
+
+let a = Ok 1; let b = Error 2; let c = Ok 3

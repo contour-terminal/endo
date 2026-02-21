@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List groupBy identity
+# expect: [(1, [1]); (2, [2]); (3, [3])]
+
+print (groupBy (fun x -> x) [1; 2; 3])

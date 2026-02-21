@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit parameter with return type
+# expect: 42
+
+let f (): int = 42; print (f ())

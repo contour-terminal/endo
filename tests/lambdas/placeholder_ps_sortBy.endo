@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder ps sortBy
+# expect: [1; 42; 100]
+
+let pids = ps |> sortBy _.pid |> map _.pid
+print pids

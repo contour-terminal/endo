@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Read-write property with backing variable
+# expect: 1042
+
+let mut _value = 10
+let Value with get () = _value and set (v) = _value <- v
+print Value
+Value <- 42
+print Value

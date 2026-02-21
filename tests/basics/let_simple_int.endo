@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Simple integer let binding
+# expect: 42
+# expect:
+
+let x = 42
+println x

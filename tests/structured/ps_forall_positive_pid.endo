@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: all pids are > 0
+# expect: true
+
+print (ps |> forall (fun p -> p.pid > 0))

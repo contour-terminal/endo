@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker ps find
+# mode: structured
+# expect: redis:7
+
+docker ps |> find (fun c -> c.names == "cache") |> fun x -> match x with
+| Some c -> print c.image
+| None -> print "not found"

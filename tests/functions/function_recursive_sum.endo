@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tail-recursive sum using match
+# expect: 55
+
+let rec sum (n: int) (acc: int) = match n with | 0 -> acc | _ -> sum (n - 1) (acc + n); print (sum 10 0)

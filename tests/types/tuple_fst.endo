@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple fst
+# expect: 1
+
+let fst t = match t with | (a, _) -> a; let t = (1, 2); print (fst t)

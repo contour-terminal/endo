@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ls returns a list — check length (3 mock files)
+# expect: 3
+
+let files = ls
+print (length files)

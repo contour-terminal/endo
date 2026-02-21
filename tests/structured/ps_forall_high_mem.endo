@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: not all memory values are > 2000 (init has 1024)
+# expect: false
+
+print (ps |> forall (fun p -> p.mem > 2000))

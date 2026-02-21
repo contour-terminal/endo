@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List last empty
+# expect: -1
+
+let r = match last [] with
+    | Some v -> v
+    | None -> -1
+print r

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Alias with a string argument passed through splat
+# expect: hello world
+# expect: 
+
+let greet ...args = & echo hello ...args; greet "world"

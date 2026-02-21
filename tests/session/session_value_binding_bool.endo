@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session value binding bool
+# expect: true
+# session-separator: ---
+
+let flag = true
+# ---
+print flag

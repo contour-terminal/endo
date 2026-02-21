@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Non tail rec list sum
+# expect: 15
+
+let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2; 3; 4; 5])

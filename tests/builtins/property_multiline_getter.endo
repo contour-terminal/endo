@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-line getter body with let bindings
+# expect: 20
+
+let mut _x = 10
+let Double with
+    get () =
+        let v = _x
+        v * 2
+print Double

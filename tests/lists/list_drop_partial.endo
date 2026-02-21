@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List drop partial
+# expect: [3; 4; 5]
+
+let skipFirst2 = drop 2
+print (skipFirst2 [1;2;3;4;5])

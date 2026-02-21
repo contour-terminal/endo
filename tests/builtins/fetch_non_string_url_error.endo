@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: fetch with a non-string URL argument should be a type error
+# expect-error: fetch url argument must be a string
+
+let r = fetch 42

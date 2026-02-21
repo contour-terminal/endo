@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF in pipeline
+# expect: 10
+
+let double x = x * 2
+let apply f x = f x
+print (5 |> apply double)

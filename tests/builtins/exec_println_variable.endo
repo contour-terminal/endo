@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec println variable
+# expect: world
+# expect: 
+
+let msg = "world"; println msg

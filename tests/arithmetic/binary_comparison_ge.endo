@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Binary comparison ge
+# mode: ir-only
+
+let x = 5 >= 3

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: The motivating use case: which + match + exec
+# mode: ir-only
+
+
+match which "echo" with
+| Some p -> (exec p "found it")
+| None -> println "not found"
+

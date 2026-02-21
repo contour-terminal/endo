@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float literal
+# expect: 3.14
+# expect: 
+
+(3.14)

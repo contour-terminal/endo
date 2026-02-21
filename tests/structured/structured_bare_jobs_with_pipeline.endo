@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: jobs with pipeline at statement level (mock IDs: 1, 2, 3)
+# expect: [1; 2; 3]
+
+let r = jobs |> map (fun j -> j.id)
+print r

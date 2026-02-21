@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: env returns Some when var exists — match Some arm is taken
+# mock-env: HOME=/home/user
+# expect: found
+
+let r = match env "HOME" with | Some v -> "found" | None -> "none"; print r

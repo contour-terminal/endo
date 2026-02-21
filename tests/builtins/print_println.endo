@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: print and println builtins
+# expect: helloworld
+# expect: goodbye
+# expect:
+
+print "hello"
+println "world"
+println "goodbye"

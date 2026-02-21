@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variable binding piped into a function: x |> println
+# expect: world
+# expect: 
+
+let x = 'world' ; x |> println

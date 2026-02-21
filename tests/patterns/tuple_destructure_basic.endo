@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple destructure basic
+# expect: 1020
+
+let (x, y) = (10, 20); print x; print y

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec print with let binding
+# expect: test
+
+let x = "test"; print x

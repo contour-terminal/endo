@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-with with Ok value - should extract inner value
+
+let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0

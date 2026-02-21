@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Shell flags as arguments at statement level
+# expect: -la
+# expect: 
+
+let say ...xs = & echo ...xs; say -la

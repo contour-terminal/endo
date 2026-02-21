@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pretty printing shows just the constructor name for unit variants
+# expect: Point
+
+type Shape =
+    | Circle of int
+    | Point
+let p = Point
+print p

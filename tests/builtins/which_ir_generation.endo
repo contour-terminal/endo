@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Which ir generation
+# mode: ir-only
+
+which "git"

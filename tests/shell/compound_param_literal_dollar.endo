@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: foo$HOME should be a single word (literal followed by variable)
+# mock-env: HOME=/home/test
+# mock-which: echo=/bin/echo
+# expect: foo/home/test
+# expect: 
+
+echo foo$HOME

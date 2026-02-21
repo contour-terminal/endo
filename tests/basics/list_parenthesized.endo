@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Parenthesized list should still work
+# expect: [1; 2; 3]
+# expect: 
+
+([1; 2; 3])

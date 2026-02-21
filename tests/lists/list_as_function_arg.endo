@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pass list to function and operate on it
+# expect: 5
+
+let first xs = match xs with | h :: _ -> h | [] -> 0; print (first [5; 6; 7])

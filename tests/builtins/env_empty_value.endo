@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Empty string value should still be Some (var exists)
+# mock-env: EMPTY=
+# expect: exists
+
+let r = match env "EMPTY" with | Some v -> "exists" | None -> "none"; print r

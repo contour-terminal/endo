@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unquoted identifiers as shell arguments at statement level (splat to shell command)
+# expect: hello world
+# expect: 
+
+let say ...xs = & echo ...xs; say hello world

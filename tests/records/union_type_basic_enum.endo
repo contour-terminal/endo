@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit constructors only (enum-like ADT), match all variants
+# expect: 2
+
+type Color =
+    | Red
+    | Green
+    | Blue
+let c = Green
+let r = match c with
+    | Red -> 1
+    | Green -> 2
+    | Blue -> 3
+print r

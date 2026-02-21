@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation let bool
+# expect: true
+
+let b: bool = true
+print b

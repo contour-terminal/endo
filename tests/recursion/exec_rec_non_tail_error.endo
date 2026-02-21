@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Non-tail recursive calls now work via UCALL (function compilation).
+# expect: 120
+
+let rec factorial n = match n with | 0 -> 1 | _ -> n * factorial (n - 1); print (factorial 5)

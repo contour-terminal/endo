@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline with bound value
+# mode: ir-only
+
+let double x = x * 2; let a = 10; let result = a |> double

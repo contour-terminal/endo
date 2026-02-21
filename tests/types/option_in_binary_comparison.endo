@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Using Option directly in == should produce a type error
+# expect-error: must be unwrapped first
+
+let r = (env "HOME") == "foo"

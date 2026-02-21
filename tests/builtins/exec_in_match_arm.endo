@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: exec inside match arm (parenthesized to disambiguate from |)
+# mode: ir-only
+
+
+let x = Some "/bin/echo"
+match x with
+| Some p -> (exec p "test")
+| None -> ()
+

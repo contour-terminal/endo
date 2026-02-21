@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Binary mul
+# mode: ir-only
+
+let x = 4 * 5

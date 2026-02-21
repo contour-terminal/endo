@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ps with pipeline should route through F# path (mock PIDs: 1, 42, 100)
+# expect: [1; 42; 100]
+
+let r = ps |> map (fun p -> p.pid)
+print r

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation let str
+# expect: hello
+
+let s: str = "hello"
+print s

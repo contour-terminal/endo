@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested closure: inner lambda captures from outer lambda's scope
+# expect: 16
+
+let a = 1; let f = fun x -> (fun y -> x + y + a); let g = f 10; print (g 5)

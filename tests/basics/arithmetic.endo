@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Basic arithmetic operations
+# expect: 52
+# expect:
+
+let x = 42
+let y = 10
+println (x + y)

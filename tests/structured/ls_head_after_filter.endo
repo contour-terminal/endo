@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: head of filtered list (size < 300) — first match is hello.txt (size=42)
+# expect: hello.txt
+
+match ls |> filter (fun f -> f.size < 300) |> head with
+| Some f -> print f.name
+| None -> print "none"

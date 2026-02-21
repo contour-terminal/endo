@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rand with 1 argument should produce a type error
+# expect-error: rand requires 0 or 2 arguments
+
+let x = rand 5

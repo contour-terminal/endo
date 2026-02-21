@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String concatenation
+# expect: hello world
+# expect:
+
+let a = "hello "
+let b = "world"
+println (a + b)

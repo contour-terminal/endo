@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Both branches have multiple expressions
+# expect: 6
+
+let r =
+    if true then
+        let x = 2
+        let y = 3
+        x * y
+    else
+        let a = 10
+        let b = 20
+        a + b
+print r

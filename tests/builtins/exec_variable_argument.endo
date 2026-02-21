@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variable arguments
+# expect: hello
+# expect: 
+
+let arg = "hello"; exec "/bin/echo" arg

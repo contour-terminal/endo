@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained ? with pattern match on result
+# expect: 42
+
+let wrap x = Ok x; let f x = (wrap (wrap x)?)?; let r = match (f 42) with | Ok n -> n | Error e -> 0; print r

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify Option construction executes without error
+
+let a = Some 42; let b = None

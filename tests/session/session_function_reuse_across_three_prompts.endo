@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Define in prompt 1, use in prompt 2 and 3
+# expect: 49
+# session-separator: ---
+
+let square x = x * x
+# ---
+print (square 4)
+# ---
+print (square 7)

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Wildcard pattern catches all
+# expect: matched
+# expect:
+
+match 99 with
+    | _ -> println "matched"

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Native callback calls as list elements
+# expect: [3; 5]
+
+let r = [string_length "abc"; string_length "hello"]; print r

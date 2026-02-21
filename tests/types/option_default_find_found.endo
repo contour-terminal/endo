@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: find returns Some when element found — ?| unwraps
+# expect: 2
+
+print (find (fun x -> x > 1) [1;2;3] ?| -1)

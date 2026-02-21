@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda captures outer variable
+# expect: 15
+
+let n = 10; let f = fun x -> x + n; print (f 5)

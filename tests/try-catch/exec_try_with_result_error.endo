@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ? operator on Error propagates the Error
+
+let unwrap res = res?; let r = unwrap (Error 404)

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Default is an expression, not just a literal
+# expect: 10
+
+print (Some 10 ?| (3 + 4))

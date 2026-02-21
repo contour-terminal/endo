@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Using unwrapped Option with ? should compile without type errors (IR generation succeeds)
+# mode: ir-only
+
+let r = (env "HOME")? + "/.local/bin"; print r

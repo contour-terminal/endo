@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: For in tuple destructure
+# expect: 13
+
+for (x, y) in [(1, 2); (3, 4)] do
+print x
+end

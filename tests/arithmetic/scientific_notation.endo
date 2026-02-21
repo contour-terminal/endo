@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Scientific notation
+# expect: 1e+10
+
+print 1e10

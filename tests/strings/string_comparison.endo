@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String comparison operators
+# expect: true
+# expect: false
+# expect:
+
+println ("abc" == "abc")
+println ("abc" == "def")

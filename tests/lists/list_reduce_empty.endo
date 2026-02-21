@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List reduce empty
+# expect: none
+
+let r = reduce (fun a b -> a + b) []
+match r with
+    | Some v -> print v
+    | None -> print "none"

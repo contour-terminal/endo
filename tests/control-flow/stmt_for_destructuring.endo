@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Stmt for destructuring
+# expect: 13
+
+for (a, b) in [(1, 2); (3, 4)] do print a end

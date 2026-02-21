@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: env calls create control-flow blocks (some/none/merge diamond);
+
+let r = [(env "HOME"); (env "PATH")]; print r

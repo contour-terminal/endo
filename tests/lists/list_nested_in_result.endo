@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List inside Ok/Error
+# expect: [10; 20]
+
+let x = Ok [10; 20]; match x with | Ok xs -> print xs | Error _ -> print 0

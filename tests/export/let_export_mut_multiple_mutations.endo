@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export mut multiple mutations
+# expect: 3
+# expect-env: Z=3
+
+let export mut Z = 1; Z <- 2; Z <- 3; print Z

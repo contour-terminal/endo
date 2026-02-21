@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured jobs take
+# expect: [1; 2]
+
+let ids = jobs |> take 2 |> map _.id
+print ids

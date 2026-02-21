@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Extract command from first element
+# expect: /sbin/init
+
+match head ps with
+| Some p -> print p.command
+| None -> print "empty"

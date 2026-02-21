@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: reduce via mapped pids: 1 + 42 + 100 = 143
+# expect: 143
+
+match ps |> map (fun p -> p.pid) |> reduce (fun a b -> a + b) with
+| Some v -> print v
+| None -> print "none"

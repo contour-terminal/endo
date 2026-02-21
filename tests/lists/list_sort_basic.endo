@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List sort basic
+# expect: [1; 2; 3]
+
+print (sort [3; 1; 2])

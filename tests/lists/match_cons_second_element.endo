@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match cons second element
+# expect: 2
+
+let x = [1; 2; 3]; let r = match x with | _ :: second :: _ -> second | _ -> 0; print r

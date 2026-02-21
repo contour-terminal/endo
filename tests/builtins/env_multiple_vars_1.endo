@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Env multiple vars
+# mock-env: A=alpha
+# mock-env: B=beta
+# expect: a_found
+
+let r = match env "A" with | Some v -> "a_found" | None -> "?"; print r

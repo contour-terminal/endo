@@ -70,11 +70,94 @@ Endo is written in modern C++23. Please follow these guidelines:
 
 ## Testing
 
-- All new functionality should be covered by unit tests.
-- Run the full test suite before submitting a pull request.
-- Tests are located alongside source files (e.g., `Foo_test.cpp` next to `Foo.cpp`).
-- Use the existing test helpers (`executeSourceAndGetOutput()`, `executesSuccessfully()`,
-  `generatesIRSuccessfully()`) for language and IR tests.
+Endo uses two test systems:
+
+- **`.endo` test files** — for language behavior, IR generation, and execution tests.
+  Located in `tests/` and run by the `endo-test` runner.
+- **Catch2 C++ tests** — for internal C++ API tests (lexer, parser, type system, IDE).
+  Located alongside source files (e.g., `Foo_test.cpp` next to `Foo.cpp`).
+
+### Running tests
+
+```bash
+# Run all tests (Catch2 + endo-test)
+ctest --preset=clang-debug
+
+# Run only .endo tests
+./build/clang-debug/src/endo-test/endo-test
+
+# Filter .endo tests by pattern
+./build/clang-debug/src/endo-test/endo-test "lists/*"
+./build/clang-debug/src/endo-test/endo-test "*recursion*"
+
+# TAP output format
+./build/clang-debug/src/endo-test/endo-test --format tap
+
+# List available tests
+./build/clang-debug/src/endo-test/endo-test --list
+```
+
+### Writing a new `.endo` test
+
+Create a `.endo` file in the appropriate `tests/` subdirectory with directives at
+the top, followed by source code:
+
+```
+# description: Addition of two integers
+# expect: 52
+
+let x = 42
+let y = 10
+println (x + y)
+```
+
+Available directives:
+
+| Directive | Purpose |
+|---|---|
+| `# description: <text>` | Human-readable test description |
+| `# expect: <line>` | Expected output line (repeatable, joined with `\n`) |
+| `# expect-exit: <code>` | Expected exit code (default: 0) |
+| `# expect-error: <substring>` | Expected compilation error (empty = any error) |
+| `# mode: <mode>` | `execute` (default), `ir-only`, `parse-only`, `structured` |
+| `# skip: <reason>` | Skip this test |
+| `# session-separator: <sep>` | Split source into REPL prompts |
+| `# mock-env: KEY=VALUE` | Set mock environment variable |
+| `# mock-which: PROG=/path` | Set mock which path |
+| `# expect-env: KEY=VALUE` | Verify environment variable after execution |
+| `# expect-nonempty` | Assert output is non-empty |
+
+### Test directory structure
+
+| Directory | Content |
+|---|---|
+| `basics/` | Let bindings, identifiers, comments, numeric literals |
+| `arithmetic/` | Binary ops, unary ops, float arithmetic |
+| `functions/` | Definitions, application, closures, partial application |
+| `recursion/` | Let rec, mutual recursion |
+| `lambdas/` | Lambda expressions, placeholder sugar |
+| `control-flow/` | If-then-else, mutable assignment, block scopes |
+| `match/` | Pattern matching on literals, options, results |
+| `patterns/` | Or-patterns, as-patterns, tuple patterns |
+| `types/` | Option, result, tuples, type annotations |
+| `try-catch/` | `?` operator, try-with, try-finally |
+| `pipelines/` | Pipeline operator |
+| `lists/` | Construction, HOFs, comprehensions, ranges |
+| `strings/` | Concatenation, interpolation, string library |
+| `records/` | Record types, discriminated unions |
+| `session/` | REPL persistence tests |
+| `errors/` | Compile-time error detection |
+| `builtins/` | Print, which, env, standard library |
+| `shell/` | Shell integration, command substitution |
+| `structured/` | Structured commands (ps, ls, docker, git) |
+| `export/` | Let export, env verification |
+| `let-in/` | Let-in expressions, nested scoping |
+| `regression/` | Bug fix regression tests |
+
+### When to use `.endo` vs Catch2
+
+- **Language behavior** (syntax, semantics, output, errors) → `.endo` test file
+- **C++ API** (lexer tokens, AST node construction, type inference) → Catch2 test
 
 ## Bug Reports
 
@@ -100,9 +183,11 @@ your idea is already planned. When proposing a new feature:
 ```
 src/
   endo-language/     # Core language library (lexer, parser, AST, IR)
+  endo-test/         # .endo test runner (standalone, no Catch2)
   shell/             # Shell runtime (builtins, job control, prompt)
   tui/               # Terminal UI library (input, rendering, widgets)
   CoreVM/            # Stack-based bytecode virtual machine
+tests/               # .endo test files (language behavior tests)
 ```
 
 ## Roadmap Reference

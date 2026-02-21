@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Type tag string list words
+# expect: ["hello"; "world"]
+# expect: 
+
+println ["hello", "world"]

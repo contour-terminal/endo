@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Recursive function invoked via pipeline
+# expect: 0
+
+let rec countdown n = match n with | 0 -> 0 | _ -> countdown (n - 1); print (10 |> countdown)

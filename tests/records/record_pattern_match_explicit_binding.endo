@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Record pattern matching with explicit variable binding
+# expect: 50
+
+type Point = { x: int; y: int }
+let p = { x = 5; y = 10 }
+let r = match p with | { x = a; y = b } -> a * b
+print r

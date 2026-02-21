@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List range let binding
+# expect: [1; 2; 3; 4; 5]
+
+let xs = [1..5]
+print xs

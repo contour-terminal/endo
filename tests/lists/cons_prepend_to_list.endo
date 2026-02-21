@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Cons prepend to list
+# expect: [0; 1; 2; 3]
+
+print (0 :: [1; 2; 3])

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: For in accumulator
+# expect: 6
+
+let mut sum = 0
+for (x, _) in [(1, 10); (2, 20); (3, 30)] do
+sum <- sum + x
+end
+print sum

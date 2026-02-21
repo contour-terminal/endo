@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List hof fold with if
+# expect: 9
+
+print (fold 0 (fun acc x -> if x > 3 then acc + x else acc) [1; 2; 3; 4; 5])

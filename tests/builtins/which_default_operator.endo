@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Which default operator
+# mock-which: git=/usr/bin/git
+# expect: /usr/bin/git
+
+print (which "git" ?| "/default")

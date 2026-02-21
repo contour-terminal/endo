@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare `ps` at statement level should route through F# path with display_result
+# mode: structured
+# expect-nonempty
+
+ps

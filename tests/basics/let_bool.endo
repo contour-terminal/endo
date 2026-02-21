@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Boolean let bindings
+# expect: true
+# expect: false
+# expect:
+
+let a = true
+let b = false
+println a
+println b

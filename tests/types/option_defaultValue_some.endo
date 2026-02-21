@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option.defaultValue with Some returns inner value
+# expect: 42
+
+print (Option.defaultValue 0 (Some 42))

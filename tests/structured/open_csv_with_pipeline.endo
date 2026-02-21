@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Open csv with pipeline
+# mode: ir-only
+
+open-csv "data.csv" as { name: string; score: int } |> map _.name |> print

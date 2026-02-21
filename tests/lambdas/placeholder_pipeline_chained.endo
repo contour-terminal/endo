@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained pipelines with placeholder lambdas
+# expect: 21
+
+print (10 |> (_ * 2) |> (_ + 1))

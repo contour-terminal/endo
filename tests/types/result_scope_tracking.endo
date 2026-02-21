@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Result variable should be tracked for scope-based release
+# mode: ir-only
+
+let x = Ok 100; let y = x

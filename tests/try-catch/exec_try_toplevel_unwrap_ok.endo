@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Top-level ? unwraps Ok value
+# expect: 100
+
+let x = (Ok 100)?; print x

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Empty list — body never executes
+
+for (x, y) in [] do
+print x
+end

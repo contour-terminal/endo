@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder ps filter string eq
+# expect: [firefox]
+
+let cmds = ps |> filter (_.user == "alice") |> map _.command
+print cmds

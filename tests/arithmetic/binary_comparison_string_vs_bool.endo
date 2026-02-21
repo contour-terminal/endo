@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Regression: comparing a string with a boolean in a string comparison context
+# expect: true
+
+let r = "true" == true
+print r

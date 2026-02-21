@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare call lambda binding
+# expect: 99
+
+let f = fun x -> print x
+f 99

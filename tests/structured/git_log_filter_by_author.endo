@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Git log filter by author
+# mode: structured
+# expect: [abc123; ghi789]
+
+git log |> filter (fun c -> c.author == "Alice") |> map (fun c -> c.sha) |> print

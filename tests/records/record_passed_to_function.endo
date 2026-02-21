@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Record passed as function argument
+# expect: 10
+
+type Point = { x: int; y: int }
+let sum_point p = p.x + p.y
+let p = { x = 3; y = 7 }
+print (sum_point p)

@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested if-then-else inside outer else branch
+# expect: 42
+
+let r =
+    if false then
+        0
+    else
+        if true then
+            let x = 42
+            x
+        else
+            99
+print r

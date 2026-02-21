@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained ? operators for nested Option
+
+let nested = Some (Some 5); let unwrap2 opt = opt??; let r = unwrap2 nested

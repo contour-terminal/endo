@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option.map with strings
+# expect: hi!
+
+print (Option.map (fun s -> s + "!") (Some "hi") ?| "")

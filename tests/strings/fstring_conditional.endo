@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fstring conditional
+# expect: val: 1
+
+print $"val: {if true then 1 else 0}"

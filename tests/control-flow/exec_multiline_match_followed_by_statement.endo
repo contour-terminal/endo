@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-line match followed by another let binding
+# expect: 1020
+
+let classify n = match n with
+    | 0 -> 10
+    | _ -> 20
+print (classify 0)
+print (classify 5)
+

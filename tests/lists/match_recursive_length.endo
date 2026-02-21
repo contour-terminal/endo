@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Use accumulator style since non-tail recursion (1 + len t) is not supported
+# expect: 3
+
+let rec lenAcc acc xs = match xs with | [] -> acc | _ :: t -> lenAcc (acc + 1) t; print (lenAcc 0 [10; 20; 30])

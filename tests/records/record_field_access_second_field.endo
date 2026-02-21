@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Record field access second field
+# expect: 20
+
+type Point = { x: int; y: int }
+let p = { x = 10; y = 20 }
+print p.y

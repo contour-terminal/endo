@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Wildcard in tail position
+# expect: 1
+
+let x = [1; 2; 3]; let r = match x with | h :: _ -> h | [] -> 0; print r

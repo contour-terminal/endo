@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fstring pipeline in hole
+# expect: len=5
+
+print $"len={"hello" |> string_length}"

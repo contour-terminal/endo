@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Float mixed int promotion reverse
+# expect: 3.5
+
+print (2.5 + 1)

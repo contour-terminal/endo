@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Numbers < 1000 need no separator
+# expect: 42
+
+print (formatNumber "," 42)

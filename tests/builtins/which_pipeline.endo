@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Which pipeline
+# mock-which: cat=/usr/bin/cat
+# expect: /usr/bin/cat
+
+which "cat" |> fun opt -> match opt with | Some p -> print p | None -> print "none"

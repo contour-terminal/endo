@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured jobs chained
+# expect: [sleep 100]
+
+let cmds = jobs |> filter (_.state == "Running") |> map _.command
+print cmds

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: IR generation for nested recursive function
+# mode: ir-only
+
+
+let process (n: int) =
+    let rec step (i: int) =
+        println $"step {i}"
+        if i >= n then
+            println "done"
+        else
+            step (i + 1)
+    step 1
+process 3
+

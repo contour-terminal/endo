@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Char range basic
+# expect: ["a"; "b"; "c"; "d"; "e"]
+
+print ['a'..'e']

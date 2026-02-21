@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String join pipeline
+# expect: a-b-c
+
+let r = ["a"; "b"; "c"] |> join "-"; print r

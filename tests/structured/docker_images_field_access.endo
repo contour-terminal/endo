@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker images field access
+# mode: structured
+# expect: [latest; 16; 7]
+
+docker images |> map (fun i -> i.tag) |> print

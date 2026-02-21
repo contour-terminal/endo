@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline: number |> formatNumber (locale-aware)
+
+print (1234567 |> formatNumber)

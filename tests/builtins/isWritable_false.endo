@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 0444 = 292 — read-only
+# expect: false
+
+print (isWritable 292)

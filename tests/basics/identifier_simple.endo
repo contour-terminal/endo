@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Reference a previously bound identifier
+# mode: ir-only
+
+let x = 42; let y = x

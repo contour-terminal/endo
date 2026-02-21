@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Optional chain some
+# expect: Alice
+
+type P = { name: str; age: int }
+let x = Some { name = "Alice"; age = 30 }
+print (x?.name ?| "none")

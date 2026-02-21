@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let-in inside parentheses (as function argument)
+# expect: 21
+
+print (let x = 7 in x * 3)

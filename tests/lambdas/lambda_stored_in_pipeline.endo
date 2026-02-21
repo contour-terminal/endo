@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Store lambda in variable, use in pipeline
+# mode: ir-only
+
+let double = fun x -> x * 2; let result = 5 |> double

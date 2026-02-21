@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option dot isSome
+# expect: false
+
+let x = None
+print x.isSome

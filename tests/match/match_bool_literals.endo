@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match with boolean literal patterns
+# mode: ir-only
+
+let r = match true with | true -> 1 | false -> 0

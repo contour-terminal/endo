@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured jobs placeholder command
+# expect: [sleep 100; vim; make build]
+
+let cmds = jobs |> map _.command
+print cmds

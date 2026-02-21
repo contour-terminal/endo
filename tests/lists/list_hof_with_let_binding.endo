@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List hof with let binding
+# expect: [4; 8]
+
+let xs = [1; 2; 3; 4; 5]
+let evens = filter (fun x -> x % 2 == 0) xs
+let doubled = map (fun x -> x * 2) evens
+print doubled

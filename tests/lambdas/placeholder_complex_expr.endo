@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: (_ * _ + _) desugars to fun __x -> __x * __x + __x
+# expect: 12
+
+let f = (_ * _ + _); print (f 3)

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple with if-then-else elements
+# expect: ok
+
+let t = (if true then 1 else 2, if false then 3 else 4)
+print "ok"

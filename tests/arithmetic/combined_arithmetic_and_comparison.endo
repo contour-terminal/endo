@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Combined arithmetic and comparison
+# mode: ir-only
+
+let a = 5; let b = 3; let c = a + b; let result = c > 7

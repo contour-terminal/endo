@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Write-only property
+# expect: 99
+
+let mut _log = 0
+let Logger with set (v) = _log <- v
+Logger <- 99
+print _log

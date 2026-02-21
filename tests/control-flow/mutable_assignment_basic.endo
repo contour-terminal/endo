@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mutable assignment basic
+# expect: 42
+
+let mut x = 1; x <- 42; print x

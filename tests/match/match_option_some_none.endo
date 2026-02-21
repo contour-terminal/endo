@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match on Option with Some and None patterns
+# mode: ir-only
+
+let opt = Some 42; let result = match opt with | Some x -> x | None -> 0

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Logical operators
+# expect: false
+# expect: true
+# expect: false
+# expect:
+
+println (true && false)
+println (true || false)
+println (!true)

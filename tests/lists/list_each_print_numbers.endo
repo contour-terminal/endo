@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Numbers should still work correctly with element type tracking
+# expect: 123
+
+each print [1; 2; 3]

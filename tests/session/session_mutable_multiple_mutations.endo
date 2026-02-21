@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multiple mutations across prompts: last value wins
+# expect: 2
+# session-separator: ---
+
+let mut x = 0
+# ---
+x <- 1
+# ---
+x <- 2
+# ---
+print x

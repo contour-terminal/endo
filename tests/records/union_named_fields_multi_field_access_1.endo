@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Field access on multi-field variant
+# expect: 10
+
+type Shape =
+    | Rect of w: int * h: int
+    | Point
+let r = Rect (10, 20)
+print r.w

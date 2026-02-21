@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: & at statement level generates IR successfully
+# mode: ir-only
+
+& echo test

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Type tag tuple with string
+# expect: (42, "hello")
+# expect: 
+
+println (42, "hello")

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-with catching None - should run handler
+
+let getNone x = None; let r = try getNone 42 with | None -> 99

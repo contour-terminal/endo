@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: fold to sum all pids: 1 + 42 + 100 = 143
+# expect: 143
+
+print (ps |> fold 0 (fun acc p -> acc + p.pid))

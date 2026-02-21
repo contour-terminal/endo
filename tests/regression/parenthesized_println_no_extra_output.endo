@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Parenthesized println no extra output
+# expect: hi
+# expect: 
+
+(println "hi")

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: sortBy size ascending: 42(hello.txt), 256(script.sh), 4096(docs)
+# expect: [hello.txt; script.sh; docs]
+
+print (ls |> sortBy (fun f -> f.size) |> map (fun f -> f.name))

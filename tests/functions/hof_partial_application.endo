@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Partial application of HOF
+# expect: 10
+
+let double x = x * 2
+let apply f x = f x
+let g = apply double
+print (g 5)

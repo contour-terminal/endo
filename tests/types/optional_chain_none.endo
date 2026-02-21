@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Optional chain none
+# expect: none
+
+type P = { name: str; age: int }
+let x = None
+print (x?.name ?| "none")

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Octal literal
+# expect: 493
+
+print 0o755

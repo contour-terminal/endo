@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Binary arithmetic
+# expect: 7
+
+print (0b1000 - 1)

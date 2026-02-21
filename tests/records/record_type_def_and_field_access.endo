@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Basic record type definition, creation, and field access
+# expect: 10
+
+type Point = { x: int; y: int }
+let p = { x = 10; y = 20 }
+print p.x

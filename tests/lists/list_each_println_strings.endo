@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each println strings
+# expect: hello
+# expect: world
+# expect: 
+
+each println ["hello"; "world"]

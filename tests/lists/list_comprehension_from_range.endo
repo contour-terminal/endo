@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List comprehension from range
+# expect: [1; 4; 9; 16; 25]
+
+print [for x in [1..5] -> x * x]

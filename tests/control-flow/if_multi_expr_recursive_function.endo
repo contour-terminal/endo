@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Recursive function with multi-expression branches (calc-1x1 pattern)
+# expect: 42
+
+let rec go (n: int) =
+    if n <= 0 then
+        let result = 42
+        result
+    else
+        go (n - 1)
+print (go 3)

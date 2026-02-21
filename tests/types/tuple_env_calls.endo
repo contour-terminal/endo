@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple with env calls — each creates control-flow blocks
+
+let t = ((env "HOME"), (env "PATH")); print "ok"

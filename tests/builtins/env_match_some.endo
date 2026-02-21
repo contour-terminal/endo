@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Env match some
+# mock-env: PATH=/usr/bin
+# expect: present
+
+let r = match env "PATH" with | Some v -> "present" | None -> "missing"; print r

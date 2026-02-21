@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple destructure from binding
+# expect: 7
+
+let t = (3, 4); let (a, b) = t; print (a + b)

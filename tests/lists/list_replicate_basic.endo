@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List replicate basic
+# expect: [42; 42; 42]
+
+print (replicate 3 42)

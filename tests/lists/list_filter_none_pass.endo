@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List filter none pass
+# expect: []
+
+print (filter (fun x -> x > 10) [1; 2; 3])

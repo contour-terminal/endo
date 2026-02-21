@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Try operator (?) unwraps Option values
+# mode: ir-only
+
+let unwrap opt = opt?
+let r = unwrap (Some 42)

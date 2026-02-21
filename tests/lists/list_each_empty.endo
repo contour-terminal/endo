@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each empty
+
+each (fun x -> print x) []

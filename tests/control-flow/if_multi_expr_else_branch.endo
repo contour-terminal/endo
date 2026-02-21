@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-expression else branch with let bindings
+# expect: 30
+
+let r =
+    if false then
+        0
+    else
+        let b = 10
+        let c = 20
+        b + c
+print r

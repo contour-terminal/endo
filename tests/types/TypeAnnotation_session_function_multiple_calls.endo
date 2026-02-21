@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed compiled function called across multiple prompts
+# expect: 49
+# session-separator: ---
+
+let square (x: int): int = x * x
+# ---
+print (square 4)
+# ---
+print (square 7)

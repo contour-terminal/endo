@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: if-then without else returns unit (F# style)
+# expect: 42
+
+let mut x = 0
+if true then x <- 42
+print x

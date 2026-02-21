@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: User-defined function that returns unit via println
+# expect: hello
+# expect: 
+
+let greet name = println name
+(greet "hello")

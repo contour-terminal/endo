@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec comparison ne
+# expect: 1
+
+let r = match 0 with | _ when 5 != 3 -> 1 | _ -> 0; print r

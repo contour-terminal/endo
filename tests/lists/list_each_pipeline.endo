@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each pipeline
+# expect: 123
+
+let _ = [1; 2; 3] |> each (fun x -> print x)

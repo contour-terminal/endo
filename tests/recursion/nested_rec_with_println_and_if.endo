@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exact user script pattern: nested let rec with println + if-then-else
+# expect: step 1
+# expect: step 2
+# expect: step 3
+# expect: done
+# expect: 
+
+
+let process (n: int) =
+    let rec step (i: int) =
+        println $"step {i}"
+        if i >= n then
+            println "done"
+        else
+            step (i + 1)
+    step 1
+process 3
+

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Regression test: nested function calls with ? operator
+
+let inc x = Some (x + 1); let f x = (inc x)?; let r = f 5

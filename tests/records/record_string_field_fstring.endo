@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String field used in f-string interpolation
+# expect: Hello, Diana!
+
+type Person = { name: str; age: int }
+let p = { name = "Diana"; age = 28 }
+print $"Hello, {p.name}!"

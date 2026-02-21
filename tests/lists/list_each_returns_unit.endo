@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each returns unit
+# expect: 120
+
+let r = each (fun x -> print x) [1; 2]
+print r

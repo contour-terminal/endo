@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Count elements greater than a threshold
+# expect: 3
+
+let rec countAbove threshold acc xs = match xs with
+  | [] -> acc
+  | h :: t -> if h > threshold then countAbove threshold (acc + 1) t else countAbove threshold acc t
+print (countAbove 3 0 [1; 5; 2; 7; 3; 8])

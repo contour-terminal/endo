@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Recursive function defined in first prompt, called in second
+# session-separator: ---
+# expect: 120
+# expect:
+
+let rec factorial n acc = match n with | 0 -> acc | _ -> factorial (n - 1) (n * acc)
+# ---
+println (factorial 5 1)

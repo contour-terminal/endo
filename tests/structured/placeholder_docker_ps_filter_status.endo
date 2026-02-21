@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder docker ps filter status
+# mode: structured
+# expect: [web-server; db-main]
+
+docker ps |> filter (_.status |> contains "Up") |> map _.names |> print

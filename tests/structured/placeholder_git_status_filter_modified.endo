@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder git status filter modified
+# mode: structured
+# expect: [src/main.cpp]
+
+git status |> filter (_.status |> contains "M") |> map _.path |> print

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Comment hash
+# expect: 42
+
+print 42 # ignored

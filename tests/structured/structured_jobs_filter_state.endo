@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Structured jobs filter state
+# expect: [1]
+
+let ids = jobs |> filter (fun j -> j.state == "Running") |> map (fun j -> j.id)
+print ids

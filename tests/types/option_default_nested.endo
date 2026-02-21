@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested ?| — inner None falls back, then result used as default for outer
+# expect: 5
+
+print (None ?| (Some 5 ?| 0))

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ?| in a let binding
+# expect: 7
+
+let x = Some 7 ?| 0; print x

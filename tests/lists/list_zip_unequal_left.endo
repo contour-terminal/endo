@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List zip unequal left
+# expect: [(1, 4); (2, 5)]
+
+print (zip [1;2] [4;5;6])

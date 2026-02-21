@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: exec with pattern-matched variables from tuple scrutinee.
+# mock-which: echo=/bin/echo
+# mock-which: cat=/bin/cat
+# expect: hello
+# expect: 
+
+
+match (which "echo", which "cat") with
+| (Some f, Some l) -> exec f "hello"
+| (Some f, None) -> exec f "hello"
+| (None, Some l) -> exec l
+| (None, None) -> println "none"
+

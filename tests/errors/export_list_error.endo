@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export with list is disallowed (requires scalar)
+# expect-error: 'let export' requires a scalar type
+
+let export X = [1; 2; 3]

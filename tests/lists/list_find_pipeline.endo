@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List find pipeline
+# expect: 4
+
+match ([1;2;3;4;5] |> find (fun x -> x > 3)) with | Some v -> print v | None -> print "none"

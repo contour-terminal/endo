@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: sortBy memory ascending: 1024(pid=1), 2048(pid=100), 4096(pid=42)
+# expect: [1; 100; 42]
+
+print (ps |> sortBy (fun p -> p.mem) |> map (fun p -> p.pid))

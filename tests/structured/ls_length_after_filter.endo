@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 2 files with size <= 256 (hello.txt=42, script.sh=256)
+# expect: 2
+
+print (ls |> filter (fun f -> f.size <= 256) |> length)

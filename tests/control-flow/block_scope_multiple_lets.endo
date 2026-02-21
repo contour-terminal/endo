@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Block scope multiple lets
+# expect: 3
+
+let r = { let x = 1; let y = 2; x + y }; print r

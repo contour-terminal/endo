@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match bare tuple wildcard
+# expect: 2
+
+let r = match 1, 2 with | _, b -> b; print r

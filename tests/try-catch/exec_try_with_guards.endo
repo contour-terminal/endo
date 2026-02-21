@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: try-with with guard conditions on error patterns.
+# expect: 100
+
+
+        let getErr x = Error x
+        let r = try getErr 5 with | Error e when e > 3 -> 100 | Error _ -> 0
+        print r
+    

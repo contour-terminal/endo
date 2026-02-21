@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mixing int and string in list literal should be a type error
+# expect-error: List elements must have the same type
+
+let r = [1; "hello"]

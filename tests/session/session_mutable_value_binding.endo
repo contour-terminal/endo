@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mutable binding persists across prompts (initial value preserved)
+# expect: 0
+# session-separator: ---
+
+let mut x = 0
+# ---
+print x

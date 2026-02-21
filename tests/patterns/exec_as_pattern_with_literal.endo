@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: As pattern with literal inner pattern
+# expect: 5
+
+let x = 5; let r = match x with | 5 as val -> val | _ -> 0; print r

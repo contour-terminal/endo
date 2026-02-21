@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec arith sub
+# expect: 7
+
+let x = 10 - 3; print x

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker ps count with length
+# mode: structured
+# expect: 2
+
+docker ps |> filter (fun c -> c.ports |> contains "tcp") |> length |> fun n -> print n

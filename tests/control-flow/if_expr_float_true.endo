@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If expr float true
+# expect: 3.14
+
+print (if true then 3.14 else 2.81)

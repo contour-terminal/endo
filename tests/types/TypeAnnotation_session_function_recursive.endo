@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed recursive function defined in one prompt, called in the next (compiled as function)
+# expect: 0
+# session-separator: ---
+
+let rec countdown (n: int): int = if n <= 0 then 0 else countdown (n - 1)
+# ---
+print (countdown 5)

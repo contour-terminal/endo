@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match bare tuple 3 elements
+# expect: 6
+
+let r = match 1, 2, 3 with | a, b, c -> a + b + c; print r

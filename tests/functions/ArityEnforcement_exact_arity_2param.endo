@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 2-param function called with exactly 2 args must succeed
+# expect: 7
+
+let add x y = x + y; print (add 3 4)

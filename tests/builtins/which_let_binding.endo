@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Which let binding
+# mock-which: ls=/bin/ls
+# expect: /bin/ls
+
+let w = which "ls"; let r = match w with | Some p -> p | None -> "none"; print r

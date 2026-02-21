@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rand can be used in let bindings and arithmetic
+
+let x = rand 1 100; let y = x + 1

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If expr same type tuple
+# mode: ir-only
+
+let x = if true then (1, 2) else (3, 4)

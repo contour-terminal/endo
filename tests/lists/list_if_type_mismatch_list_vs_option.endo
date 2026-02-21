@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: if-then-else branches: list vs option
+# expect-error: Type mismatch in if-then-else
+
+let x = if true then [1; 2] else Some 42

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export with lambda is disallowed
+# expect-error: 'let export' cannot be used with lambda expressions
+
+let export f = fun x -> x + 1; f 1

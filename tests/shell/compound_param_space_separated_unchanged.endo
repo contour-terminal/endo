@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: $LINES $COLUMNS should remain two separate arguments (space-separated)
+# mock-env: LINES=35
+# mock-env: COLUMNS=127
+# mock-which: echo=/bin/echo
+# expect: 35 127
+# expect: 
+
+echo $LINES $COLUMNS

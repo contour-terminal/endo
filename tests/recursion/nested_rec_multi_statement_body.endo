@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-statement function body with println followed by computation
+# expect: start
+# expect: 42
+
+let f (n: int) =
+  println "start"
+  print n
+f 42

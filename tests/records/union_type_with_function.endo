@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pass ADT to function, match inside function
+# expect: 25
+
+type Shape =
+    | Circle of int
+    | Point
+let area s = match s with
+    | Circle r -> r * r
+    | Point -> 0
+print (area (Circle 5))

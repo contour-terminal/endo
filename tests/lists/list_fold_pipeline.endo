@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List fold pipeline
+# expect: 15
+
+print ([1; 2; 3; 4; 5] |> fold 0 (fun acc x -> acc + x))

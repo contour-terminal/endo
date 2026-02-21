@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List reduce max
+# expect: 9
+
+let r = reduce (fun a b -> if a > b then a else b) [3; 1; 4; 1; 5; 9]
+match r with
+    | Some v -> print v
+    | None -> print "none"

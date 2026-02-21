@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Verify basic arithmetic executes without error
+
+let x = 2 + 3

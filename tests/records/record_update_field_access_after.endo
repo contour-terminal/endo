@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access fields of a record created via record update
+# expect: 46
+
+type Point = { x: int; y: int }
+let p1 = { x = 3; y = 4 }
+let p2 = { p1 with x = p1.x + 1; y = p1.y + 2 }
+print p2.x
+print p2.y

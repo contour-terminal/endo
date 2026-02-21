@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List concat basic
+# expect: [1; 2; 3; 4]
+
+print ([1; 2] @ [3; 4])

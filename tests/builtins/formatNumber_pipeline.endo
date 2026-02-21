@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline: number |> formatNumber ","
+# expect: 1,234,567
+
+print (1234567 |> formatNumber ",")

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export binds value and exports as environment variable
+# expect: 42
+
+let export X = 42; print X

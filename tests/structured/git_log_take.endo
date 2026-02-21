@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Git log take
+# mode: structured
+# expect: [Alice; Bob]
+
+git log |> take 2 |> map (fun c -> c.author) |> print

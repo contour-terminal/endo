@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Bare range as let binding
+# mode: ir-only
+
+let xs = 1..5

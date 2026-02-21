@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Store ps result, then pipeline
+# expect: [42; 100]
+
+let procs = ps
+let highPid = procs |> filter (fun p -> p.pid > 1) |> map (fun p -> p.pid)
+print highPid

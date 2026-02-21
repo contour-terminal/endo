@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session value binding float
+# expect: 3.14
+# session-separator: ---
+
+let pi = 3.14
+# ---
+print pi

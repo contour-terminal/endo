@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Option containing Result
+# mode: ir-only
+
+let x = Some (Ok 42)

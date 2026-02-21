@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-line match expression with arms on separate lines
+# expect: 123
+
+let grade score = match score with
+    | s when s >= 90 -> 1
+    | s when s >= 80 -> 2
+    | _ -> 3
+print (grade 95)
+print (grade 85)
+print (grade 60)
+

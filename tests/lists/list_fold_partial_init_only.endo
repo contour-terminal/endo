@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List fold partial init only
+# expect: 6
+
+let sumFrom0 = fold 0
+print (sumFrom0 (fun acc x -> acc + x) [1; 2; 3])

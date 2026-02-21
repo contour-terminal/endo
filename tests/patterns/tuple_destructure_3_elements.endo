@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple destructure 3 elements
+# expect: 6
+
+let (a, b, c) = (1, 2, 3); print (a + b + c)

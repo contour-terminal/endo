@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List each basic
+# expect: 123
+
+each (fun x -> print x) [1; 2; 3]

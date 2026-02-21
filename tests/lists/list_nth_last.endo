@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List nth last
+# expect: 30
+
+let r = match nth 2 [10; 20; 30] with
+    | Some v -> v
+    | None -> -1
+print r

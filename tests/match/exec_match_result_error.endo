@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec match result error
+
+let res = Error 404; let r = match res with | Ok n -> n | Error e -> 0

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker ps filter status
+# mode: structured
+# expect: [web-server; db-main]
+
+docker ps |> filter (fun c -> c.status |> contains "Up") |> map (fun c -> c.names) |> print

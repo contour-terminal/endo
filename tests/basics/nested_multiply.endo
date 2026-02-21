@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Use let to bind intermediate result since (( is shell arithmetic in shell mode
+# expect: 5
+# expect: 
+
+(2 + 3)

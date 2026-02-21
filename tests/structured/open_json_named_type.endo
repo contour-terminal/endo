@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Using a named type reference
+# mode: ir-only
+
+type Person = { name: string; age: int }
+open-json "test.json" as Person

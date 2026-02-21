@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Iterates through all 3 elements
+# expect: 60
+
+let mut sum = 0
+for (x, _) in [(10, 0); (20, 0); (30, 0)] do
+sum <- sum + x
+end
+print sum

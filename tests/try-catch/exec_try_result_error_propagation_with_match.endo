@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Error propagation through ? with match on outer function
+# expect: 99
+
+let maybe_fail x = if x > 0 then Ok x else Error 0; let f x = (maybe_fail x)?; let r = match (f 0) with | Ok n -> n | Error e -> 99; print r

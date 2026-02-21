@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Error propagates through nested try-finally: both finally blocks run
+# expect: io7
+
+let fail x = Error 7; let inner x = try (fail x)? finally print "i"; let outer x = try (inner x)? finally print "o"; let r = match outer 0 with | Ok v -> v | Error e -> e; print r

@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec match option none
+
+let opt = None; let r = match opt with | Some x -> x | None -> 0

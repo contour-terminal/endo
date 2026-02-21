@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List groupBy named function
+# expect: [(1, [1; 3]); (0, [2; 4])]
+
+let parity x = x % 2
+print (groupBy parity [1; 2; 3; 4])

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Ok value should not trigger any error handler
+# expect: 42
+
+let getValue x = Ok x; let r = try getValue 42 with | Error 1 -> 10 | Error _ -> 0; print r

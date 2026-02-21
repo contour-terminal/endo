@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder git log map message
+# mode: structured
+# expect: [feat: add login; fix: null check; docs: update README]
+
+git log |> map _.message |> print

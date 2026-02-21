@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Shell is interactive read
+# mode: ir-only
+
+print shell_is_interactive

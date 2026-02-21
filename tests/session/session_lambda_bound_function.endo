@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda assigned to variable persists
+# expect: 42
+# session-separator: ---
+
+let inc = fun x -> x + 1
+# ---
+print (inc 41)

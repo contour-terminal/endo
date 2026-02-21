@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Let export mut env initial value
+# expect: 42
+# expect-env: Y=42
+
+let export mut Y = 42; print Y

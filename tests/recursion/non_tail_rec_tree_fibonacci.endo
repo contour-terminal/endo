@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tree recursion: two non-tail recursive calls
+# expect: 55
+
+let rec fib n = if n <= 1 then n else fib (n - 1) + fib (n - 2); print (fib 10)

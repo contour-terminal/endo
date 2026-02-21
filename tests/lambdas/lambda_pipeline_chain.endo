@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained lambdas in pipeline
+# mode: ir-only
+
+let result = 5 |> (fun x -> x * 2) |> (fun x -> x + 1)

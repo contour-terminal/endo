@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation lambda multiple params
+# expect: 7
+
+let f = fun (x: int) (y: int) -> x + y
+print (f 3 4)

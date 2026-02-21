@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: let export mut should work
+# expect: 10
+
+let export mut X = 10; print X

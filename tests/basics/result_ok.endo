@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Result ok
+# expect: Ok 5
+# expect: 
+
+Ok 5

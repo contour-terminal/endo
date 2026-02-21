@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String concat with typed string param compiles as function
+# expect: hello world
+
+let greet (name: str) = "hello " + name; print (greet "world")

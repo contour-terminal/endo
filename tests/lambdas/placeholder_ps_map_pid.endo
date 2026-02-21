@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: _.pid desugars to fun __x -> __x.pid
+# expect: [1; 42; 100]
+
+let pids = ps |> map _.pid
+print pids

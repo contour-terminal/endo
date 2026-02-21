@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Stmt while break
+# expect: 12
+
+let mut x = 0; while true do x <- x + 1; if x == 3 then break else print x; end

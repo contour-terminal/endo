@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exec multiline if then else 2
+# expect: 42
+
+let r = if true then
+            42
+        else
+            0
+print r
+

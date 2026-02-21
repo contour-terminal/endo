@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: If expr same type option
+# mode: ir-only
+
+let x = if true then Some 1 else None

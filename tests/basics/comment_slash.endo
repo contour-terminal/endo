@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: comment\nprint x") == "42");
+# expect: 42
+
+let x = 42 // comment
+print x

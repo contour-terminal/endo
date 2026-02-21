@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Direct match with different constructor variants — no function inlining
+# expect: 12
+
+type Shape =
+    | Circle of int
+    | Rectangle of int * int
+    | Point
+let s = Rectangle (3, 4)
+let r = match s with
+    | Circle r -> r * r
+    | Rectangle (w, h) -> w * h
+    | Point -> 0
+print r

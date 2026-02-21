@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List distinct all same
+# expect: [5]
+
+print (distinct [5; 5; 5; 5])

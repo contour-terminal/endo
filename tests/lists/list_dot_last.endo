@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List dot last
+# expect: 30
+
+let xs = [10; 20; 30]
+match xs.last with
+| Some v -> print v
+| None -> print 0

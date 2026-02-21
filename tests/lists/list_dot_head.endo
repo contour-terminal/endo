@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List dot head
+# expect: 10
+
+let xs = [10; 20; 30]
+match xs.head with
+| Some v -> print v
+| None -> print 0

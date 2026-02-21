@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List head and tail builtins
+# expect: Some 1
+# expect: [2; 3]
+# expect:
+
+println (head [1; 2; 3])
+println (tail [1; 2; 3])

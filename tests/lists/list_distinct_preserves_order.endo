@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List distinct preserves order
+# expect: [3; 1; 4; 5; 9; 2; 6]
+
+print (distinct [3; 1; 4; 1; 5; 9; 2; 6; 5; 3])

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder git log filter author
+# mode: structured
+# expect: [abc123; ghi789]
+
+git log |> filter (_.author == "Alice") |> map _.sha |> print

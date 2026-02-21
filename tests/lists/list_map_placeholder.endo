@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List map placeholder
+# expect: [2; 4; 6]
+
+print (map (_ * 2) [1; 2; 3])

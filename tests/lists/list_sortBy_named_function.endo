@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List sortBy named function
+# expect: [3; 2; 1]
+
+let negate x = 0 - x
+print (sortBy negate [3; 1; 2])

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session value depending on value
+# expect: 43
+# session-separator: ---
+
+let x = 42
+# ---
+let y = x + 1
+# ---
+print y

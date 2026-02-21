@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-line getter with if-then-else conditional
+# expect: 7
+
+let mut _x = 0
+let Abs with
+    get () =
+        if _x >= 0 then _x
+        else 0 - _x
+_x <- 0 - 7
+print Abs

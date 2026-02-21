@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List map closure
+# expect: [11; 12; 13]
+
+let offset = 10
+print (map (fun x -> x + offset) [1; 2; 3])

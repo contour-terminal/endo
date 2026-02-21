@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: drop first process, map to pids
+# expect: [42; 100]
+
+print (ps |> drop 1 |> map (fun p -> p.pid))

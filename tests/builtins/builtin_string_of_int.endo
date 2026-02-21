@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Builtin string of int
+# expect: 42
+
+print (string_of_int 42)

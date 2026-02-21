@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: rand result can be piped to a function
+# expect: 1
+
+rand 1 10 |> fun n -> print (if n >= 1 && n <= 10 then 1 else 0)

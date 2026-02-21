@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List groupBy all same key
+# expect: [(0, [1; 2; 3])]
+
+print (groupBy (fun x -> 0) [1; 2; 3])

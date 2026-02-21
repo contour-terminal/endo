@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Closure over a multiplier variable
+# expect: 21
+
+let m = 3; let scale = fun x -> x * m; print (scale 7)

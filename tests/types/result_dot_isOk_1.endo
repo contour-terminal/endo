@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Result dot isOk
+# expect: true
+
+let x = Ok 42
+print x.isOk

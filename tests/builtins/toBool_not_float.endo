@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: not(1.5): toBool(1.5) = false (falsy), BNot(false) = true
+# expect: true
+
+print (not 1.5)

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Return a list from a function
+# expect: [99]
+
+let make x = x :: []; print (make 99)

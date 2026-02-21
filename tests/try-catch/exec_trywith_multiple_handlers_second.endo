@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multiple handlers - second pattern matches
+# expect: 20
+
+let getErr x = Error x; let r = try getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | Error _ -> 0; print r

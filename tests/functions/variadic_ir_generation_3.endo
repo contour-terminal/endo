@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: IR generation for various variadic + splat patterns
+# mode: ir-only
+
+let run x ...args = & echo x ...args; run "test" "a"

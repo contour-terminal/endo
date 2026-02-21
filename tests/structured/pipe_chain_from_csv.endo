@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipe chain from csv
+# mode: ir-only
+
+echo hello | from-csv as { name: string; value: int }

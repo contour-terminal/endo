@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TypeAnnotation function single param
+# expect: 10
+
+let double (x: int): int = x * 2
+print (double 5)

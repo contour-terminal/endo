@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: fetch with URL string generates IR with Result annotation
+# mode: ir-only
+
+let r = fetch "https://example.com"

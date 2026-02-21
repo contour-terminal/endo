@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: ((100 - 1) - 2) - 3 = 94
+# expect: 94
+
+print (fold 100 (fun acc x -> acc - x) [1; 2; 3])

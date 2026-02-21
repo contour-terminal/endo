@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Guard with > that fails - falls through to next handler
+# expect: 0
+
+let getErr x = Error x; let r = try getErr 2 with | Error e when e > 3 -> 100 | Error _ -> 0; print r

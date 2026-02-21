@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Record destructuring in let binding
+# expect: 15
+
+type Point = { x: int; y: int }
+let p = { x = 7; y = 8 }
+let { x; y } = p
+print (x + y)

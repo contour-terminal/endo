@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function with complex expression body
+# mode: ir-only
+
+let compute x y = x * x + y * y; let r = compute 3 4

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Match on integer literals
+# expect: ten
+# expect:
+
+let x = 10
+let r = match x with
+    | 0 -> "zero"
+    | 10 -> "ten"
+    | _ -> "other"
+println r

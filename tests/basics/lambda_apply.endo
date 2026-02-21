@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda apply
+# expect: 6
+# expect: 
+
+(fun x -> x + 1) 5

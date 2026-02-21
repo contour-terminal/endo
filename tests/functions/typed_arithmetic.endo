@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed arithmetic functions
+# expect: 7
+# expect: 25
+# expect:
+
+let add (x: int) (y: int) = x + y
+let sq (x: int) = x * x
+println (add 3 4)
+println (sq 5)

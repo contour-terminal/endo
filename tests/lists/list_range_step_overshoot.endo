@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Step overshoots end — should include only start (aligned to valid elements)
+# expect: [1]
+
+print [1..10..5]

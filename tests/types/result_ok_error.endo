@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Result type Ok and Error matching
+# expect: 42
+# expect:
+
+let r = Ok 42
+let x = match r with
+    | Ok n -> n
+    | Error e -> 0
+println x

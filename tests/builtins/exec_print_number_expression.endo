@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Print works with numeric expressions
+# expect: 25
+
+let x = 10; print (x * 2 + 5)

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: toText with jobs in pipeline
+# mode: ir-only
+
+let r = jobs |> toText
+print r

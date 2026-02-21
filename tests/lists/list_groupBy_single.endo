@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List groupBy single
+# expect: [(42, [42])]
+
+print (groupBy (fun x -> x) [42])

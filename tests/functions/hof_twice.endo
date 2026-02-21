@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Apply function to result of itself
+# expect: 12
+
+let double x = x * 2
+let twice f x = f (f x)
+print (twice double 3)

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Docker ps each
+# mode: structured
+# expect: web-serverdb-maincache
+
+docker ps |> each (fun c -> print c.names)

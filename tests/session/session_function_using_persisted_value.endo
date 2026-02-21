@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Session function using persisted value
+# expect: 15
+# session-separator: ---
+
+let x = 10
+# ---
+let f y = y + x
+# ---
+print (f 5)

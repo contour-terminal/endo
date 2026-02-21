@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map over ls results to format mode as rwx strings
+# expect: ["rwxr-xr-x"; "rw-r--r--"; "rwxr-xr-x"]
+
+print (ls |> map (fun f -> formatMode f.mode))

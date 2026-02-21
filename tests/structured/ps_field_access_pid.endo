@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Extract pid from first element via head + match
+# expect: 1
+
+match head ps with
+| Some p -> print p.pid
+| None -> print "empty"

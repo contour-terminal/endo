@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Negative number
+# expect: -7
+# expect: 
+
+(-7)

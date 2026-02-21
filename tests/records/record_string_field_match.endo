@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: String field via pattern matching
+# expect: Charlie
+
+type Person = { name: str; age: int }
+let p = { name = "Charlie"; age = 35 }
+print (match p with | { name; age } -> name)

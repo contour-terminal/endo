@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FormatNumber zero
+# expect: 0
+
+print (formatNumber "," 0)

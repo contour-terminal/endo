@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Set accessor before get accessor
+# expect: 510
+
+let mut _x = 5
+let X with set (v) = _x <- v and get () = _x
+print X
+X <- 10
+print X

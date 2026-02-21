@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Printing a whole record should produce formatted output
+# expect: { x = 3; y = 4 }
+
+type Point = { x: int; y: int }
+let p = { x = 3; y = 4 }
+print p

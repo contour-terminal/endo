@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: if-then without else returns unit (F# style)
+# expect: 1
+
+if true then print 1

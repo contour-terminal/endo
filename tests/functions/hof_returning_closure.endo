@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF returning closure that captures function ref
+# expect: 10
+
+let double x = x * 2
+let make_caller f = fun x -> f x
+let g = make_caller double
+print (g 5)

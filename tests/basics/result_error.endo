@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Result error
+# expect: Error 99
+# expect: 
+
+Error 99

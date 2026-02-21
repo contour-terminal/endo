@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Fstring arithmetic
+# expect: Sum is 7
+
+print $"Sum is {3 + 4}"

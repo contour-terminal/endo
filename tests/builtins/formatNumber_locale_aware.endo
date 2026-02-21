@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: 1-arg: uses the user's locale thousand separator
+
+print (formatNumber 1234567)

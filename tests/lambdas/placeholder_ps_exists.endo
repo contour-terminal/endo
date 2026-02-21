@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Placeholder ps exists
+# expect: true
+
+let r = ps |> exists (_.pid > 50)
+print r

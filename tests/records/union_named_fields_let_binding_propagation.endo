@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Field access works through let binding propagation
+# expect: 7
+
+type Shape =
+    | Circle of radius: int
+    | Point
+let c = Circle 7
+let x = c
+print x.radius

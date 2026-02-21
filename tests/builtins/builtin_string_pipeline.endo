@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Builtin string pipeline
+# expect: 42
+# expect: 
+
+42 |> string |> println

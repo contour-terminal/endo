@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List tail single
+# expect: []
+
+print (tail [1])
