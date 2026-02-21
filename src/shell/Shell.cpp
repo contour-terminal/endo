@@ -2506,7 +2506,9 @@ void Shell::runAgentMode()
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                     out.carriageReturn();
+                    out.clearLine();   // Clear info line (shortcut hints / spinner)
                     out.linefeed();
+                    out.clearLine();   // Clear bottom padding (NBSP marker)
                     out.flush();
 
                     screen.releaseCursor();
