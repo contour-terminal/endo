@@ -245,18 +245,24 @@ polls servers and triggers `refreshTools()` on `notifications/tools/list_changed
 (added/removed) propagated to `ToolRegistry` via `ToolsChangedCallback`. Polled before each
 LLM turn in the agent event loop.
 
-### Session Resume Enhancement
+### Session Resume Enhancement ✅
 
-**Status:** Partial (`ConversationHistoryStore` exists) | **Effort:** Small
+**Status:** Done | **Effort:** Small
 
-The conversation persistence infrastructure exists but could be enhanced:
+Named session management with full CRUD operations and interactive picker.
 
-- Auto-save on each turn (not just on exit)
-- Multiple named sessions (`/save-session  <name>`, `/load-session [<name>]`).
-- If on `/load-session` without a name, list available sessions with timestamps and token counts. Use QuestionComponent from tui library for that, allowing the user to select which session to load.
-- Session list with timestamps and token counts
-- Auto-resume last session on agent mode entry (configurable)
-- On session load, replay the history for context (configurable).
+- [x] `SessionMetadata` struct with name, timestamps, provider, model, turn count, token usage
+- [x] `ConversationHistoryStore` version 2 format with metadata fields
+- [x] `SessionManager` class managing named sessions under `.endo/sessions/`
+- [x] `/save-session [<name>]` — save current session (auto-generates name from first message if omitted)
+- [x] `/load-session [<name>]` — load by name, or interactive picker via `QuestionComponent` if no name given
+- [x] `/delete-session <name>` — delete a saved session
+- [x] `/sessions` — list all sessions as markdown table (name, turns, tokens, updated, active marker)
+- [x] Auto-resume last named session on agent mode entry (configurable via `agent_auto_resume`)
+- [x] Resume context message (configurable via `agent_session_replay`)
+- [x] Tab completion for session names in `/load-session` and `/delete-session`
+- [x] Auto-save to named session after each turn when active
+- [x] `/reset` clears named session state and last-active marker
 
 ### Model Switching at Runtime Enhancement ✅
 
