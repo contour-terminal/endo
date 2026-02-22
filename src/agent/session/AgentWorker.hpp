@@ -77,6 +77,9 @@ class AgentWorker
     /// Handles a user prompt message.
     void handlePrompt(UserPromptMessage const& msg, std::stop_token const& stopToken);
 
+    /// Handles plan execution after user approval.
+    void handlePlanExecution(PlanApproveMessage const& msg, std::stop_token const& stopToken);
+
     /// Creates a StreamCallback that checks for cancellation and pushes tokens.
     [[nodiscard]] auto makeStreamCallback(std::stop_token const& stopToken) -> StreamCallback;
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "AgentWorker.hpp"
 
+#include <agent/session/PlanExecutor.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 
 namespace endo::agent
@@ -52,7 +53,7 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
         // so we must drain _inbound ourselves to route UserAnswerMessage → _askUserResponses.
         while (true)
         {
-            // Drain _inbound: route UserAnswerMessage/PermissionResponseMessage, handle Cancel/Shutdown.
+            // Drain _inbound: route responses to their queues, handle Cancel/Shutdown.
             while (auto inMsg = _inbound.tryPop())
             {
                 std::visit(
@@ -66,6 +67,7 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
                             _permissionResponses.push(m);
                         else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                             _cancelled.store(true, std::memory_order_relaxed);
+                        // PlanApproveMessage, UserPromptMessage: ignored during blocking waits.
                     },
                     *inMsg);
             }
@@ -93,7 +95,7 @@ auto AgentWorker::makePermissionCallback() -> PermissionPromptCallback
         // Same drain pattern as makeAskUserCallback().
         while (true)
         {
-            // Drain _inbound: route PermissionResponseMessage/UserAnswerMessage, handle Cancel/Shutdown.
+            // Drain _inbound: route responses to their queues, handle Cancel/Shutdown.
             while (auto inMsg = _inbound.tryPop())
             {
                 std::visit(
@@ -107,6 +109,7 @@ auto AgentWorker::makePermissionCallback() -> PermissionPromptCallback
                             _permissionResponses.push(m);
                         else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                             _cancelled.store(true, std::memory_order_relaxed);
+                        // PlanApproveMessage, UserPromptMessage: ignored during blocking waits.
                     },
                     *inMsg);
             }
@@ -146,6 +149,10 @@ void AgentWorker::run(std::stop_token stopToken)
                 else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                 {
                     _inbound.shutdown();
+                }
+                else if constexpr (std::is_same_v<MsgType, PlanApproveMessage>)
+                {
+                    handlePlanExecution(m, stopToken);
                 }
                 else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
                 {
@@ -217,7 +224,7 @@ auto AgentWorker::makeStreamCallback(std::stop_token const& stopToken) -> Stream
         if (_cancelled.load(std::memory_order_relaxed))
             return false;
 
-        // Drain inbound for CancelMessage, UserAnswerMessage, or PermissionResponseMessage during streaming.
+        // Drain _inbound: route responses to their queues, handle Cancel/Shutdown.
         while (auto inMsg = _inbound.tryPop())
         {
             std::visit(
@@ -231,6 +238,7 @@ auto AgentWorker::makeStreamCallback(std::stop_token const& stopToken) -> Stream
                         _permissionResponses.push(m);
                     else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                         _cancelled.store(true, std::memory_order_relaxed);
+                    // PlanApproveMessage, UserPromptMessage: ignored during streaming.
                 },
                 *inMsg);
         }
@@ -241,6 +249,85 @@ auto AgentWorker::makeStreamCallback(std::stop_token const& stopToken) -> Stream
         _outbound.push(TokenMessage { .token = std::string(token) });
         return true;
     };
+}
+
+void AgentWorker::handlePlanExecution(PlanApproveMessage const& msg, std::stop_token const& stopToken)
+{
+    _busy.store(true, std::memory_order_relaxed);
+    _cancelled.store(false, std::memory_order_relaxed);
+
+    // Optionally compact conversation before execution to free context window space.
+    if (msg.compactFirst)
+    {
+        auto compactResult = _session.forceCompaction();
+        // Log but don't abort on compaction failure.
+        (void) compactResult;
+    }
+
+    auto executor = PlanExecutor(_session, msg.plan);
+    auto const totalSteps = executor.plan().steps.size();
+
+    while (!executor.isComplete() && !_cancelled.load(std::memory_order_relaxed)
+           && !stopToken.stop_requested())
+    {
+        auto const stepIndex = executor.currentStepIndex();
+        auto const& step = executor.plan().steps[stepIndex];
+
+        _outbound.push(PlanStepStartMessage {
+            .stepIndex = stepIndex,
+            .totalSteps = totalSteps,
+            .description = step.description,
+        });
+
+        auto streamCb = makeStreamCallback(stopToken);
+        auto stepResult = executor.executeNextStep(std::move(streamCb));
+
+        if (stepResult.has_value())
+        {
+            _outbound.push(PlanStepCompleteMessage {
+                .stepIndex = stepIndex,
+                .status = *stepResult,
+            });
+        }
+        else
+        {
+            _outbound.push(PlanStepCompleteMessage {
+                .stepIndex = stepIndex,
+                .status = PlanStepStatus::Failed,
+                .errorMessage = stepResult.error().message,
+            });
+            // Stop execution on failure — remaining steps stay Pending.
+            break;
+        }
+    }
+
+    // If cancelled, skip remaining pending steps.
+    if (_cancelled.load(std::memory_order_relaxed))
+    {
+        for (auto i = size_t { 0 }; i < executor.plan().steps.size(); ++i)
+        {
+            if (executor.plan().steps[i].status == PlanStepStatus::Pending)
+                executor.skipStep(i);
+        }
+    }
+
+    // Check if all steps succeeded.
+    auto allSucceeded = true;
+    for (auto const& step: executor.plan().steps)
+    {
+        if (step.status != PlanStepStatus::Completed)
+        {
+            allSucceeded = false;
+            break;
+        }
+    }
+
+    _outbound.push(PlanCompleteMessage {
+        .plan = executor.plan(),
+        .allSucceeded = allSucceeded,
+    });
+
+    _busy.store(false, std::memory_order_relaxed);
 }
 
 } // namespace endo::agent

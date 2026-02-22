@@ -52,9 +52,20 @@ struct PermissionResponseMessage
     PermissionDecision decision = PermissionDecision::Denied; ///< The user's decision.
 };
 
+/// User approved a plan for execution.
+struct PlanApproveMessage
+{
+    Plan plan;                 ///< The approved plan to execute.
+    bool compactFirst = false; ///< If true, compact conversation before executing.
+};
+
 /// All message types that flow from the main thread to the agent worker.
-using ToAgentMessage = std::
-    variant<UserPromptMessage, CancelMessage, ShutdownMessage, UserAnswerMessage, PermissionResponseMessage>;
+using ToAgentMessage = std::variant<UserPromptMessage,
+                                    CancelMessage,
+                                    ShutdownMessage,
+                                    UserAnswerMessage,
+                                    PermissionResponseMessage,
+                                    PlanApproveMessage>;
 
 // ============================================================================
 // Agent Worker → Main Thread messages
@@ -116,6 +127,29 @@ struct PermissionRequest
     PermissionPrompt prompt; ///< The permission prompt to display.
 };
 
+/// A plan step is about to execute.
+struct PlanStepStartMessage
+{
+    size_t stepIndex;        ///< Zero-based index of the step.
+    size_t totalSteps;       ///< Total number of steps in the plan.
+    std::string description; ///< Step description.
+};
+
+/// A plan step has finished execution.
+struct PlanStepCompleteMessage
+{
+    size_t stepIndex;         ///< Zero-based index of the step.
+    PlanStepStatus status;    ///< Final status of the step.
+    std::string errorMessage; ///< Non-empty when status == Failed.
+};
+
+/// The entire plan has finished execution.
+struct PlanCompleteMessage
+{
+    Plan plan;                 ///< Final plan with updated step statuses.
+    bool allSucceeded = false; ///< Whether all steps completed successfully.
+};
+
 /// The agent worker thread has exited.
 struct AgentShutdownComplete
 {
@@ -130,6 +164,9 @@ using FromAgentMessage = std::variant<TokenMessage,
                                       AskUserRequest,
                                       PermissionRequest,
                                       PlanGeneratedMessage,
+                                      PlanStepStartMessage,
+                                      PlanStepCompleteMessage,
+                                      PlanCompleteMessage,
                                       AgentShutdownComplete>;
 
 } // namespace endo::agent

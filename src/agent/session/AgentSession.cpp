@@ -414,6 +414,13 @@ void AgentSession::setCompactionConfig(CompactionConfig const& config)
     _compactor = std::make_unique<ConversationCompactor>(*_provider, config);
 }
 
+auto AgentSession::forceCompaction() -> std::expected<bool, std::string>
+{
+    if (!_compactor)
+        return false;
+    return _compactor->compactIfNeeded(_history);
+}
+
 void AgentSession::setPermissionManager(PermissionManager* pm)
 {
     _permissionManager = pm;

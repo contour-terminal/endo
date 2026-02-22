@@ -152,6 +152,13 @@ class AgentSession
     /// @param config The compaction configuration.
     void setCompactionConfig(CompactionConfig const& config);
 
+    /// @brief Forces conversation compaction regardless of threshold.
+    ///
+    /// Useful before plan execution to free context window space consumed
+    /// during exploration. Does nothing if no compactor is configured.
+    /// @return true if compaction was performed, false if skipped, or an error.
+    [[nodiscard]] auto forceCompaction() -> std::expected<bool, std::string>;
+
     /// @brief Sets the permission manager for tool execution gating.
     ///
     /// When set, each tool call is checked against the permission manager
