@@ -792,7 +792,12 @@ Component (base class)
   - [x] Fix StubRuntime missing shell builtin registrations (crash on `which`/`exit`/`bind` in diagnostics)
   - [x] Fix `bind` signature mismatch in Parser (`"bind(S+)I"` → `"bind(s)I"`)
   - [x] 18 unit tests + 2 E2E LSP tests
-- [ ] Implement semantic highlighting (valid vs invalid commands)
+- [x] Implement Rust-style rich error diagnostics (`RichConsoleReport`)
+  - [x] Colored error/warning labels, syntax-highlighted source context, curly underline carets
+  - [x] "Did you mean?" suggestions for command-not-found errors (builtins + registered functions)
+  - [x] TTY detection with `NO_COLOR` env var support
+  - [x] 15 unit tests covering plain/colored output, all error types, suggestions, caret positioning
+- [ ] Implement semantic highlighting (for example: highlight valid vs invalid system commands and directives differently)
 - [ ] Implement configurable color schemes
 
 ### Phase 2.5: Tooltips and Help

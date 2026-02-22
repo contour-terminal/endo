@@ -28,6 +28,8 @@ add_library(endo-shell STATIC
     ui/PromptPresets.cpp
     ui/Gradient.hpp
     ui/Gradient.cpp
+    ui/RichConsoleReport.hpp
+    ui/RichConsoleReport.cpp
     ui/SyntaxHighlighter.hpp
     ui/SyntaxHighlighter.cpp
     ui/SourceOffsetUtils.hpp
@@ -222,6 +224,7 @@ add_executable(test-endo-shell
     output/OutputDefinitionRegistry_test.cpp
     output/OutputParser_test.cpp
     util/Suggestions_test.cpp
+    ui/RichConsoleReport_test.cpp
     ui/SyntaxHighlighter_test.cpp
 )
 

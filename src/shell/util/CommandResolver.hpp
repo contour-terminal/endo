@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/EnvironmentProvider.hpp>
-
 #include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+
+#include <platform/EnvironmentProvider.hpp>
 
 namespace endo
 {
@@ -52,6 +52,9 @@ class CommandResolver
     /// Call this when $PATH changes to force re-scanning.
     void invalidateCache();
 
+    /// @brief Returns the list of builtin command names.
+    [[nodiscard]] static std::set<std::string> const& builtinNames();
+
   private:
     EnvironmentProvider const& _env;
 
@@ -64,9 +67,6 @@ class CommandResolver
 
     /// @brief Refreshes the PATH cache if $PATH has changed.
     void refreshCacheIfNeeded() const;
-
-    /// @brief Returns the list of builtin command names.
-    [[nodiscard]] static std::set<std::string> const& builtinNames();
 };
 
 } // namespace endo

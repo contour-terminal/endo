@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Shell.hpp>
 #include <shell/util/GlobMatcher.hpp>
+#include <shell/util/Suggestions.hpp>
 
 #include <CoreVM/CoreVM.hpp>
+
+#include <format>
 
 namespace endo
 {
@@ -80,7 +83,13 @@ void Shell::builtinFunctionCall(CoreVM::Params& context)
 
     if (!_registeredFunctions.contains(name))
     {
-        error("{}: command not found", name);
+        auto candidates =
+            std::vector<std::string_view>(_registeredFunctions.begin(), _registeredFunctions.end());
+        auto const suggestions = SuggestionGenerator::suggestCommand(name, candidates);
+        auto hint = suggestions.empty()
+                        ? std::string {}
+                        : std::format(" {}", SuggestionGenerator::formatDidYouMean(suggestions.front()));
+        error("{}: command not found{}", name, hint);
         _exitCode = 127;
         context.setResult(CoreVM::CoreNumber(127));
         return;

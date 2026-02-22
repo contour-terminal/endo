@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <shell/Error.hpp>
 #include <shell/Shell.hpp>
+#include <shell/util/CommandResolver.hpp>
+#include <shell/util/Suggestions.hpp>
 
 #include <endo-language/LogCategories.hpp>
 
@@ -127,7 +129,20 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 
     if (!programPath.has_value())
     {
-        error("{}: {}", program, toString(programPath.error()));
+        if (programPath.error() == ShellError::ProgramNotFound)
+        {
+            auto const& builtins = CommandResolver::builtinNames();
+            auto candidates = std::vector<std::string_view>(builtins.begin(), builtins.end());
+            auto const suggestions = SuggestionGenerator::suggestCommand(program, candidates);
+            auto hint = suggestions.empty()
+                            ? std::string {}
+                            : std::format(" {}", SuggestionGenerator::formatDidYouMean(suggestions.front()));
+            error("{}: {}{}", program, toString(programPath.error()), hint);
+        }
+        else
+        {
+            error("{}: {}", program, toString(programPath.error()));
+        }
         _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;
@@ -240,7 +255,20 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
     if (!programPath.has_value())
     {
-        error("{}: {}", program, toString(programPath.error()));
+        if (programPath.error() == ShellError::ProgramNotFound)
+        {
+            auto const& builtins = CommandResolver::builtinNames();
+            auto candidates = std::vector<std::string_view>(builtins.begin(), builtins.end());
+            auto const suggestions = SuggestionGenerator::suggestCommand(program, candidates);
+            auto hint = suggestions.empty()
+                            ? std::string {}
+                            : std::format(" {}", SuggestionGenerator::formatDidYouMean(suggestions.front()));
+            error("{}: {}{}", program, toString(programPath.error()), hint);
+        }
+        else
+        {
+            error("{}: {}", program, toString(programPath.error()));
+        }
         _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
         return;

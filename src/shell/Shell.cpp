@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
 #include <shell/ui/Prompt.hpp>
+#include <shell/ui/RichConsoleReport.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
 #include <shell/ui/modules/GitModule.hpp>
 
@@ -822,7 +823,7 @@ int Shell::execute(std::string const& lineBuffer)
 
     try
     {
-        CoreVM::diagnostics::ConsoleReport report;
+        RichConsoleReport report;
         auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
         {
             auto names = std::unordered_set<std::string> {};
@@ -1926,8 +1927,8 @@ void Shell::runAgentMode()
     // --- Session management slash commands ---
 
     // /clear and /new: auto-save current session, then start fresh.
-    auto clearHandler =
-        std::function<agent::SlashCommandResult(std::string_view)>([&](std::string_view) -> agent::SlashCommandResult {
+    auto clearHandler = std::function<agent::SlashCommandResult(std::string_view)>(
+        [&](std::string_view) -> agent::SlashCommandResult {
             auto savedName = std::string {};
             // Save current conversation if it has content.
             if (_agentSession->turnCount() > 0)
@@ -1954,16 +1955,16 @@ void Shell::runAgentMode()
                 auto const now = std::chrono::system_clock::now();
                 auto const metadata = agent::SessionMetadata {
                     .name = savedName,
-                    .createdAt =
-                        _sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : _sessionCreatedAt,
+                    .createdAt = _sessionCreatedAt == std::chrono::system_clock::time_point {}
+                                     ? now
+                                     : _sessionCreatedAt,
                     .updatedAt = now,
                     .provider = _agentProviderFactory->activeProviderName(),
                     .model = provider->modelInfo().modelName,
                     .turnCount = static_cast<int>(_agentSession->turnCount()),
                     .tokenUsage = _agentSession->sessionUsage(),
                 };
-                (void) sessionManager.saveSession(
-                    savedName, _agentSession->history().messages(), metadata);
+                (void) sessionManager.saveSession(savedName, _agentSession->history().messages(), metadata);
             }
 
             // Reset everything for a fresh conversation.
@@ -1980,14 +1981,14 @@ void Shell::runAgentMode()
                                                      + "'. Starting new conversation.\n" };
             return agent::DirectOutput { .text = "Starting new conversation.\n" };
         });
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("clear", "Auto-save and start new conversation", clearHandler));
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("new", "Auto-save and start new conversation", clearHandler));
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "clear", "Auto-save and start new conversation", clearHandler));
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "new", "Auto-save and start new conversation", clearHandler));
 
     // /save (alias: /save-session): Save current session with a name.
-    auto saveHandler =
-        std::function<agent::SlashCommandResult(std::string_view)>([&](std::string_view arguments) -> agent::SlashCommandResult {
+    auto saveHandler = std::function<agent::SlashCommandResult(std::string_view)>(
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
             auto name = std::string(arguments);
             // Trim whitespace.
             while (!name.empty() && name.front() == ' ')
@@ -2033,14 +2034,14 @@ void Shell::runAgentMode()
             sessionManager.setLastActiveSession(name);
             return agent::DirectOutput { .text = "Session saved as '" + name + "'.\n" };
         });
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("save", "Save current session with a name", saveHandler));
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("save-session", "Save current session with a name", saveHandler));
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "save", "Save current session with a name", saveHandler));
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "save-session", "Save current session with a name", saveHandler));
 
     // /load (alias: /load-session): Load a saved session.
-    auto loadHandler =
-        std::function<agent::SlashCommandResult(std::string_view)>([&](std::string_view arguments) -> agent::SlashCommandResult {
+    auto loadHandler = std::function<agent::SlashCommandResult(std::string_view)>(
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
             auto name = std::string(arguments);
             while (!name.empty() && name.front() == ' ')
                 name.erase(name.begin());
@@ -2102,8 +2103,8 @@ void Shell::runAgentMode()
         std::make_unique<agent::CallbackSlashCommand>("load-session", "Load a saved session", loadHandler));
 
     // /delete (alias: /delete-session): Delete a saved session.
-    auto deleteHandler =
-        std::function<agent::SlashCommandResult(std::string_view)>([&](std::string_view arguments) -> agent::SlashCommandResult {
+    auto deleteHandler = std::function<agent::SlashCommandResult(std::string_view)>(
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
             auto name = std::string(arguments);
             while (!name.empty() && name.front() == ' ')
                 name.erase(name.begin());
@@ -2131,12 +2132,12 @@ void Shell::runAgentMode()
         });
     slashRegistry.registerCommand(
         std::make_unique<agent::CallbackSlashCommand>("delete", "Delete a saved session", deleteHandler));
-    slashRegistry.registerCommand(
-        std::make_unique<agent::CallbackSlashCommand>("delete-session", "Delete a saved session", deleteHandler));
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "delete-session", "Delete a saved session", deleteHandler));
 
     // /list (alias: /sessions): List saved sessions.
-    auto listHandler =
-        std::function<agent::SlashCommandResult(std::string_view)>([&](std::string_view) -> agent::SlashCommandResult {
+    auto listHandler = std::function<agent::SlashCommandResult(std::string_view)>(
+        [&](std::string_view) -> agent::SlashCommandResult {
             auto sessionsResult = sessionManager.listSessions();
             if (!sessionsResult.has_value())
                 return agent::DirectOutput { .text = "Failed to list sessions: "
