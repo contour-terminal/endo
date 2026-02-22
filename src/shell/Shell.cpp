@@ -2318,6 +2318,7 @@ void Shell::runAgentMode()
     auto clearStreamingPrompt = [&] {
         if (!streamingPromptVisible)
             return;
+        out.hideCursor();
         out.restoreCursor();
         out.clearToEndOfDisplay();
         out.flush();
@@ -2337,6 +2338,7 @@ void Shell::runAgentMode()
         out.saveCursor();
         out.linefeed();
         renderComponentDirect();
+        out.hideCursor();
         out.flush();
         streamingPromptVisible = true;
     };
@@ -2776,7 +2778,7 @@ void Shell::runAgentMode()
                     clearStreamingPrompt();
                     renderStreamingPrompt();
                 }
-                else
+                else if (!askUserActive && !permissionActive)
                 {
                     auto const newPrefSize = inputComponent.preferredSize();
                     inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
