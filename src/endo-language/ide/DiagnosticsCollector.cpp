@@ -297,6 +297,12 @@ std::vector<DiagnosticMessage> collectDiagnostics(std::string const& source,
             if (msg.suggestions.empty())
                 continue;
 
+            // Suppress "Undefined variable" false positives for names persisted from prior REPL prompts
+            if (auto constexpr prefix = std::string_view("Undefined variable: ");
+                msg.text.starts_with(prefix)
+                && knownNames.contains(std::string(msg.text.substr(prefix.size()))))
+                continue;
+
             auto severity = DiagnosticSeverity::Error;
             using Type = CoreVM::diagnostics::Type;
             switch (msg.type)

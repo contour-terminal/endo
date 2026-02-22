@@ -234,6 +234,59 @@ TEST_CASE("DiagnosticsCollector.cd_tilde_no_crash", "[diagnostics][builtins]")
     CHECK(diagnostics.empty());
 }
 
+// =============================================================================
+// Mutable assignment diagnostics
+// =============================================================================
+
+TEST_CASE("DiagnosticsCollector.immutable_variable_assignment", "[diagnostics][mut-assignment]")
+{
+    auto diagnostics = collectDiagnostics("let x = 5\nx <- 10");
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("Cannot assign to immutable variable") != std::string::npos)
+        {
+            found = true;
+            CHECK(d.severity == DiagnosticSeverity::Error);
+            REQUIRE(!d.suggestions.empty());
+            CHECK(d.suggestions[0].find("let mut") != std::string::npos);
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DiagnosticsCollector.undefined_variable_assignment", "[diagnostics][mut-assignment]")
+{
+    auto diagnostics = collectDiagnostics("foo <- 42");
+    auto found = false;
+    for (auto const& d: diagnostics)
+    {
+        if (d.message.find("Undefined variable") != std::string::npos)
+        {
+            found = true;
+            CHECK(d.severity == DiagnosticSeverity::Error);
+            REQUIRE(!d.suggestions.empty());
+            CHECK(d.suggestions[0].find("let mut foo") != std::string::npos);
+        }
+    }
+    CHECK(found);
+}
+
+TEST_CASE("DiagnosticsCollector.persisted_mut_variable_no_false_positive", "[diagnostics][mut-assignment]")
+{
+    // "foo" is a known persisted name from a prior REPL prompt — should suppress "Undefined variable"
+    auto diagnostics = collectDiagnostics("foo <- 42", { "foo" });
+    for (auto const& d: diagnostics)
+        CHECK(d.message.find("Undefined variable") == std::string::npos);
+}
+
+TEST_CASE("DiagnosticsCollector.mutable_variable_assignment_no_error", "[diagnostics][mut-assignment]")
+{
+    auto diagnostics = collectDiagnostics("let mut x = 5\nx <- 10");
+    for (auto const& d: diagnostics)
+        CHECK(d.message.find("assign") == std::string::npos);
+}
+
 TEST_CASE("DiagnosticsCollector.heterogeneous_list_type_error", "[diagnostics][type-error]")
 {
     auto diagnostics = collectDiagnostics(R"(let x = ['a', 'b', (env 'c')])");

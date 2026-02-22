@@ -4712,13 +4712,16 @@ void IRGenerator::visit(ast::MutAssignStmt const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
-        reportTypeError("Undefined variable: {}", std::string_view(node.name));
+        reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
+                                       "Undefined variable: {}",
+                                       std::string_view(node.name));
         return;
     }
 
     if (!binding->isMutable)
     {
-        reportTypeError(
+        reportTypeErrorWithSuggestions(
+            { std::format("Use 'let mut {}' to declare a mutable variable", node.name) },
             "Cannot assign to immutable variable '{}'. Use 'let mut' to declare mutable variables.",
             std::string_view(node.name));
         return;
@@ -4798,13 +4801,16 @@ void IRGenerator::visit(ast::MutAssignExpr const& node)
     auto const* binding = lookupFSharpBinding(node.name);
     if (!binding)
     {
-        reportTypeError("Undefined variable: {}", std::string_view(node.name));
+        reportTypeErrorWithSuggestions({ std::format("Declare with 'let mut {} = <value>'", node.name) },
+                                       "Undefined variable: {}",
+                                       std::string_view(node.name));
         return;
     }
 
     if (!binding->isMutable)
     {
-        reportTypeError(
+        reportTypeErrorWithSuggestions(
+            { std::format("Use 'let mut {}' to declare a mutable variable", node.name) },
             "Cannot assign to immutable variable '{}'. Use 'let mut' to declare mutable variables.",
             std::string_view(node.name));
         return;
@@ -5567,7 +5573,8 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     if (isComparison && hasStringOperand)
     {
         // Convert non-string operands to string for string comparison
-        auto const ensureStringCompatible = [&](CoreVM::Value* val, std::string_view label) -> CoreVM::Value* {
+        auto const ensureStringCompatible = [&](CoreVM::Value* val,
+                                                std::string_view label) -> CoreVM::Value* {
             switch (val->type())
             {
                 case CoreVM::LiteralType::Number: return _builder.createN2S(val, std::string(label) + ".n2s");
