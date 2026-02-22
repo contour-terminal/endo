@@ -369,15 +369,17 @@ Leverage provider-specific prompt caching to reduce costs and latency for long c
 
 ### Image Input — Clipboard Paste (Phase 2.6)
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Allow users to paste images from the clipboard into agent mode queries:
 
-- Extend `PasteEvent` to detect image data (OSC 52)
-- Decode PNG/JPEG via `stb_image` (new header-only dependency) into `tui::ImageData`
-- Show downscaled sixel preview inline in `AgentInputComponent`
+- Detect image data in `PasteEvent` via magic byte detection (`detectImageMediaType()`)
+- Decode PNG/JPEG/GIF/BMP/WebP via `stbi_load_from_memory()` (stb_image already vendored)
+- Show downscaled sixel preview inline in `AgentInputComponent` (best-effort, text fallback)
 - Store original bytes as `ImageBlock` attachment, serialize per-provider on submit
-- Multiple images per query, `/remove-image` to detach
+- Multiple images per query (max 5), `/remove-image` to detach
+- Images included in both normal and plan mode for full multimodal context
+- All three providers (Claude, OpenAI, Gemini) already handle `ImageBlock` serialization
 
 ### Image Output — Inline LLM Response Images (Phase 2.7)
 
