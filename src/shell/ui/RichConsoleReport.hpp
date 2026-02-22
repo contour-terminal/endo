@@ -4,6 +4,7 @@
 #include <CoreVM/CoreVM.hpp>
 
 #include <string>
+#include <string_view>
 
 namespace endo
 {
@@ -29,12 +30,20 @@ class RichConsoleReport: public CoreVM::diagnostics::Report
   public:
     RichConsoleReport();
 
+    /// Sets the source text for context snippet extraction.
+    ///
+    /// When a diagnostic message lacks a contextSnippet but has a valid source location,
+    /// the report will extract the relevant source line from this text.
+    /// @param source The full source text being compiled.
+    void setSourceText(std::string_view source);
+
     void push_back(CoreVM::diagnostics::Message message) override;
     [[nodiscard]] bool containsFailures() const noexcept override;
 
   private:
     size_t _errorCount = 0;
     bool _useColor = false;
+    std::string_view _sourceText;
 };
 
 } // namespace endo

@@ -823,8 +823,13 @@ int Shell::execute(std::string const& lineBuffer)
 
     try
     {
+        auto const sourceName =
+            !_interactive && !_positionalParameters.empty() ? _positionalParameters[0] : std::string("stdin");
         RichConsoleReport report;
-        auto parser = endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer));
+        report.setSourceText(lineBuffer);
+        auto parser =
+            endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer, sourceName));
+        parser.setSourceText(lineBuffer);
         {
             auto names = std::unordered_set<std::string> {};
             auto variadicNames = std::unordered_set<std::string> {};

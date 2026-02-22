@@ -2,6 +2,8 @@
 #include "RichConsoleReport.hpp"
 #include <shell/ui/SyntaxHighlighter.hpp>
 
+#include <endo-language/parser/DiagnosticsAdapter.hpp>
+
 #include <tui/Theme.hpp>
 
 #include <cstdlib>
@@ -263,10 +265,27 @@ RichConsoleReport::RichConsoleReport()
     _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
 }
 
+void RichConsoleReport::setSourceText(std::string_view source)
+{
+    _sourceText = source;
+}
+
 void RichConsoleReport::push_back(CoreVM::diagnostics::Message message)
 {
     if (!isWarning(message.type))
         _errorCount++;
+
+    // Fill in missing context snippet from source text if available.
+    // The parser and IRGenerator don't always provide contextSnippet,
+    // but we can extract the relevant line from the source text ourselves.
+    if (!message.contextSnippet.has_value() && !_sourceText.empty() && message.sourceLocation.begin.line > 0)
+    {
+        // SourceLocation uses 1-based lines; extractSourceLine uses 0-based.
+        auto const line =
+            extractSourceLine(_sourceText, static_cast<int>(message.sourceLocation.begin.line) - 1);
+        if (!line.empty())
+            message.contextSnippet = line;
+    }
 
     std::cerr << formatDiagnostic(message, _useColor) << '\n';
 }
