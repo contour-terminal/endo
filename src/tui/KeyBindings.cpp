@@ -336,7 +336,8 @@ KeyBindings KeyBindings::defaults()
     // === Clipboard ===
     bindings.bind(K::fromChar('c', M::Ctrl), A::Copy);
     bindings.bind(K::fromChar('x', M::Ctrl), A::Cut);
-    bindings.bind(K::fromChar('v', M::Ctrl), A::Paste);
+    // Note: Paste has no default binding (terminal paste is handled via PasteEvent)
+    // Users can configure: bindings.bind(K::fromChar('v', M::Ctrl), A::Paste);
 
     // === Selection ===
     bindings.bind(K::fromChar('a', M::Ctrl | M::Shift), A::SelectAll);

@@ -232,13 +232,13 @@ TEST_CASE("KeyBindings.defaults_cut")
     CHECK(*result == EditAction::Cut);
 }
 
-TEST_CASE("KeyBindings.defaults_paste")
+TEST_CASE("KeyBindings.defaults_paste_unbound")
 {
     auto bindings = KeyBindings::defaults();
 
+    // Paste has no default binding (terminal paste handled via PasteEvent)
     auto result = bindings.lookup(charEvent('v', Modifier::Ctrl));
-    REQUIRE(result.has_value());
-    CHECK(*result == EditAction::Paste);
+    CHECK_FALSE(result.has_value());
 }
 
 TEST_CASE("KeyBindings.defaults_select_all")

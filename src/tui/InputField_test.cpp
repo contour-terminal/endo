@@ -658,6 +658,8 @@ TEST_CASE("InputField.kill_to_start_of_line")
 TEST_CASE("InputField.yank")
 {
     InputField field;
+    // Bind Ctrl+V to Paste explicitly (no default binding)
+    field.keyBindings().bind(KeyChord::fromChar('v', Modifier::Ctrl), EditAction::Paste);
     field.setText("hello");
 
     // Kill the text
@@ -719,6 +721,8 @@ TEST_CASE("InputField.ctrl_d_deletes_char_when_not_empty")
 TEST_CASE("InputField.ctrl_c_copies_when_selection")
 {
     InputField field;
+    // Bind Ctrl+V to Paste explicitly (no default binding)
+    field.keyBindings().bind(KeyChord::fromChar('v', Modifier::Ctrl), EditAction::Paste);
     field.setText("hello");
     (void) field.processEvent(charKey('a', Modifier::Ctrl | Modifier::Shift)); // Select all
 
