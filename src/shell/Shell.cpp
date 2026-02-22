@@ -2338,7 +2338,6 @@ void Shell::runAgentMode()
         out.saveCursor();
         out.linefeed();
         renderComponentDirect();
-        out.hideCursor();
         out.flush();
         streamingPromptVisible = true;
     };
