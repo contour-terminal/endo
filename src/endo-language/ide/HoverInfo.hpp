@@ -30,41 +30,35 @@ struct HoverInfo
     std::optional<SourceRange> range; ///< Optional source range of the hovered token.
 };
 
-/// @brief Converts a lexer SourceLocationRange to a 0-based SourceRange.
-/// The endo lexer uses 1-based columns; SourceRange uses 0-based.
+/// @brief Converts a lexer SourceLocationRange to a SourceRange.
+/// Both use 0-based line and column indices.
 /// @param loc The source location range from the endo lexer.
-/// @return The corresponding 0-based SourceRange.
+/// @return The corresponding SourceRange.
 [[nodiscard]] inline SourceRange toSourceRange(SourceLocationRange const& loc)
 {
     return SourceRange {
-        .start = SourcePosition { .line = loc.begin.line,
-                                  .character = loc.begin.column > 0 ? loc.begin.column - 1 : 0 },
-        .end =
-            SourcePosition { .line = loc.end.line, .character = loc.end.column > 0 ? loc.end.column - 1 : 0 },
+        .start = SourcePosition { .line = loc.begin.line, .character = loc.begin.column },
+        .end = SourcePosition { .line = loc.end.line, .character = loc.end.column },
     };
 }
 
 /// @brief Checks if a 0-based position falls within a lexer source location range.
-/// The lexer uses 1-based columns, so we convert during comparison.
+/// Both use 0-based line and column indices.
 /// @param range The source location range from the endo lexer.
 /// @param pos The 0-based position to test.
 /// @return true if the position is within the range.
 [[nodiscard]] inline bool containsPosition(SourceLocationRange const& range, SourcePosition pos)
 {
-    // Convert lexer 1-based columns to 0-based for comparison
-    auto const beginCol = range.begin.column > 0 ? range.begin.column - 1 : 0;
-    auto const endCol = range.end.column > 0 ? range.end.column - 1 : 0;
-
     // Check if position is on or after the start
     if (pos.line < range.begin.line)
         return false;
-    if (pos.line == range.begin.line && pos.character < beginCol)
+    if (pos.line == range.begin.line && pos.character < range.begin.column)
         return false;
 
     // Check if position is before the end
     if (pos.line > range.end.line)
         return false;
-    if (pos.line == range.end.line && pos.character >= endCol)
+    if (pos.line == range.end.line && pos.character >= range.end.column)
         return false;
 
     return true;

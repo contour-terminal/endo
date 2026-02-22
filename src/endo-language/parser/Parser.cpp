@@ -528,8 +528,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         _lexer.leaveFSharpExpr();
                         if (!value)
                             return nullptr;
-                        return std::make_unique<ast::MutAssignStmt>(std::move(savedLiteral),
-                                                                    std::move(value));
+                        auto stmt =
+                            std::make_unique<ast::MutAssignStmt>(std::move(savedLiteral), std::move(value));
+                        stmt->location = stmt->value->location
+                                             ? SourceLocationRange { savedRange.begin, stmt->value->location->end }
+                                             : savedRange;
+                        return stmt;
                     }
                     // Not a mutable assignment — we consumed the identifier, need to push it back.
                     // Instead, we inject it as the command name and continue parsing.
@@ -3708,7 +3712,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExpr()
             auto value = parseFSharpExpr();
             if (!value)
                 return nullptr;
-            return std::make_unique<ast::MutAssignExpr>(std::move(name), std::move(value));
+            auto mutExpr = std::make_unique<ast::MutAssignExpr>(std::move(name), std::move(value));
+            mutExpr->location = (expr->location && mutExpr->value->location)
+                                    ? SourceLocationRange { expr->location->begin, mutExpr->value->location->end }
+                                    : expr->location;
+            return mutExpr;
         }
     }
 

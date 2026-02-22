@@ -180,14 +180,13 @@ inline void from_json(nlohmann::json const& j, TextDocumentContentChangeEvent& e
 
 /// Converts an endo SourceLocationRange to an LSP Range.
 /// The endo lexer uses 1-based columns; LSP uses 0-based.
-/// @param loc The source location range from the endo lexer
-/// @return The corresponding LSP Range
+/// @param loc The source location range from the endo lexer (0-based)
+/// @return The corresponding LSP Range (0-based)
 [[nodiscard]] inline Range toRange(SourceLocationRange const& loc)
 {
     return Range {
-        .start =
-            Position { .line = loc.begin.line, .character = loc.begin.column > 0 ? loc.begin.column - 1 : 0 },
-        .end = Position { .line = loc.end.line, .character = loc.end.column > 0 ? loc.end.column - 1 : 0 },
+        .start = Position { .line = loc.begin.line, .character = loc.begin.column },
+        .end = Position { .line = loc.end.line, .character = loc.end.column },
     };
 }
 

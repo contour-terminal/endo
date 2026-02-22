@@ -3,6 +3,8 @@
 
 #include <libunicode/utf8.h>
 
+#include <algorithm>
+
 using namespace std::string_view_literals;
 
 namespace endo
@@ -451,7 +453,7 @@ void Lexer::consumeWhitespace()
 
     auto const [line, column, name] = _source->currentSourceLocation();
     _nextToken.location.name = name;
-    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.begin = { .line = line, .column = std::max(0, column - 1) };
     _nextToken.location.end = _nextToken.location.begin;
 }
 
@@ -725,7 +727,7 @@ Token Lexer::consumeDoubleQuotedContent()
     // Set up location tracking
     auto const [line, column, name] = _source->currentSourceLocation();
     _nextToken.location.name = name;
-    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.begin = { .line = line, .column = std::max(0, column - 1) };
     _nextToken.location.end = _nextToken.location.begin;
     _nextToken.literal.clear();
 
@@ -868,7 +870,7 @@ Token Lexer::consumeFStringContent()
     // Set up location tracking
     auto const [line, column, name] = _source->currentSourceLocation();
     _nextToken.location.name = name;
-    _nextToken.location.begin = { .line = line, .column = column };
+    _nextToken.location.begin = { .line = line, .column = std::max(0, column - 1) };
     _nextToken.location.end = _nextToken.location.begin;
     _nextToken.literal.clear();
 
@@ -1181,7 +1183,7 @@ Token Lexer::confirmToken(Token token)
     _nextToken.token = token;
     _nextToken.literal = _nextToken.literal;
     auto const [a, b, _] = _source->currentSourceLocation();
-    _nextToken.location.end = { .line = a, .column = b };
+    _nextToken.location.end = { .line = a, .column = std::max(0, b - 1) };
     _currentToken = _nextToken;
 
     _nextToken.literal = {};

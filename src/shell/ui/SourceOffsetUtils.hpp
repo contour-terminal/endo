@@ -15,10 +15,10 @@ namespace endo
 /// @return A vector where index i is the byte offset of line i's first character.
 [[nodiscard]] std::vector<std::size_t> buildLineStartOffsets(std::string_view source);
 
-/// @brief Converts a codepoint-based column (1-based) to a byte offset within the source.
+/// @brief Converts a codepoint-based column (0-based) to a byte offset within the source.
 /// @param source The full source text.
 /// @param lineStartByte The byte offset where this line starts.
-/// @param column The 1-based codepoint column from the Lexer.
+/// @param column The 0-based codepoint column from the Lexer.
 /// @return The byte offset corresponding to the given column.
 [[nodiscard]] std::size_t columnToByteOffset(std::string_view source,
                                              std::size_t lineStartByte,

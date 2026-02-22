@@ -77,10 +77,15 @@ namespace
     }
 
     /// Formats a syntax-highlighted source line using per-grapheme coloring.
+    /// When an underline span is provided (underlineLength > 0), applies curly underline
+    /// directly to the source characters within the span instead of using a separate caret line.
     void appendHighlightedSource(std::string& out,
                                  std::string_view source,
                                  tui::Theme const& theme,
-                                 bool useColor)
+                                 bool useColor,
+                                 size_t underlineColumn = 0,
+                                 size_t underlineLength = 0,
+                                 tui::RgbColor const* underlineColor = nullptr)
     {
         if (!useColor)
         {
@@ -89,6 +94,7 @@ namespace
         }
 
         auto const highlightMap = computeHighlightMap(source);
+        auto const underlineEnd = underlineColumn + underlineLength;
 
         // Walk grapheme clusters in parallel with the highlight map.
         // For ASCII input (the common case), grapheme index == byte index.
@@ -111,8 +117,13 @@ namespace
                     clusterLen = 4;
             }
 
+            auto const inUnderlineSpan =
+                underlineColor && underlineLength > 0 && graphemeIdx >= underlineColumn && graphemeIdx < underlineEnd;
+
             auto const color = categoryColor(highlightMap[graphemeIdx], theme);
             appendFg(out, color);
+            if (inUnderlineSpan)
+                appendCurlyUnderline(out, *underlineColor);
             out += source.substr(byteIdx, clusterLen);
             appendReset(out);
 
@@ -193,34 +204,30 @@ std::string formatDiagnostic(Message const& message, bool useColor)
         if (useColor)
             appendReset(out);
 
-        appendHighlightedSource(out, snippet, theme, useColor);
+        // Compute underline span (0-based column and length)
+        auto const column =
+            loc.begin.column > 0 ? static_cast<size_t>(loc.begin.column) - 1 : size_t { 0 };
+        auto const length =
+            (loc.end.column > loc.begin.column) ? (loc.end.column - loc.begin.column) : size_t { 1 };
 
-        // Caret/underline line
-        if (loc.begin.column > 0)
+        if (useColor)
         {
-            auto const column = static_cast<size_t>(loc.begin.column) - 1; // Convert to 0-based
-            auto const length =
-                (loc.end.column > loc.begin.column) ? (loc.end.column - loc.begin.column) : size_t { 1 };
+            // Apply curly underline directly on the source characters
+            appendHighlightedSource(out, snippet, theme, useColor, column, length, &semanticColor);
+        }
+        else
+        {
+            appendHighlightedSource(out, snippet, theme, useColor);
 
-            out += '\n';
-            if (useColor)
-                appendFg(out, mutedColor);
-            out += std::string(gutterWidth + 1, ' ');
-            out += "| ";
-            if (useColor)
-                appendReset(out);
-
-            // Spaces before the underline
-            out += std::string(column, ' ');
-
-            // Curly underline
-            if (useColor)
-                appendCurlyUnderline(out, theme.colors.warning);
-
-            out += std::string(length, '~');
-
-            if (useColor)
-                appendReset(out);
+            // Plain text fallback: separate caret/underline line
+            if (loc.begin.column > 0)
+            {
+                out += '\n';
+                out += std::string(gutterWidth + 1, ' ');
+                out += "| ";
+                out += std::string(column, ' ');
+                out += std::string(length, '~');
+            }
         }
 
         // Closing gutter line (before hints or at end)

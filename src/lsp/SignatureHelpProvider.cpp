@@ -185,7 +185,7 @@ namespace
         {
             auto const range = lexer.currentRange();
             auto const lit = lexer.currentLiteral();
-            auto const col0 = range.begin.column > 0 ? range.begin.column - 1 : 0;
+            auto const col0 = range.begin.column;
             tokens.push_back(TokInfo {
                 .token = lexer.currentToken(),
                 .literal = lit,

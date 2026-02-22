@@ -231,14 +231,13 @@ namespace
         };
     }
 
-    /// @brief Converts a SourceLocationRange (1-based columns) to a 0-based SourceRange.
+    /// @brief Converts a SourceLocationRange to a SourceRange.
+    /// Both use 0-based line and column indices.
     [[nodiscard]] SourceRange lexerToSourceRange(SourceLocationRange const& loc)
     {
         return SourceRange {
-            .start = SourcePosition { .line = loc.begin.line,
-                                      .character = loc.begin.column > 0 ? loc.begin.column - 1 : 0 },
-            .end = SourcePosition { .line = loc.end.line,
-                                    .character = loc.end.column > 0 ? loc.end.column - 1 : 0 },
+            .start = SourcePosition { .line = loc.begin.line, .character = loc.begin.column },
+            .end = SourcePosition { .line = loc.end.line, .character = loc.end.column },
         };
     }
 

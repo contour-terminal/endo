@@ -20,8 +20,8 @@ std::size_t columnToByteOffset(std::string_view source, std::size_t lineStartByt
 {
     auto pos = lineStartByte;
     auto codepointsSkipped = 0;
-    // Column is 1-based: column 1 = first character
-    while (codepointsSkipped < column - 1 && pos < source.size() && source[pos] != '\n')
+    // Column is 0-based
+    while (codepointsSkipped < column && pos < source.size() && source[pos] != '\n')
     {
         // Skip one UTF-8 codepoint
         auto const byte = static_cast<unsigned char>(source[pos]);

@@ -109,10 +109,8 @@ SemanticTokens computeSemanticTokens(std::string const& source)
         if (classification.type < 0)
             continue;
 
-        // Convert from lexer's 1-based columns to 0-based for LSP
         auto const line = classified.location.begin.line;
-        auto const character =
-            classified.location.begin.column > 0 ? classified.location.begin.column - 1 : 0;
+        auto const character = classified.location.begin.column;
 
         // Compute length from source location range and literal size.
         // Use the maximum of range-based length and literal length because:

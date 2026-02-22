@@ -377,9 +377,7 @@ namespace
     /// the lexer's edge case where end==begin for the last token in the source.
     [[nodiscard]] bool tokenContainsPosition(TokenEntry const& entry, Position pos)
     {
-        // The lexer's begin.column is 1-based (column after the last char before the token was consumed).
-        // Convert to 0-based for LSP comparison.
-        auto const beginCol = entry.range.begin.column > 0 ? entry.range.begin.column - 1 : 0;
+        auto const beginCol = entry.range.begin.column;
         auto const endCol = beginCol + static_cast<int>(entry.literal.size());
         auto const line = entry.range.begin.line;
 
