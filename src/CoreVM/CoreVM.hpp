@@ -993,6 +993,12 @@ class Params
 
     [[nodiscard]] const util::Cidr& getCidr(size_t offset) const { return *(util::Cidr*) at(offset); }
 
+    /// @brief Retrieves a TypedObject pointer from the argument at the given offset.
+    [[nodiscard]] TypedObject* getObject(size_t offset) const
+    {
+        return reinterpret_cast<TypedObject*>(static_cast<uintptr_t>(at(offset)));
+    }
+
     [[nodiscard]] const CoreIntArray& getIntArray(size_t offset) const { return *(CoreIntArray*) at(offset); }
 
     [[nodiscard]] const CoreStringArray& getStringArray(size_t offset) const
@@ -3180,6 +3186,18 @@ inline NativeCallback& NativeCallback::param<CoreStringArray>(const std::string&
     assert(_defaults.size() == _names.size());
 
     _signature.args().push_back(LiteralType::StringArray);
+    _names.push_back(name);
+    _defaults.emplace_back(std::monostate {});
+
+    return *this;
+}
+
+template <>
+inline NativeCallback& NativeCallback::param<CoreVM::TypedObject*>(const std::string& name)
+{
+    assert(_defaults.size() == _names.size());
+
+    _signature.args().push_back(LiteralType::Object);
     _names.push_back(name);
     _defaults.emplace_back(std::monostate {});
 

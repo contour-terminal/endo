@@ -108,6 +108,7 @@ LiteralType typeSignature(char ch)
         case 'c': return LiteralType::CidrArray;
         case 'a': return LiteralType::IntPair;
         case 'F': return LiteralType::Float;
+        case 'O': return LiteralType::Object;
         default: abort(); return LiteralType::Void;
     }
 }
@@ -130,6 +131,7 @@ char signatureType(LiteralType t)
         case LiteralType::CidrArray: return 'c';
         case LiteralType::IntPair: return 'a';
         case LiteralType::Float: return 'F';
+        case LiteralType::Object: return 'O';
         default: abort(); return '?';
     }
 }

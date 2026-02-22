@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <ranges>
 #include <sstream>
 
 namespace endo
@@ -1420,48 +1421,52 @@ void Shell::registerAgentConfigBuiltins()
             agentConfig.permissions.policy = agent::permissionPolicyFromString(value);
         });
 
-    _runtime.registerFunction("add_agent_trusted_tool")
-        .param<CoreVM::CoreString>("tool_name")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const name = std::string(args.getString(1));
-            if (!name.empty())
+    _runtime.registerProperty("agent_trusted_tool", CoreVM::LiteralType::Object)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& tools = agentConfig.permissions.trustedTools;
+            CoreVM::TypedObject* list = nullptr;
+            for (auto const& tool: tools | std::views::reverse)
             {
-                auto& tools = agentConfig.permissions.trustedTools;
-                if (std::ranges::find(tools, name) == tools.end())
-                    tools.push_back(name);
+                auto* str = args.caller()->newString(tool);
+                list = args.caller()->makeConsCell(
+                    reinterpret_cast<uintptr_t>(str), list, CoreVM::LiteralType::String);
+            }
+            args.setResult(
+                static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            auto* list = args.getObject(1);
+            agentConfig.permissions.trustedTools.clear();
+            for (auto* cur = list; cur && cur->tag == 1;
+                 cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1)))
+            {
+                auto const* str = reinterpret_cast<CoreVM::CoreString const*>(cur->getSlot(0));
+                agentConfig.permissions.trustedTools.emplace_back(*str);
             }
         });
 
-    _runtime.registerFunction("remove_agent_trusted_tool")
-        .param<CoreVM::CoreString>("tool_name")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const name = std::string(args.getString(1));
-            auto& tools = agentConfig.permissions.trustedTools;
-            std::erase(tools, name);
-        });
-
-    _runtime.registerFunction("add_agent_blocked_pattern")
-        .param<CoreVM::CoreString>("pattern")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const pattern = std::string(args.getString(1));
-            if (!pattern.empty())
+    _runtime.registerProperty("agent_blocked_pattern", CoreVM::LiteralType::Object)
+        .onGet([this](CoreVM::Params& args) {
+            auto const& patterns = agentConfig.permissions.blockedPatterns;
+            CoreVM::TypedObject* list = nullptr;
+            for (auto const& pattern: patterns | std::views::reverse)
             {
-                auto& patterns = agentConfig.permissions.blockedPatterns;
-                if (std::ranges::find(patterns, pattern) == patterns.end())
-                    patterns.push_back(pattern);
+                auto* str = args.caller()->newString(pattern);
+                list = args.caller()->makeConsCell(
+                    reinterpret_cast<uintptr_t>(str), list, CoreVM::LiteralType::String);
             }
-        });
-
-    _runtime.registerFunction("remove_agent_blocked_pattern")
-        .param<CoreVM::CoreString>("pattern")
-        .returnType(CoreVM::LiteralType::Void)
-        .bind([this](CoreVM::Params& args) {
-            auto const pattern = std::string(args.getString(1));
-            auto& patterns = agentConfig.permissions.blockedPatterns;
-            std::erase(patterns, pattern);
+            args.setResult(
+                static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            auto* list = args.getObject(1);
+            agentConfig.permissions.blockedPatterns.clear();
+            for (auto* cur = list; cur && cur->tag == 1;
+                 cur = reinterpret_cast<CoreVM::TypedObject*>(cur->getSlot(1)))
+            {
+                auto const* str = reinterpret_cast<CoreVM::CoreString const*>(cur->getSlot(0));
+                agentConfig.permissions.blockedPatterns.emplace_back(*str);
+            }
         });
 
     // --- Web search ---

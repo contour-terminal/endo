@@ -107,6 +107,20 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 |----------|------|-------------|
 | `agent_explore_max_turns` | int | Maximum iterations for the explore sub-agent (default: 10) |
 
+### Permissions
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_permissions_policy` | string | Permission policy: `"ask"` (default), `"trust_session"`, `"trust_all"`, `"read_only"` |
+| `agent_trusted_tool` | list | Tools auto-approved regardless of risk level |
+| `agent_blocked_pattern` | list | Shell command patterns unconditionally blocked |
+
+```endo
+agent_permissions_policy <- "ask"
+agent_trusted_tool <- ["read_file"; "glob"; "grep"; "search"]
+agent_blocked_pattern <- ["rm -rf /"; ":(){ :|:& };:"]
+```
+
 ### Tracing
 
 | Property | Type | Description |
@@ -205,6 +219,10 @@ agent_plan_mode_max_exploration_turns <- 20
 
 # Explore sub-agent
 agent_explore_max_turns <- 15
+
+# Permissions
+agent_permissions_policy <- "ask"
+agent_trusted_tool <- ["read_file"; "glob"; "grep"; "search"]
 
 # Tracing
 agent_trace_max_files <- 10

@@ -44,6 +44,7 @@ NativeProperty& Runtime::registerProperty(std::string const& name, LiteralType t
         case LiteralType::String: setter.param<CoreString>("value"); break;
         case LiteralType::Number: setter.param<CoreNumber>("value"); break;
         case LiteralType::Boolean: setter.param<bool>("value"); break;
+        case LiteralType::Object: setter.param<TypedObject*>("value"); break;
         default: setter.param<CoreNumber>("value"); break;
     }
     setter.returnType(LiteralType::Void);

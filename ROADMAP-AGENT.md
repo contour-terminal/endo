@@ -324,8 +324,8 @@ Special handling for the `shell_execute` tool:
 
 Configure in `init.endo`:
 
-```sh
-agent_permissions_policy <- AgentPermission.ask          # ask | trust_session | trust_all | read_only
+```endo
+agent_permissions_policy <- "ask"                        # "ask" | "trust_session" | "trust_all" | "read_only"
 agent_trusted_tool <- ["read_file"; "glob"; "grep"]
 agent_blocked_pattern <- ["rm -rf /"; ":(){ :|:& };:"]
 ```
