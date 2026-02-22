@@ -14,6 +14,7 @@
 
 #include <tui/Canvas.hpp>
 #include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/ImageLoader.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/QuestionComponent.hpp>
 #include <tui/Screen.hpp>
@@ -26,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <filesystem>
 #include <format>
@@ -1904,6 +1906,7 @@ void Shell::runAgentMode()
     auto const modelInfo = provider->modelInfo();
     inputComponent.setProviderName(modelInfo.providerName);
     inputComponent.setModelName(modelInfo.modelName);
+    inputComponent.setCellPixelDimensions(terminal.cellPixelWidth(), terminal.cellPixelHeight());
 
     // Set initial thinking mode from config for the active provider.
     auto const& providerName = _agentProviderFactory->activeProviderName();
@@ -2333,6 +2336,53 @@ void Shell::runAgentMode()
             auto const newInfo = provider->modelInfo();
 
             return agent::MarkdownOutput { .markdown = agent::formatCapabilityDiff(oldInfo, newInfo) };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "paste-image",
+        "Paste image from system clipboard",
+        [&](std::string_view /*args*/) -> agent::SlashCommandResult {
+            if (inputComponent.imageCount() >= 5)
+                return agent::DirectOutput { .text = "Maximum of 5 images already attached.\n" };
+
+            auto clipboardImage = tui::readClipboardImage();
+            if (!clipboardImage)
+                return agent::DirectOutput {
+                    .text = "No image found in clipboard. Ensure an image is copied and the clipboard tool "
+                            "(wl-paste or xclip) is installed.\n"
+                };
+
+            auto const mediaType = clipboardImage->mediaType;
+            auto const sizeKB = clipboardImage->data.size() / 1024;
+            inputComponent.attachImage(std::move(clipboardImage->data), std::string(mediaType));
+            return agent::DirectOutput {
+                .text = std::format("Attached image from clipboard ({}, {} KB).\n", mediaType, sizeKB),
+            };
+        }));
+
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "remove-image", "Remove attached images", [&](std::string_view args) -> agent::SlashCommandResult {
+            if (inputComponent.imageCount() == 0)
+                return agent::DirectOutput { .text = "No images attached.\n" };
+
+            if (args.empty() || args == "all")
+            {
+                auto const count = inputComponent.imageCount();
+                inputComponent.clearImages();
+                return agent::DirectOutput {
+                    .text = std::format("Removed {} attached image{}.\n", count, count == 1 ? "" : "s"),
+                };
+            }
+
+            auto index = size_t { 0 };
+            auto const [ptr, ec] = std::from_chars(args.data(), args.data() + args.size(), index);
+            if (ec != std::errc {} || index >= inputComponent.imageCount())
+                return agent::DirectOutput {
+                    .text = std::format("Invalid image index. Use 0-{} or 'all'.\n",
+                                        inputComponent.imageCount() - 1),
+                };
+            inputComponent.removeImage(index);
+            return agent::DirectOutput { .text = std::format("Removed image {}.\n", index) };
         }));
 
     auto slashCompleter = std::make_unique<agent::SlashCommandCompleter>(slashRegistry);
@@ -3352,6 +3402,10 @@ void Shell::runAgentMode()
 
                     auto const query = std::string(inputComponent.text());
 
+                    // Extract attached images before clearing.
+                    auto attachedImages = std::vector<agent::ImageBlock>(
+                        inputComponent.attachedImages().begin(), inputComponent.attachedImages().end());
+
                     // Expand @-file references for agent context injection.
                     auto const expandFileRefs = [&](std::string_view text) {
                         return agent::FileReferenceExpander::expand(text, std::filesystem::current_path())
@@ -3364,11 +3418,12 @@ void Shell::runAgentMode()
                         historyProviderPtr->addEntry(query);
                     }
 
-                    // Move cursor past the input component.
+                    // Move cursor past the input component, preserving image previews in scrollback.
                     auto const totalLines = inputComponent.inputField().lineCount();
                     auto const cursorLine = inputComponent.inputField().cursorLine();
+                    auto const previewLines = inputComponent.imagePreviewHeight();
                     inputComponent.clear();
-                    auto const linesToMoveDown = totalLines - cursorLine;
+                    auto const linesToMoveDown = totalLines - cursorLine + previewLines;
                     if (linesToMoveDown > 0)
                         out.moveDown(linesToMoveDown);
                     out.carriageReturn();
@@ -3462,15 +3517,21 @@ void Shell::runAgentMode()
                     else if (planModeActive && agentConfig.planMode.enabled)
                     {
                         // Plan mode: send to worker with planMode flag.
-                        worker.inbound().push(
-                            agent::UserPromptMessage { .text = expandFileRefs(query), .planMode = true });
+                        worker.inbound().push(agent::UserPromptMessage {
+                            .text = expandFileRefs(query),
+                            .planMode = true,
+                            .images = std::move(attachedImages),
+                        });
                         sentToWorker = true;
                         saveHistory();
                     }
                     else
                     {
                         // Normal message: send to worker.
-                        worker.inbound().push(agent::UserPromptMessage { .text = expandFileRefs(query) });
+                        worker.inbound().push(agent::UserPromptMessage {
+                            .text = expandFileRefs(query),
+                            .images = std::move(attachedImages),
+                        });
                         sentToWorker = true;
                     }
 
