@@ -24,6 +24,7 @@ void AgentWorker::start()
     // Reset queues in case they were shut down by a previous stop() call.
     _inbound.reset();
     _askUserResponses.reset();
+    _permissionResponses.reset();
     _cancelled.store(false, std::memory_order_relaxed);
     _thread = std::jthread([this](std::stop_token st) { run(std::move(st)); });
 }
@@ -35,6 +36,7 @@ void AgentWorker::stop()
         _thread.request_stop();
         _inbound.shutdown();
         _askUserResponses.shutdown();
+        _permissionResponses.shutdown();
         _thread.join();
     }
 }
@@ -50,7 +52,7 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
         // so we must drain _inbound ourselves to route UserAnswerMessage → _askUserResponses.
         while (true)
         {
-            // Drain _inbound: route UserAnswerMessage, handle Cancel/Shutdown.
+            // Drain _inbound: route UserAnswerMessage/PermissionResponseMessage, handle Cancel/Shutdown.
             while (auto inMsg = _inbound.tryPop())
             {
                 std::visit(
@@ -60,6 +62,8 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
                             _cancelled.store(true, std::memory_order_relaxed);
                         else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
                             _askUserResponses.push(m);
+                        else if constexpr (std::is_same_v<MsgType, PermissionResponseMessage>)
+                            _permissionResponses.push(m);
                         else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                             _cancelled.store(true, std::memory_order_relaxed);
                     },
@@ -74,6 +78,47 @@ auto AgentWorker::makeAskUserCallback() -> AskUserCallback
                 continue;
             if (response->requestId == requestId)
                 return response->answer;
+            // Wrong request ID — shouldn't happen but handle gracefully.
+        }
+    };
+}
+
+auto AgentWorker::makePermissionCallback() -> PermissionPromptCallback
+{
+    return [this](PermissionPrompt const& prompt) -> PermissionDecision {
+        auto const requestId = _nextRequestId.fetch_add(1, std::memory_order_relaxed);
+        _outbound.push(PermissionRequest { .requestId = requestId, .prompt = prompt });
+
+        // Block until the main thread provides a decision.
+        // Same drain pattern as makeAskUserCallback().
+        while (true)
+        {
+            // Drain _inbound: route PermissionResponseMessage/UserAnswerMessage, handle Cancel/Shutdown.
+            while (auto inMsg = _inbound.tryPop())
+            {
+                std::visit(
+                    [this](auto const& m) {
+                        using MsgType = std::decay_t<decltype(m)>;
+                        if constexpr (std::is_same_v<MsgType, CancelMessage>)
+                            _cancelled.store(true, std::memory_order_relaxed);
+                        else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
+                            _askUserResponses.push(m);
+                        else if constexpr (std::is_same_v<MsgType, PermissionResponseMessage>)
+                            _permissionResponses.push(m);
+                        else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
+                            _cancelled.store(true, std::memory_order_relaxed);
+                    },
+                    *inMsg);
+            }
+
+            if (_cancelled.load(std::memory_order_relaxed))
+                return PermissionDecision::Cancelled;
+
+            auto response = _permissionResponses.popFor(std::chrono::milliseconds(200));
+            if (!response.has_value())
+                continue;
+            if (response->requestId == requestId)
+                return response->decision;
             // Wrong request ID — shouldn't happen but handle gracefully.
         }
     };
@@ -105,6 +150,10 @@ void AgentWorker::run(std::stop_token stopToken)
                 else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
                 {
                     _askUserResponses.push(m);
+                }
+                else if constexpr (std::is_same_v<MsgType, PermissionResponseMessage>)
+                {
+                    _permissionResponses.push(m);
                 }
             },
             *msg);
@@ -168,7 +217,7 @@ auto AgentWorker::makeStreamCallback(std::stop_token const& stopToken) -> Stream
         if (_cancelled.load(std::memory_order_relaxed))
             return false;
 
-        // Drain inbound for CancelMessage or UserAnswerMessage during streaming.
+        // Drain inbound for CancelMessage, UserAnswerMessage, or PermissionResponseMessage during streaming.
         while (auto inMsg = _inbound.tryPop())
         {
             std::visit(
@@ -178,6 +227,8 @@ auto AgentWorker::makeStreamCallback(std::stop_token const& stopToken) -> Stream
                         _cancelled.store(true, std::memory_order_relaxed);
                     else if constexpr (std::is_same_v<MsgType, UserAnswerMessage>)
                         _askUserResponses.push(m);
+                    else if constexpr (std::is_same_v<MsgType, PermissionResponseMessage>)
+                        _permissionResponses.push(m);
                     else if constexpr (std::is_same_v<MsgType, ShutdownMessage>)
                         _cancelled.store(true, std::memory_order_relaxed);
                 },

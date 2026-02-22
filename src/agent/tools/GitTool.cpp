@@ -173,4 +173,33 @@ auto GitTool::execute(nlohmann::json const& arguments) -> std::expected<ToolResu
     };
 }
 
+auto GitTool::classifyRisk(nlohmann::json const& arguments) const -> ToolRisk
+{
+    auto const subcommand = arguments.value("subcommand", std::string {});
+
+    // Blocked patterns are handled by execute() — classify as Destructive here.
+    auto args = std::vector<std::string> {};
+    if (arguments.contains("args") && arguments["args"].is_array())
+    {
+        for (auto const& arg: arguments["args"])
+        {
+            if (arg.is_string())
+                args.push_back(arg.get<std::string>());
+        }
+    }
+    if (isBlockedPattern(subcommand, args))
+        return ToolRisk::Blocked;
+
+    // Read-only subcommands.
+    if (ReadOnlySubcommands.contains(subcommand))
+        return ToolRisk::ReadOnly;
+
+    // Push is destructive (affects remote state).
+    if (subcommand == "push")
+        return ToolRisk::Destructive;
+
+    // Everything else is mutating.
+    return ToolRisk::Mutating;
+}
+
 } // namespace endo::agent

@@ -19,6 +19,7 @@ namespace endo::agent
 {
 
 class AgentTracer;
+class PermissionManager;
 class ToolRegistry;
 class SubmitPlanTool;
 class ConversationCompactor;
@@ -151,6 +152,14 @@ class AgentSession
     /// @param config The compaction configuration.
     void setCompactionConfig(CompactionConfig const& config);
 
+    /// @brief Sets the permission manager for tool execution gating.
+    ///
+    /// When set, each tool call is checked against the permission manager
+    /// before execution. If null, all tools execute without permission checks
+    /// (backward-compatible behavior).
+    /// @param pm Pointer to the permission manager (must outlive the session), or nullptr to disable.
+    void setPermissionManager(PermissionManager* pm);
+
   private:
     /// Executes a batch of tool calls and returns results.
     [[nodiscard]] auto executeToolCalls(std::span<ToolCall const> calls) -> std::vector<ToolResult>;
@@ -158,6 +167,7 @@ class AgentSession
     LlmProvider* _provider;
     ConversationHistory _history;
     ToolRegistry* _toolRegistry = nullptr;
+    PermissionManager* _permissionManager = nullptr;
     AgentTracer* _tracer = nullptr;
     size_t _maxToolIterations = 25;
     size_t _maxExplorationIterations = 15;

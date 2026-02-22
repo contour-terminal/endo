@@ -37,6 +37,7 @@
 #include "Error.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
+#include <agent/PermissionManager.hpp>
 #include <agent/commands/AgentHistoryProvider.hpp>
 #include <agent/commands/FilePathCompleter.hpp>
 #include <agent/commands/SlashCommandCompleter.hpp>
@@ -1561,8 +1562,7 @@ void Shell::runAgentMode()
                 {
                     if (msg.role == agent::Role::User)
                     {
-                        auto const text =
-                            agent::FileReferenceExpander::stripExpansions(msg.textContent());
+                        auto const text = agent::FileReferenceExpander::stripExpansions(msg.textContent());
                         if (!text.empty())
                             historyProvider->addEntry(text);
                     }
@@ -1595,16 +1595,16 @@ void Shell::runAgentMode()
             auto const now = std::chrono::system_clock::now();
             auto const metadata = agent::SessionMetadata {
                 .name = activeSessionName,
-                .createdAt = sessionCreatedAt == std::chrono::system_clock::time_point {}
-                                 ? now
-                                 : sessionCreatedAt,
+                .createdAt =
+                    sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : sessionCreatedAt,
                 .updatedAt = now,
                 .provider = _agentProviderFactory->activeProviderName(),
                 .model = provider->modelInfo().modelName,
                 .turnCount = static_cast<int>(_agentSession->turnCount()),
                 .tokenUsage = _agentSession->sessionUsage(),
             };
-            (void) sessionManager.saveSession(activeSessionName, _agentSession->history().messages(), metadata);
+            (void) sessionManager.saveSession(
+                activeSessionName, _agentSession->history().messages(), metadata);
             sessionManager.setLastActiveSession(activeSessionName);
         }
     };
@@ -1848,6 +1848,11 @@ void Shell::runAgentMode()
     // Register AskUserTool with a callback that routes through the worker's message queues.
     toolRegistry.registerTool(std::make_unique<agent::AskUserTool>(worker.makeAskUserCallback()));
 
+    // Set up permission manager with a callback that routes through the worker's message queues.
+    auto permissionManager = agent::PermissionManager(agentConfig.permissions);
+    permissionManager.setPromptCallback(worker.makePermissionCallback());
+    _agentSession->setPermissionManager(&permissionManager);
+
     worker.start();
 
     // --- Agent input loop ---
@@ -1894,6 +1899,7 @@ void Shell::runAgentMode()
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "reset", "Clear conversation history", [&](std::string_view) -> agent::SlashCommandResult {
             _agentSession->reset();
+            permissionManager.resetApprovals();
             (void) historyStore.remove();
             historyProviderPtr->setEntries({});
             activeSessionName.clear();
@@ -1933,7 +1939,8 @@ void Shell::runAgentMode()
             auto const now = std::chrono::system_clock::now();
             auto const metadata = agent::SessionMetadata {
                 .name = name,
-                .createdAt = sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : sessionCreatedAt,
+                .createdAt =
+                    sessionCreatedAt == std::chrono::system_clock::time_point {} ? now : sessionCreatedAt,
                 .updatedAt = now,
                 .provider = _agentProviderFactory->activeProviderName(),
                 .model = provider->modelInfo().modelName,
@@ -1941,10 +1948,10 @@ void Shell::runAgentMode()
                 .tokenUsage = _agentSession->sessionUsage(),
             };
 
-            auto result =
-                sessionManager.saveSession(name, _agentSession->history().messages(), metadata);
+            auto result = sessionManager.saveSession(name, _agentSession->history().messages(), metadata);
             if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to save session: " + result.error().message + "\n" };
+                return agent::DirectOutput { .text =
+                                                 "Failed to save session: " + result.error().message + "\n" };
 
             activeSessionName = name;
             if (sessionCreatedAt == std::chrono::system_clock::time_point {})
@@ -1954,9 +1961,7 @@ void Shell::runAgentMode()
         }));
 
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "load-session",
-        "Load a saved session",
-        [&](std::string_view arguments) -> agent::SlashCommandResult {
+        "load-session", "Load a saved session", [&](std::string_view arguments) -> agent::SlashCommandResult {
             auto name = std::string(arguments);
             while (!name.empty() && name.front() == ' ')
                 name.erase(name.begin());
@@ -1975,10 +1980,8 @@ void Shell::runAgentMode()
                 for (auto const& meta: *sessionsResult)
                 {
                     auto const total = meta.tokenUsage.inputTokens + meta.tokenUsage.outputTokens;
-                    auto label = std::format("{} ({} turns, ~{}k tokens)",
-                                             meta.name,
-                                             meta.turnCount,
-                                             total / 1000);
+                    auto label =
+                        std::format("{} ({} turns, ~{}k tokens)", meta.name, meta.turnCount, total / 1000);
                     options.push_back(std::move(label));
                     names.push_back(meta.name);
                 }
@@ -1992,7 +1995,8 @@ void Shell::runAgentMode()
             // Load by name.
             auto loaded = sessionManager.loadSession(name);
             if (!loaded.has_value())
-                return agent::DirectOutput { .text = "Failed to load session: " + loaded.error().message + "\n" };
+                return agent::DirectOutput { .text =
+                                                 "Failed to load session: " + loaded.error().message + "\n" };
 
             auto& [meta, messages] = *loaded;
             _agentSession->reset();
@@ -2010,7 +2014,8 @@ void Shell::runAgentMode()
             activeSessionName = name;
             sessionCreatedAt = meta.createdAt;
             sessionManager.setLastActiveSession(name);
-            return agent::DirectOutput { .text = "Session '" + name + "' loaded (" + std::to_string(meta.turnCount) + " turns).\n" };
+            return agent::DirectOutput { .text = "Session '" + name + "' loaded ("
+                                                 + std::to_string(meta.turnCount) + " turns).\n" };
         }));
 
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
@@ -2031,7 +2036,8 @@ void Shell::runAgentMode()
 
             auto result = sessionManager.removeSession(name);
             if (!result.has_value())
-                return agent::DirectOutput { .text = "Failed to delete session: " + result.error().message + "\n" };
+                return agent::DirectOutput { .text = "Failed to delete session: " + result.error().message
+                                                     + "\n" };
 
             if (activeSessionName == name)
             {
@@ -2043,12 +2049,11 @@ void Shell::runAgentMode()
         }));
 
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "sessions",
-        "List saved sessions",
-        [&](std::string_view) -> agent::SlashCommandResult {
+        "sessions", "List saved sessions", [&](std::string_view) -> agent::SlashCommandResult {
             auto sessionsResult = sessionManager.listSessions();
             if (!sessionsResult.has_value())
-                return agent::DirectOutput { .text = "Failed to list sessions: " + sessionsResult.error().message + "\n" };
+                return agent::DirectOutput { .text = "Failed to list sessions: "
+                                                     + sessionsResult.error().message + "\n" };
 
             if (sessionsResult->empty())
                 return agent::DirectOutput { .text = "No saved sessions.\n" };
@@ -2269,6 +2274,12 @@ void Shell::runAgentMode()
     std::optional<tui::QuestionComponent> askUserComponent;
     auto askUserPromptVisible = false;
 
+    // --- Permission prompt state ---
+    auto permissionActive = false;
+    auto permissionRequestId = uint64_t { 0 };
+    std::optional<tui::QuestionComponent> permissionComponent;
+    auto permissionPromptVisible = false;
+
     // --- Session picker state ---
     auto sessionPickerActive = false;
     std::optional<tui::QuestionComponent> sessionPickerComponent;
@@ -2371,6 +2382,45 @@ void Shell::runAgentMode()
         askUserPromptVisible = true;
     };
 
+    /// Clear the permission prompt, restoring cursor to content end position.
+    auto clearPermissionPrompt = [&] {
+        if (!permissionPromptVisible)
+            return;
+        out.hideCursor();
+        out.restoreCursor();
+        out.clearToEndOfDisplay();
+        out.flush();
+        permissionPromptVisible = false;
+    };
+
+    /// Render the permission question component below the current content position.
+    auto renderPermissionPrompt = [&] {
+        if (!permissionActive || !permissionComponent)
+            return;
+        auto const& pTheme = tui::currentTheme();
+        auto const prefSize = permissionComponent->preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
+
+        // Pre-scroll to make room.
+        for (auto i = 0; i < height; ++i)
+            out.linefeed();
+        out.moveUp(height);
+        out.saveCursor();
+        out.linefeed();
+
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, pTheme);
+        permissionComponent->setArea(tui::Rect { 0, 0, width, height });
+        permissionComponent->setScreenBounds(tui::Rect { 0, 0, width, height });
+        permissionComponent->render(canvas);
+        buffer.writeTo(out);
+
+        out.hideCursor();
+        out.flush();
+        permissionPromptVisible = true;
+    };
+
     auto clearSessionPicker = [&] {
         if (!sessionPickerVisible)
             return;
@@ -2415,7 +2465,8 @@ void Shell::runAgentMode()
     if (loadedFromNamedSession && agentConfig.session.showResumeContext)
     {
         auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
-        auto const total = _agentSession->sessionUsage().inputTokens + _agentSession->sessionUsage().outputTokens;
+        auto const total =
+            _agentSession->sessionUsage().inputTokens + _agentSession->sessionUsage().outputTokens;
         out.writeText(std::format("Resumed session '{}' ({} turns, ~{}k tokens).\n",
                                   activeSessionName,
                                   _agentSession->turnCount(),
@@ -2556,12 +2607,18 @@ void Shell::runAgentMode()
                             out.flush();
                         }
 
-                        // Clean up any active ask-user prompt.
+                        // Clean up any active ask-user or permission prompt.
                         if (askUserActive)
                         {
                             clearAskUserPrompt();
                             askUserActive = false;
                             askUserComponent.reset();
+                        }
+                        if (permissionActive)
+                        {
+                            clearPermissionPrompt();
+                            permissionActive = false;
+                            permissionComponent.reset();
                         }
 
                         teardownStreaming();
@@ -2587,6 +2644,25 @@ void Shell::runAgentMode()
                         askUserActive = true;
                         renderAskUserPrompt();
                     }
+                    else if constexpr (std::is_same_v<T, agent::PermissionRequest>)
+                    {
+                        clearStreamingPrompt();
+                        auto questionText =
+                            std::format("Allow {} ({})?", m.prompt.toolName, m.prompt.description);
+                        if (!m.prompt.commandPreview.empty())
+                            questionText += std::format("\n  {}", m.prompt.commandPreview);
+
+                        auto options = std::vector<std::string> { "Yes", "Yes, always for this tool", "No" };
+                        permissionComponent.emplace(tui::QuestionConfig {
+                            .questionText = std::move(questionText),
+                            .options = std::move(options),
+                            .multiSelect = false,
+                            .allowOther = false,
+                        });
+                        permissionRequestId = m.requestId;
+                        permissionActive = true;
+                        renderPermissionPrompt();
+                    }
                     else if constexpr (std::is_same_v<T, agent::PlanGeneratedMessage>)
                     {
                         clearStreamingPrompt();
@@ -2604,7 +2680,7 @@ void Shell::runAgentMode()
 
         // Re-render the streaming prompt after each message batch that produced content.
         // Suppress while ask-user is active — only one inline prompt at a time.
-        if (streaming && !streamingPromptVisible && !askUserActive)
+        if (streaming && !streamingPromptVisible && !askUserActive && !permissionActive)
             renderStreamingPrompt();
 
         // 2. Determine poll timeout.
@@ -2682,6 +2758,8 @@ void Shell::runAgentMode()
             // Re-render ask-user prompt if it was cleared (e.g., by resize).
             if (askUserActive && !askUserPromptVisible)
                 renderAskUserPrompt();
+            if (permissionActive && !permissionPromptVisible)
+                renderPermissionPrompt();
 
             // Ghost text debounce and escape hint auto-clear.
             if (!streaming)
@@ -2834,6 +2912,75 @@ void Shell::runAgentMode()
                         auto guard = out.syncGuard();
                         clearAskUserPrompt();
                         renderAskUserPrompt();
+                        break;
+                    }
+                    case tui::QuestionAction::None: break;
+                }
+                continue;
+            }
+
+            // During permission prompt, route input to the permission component.
+            if (permissionActive && permissionComponent)
+            {
+                auto const action = permissionComponent->processInput(event);
+                switch (action)
+                {
+                    case tui::QuestionAction::Confirmed: {
+                        auto const selectedIdx = permissionComponent->selectedIndex();
+                        clearPermissionPrompt();
+
+                        auto decision = agent::PermissionDecision::Denied;
+                        if (selectedIdx == 0) // "Yes"
+                            decision = agent::PermissionDecision::Approved;
+                        else if (selectedIdx == 1) // "Yes, always for this tool"
+                            decision = agent::PermissionDecision::Approved;
+                        else // "No"
+                            decision = agent::PermissionDecision::Denied;
+
+                        worker.inbound().push(agent::PermissionResponseMessage {
+                            .requestId = permissionRequestId,
+                            .decision = decision,
+                        });
+
+                        // Echo the permission decision to scrollback.
+                        {
+                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                            auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                            out.writeText("\u2502 ", barStyle);
+                            if (decision == agent::PermissionDecision::Approved)
+                                out.writeText("Approved", dimStyle);
+                            else
+                                out.writeText("Denied", dimStyle);
+                            out.linefeed();
+                            out.flush();
+                        }
+
+                        permissionActive = false;
+                        permissionComponent.reset();
+                        break;
+                    }
+                    case tui::QuestionAction::Cancelled: {
+                        clearPermissionPrompt();
+                        worker.inbound().push(agent::PermissionResponseMessage {
+                            .requestId = permissionRequestId,
+                            .decision = agent::PermissionDecision::Cancelled,
+                        });
+
+                        auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
+                        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText };
+                        out.writeText("\u2502 ", barStyle);
+                        out.writeText("(cancelled)", dimStyle);
+                        out.linefeed();
+                        out.flush();
+
+                        permissionActive = false;
+                        permissionComponent.reset();
+                        break;
+                    }
+                    case tui::QuestionAction::Changed: {
+                        auto guard = out.syncGuard();
+                        clearPermissionPrompt();
+                        renderPermissionPrompt();
                         break;
                     }
                     case tui::QuestionAction::None: break;
@@ -3097,6 +3244,7 @@ void Shell::runAgentMode()
                 case agent::AgentInputComponent::Action::Abort: {
                     // Stop worker before exiting agent mode.
                     worker.stop();
+                    _agentSession->setPermissionManager(nullptr);
                     _agentSession->setToolRegistry(nullptr);
                     _agentSession->setToolStatusCallback(nullptr);
                     _agentSession->setTracer(nullptr);

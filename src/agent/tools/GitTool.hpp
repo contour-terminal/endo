@@ -26,6 +26,7 @@ class GitTool final: public AgentTool
     [[nodiscard]] auto definition() const -> ToolDefinition override;
     [[nodiscard]] auto execute(nlohmann::json const& arguments)
         -> std::expected<ToolResult, ToolError> override;
+    [[nodiscard]] auto classifyRisk(nlohmann::json const& arguments) const -> ToolRisk override;
 
   private:
     ShellExecuteCallback _executeCallback;

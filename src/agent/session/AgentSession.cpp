@@ -3,8 +3,10 @@
 #include <format>
 #include <span>
 
+#include <agent/PermissionManager.hpp>
 #include <agent/conversation/ConversationCompactor.hpp>
 #include <agent/session/AgentSession.hpp>
+#include <agent/tools/AgentTool.hpp>
 #include <agent/tools/SubmitPlanTool.hpp>
 #include <agent/tools/ToolRegistry.hpp>
 #include <agent/tracing/AgentTracer.hpp>
@@ -412,6 +414,11 @@ void AgentSession::setCompactionConfig(CompactionConfig const& config)
     _compactor = std::make_unique<ConversationCompactor>(*_provider, config);
 }
 
+void AgentSession::setPermissionManager(PermissionManager* pm)
+{
+    _permissionManager = pm;
+}
+
 void AgentSession::setTracer(AgentTracer* tracer)
 {
     _tracer = tracer;
@@ -426,6 +433,55 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
     {
         if (_toolStatusCallback)
             _toolStatusCallback(call);
+
+        // Permission check: classify risk and check with permission manager.
+        if (_permissionManager)
+        {
+            auto risk = ToolRisk::Mutating;
+            if (auto const* tool = _toolRegistry->findTool(call.name))
+                risk = tool->classifyRisk(call.arguments);
+
+            auto const decision = _permissionManager->checkPermission(call.name, risk, call.arguments);
+            if (decision != PermissionDecision::Approved)
+            {
+                auto errorMsg = std::string {};
+                switch (decision)
+                {
+                    case PermissionDecision::Denied:
+                        errorMsg = std::format("Permission denied for tool: {}", call.name);
+                        break;
+                    case PermissionDecision::Blocked:
+                        errorMsg = std::format("Tool is blocked: {}", call.name);
+                        break;
+                    case PermissionDecision::Cancelled:
+                        errorMsg = std::format("Permission prompt cancelled for tool: {}", call.name);
+                        break;
+                    default: errorMsg = std::format("Tool not approved: {}", call.name); break;
+                }
+
+                auto deniedResult = ToolResult {
+                    .callId = call.id,
+                    .content = errorMsg,
+                    .isError = true,
+                };
+
+                if (_tracer)
+                {
+                    _tracer->writeToolCall(ToolTraceEntry {
+                        .timestamp = utcTimestampNow(),
+                        .callId = call.id,
+                        .toolName = call.name,
+                        .arguments = call.arguments,
+                        .resultContent = deniedResult.content,
+                        .resultIsError = true,
+                        .duration = std::chrono::milliseconds { 0 },
+                    });
+                }
+
+                results.push_back(std::move(deniedResult));
+                continue;
+            }
+        }
 
         auto const startTime = std::chrono::steady_clock::now();
         auto result = _toolRegistry->execute(call);

@@ -46,6 +46,8 @@ class WebFetchTool final: public AgentTool
     [[nodiscard]] auto execute(nlohmann::json const& arguments)
         -> std::expected<ToolResult, ToolError> override;
 
+    [[nodiscard]] auto riskLevel() const noexcept -> ToolRisk override { return ToolRisk::ReadOnly; }
+
     /// @brief Converts HTML content to simplified markdown.
     /// @param html The HTML source to convert.
     /// @return Markdown-formatted text.

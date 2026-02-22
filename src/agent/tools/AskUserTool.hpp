@@ -48,6 +48,8 @@ class AskUserTool final: public AgentTool
     [[nodiscard]] auto execute(nlohmann::json const& arguments)
         -> std::expected<ToolResult, ToolError> override;
 
+    [[nodiscard]] auto riskLevel() const noexcept -> ToolRisk override { return ToolRisk::ReadOnly; }
+
   private:
     AskUserCallback _askCallback;
 };

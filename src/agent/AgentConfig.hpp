@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 
+#include <agent/PermissionManager.hpp>
 #include <agent/Types.hpp>
 
 namespace endo::agent
@@ -87,10 +88,11 @@ struct AgentConfig
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
     bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.
 
-    PlanModeConfig planMode; ///< Plan mode configuration.
-    ExploreConfig explore;   ///< Explore sub-agent configuration.
-    TraceConfig trace;       ///< Tool I/O tracing configuration.
-    SessionConfig session;   ///< Session management configuration.
+    PlanModeConfig planMode;      ///< Plan mode configuration.
+    ExploreConfig explore;        ///< Explore sub-agent configuration.
+    TraceConfig trace;            ///< Tool I/O tracing configuration.
+    SessionConfig session;        ///< Session management configuration.
+    PermissionConfig permissions; ///< Tool permission configuration.
 };
 
 /// Loads agent configuration from a YAML file.

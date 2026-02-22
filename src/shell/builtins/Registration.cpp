@@ -1411,6 +1411,59 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.trace.maxFiles)); })
         .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) agentConfig.trace.maxFiles = static_cast<size_t>(n); });
 
+    // --- Permissions ---
+
+    _runtime.registerProperty("agent_permissions_policy", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::permissionPolicyToString(agentConfig.permissions.policy))); })
+        .onSet([this](CoreVM::Params& args) {
+            auto const& value = args.getString(1);
+            agentConfig.permissions.policy = agent::permissionPolicyFromString(value);
+        });
+
+    _runtime.registerFunction("add_agent_trusted_tool")
+        .param<CoreVM::CoreString>("tool_name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const name = std::string(args.getString(1));
+            if (!name.empty())
+            {
+                auto& tools = agentConfig.permissions.trustedTools;
+                if (std::ranges::find(tools, name) == tools.end())
+                    tools.push_back(name);
+            }
+        });
+
+    _runtime.registerFunction("remove_agent_trusted_tool")
+        .param<CoreVM::CoreString>("tool_name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const name = std::string(args.getString(1));
+            auto& tools = agentConfig.permissions.trustedTools;
+            std::erase(tools, name);
+        });
+
+    _runtime.registerFunction("add_agent_blocked_pattern")
+        .param<CoreVM::CoreString>("pattern")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const pattern = std::string(args.getString(1));
+            if (!pattern.empty())
+            {
+                auto& patterns = agentConfig.permissions.blockedPatterns;
+                if (std::ranges::find(patterns, pattern) == patterns.end())
+                    patterns.push_back(pattern);
+            }
+        });
+
+    _runtime.registerFunction("remove_agent_blocked_pattern")
+        .param<CoreVM::CoreString>("pattern")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto const pattern = std::string(args.getString(1));
+            auto& patterns = agentConfig.permissions.blockedPatterns;
+            std::erase(patterns, pattern);
+        });
+
     // --- Web search ---
 
     _runtime.registerProperty("agent_web_search_engine", CoreVM::LiteralType::String)

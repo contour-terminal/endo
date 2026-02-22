@@ -20,6 +20,8 @@ class SubmitPlanTool final: public AgentTool
     /// @brief Returns the tool name: "submit_plan".
     [[nodiscard]] auto name() const noexcept -> std::string_view override;
 
+    [[nodiscard]] auto riskLevel() const noexcept -> ToolRisk override { return ToolRisk::ReadOnly; }
+
     /// @brief Returns the JSON Schema definition for plan submission.
     [[nodiscard]] auto definition() const -> ToolDefinition override;
 

@@ -22,6 +22,8 @@ class ListDirectoryTool final: public AgentTool
     [[nodiscard]] auto definition() const -> ToolDefinition override;
     [[nodiscard]] auto execute(nlohmann::json const& arguments)
         -> std::expected<ToolResult, ToolError> override;
+
+    [[nodiscard]] auto riskLevel() const noexcept -> ToolRisk override { return ToolRisk::ReadOnly; }
 };
 
 } // namespace endo::agent

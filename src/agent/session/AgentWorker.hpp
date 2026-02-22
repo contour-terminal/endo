@@ -64,6 +64,12 @@ class AgentWorker
     /// blocks on the ask-user response queue until the main thread provides an answer.
     [[nodiscard]] auto makeAskUserCallback() -> AskUserCallback;
 
+    /// @brief Returns a PermissionPromptCallback that routes permission prompts through the message queues.
+    ///
+    /// The returned callback pushes a PermissionRequest to the outbound queue and
+    /// blocks on the permission response queue until the main thread provides a decision.
+    [[nodiscard]] auto makePermissionCallback() -> PermissionPromptCallback;
+
   private:
     /// Main run loop executed on the worker thread.
     void run(std::stop_token stopToken);
@@ -81,6 +87,9 @@ class AgentWorker
 
     /// Queue for AskUserTool synchronization: worker blocks here waiting for user answer.
     platform::MessageQueue<UserAnswerMessage> _askUserResponses;
+
+    /// Queue for permission prompt synchronization: worker blocks here waiting for user decision.
+    platform::MessageQueue<PermissionResponseMessage> _permissionResponses;
 
     std::jthread _thread;
     std::atomic<bool> _busy { false };

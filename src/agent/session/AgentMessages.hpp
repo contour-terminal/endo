@@ -9,6 +9,7 @@
 #include <string>
 #include <variant>
 
+#include <agent/PermissionManager.hpp>
 #include <agent/Plan.hpp>
 #include <agent/Types.hpp>
 #include <agent/tools/AskUserTool.hpp>
@@ -44,8 +45,16 @@ struct UserAnswerMessage
     UserAnswer answer;      ///< The user's answer.
 };
 
+/// User's response to a permission prompt.
+struct PermissionResponseMessage
+{
+    uint64_t requestId = 0;                                   ///< Correlates with the PermissionRequest.
+    PermissionDecision decision = PermissionDecision::Denied; ///< The user's decision.
+};
+
 /// All message types that flow from the main thread to the agent worker.
-using ToAgentMessage = std::variant<UserPromptMessage, CancelMessage, ShutdownMessage, UserAnswerMessage>;
+using ToAgentMessage = std::
+    variant<UserPromptMessage, CancelMessage, ShutdownMessage, UserAnswerMessage, PermissionResponseMessage>;
 
 // ============================================================================
 // Agent Worker → Main Thread messages
@@ -100,6 +109,13 @@ struct PlanGeneratedMessage
     Plan plan; ///< The generated plan.
 };
 
+/// The agent requests permission to execute a tool.
+struct PermissionRequest
+{
+    uint64_t requestId = 0;  ///< Unique ID for correlating the response.
+    PermissionPrompt prompt; ///< The permission prompt to display.
+};
+
 /// The agent worker thread has exited.
 struct AgentShutdownComplete
 {
@@ -112,6 +128,7 @@ using FromAgentMessage = std::variant<TokenMessage,
                                       ToolResultMessage,
                                       CompletionMessage,
                                       AskUserRequest,
+                                      PermissionRequest,
                                       PlanGeneratedMessage,
                                       AgentShutdownComplete>;
 

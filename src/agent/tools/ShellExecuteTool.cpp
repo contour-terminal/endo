@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <format>
 
+#include <agent/CommandSafetyAnalyzer.hpp>
 #include <agent/tools/ShellExecuteTool.hpp>
 
 namespace endo::agent
@@ -87,6 +88,16 @@ auto ShellExecuteTool::execute(nlohmann::json const& arguments) -> std::expected
         .content = std::move(content),
         .isError = result.exitCode != 0,
     };
+}
+
+auto ShellExecuteTool::classifyRisk(nlohmann::json const& arguments) const -> ToolRisk
+{
+    auto const command = arguments.value("command", std::string {});
+    if (command.empty())
+        return ToolRisk::Mutating;
+
+    auto const analysis = CommandSafetyAnalyzer::classify(command);
+    return analysis.risk;
 }
 
 } // namespace endo::agent

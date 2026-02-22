@@ -5,6 +5,8 @@ add_library(endo-agent STATIC
     Types.hpp Types.cpp
     Plan.hpp
     AgentConfig.hpp AgentConfig.cpp
+    PermissionManager.hpp PermissionManager.cpp
+    CommandSafetyAnalyzer.hpp CommandSafetyAnalyzer.cpp
 
     # Auth
     auth/OAuthFlow.hpp auth/OAuthFlow.cpp
@@ -102,6 +104,8 @@ add_executable(test-endo-agent
     test_main.cpp
     Types_test.cpp
     AgentConfig_test.cpp
+    PermissionManager_test.cpp
+    CommandSafetyAnalyzer_test.cpp
 
     # Auth tests
     auth/OAuthFlow_test.cpp
