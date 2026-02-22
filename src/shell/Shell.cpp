@@ -823,8 +823,11 @@ int Shell::execute(std::string const& lineBuffer)
 
     try
     {
+        static constexpr std::string_view stdinName = "stdin";
         auto const sourceName =
-            !_interactive && !_positionalParameters.empty() ? _positionalParameters[0] : std::string("stdin");
+            !_interactive && !_positionalParameters.empty()
+                ? std::string_view(_positionalParameters[0])
+                : stdinName;
         RichConsoleReport report;
         report.setSourceText(lineBuffer);
         auto parser =

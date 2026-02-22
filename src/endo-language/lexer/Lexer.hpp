@@ -187,10 +187,10 @@ class Source
 class StringSource final: public Source
 {
   public:
-    explicit StringSource(std::string source, std::string name = {}):
-        _source { std::move(source) }, _name { std::move(name) }
+    explicit StringSource(std::string source, std::string_view name = {}):
+        _source { std::move(source) }
     {
-        _location.name = _name;
+        _location.name = name;
     }
 
     void rewind() override
@@ -269,7 +269,6 @@ class StringSource final: public Source
     }
 
   private:
-    std::string _name;
     SourceLocation _location;
     std::string _source;
     size_t _offset = 0;
