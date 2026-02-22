@@ -329,9 +329,10 @@ TEST_CASE("agent.gemini.wrap_code_assist_request")
 
     CHECK(wrapped.contains("model"));
     CHECK(wrapped["model"] == "gemini-2.5-flash");
-    CHECK(wrapped.contains("contents"));
-    CHECK(wrapped["contents"][0]["parts"][0]["text"] == "Hello");
-    CHECK_FALSE(wrapped.contains("request"));
+    CHECK(wrapped.contains("request"));
+    CHECK(wrapped["request"].contains("contents"));
+    CHECK(wrapped["request"]["contents"][0]["parts"][0]["text"] == "Hello");
+    CHECK_FALSE(wrapped.contains("contents"));
 }
 
 TEST_CASE("agent.gemini.sse_response_unwrapping")

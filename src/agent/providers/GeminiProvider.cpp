@@ -27,8 +27,10 @@ auto GeminiProvider::buildUrl() const -> std::string
 
 auto GeminiProvider::wrapCodeAssistRequest(nlohmann::json innerRequest) const -> nlohmann::json
 {
-    innerRequest["model"] = _config.model;
-    return innerRequest;
+    return nlohmann::json {
+        { "model", _config.model },
+        { "request", std::move(innerRequest) },
+    };
 }
 
 auto GeminiProvider::ensureCodeAssistOnboarded() -> std::optional<ProviderError>
