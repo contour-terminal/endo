@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/Canvas.hpp>
+#include <tui/ImageLoader.hpp>
+#include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
 #include <tui/completer/CompletionProvider.hpp>
+
+#include <format>
 
 #include <agent/ui/AgentInputComponent.hpp>
 
@@ -178,12 +182,47 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         }
     }
 
-    // Render info line below the input field
-    auto const infoLineRow = rowOff + HeaderHeight + fieldHeight;
+    // Render image preview area between input field and info line
+    auto const previewHeight = imagePreviewHeight();
+    auto previewRow = rowOff + HeaderHeight + fieldHeight;
+    if (previewHeight > 0 && previewRow < area.height)
+    {
+        auto const dimStyle = tui::Style { .fg = theme.agentColors.statusText, .dim = true };
+        for (size_t i = 0; i < _attachedImages.size() && previewRow < area.height; ++i)
+        {
+            auto const& img = _attachedImages[i];
+            auto const& layout = i < _previewLayouts.size() ? _previewLayouts[i]
+                                                            : PreviewLayout { .colSpan = 0, .lineSpan = 1 };
+            if (i < _imagePreviews.size() && !_imagePreviews[i].empty() && layout.colSpan > 0)
+            {
+                canvas.drawImage(previewRow,
+                                 LeftBarWidth + BarPadding,
+                                 layout.colSpan,
+                                 layout.lineSpan,
+                                 _imagePreviews[i]);
+                // Label after image
+                auto const sizeKb = img.data.size() / 1024;
+                auto const label = std::format("[{}: {}, {} KB]", i + 1, img.mediaType, sizeKb);
+                canvas.putString(previewRow, LeftBarWidth + BarPadding + layout.colSpan + 1, label, dimStyle);
+                previewRow += layout.lineSpan;
+            }
+            else
+            {
+                // Text placeholder for images without sixel preview
+                auto const sizeKb = img.data.size() / 1024;
+                auto const label = std::format("[image {}: {}, {} KB]", i + 1, img.mediaType, sizeKb);
+                canvas.putString(previewRow, LeftBarWidth + BarPadding, label, dimStyle);
+                ++previewRow;
+            }
+        }
+    }
+
+    // Render info line below the input field (and image preview area)
+    auto const infoLineRow = rowOff + HeaderHeight + fieldHeight + previewHeight;
     if (infoLineRow < area.height)
         renderInfoLine(canvas, infoLineRow);
     // Bottom padding: write a non-breaking space so Screen counts this row as content.
-    auto const paddingRow = infoLineRow + 1;
+    auto const paddingRow = rowOff + HeaderHeight + fieldHeight + previewHeight + InfoLineHeight;
     if (paddingRow < area.height)
         canvas.put(paddingRow, 0, "\xc2\xa0", {}); // U+00A0 non-breaking space
 }
@@ -197,7 +236,7 @@ tui::EventResult AgentInputComponent::onEvent(tui::InputEvent const& event)
 tui::Size AgentInputComponent::preferredSize() const
 {
     auto const fieldSize = _inputField.preferredSize();
-    auto totalHeight = _topPadding + fieldSize.height + HeaderHeight + FooterHeight;
+    auto totalHeight = _topPadding + fieldSize.height + HeaderHeight + imagePreviewHeight() + FooterHeight;
 
     // Add space for completion popup if visible
     if (_completionPopup.visible())
@@ -214,6 +253,31 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
     // Track if popup was visible before processing (for dynamic filtering)
     auto const popupWasVisible = _completionPopup.visible();
     auto popupDismissedByTyping = false;
+
+    // Intercept paste events: detect image data before forwarding to InputField.
+    if (auto const* paste = std::get_if<tui::PasteEvent>(&event))
+    {
+        auto const raw = std::span<std::uint8_t const>(
+            reinterpret_cast<std::uint8_t const*>(paste->text.data()), paste->text.size());
+        auto const mediaType = tui::detectImageMediaType(raw);
+        if (!mediaType.empty())
+        {
+            attachImage(std::vector<std::uint8_t>(raw.begin(), raw.end()), mediaType);
+            return Action::Changed;
+        }
+
+        // If paste text is empty, the terminal likely received an image paste request
+        // that it couldn't convert to text. Try reading image from the system clipboard.
+        if (paste->text.empty())
+        {
+            if (auto clipboardImage = tui::readClipboardImage())
+            {
+                attachImage(std::move(clipboardImage->data), std::move(clipboardImage->mediaType));
+                return Action::Changed;
+            }
+        }
+        // Non-image paste: fall through to InputField.
+    }
 
     // Handle completion popup events first
     if (_completionPopup.visible())
@@ -690,7 +754,123 @@ void AgentInputComponent::renderInfoLine(tui::Canvas& canvas, int row)
             if (col >= area.width)
                 break;
         }
+
+        // Show image attachment count
+        if (!_attachedImages.empty() && col < area.width)
+        {
+            auto const imageCountStyle = tui::Style { .fg = theme.agentColors.leftBar };
+            auto const label = _attachedImages.size() == 1
+                                   ? std::string("1 image attached")
+                                   : std::format("{} images attached", _attachedImages.size());
+            col += canvas.putString(row, col, "  ", {});
+            canvas.putString(row, col, label, imageCountStyle);
+        }
     }
+}
+
+bool AgentInputComponent::attachImage(std::vector<std::uint8_t> data, std::string mediaType)
+{
+    if (_attachedImages.size() >= MaxAttachedImages)
+        return false;
+
+    if (data.size() > MaxImageBytes)
+        return false;
+
+    _attachedImages.push_back(ImageBlock {
+        .data = std::move(data),
+        .mediaType = std::move(mediaType),
+    });
+
+    // Generate sixel preview (best-effort — failure doesn't block attachment).
+    auto const& img = _attachedImages.back();
+    auto loaded = tui::loadImageFromMemory(std::span<std::uint8_t const>(img.data.data(), img.data.size()));
+    if (!loaded.has_value())
+    {
+        _imagePreviews.emplace_back();
+        _previewLayouts.push_back(PreviewLayout { .colSpan = 0, .lineSpan = 1 });
+        return true;
+    }
+
+    auto const cellW = std::max(1, _cellPixelWidth > 0 ? _cellPixelWidth : 8);
+    auto const cellH = std::max(1, _cellPixelHeight > 0 ? _cellPixelHeight : 16);
+    auto const maxPixelWidth = PreviewMaxColumns * cellW;
+    auto const maxPixelHeight = PreviewMaxLines * cellH;
+
+    // Fit within bounds preserving aspect ratio.
+    auto targetW = loaded->width;
+    auto targetH = loaded->height;
+    if (targetW > maxPixelWidth)
+    {
+        targetH = targetH * maxPixelWidth / targetW;
+        targetW = maxPixelWidth;
+    }
+    if (targetH > maxPixelHeight)
+    {
+        targetW = targetW * maxPixelHeight / targetH;
+        targetH = maxPixelHeight;
+    }
+
+    // Cache the computed layout for this preview.
+    auto const colSpan = std::max(1, targetW / cellW);
+    auto const lineSpan = std::max(1, (std::max(1, targetH) + cellH - 1) / cellH);
+    _previewLayouts.push_back(PreviewLayout { .colSpan = colSpan, .lineSpan = lineSpan });
+
+    auto resized = tui::resizeImage(*loaded, std::max(1, targetW), std::max(1, targetH));
+    if (!resized.has_value())
+    {
+        _imagePreviews.emplace_back();
+        return true;
+    }
+
+    auto const imageData = tui::ImageData {
+        .pixels = std::span(resized->pixels),
+        .width = resized->width,
+        .height = resized->height,
+    };
+    auto sixel = tui::encodeSixel(imageData, 64);
+    _imagePreviews.push_back(sixel.has_value() ? std::move(*sixel) : std::string {});
+    return true;
+}
+
+void AgentInputComponent::removeImage(size_t index)
+{
+    if (index < _attachedImages.size())
+    {
+        _attachedImages.erase(_attachedImages.begin() + static_cast<ptrdiff_t>(index));
+        _imagePreviews.erase(_imagePreviews.begin() + static_cast<ptrdiff_t>(index));
+        _previewLayouts.erase(_previewLayouts.begin() + static_cast<ptrdiff_t>(index));
+    }
+}
+
+void AgentInputComponent::clearImages()
+{
+    _attachedImages.clear();
+    _imagePreviews.clear();
+    _previewLayouts.clear();
+}
+
+auto AgentInputComponent::attachedImages() const noexcept -> std::span<ImageBlock const>
+{
+    return _attachedImages;
+}
+
+auto AgentInputComponent::imageCount() const noexcept -> size_t
+{
+    return _attachedImages.size();
+}
+
+void AgentInputComponent::setCellPixelDimensions(int width, int height) noexcept
+{
+    _cellPixelWidth = width;
+    _cellPixelHeight = height;
+}
+
+int AgentInputComponent::imagePreviewHeight() const noexcept
+{
+    auto totalLines = 0;
+    for (auto const& layout: _previewLayouts)
+        totalLines += layout.lineSpan;
+    return totalLines;
 }
 
 } // namespace endo::agent

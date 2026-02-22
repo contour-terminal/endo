@@ -8,9 +8,12 @@
 #include <tui/completer/Completer.hpp>
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
 
 #include <agent/Types.hpp>
 
@@ -90,11 +93,12 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns the current input text.
     [[nodiscard]] auto text() const noexcept -> std::string_view { return _inputField.text(); }
 
-    /// @brief Clears the input field and dismisses any popup.
+    /// @brief Clears the input field, dismisses any popup, and removes attached images.
     void clear()
     {
         _inputField.clear();
         dismissPopup();
+        clearImages();
     }
 
     /// @brief Sets whether plan mode is active (affects header badge).
@@ -150,6 +154,35 @@ class AgentInputComponent: public tui::Component
     /// Use this to set the event loop poll timeout so the hint auto-restores
     /// without requiring additional keystrokes.
     [[nodiscard]] int escapeHintTimeoutMs() const;
+
+    // --- Image Attachment API ---
+
+    /// @brief Attaches an image from raw bytes.
+    /// @param data Raw image bytes (PNG, JPEG, etc.).
+    /// @param mediaType MIME type (e.g. "image/png").
+    /// @return true if attached, false if the maximum limit was reached.
+    bool attachImage(std::vector<std::uint8_t> data, std::string mediaType);
+
+    /// @brief Removes the image at the given index.
+    /// @param index Zero-based index of the image to remove.
+    void removeImage(size_t index);
+
+    /// @brief Removes all attached images.
+    void clearImages();
+
+    /// @brief Returns attached images for submission.
+    [[nodiscard]] auto attachedImages() const noexcept -> std::span<ImageBlock const>;
+
+    /// @brief Returns the number of attached images.
+    [[nodiscard]] auto imageCount() const noexcept -> size_t;
+
+    /// @brief Sets the cell pixel dimensions for preview sizing.
+    /// @param width Cell width in pixels.
+    /// @param height Cell height in pixels.
+    void setCellPixelDimensions(int width, int height) noexcept;
+
+    /// @brief Returns the number of terminal rows occupied by image previews.
+    [[nodiscard]] int imagePreviewHeight() const noexcept;
 
     // --- Thinking/Activity State ---
 
@@ -229,6 +262,24 @@ class AgentInputComponent: public tui::Component
     bool _escapeHintVisible = false;
     std::string _savedTextBeforeEscape;
     size_t _savedCursorBeforeEscape = 0;
+
+    /// @brief Cached preview layout dimensions for a single image.
+    struct PreviewLayout
+    {
+        int colSpan = 0;  ///< Width in terminal columns.
+        int lineSpan = 1; ///< Height in terminal lines.
+    };
+
+    // Image attachment state
+    std::vector<ImageBlock> _attachedImages;                  ///< Images attached via paste.
+    std::vector<std::string> _imagePreviews;                  ///< Pre-encoded sixel data for preview.
+    std::vector<PreviewLayout> _previewLayouts;               ///< Cached layout per preview image.
+    int _cellPixelWidth = 0;                                  ///< Terminal cell width in pixels.
+    int _cellPixelHeight = 0;                                 ///< Terminal cell height in pixels.
+    static constexpr int MaxAttachedImages = 5;               ///< Maximum images per message.
+    static constexpr int PreviewMaxColumns = 30;              ///< Max preview width in terminal columns.
+    static constexpr int PreviewMaxLines = 8;                 ///< Max preview height in terminal lines.
+    static constexpr size_t MaxImageBytes = 10 * 1024 * 1024; ///< Max image size: 10 MB.
 };
 
 } // namespace endo::agent
