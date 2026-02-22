@@ -4,7 +4,9 @@
 #include <algorithm>
 #include <format>
 #include <limits>
+#include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace tui
@@ -83,7 +85,7 @@ namespace
         auto buckets = std::vector<ColorBucket> {};
         buckets.push_back(ColorBucket { .pixels = pixels });
 
-        while (static_cast<int>(buckets.size()) < maxColors)
+        while (std::cmp_less(buckets.size(), maxColors))
         {
             // Find the bucket with the most pixels
             auto largestIdx = std::size_t { 0 };
@@ -129,25 +131,52 @@ namespace
         return palette;
     }
 
-    /// @brief Finds the closest palette color to the given pixel.
+    /// @brief Finds the closest palette color to the given pixel using squared Euclidean distance.
+    /// @param pixel The pixel to match.
+    /// @param palette The color palette.
+    /// @return Index of the closest palette entry.
     auto closestColor(RgbPixel const& pixel, std::vector<RgbPixel> const& palette) -> int
     {
-        auto bestIdx = 0;
+        auto bestIdx = std::size_t { 0 };
         auto bestDist = std::numeric_limits<int>::max();
-        for (auto i = 0; i < static_cast<int>(palette.size()); ++i)
+        for (auto i = std::size_t { 0 }; i < palette.size(); ++i)
         {
-            auto const& c = palette[static_cast<std::size_t>(i)];
+            auto const& c = palette[i];
             auto const dr = static_cast<int>(pixel.r) - static_cast<int>(c.r);
             auto const dg = static_cast<int>(pixel.g) - static_cast<int>(c.g);
             auto const db = static_cast<int>(pixel.b) - static_cast<int>(c.b);
-            auto const dist = dr * dr + dg * dg + db * db;
+            auto const dist = (dr * dr) + (dg * dg) + (db * db);
             if (dist < bestDist)
             {
                 bestDist = dist;
                 bestIdx = i;
             }
         }
-        return bestIdx;
+        return static_cast<int>(bestIdx);
+    }
+
+    /// @brief Emits a sixel row with run-length encoding.
+    ///
+    /// Sixel RLE format: `!count<char>` for runs of identical bytes.
+    /// Falls back to raw characters for short runs (< 4).
+    ///
+    /// @param out The output string to append to.
+    /// @param row The sixel byte values for one color across the band width.
+    void emitSixelRowRLE(std::string& out, std::span<const std::uint8_t> row)
+    {
+        for (auto i = std::size_t { 0 }; i < row.size();)
+        {
+            auto const value = row[i];
+            auto const ch = static_cast<char>(value + 63);
+            auto runLen = std::size_t { 1 };
+            while (i + runLen < row.size() && row[i + runLen] == value)
+                ++runLen;
+            if (runLen >= 4)
+                out += std::format("!{}{}", runLen, ch);
+            else
+                out.append(runLen, ch);
+            i += runLen;
+        }
     }
 } // namespace
 
@@ -169,14 +198,14 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
 
     for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
     {
-        auto const alpha = image.pixels[i * 4 + 3];
+        auto const alpha = image.pixels[(i * 4) + 3];
         if (alpha < 128)
             continue; // Transparent — leave indexed[i] = -1
 
         auto pixel = RgbPixel {};
         pixel.r = image.pixels[i * 4];
-        pixel.g = image.pixels[i * 4 + 1];
-        pixel.b = image.pixels[i * 4 + 2];
+        pixel.g = image.pixels[(i * 4) + 1];
+        pixel.b = image.pixels[(i * 4) + 2];
         opaquePixels.push_back(pixel);
         indexed[i] = 0; // Placeholder — will be mapped to palette after quantization
     }
@@ -186,68 +215,104 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
 
     // Quantize colors (only opaque pixels)
     auto const palette = medianCut(opaquePixels, maxColors);
+    auto const paletteSize = static_cast<int>(palette.size());
 
-    // Map each opaque pixel to a palette index
+    // 15-bit RGB color cache: 5 bits per channel → 32768 entries
+    // Avoids repeated O(palette.size()) linear scans for similar pixel colors.
+    auto colorCache = std::vector<int>(32768, -1);
+    auto cachedClosestColor = [&](RgbPixel const& pixel) -> int {
+        auto const key = ((pixel.r >> 3) << 10) | ((pixel.g >> 3) << 5) | (pixel.b >> 3);
+        if (colorCache[static_cast<std::size_t>(key)] < 0)
+            colorCache[static_cast<std::size_t>(key)] = closestColor(pixel, palette);
+        return colorCache[static_cast<std::size_t>(key)];
+    };
+
+    // Map each opaque pixel to a palette index (with cache)
     for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
     {
         if (indexed[i] < 0)
             continue; // Transparent
         auto pixel = RgbPixel {};
         pixel.r = image.pixels[i * 4];
-        pixel.g = image.pixels[i * 4 + 1];
-        pixel.b = image.pixels[i * 4 + 2];
-        indexed[i] = closestColor(pixel, palette);
+        pixel.g = image.pixels[(i * 4) + 1];
+        pixel.b = image.pixels[(i * 4) + 2];
+        indexed[i] = cachedClosestColor(pixel);
     }
 
-    // Build sixel output
+    // Build sixel output with pre-allocated buffer
     auto result = std::string {};
+    result.reserve(static_cast<std::size_t>(image.width) * static_cast<std::size_t>(image.height));
 
     // Raster attributes: "Pan;Pad;Ph;Pv — tells terminal exact image dimensions
     result += std::format("\"1;1;{};{}", image.width, image.height);
 
     // Define palette: #idx;2;r%;g%;b% (percentage 0-100)
-    for (auto i = 0; i < static_cast<int>(palette.size()); ++i)
+    for (auto i = 0; i < paletteSize; ++i)
     {
         auto const& c = palette[static_cast<std::size_t>(i)];
         result += std::format("#{};2;{};{};{}", i, c.r * 100 / 255, c.g * 100 / 255, c.b * 100 / 255);
     }
 
-    // Encode sixel data: process in bands of 6 rows
+    // Encode sixel data: single-pass per band with RLE compression
     auto const width = image.width;
     auto const height = image.height;
+    auto const widthU = static_cast<std::size_t>(width);
+
+    // Pre-allocate per-color sixel row buffers (reused across bands)
+    auto colorRows = std::vector<std::vector<std::uint8_t>>(static_cast<std::size_t>(paletteSize),
+                                                            std::vector<std::uint8_t>(widthU, 0));
+    auto activeColors = std::vector<int> {};
+    activeColors.reserve(static_cast<std::size_t>(paletteSize));
+
     for (auto bandY = 0; bandY < height; bandY += 6)
     {
-        for (auto colorIdx = 0; colorIdx < static_cast<int>(palette.size()); ++colorIdx)
+        // Pass 1: Accumulate sixel bits per color (single pass over pixels)
+        auto const bandHeight = std::min(6, height - bandY);
+        for (auto bit = 0; bit < bandHeight; ++bit)
         {
-            auto hasPixels = false;
-            auto row = std::string {};
-            for (auto x = 0; x < width; ++x)
+            auto const y = bandY + bit;
+            auto const rowOffset = static_cast<std::size_t>(y) * widthU;
+            auto const bitMask = static_cast<std::uint8_t>(1 << bit);
+            for (auto x = std::size_t { 0 }; x < widthU; ++x)
             {
-                auto sixelByte = std::uint8_t { 0 };
-                for (auto bit = 0; bit < 6; ++bit)
-                {
-                    auto const y = bandY + bit;
-                    if (y < height)
-                    {
-                        auto const pixelIdx = static_cast<std::size_t>(y) * static_cast<std::size_t>(width)
-                                              + static_cast<std::size_t>(x);
-                        if (indexed[pixelIdx] >= 0 && indexed[pixelIdx] == colorIdx)
-                        {
-                            sixelByte |= static_cast<std::uint8_t>(1 << bit);
-                            hasPixels = true;
-                        }
-                    }
-                }
-                row += static_cast<char>(sixelByte + 63);
-            }
-            if (hasPixels)
-            {
-                result += std::format("#{}", colorIdx);
-                result += row;
-                result += '$'; // Carriage return (go to beginning of same sixel band)
+                auto const colorIdx = indexed[rowOffset + x];
+                if (colorIdx >= 0)
+                    colorRows[static_cast<std::size_t>(colorIdx)][x] |= bitMask;
             }
         }
+
+        // Collect active colors for this band
+        activeColors.clear();
+        for (auto colorIdx = 0; colorIdx < paletteSize; ++colorIdx)
+        {
+            auto const& row = colorRows[static_cast<std::size_t>(colorIdx)];
+            auto isActive = false;
+            for (auto x = std::size_t { 0 }; x < widthU; ++x)
+            {
+                if (row[x] != 0)
+                {
+                    isActive = true;
+                    break;
+                }
+            }
+            if (isActive)
+                activeColors.push_back(colorIdx);
+        }
+
+        // Pass 2: Emit sixel data with RLE (only active colors)
+        for (auto const colorIdx: activeColors)
+        {
+            result += std::format("#{}", colorIdx);
+            emitSixelRowRLE(result, colorRows[static_cast<std::size_t>(colorIdx)]);
+            result += '$'; // Carriage return (go to beginning of same sixel band)
+        }
         result += '-'; // New line (advance to next sixel band)
+
+        // Clear only the active color buffers for next band
+        for (auto const colorIdx: activeColors)
+            std::fill(colorRows[static_cast<std::size_t>(colorIdx)].begin(),
+                      colorRows[static_cast<std::size_t>(colorIdx)].end(),
+                      std::uint8_t { 0 });
     }
 
     return result;
