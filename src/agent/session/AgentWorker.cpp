@@ -178,9 +178,11 @@ void AgentWorker::handlePrompt(UserPromptMessage const& msg, std::stop_token con
 
     auto streamCb = makeStreamCallback(stopToken);
 
+    auto const images = std::span<agent::ImageBlock const>(msg.images);
+
     if (msg.planMode)
     {
-        auto planResult = _session.processMessageForPlan(msg.text, std::move(streamCb));
+        auto planResult = _session.processMessageForPlan(msg.text, images, std::move(streamCb));
         if (planResult.has_value())
         {
             _outbound.push(PlanGeneratedMessage { .plan = std::move(*planResult) });
@@ -197,7 +199,7 @@ void AgentWorker::handlePrompt(UserPromptMessage const& msg, std::stop_token con
     }
     else
     {
-        auto result = _session.processMessage(msg.text, std::move(streamCb));
+        auto result = _session.processMessage(msg.text, images, std::move(streamCb));
         if (result.has_value())
         {
             _outbound.push(CompletionMessage { .fullResponse = std::move(*result),

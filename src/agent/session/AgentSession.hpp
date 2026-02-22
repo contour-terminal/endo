@@ -79,6 +79,17 @@ class AgentSession
     [[nodiscard]] auto processMessage(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<std::string, AgentError>;
 
+    /// @brief Processes a user message with image attachments and generates a response.
+    ///
+    /// Builds a multimodal ChatMessage with TextBlock and ImageBlocks.
+    /// @param userMessage The user's query text.
+    /// @param images Image attachments to include.
+    /// @param streamCb Optional callback for streaming tokens as they arrive.
+    /// @return The complete response text, or an error.
+    [[nodiscard]] auto processMessage(std::string_view userMessage,
+                                      std::span<ImageBlock const> images,
+                                      StreamCallback streamCb) -> std::expected<std::string, AgentError>;
+
     /// @brief Explores the codebase and produces a structured plan.
     ///
     /// Runs a tool loop with only read-only tools (read_file, glob, grep, git)
@@ -89,6 +100,16 @@ class AgentSession
     /// @return The submitted plan, or an error.
     [[nodiscard]] auto processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
         -> std::expected<Plan, AgentError>;
+
+    /// @brief Explores the codebase with image context and produces a structured plan.
+    ///
+    /// @param userMessage The user's planning request.
+    /// @param images Image attachments providing context.
+    /// @param streamCb Optional callback for streaming tokens during exploration.
+    /// @return The submitted plan, or an error.
+    [[nodiscard]] auto processMessageForPlan(std::string_view userMessage,
+                                             std::span<ImageBlock const> images,
+                                             StreamCallback streamCb) -> std::expected<Plan, AgentError>;
 
     /// @brief Sets the maximum number of exploration iterations for plan mode.
     /// @param n Maximum iterations (default: 15).

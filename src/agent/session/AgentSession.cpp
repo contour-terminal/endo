@@ -58,6 +58,13 @@ void AgentSession::setProvider(LlmProvider& provider)
 auto AgentSession::processMessage(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<std::string, AgentError>
 {
+    return processMessage(userMessage, std::span<ImageBlock const> {}, std::move(streamCb));
+}
+
+auto AgentSession::processMessage(std::string_view userMessage,
+                                  std::span<ImageBlock const> images,
+                                  StreamCallback streamCb) -> std::expected<std::string, AgentError>
+{
     auto trimmedMessage = std::string(userMessage);
     trimInPlace(trimmedMessage);
     if (trimmedMessage.empty())
@@ -66,8 +73,12 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
             .message = "Empty message after trimming whitespace.",
         });
 
-    // Add user message to history
-    _history.addMessage(ChatMessage::text(Role::User, std::move(trimmedMessage)));
+    // Add user message to history (multimodal if images are provided)
+    auto userMsg = ChatMessage { .role = Role::User };
+    userMsg.content.emplace_back(TextBlock { .text = std::move(trimmedMessage) });
+    for (auto const& img: images)
+        userMsg.content.emplace_back(img);
+    _history.addMessage(std::move(userMsg));
 
     if (_tracer)
         _tracer->writeUserMessage("chat", userMessage);
@@ -234,6 +245,13 @@ void AgentSession::loadPersistedMessages(std::vector<ChatMessage> messages)
 auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCallback streamCb)
     -> std::expected<Plan, AgentError>
 {
+    return processMessageForPlan(userMessage, std::span<ImageBlock const> {}, std::move(streamCb));
+}
+
+auto AgentSession::processMessageForPlan(std::string_view userMessage,
+                                         std::span<ImageBlock const> images,
+                                         StreamCallback streamCb) -> std::expected<Plan, AgentError>
+{
     if (!_toolRegistry)
     {
         return std::unexpected(AgentError {
@@ -263,8 +281,12 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
             .message = "Empty message after trimming whitespace.",
         });
 
-    // Add user message to history
-    _history.addMessage(ChatMessage::text(Role::User, std::move(trimmedPlanMessage)));
+    // Add user message to history (multimodal if images are provided)
+    auto userMsg = ChatMessage { .role = Role::User };
+    userMsg.content.emplace_back(TextBlock { .text = std::move(trimmedPlanMessage) });
+    for (auto const& img: images)
+        userMsg.content.emplace_back(img);
+    _history.addMessage(std::move(userMsg));
 
     if (_tracer)
         _tracer->writeUserMessage("plan", userMessage);

@@ -24,8 +24,9 @@ namespace endo::agent
 /// User submitted a prompt for the agent to process.
 struct UserPromptMessage
 {
-    std::string text;      ///< The user's query text.
-    bool planMode = false; ///< Whether to use plan exploration mode.
+    std::string text;               ///< The user's query text.
+    bool planMode = false;          ///< Whether to use plan exploration mode.
+    std::vector<ImageBlock> images; ///< Attached images to include with the message.
 };
 
 /// Request to cancel the current operation.

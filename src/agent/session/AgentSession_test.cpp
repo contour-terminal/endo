@@ -867,8 +867,11 @@ TEST_CASE("AgentSession.last_turn_usage_multi_call_tool_loop", "[agent]")
         }
 
         [[nodiscard]] auto supportsToolUse() const noexcept -> bool override { return true; }
+
         [[nodiscard]] auto supportsImageInput() const noexcept -> bool override { return false; }
+
         [[nodiscard]] auto supportsImageOutput() const noexcept -> bool override { return false; }
+
         [[nodiscard]] auto contextSize() const noexcept -> size_t override { return 8192; }
 
         [[nodiscard]] auto modelInfo() const -> ModelInfo override
@@ -946,4 +949,71 @@ TEST_CASE("AgentSession.reset_clears_last_turn_usage", "[agent]")
     session.reset();
     CHECK(session.lastTurnUsage().inputTokens == 0);
     CHECK(session.lastTurnUsage().outputTokens == 0);
+}
+
+// ============================================================================
+// Multimodal (image) message tests
+// ============================================================================
+
+TEST_CASE("AgentSession.process_message_with_images", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "I see an image.";
+    auto session = AgentSession(provider);
+
+    auto const imageData = std::vector<uint8_t> { 0x89, 0x50, 0x4E, 0x47 }; // PNG header bytes
+    auto images = std::vector<ImageBlock> {};
+    images.push_back(ImageBlock { .data = imageData, .mediaType = "image/png" });
+
+    auto result = session.processMessage("What is in this image?", std::span(images), nullptr);
+
+    REQUIRE(result.has_value());
+    CHECK(*result == "I see an image.");
+
+    // Verify the user message in history has both TextBlock and ImageBlock.
+    REQUIRE(session.history().size() == 2);
+    auto const& userMsg = session.history().messages()[0];
+    REQUIRE(userMsg.content.size() == 2);
+    CHECK(std::holds_alternative<TextBlock>(userMsg.content[0]));
+    CHECK(std::holds_alternative<ImageBlock>(userMsg.content[1]));
+
+    auto const& imgBlock = std::get<ImageBlock>(userMsg.content[1]);
+    CHECK(imgBlock.mediaType == "image/png");
+    CHECK(imgBlock.data == imageData);
+}
+
+TEST_CASE("AgentSession.process_message_without_images_is_text_only", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "Response";
+    auto session = AgentSession(provider);
+
+    auto result = session.processMessage("Hello", std::span<ImageBlock const> {}, nullptr);
+
+    REQUIRE(result.has_value());
+    REQUIRE(session.history().size() == 2);
+    auto const& userMsg = session.history().messages()[0];
+    REQUIRE(userMsg.content.size() == 1);
+    CHECK(std::holds_alternative<TextBlock>(userMsg.content[0]));
+}
+
+TEST_CASE("AgentSession.process_message_with_multiple_images", "[agent]")
+{
+    auto provider = MockProvider {};
+    provider.responseText = "I see two images.";
+    auto session = AgentSession(provider);
+
+    auto images = std::vector<ImageBlock> {};
+    images.push_back(ImageBlock { .data = { 0xFF, 0xD8, 0xFF }, .mediaType = "image/jpeg" });
+    images.push_back(ImageBlock { .data = { 0x89, 0x50, 0x4E, 0x47 }, .mediaType = "image/png" });
+
+    auto result = session.processMessage("Describe these", std::span(images), nullptr);
+
+    REQUIRE(result.has_value());
+    REQUIRE(session.history().size() == 2);
+    auto const& userMsg = session.history().messages()[0];
+    REQUIRE(userMsg.content.size() == 3); // 1 TextBlock + 2 ImageBlocks
+    CHECK(std::holds_alternative<TextBlock>(userMsg.content[0]));
+    CHECK(std::holds_alternative<ImageBlock>(userMsg.content[1]));
+    CHECK(std::holds_alternative<ImageBlock>(userMsg.content[2]));
 }
