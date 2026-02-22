@@ -373,6 +373,19 @@ void VtParser::processUtf8(std::uint8_t byte, std::vector<InputEvent>& events)
 
 void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
 {
+    // Check for focus events (DECSET 1004): CSI I = focus-in, CSI O = focus-out.
+    // These have no parameters (empty _paramBuf).
+    if (_paramBuf.empty() && finalByte == 'I')
+    {
+        events.emplace_back(FocusEvent { .focused = true });
+        return;
+    }
+    if (_paramBuf.empty() && finalByte == 'O')
+    {
+        events.emplace_back(FocusEvent { .focused = false });
+        return;
+    }
+
     // Check for SGR mouse: ESC[<button;x;y[;uiHandled]M or ESC[<button;x;y[;uiHandled]m
     // The optional 4th parameter (uiHandled) is part of passive mouse tracking (DEC mode 2029).
     if (!_paramBuf.empty() && _paramBuf[0] == '<' && (finalByte == 'M' || finalByte == 'm'))

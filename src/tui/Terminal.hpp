@@ -111,6 +111,16 @@ class Terminal
     /// @param scheme The reported color scheme.
     void handleColorSchemeReport(ColorScheme scheme);
 
+    /// @brief Returns whether the terminal window currently has focus.
+    [[nodiscard]] auto isFocused() const noexcept -> bool;
+
+    /// @brief Registers a callback for focus change notifications (DECSET 1004).
+    ///
+    /// The callback is invoked when the terminal reports focus gained or lost.
+    /// Multiple handlers can be registered.
+    /// @param callback The callback to invoke on focus change (true = focused).
+    void onFocusChanged(std::function<void(bool)> callback);
+
   private:
     TerminalInput _input;
     std::unique_ptr<TerminalOutput> _output;
@@ -118,8 +128,14 @@ class Terminal
     bool _mockMode = false; ///< True when using a mock output (skip input/signal init).
     ColorScheme _colorScheme = ColorScheme::Unknown;
     std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
+    bool _focused = true; ///< Whether the terminal window has focus (assume focused on startup).
+    std::vector<std::function<void(bool)>> _focusCallbacks;
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
     int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).
+
+    /// @brief Called internally when a focus event is received.
+    /// @param focused True if terminal gained focus, false if lost.
+    void handleFocusEvent(bool focused);
 };
 
 } // namespace tui

@@ -887,6 +887,7 @@ Component (base class)
 - [ ] Add prompt configuration tests
 - [x] Implement OSC 133 shell integration (prompt start/end, command start/finished markers)
 - [x] Implement OSC 7 current working directory propagation to terminal
+- [x] Implement terminal focus tracking (DECSET 1004): parse CSI I/O focus events in VtParser, enable/disable in TerminalInput protocols, track state in Terminal with callback API, pause spinners and deferred updates (ghost text, diagnostics, module refresh) when unfocused, dim prompt chrome when terminal loses focus
 
 ---
 

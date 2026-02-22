@@ -114,3 +114,54 @@ TEST_CASE("VtParser.CSIu.escape_key", "[tui,vtparser]")
     CHECK(key->key == KeyCode::Escape);
     CHECK(key->modifiers == Modifier::None);
 }
+
+// ============================================================================
+// Focus event tests (DECSET 1004)
+// ============================================================================
+
+TEST_CASE("VtParser.focus.focus_in", "[tui,vtparser]")
+{
+    // CSI I → FocusEvent { .focused = true }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[I");
+    REQUIRE(events.size() == 1);
+    auto const* fe = std::get_if<FocusEvent>(&events[0]);
+    REQUIRE(fe != nullptr);
+    CHECK(fe->focused == true);
+}
+
+TEST_CASE("VtParser.focus.focus_out", "[tui,vtparser]")
+{
+    // CSI O → FocusEvent { .focused = false }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[O");
+    REQUIRE(events.size() == 1);
+    auto const* fe = std::get_if<FocusEvent>(&events[0]);
+    REQUIRE(fe != nullptr);
+    CHECK(fe->focused == false);
+}
+
+TEST_CASE("VtParser.focus.ss3_not_confused_with_focus_out", "[tui,vtparser]")
+{
+    // ESC O A → SS3 Up arrow (not focus-out)
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033OA");
+    REQUIRE(events.size() == 1);
+    auto const* key = std::get_if<KeyEvent>(&events[0]);
+    REQUIRE(key != nullptr);
+    CHECK(key->key == KeyCode::Up);
+}
+
+TEST_CASE("VtParser.focus.focus_followed_by_key", "[tui,vtparser]")
+{
+    // CSI I followed by 'a' → FocusEvent then KeyEvent
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[Ia");
+    REQUIRE(events.size() == 2);
+    auto const* fe = std::get_if<FocusEvent>(&events[0]);
+    REQUIRE(fe != nullptr);
+    CHECK(fe->focused == true);
+    auto const* key = std::get_if<KeyEvent>(&events[1]);
+    REQUIRE(key != nullptr);
+    CHECK(key->codepoint == U'a');
+}

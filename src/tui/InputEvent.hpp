@@ -80,6 +80,15 @@ struct CellSizeReport
     int width;  ///< Cell width in pixels.
 };
 
+/// @brief Terminal focus change event (DECSET 1004).
+///
+/// This is an internal event consumed by Terminal::poll() and not propagated
+/// to application code. It signals when the terminal window gains or loses focus.
+struct FocusEvent
+{
+    bool focused; ///< True when terminal gained focus, false when lost.
+};
+
 /// @brief Discriminated union of all possible terminal input events.
 using InputEvent = std::variant<KeyEvent,
                                 MouseEvent,
@@ -87,6 +96,7 @@ using InputEvent = std::variant<KeyEvent,
                                 PasteEvent,
                                 CursorPositionReport,
                                 ColorSchemeReport,
-                                CellSizeReport>;
+                                CellSizeReport,
+                                FocusEvent>;
 
 } // namespace tui

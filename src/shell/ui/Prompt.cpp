@@ -82,6 +82,9 @@ void Prompt::initialize()
         _terminal.output().flush();
     });
 
+    // Propagate terminal focus state to prompt component for visual dimming
+    _terminal.onFocusChanged([this](bool focused) { _promptComponent->setTerminalFocused(focused); });
+
     // Create Screen with Inline viewport mode
     auto screenConfig = tui::ScreenConfig {
         .viewport = tui::Viewport::Inline,
@@ -124,28 +127,53 @@ std::string Prompt::read()
     // Event loop
     while (ready())
     {
+        // When unfocused, use a long poll timeout and skip deferred updates
+        auto const wasFocused = _terminal.isFocused();
+
         // Combine hover, module auto-refresh, diagnostics debounce, and ghost text debounce timeouts
-        auto const hoverTimeout = _screen->pollTimeoutMs();
-        auto const moduleTimeout = _promptComponent->moduleRefreshTimeoutMs();
-        auto const diagTimeout = _promptComponent->diagnosticsTimeoutMs();
-        auto const ghostTimeout = _promptComponent->ghostTextTimeoutMs();
-        auto const exitHintTimeout = _promptComponent->exitHintTimeoutMs();
         auto timeout = -1;
-        for (auto const t: { hoverTimeout, moduleTimeout, diagTimeout, ghostTimeout, exitHintTimeout })
+        if (wasFocused)
         {
-            if (t >= 0)
-                timeout = (timeout < 0) ? t : std::min(timeout, t);
+            auto const hoverTimeout = _screen->pollTimeoutMs();
+            auto const moduleTimeout = _promptComponent->moduleRefreshTimeoutMs();
+            auto const diagTimeout = _promptComponent->diagnosticsTimeoutMs();
+            auto const ghostTimeout = _promptComponent->ghostTextTimeoutMs();
+            auto const exitHintTimeout = _promptComponent->exitHintTimeoutMs();
+            for (auto const t: { hoverTimeout, moduleTimeout, diagTimeout, ghostTimeout, exitHintTimeout })
+            {
+                if (t >= 0)
+                    timeout = (timeout < 0) ? t : std::min(timeout, t);
+            }
+        }
+        else
+        {
+            timeout = 5000; // Idle when unfocused — just wait for events
         }
         auto events = _terminal.poll(timeout);
 
-        // If no events received (timeout), process hover timer, pending diagnostics, and ghost text
+        // Re-read focus state after poll — FocusEvent may have been consumed during poll()
+        auto const nowFocused = _terminal.isFocused();
+        auto const focusChanged = (wasFocused != nowFocused);
+
+        // If no events received (timeout or only internal events like FocusEvent)
         if (events.empty())
         {
-            _screen->tickHover();
-            _promptComponent->flushDeferredUpdates();
-            auto pSize = _promptComponent->preferredSize();
-            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
-            _screen->draw(); // Redraw in case tooltip was shown or diagnostics/modules/ghost text updated
+            if (focusChanged)
+            {
+                // Focus just changed — redraw to show/hide dim effect
+                _promptComponent->flushDeferredUpdates();
+                auto pSize = _promptComponent->preferredSize();
+                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _screen->draw();
+            }
+            else if (nowFocused)
+            {
+                _screen->tickHover();
+                _promptComponent->flushDeferredUpdates();
+                auto pSize = _promptComponent->preferredSize();
+                _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                _screen->draw();
+            }
             continue;
         }
 

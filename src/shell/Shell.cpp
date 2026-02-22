@@ -824,10 +824,9 @@ int Shell::execute(std::string const& lineBuffer)
     try
     {
         static constexpr std::string_view stdinName = "stdin";
-        auto const sourceName =
-            !_interactive && !_positionalParameters.empty()
-                ? std::string_view(_positionalParameters[0])
-                : stdinName;
+        auto const sourceName = !_interactive && !_positionalParameters.empty()
+                                    ? std::string_view(_positionalParameters[0])
+                                    : stdinName;
         RichConsoleReport report;
         report.setSourceText(lineBuffer);
         auto parser =
@@ -1887,6 +1886,9 @@ void Shell::runAgentMode()
     // Connect wakeup to terminal input so poll() wakes on agent messages.
     terminal.input().setWakeup(&_agentWakeup);
 
+    // Wakeup poll loop on focus changes so timeout is re-evaluated immediately.
+    terminal.onFocusChanged([this](bool) { _agentWakeup.signal(); });
+
     // Track the active renderer for tool-use line re-rendering of spinner.
     agent::AgentResponseRenderer* activeRenderer = nullptr;
 
@@ -2841,10 +2843,11 @@ void Shell::runAgentMode()
             renderStreamingPrompt();
 
         // 2. Determine poll timeout.
-        auto pollTimeout = 80; // Default: 80ms for ghost text and spinner.
+        auto const prePollFocused = terminal.isFocused();
+        auto pollTimeout = prePollFocused ? 80 : 2000; // Longer timeout when unfocused.
         if (streaming)
             pollTimeout = 5; // Fast polling during streaming for responsive cancellation.
-        else
+        else if (prePollFocused)
         {
             auto const ghostTimeout = inputComponent.ghostTextTimeoutMs();
             auto const escapeTimeout = inputComponent.escapeHintTimeoutMs();
@@ -2854,11 +2857,17 @@ void Shell::runAgentMode()
                 pollTimeout = std::min(escapeTimeout, pollTimeout);
         }
         // Include input component spinner timeout for info line animation.
-        if (auto const spinnerTimeout = inputComponent.spinnerTimeoutMs(); spinnerTimeout >= 0)
-            pollTimeout = std::min(spinnerTimeout, pollTimeout);
+        if (prePollFocused)
+        {
+            if (auto const spinnerTimeout = inputComponent.spinnerTimeoutMs(); spinnerTimeout >= 0)
+                pollTimeout = std::min(spinnerTimeout, pollTimeout);
+        }
 
         // 3. Poll terminal input.
         auto events = terminal.poll(pollTimeout);
+
+        // Re-read focus state after poll — FocusEvent may have been consumed during poll()
+        auto const terminalFocused = terminal.isFocused();
 
         if (events.empty())
         {
@@ -2883,32 +2892,36 @@ void Shell::runAgentMode()
                 screen.draw();
             }
 
-            // Tick spinner during thinking phase (but not while ask-user prompt is active).
-            if (activeRenderer && activeRenderer->isThinking() && !anyPromptActive())
+            // Skip spinner and deferred updates when terminal is unfocused
+            if (terminalFocused)
             {
-                if (activeRenderer->tickSpinner())
+                // Tick spinner during thinking phase (but not while ask-user prompt is active).
+                if (activeRenderer && activeRenderer->isThinking() && !anyPromptActive())
                 {
-                    auto guard = out.syncGuard();
-                    clearStreamingPrompt();
-                    activeRenderer->renderSpinner();
-                    renderStreamingPrompt();
+                    if (activeRenderer->tickSpinner())
+                    {
+                        auto guard = out.syncGuard();
+                        clearStreamingPrompt();
+                        activeRenderer->renderSpinner();
+                        renderStreamingPrompt();
+                    }
                 }
-            }
 
-            // Tick the input component's info line spinner.
-            if (inputComponent.tickSpinner())
-            {
-                if (streaming && !anyPromptActive())
+                // Tick the input component's info line spinner.
+                if (inputComponent.tickSpinner())
                 {
-                    auto guard = out.syncGuard();
-                    clearStreamingPrompt();
-                    renderStreamingPrompt();
-                }
-                else if (!anyPromptActive())
-                {
-                    auto const newPrefSize = inputComponent.preferredSize();
-                    inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
-                    screen.draw();
+                    if (streaming && !anyPromptActive())
+                    {
+                        auto guard = out.syncGuard();
+                        clearStreamingPrompt();
+                        renderStreamingPrompt();
+                    }
+                    else if (!anyPromptActive())
+                    {
+                        auto const newPrefSize = inputComponent.preferredSize();
+                        inputComponent.setArea(tui::Rect { 0, 0, terminal.columns(), newPrefSize.height });
+                        screen.draw();
+                    }
                 }
             }
 
@@ -2923,7 +2936,7 @@ void Shell::runAgentMode()
                 sessionPickerPrompt.render(out, terminal);
 
             // Ghost text debounce and escape hint auto-clear.
-            if (!streaming)
+            if (!streaming && terminalFocused)
             {
                 // Capture pre-flush state: flushDeferredUpdates() may clear the escape hint,
                 // and we still need to redraw to show the restored input text.

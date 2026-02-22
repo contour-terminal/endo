@@ -161,6 +161,16 @@ class PromptComponent: public tui::Component
     /// Call once per event batch, before drawing.
     void flushDeferredUpdates();
 
+    /// @brief Sets the terminal focus state for visual feedback.
+    ///
+    /// When unfocused, prompt chrome (left bar, separators) is dimmed
+    /// to indicate the terminal is inactive.
+    /// @param focused True if terminal has focus, false otherwise.
+    void setTerminalFocused(bool focused) noexcept { _terminalFocused = focused; }
+
+    /// @brief Returns whether the terminal is currently focused.
+    [[nodiscard]] bool isTerminalFocused() const noexcept { return _terminalFocused; }
+
     /// @brief Returns the InputField for direct access.
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
 
@@ -208,6 +218,7 @@ class PromptComponent: public tui::Component
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup;
     Completer* _completer = nullptr;
+    bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;
     History const* _history = nullptr;
     std::string _promptStr = "> ";

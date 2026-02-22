@@ -67,6 +67,11 @@ namespace
     constexpr auto EnablePassiveMouseTracking = "\033[?2029h"sv;
     constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv;
 
+    // Focus tracking (DEC mode 1004)
+    // When enabled, the terminal sends CSI I on focus-in and CSI O on focus-out.
+    constexpr auto EnableFocusTracking = "\033[?1004h"sv;
+    constexpr auto DisableFocusTracking = "\033[?1004l"sv;
+
     /// Writes a string_view to the terminal (stdout).
     void writeToTerminal(std::string_view data)
     {
@@ -248,13 +253,15 @@ void TerminalInput::enableProtocols()
     writeToTerminal(EnableBracketedPaste);
     writeToTerminal(EnableColorSchemeNotify); // Subscribe to dark/light mode changes
     writeToTerminal(QueryColorScheme);        // Query current color scheme
+    writeToTerminal(EnableFocusTracking);     // Focus in/out notifications
 }
 
 void TerminalInput::disableProtocols()
 {
+    writeToTerminal(DisableFocusTracking); // Disable in reverse order
     writeToTerminal(DisableColorSchemeNotify);
     writeToTerminal(DisableBracketedPaste);
-    writeToTerminal(DisableAnyMotionTracking); // Disable in reverse order
+    writeToTerminal(DisableAnyMotionTracking);
     writeToTerminal(DisablePassiveMouseTracking);
     writeToTerminal(DisableSGRMouse);
     writeToTerminal(DisableCsiU);

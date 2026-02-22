@@ -56,4 +56,9 @@ constexpr auto DisableAnyMotionTracking = "\033[?1003l"sv; ///< Disable any-moti
 constexpr auto EnablePassiveMouseTracking = "\033[?2029h"sv;  ///< Enable passive mouse tracking.
 constexpr auto DisablePassiveMouseTracking = "\033[?2029l"sv; ///< Disable passive mouse tracking.
 
+// Focus tracking (DEC mode 1004)
+// When enabled, the terminal sends CSI I on focus-in and CSI O on focus-out.
+constexpr auto EnableFocusTracking = "\033[?1004h"sv;  ///< Enable focus in/out notifications.
+constexpr auto DisableFocusTracking = "\033[?1004l"sv; ///< Disable focus in/out notifications.
+
 } // namespace tui::protocols

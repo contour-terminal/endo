@@ -215,16 +215,20 @@ void PromptComponent::render(tui::Canvas& canvas)
     };
 
     // Create styles
+    auto const dimChrome = !_terminalFocused; // Dim decorative elements when terminal unfocused
+
     tui::Style bgStyle;
     bgStyle.bg = pc.background;
 
     tui::Style leftBarStyle;
     leftBarStyle.fg = pc.separator;
     leftBarStyle.bg = pc.background;
+    leftBarStyle.dim = dimChrome;
 
     tui::Style promptStyle;
     promptStyle.fg = pc.badgeText;
     promptStyle.bg = pc.background;
+    promptStyle.dim = dimChrome;
 
     tui::Style ghostStyle;
     ghostStyle.fg = pc.badgeText;
@@ -313,6 +317,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
             sepStyle.bg = bgAt(col);
+            sepStyle.dim = dimChrome;
             col += canvas.putString(infoLineRow, col, "\xe2\x95\xad", sepStyle); // U+256D ╭
             sepStyle.bg = bgAt(col);
             col += canvas.putString(infoLineRow, col, "\xe2\x94\x80", sepStyle); // U+2500 ─
@@ -465,6 +470,7 @@ void PromptComponent::render(tui::Canvas& canvas)
             tui::Style sepStyle;
             sepStyle.fg = pc.separator;
             sepStyle.bg = bgAt(HorizontalMargin);
+            sepStyle.dim = dimChrome;
             if (lineIndex == 0)
             {
                 canvas.putString(row, HorizontalMargin, "\xe2\x95\xb0", sepStyle); // U+2570 ╰
