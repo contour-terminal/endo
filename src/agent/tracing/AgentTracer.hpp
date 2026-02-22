@@ -66,7 +66,8 @@ class AgentTracer
                           std::span<ToolCall const> toolCalls,
                           std::optional<TokenUsage> const& usage,
                           std::string_view url = {},
-                          std::string_view requestBody = {});
+                          std::string_view requestBody = {},
+                          std::string_view responseBody = {});
 
     /// @brief Writes a conversation compaction event.
     /// @param beforeMessages Number of messages before compaction.

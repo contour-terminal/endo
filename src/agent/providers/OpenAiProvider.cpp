@@ -277,7 +277,15 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
     auto pendingToolCalls = std::map<int, PendingToolCall> {};
     auto finishReason = std::string {};
 
+    auto responseBodyAccumulator = std::string {};
+
     auto const sseCallback = [&](http::SseEvent const& event) -> bool {
+        if (!event.data.empty())
+        {
+            responseBodyAccumulator += event.data;
+            responseBodyAccumulator += '\n';
+        }
+
         auto const parsed = parseSseData(event.data);
         if (!parsed.has_value())
             return false; // [DONE] sentinel
@@ -410,6 +418,7 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
     // Populate HTTP I/O context for trace logging.
     result.requestUrl = request.url;
     result.requestBody = std::move(request.body);
+    result.responseBody = std::move(responseBodyAccumulator);
 
     return result;
 }

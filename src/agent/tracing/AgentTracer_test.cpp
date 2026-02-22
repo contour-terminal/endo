@@ -453,7 +453,8 @@ TEST_CASE("AgentTracer.llm_response_with_http_context", "[agent]")
                              emptyToolCalls,
                              std::nullopt,
                              "https://api.anthropic.com/v1/messages",
-                             R"({"model":"claude-sonnet-4-5-20250929"})");
+                             R"({"model":"claude-sonnet-4-5-20250929"})",
+                             R"({"id":"msg_123","content":[{"type":"text","text":"Hello"}]})");
 
     auto const lines = readLines(tracePath);
     REQUIRE(lines.size() == 1);
@@ -463,6 +464,39 @@ TEST_CASE("AgentTracer.llm_response_with_http_context", "[agent]")
     CHECK(doc.at("text") == "Hello");
     CHECK(doc.at("url") == "https://api.anthropic.com/v1/messages");
     CHECK(doc.at("request_body") == R"({"model":"claude-sonnet-4-5-20250929"})");
+    CHECK(doc.at("response_body") == R"({"id":"msg_123","content":[{"type":"text","text":"Hello"}]})");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.llm_response_without_response_body_omits_field", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-llmres-noresbody";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    auto const emptyToolCalls = std::vector<ToolCall> {};
+
+    tracer->writeLlmResponse(0,
+                             false,
+                             0,
+                             5,
+                             std::chrono::milliseconds { 100 },
+                             "Hello",
+                             emptyToolCalls,
+                             std::nullopt,
+                             "https://api.anthropic.com/v1/messages",
+                             R"({"model":"claude-sonnet-4-5-20250929"})");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "llm_response");
+    CHECK_FALSE(doc.contains("response_body"));
 
     std::filesystem::remove_all(tmpDir);
 }

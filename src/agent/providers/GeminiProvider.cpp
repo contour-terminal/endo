@@ -258,10 +258,17 @@ auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCa
     auto accumulatedText = std::string {};
     auto toolCallIdCounter = 0;
     auto errorBody = std::string {};
+    auto responseBodyAccumulator = std::string {};
 
     auto const sseResult = _httpClient.executeStreaming(
         request,
         [&](http::SseEvent const& event) -> bool {
+            if (!event.data.empty())
+            {
+                responseBodyAccumulator += event.data;
+                responseBodyAccumulator += '\n';
+            }
+
             if (event.data.empty() || event.data == "[DONE]")
                 return true;
 
@@ -361,6 +368,7 @@ auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCa
         result.content.emplace_back(
             ToolUseBlock { .id = toolCall.id, .name = toolCall.name, .arguments = toolCall.arguments });
 
+    result.responseBody = std::move(responseBodyAccumulator);
     return result;
 }
 

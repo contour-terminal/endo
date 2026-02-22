@@ -116,6 +116,14 @@ auto runTraceReplay(std::string_view traceFilePath) -> int
                              u.value("cache_read_tokens", 0),
                              u.value("cache_creation_tokens", 0));
             }
+
+            // Display response body size if available
+            if (doc.contains("response_body") && doc["response_body"].is_string())
+            {
+                auto const bodySize = doc["response_body"].get<std::string>().size();
+                if (bodySize > 0)
+                    std::println("        response_body: {} bytes", bodySize);
+            }
         }
         else if (type == "tool_call")
         {

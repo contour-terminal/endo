@@ -64,11 +64,18 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
     auto accumulators = std::vector<ContentBlockAccumulator> {};
     auto accumulatedUsage = TokenUsage {};
     auto hasUsage = false;
+    auto responseBodyAccumulator = std::string {};
 
     auto errorBody = std::string {};
     auto const sseResult = _httpClient.executeStreaming(
         request,
         [&](http::SseEvent const& event) -> bool {
+            if (!event.data.empty())
+            {
+                responseBodyAccumulator += event.data;
+                responseBodyAccumulator += '\n';
+            }
+
             auto parsed = parseSseEvent(event, accumulators);
             if (!parsed.has_value())
                 return false;
@@ -137,6 +144,7 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
     if (hasUsage)
         result.usage = accumulatedUsage;
 
+    result.responseBody = std::move(responseBodyAccumulator);
     return result;
 }
 

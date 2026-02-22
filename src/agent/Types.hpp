@@ -179,6 +179,7 @@ struct GenerateResult
     std::optional<TokenUsage> usage;   ///< Token usage statistics, if available.
     std::string requestUrl;            ///< HTTP request URL (for trace logging).
     std::string requestBody;           ///< HTTP request body (for trace logging).
+    std::string responseBody;          ///< HTTP response body (for trace logging).
 
     /// Returns true if the model requested any tool calls.
     [[nodiscard]] auto hasToolCalls() const noexcept -> bool { return !toolCalls.empty(); }

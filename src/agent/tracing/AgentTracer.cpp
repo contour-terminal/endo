@@ -105,7 +105,8 @@ void AgentTracer::writeLlmResponse(size_t iteration,
                                    std::span<ToolCall const> toolCalls,
                                    std::optional<TokenUsage> const& usage,
                                    std::string_view url,
-                                   std::string_view requestBody)
+                                   std::string_view requestBody,
+                                   std::string_view responseBody)
 {
     auto doc = nlohmann::json {
         { "type", "llm_response" },  { "timestamp", utcTimestamp() },
@@ -118,6 +119,8 @@ void AgentTracer::writeLlmResponse(size_t iteration,
         doc["url"] = url;
     if (!requestBody.empty())
         doc["request_body"] = requestBody;
+    if (!responseBody.empty())
+        doc["response_body"] = responseBody;
 
     auto toolCallsArray = nlohmann::json::array();
     for (auto const& tc: toolCalls)
