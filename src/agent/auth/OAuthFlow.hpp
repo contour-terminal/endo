@@ -30,6 +30,7 @@ struct OAuthStore
     std::optional<OAuthCredentials> claude;
     std::optional<OAuthCredentials> openai;
     std::optional<OAuthCredentials> gemini;
+    std::optional<OAuthCredentials> copilot;
 };
 
 /// PKCE verifier + S256 challenge pair for the OAuth authorization code flow.

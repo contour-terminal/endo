@@ -39,11 +39,20 @@ inline constexpr std::array GeminiModels = {
     std::string_view { "gemini-2.0-flash" },
 };
 
+/// Hardcoded list of available GitHub Copilot models (newest first).
+inline constexpr std::array CopilotModels = {
+    std::string_view { "gpt-4o" },
+    std::string_view { "gpt-4o-mini" },
+    std::string_view { "claude-3.5-sonnet" },
+    std::string_view { "o3-mini" },
+};
+
 /// All known provider names in display order.
 inline constexpr std::array KnownProviders = {
     std::string_view { "claude" },
     std::string_view { "openai" },
     std::string_view { "gemini" },
+    std::string_view { "copilot" },
 };
 
 /// Result of a model name lookup across all known providers.
@@ -85,6 +94,8 @@ struct ModelMatch
         return OpenAiModels;
     if (providerName == "gemini")
         return GeminiModels;
+    if (providerName == "copilot")
+        return CopilotModels;
     return {};
 }
 

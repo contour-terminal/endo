@@ -11,6 +11,7 @@ add_library(endo-agent STATIC
     # Auth
     auth/OAuthFlow.hpp auth/OAuthFlow.cpp
     auth/OAuthCallbackServer.hpp auth/OAuthCallbackServer.cpp
+    auth/CopilotDeviceFlow.hpp auth/CopilotDeviceFlow.cpp
     auth/TerminalInput.hpp auth/TerminalInput.cpp
     auth/LoginCommand.hpp auth/LoginCommand.cpp
 
@@ -55,6 +56,7 @@ add_library(endo-agent STATIC
     providers/ClaudeProvider.hpp providers/ClaudeProvider.cpp
     providers/OpenAiProvider.hpp providers/OpenAiProvider.cpp
     providers/GeminiProvider.hpp providers/GeminiProvider.cpp
+    providers/CopilotProvider.hpp providers/CopilotProvider.cpp
     providers/ProviderFactory.hpp providers/ProviderFactory.cpp
 
     # Tools
@@ -110,6 +112,7 @@ add_executable(test-endo-agent
     # Auth tests
     auth/OAuthFlow_test.cpp
     auth/OAuthCallbackServer_test.cpp
+    auth/CopilotDeviceFlow_test.cpp
     auth/LoginCommand_test.cpp
 
     # Conversation tests
@@ -145,6 +148,7 @@ add_executable(test-endo-agent
     providers/ClaudeProvider_test.cpp
     providers/OpenAiProvider_test.cpp
     providers/GeminiProvider_test.cpp
+    providers/CopilotProvider_test.cpp
     providers/ProviderFactory_test.cpp
 
     # Tool tests

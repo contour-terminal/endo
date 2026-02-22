@@ -65,6 +65,18 @@ namespace
             config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }
 
+    void parseCopilotConfig(YAML::Node const& node, CopilotConfig& config)
+    {
+        if (!node || !node.IsMap())
+            return;
+        if (node["model"])
+            config.model = node["model"].as<std::string>();
+        if (node["max_tokens"])
+            config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["thinking_mode"])
+            config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
+    }
+
     void parsePlanModeConfig(YAML::Node const& node, PlanModeConfig& config)
     {
         if (!node || !node.IsMap())
@@ -141,6 +153,7 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
         parseOpenAiConfig(root["openai"], config.openai);
         parseOpenAiConfig(root["openai_compat"], config.openaiCompat);
         parseGeminiConfig(root["gemini"], config.gemini);
+        parseCopilotConfig(root["copilot"], config.copilot);
 
         if (root["max_tool_result_size"])
             config.maxToolResultSize = root["max_tool_result_size"].as<size_t>();

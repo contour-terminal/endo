@@ -181,5 +181,5 @@ TEST_CASE("SlashCommandCompleter.model_argument_completion_all_models", "[agent]
 
     // Empty prefix after space should list all models.
     auto const items = completer.complete("/model ", 7);
-    CHECK(items.size() == 12); // 5 Claude + 4 OpenAI + 3 Gemini
+    CHECK(items.size() == 16); // 5 Claude + 4 OpenAI + 3 Gemini + 4 Copilot
 }

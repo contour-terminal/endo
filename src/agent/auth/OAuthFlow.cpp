@@ -4,6 +4,7 @@
 #include <http/HttpClient.hpp>
 
 #include <crispy/base64.h>
+
 #include <yaml-cpp/yaml.h>
 
 #include <array>
@@ -49,8 +50,7 @@ namespace
 
     auto const GoogleClientId = deobfuscate(
         "bGJraG9vYmpjaWNvdzU1YjwuaDUqKD4oNCpjP2k7KzxsOyxpMjc+MzhraW8wdDsqKil0PTU1PTY/Lyk/KDk1NC4/NC50OTU3");
-    auto const GoogleClientSecret =
-        deobfuscate("HRUZCQoCd24vEj0XCjd3azVtCTF3PT8MbBkvbzk2AhwpIjY=");
+    auto const GoogleClientSecret = deobfuscate("HRUZCQoCd24vEj0XCjd3azVtCTF3PT8MbBkvbzk2AhwpIjY=");
     constexpr auto GoogleAuthorizeUrl = "https://accounts.google.com/o/oauth2/v2/auth";
     constexpr auto GoogleTokenUrl = "https://oauth2.googleapis.com/token";
     constexpr auto GoogleScopes = "https://www.googleapis.com/auth/cloud-platform"
@@ -567,6 +567,7 @@ auto loadOAuthStore(std::filesystem::path const& path) -> OAuthStore
         store.claude = parseCredentials(root["claude"]);
         store.openai = parseCredentials(root["openai"]);
         store.gemini = parseCredentials(root["gemini"]);
+        store.copilot = parseCredentials(root["copilot"]);
     }
     catch (YAML::Exception const&)
     {
@@ -599,6 +600,8 @@ auto saveOAuthStore(OAuthStore const& store, std::filesystem::path const& path) 
             emitCredentials(emitter, "openai", *store.openai);
         if (store.gemini.has_value())
             emitCredentials(emitter, "gemini", *store.gemini);
+        if (store.copilot.has_value())
+            emitCredentials(emitter, "copilot", *store.copilot);
 
         emitter << YAML::EndMap;
 

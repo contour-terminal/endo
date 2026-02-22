@@ -46,6 +46,14 @@ struct GeminiConfig
     ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
+/// Configuration for the GitHub Copilot provider.
+struct CopilotConfig
+{
+    std::string model = "gpt-4o";                  ///< Model identifier.
+    size_t maxTokens = 4096;                       ///< Maximum output tokens per request.
+    ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
+};
+
 /// Configuration for agent plan mode.
 struct PlanModeConfig
 {
@@ -85,6 +93,7 @@ struct AgentConfig
     OpenAiConfig openai;       ///< OpenAI configuration.
     OpenAiConfig openaiCompat; ///< OpenAI-compatible provider (Ollama, vLLM, LM Studio).
     GeminiConfig gemini;       ///< Google Gemini configuration.
+    CopilotConfig copilot;     ///< GitHub Copilot configuration.
 
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
     bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.

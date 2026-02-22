@@ -78,16 +78,17 @@ TEST_CASE("ProviderModels.findModelByName.openai_exact", "[agent][providers][mod
 TEST_CASE("ProviderModels.allKnownModels.returns_all", "[agent][providers][models]")
 {
     auto const models = allKnownModels();
-    auto const expectedCount = ClaudeModels.size() + OpenAiModels.size() + GeminiModels.size();
+    auto const expectedCount =
+        ClaudeModels.size() + OpenAiModels.size() + GeminiModels.size() + CopilotModels.size();
     CHECK(models.size() == expectedCount);
 }
 
 TEST_CASE("ProviderModels.allKnownModels.provider_order", "[agent][providers][models]")
 {
     auto const models = allKnownModels();
-    // First models should be Claude, then OpenAI, then Gemini.
+    // First models should be Claude, last should be Copilot.
     CHECK(models.front().providerName == "claude");
-    CHECK(models.back().providerName == "gemini");
+    CHECK(models.back().providerName == "copilot");
 }
 
 // --- formatCapabilityDiff tests ---

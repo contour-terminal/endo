@@ -3,8 +3,10 @@
 
 #include <http/HttpClient.hpp>
 
+#include <agent/auth/CopilotDeviceFlow.hpp>
 #include <agent/auth/OAuthFlow.hpp>
 #include <agent/providers/ClaudeProvider.hpp>
+#include <agent/providers/CopilotProvider.hpp>
 #include <agent/providers/GeminiProvider.hpp>
 #include <agent/providers/OpenAiProvider.hpp>
 
@@ -141,6 +143,27 @@ namespace
         return std::nullopt;
     }
 
+    /// Resolves the GitHub OAuth token for Copilot from the OAuth store.
+    auto resolveCopilotToken(OAuthStore const& oauthStore) -> std::optional<std::string>
+    {
+        if (!oauthStore.copilot.has_value() || oauthStore.copilot->accessToken.empty())
+            return std::nullopt;
+        return oauthStore.copilot->accessToken;
+    }
+
+    /// Creates a TokenRefresher that reloads the GitHub token from the OAuthStore.
+    /// (The GitHub token itself is long-lived; this handles re-reading from disk
+    /// in case another process updated it.)
+    auto makeCopilotTokenRefresher() -> TokenRefresher
+    {
+        return []() -> std::expected<std::string, std::string> {
+            auto store = loadOAuthStore();
+            if (!store.copilot.has_value())
+                return std::unexpected(std::string("No Copilot OAuth credentials stored"));
+            return store.copilot->accessToken;
+        };
+    }
+
     /// Creates a TokenRefresher callback that refreshes the Gemini Google OAuth token
     /// and persists the new credentials to disk.
     auto makeGeminiTokenRefresher() -> TokenRefresher
@@ -227,6 +250,20 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
         if (providerConfig.useOAuth)
             providerConfig.tokenRefresher = makeGeminiTokenRefresher();
         _providers.emplace("gemini", std::make_unique<GeminiProvider>(httpClient, std::move(providerConfig)));
+    }
+
+    // Try to create Copilot provider (OAuth only — requires GitHub token in OAuthStore).
+    if (auto ghToken = resolveCopilotToken(oauthStore))
+    {
+        auto providerConfig = CopilotProviderConfig {
+            .githubToken = std::move(*ghToken),
+            .model = config.copilot.model,
+            .maxTokens = config.copilot.maxTokens,
+            .thinkingMode = config.copilot.thinkingMode,
+            .tokenRefresher = makeCopilotTokenRefresher(),
+        };
+        _providers.emplace("copilot",
+                           std::make_unique<CopilotProvider>(httpClient, std::move(providerConfig)));
     }
 
     // Set active provider: prefer config.activeProvider if authenticated, otherwise first available
@@ -341,6 +378,22 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
             if (providerConfig.useOAuth)
                 providerConfig.tokenRefresher = makeGeminiTokenRefresher();
             auto provider = std::make_unique<GeminiProvider>(httpRef, std::move(providerConfig));
+            return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
+        }
+    }
+    else if (_activeProviderName == "copilot")
+    {
+        auto const oauthStore = loadOAuthStore();
+        if (auto ghToken = resolveCopilotToken(oauthStore))
+        {
+            auto providerConfig = CopilotProviderConfig {
+                .githubToken = std::move(*ghToken),
+                .model = _config.copilot.model,
+                .maxTokens = _config.copilot.maxTokens,
+                .thinkingMode = _config.copilot.thinkingMode,
+                .tokenRefresher = makeCopilotTokenRefresher(),
+            };
+            auto provider = std::make_unique<CopilotProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
         }
     }

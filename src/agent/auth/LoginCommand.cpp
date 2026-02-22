@@ -16,6 +16,7 @@
 #endif
 
 #include <agent/AgentConfig.hpp>
+#include <agent/auth/CopilotDeviceFlow.hpp>
 #include <agent/auth/OAuthCallbackServer.hpp>
 #include <agent/auth/OAuthFlow.hpp>
 #include <agent/auth/TerminalInput.hpp>
@@ -38,7 +39,7 @@ namespace
         bool supportsOAuth = false;   ///< Whether this provider supports OAuth login.
     };
 
-    constexpr auto KnownProviders = std::array<ProviderInfo, 3> { {
+    constexpr auto KnownProviders = std::array<ProviderInfo, 4> { {
         { .name = "claude"sv,
           .label = "Claude (Anthropic)"sv,
           .apiKeyUrl = "https://console.anthropic.com/settings/keys"sv,
@@ -53,6 +54,11 @@ namespace
           .label = "Gemini (Google)"sv,
           .apiKeyUrl = "https://aistudio.google.com/apikey"sv,
           .validateUrl = "https://generativelanguage.googleapis.com/v1beta/models"sv,
+          .supportsOAuth = true },
+        { .name = "copilot"sv,
+          .label = "GitHub Copilot"sv,
+          .apiKeyUrl = ""sv,
+          .validateUrl = ""sv,
           .supportsOAuth = true },
     } };
 
@@ -71,6 +77,7 @@ namespace
             "Claude (Anthropic)"sv,
             "OpenAI"sv,
             "Gemini (Google)"sv,
+            "GitHub Copilot"sv,
         };
         auto const sel = askSingleSelect("Select a provider to authenticate:", labels);
         if (!sel)
@@ -128,6 +135,7 @@ namespace
             config.openai.apiKey = apiKey;
         else if (provider == "gemini")
             config.gemini.apiKey = apiKey;
+        // Copilot does not use API keys — OAuth only.
     }
 
     /// Clears the stored API key for a provider.
@@ -148,6 +156,7 @@ namespace
         if (provider == "openai_compat")
             return resolveProviderApiKey(config.openaiCompat.apiKey, config.openaiCompat.apiKeyEnv)
                 .has_value();
+        // Copilot uses OAuth only — API key check is not applicable.
         return false;
     }
 
@@ -163,6 +172,8 @@ namespace
                 return &*oauthStore.openai;
             if (provider == "gemini" && oauthStore.gemini.has_value())
                 return &*oauthStore.gemini;
+            if (provider == "copilot" && oauthStore.copilot.has_value())
+                return &*oauthStore.copilot;
             return nullptr;
         }();
 
@@ -207,6 +218,9 @@ namespace
         if (provider == "openai" && oauthStore.openai.has_value() && !oauthStore.openai->accessToken.empty())
             return true;
         if (provider == "gemini" && oauthStore.gemini.has_value() && !oauthStore.gemini->accessToken.empty())
+            return true;
+        if (provider == "copilot" && oauthStore.copilot.has_value()
+            && !oauthStore.copilot->accessToken.empty())
             return true;
 
         // Check API key.
@@ -479,6 +493,69 @@ namespace
         return EXIT_SUCCESS;
     }
 
+    // ── GitHub Copilot Device Flow Login ──────────────────────────────
+
+    auto runCopilotDeviceFlow() -> int
+    {
+        auto httpClient = http::HttpClient {};
+
+        // Step 1: Request device code.
+        std::print("Requesting device authorization...\n");
+        auto const deviceCodeResult = requestGitHubDeviceCode(httpClient);
+        if (!deviceCodeResult.has_value())
+        {
+            std::print(stderr, "Failed: {}\n", deviceCodeResult.error());
+            return EXIT_FAILURE;
+        }
+        auto const& dc = *deviceCodeResult;
+
+        // Step 2: Display user code and open browser.
+        std::print("\n  Enter code: {}\n", dc.userCode);
+        std::print("  at: {}\n\n", dc.verificationUri);
+        (void) openBrowser(dc.verificationUri);
+
+        // Step 3: Poll for completion.
+        std::print("Waiting for authorization...");
+        auto const ghTokenResult = pollGitHubDeviceAuth(httpClient, dc);
+        if (!ghTokenResult.has_value())
+        {
+            std::print(stderr, "\n{}\n", ghTokenResult.error());
+            return EXIT_FAILURE;
+        }
+        std::print(" OK\n");
+
+        // Step 4: Validate by exchanging for Copilot session token.
+        std::print("Validating Copilot access...");
+        auto const sessionResult = exchangeCopilotToken(httpClient, *ghTokenResult);
+        if (!sessionResult.has_value())
+        {
+            std::print(stderr, "\nCopilot token exchange failed: {}\n", sessionResult.error());
+            std::print(stderr, "Your GitHub account may not have an active Copilot subscription.\n");
+            return EXIT_FAILURE;
+        }
+        std::print(" OK\n");
+
+        // Step 5: Save the long-lived GitHub token to OAuthStore.
+        auto store = loadOAuthStore();
+        store.copilot = OAuthCredentials {
+            .accessToken = *ghTokenResult,
+            .refreshToken = {},
+            .expiresAt = 0, // GitHub tokens do not expire.
+            .authMode = "github_device",
+        };
+
+        if (auto error = saveOAuthStore(store))
+        {
+            std::print(stderr, "Failed to save credentials: {}\n", *error);
+            return EXIT_FAILURE;
+        }
+
+        std::print("Login successful! Copilot credentials saved to {}\n", oauthStorePath().string());
+        std::print("To select this provider, add to ~/.config/endo/init.endo:\n");
+        std::print("  set_agent_provider \"copilot\"\n");
+        return EXIT_SUCCESS;
+    }
+
 } // namespace
 
 auto runLoginCommand(std::string_view providerHint) -> int
@@ -494,9 +571,13 @@ auto runLoginCommand(std::string_view providerHint) -> int
     if (!info)
     {
         std::print(stderr, "Unknown provider: {}\n", providerName);
-        std::print(stderr, "Available providers: claude, openai, gemini\n");
+        std::print(stderr, "Available providers: claude, openai, gemini, copilot\n");
         return EXIT_FAILURE;
     }
+
+    // Copilot uses OAuth device flow exclusively — no API key option.
+    if (providerName == "copilot")
+        return runCopilotDeviceFlow();
 
     // If this provider supports OAuth, offer the choice.
     if (info->supportsOAuth)
@@ -543,7 +624,8 @@ auto runStatusCommand() -> int
     std::print("\n{}{:<16}{:<18}{}{}\n", bold, "Provider", "Status", "Source", reset);
     std::print("{}{:─<16}{:─<18}{:─<14}{}\n", dim, "", "", "", reset);
 
-    auto const allProviders = std::array { "claude"sv, "openai"sv, "gemini"sv, "openai_compat"sv };
+    auto const allProviders =
+        std::array { "claude"sv, "openai"sv, "gemini"sv, "copilot"sv, "openai_compat"sv };
 
     for (auto const& provider: allProviders)
     {
@@ -610,6 +692,14 @@ auto runLogoutCommand(std::string_view providerHint) -> int
     else if (providerName == "gemini" && oauthStore.gemini.has_value())
     {
         oauthStore.gemini.reset();
+        if (auto error = saveOAuthStore(oauthStore))
+            std::print(stderr, "Warning: failed to save OAuth store: {}\n", *error);
+        else
+            removedSomething = true;
+    }
+    else if (providerName == "copilot" && oauthStore.copilot.has_value())
+    {
+        oauthStore.copilot.reset();
         if (auto error = saveOAuthStore(oauthStore))
             std::print(stderr, "Warning: failed to save OAuth store: {}\n", *error);
         else
