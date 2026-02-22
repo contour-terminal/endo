@@ -47,6 +47,104 @@ TEST_CASE("ImageLoader.isImageExtension_rejects_non_image_formats")
 }
 
 // ============================================================================
+// detectImageMediaType tests
+// ============================================================================
+
+TEST_CASE("ImageLoader.detectImageMediaType_png")
+{
+    // PNG signature: 89 50 4E 47 0D 0A 1A 0A
+    auto const data = std::vector<std::uint8_t> { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00 };
+    CHECK(detectImageMediaType(data) == "image/png");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_jpeg")
+{
+    auto const data = std::vector<std::uint8_t> { 0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10 };
+    CHECK(detectImageMediaType(data) == "image/jpeg");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_gif87a")
+{
+    auto const data = std::vector<std::uint8_t> { 'G', 'I', 'F', '8', '7', 'a', 0x00 };
+    CHECK(detectImageMediaType(data) == "image/gif");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_gif89a")
+{
+    auto const data = std::vector<std::uint8_t> { 'G', 'I', 'F', '8', '9', 'a', 0x00 };
+    CHECK(detectImageMediaType(data) == "image/gif");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_bmp")
+{
+    auto const data = std::vector<std::uint8_t> { 'B', 'M', 0x00, 0x00, 0x00 };
+    CHECK(detectImageMediaType(data) == "image/bmp");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_webp")
+{
+    auto const data =
+        std::vector<std::uint8_t> { 'R', 'I', 'F', 'F', 0x00, 0x00, 0x00, 0x00, 'W', 'E', 'B', 'P' };
+    CHECK(detectImageMediaType(data) == "image/webp");
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_unknown_text")
+{
+    auto const data = std::vector<std::uint8_t> { 'H', 'e', 'l', 'l', 'o' };
+    CHECK(detectImageMediaType(data).empty());
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_too_short")
+{
+    auto const data = std::vector<std::uint8_t> { 0xFF, 0xD8 };
+    CHECK(detectImageMediaType(data).empty());
+}
+
+TEST_CASE("ImageLoader.detectImageMediaType_empty")
+{
+    auto const data = std::vector<std::uint8_t> {};
+    CHECK(detectImageMediaType(data).empty());
+}
+
+// ============================================================================
+// loadImageFromMemory tests
+// ============================================================================
+
+TEST_CASE("ImageLoader.loadImageFromMemory_invalid_data")
+{
+    auto const garbage = std::vector<std::uint8_t> { 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFE };
+    auto const result = loadImageFromMemory(garbage);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().find("Failed to load image from memory") != std::string::npos);
+}
+
+TEST_CASE("ImageLoader.loadImageFromMemory_valid_ppm")
+{
+    // PPM P6 format: simple, no compression
+    std::string header = "P6\n2 2\n255\n";
+    std::vector<std::uint8_t> data(header.begin(), header.end());
+    // 4 red pixels (RGB)
+    for (int i = 0; i < 4; ++i)
+    {
+        data.push_back(255); // R
+        data.push_back(0);   // G
+        data.push_back(0);   // B
+    }
+
+    auto const result = loadImageFromMemory(data);
+    REQUIRE(result.has_value());
+    CHECK(result->width == 2);
+    CHECK(result->height == 2);
+    CHECK(result->pixels.size() == 2 * 2 * 4); // RGBA
+
+    // First pixel should be red (R=255, G=0, B=0, A=255)
+    CHECK(result->pixels[0] == 255); // R
+    CHECK(result->pixels[1] == 0);   // G
+    CHECK(result->pixels[2] == 0);   // B
+    CHECK(result->pixels[3] == 255); // A (opaque)
+}
+
+// ============================================================================
 // loadImage tests
 // ============================================================================
 
