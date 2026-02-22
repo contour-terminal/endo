@@ -1362,6 +1362,8 @@ namespace
             auto command = std::string {};
             if (call.arguments.contains("command") && call.arguments["command"].is_string())
                 command = call.arguments["command"].get<std::string>();
+            else if (call.arguments.contains("source") && call.arguments["source"].is_string())
+                command = call.arguments["source"].get<std::string>();
 
             if (call.arguments.contains("timeout_ms") && call.arguments["timeout_ms"].is_number())
             {
@@ -2529,8 +2531,35 @@ void Shell::runAgentMode()
                             out.writeText("\u2502 ", barStyle);
                             if (m.call.name == "shell_execute" || m.call.name == "endo_execute")
                             {
-                                out.writeText(prefix, shellPromptStyle);
-                                out.writeText(text, shellCommandStyle);
+                                auto const language = m.call.name == "endo_execute" ? tui::LanguageId::Endo
+                                                                                    : tui::LanguageId::Bash;
+                                auto hlState = tui::HighlightState::Normal;
+                                auto remaining = std::string_view { text };
+                                auto firstLine = true;
+                                while (!remaining.empty())
+                                {
+                                    auto const newlinePos = remaining.find('\n');
+                                    auto const line = remaining.substr(0, newlinePos);
+                                    remaining = newlinePos != std::string_view::npos
+                                                    ? remaining.substr(newlinePos + 1)
+                                                    : std::string_view {};
+
+                                    if (firstLine)
+                                    {
+                                        out.writeText(prefix, shellPromptStyle);
+                                        firstLine = false;
+                                    }
+                                    else
+                                    {
+                                        out.linefeed();
+                                        out.writeText("\u2502   ", barStyle);
+                                    }
+
+                                    auto [highlights, nextState] =
+                                        tui::highlightLine(line, language, hlState);
+                                    hlState = nextState;
+                                    tui::renderHighlightedLine(out, line, highlights, tui::Style {}, theme);
+                                }
                             }
                             else
                             {
