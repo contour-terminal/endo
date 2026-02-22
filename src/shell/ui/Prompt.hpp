@@ -103,6 +103,9 @@ class Prompt
     /// @brief Returns the Terminal for color scheme access.
     [[nodiscard]] tui::Terminal& terminal() noexcept { return _terminal; }
 
+    /// @brief Returns the GitModule for accessing cached git info.
+    [[nodiscard]] GitModule const* gitModule() const noexcept;
+
     /// @brief Returns the action from the last read() call.
     [[nodiscard]] auto lastAction() const noexcept -> PromptComponent::Action { return _lastAction; }
 

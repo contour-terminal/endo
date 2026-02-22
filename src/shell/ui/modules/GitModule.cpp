@@ -18,14 +18,6 @@ namespace endo
 namespace
 {
 
-    struct GitInfo
-    {
-        std::string branch;
-        int dirty = 0;  ///< Number of unstaged changes.
-        int staged = 0; ///< Number of staged changes.
-        bool valid = false;
-    };
-
     /// @brief Runs a command and captures stdout.
     [[nodiscard]] auto runCommand(std::string const& cmd) -> std::string
     {
@@ -45,35 +37,40 @@ namespace
         return result;
     }
 
-    /// @brief Queries git status for the given directory.
+    /// @brief Queries git status using a single command.
+    ///
+    /// Extracts branch name from `# branch.head` header and dirty/staged counts
+    /// from porcelain v2 change entries. Avoids the separate `git rev-parse` call.
     [[nodiscard]] auto queryGitInfo(std::string const& cwd) -> GitInfo
     {
         auto info = GitInfo {};
 
-        // Get branch name
-#if defined(_WIN32)
-        info.branch = runCommand("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
-#else
-        info.branch = runCommand("git -C " + cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-#endif
-        if (info.branch.empty())
-            return info;
-
-        info.valid = true;
-
-        // Get porcelain status for dirty/staged counts
 #if defined(_WIN32)
         auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>NUL");
 #else
         auto const status = runCommand("git -C " + cwd + " status --porcelain=v2 --branch 2>/dev/null");
 #endif
+        if (status.empty())
+            return info;
+
         for (auto pos = std::size_t { 0 }; pos < status.size();)
         {
             auto const nl = status.find('\n', pos);
             auto const line = status.substr(pos, (nl == std::string::npos) ? std::string::npos : nl - pos);
             pos = (nl == std::string::npos) ? status.size() : nl + 1;
 
-            if (line.size() >= 2 && (line[0] == '1' || line[0] == '2'))
+            // Extract branch name from header: "# branch.head <name>"
+            if (line.starts_with("# branch.head "))
+            {
+                info.branch = line.substr(14); // strlen("# branch.head ") == 14
+                // git status reports "(detached)" for detached HEAD — normalize to "HEAD"
+                if (info.branch == "(detached)")
+                    info.branch = "HEAD";
+                info.valid = true;
+                continue;
+            }
+
+            if (line.size() >= 4 && (line[0] == '1' || line[0] == '2'))
             {
                 // Changed entry: "1 XY ..." or "2 XY ..."
                 auto const x = line[2]; // staged indicator
@@ -94,20 +91,30 @@ namespace
 
 } // namespace
 
+void GitModule::refreshIfNeeded(std::string const& cwd) const
+{
+    auto const now = std::chrono::steady_clock::now();
+
+    if (_cachePopulated && _cachedCwd == cwd && (now - _cacheTime) < CacheTtl)
+        return;
+
+    _cache = queryGitInfo(cwd);
+    _cachedCwd = cwd;
+    _cacheTime = now;
+    _cachePopulated = true;
+}
+
 bool GitModule::shouldShow(PromptContext const& ctx) const
 {
-#if defined(_WIN32)
-    auto const branch = runCommand("git -C " + ctx.cwd + " rev-parse --abbrev-ref HEAD 2>NUL");
-#else
-    auto const branch = runCommand("git -C " + ctx.cwd + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-#endif
-    return !branch.empty();
+    refreshIfNeeded(ctx.cwd);
+    return _cache.valid;
 }
 
 PromptSegments GitModule::evaluate(PromptContext const& ctx) const
 {
-    auto const info = queryGitInfo(ctx.cwd);
-    if (!info.valid)
+    refreshIfNeeded(ctx.cwd);
+
+    if (!_cache.valid)
         return {};
 
     auto segments = PromptSegments {};
@@ -116,30 +123,30 @@ PromptSegments GitModule::evaluate(PromptContext const& ctx) const
     auto branchStyle = tui::Style {};
     if (ctx.theme)
     {
-        if (info.dirty > 0)
+        if (_cache.dirty > 0)
             branchStyle.fg = ctx.theme->promptColors.gitDirty;
-        else if (info.staged > 0)
+        else if (_cache.staged > 0)
             branchStyle.fg = ctx.theme->promptColors.gitStaged;
         else
             branchStyle.fg = ctx.theme->promptColors.gitClean;
     }
 
     segments.push_back(
-        PromptSegment { .text = "\xee\x82\xa0 " + info.branch, .style = branchStyle }); // U+E0A0
+        PromptSegment { .text = "\xee\x82\xa0 " + _cache.branch, .style = branchStyle }); // U+E0A0
 
     // Dirty/staged indicators
-    if (info.dirty > 0 || info.staged > 0)
+    if (_cache.dirty > 0 || _cache.staged > 0)
     {
         auto indicatorText = std::string {};
-        if (info.dirty > 0)
-            indicatorText += " !" + std::to_string(info.dirty);
-        if (info.staged > 0)
-            indicatorText += " +" + std::to_string(info.staged);
+        if (_cache.dirty > 0)
+            indicatorText += " !" + std::to_string(_cache.dirty);
+        if (_cache.staged > 0)
+            indicatorText += " +" + std::to_string(_cache.staged);
 
         auto indicatorStyle = tui::Style {};
         if (ctx.theme)
             indicatorStyle.fg =
-                (info.dirty > 0) ? ctx.theme->promptColors.gitDirty : ctx.theme->promptColors.gitStaged;
+                (_cache.dirty > 0) ? ctx.theme->promptColors.gitDirty : ctx.theme->promptColors.gitStaged;
         segments.push_back(PromptSegment { .text = indicatorText, .style = indicatorStyle });
     }
 

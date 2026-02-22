@@ -2,6 +2,7 @@
 #include "Shell.hpp"
 #include <shell/ui/Prompt.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
+#include <shell/ui/modules/GitModule.hpp>
 
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
@@ -1411,11 +1412,12 @@ namespace
     /// @param agentConfig The agent configuration.
     /// @param cwd The current working directory.
     /// @param cachedContext Optional cached project context to reuse (skips file scanning).
+    /// @param cachedGitInfo Optional cached git info from the prompt's GitModule.
     /// @return The assembled context result.
     [[nodiscard]] auto buildAgentContext(agent::AgentConfig const& agentConfig,
                                          std::filesystem::path const& cwd,
-                                         std::optional<agent::ProjectContext> cachedContext)
-        -> AgentContextResult
+                                         std::optional<agent::ProjectContext> cachedContext,
+                                         std::optional<GitInfo> cachedGitInfo) -> AgentContextResult
     {
         auto projectContext =
             cachedContext ? std::move(*cachedContext) : agent::ProjectContextLoader {}.load(cwd);
@@ -1428,24 +1430,37 @@ namespace
         promptBuilder.setMemoryFiles(projectContext.memoryFiles);
         promptBuilder.setFileTree(projectContext.fileTree);
 
-        auto const cwdStr = cwd.string();
-#if defined(_WIN32)
-        auto const gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
-#else
-        auto const gitBranch =
-            runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>/dev/null");
-#endif
-        if (!gitBranch.empty())
+        // Use cached git info from the prompt module when available to avoid
+        // spawning additional subprocess calls.
+        auto gitBranch = std::string {};
+        if (cachedGitInfo && cachedGitInfo->valid)
         {
+            gitBranch = cachedGitInfo->branch;
             promptBuilder.setGitBranch(gitBranch);
+            promptBuilder.setGitStatus((cachedGitInfo->dirty > 0 || cachedGitInfo->staged > 0) ? "has changes"
+                                                                                               : "clean");
+        }
+        else
+        {
+            // Fallback: query git directly (e.g., first agent entry before prompt displayed)
+            auto const cwdStr = cwd.string();
 #if defined(_WIN32)
-            auto const gitStatus =
-                runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>NUL");
+            gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>NUL");
 #else
-            auto const gitStatus =
-                runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>/dev/null");
+            gitBranch = runCommandCapture("git -C " + cwdStr + " rev-parse --abbrev-ref HEAD 2>/dev/null");
 #endif
-            promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
+            if (!gitBranch.empty())
+            {
+                promptBuilder.setGitBranch(gitBranch);
+#if defined(_WIN32)
+                auto const gitStatus =
+                    runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>NUL");
+#else
+                auto const gitStatus =
+                    runCommandCapture("git -C " + cwdStr + " status --porcelain=v2 --branch 2>/dev/null");
+#endif
+                promptBuilder.setGitStatus(gitStatus.empty() ? "clean" : "has changes");
+            }
         }
 
         // Tilde-contract the project path for display
@@ -2258,8 +2273,17 @@ void Shell::runAgentMode()
     auto const cwd = std::filesystem::current_path();
     auto cachedCtx = (_cachedProjectContextCwd == cwd) ? std::move(_cachedProjectContext) : std::nullopt;
     _cachedProjectContext.reset();
-    auto contextFuture =
-        std::async(std::launch::async, buildAgentContext, agentConfig, cwd, std::move(cachedCtx));
+
+    // Capture cached git info from the prompt's GitModule to avoid redundant subprocess calls.
+    auto cachedGit = std::optional<GitInfo> {};
+    if (auto const* gitMod = prompt.gitModule())
+        cachedGit = gitMod->cachedInfo();
+
+    auto contextFuture = std::async(
+        std::launch::async,
+        [&cfg = agentConfig, cwd, ctx = std::move(cachedCtx), git = std::move(cachedGit)]() mutable {
+            return buildAgentContext(cfg, cwd, std::move(ctx), std::move(git));
+        });
     auto systemPromptReady = false;
     auto planModeActive = false;
 

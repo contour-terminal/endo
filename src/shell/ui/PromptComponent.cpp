@@ -166,8 +166,17 @@ void PromptComponent::setPromptContext(PromptContext context)
         || context.cellPixelHeight != _context.cellPixelHeight)
         _auroraFadeCacheWidth = 0;
 
+    // Selective module cache invalidation: only invalidate when semantically
+    // meaningful fields change (CWD, exit code, duration). During typing/re-renders
+    // within the same prompt cycle these fields don't change, avoiding expensive
+    // module evaluation (especially git subprocess calls).
+    if (context.cwd != _context.cwd || context.lastExitCode != _context.lastExitCode
+        || context.lastDuration != _context.lastDuration)
+    {
+        _moduleCacheValid = false;
+    }
+
     _context = std::move(context);
-    _moduleCacheValid = false; // Invalidate module cache on context change
 }
 
 void PromptComponent::render(tui::Canvas& canvas)
@@ -1493,6 +1502,14 @@ void PromptComponent::resetHistoryCycling()
 {
     _historyCycleIndex.reset();
     _historyCandidates.clear();
+}
+
+GitModule const* PromptComponent::gitModule() const noexcept
+{
+    auto const it = _modules.find("git");
+    if (it == _modules.end())
+        return nullptr;
+    return dynamic_cast<GitModule const*>(it->second.get());
 }
 
 std::optional<std::chrono::steady_clock::time_point> PromptComponent::computeModuleRefreshDeadline() const

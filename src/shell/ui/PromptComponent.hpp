@@ -27,6 +27,7 @@ namespace endo
 
 class Completer;
 class CommandResolver;
+class GitModule;
 class History;
 
 /// @brief A styled prompt component for the shell.
@@ -164,6 +165,9 @@ class PromptComponent: public tui::Component
     [[nodiscard]] tui::InputField& inputField() noexcept { return _inputField; }
 
     [[nodiscard]] tui::InputField const& inputField() const noexcept { return _inputField; }
+
+    /// @brief Returns the GitModule for accessing cached git info.
+    [[nodiscard]] GitModule const* gitModule() const noexcept;
 
     /// @brief Returns the number of chrome lines above input (info line, box frame, etc.).
     [[nodiscard]] int chromeHeight() const noexcept;

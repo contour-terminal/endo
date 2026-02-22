@@ -3,6 +3,8 @@
 
 #include <tui/Screen.hpp>
 
+#include "modules/GitModule.hpp"
+
 #if defined(__clang__)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wold-style-cast"
@@ -457,6 +459,11 @@ void Prompt::setPromptContext(PromptContext context)
 {
     if (_promptComponent)
         _promptComponent->setPromptContext(std::move(context));
+}
+
+GitModule const* Prompt::gitModule() const noexcept
+{
+    return _promptComponent ? _promptComponent->gitModule() : nullptr;
 }
 
 void Prompt::setKnownFSharpNames(std::set<std::string> names)
