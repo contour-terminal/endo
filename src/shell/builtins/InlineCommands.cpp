@@ -3,6 +3,8 @@
 #include <shell/commands/FindExpression.hpp>
 
 #include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/ImageLoader.hpp>
+#include <tui/Sixel.hpp>
 #include <tui/Theme.hpp>
 
 #include <charconv>
@@ -264,9 +266,12 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
     bool showEnds = false;
     bool showTabs = false;
     bool showHelp = false;
+    bool rawMode = false;
     std::optional<int> rangeStart;
     std::optional<int> rangeEnd;
     bool rangeSpecified = false;
+    std::optional<int> imageColumns;
+    std::optional<int> imageRows;
     std::vector<std::string> files;
 
     for (size_t i = 0; i < catArgs.size(); ++i)
@@ -316,6 +321,63 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             showTabs = true;
             continue;
         }
+        if (arg == "--raw")
+        {
+            rawMode = true;
+            continue;
+        }
+        if (arg == "--columns" || arg.starts_with("--columns="))
+        {
+            std::string_view colValue;
+            if (arg == "--columns")
+            {
+                if (i + 1 >= catArgs.size())
+                {
+                    error("cat: --columns requires a value");
+                    return 1;
+                }
+                colValue = catArgs[++i];
+            }
+            else
+            {
+                colValue = arg.substr(10); // skip "--columns="
+            }
+            int value = 0;
+            auto const [ptr, ec] = std::from_chars(colValue.data(), colValue.data() + colValue.size(), value);
+            if (ec != std::errc {} || ptr != colValue.data() + colValue.size() || value < 1)
+            {
+                error("cat: --columns: invalid value '{}'", colValue);
+                return 1;
+            }
+            imageColumns = value;
+            continue;
+        }
+        if (arg == "--rows" || arg.starts_with("--rows="))
+        {
+            std::string_view rowValue;
+            if (arg == "--rows")
+            {
+                if (i + 1 >= catArgs.size())
+                {
+                    error("cat: --rows requires a value");
+                    return 1;
+                }
+                rowValue = catArgs[++i];
+            }
+            else
+            {
+                rowValue = arg.substr(7); // skip "--rows="
+            }
+            int value = 0;
+            auto const [ptr, ec] = std::from_chars(rowValue.data(), rowValue.data() + rowValue.size(), value);
+            if (ec != std::errc {} || ptr != rowValue.data() + rowValue.size() || value < 1)
+            {
+                error("cat: --rows: invalid value '{}'", rowValue);
+                return 1;
+            }
+            imageRows = value;
+            continue;
+        }
         if (arg == "--range" || arg.starts_with("--range="))
         {
             std::string_view rangeValue;
@@ -361,6 +423,56 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
                         showTabs = true;
                         break;
                     case 'h': showHelp = true; break;
+                    case 'c': {
+                        // -c must be last in the flag cluster since it takes an argument
+                        if (j + 1 != arg.size())
+                        {
+                            error("cat: -c must be last in combined flags (takes an argument)");
+                            return 1;
+                        }
+                        if (i + 1 >= catArgs.size())
+                        {
+                            error("cat: -c requires a value");
+                            return 1;
+                        }
+                        int value = 0;
+                        auto const [ptr, ec] = std::from_chars(
+                            catArgs[i + 1].data(), catArgs[i + 1].data() + catArgs[i + 1].size(), value);
+                        if (ec != std::errc {} || ptr != catArgs[i + 1].data() + catArgs[i + 1].size()
+                            || value < 1)
+                        {
+                            error("cat: -c: invalid value '{}'", catArgs[i + 1]);
+                            return 1;
+                        }
+                        ++i;
+                        imageColumns = value;
+                        break;
+                    }
+                    case 'R': {
+                        // -R must be last in the flag cluster since it takes an argument
+                        if (j + 1 != arg.size())
+                        {
+                            error("cat: -R must be last in combined flags (takes an argument)");
+                            return 1;
+                        }
+                        if (i + 1 >= catArgs.size())
+                        {
+                            error("cat: -R requires a value");
+                            return 1;
+                        }
+                        int value = 0;
+                        auto const [ptr, ec] = std::from_chars(
+                            catArgs[i + 1].data(), catArgs[i + 1].data() + catArgs[i + 1].size(), value);
+                        if (ec != std::errc {} || ptr != catArgs[i + 1].data() + catArgs[i + 1].size()
+                            || value < 1)
+                        {
+                            error("cat: -R: invalid value '{}'", catArgs[i + 1]);
+                            return 1;
+                        }
+                        ++i;
+                        imageRows = value;
+                        break;
+                    }
                     case 'r': {
                         // -r must be last in the flag cluster since it takes an argument
                         if (j + 1 != arg.size())
@@ -417,6 +529,9 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         writeOutput("  -T, --show-tabs        display TAB characters as ^I\n");
         writeOutput("  -A, --show-all         equivalent to -ET\n");
         writeOutput("  -r, --range START..END show only lines in the given range\n");
+        writeOutput("  -c, --columns N        target image width in terminal columns\n");
+        writeOutput("  -R, --rows N           target image height in terminal rows\n");
+        writeOutput("      --raw              disable inline image rendering\n");
         writeOutput("  -h, --help             display this help and exit\n");
         return 0;
     }
@@ -580,6 +695,90 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         }
         else
         {
+            // Check for image file rendering via sixel
+            auto const ext = std::filesystem::path(file).extension().string();
+            auto const forceImage = imageColumns.has_value() || imageRows.has_value();
+            if (tui::isImageExtension(ext) && (outputIsTty || forceImage) && !rawMode)
+            {
+                auto imageResult = tui::loadImage(file);
+                if (!imageResult.has_value())
+                {
+                    error("cat: {}: {}", file, imageResult.error());
+                    success = false;
+                    continue;
+                }
+
+                auto& image = imageResult.value();
+
+                // Determine target pixel dimensions
+                auto const termSize = _tty.getSize();
+                auto const termCols = termSize.has_value() ? termSize->cols : uint16_t { 80 };
+                auto const termXpixel = termSize.has_value() ? termSize->xpixel : uint16_t { 0 };
+                auto const termYpixel = termSize.has_value() ? termSize->ypixel : uint16_t { 0 };
+                auto const termRows = termSize.has_value() ? termSize->rows : uint16_t { 25 };
+
+                // Cell pixel size (fallback: 8x16 if pixel dims unavailable)
+                auto const cellWidth = termXpixel > 0 ? termXpixel / termCols : 8;
+                auto const cellHeight = termYpixel > 0 ? termYpixel / termRows : 16;
+
+                auto targetPixelWidth = 0;
+                auto targetPixelHeight = 0;
+
+                if (imageColumns.has_value())
+                    targetPixelWidth = *imageColumns * cellWidth;
+                if (imageRows.has_value())
+                    targetPixelHeight = *imageRows * cellHeight;
+
+                // Auto-sizing: fit to terminal width if no explicit size given
+                if (!imageColumns.has_value() && !imageRows.has_value())
+                {
+                    auto const maxPixelWidth = static_cast<int>(termCols) * cellWidth;
+                    if (image.width > maxPixelWidth)
+                    {
+                        targetPixelWidth = maxPixelWidth;
+                        targetPixelHeight = 0; // auto from aspect ratio
+                    }
+                }
+
+                // Resize if target differs from source
+                if (targetPixelWidth > 0 || targetPixelHeight > 0)
+                {
+                    auto const tw = targetPixelWidth > 0 ? targetPixelWidth : 0;
+                    auto const th = targetPixelHeight > 0 ? targetPixelHeight : 0;
+                    if (tw != image.width || th != image.height)
+                    {
+                        auto resized = tui::resizeImage(image, tw, th);
+                        if (!resized.has_value())
+                        {
+                            error("cat: {}: {}", file, resized.error());
+                            success = false;
+                            continue;
+                        }
+                        image = std::move(resized.value());
+                    }
+                }
+
+                // Encode as sixel
+                auto const imageData =
+                    tui::ImageData { .pixels = image.pixels, .width = image.width, .height = image.height };
+                auto sixelResult = tui::encodeSixel(imageData, 256);
+                if (!sixelResult.has_value())
+                {
+                    error("cat: {}: sixel encode failed: {}", file, sixelResult.error());
+                    success = false;
+                    continue;
+                }
+
+                // Write DCS-framed sixel sequence
+                auto const sixelOutput = std::format("\033P0;1q{}\033\\", sixelResult.value());
+                [[maybe_unused]] auto written =
+                    platformWrite(outputFd, sixelOutput.data(), sixelOutput.size());
+
+                // Trailing newline
+                writeOutput("\n");
+                continue;
+            }
+
             auto const result = _processManager.openFile(file, O_RDONLY);
             if (!result.has_value())
             {
@@ -590,6 +789,18 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
             auto const fd = result.value();
             auto const content = readFromFd(fd);
             _processManager.closeHandle(fd);
+
+            // Detect binary content (non-image files)
+            if (!rawMode && outputIsTty)
+            {
+                if (content.find('\0') != std::string::npos)
+                {
+                    error("cat: {}: binary file (use --raw to force output)", file);
+                    success = false;
+                    continue;
+                }
+            }
+
             auto const language = tui::detectLanguageFromPath(file);
             processContent(content, language);
         }

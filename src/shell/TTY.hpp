@@ -22,11 +22,13 @@
 namespace endo
 {
 
-/// Terminal size in rows and columns.
+/// Terminal size in rows and columns, with optional pixel dimensions.
 struct TerminalSize
 {
-    uint16_t rows = 0; ///< Number of rows
-    uint16_t cols = 0; ///< Number of columns
+    uint16_t rows = 0;   ///< Number of rows
+    uint16_t cols = 0;   ///< Number of columns
+    uint16_t xpixel = 0; ///< Terminal width in pixels (0 if unknown)
+    uint16_t ypixel = 0; ///< Terminal height in pixels (0 if unknown)
 };
 
 /// Abstract interface for terminal operations.

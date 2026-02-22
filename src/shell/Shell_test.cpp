@@ -707,6 +707,47 @@ TEST_CASE("shell.builtin.cat_range_in_help")
     CHECK(output.find("--range") != std::string::npos);
 }
 
+TEST_CASE("shell.builtin.cat_help_shows_image_options")
+{
+    TestShell shell;
+    auto output = shell("cat --help").output();
+    CHECK(output.find("--columns") != std::string::npos);
+    CHECK(output.find("--rows") != std::string::npos);
+    CHECK(output.find("--raw") != std::string::npos);
+}
+
+TEST_CASE("shell.builtin.cat_raw_flag")
+{
+    // Write a PPM image to tmp/ and cat it with --raw — should get raw bytes
+    TestShell shell;
+    // Create a minimal PPM file
+    shell("echo -e 'P6\\n1 1\\n255\\n' > tmp/test_cat_raw.ppm");
+    auto output = shell("cat --raw tmp/test_cat_raw.ppm").output();
+    CHECK(output.find("P6") != std::string::npos);
+    shell("rm tmp/test_cat_raw.ppm");
+}
+
+TEST_CASE("shell.builtin.cat_binary_file_refuses_output")
+{
+    TestShell shell;
+    // Create a file with null bytes (binary content)
+    shell("printf 'hello\\x00world' > tmp/test_binary.dat");
+    shell("cat tmp/test_binary.dat");
+    CHECK(shell.exitCode == 1);
+    shell("rm tmp/test_binary.dat");
+}
+
+TEST_CASE("shell.builtin.cat_binary_file_raw_mode")
+{
+    TestShell shell;
+    // Create a file with null bytes (binary content)
+    shell("printf 'hello\\x00world' > tmp/test_binary_raw.dat");
+    auto output = shell("cat --raw tmp/test_binary_raw.dat").output();
+    // With --raw, binary data should pass through (exit code 0)
+    CHECK(shell.exitCode == 0);
+    shell("rm tmp/test_binary_raw.dat");
+}
+
 // ============================================================================
 // Sleep Builtin
 // ============================================================================

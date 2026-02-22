@@ -8,6 +8,7 @@ add_library(tui
     Dialog.cpp
     GenericSyntaxHighlighter.cpp
     HoverState.cpp
+    ImageLoader.cpp
     QuestionComponent.cpp
     InputField.cpp
     KeyBindings.cpp
@@ -19,6 +20,7 @@ add_library(tui
     Screen.cpp
     Sixel.cpp
     Spinner.cpp
+    StbImageImpl.cpp
     StatusBar.cpp
     StyledText.cpp
     Text.cpp
@@ -52,12 +54,16 @@ target_include_directories(tui PUBLIC
 target_link_libraries(tui PUBLIC
     unicode::unicode
     endo-platform
+    stb_image
 )
 
 target_compile_features(tui PUBLIC cxx_std_23)
 
 set_pedantic_compiler_warnings(tui)
 enable_sanitizers(tui)
+
+# Disable sanitizers for third-party stb code (known UBSan false positives in stb_image_resize2)
+set_source_files_properties(StbImageImpl.cpp PROPERTIES COMPILE_OPTIONS "-fno-sanitize=undefined")
 
 # Tests
 add_executable(test-tui
@@ -77,6 +83,7 @@ add_executable(test-tui
     StyledText_test.cpp
     Unicode_test.cpp
     VtParser_test.cpp
+    ImageLoader_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

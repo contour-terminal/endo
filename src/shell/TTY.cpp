@@ -90,7 +90,9 @@ std::expected<TerminalSize, ShellError> RealTTY::getSize() const
     winsize ws {};
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1)
         return std::unexpected(ShellError::IoError);
-    return TerminalSize { .rows = ws.ws_row, .cols = ws.ws_col };
+    return TerminalSize {
+        .rows = ws.ws_row, .cols = ws.ws_col, .xpixel = ws.ws_xpixel, .ypixel = ws.ws_ypixel
+    };
 }
 
 void RealTTY::setRawMode()
@@ -194,7 +196,10 @@ bool TestPTY::isTerminal() const noexcept
 
 std::expected<TerminalSize, ShellError> TestPTY::getSize() const
 {
-    return TerminalSize { .rows = _windowSize.ws_row, .cols = _windowSize.ws_col };
+    return TerminalSize { .rows = _windowSize.ws_row,
+                          .cols = _windowSize.ws_col,
+                          .xpixel = _windowSize.ws_xpixel,
+                          .ypixel = _windowSize.ws_ypixel };
 }
 
 void TestPTY::setRawMode()
