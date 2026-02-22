@@ -112,6 +112,9 @@ class QuestionComponent: public Component
 
     /// @brief Returns the number of content rows (list items + optional input field).
     [[nodiscard]] int contentHeight() const noexcept;
+
+    /// @brief Returns the number of lines in the question text (split by newlines).
+    [[nodiscard]] int questionLineCount() const noexcept;
 };
 
 } // namespace tui

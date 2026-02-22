@@ -2680,7 +2680,7 @@ void Shell::runAgentMode()
                         auto questionText =
                             std::format("Allow {} ({})?", m.prompt.toolName, m.prompt.description);
                         if (!m.prompt.commandPreview.empty())
-                            questionText += std::format("\n  {}", m.prompt.commandPreview);
+                            questionText += std::format("\n{}", m.prompt.commandPreview);
 
                         auto options = std::vector<std::string> { "Yes", "Yes, always for this tool", "No" };
                         permissionComponent.emplace(tui::QuestionConfig {

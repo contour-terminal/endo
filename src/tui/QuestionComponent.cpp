@@ -59,10 +59,19 @@ void QuestionComponent::render(Canvas& canvas)
     canvas.drawHLine(row, col + 1, width - col - 1, "\xe2\x94\x80", barStyle); // ─
     ++row;
 
-    // --- Question text line: │  question text
-    canvas.putString(row, 0, "\xe2\x94\x82", barStyle); // │
-    canvas.putString(row, LeftBarWidth + BarPadding, _config.questionText, questionStyle);
-    ++row;
+    // --- Question text lines: │  question text (supports multi-line via \n)
+    auto remaining = std::string_view(_config.questionText);
+    while (!remaining.empty())
+    {
+        auto const nl = remaining.find('\n');
+        auto const line = remaining.substr(0, nl);
+        canvas.putString(row, 0, "\xe2\x94\x82", barStyle); // │
+        canvas.putString(row, LeftBarWidth + BarPadding, line, questionStyle);
+        ++row;
+        if (nl == std::string_view::npos)
+            break;
+        remaining.remove_prefix(nl + 1);
+    }
 
     if (isFreeTextOnly())
     {
@@ -94,7 +103,7 @@ void QuestionComponent::render(Canvas& canvas)
         }
 
         // Render list into its subcanvas region
-        auto const listStartRow = HeaderHeight + 2; // header + question + blank
+        auto const listStartRow = HeaderHeight + questionLineCount() + 1; // header + question lines + blank
         auto const listArea = Rect {
             .x = LeftBarWidth + BarPadding,
             .y = listStartRow,
@@ -144,7 +153,8 @@ void QuestionComponent::render(Canvas& canvas)
             }
 
             // Render list
-            auto const listStartRow = HeaderHeight + 2; // header + question + blank
+            auto const listStartRow =
+                HeaderHeight + questionLineCount() + 1; // header + question lines + blank
             auto const listArea = Rect {
                 .x = LeftBarWidth + BarPadding,
                 .y = listStartRow,
@@ -192,7 +202,8 @@ CursorShape QuestionComponent::cursorShape() const
 
 Size QuestionComponent::preferredSize() const
 {
-    auto const height = HeaderHeight + 1 + contentHeight() + 1; // header + question + content + hint/bottom
+    auto const height =
+        HeaderHeight + questionLineCount() + contentHeight() + 1; // header + question + content + hint/bottom
     return { .width = 60, .height = height };
 }
 
@@ -381,6 +392,15 @@ int QuestionComponent::contentHeight() const noexcept
     if (_config.multiSelect && _otherActive)
         height += 1; // InputField row
     return height;
+}
+
+int QuestionComponent::questionLineCount() const noexcept
+{
+    auto count = 1;
+    for (auto ch: _config.questionText)
+        if (ch == '\n')
+            ++count;
+    return count;
 }
 
 } // namespace tui

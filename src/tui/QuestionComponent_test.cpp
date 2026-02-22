@@ -284,6 +284,38 @@ TEST_CASE("QuestionComponent.cursor_shape_list", "[tui][question]")
     CHECK(comp.cursorShape() == CursorShape::Default);
 }
 
+TEST_CASE("QuestionComponent.multiline_question_text", "[tui][question]")
+{
+    auto comp = QuestionComponent(QuestionConfig {
+        .questionText = "Allow shell_execute (Execute command)?\ncmake --build --preset clang-debug",
+        .options = { "Yes", "No" },
+        .allowOther = false,
+    });
+
+    // Two question lines + header(1) + blank(1) + 2 options + hint(1) = 7
+    CHECK(comp.preferredSize().height == 7);
+
+    // Render and verify both lines appear on separate rows.
+    auto const size = comp.preferredSize();
+    auto buffer = Buffer(size.height, 80);
+    auto canvas = Canvas(buffer, Rect { 0, 0, 80, size.height }, currentTheme());
+    comp.setArea(Rect { 0, 0, 80, size.height });
+    comp.render(canvas);
+
+    // Row 0: header (╭─ question ─...)
+    // Row 1: first question line (│  Allow shell_execute...)
+    // Row 2: second question line (│  cmake --build...)
+    auto row1Text = std::string {};
+    for (auto col = 0; col < 80; ++col)
+        row1Text += buffer.at(1, col).grapheme;
+    CHECK(row1Text.find("Allow shell_execute") != std::string::npos);
+
+    auto row2Text = std::string {};
+    for (auto col = 0; col < 80; ++col)
+        row2Text += buffer.at(2, col).grapheme;
+    CHECK(row2Text.find("cmake --build --preset clang-debug") != std::string::npos);
+}
+
 // ============================================================================
 // List multi-select tests
 // ============================================================================
