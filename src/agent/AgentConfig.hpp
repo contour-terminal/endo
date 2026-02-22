@@ -42,6 +42,7 @@ struct GeminiConfig
     std::string apiKeyEnv = "GEMINI_API_KEY";      ///< Environment variable holding the API key.
     std::string model = "gemini-2.5-flash";        ///< Model identifier.
     size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
+    std::string authPreference = "auto";           ///< Auth method: "auto", "oauth", "api_key".
     ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 

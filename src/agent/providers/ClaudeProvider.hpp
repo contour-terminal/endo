@@ -5,10 +5,8 @@
 
 #include <cstddef>
 #include <expected>
-#include <functional>
 #include <span>
 #include <string>
-#include <variant>
 #include <vector>
 
 #include <agent/Types.hpp>
@@ -17,10 +15,6 @@
 
 namespace endo::agent
 {
-
-/// Callback type for refreshing an expired OAuth token.
-/// Returns the new access token on success, or an error message.
-using TokenRefresher = std::function<std::expected<std::string, std::string>()>;
 
 /// Configuration for the Claude provider.
 struct ClaudeProviderConfig

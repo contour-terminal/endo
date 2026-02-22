@@ -53,7 +53,7 @@ namespace
           .label = "Gemini (Google)"sv,
           .apiKeyUrl = "https://aistudio.google.com/apikey"sv,
           .validateUrl = "https://generativelanguage.googleapis.com/v1beta/models"sv,
-          .supportsOAuth = false },
+          .supportsOAuth = true },
     } };
 
     /// Finds a ProviderInfo by name, or nullptr if not found.
@@ -403,6 +403,82 @@ namespace
         return EXIT_SUCCESS;
     }
 
+    // ── Google OAuth Login Flow ─────────────────────────────────────────
+
+    auto runGoogleOAuthLoginFlow() -> int
+    {
+        // Generate PKCE parameters.
+        auto const pkce = generatePkce();
+
+        // Start the local callback server.
+        auto server = OAuthCallbackServer {};
+        auto const portResult = server.start();
+
+        if (!portResult.has_value())
+        {
+            std::print(stderr, "Failed to start callback server: {}\n", portResult.error());
+            return EXIT_FAILURE;
+        }
+
+        // Google requires 127.0.0.1 (IP literal), not "localhost".
+        auto const redirectUri = std::format("http://127.0.0.1:{}/oauth2callback", *portResult);
+
+        // Build and display the authorization URL.
+        auto const authUrl = buildGoogleAuthorizeUrl(pkce, redirectUri);
+
+        std::print("\nOpening browser for Google authentication...\n");
+        if (!openBrowser(authUrl))
+            std::print("Could not open browser automatically.\n");
+
+        std::print("\n  If the browser did not open, visit:\n  {}\n\n", authUrl);
+
+        // Wait for the callback.
+        std::print("Waiting for browser callback on {}...\n", redirectUri);
+
+        auto const callbackResult = server.waitForCallback(std::chrono::seconds(120));
+        server.close();
+
+        if (!callbackResult.has_value())
+        {
+            std::print(stderr, "Callback timed out or failed.\n");
+            return EXIT_FAILURE;
+        }
+
+        auto const& code = callbackResult->code;
+        if (code.empty())
+        {
+            std::print(stderr, "No authorization code received.\n");
+            return EXIT_FAILURE;
+        }
+
+        // Exchange the code for tokens.
+        std::print("Exchanging authorization code for tokens...");
+        auto httpClient = http::HttpClient {};
+        auto const exchangeResult = exchangeGoogleCode(httpClient, code, pkce.verifier, redirectUri);
+
+        if (!exchangeResult.has_value())
+        {
+            std::print(stderr, "\nToken exchange failed: {}\n", exchangeResult.error());
+            return EXIT_FAILURE;
+        }
+        std::print(" OK\n");
+
+        // Save OAuth credentials.
+        auto store = loadOAuthStore();
+        store.gemini = *exchangeResult;
+
+        if (auto error = saveOAuthStore(store))
+        {
+            std::print(stderr, "Failed to save OAuth credentials: {}\n", *error);
+            return EXIT_FAILURE;
+        }
+
+        std::print("Login successful! Google OAuth credentials saved to {}\n", oauthStorePath().string());
+        std::print("To select this provider, add to ~/.config/endo/init.endo:\n");
+        std::print("  set_agent_provider \"gemini\"\n");
+        return EXIT_SUCCESS;
+    }
+
 } // namespace
 
 auto runLoginCommand(std::string_view providerHint) -> int
@@ -425,16 +501,19 @@ auto runLoginCommand(std::string_view providerHint) -> int
     // If this provider supports OAuth, offer the choice.
     if (info->supportsOAuth)
     {
-        auto const authLabels = std::array {
-            "API Key"sv,
-            "OAuth (Claude MAX/Pro/Teams subscription)"sv,
-        };
+        auto const oauthLabel = (providerName == "gemini") ? "OAuth (Google One AI Premium)"sv
+                                                           : "OAuth (Claude MAX/Pro/Teams subscription)"sv;
+        auto const authLabels = std::array { "API Key"sv, oauthLabel };
         auto const authSel =
             askSingleSelect(std::format("Select authentication method for {}:", info->label), authLabels);
         if (!authSel)
             return EXIT_FAILURE;
         if (*authSel == 1)
+        {
+            if (providerName == "gemini")
+                return runGoogleOAuthLoginFlow();
             return runOAuthLoginFlow(providerName);
+        }
         // index 0 = API Key, falls through.
     }
 

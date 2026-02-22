@@ -85,6 +85,82 @@ namespace
             return newAccessToken;
         };
     }
+
+    /// Attempts to resolve a Gemini OAuth access token, refreshing if expired.
+    /// @return The access token, or nullopt if unavailable/refresh failed.
+    auto resolveGeminiOAuthToken(OAuthStore const& oauthStore) -> std::optional<std::string>
+    {
+        if (!oauthStore.gemini.has_value() || oauthStore.gemini->accessToken.empty())
+            return std::nullopt;
+
+        if (!isTokenExpired(*oauthStore.gemini))
+            return oauthStore.gemini->accessToken;
+
+        // Token expired — attempt refresh.
+        auto refreshClient = http::HttpClient {};
+        auto refreshed = refreshGoogleOAuthToken(refreshClient, oauthStore.gemini->refreshToken);
+        if (refreshed.has_value())
+        {
+            // Persist the refreshed token.
+            auto store = oauthStore;
+            store.gemini = std::move(*refreshed);
+            (void) saveOAuthStore(store);
+            return store.gemini->accessToken;
+        }
+        return std::nullopt;
+    }
+
+    /// Resolves the Gemini API token respecting the auth preference.
+    /// @return A pair of (token, isOAuth), or nullopt if neither source is available.
+    auto resolveGeminiToken(AgentConfig const& config, OAuthStore const& oauthStore)
+        -> std::optional<std::pair<std::string, bool>>
+    {
+        auto const& pref = config.gemini.authPreference;
+
+        if (pref == "api_key")
+        {
+            if (auto key = resolveProviderApiKey(config.gemini.apiKey, config.gemini.apiKeyEnv))
+                return std::pair { std::move(*key), false };
+            return std::nullopt;
+        }
+
+        if (pref == "oauth")
+        {
+            if (auto token = resolveGeminiOAuthToken(oauthStore))
+                return std::pair { std::move(*token), true };
+            return std::nullopt;
+        }
+
+        // "auto" (default): OAuth > API key > env var.
+        if (auto token = resolveGeminiOAuthToken(oauthStore))
+            return std::pair { std::move(*token), true };
+
+        if (auto key = resolveProviderApiKey(config.gemini.apiKey, config.gemini.apiKeyEnv))
+            return std::pair { std::move(*key), false };
+
+        return std::nullopt;
+    }
+
+    /// Creates a TokenRefresher callback that refreshes the Gemini Google OAuth token
+    /// and persists the new credentials to disk.
+    auto makeGeminiTokenRefresher() -> TokenRefresher
+    {
+        return []() -> std::expected<std::string, std::string> {
+            auto store = loadOAuthStore();
+            if (!store.gemini.has_value())
+                return std::unexpected(std::string("No Gemini OAuth credentials stored"));
+
+            auto httpClient = http::HttpClient {};
+            auto refreshed = refreshGoogleOAuthToken(httpClient, store.gemini->refreshToken);
+            if (!refreshed.has_value())
+                return std::unexpected(refreshed.error());
+
+            auto const newAccessToken = refreshed->accessToken;
+            store.gemini = std::move(*refreshed);
+            (void) saveOAuthStore(store);
+            return newAccessToken;
+        };
+    }
 } // namespace
 
 ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig const& config):
@@ -138,15 +214,18 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
                            std::make_unique<OpenAiProvider>(httpClient, std::move(providerConfig)));
     }
 
-    // Try to create Gemini provider (stored key takes priority over env var)
-    if (auto key = resolveProviderApiKey(config.gemini.apiKey, config.gemini.apiKeyEnv))
+    // Try to create Gemini provider (OAuth > stored key > env var)
+    if (auto geminiToken = resolveGeminiToken(config, oauthStore))
     {
         auto providerConfig = GeminiProviderConfig {
-            .apiKey = std::move(*key),
+            .apiKey = std::move(geminiToken->first),
             .model = config.gemini.model,
             .maxTokens = config.gemini.maxTokens,
             .thinkingMode = config.gemini.thinkingMode,
+            .useOAuth = geminiToken->second,
         };
+        if (providerConfig.useOAuth)
+            providerConfig.tokenRefresher = makeGeminiTokenRefresher();
         _providers.emplace("gemini", std::make_unique<GeminiProvider>(httpClient, std::move(providerConfig)));
     }
 
@@ -249,14 +328,18 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
     }
     else if (_activeProviderName == "gemini")
     {
-        if (auto key = resolveProviderApiKey(_config.gemini.apiKey, _config.gemini.apiKeyEnv))
+        auto const oauthStore = loadOAuthStore();
+        if (auto geminiToken = resolveGeminiToken(_config, oauthStore))
         {
             auto providerConfig = GeminiProviderConfig {
-                .apiKey = std::move(*key),
+                .apiKey = std::move(geminiToken->first),
                 .model = _config.gemini.model,
                 .maxTokens = _config.gemini.maxTokens,
                 .thinkingMode = _config.gemini.thinkingMode,
+                .useOAuth = geminiToken->second,
             };
+            if (providerConfig.useOAuth)
+                providerConfig.tokenRefresher = makeGeminiTokenRefresher();
             auto provider = std::make_unique<GeminiProvider>(httpRef, std::move(providerConfig));
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
         }

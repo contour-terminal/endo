@@ -17,10 +17,21 @@ GeminiProvider::GeminiProvider(http::HttpClient const& httpClient, GeminiProvide
 
 auto GeminiProvider::buildUrl() const -> std::string
 {
+    if (_config.useOAuth)
+        return std::format(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse",
+            _config.model);
     return std::format(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
         _config.model,
         _config.apiKey);
+}
+
+auto GeminiProvider::buildAuthHeaders() const -> std::vector<std::string>
+{
+    if (_config.useOAuth)
+        return { "Content-Type: application/json", std::format("Authorization: Bearer {}", _config.apiKey) };
+    return { "Content-Type: application/json" };
 }
 
 auto GeminiProvider::mapHttpError(long statusCode, std::string const& body) -> ProviderError
@@ -184,26 +195,16 @@ auto GeminiProvider::serializeRequest(std::span<ChatMessage const> messages,
     return request;
 }
 
-auto GeminiProvider::generate(std::span<ChatMessage const> messages,
-                              std::span<ToolDefinition const> tools,
-                              StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
+auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCallback const& streamCb)
+    -> std::expected<GenerateResult, ProviderError>
 {
-    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens, _config.thinkingMode);
-
-    auto httpRequest = http::HttpRequest {};
-    httpRequest.url = buildUrl();
-    httpRequest.method = http::HttpMethod::Post;
-    httpRequest.headers = { "Content-Type: application/json" };
-    httpRequest.body = requestBody.dump();
-
     auto result = GenerateResult {};
     auto accumulatedText = std::string {};
     auto toolCallIdCounter = 0;
-
     auto errorBody = std::string {};
 
     auto const sseResult = _httpClient.executeStreaming(
-        httpRequest,
+        request,
         [&](http::SseEvent const& event) -> bool {
             if (event.data.empty() || event.data == "[DONE]")
                 return true;
@@ -220,9 +221,7 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
 
             // Check for error response.
             if (parsed.contains("error"))
-            {
                 return false;
-            }
 
             // Extract usage metadata (appears in each chunk, last one has final counts).
             if (parsed.contains("usageMetadata"))
@@ -281,12 +280,10 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
         &errorBody);
 
     if (!sseResult.has_value())
-    {
         return std::unexpected(
             ProviderError { .code = ProviderErrorCode::NetworkError,
                             .message = std::format("HTTP request failed: {}", sseResult.error().message),
                             .httpStatus = 0 });
-    }
 
     auto const statusCode = sseResult.value();
     if (statusCode != 200)
@@ -299,6 +296,38 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
     for (auto const& toolCall: result.toolCalls)
         result.content.emplace_back(
             ToolUseBlock { .id = toolCall.id, .name = toolCall.name, .arguments = toolCall.arguments });
+
+    return result;
+}
+
+auto GeminiProvider::generate(std::span<ChatMessage const> messages,
+                              std::span<ToolDefinition const> tools,
+                              StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
+{
+    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens, _config.thinkingMode);
+
+    auto request = http::HttpRequest {};
+    request.url = buildUrl();
+    request.method = http::HttpMethod::Post;
+    request.headers = buildAuthHeaders();
+    request.body = requestBody.dump();
+
+    auto result = executeStreaming(request, streamCb);
+
+    // On 401/403 with OAuth, attempt a token refresh and retry once.
+    if (!result.has_value() && (result.error().httpStatus == 401 || result.error().httpStatus == 403)
+        && _config.useOAuth && _config.tokenRefresher)
+    {
+        auto refreshed = _config.tokenRefresher();
+        if (refreshed.has_value())
+        {
+            _config.apiKey = std::move(*refreshed);
+            request.url = buildUrl();
+            request.headers = buildAuthHeaders();
+            result = executeStreaming(request, streamCb);
+        }
+        // If refresh failed, fall through and return the original error.
+    }
 
     return result;
 }

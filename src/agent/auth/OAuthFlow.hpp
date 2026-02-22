@@ -90,6 +90,34 @@ enum class OAuthMode
 [[nodiscard]] auto refreshOAuthToken(http::HttpClient const& httpClient, std::string_view refreshToken)
     -> std::expected<OAuthCredentials, std::string>;
 
+/// Builds the Google OAuth authorization URL for Google One AI Premium.
+/// @param pkce        The PKCE parameters (challenge and state are embedded in the URL).
+/// @param redirectUri The redirect URI (127.0.0.1 callback).
+/// @return The fully-formed Google authorization URL.
+[[nodiscard]] auto buildGoogleAuthorizeUrl(PkceParams const& pkce, std::string_view redirectUri)
+    -> std::string;
+
+/// Exchanges a Google authorization code for OAuth tokens.
+/// @param httpClient  HTTP client to use for the token endpoint request.
+/// @param code        The authorization code received from the redirect.
+/// @param verifier    The PKCE code verifier generated during the authorization request.
+/// @param redirectUri The redirect URI used in the authorization request.
+/// @return OAuth credentials on success, or an error message.
+[[nodiscard]] auto exchangeGoogleCode(http::HttpClient const& httpClient,
+                                      std::string_view code,
+                                      std::string_view verifier,
+                                      std::string_view redirectUri)
+    -> std::expected<OAuthCredentials, std::string>;
+
+/// Refreshes a Google OAuth access token using the refresh token.
+/// @param httpClient    HTTP client to use for the token endpoint request.
+/// @param refreshToken  The refresh token from a previous token exchange.
+/// @return Updated OAuth credentials on success, or an error message.
+///         Google may omit the refresh_token in the response; the caller must preserve
+///         the original refresh token if the returned one is empty.
+[[nodiscard]] auto refreshGoogleOAuthToken(http::HttpClient const& httpClient, std::string_view refreshToken)
+    -> std::expected<OAuthCredentials, std::string>;
+
 /// Returns the default path for the OAuth credentials file (~/.config/endo/agent-oauth.yaml).
 [[nodiscard]] auto oauthStorePath() -> std::filesystem::path;
 

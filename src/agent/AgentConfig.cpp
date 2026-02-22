@@ -59,6 +59,8 @@ namespace
             config.model = node["model"].as<std::string>();
         if (node["max_tokens"])
             config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["auth_preference"])
+            config.authPreference = node["auth_preference"].as<std::string>();
         if (node["thinking_mode"])
             config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }

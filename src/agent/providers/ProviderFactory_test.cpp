@@ -26,6 +26,7 @@ TEST_CASE("agent.factory.no_keys_no_providers")
     config.claude.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openai.apiKeyEnv = "ENDO_TEST_OPENAI_KEY";
     config.gemini.apiKeyEnv = "ENDO_TEST_GEMINI_KEY";
+    config.gemini.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openaiCompat.baseUrl = ""; // no compat provider
 
     endo::http::HttpClient httpClient;
@@ -44,6 +45,7 @@ TEST_CASE("agent.factory.single_provider")
     config.claude.apiKeyEnv = "ENDO_TEST_FACTORY_KEY";
     config.openai.apiKeyEnv = "ENDO_TEST_NONEXISTENT_1";
     config.gemini.apiKeyEnv = "ENDO_TEST_NONEXISTENT_2";
+    config.gemini.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openaiCompat.baseUrl = "";
 
     endo::http::HttpClient httpClient;
@@ -101,6 +103,7 @@ TEST_CASE("agent.factory.fallback_when_active_not_available")
     config.claude.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openai.apiKeyEnv = "ENDO_TEST_FALLBACK_KEY";
     config.gemini.apiKeyEnv = "ENDO_TEST_NONEXISTENT_5";
+    config.gemini.authPreference = "api_key"; // Skip OAuth store (may have real credentials on dev machine)
     config.openaiCompat.baseUrl = "";
 
     endo::http::HttpClient httpClient;

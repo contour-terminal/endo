@@ -2,12 +2,18 @@
 #pragma once
 
 #include <expected>
+#include <functional>
 #include <span>
+#include <string>
 
 #include <agent/Types.hpp>
 
 namespace endo::agent
 {
+
+/// Callback type for refreshing an expired OAuth token.
+/// Returns the new access token on success, or an error message.
+using TokenRefresher = std::function<std::expected<std::string, std::string>()>;
 
 /// Abstract interface for LLM providers.
 ///

@@ -3,6 +3,7 @@
 
 #include <span>
 #include <string>
+#include <vector>
 
 #include <agent/Types.hpp>
 #include <agent/providers/LlmProvider.hpp>
@@ -11,6 +12,7 @@
 namespace endo::http
 {
 class HttpClient;
+struct HttpRequest;
 } // namespace endo::http
 
 namespace endo::agent
@@ -19,11 +21,13 @@ namespace endo::agent
 /// Configuration for the Google Gemini provider.
 struct GeminiProviderConfig
 {
-    std::string apiKey;                            ///< API key for authentication.
+    std::string apiKey;                            ///< API key or OAuth access token.
     std::string model = "gemini-2.5-flash";        ///< Model identifier.
     size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
     size_t contextWindowSize = 1000000;            ///< Maximum context window in tokens.
     ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
+    bool useOAuth = false;                         ///< Whether to use OAuth Bearer auth instead of API key.
+    TokenRefresher tokenRefresher;                 ///< Optional: refreshes OAuth token on 401.
 };
 
 /// LLM provider implementation for Google Gemini API.
@@ -74,8 +78,15 @@ class GeminiProvider final: public LlmProvider
     http::HttpClient const& _httpClient;
     GeminiProviderConfig _config;
 
-    /// Builds the full API endpoint URL including the API key.
+    /// Executes a streaming request and collects the result.
+    [[nodiscard]] auto executeStreaming(http::HttpRequest const& request, StreamCallback const& streamCb)
+        -> std::expected<GenerateResult, ProviderError>;
+
+    /// Builds the full API endpoint URL (with or without API key depending on auth mode).
     [[nodiscard]] auto buildUrl() const -> std::string;
+
+    /// Builds HTTP headers with appropriate authentication (Bearer for OAuth, Content-Type only for API key).
+    [[nodiscard]] auto buildAuthHeaders() const -> std::vector<std::string>;
 
     /// Maps an HTTP status code and response body to a ProviderError.
     /// @param statusCode The HTTP response status code.

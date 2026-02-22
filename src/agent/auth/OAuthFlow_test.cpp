@@ -85,6 +85,29 @@ TEST_CASE("OAuthFlow.buildAuthorizeUrl_Console")
     CHECK(url.find("user%3Asessions%3Aclaude_code") != std::string::npos);
 }
 
+TEST_CASE("OAuthFlow.buildGoogleAuthorizeUrl_contains_valid_credentials")
+{
+    auto const pkce = PkceParams {
+        .verifier = "test-verifier",
+        .challenge = "test-challenge",
+        .state = "test-state",
+    };
+
+    auto const url = buildGoogleAuthorizeUrl(pkce, "http://localhost:12345/callback");
+
+    // Validates that the base64-decoded Google client ID has the expected format.
+    CHECK(url.find("https://accounts.google.com/o/oauth2/v2/auth") != std::string::npos);
+    CHECK(url.find("client_id=") != std::string::npos);
+    CHECK(url.find(".apps.googleusercontent.com") != std::string::npos);
+    CHECK(url.find("response_type=code") != std::string::npos);
+    CHECK(url.find("code_challenge=test-challenge") != std::string::npos);
+    CHECK(url.find("code_challenge_method=S256") != std::string::npos);
+    CHECK(url.find("state=test-state") != std::string::npos);
+    CHECK(url.find("scope=") != std::string::npos);
+    CHECK(url.find("access_type=offline") != std::string::npos);
+    CHECK(url.find("prompt=consent") != std::string::npos);
+}
+
 TEST_CASE("OAuthFlow.isOAuthToken_detects_prefix")
 {
     CHECK(isOAuthToken("sk-ant-oat01-abc123"));
