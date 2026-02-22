@@ -262,8 +262,12 @@ Keys are specified as modifier+key combinations:
 |-----|--------|
 | `ctrl+c` | Copy (or interrupt if no selection) |
 | `ctrl+x` | Cut |
-| `ctrl+v` | Paste |
 | `ctrl+shift+a` | Select all |
+
+!!! tip
+    Paste has no default binding. Terminal paste is handled natively via the terminal's
+    paste event (`ctrl+v` or `ctrl+shift+v` depending on terminal). To bind the kill ring
+    paste action, run: `bind ctrl+v paste`
 
 #### Movement
 
@@ -301,7 +305,18 @@ Keys are specified as modifier+key combinations:
 | `alt+d` | Delete word forward |
 | `ctrl+k` | Kill to end of line |
 | `ctrl+u` | Kill to start of line |
-| `ctrl+t` | Transpose characters |
+
+!!! tip
+    Transpose has no default binding. To bind it, run: `bind ctrl+t transpose`
+
+#### Agent Mode
+
+| Key | Action |
+|-----|--------|
+| `ctrl+t` | Enter agent mode |
+| `shift+tab` | Cycle agent sub-modes |
+| `ctrl+/` | Cycle thinking modes |
+| `ctrl+.` | Cycle model |
 
 #### Kill Ring
 
@@ -325,6 +340,21 @@ Keys are specified as modifier+key combinations:
 | `ctrl+l` | Clear screen |
 | `ctrl+r` | History search |
 | `right` / `end` / `ctrl+e` | Accept ghost text suggestion (when at end of line) |
+
+### Action Reference
+
+All bindable action names for use with `bind`:
+
+| Category | Actions |
+|----------|---------|
+| Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, `move-backward-word`, `move-to-line-start`, `move-to-line-end`, `move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, `smart-move-to-line-start`, `smart-move-to-line-end` |
+| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, `delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |
+| Undo / Redo | `undo`, `redo` |
+| Kill Ring | `yank`, `yank-pop` |
+| Selection | `select-all` |
+| Clipboard | `cut`, `copy`, `paste` |
+| Control | `submit`, `abort`, `insert-newline`, `agent-mode`, `cycle-agent-mode`, `cycle-thinking-mode`, `cycle-model` |
+| History | `history-prev`, `history-next` |
 
 !!! note "Under Development"
     Some configuration features (such as vi mode and configurable color schemes) are still
