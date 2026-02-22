@@ -18,13 +18,67 @@ GeminiProvider::GeminiProvider(http::HttpClient const& httpClient, GeminiProvide
 auto GeminiProvider::buildUrl() const -> std::string
 {
     if (_config.useOAuth)
-        return std::format(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse",
-            _config.model);
+        return "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse";
     return std::format(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
         _config.model,
         _config.apiKey);
+}
+
+auto GeminiProvider::wrapCodeAssistRequest(nlohmann::json innerRequest) const -> nlohmann::json
+{
+    innerRequest["model"] = _config.model;
+    return innerRequest;
+}
+
+auto GeminiProvider::ensureCodeAssistOnboarded() -> std::optional<ProviderError>
+{
+    if (_codeAssistOnboarded || !_config.useOAuth)
+        return std::nullopt;
+
+    auto const headers = buildAuthHeaders();
+
+    // Try loadCodeAssist first — succeeds if user is already onboarded.
+    auto loadRequest = http::HttpRequest {};
+    loadRequest.url = "https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist";
+    loadRequest.method = http::HttpMethod::Post;
+    loadRequest.headers = headers;
+    loadRequest.body = "{}";
+    loadRequest.timeout = std::chrono::seconds(30);
+
+    auto loadResult = _httpClient.execute(loadRequest);
+    if (loadResult.has_value() && loadResult->statusCode == 200)
+    {
+        _codeAssistOnboarded = true;
+        return std::nullopt;
+    }
+
+    // Onboard the user.
+    auto onboardRequest = http::HttpRequest {};
+    onboardRequest.url = "https://cloudcode-pa.googleapis.com/v1internal:onboardUser";
+    onboardRequest.method = http::HttpMethod::Post;
+    onboardRequest.headers = headers;
+    onboardRequest.body = "{}";
+    onboardRequest.timeout = std::chrono::seconds(30);
+
+    auto onboardResult = _httpClient.execute(onboardRequest);
+    if (!onboardResult.has_value())
+        return ProviderError { .code = ProviderErrorCode::NetworkError,
+                               .message = std::format("Code Assist onboarding failed: {}",
+                                                      onboardResult.error().message),
+                               .httpStatus = 0 };
+
+    if (onboardResult->statusCode != 200)
+        return ProviderError {
+            .code = ProviderErrorCode::AuthenticationError,
+            .message = std::format("Code Assist onboarding failed (HTTP {}): {}",
+                                   onboardResult->statusCode,
+                                   onboardResult->body.substr(0, 500)),
+            .httpStatus = static_cast<int>(onboardResult->statusCode),
+        };
+
+    _codeAssistOnboarded = true;
+    return std::nullopt;
 }
 
 auto GeminiProvider::buildAuthHeaders() const -> std::vector<std::string>
@@ -219,6 +273,10 @@ auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCa
                 return true; // Skip malformed events.
             }
 
+            // Unwrap Code Assist response envelope if present.
+            if (parsed.contains("response"))
+                parsed = std::move(parsed["response"]);
+
             // Check for error response.
             if (parsed.contains("error"))
                 return false;
@@ -287,7 +345,11 @@ auto GeminiProvider::executeStreaming(http::HttpRequest const& request, StreamCa
 
     auto const statusCode = sseResult.value();
     if (statusCode != 200)
-        return std::unexpected(mapHttpError(statusCode, errorBody));
+    {
+        auto error = mapHttpError(statusCode, errorBody);
+        error.responseBody = std::move(errorBody);
+        return std::unexpected(std::move(error));
+    }
 
     if (!accumulatedText.empty())
         result.content.emplace_back(TextBlock { .text = std::move(accumulatedText) });
@@ -304,7 +366,12 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
                               std::span<ToolDefinition const> tools,
                               StreamCallback streamCb) -> std::expected<GenerateResult, ProviderError>
 {
-    auto const requestBody = serializeRequest(messages, tools, _config.maxTokens, _config.thinkingMode);
+    if (auto onboardError = ensureCodeAssistOnboarded())
+        return std::unexpected(std::move(*onboardError));
+
+    auto requestBody = serializeRequest(messages, tools, _config.maxTokens, _config.thinkingMode);
+    if (_config.useOAuth)
+        requestBody = wrapCodeAssistRequest(std::move(requestBody));
 
     auto request = http::HttpRequest {};
     request.url = buildUrl();
@@ -327,6 +394,18 @@ auto GeminiProvider::generate(std::span<ChatMessage const> messages,
             result = executeStreaming(request, streamCb);
         }
         // If refresh failed, fall through and return the original error.
+    }
+
+    // Populate HTTP I/O context for trace logging.
+    if (result.has_value())
+    {
+        result->requestUrl = request.url;
+        result->requestBody = std::move(request.body);
+    }
+    else
+    {
+        result.error().requestUrl = request.url;
+        result.error().requestBody = std::move(request.body);
     }
 
     return result;

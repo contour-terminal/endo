@@ -103,7 +103,9 @@ void AgentTracer::writeLlmResponse(size_t iteration,
                                    std::chrono::milliseconds duration,
                                    std::string_view textContent,
                                    std::span<ToolCall const> toolCalls,
-                                   std::optional<TokenUsage> const& usage)
+                                   std::optional<TokenUsage> const& usage,
+                                   std::string_view url,
+                                   std::string_view requestBody)
 {
     auto doc = nlohmann::json {
         { "type", "llm_response" },  { "timestamp", utcTimestamp() },
@@ -111,6 +113,11 @@ void AgentTracer::writeLlmResponse(size_t iteration,
         { "tool_count", toolCount }, { "text_length", textLength },
         { "text", textContent },     { "duration_ms", duration.count() },
     };
+
+    if (!url.empty())
+        doc["url"] = url;
+    if (!requestBody.empty())
+        doc["request_body"] = requestBody;
 
     auto toolCallsArray = nlohmann::json::array();
     for (auto const& tc: toolCalls)
@@ -151,14 +158,25 @@ void AgentTracer::writeCompaction(size_t beforeMessages,
     });
 }
 
-void AgentTracer::writeError(std::string_view code, std::string_view message)
+void AgentTracer::writeError(std::string_view code,
+                             std::string_view message,
+                             std::string_view url,
+                             std::string_view requestBody,
+                             std::string_view responseBody)
 {
-    writeLine(nlohmann::json {
+    auto doc = nlohmann::json {
         { "type", "error" },
         { "timestamp", utcTimestamp() },
         { "code", code },
         { "message", message },
-    });
+    };
+    if (!url.empty())
+        doc["url"] = url;
+    if (!requestBody.empty())
+        doc["request_body"] = requestBody;
+    if (!responseBody.empty())
+        doc["response_body"] = responseBody;
+    writeLine(doc);
 }
 
 auto AgentTracer::path() const noexcept -> std::filesystem::path const&

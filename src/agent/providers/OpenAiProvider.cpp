@@ -364,12 +364,21 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
     if (!streamResult.has_value())
     {
         return std::unexpected(ProviderError { .code = ProviderErrorCode::NetworkError,
-                                               .message = streamResult.error().message });
+                                               .message = streamResult.error().message,
+                                               .httpStatus = 0,
+                                               .requestUrl = request.url,
+                                               .requestBody = request.body });
     }
 
     auto const httpStatus = streamResult.value();
     if (httpStatus < 200 || httpStatus >= 300)
-        return std::unexpected(mapHttpError(httpStatus, errorBody));
+    {
+        auto error = mapHttpError(httpStatus, errorBody);
+        error.requestUrl = request.url;
+        error.requestBody = request.body;
+        error.responseBody = std::move(errorBody);
+        return std::unexpected(std::move(error));
+    }
 
     // Assemble text content.
     if (!textAccumulator.empty())
@@ -397,6 +406,10 @@ auto OpenAiProvider::generate(std::span<ChatMessage const> messages,
             });
         }
     }
+
+    // Populate HTTP I/O context for trace logging.
+    result.requestUrl = request.url;
+    result.requestBody = std::move(request.body);
 
     return result;
 }

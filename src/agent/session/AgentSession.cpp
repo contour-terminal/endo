@@ -107,7 +107,11 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
             auto const errorMsg =
                 std::format("{} (HTTP {})", result.error().message, result.error().httpStatus);
             if (_tracer)
-                _tracer->writeError("ProviderError", errorMsg);
+                _tracer->writeError("ProviderError",
+                                    errorMsg,
+                                    result.error().requestUrl,
+                                    result.error().requestBody,
+                                    result.error().responseBody);
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
                 .message = errorMsg,
@@ -122,7 +126,9 @@ auto AgentSession::processMessage(std::string_view userMessage, StreamCallback s
                                       generateElapsed,
                                       result->textContent(),
                                       result->toolCalls,
-                                      result->usage);
+                                      result->usage,
+                                      result->requestUrl,
+                                      result->requestBody);
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())
@@ -304,7 +310,11 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
             auto const errorMsg =
                 std::format("{} (HTTP {})", result.error().message, result.error().httpStatus);
             if (_tracer)
-                _tracer->writeError("ProviderError", errorMsg);
+                _tracer->writeError("ProviderError",
+                                    errorMsg,
+                                    result.error().requestUrl,
+                                    result.error().requestBody,
+                                    result.error().responseBody);
             return std::unexpected(AgentError {
                 .code = AgentErrorCode::ProviderError,
                 .message = errorMsg,
@@ -319,7 +329,9 @@ auto AgentSession::processMessageForPlan(std::string_view userMessage, StreamCal
                                       generateElapsed,
                                       result->textContent(),
                                       result->toolCalls,
-                                      result->usage);
+                                      result->usage,
+                                      result->requestUrl,
+                                      result->requestBody);
 
         // Accumulate token usage from this generate() call.
         if (result->usage.has_value())

@@ -379,6 +379,94 @@ TEST_CASE("AgentTracer.error_format", "[agent]")
     std::filesystem::remove_all(tmpDir);
 }
 
+TEST_CASE("AgentTracer.error_with_http_context", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-errhttpctx";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeError("ProviderError",
+                       "Internal error encountered. (HTTP 500)",
+                       "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse",
+                       R"({"model":"gemini-2.5-flash","contents":[]})",
+                       R"({"error":{"message":"Internal error"}})");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "error");
+    CHECK(doc.at("code") == "ProviderError");
+    CHECK(doc.at("message") == "Internal error encountered. (HTTP 500)");
+    CHECK(doc.at("url") == "https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse");
+    CHECK(doc.at("request_body") == R"({"model":"gemini-2.5-flash","contents":[]})");
+    CHECK(doc.at("response_body") == R"({"error":{"message":"Internal error"}})");
+    CHECK(doc.contains("timestamp"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.error_without_http_context_omits_fields", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-errnohttpctx";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    tracer->writeError("ToolLoopExceeded", "Tool loop exceeded 25 iterations");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "error");
+    CHECK(doc.at("code") == "ToolLoopExceeded");
+    CHECK_FALSE(doc.contains("url"));
+    CHECK_FALSE(doc.contains("request_body"));
+    CHECK_FALSE(doc.contains("response_body"));
+
+    std::filesystem::remove_all(tmpDir);
+}
+
+TEST_CASE("AgentTracer.llm_response_with_http_context", "[agent]")
+{
+    auto const tmpDir = std::filesystem::temp_directory_path() / "endo-test-tracer-llmreshttpctx";
+    std::filesystem::remove_all(tmpDir);
+    auto const tracePath = tmpDir / "trace.jsonl";
+
+    auto tracer = AgentTracer::create(tracePath);
+    REQUIRE(tracer.has_value());
+
+    auto const emptyToolCalls = std::vector<ToolCall> {};
+
+    tracer->writeLlmResponse(0,
+                             false,
+                             0,
+                             5,
+                             std::chrono::milliseconds { 100 },
+                             "Hello",
+                             emptyToolCalls,
+                             std::nullopt,
+                             "https://api.anthropic.com/v1/messages",
+                             R"({"model":"claude-sonnet-4-5-20250929"})");
+
+    auto const lines = readLines(tracePath);
+    REQUIRE(lines.size() == 1);
+
+    auto const doc = nlohmann::json::parse(lines[0]);
+    CHECK(doc.at("type") == "llm_response");
+    CHECK(doc.at("text") == "Hello");
+    CHECK(doc.at("url") == "https://api.anthropic.com/v1/messages");
+    CHECK(doc.at("request_body") == R"({"model":"claude-sonnet-4-5-20250929"})");
+
+    std::filesystem::remove_all(tmpDir);
+}
+
 // ============================================================================
 // resolveTraceLogDirectory tests
 // ============================================================================

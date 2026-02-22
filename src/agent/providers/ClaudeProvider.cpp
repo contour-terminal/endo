@@ -129,7 +129,9 @@ auto ClaudeProvider::executeStreaming(http::HttpRequest const& request, StreamCa
                 message = std::format("HTTP {}: {}", statusCode, snippet);
             }
         }
-        return std::unexpected(mapHttpError(statusCode, std::move(message)));
+        auto error = mapHttpError(statusCode, std::move(message));
+        error.responseBody = std::move(errorBody);
+        return std::unexpected(std::move(error));
     }
 
     if (hasUsage)
@@ -161,6 +163,18 @@ auto ClaudeProvider::generate(std::span<ChatMessage const> messages,
             result = executeStreaming(request, streamCb);
         }
         // If refresh failed, fall through and return the original 401 error.
+    }
+
+    // Populate HTTP I/O context for trace logging.
+    if (result.has_value())
+    {
+        result->requestUrl = request.url;
+        result->requestBody = std::move(request.body);
+    }
+    else
+    {
+        result.error().requestUrl = request.url;
+        result.error().requestBody = std::move(request.body);
     }
 
     return result;

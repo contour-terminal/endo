@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -74,9 +75,15 @@ class GeminiProvider final: public LlmProvider
                                                size_t maxTokens,
                                                ThinkingMode thinkingMode) -> nlohmann::json;
 
+    /// Wraps a standard Gemini request body for the Code Assist API by adding the model field.
+    /// @param innerRequest The standard Gemini API request JSON.
+    /// @return The request with model added as a top-level sibling of contents/generationConfig.
+    [[nodiscard]] auto wrapCodeAssistRequest(nlohmann::json innerRequest) const -> nlohmann::json;
+
   private:
     http::HttpClient const& _httpClient;
     GeminiProviderConfig _config;
+    bool _codeAssistOnboarded = false; ///< Whether Code Assist onboarding has been verified.
 
     /// Executes a streaming request and collects the result.
     [[nodiscard]] auto executeStreaming(http::HttpRequest const& request, StreamCallback const& streamCb)
@@ -87,6 +94,10 @@ class GeminiProvider final: public LlmProvider
 
     /// Builds HTTP headers with appropriate authentication (Bearer for OAuth, Content-Type only for API key).
     [[nodiscard]] auto buildAuthHeaders() const -> std::vector<std::string>;
+
+    /// Ensures Code Assist onboarding is complete (lazy, one-shot per provider lifetime).
+    /// @return std::nullopt on success, or a ProviderError if onboarding fails.
+    [[nodiscard]] auto ensureCodeAssistOnboarded() -> std::optional<ProviderError>;
 
     /// Maps an HTTP status code and response body to a ProviderError.
     /// @param statusCode The HTTP response status code.

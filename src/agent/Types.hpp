@@ -177,6 +177,8 @@ struct GenerateResult
     std::vector<ContentBlock> content; ///< Generated content blocks.
     std::vector<ToolCall> toolCalls;   ///< Tool calls extracted from the response.
     std::optional<TokenUsage> usage;   ///< Token usage statistics, if available.
+    std::string requestUrl;            ///< HTTP request URL (for trace logging).
+    std::string requestBody;           ///< HTTP request body (for trace logging).
 
     /// Returns true if the model requested any tool calls.
     [[nodiscard]] auto hasToolCalls() const noexcept -> bool { return !toolCalls.empty(); }
@@ -279,6 +281,9 @@ struct ProviderError
     ProviderErrorCode code = ProviderErrorCode::Unknown;
     std::string message;
     int httpStatus = 0;
+    std::string requestUrl;   ///< HTTP request URL (for trace logging).
+    std::string requestBody;  ///< HTTP request body (for trace logging).
+    std::string responseBody; ///< HTTP response body (for trace logging).
 };
 
 /// Estimates the cost of a turn based on token usage and model name.

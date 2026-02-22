@@ -64,7 +64,9 @@ class AgentTracer
                           std::chrono::milliseconds duration,
                           std::string_view textContent,
                           std::span<ToolCall const> toolCalls,
-                          std::optional<TokenUsage> const& usage);
+                          std::optional<TokenUsage> const& usage,
+                          std::string_view url = {},
+                          std::string_view requestBody = {});
 
     /// @brief Writes a conversation compaction event.
     /// @param beforeMessages Number of messages before compaction.
@@ -76,10 +78,17 @@ class AgentTracer
                          size_t beforeTokens,
                          size_t afterTokens);
 
-    /// @brief Writes an error event.
+    /// @brief Writes an error event with optional HTTP I/O context.
     /// @param code A short error code (e.g. "ProviderError", "ToolLoopExceeded").
     /// @param message Descriptive error message.
-    void writeError(std::string_view code, std::string_view message);
+    /// @param url HTTP request URL (omitted from output when empty).
+    /// @param requestBody HTTP request body (omitted from output when empty).
+    /// @param responseBody HTTP response body (omitted from output when empty).
+    void writeError(std::string_view code,
+                    std::string_view message,
+                    std::string_view url = {},
+                    std::string_view requestBody = {},
+                    std::string_view responseBody = {});
 
     /// @brief Returns the trace file path.
     [[nodiscard]] auto path() const noexcept -> std::filesystem::path const&;

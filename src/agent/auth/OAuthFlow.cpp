@@ -53,10 +53,9 @@ namespace
         deobfuscate("HRUZCQoCd24vEj0XCjd3azVtCTF3PT8MbBkvbzk2AhwpIjY=");
     constexpr auto GoogleAuthorizeUrl = "https://accounts.google.com/o/oauth2/v2/auth";
     constexpr auto GoogleTokenUrl = "https://oauth2.googleapis.com/token";
-    constexpr auto GoogleScopes =
-        "openid https://www.googleapis.com/auth/userinfo.email"
-        " https://www.googleapis.com/auth/cloud-platform"
-        " https://www.googleapis.com/auth/generative-language";
+    constexpr auto GoogleScopes = "https://www.googleapis.com/auth/cloud-platform"
+                                  " https://www.googleapis.com/auth/userinfo.email"
+                                  " https://www.googleapis.com/auth/userinfo.profile";
 
     /// 5-minute buffer before token expiry to trigger refresh.
     constexpr int64_t ExpiryBufferMs = 5 * 60 * 1000;
