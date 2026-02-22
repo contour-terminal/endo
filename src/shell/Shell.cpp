@@ -2326,7 +2326,7 @@ void Shell::runAgentMode()
 
     /// Render the streaming prompt below the current content position.
     auto renderStreamingPrompt = [&] {
-        if (!streaming)
+        if (!streaming || askUserActive || permissionActive)
             return;
         // Pre-scroll: emit linefeeds matching the prompt height.
         // This forces any terminal scrolling BEFORE saveCursor, keeping the saved position valid.
@@ -2756,7 +2756,7 @@ void Shell::runAgentMode()
             }
 
             // Tick spinner during thinking phase (but not while ask-user prompt is active).
-            if (activeRenderer && activeRenderer->isThinking() && !askUserActive)
+            if (activeRenderer && activeRenderer->isThinking() && !askUserActive && !permissionActive)
             {
                 if (activeRenderer->tickSpinner())
                 {
@@ -2770,7 +2770,7 @@ void Shell::runAgentMode()
             // Tick the input component's info line spinner.
             if (inputComponent.tickSpinner())
             {
-                if (streaming)
+                if (streaming && !askUserActive && !permissionActive)
                 {
                     auto guard = out.syncGuard();
                     clearStreamingPrompt();
