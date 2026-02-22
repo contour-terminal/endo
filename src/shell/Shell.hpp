@@ -315,6 +315,8 @@ class Shell final: public SignalCallback
         _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
     std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.
     std::optional<std::string> _agentTracePath; ///< Trace file path for agent tool I/O (nullopt = disabled).
+    std::string _activeSessionName;               ///< Name of the active agent session (persists across re-entries).
+    std::chrono::system_clock::time_point _sessionCreatedAt {}; ///< Creation time of the active session.
 
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;

@@ -33,7 +33,7 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
         auto const argPrefix = inputUpToCursor.substr(spacePos + 1);
         if (cmdName == "model")
             return completeModelArgument(argPrefix);
-        if (cmdName == "load-session" || cmdName == "delete-session")
+        if (cmdName == "load" || cmdName == "load-session" || cmdName == "delete" || cmdName == "delete-session")
             return completeSessionArgument(cmdName, argPrefix);
         return {};
     }
