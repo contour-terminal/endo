@@ -283,7 +283,7 @@ Full model switching via `/model` slash command with cross-provider support.
 
 ### Permission & Safety System (Phase 6)
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Complete | **Effort:** Medium
 
 Classify tools by risk and gate dangerous operations on user approval.
 Permission prompts render inline in the primary screen.
