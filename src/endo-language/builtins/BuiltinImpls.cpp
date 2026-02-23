@@ -123,38 +123,7 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
             return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
         }
         if (typeId == CoreVM::BuiltinTypeId::Size)
-        {
-            auto const bytes = static_cast<int64_t>(obj->getSlot(0));
-            constexpr int64_t KB = 1024;
-            constexpr int64_t MB = KB * 1024;
-            constexpr int64_t GB = MB * 1024;
-            constexpr int64_t TB = GB * 1024;
-            if (bytes >= TB)
-            {
-                auto const whole = bytes / TB;
-                auto const frac = (bytes % TB) * 10 / TB;
-                return frac == 0 ? std::format("{} TB", whole) : std::format("{}.{} TB", whole, frac);
-            }
-            if (bytes >= GB)
-            {
-                auto const whole = bytes / GB;
-                auto const frac = (bytes % GB) * 10 / GB;
-                return frac == 0 ? std::format("{} GB", whole) : std::format("{}.{} GB", whole, frac);
-            }
-            if (bytes >= MB)
-            {
-                auto const whole = bytes / MB;
-                auto const frac = (bytes % MB) * 10 / MB;
-                return frac == 0 ? std::format("{} MB", whole) : std::format("{}.{} MB", whole, frac);
-            }
-            if (bytes >= KB)
-            {
-                auto const whole = bytes / KB;
-                auto const frac = (bytes % KB) * 10 / KB;
-                return frac == 0 ? std::format("{} KB", whole) : std::format("{}.{} KB", whole, frac);
-            }
-            return std::format("{} B", bytes);
-        }
+            return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
         if (typeId == CoreVM::BuiltinTypeId::DateTime)
         {
             // Render DateTime as "YYYY-MM-DD HH:MM:SS"
@@ -763,6 +732,39 @@ void modeIsExecutable(CoreVM::Params& args)
 // ---------------------------------------------------------------------------
 // Size operations
 // ---------------------------------------------------------------------------
+
+std::string formatSizeToString(int64_t bytes)
+{
+    constexpr int64_t KB = 1024;
+    constexpr int64_t MB = KB * 1024;
+    constexpr int64_t GB = MB * 1024;
+    constexpr int64_t TB = GB * 1024;
+    if (bytes >= TB)
+    {
+        auto const whole = bytes / TB;
+        auto const frac = (bytes % TB) * 10 / TB;
+        return frac == 0 ? std::format("{} TB", whole) : std::format("{}.{} TB", whole, frac);
+    }
+    if (bytes >= GB)
+    {
+        auto const whole = bytes / GB;
+        auto const frac = (bytes % GB) * 10 / GB;
+        return frac == 0 ? std::format("{} GB", whole) : std::format("{}.{} GB", whole, frac);
+    }
+    if (bytes >= MB)
+    {
+        auto const whole = bytes / MB;
+        auto const frac = (bytes % MB) * 10 / MB;
+        return frac == 0 ? std::format("{} MB", whole) : std::format("{}.{} MB", whole, frac);
+    }
+    if (bytes >= KB)
+    {
+        auto const whole = bytes / KB;
+        auto const frac = (bytes % KB) * 10 / KB;
+        return frac == 0 ? std::format("{} KB", whole) : std::format("{}.{} KB", whole, frac);
+    }
+    return std::format("{} B", bytes);
+}
 
 CoreVM::TypedObject* makeSizeFromBytes(CoreVM::Runner* runner, int64_t bytes)
 {

@@ -148,6 +148,11 @@ void modeIsExecutable(CoreVM::Params& args);
 // Size operations
 // ---------------------------------------------------------------------------
 
+/// Formats a raw byte count into a human-readable string (e.g., "42 B", "1.5 KB", "3 GB").
+/// @param bytes Raw byte count
+/// @return Formatted size string with appropriate unit suffix
+std::string formatSizeToString(int64_t bytes);
+
 /// Creates a Size record object from a raw byte count.
 /// @param runner The runner instance for object allocation
 /// @param bytes Raw byte count
