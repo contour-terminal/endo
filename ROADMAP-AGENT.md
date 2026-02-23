@@ -162,7 +162,7 @@ from intermediate grep/read results. Configurable max turns.
 
 - **Key files:** `src/agent/tools/ExploreTool.hpp/cpp`
 
-### Additional Completed Features
+### Additional Completed Features ✅
 
 | Feature | Description | Key Files |
 |:--------|:------------|:----------|
@@ -193,7 +193,7 @@ per-turn and cumulative tracking. `/status` slash command shows full session sta
 
 ### Diff Preview for edit_file ✅
 
-**Status:** Done | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
 Show a colored diff preview before applying `edit_file` mutations. The tool already has
 `old_string` and `new_string` — render a unified diff inline (green additions, red deletions)
@@ -207,7 +207,7 @@ before writing the file.
 
 ### Syntax Highlighting for Agent Output ✅
 
-**Status:** Done | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Multi-language syntax highlighting for diffs and markdown code blocks in agent mode.
 Regex/pattern-based highlighter in `src/tui/` supporting C++, CMake, Python, bash/sh,
@@ -223,7 +223,7 @@ Markdown, JSON, YAML, and git diff. Endo language support via callback registrat
 
 ### @-file Context Injection ✅
 
-**Status:** Done | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
 Allow `@path/to/file` in agent queries to automatically inject file contents into the
 message context. The `FilePathCompleter` provides path completion; `FileReferenceExpander`
@@ -237,7 +237,7 @@ reads and attaches file contents when the message is submitted.
 
 ### Dynamic MCP Tool Discovery (Phase 8.4) ✅
 
-**Status:** Done | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
 Background I/O thread per `McpClient` handles transport reads, classifying messages as
 responses (routed to pending request) or notifications (buffered). `ServerManager::processNotifications()`
@@ -247,7 +247,7 @@ LLM turn in the agent event loop.
 
 ### Session Resume Enhancement ✅
 
-**Status:** Done | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
 Named session management with full CRUD operations and interactive picker.
 
@@ -266,7 +266,7 @@ Named session management with full CRUD operations and interactive picker.
 
 ### Model Switching at Runtime Enhancement ✅
 
-**Status:** Done | **Effort:** Small
+**Status:** Completed | **Effort:** Small
 
 Full model switching via `/model` slash command with cross-provider support.
 
@@ -281,9 +281,9 @@ Full model switching via `/model` slash command with cross-provider support.
 
 ## Priority 2: Core Improvements (Medium effort, High impact)
 
-### Permission & Safety System (Phase 6)
+### Permission & Safety System (Phase 6) ✅
 
-**Status:** Complete | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Classify tools by risk and gate dangerous operations on user approval.
 Permission prompts render inline in the primary screen.
@@ -367,7 +367,7 @@ Leverage provider-specific prompt caching to reduce costs and latency for long c
 - Track cache hit/miss rates in token display
 - Configure caching strategy via `init.endo` properties
 
-### Image Input — Clipboard Paste (Phase 2.6)
+### Image Input — Clipboard Paste (Phase 2.6) ✅
 
 **Status:** Completed | **Effort:** Medium
 
@@ -542,7 +542,7 @@ Named configuration profiles for different workflows:
 
 ### Contour VT Extension — Last Command Output (Phase 2.5) ✅
 
-**Status:** Completed (via Phase 10.3) | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Integrated Contour terminal emulator's Semantic Block Query VT extension (DEC Mode 2034):
 
@@ -831,20 +831,20 @@ agent_semantic_model_path <- "~/.local/share/endo/models/nomic-embed-code-q8_0.g
 ```
 Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
    │
-   ├── Priority 1: Quick Wins (no dependencies on each other)
-   │    ├── Token/Cost Display
-   │    ├── Diff Preview for edit_file
-   │    ├── @-file Context Injection
-   │    ├── Dynamic MCP Tool Discovery
-   │    ├── Session Resume Enhancement
-   │    └── Model Switching Enhancement
+   ├── Priority 1: Quick Wins ✅ (all completed)
+   │    ├── Token/Cost Display ✅
+   │    ├── Diff Preview for edit_file ✅
+   │    ├── @-file Context Injection ✅
+   │    ├── Dynamic MCP Tool Discovery ✅
+   │    ├── Session Resume Enhancement ✅
+   │    └── Model Switching Enhancement ✅
    │
    ├── Priority 2: Core Improvements
-   │    ├── Permission & Safety System (Phase 6)
+   │    ├── Permission & Safety System (Phase 6) ✅
    │    ├── Undo/Rollback System
    │    ├── Parallel Tool Execution
    │    ├── Prompt Caching
-   │    ├── Image Input (Phase 2.6)
+   │    ├── Image Input (Phase 2.6) ✅
    │    ├── Image Output (Phase 2.7) ── depends on 2.6 (shared stb_image)
    │    ├── Batch/Headless Agent Mode
    │    └── Structured Output / JSON Mode
@@ -954,7 +954,7 @@ src/agent/
 
 ---
 
-## Documentation (**COMPLETE**)
+## Documentation ✅
 
 Agent documentation in the mkdocs site under `docs/agent/`:
 
@@ -986,7 +986,7 @@ The roadmap is complete when a user can:
 6. **Today:** Authenticate via OAuth (Claude MAX/Pro) or API keys ✅
 7. **Today:** Use web search and fetch within agent conversations ✅
 8. See token usage and cost estimates after each turn ✅
-9. Paste an image from the clipboard and ask the agent about it — with inline sixel preview
+9. Paste an image from the clipboard and ask the agent about it — with inline sixel preview ✅
 10. See LLM-generated images rendered inline (Gemini, OpenAI)
 11. Run a local LLM via llama.cpp (`provider: local`) — fully offline, no API key required
 12. Dictate a query via voice (`Ctrl+Space` push-to-talk) with real-time transcription
