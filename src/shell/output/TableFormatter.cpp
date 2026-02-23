@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "TableFormatter.hpp"
 
+#include <endo-language/builtins/BuiltinImpls.hpp>
+
 #include <tui/Box.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -58,6 +60,14 @@ namespace
                                            minute,
                                            second);
                     }
+                    if (obj->type->id == CoreVM::BuiltinTypeId::Size)
+                    {
+                        auto text = builtins::formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
+                        // Pad bare "B" suffix to match 2-char unit suffixes (KB, MB, …) for right-alignment
+                        if (text.ends_with(" B"))
+                            text += ' ';
+                        return text;
+                    }
                 }
                 return std::to_string(static_cast<int64_t>(slotVal));
             }
@@ -75,12 +85,48 @@ namespace
         return str.substr(0, static_cast<size_t>(maxWidth - 1)) + "\u2026"; // …
     }
 
-    /// Pads a string to a given width with trailing spaces.
+    /// Pads a string to a given width with trailing spaces (left-aligned).
     std::string padRight(std::string const& str, int width)
     {
         if (static_cast<int>(str.size()) >= width)
             return str;
         return str + std::string(static_cast<size_t>(width) - str.size(), ' ');
+    }
+
+    /// Pads a string to a given width with leading spaces (right-aligned).
+    std::string padLeft(std::string const& str, int width)
+    {
+        if (static_cast<int>(str.size()) >= width)
+            return str;
+        return std::string(static_cast<size_t>(width) - str.size(), ' ') + str;
+    }
+
+    /// Returns true if a column should be right-aligned based on its field type
+    /// and the actual runtime object type of the first row's value.
+    bool isRightAlignedColumn(CoreVM::FieldInfo const& field,
+                              CoreVM::TypedObject* firstRecord,
+                              CoreVM::Runner* runner)
+    {
+        if (field.type == CoreVM::LiteralType::Number)
+            return true;
+        if (field.type == CoreVM::LiteralType::Object && runner)
+        {
+            auto const slotVal = firstRecord->getSlot(field.offset);
+            if (runner->isKnownObject(slotVal))
+            {
+                auto const* obj =
+                    reinterpret_cast<CoreVM::TypedObject const*>(static_cast<uintptr_t>(slotVal));
+                if (obj->type->id == CoreVM::BuiltinTypeId::Size)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /// Pads a cell string according to the column's alignment.
+    std::string padCell(std::string const& str, int width, bool rightAligned)
+    {
+        return rightAligned ? padLeft(str, width) : padRight(str, width);
     }
 } // namespace
 
@@ -135,6 +181,11 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     auto const& fields = records[0]->type->fields;
     auto const numCols = fields.size();
     bool const isProcessInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::ProcessInfo);
+
+    // Determine per-column alignment from the first record's runtime types
+    std::vector<bool> rightAligned(numCols, false);
+    for (size_t col = 0; col < numCols; ++col)
+        rightAligned[col] = isRightAlignedColumn(fields[col], records[0], runner);
 
     // Build header names
     std::vector<std::string> headers;
@@ -236,7 +287,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         {
             result += ' ';
             result += bold;
-            result += padRight(headers[col], colWidths[col]);
+            result += padCell(headers[col], colWidths[col], rightAligned[col]);
             result += reset;
             result += ' ';
             result += dim;
@@ -257,7 +308,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             for (size_t col = 0; col < numCols; ++col)
             {
                 result += ' ';
-                result += padRight(row[col], colWidths[col]);
+                result += padCell(row[col], colWidths[col], rightAligned[col]);
                 result += ' ';
                 result += dim;
                 result += bc.vertical;
@@ -281,7 +332,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             if (col > 0)
                 result += "  "; // 2-space gap
             result += bold;
-            result += padRight(headers[col], colWidths[col]);
+            result += padCell(headers[col], colWidths[col], rightAligned[col]);
             result += reset;
         }
         result += '\n';
@@ -305,7 +356,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             {
                 if (col > 0)
                     result += "  ";
-                result += padRight(row[col], colWidths[col]);
+                result += padCell(row[col], colWidths[col], rightAligned[col]);
             }
             result += '\n';
         }
@@ -317,7 +368,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         {
             if (col > 0)
                 result += "  ";
-            result += padRight(headers[col], colWidths[col]);
+            result += padCell(headers[col], colWidths[col], rightAligned[col]);
         }
         result += '\n';
 
@@ -328,7 +379,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             {
                 if (col > 0)
                     result += "  ";
-                result += padRight(row[col], colWidths[col]);
+                result += padCell(row[col], colWidths[col], rightAligned[col]);
             }
             result += '\n';
         }
