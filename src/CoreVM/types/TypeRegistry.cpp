@@ -144,7 +144,7 @@ void TypeRegistry::registerBuiltins()
     addType(std::move(sizeType));
 
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::Size + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)
