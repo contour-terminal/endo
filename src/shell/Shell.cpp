@@ -647,9 +647,14 @@ int Shell::run()
 
     loadInitScript();
 
+    // Ensure terminal is initialized (raw mode, ECHO off) before sending
+    // any terminal queries that produce response bytes.
+    prompt.ensureInitialized();
+
     // Enable semantic block query extension (DEC mode 2034) for error recovery.
     // This silently fails on terminals that don't support it.
-    if (_interactive && _tty.isTerminal())
+    // Must run after terminal initialization so response bytes aren't echoed.
+    if (_interactive && _tty.isTerminal() && prompt.ready())
     {
         _semanticBlockClient =
             std::make_unique<tui::SemanticBlockClient>(prompt.terminal().output(), prompt.terminal().input());

@@ -11,7 +11,6 @@
 #include <sys/ioctl.h>
 
 #include <poll.h>
-#include <termios.h>
 #include <unistd.h>
 
 namespace tui
@@ -33,26 +32,12 @@ namespace
     /// Response format: DCS > | <terminal-name-and-version> ST
     /// Example: "\033P>|kitty(0.26.5)\033\\"
     ///
+    /// @pre The terminal must already be in raw mode (ECHO off) before calling.
+    ///
     /// @param timeoutMs Timeout in milliseconds to wait for response.
     /// @return Terminal identification string, or empty if not supported/timeout.
     auto queryXTVersion(int timeoutMs = 100) -> std::string
     {
-        // Save current terminal attributes
-        struct termios origTermios {};
-        struct termios rawTermios {};
-        bool needRestore = false;
-
-        if (tcgetattr(STDIN_FILENO, &origTermios) == 0)
-        {
-            rawTermios = origTermios;
-            // Set raw mode for reliable reading
-            rawTermios.c_lflag &= ~static_cast<tcflag_t>(ICANON | ECHO);
-            rawTermios.c_cc[VMIN] = 0;
-            rawTermios.c_cc[VTIME] = 0;
-            if (tcsetattr(STDIN_FILENO, TCSANOW, &rawTermios) == 0)
-                needRestore = true;
-        }
-
         // Send XTVERSION query: CSI > q
         static constexpr auto Query = "\033[>q";
         safeWrite(STDOUT_FILENO, Query, std::strlen(Query));
@@ -84,10 +69,6 @@ namespace
             // Short timeout for subsequent reads
             timeoutMs = 10;
         }
-
-        // Restore terminal attributes
-        if (needRestore)
-            tcsetattr(STDIN_FILENO, TCSANOW, &origTermios);
 
         return response;
     }
@@ -250,8 +231,12 @@ auto SyncGuard::operator=(SyncGuard&& other) noexcept -> SyncGuard&
 auto TerminalOutput::initialize() -> VoidResult
 {
     updateDimensions();
-    _unscrollSupported = detectUnscrollSupport();
     return {};
+}
+
+void TerminalOutput::detectCapabilities()
+{
+    _unscrollSupported = detectUnscrollSupport();
 }
 
 void TerminalOutput::writeText(std::string_view text, Style const& style)

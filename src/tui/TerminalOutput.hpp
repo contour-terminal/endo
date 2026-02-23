@@ -260,6 +260,13 @@ class TerminalOutput
     /// @note On unsupported terminals, this sequence is silently ignored.
     virtual void unscroll(int n);
 
+    /// @brief Detects terminal capabilities that require query/response I/O.
+    ///
+    /// Must be called after raw mode is enabled (ECHO off) to prevent
+    /// response bytes from being echoed to the screen.
+    /// Currently detects unscroll support via XTVERSION query.
+    virtual void detectCapabilities();
+
     /// @brief Checks if the terminal supports the unscroll extension.
     ///
     /// Detects support by checking for known terminals:

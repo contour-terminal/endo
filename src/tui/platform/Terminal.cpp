@@ -54,9 +54,13 @@ auto Terminal::initialize() -> VoidResult
         return {};
     }
 
-    // Initialize input (raw mode, protocols)
+    // Initialize input (raw mode, protocols — ECHO off from here)
     if (auto result = _input.initialize(); !result)
         return result;
+
+    // Detect capabilities that require query/response I/O (e.g., XTVERSION).
+    // Must run after raw mode is enabled so response bytes aren't echoed.
+    _output->detectCapabilities();
 
     // Install SIGWINCH handler
     gActiveInput = &_input;

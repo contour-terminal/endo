@@ -40,6 +40,11 @@ Prompt::~Prompt()
         _terminal.shutdown();
 }
 
+void Prompt::ensureInitialized()
+{
+    initialize();
+}
+
 bool Prompt::ready() const
 {
     return !_aborted;

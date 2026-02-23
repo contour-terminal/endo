@@ -35,6 +35,12 @@ class Prompt
     Prompt();
     ~Prompt();
 
+    /// @brief Ensures terminal initialization has been performed.
+    ///
+    /// Triggers terminal raw mode and protocol setup if not already done.
+    /// Call this before any code that sends terminal queries requiring ECHO off.
+    void ensureInitialized();
+
     /// @brief Returns whether the prompt is ready to accept input.
     [[nodiscard]] bool ready() const;
 
