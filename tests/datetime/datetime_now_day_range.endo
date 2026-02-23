@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.now day is in valid range
+# expect: true
+
+let d = DateTime.now
+print (d.day >= 1 && d.day <= 31)

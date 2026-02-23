@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.fromEpoch access second field
+# expect: 20
+
+let d = DateTime.fromEpoch 1700000000
+print d.second

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.fromEpoch epoch field roundtrip
+# expect: 1700000000
+
+let d = DateTime.fromEpoch 1700000000
+print d.epoch

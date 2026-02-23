@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size display for zero bytes
+# expect: 0 B
+
+print (Size.fromBytes 0)

@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access multiple DateTime fields in sequence
+# expect: 2023
+# expect: 11
+# expect: 14
+
+let d = DateTime.fromEpoch 1700000000
+println d.year
+println d.month
+print d.day

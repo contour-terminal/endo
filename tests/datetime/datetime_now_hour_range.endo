@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.now hour is in valid range
+# expect: true
+
+let d = DateTime.now
+print (d.hour >= 0 && d.hour <= 23)

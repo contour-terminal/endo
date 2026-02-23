@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.fromEpoch access day field
+# expect: 14
+
+let d = DateTime.fromEpoch 1700000000
+print d.day

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Cross-unit Size comparison
+# expect: true
+
+print (1_MB == Size.fromKB 1024)

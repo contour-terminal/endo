@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.fromEpoch display format
+# expect: 2023-11-14 22:13:20
+
+let d = DateTime.fromEpoch 1700000000
+print d

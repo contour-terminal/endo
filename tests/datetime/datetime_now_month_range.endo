@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.now month is in valid range
+# expect: true
+
+let d = DateTime.now
+print (d.month >= 1 && d.month <= 12)

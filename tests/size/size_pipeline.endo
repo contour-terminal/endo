@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size value passed through pipeline
+# expect: 1 MB
+
+let s = Size.fromMB 1
+s |> print
