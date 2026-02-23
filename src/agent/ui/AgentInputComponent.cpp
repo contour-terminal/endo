@@ -133,7 +133,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
     // Draw left chrome for each visible input line (accounting for scroll offset)
     auto const scrollOff = _inputField.scrollOffset();
-    auto const fieldHeight = std::max(1, area.height - rowOff - HeaderHeight - FooterHeight);
+    auto const fieldHeight = std::max(1, area.height - rowOff - HeaderHeight - imagePreviewHeight() - FooterHeight);
     auto const visibleLines = std::min(lineCount - scrollOff, fieldHeight);
     for (auto row = 0; row < visibleLines && (rowOff + row + HeaderHeight) < area.height; ++row)
     {
