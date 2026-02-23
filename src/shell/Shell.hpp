@@ -7,6 +7,8 @@
 
 #include <http/HttpClient.hpp>
 
+#include <tui/SemanticBlockClient.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 
 #include <chrono>
@@ -305,7 +307,17 @@ class Shell final: public SignalCallback
     }
 
     // --- Agent mode ---
-    void runAgentMode();
+    void runAgentMode(std::optional<std::string> initialMessage = std::nullopt);
+
+    /// @brief Offers error recovery after a failed command.
+    /// @param exitCode The exit code of the failed command.
+    /// @param command The command text that failed.
+    void offerErrorRecovery(int exitCode, std::string const& command);
+
+    std::unique_ptr<tui::SemanticBlockClient> _semanticBlockClient;
+    agent::ErrorRecoveryAction _sessionErrorRecoveryOverride =
+        agent::ErrorRecoveryAction::Ask; ///< Session-level override (set by user choice).
+    bool _hasSessionOverride = false;    ///< Whether the user made a session-level choice.
 
     std::unique_ptr<http::HttpClient> _agentHttpClient;
     std::unique_ptr<agent::ProviderFactory> _agentProviderFactory;
@@ -315,7 +327,7 @@ class Shell final: public SignalCallback
         _cachedProjectContext;                      ///< Cached project context for agent mode re-entry.
     std::filesystem::path _cachedProjectContextCwd; ///< CWD associated with cached project context.
     std::optional<std::string> _agentTracePath; ///< Trace file path for agent tool I/O (nullopt = disabled).
-    std::string _activeSessionName;               ///< Name of the active agent session (persists across re-entries).
+    std::string _activeSessionName; ///< Name of the active agent session (persists across re-entries).
     std::chrono::system_clock::time_point _sessionCreatedAt {}; ///< Creation time of the active session.
 
     CoreVM::Runtime _runtime;

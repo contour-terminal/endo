@@ -165,3 +165,168 @@ TEST_CASE("VtParser.focus.focus_followed_by_key", "[tui,vtparser]")
     REQUIRE(key != nullptr);
     CHECK(key->codepoint == U'a');
 }
+
+// ============================================================================
+// DCS (Device Control String) tests
+// ============================================================================
+
+TEST_CASE("VtParser.DCS.basic_payload", "[tui,vtparser]")
+{
+    // ESC P hello ESC \ → DcsResponse { "hello" }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033Phello\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    // The header byte 'h' transitions to body, so payload includes everything from header start.
+    // DcsEntry collects params (none here), 'h' is the final byte → body collects "ello"
+    // Full payload: "hello" (the 'h' is the DCS final byte, then "ello" is the body)
+    CHECK(dcs->payload == "hello");
+}
+
+TEST_CASE("VtParser.DCS.empty_body", "[tui,vtparser]")
+{
+    // ESC P b ESC \ → DcsResponse with just the final byte 'b' as payload
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033Pb\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == "b");
+}
+
+TEST_CASE("VtParser.DCS.semantic_block_token_response", "[tui,vtparser]")
+{
+    // DCS token response: ESC P > 2034 ; 1 b TOKEN_DATA ESC backslash
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033P>2034;1b41394;50132;58870;1816\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == ">2034;1b41394;50132;58870;1816");
+}
+
+TEST_CASE("VtParser.DCS.query_success_json", "[tui,vtparser]")
+{
+    // DCS query success: ESC P > 1 b {JSON} ST
+    auto const* const json =
+        R"({"version":1,"command":"ls","output":"file.txt\n","exitCode":0,"finished":true})";
+    auto const seq = std::string("\033P>1b") + json + "\033\\";
+    auto parser = VtParser {};
+    auto const events = parser.feed(seq);
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    auto const expectedPayload = std::string(">1b") + json;
+    CHECK(dcs->payload == expectedPayload);
+}
+
+TEST_CASE("VtParser.DCS.error_status_no_data", "[tui,vtparser]")
+{
+    // DCS status 0 (no data): ESC P > 0 b ST
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033P>0b\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == ">0b");
+}
+
+TEST_CASE("VtParser.DCS.error_status_auth_required", "[tui,vtparser]")
+{
+    // DCS status 2 (auth required): ESC P > 2 b ST
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033P>2b\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == ">2b");
+}
+
+TEST_CASE("VtParser.DCS.followed_by_normal_input", "[tui,vtparser]")
+{
+    // DCS followed by normal key input — state recovery to Ground
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033Phello\033\\abc");
+    REQUIRE(events.size() == 4); // DcsResponse + 3 KeyEvents
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == "hello");
+    // Verify subsequent keys parsed correctly
+    auto const* keyA = std::get_if<KeyEvent>(&events[1]);
+    REQUIRE(keyA != nullptr);
+    CHECK(keyA->codepoint == U'a');
+    auto const* keyB = std::get_if<KeyEvent>(&events[2]);
+    REQUIRE(keyB != nullptr);
+    CHECK(keyB->codepoint == U'b');
+    auto const* keyC = std::get_if<KeyEvent>(&events[3]);
+    REQUIRE(keyC != nullptr);
+    CHECK(keyC->codepoint == U'c');
+}
+
+TEST_CASE("VtParser.DCS.incremental_feed", "[tui,vtparser]")
+{
+    // Feed DCS in multiple chunks
+    auto parser = VtParser {};
+    auto events = parser.feed("\033P>1b");
+    CHECK(events.empty()); // Not complete yet
+    events = parser.feed("payload");
+    CHECK(events.empty()); // Still collecting
+    events = parser.feed("\033\\");
+    REQUIRE(events.size() == 1);
+    auto const* dcs = std::get_if<DcsResponse>(&events[0]);
+    REQUIRE(dcs != nullptr);
+    CHECK(dcs->payload == ">1bpayload");
+}
+
+// ============================================================================
+// DECRQM (DEC Request Mode) response tests
+// ============================================================================
+
+TEST_CASE("VtParser.DECRQM.mode_set", "[tui,vtparser]")
+{
+    // CSI ? 2034 ; 1 $ y → DecModeReport { 2034, 1 }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[?2034;1$y");
+    REQUIRE(events.size() == 1);
+    auto const* report = std::get_if<DecModeReport>(&events[0]);
+    REQUIRE(report != nullptr);
+    CHECK(report->mode == 2034);
+    CHECK(report->status == 1);
+}
+
+TEST_CASE("VtParser.DECRQM.mode_not_recognized", "[tui,vtparser]")
+{
+    // CSI ? 2034 ; 0 $ y → DecModeReport { 2034, 0 }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[?2034;0$y");
+    REQUIRE(events.size() == 1);
+    auto const* report = std::get_if<DecModeReport>(&events[0]);
+    REQUIRE(report != nullptr);
+    CHECK(report->mode == 2034);
+    CHECK(report->status == 0);
+}
+
+TEST_CASE("VtParser.DECRQM.mode_reset", "[tui,vtparser]")
+{
+    // CSI ? 2034 ; 2 $ y → DecModeReport { 2034, 2 }
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[?2034;2$y");
+    REQUIRE(events.size() == 1);
+    auto const* report = std::get_if<DecModeReport>(&events[0]);
+    REQUIRE(report != nullptr);
+    CHECK(report->mode == 2034);
+    CHECK(report->status == 2);
+}
+
+TEST_CASE("VtParser.DECRQM.different_mode", "[tui,vtparser]")
+{
+    // CSI ? 1004 ; 1 $ y → DecModeReport { 1004, 1 } (focus reporting set)
+    auto parser = VtParser {};
+    auto const events = parser.feed("\033[?1004;1$y");
+    REQUIRE(events.size() == 1);
+    auto const* report = std::get_if<DecModeReport>(&events[0]);
+    REQUIRE(report != nullptr);
+    CHECK(report->mode == 1004);
+    CHECK(report->status == 1);
+}

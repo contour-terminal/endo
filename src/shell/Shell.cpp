@@ -600,6 +600,15 @@ int Shell::run()
         }
     }
 
+    // Enable semantic block query extension (DEC mode 2034) for error recovery.
+    // This silently fails on terminals that don't support it.
+    if (_interactive && _tty.isTerminal())
+    {
+        _semanticBlockClient =
+            std::make_unique<tui::SemanticBlockClient>(prompt.terminal().output(), prompt.terminal().input());
+        (void) _semanticBlockClient->enable(); // Silently ignore failure (unsupported terminal).
+    }
+
 #if !defined(_WIN32)
     pollfd fds[2];
     fds[0].fd = _tty.inputFd();
@@ -706,13 +715,15 @@ int Shell::run()
                 history.add(lineBuffer);
             }
 
-            auto const _ = Prompt::ScopedSuspend(prompt);
-            emitCommandStart();
-            auto const cmdStart = std::chrono::steady_clock::now();
-            _exitCode = execute(lineBuffer);
-            _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - cmdStart);
-            emitCommandFinished(_exitCode);
+            {
+                auto const _ = Prompt::ScopedSuspend(prompt);
+                emitCommandStart();
+                auto const cmdStart = std::chrono::steady_clock::now();
+                _exitCode = execute(lineBuffer);
+                _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - cmdStart);
+                emitCommandFinished(_exitCode);
+            }
 
             if (!lineBuffer.empty())
                 history.markLastResult(_exitCode);
@@ -724,8 +735,24 @@ int Shell::run()
             for (auto const& binding: _fsharpState.valueBindings)
                 names.insert(binding.name);
             prompt.setKnownFSharpNames(std::move(names));
+
+            // Offer error recovery if command failed and semantic block is available.
+            if (_exitCode != 0 && !lineBuffer.empty() && _semanticBlockClient
+                && _semanticBlockClient->isEnabled())
+            {
+                auto const effectiveAction =
+                    _hasSessionOverride ? _sessionErrorRecoveryOverride : agentConfig.errorRecovery.action;
+
+                if (effectiveAction != agent::ErrorRecoveryAction::Ignore)
+                    offerErrorRecovery(_exitCode, lineBuffer);
+            }
         }
     }
+
+    // Disable semantic block extension on exit.
+    if (_semanticBlockClient)
+        _semanticBlockClient->disable();
+
 #else
     // Windows: simple loop without poll/signalfd
     while (!_quit && prompt.ready())
@@ -794,13 +821,15 @@ int Shell::run()
             history.add(lineBuffer);
         }
 
-        auto const _ = Prompt::ScopedSuspend(prompt);
-        emitCommandStart();
-        auto const cmdStart = std::chrono::steady_clock::now();
-        _exitCode = execute(lineBuffer);
-        _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - cmdStart);
-        emitCommandFinished(_exitCode);
+        {
+            auto const _ = Prompt::ScopedSuspend(prompt);
+            emitCommandStart();
+            auto const cmdStart = std::chrono::steady_clock::now();
+            _exitCode = execute(lineBuffer);
+            _lastCommandDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - cmdStart);
+            emitCommandFinished(_exitCode);
+        }
 
         if (!lineBuffer.empty())
             history.markLastResult(_exitCode);
@@ -812,8 +841,23 @@ int Shell::run()
         for (auto const& binding: _fsharpState.valueBindings)
             names.insert(binding.name);
         prompt.setKnownFSharpNames(std::move(names));
+
+        // Offer error recovery if command failed and semantic block is available.
+        if (_exitCode != 0 && !lineBuffer.empty() && _semanticBlockClient
+            && _semanticBlockClient->isEnabled())
+        {
+            auto const effectiveAction =
+                _hasSessionOverride ? _sessionErrorRecoveryOverride : agentConfig.errorRecovery.action;
+
+            if (effectiveAction != agent::ErrorRecoveryAction::Ignore)
+                offerErrorRecovery(_exitCode, lineBuffer);
+        }
     }
 #endif
+
+    // Disable semantic block extension on exit.
+    if (_semanticBlockClient)
+        _semanticBlockClient->disable();
 
     return _quit ? _exitCode : EXIT_SUCCESS;
 }
@@ -1511,7 +1555,130 @@ namespace
 
 } // namespace
 
-void Shell::runAgentMode()
+void Shell::offerErrorRecovery(int exitCode, std::string const& command)
+{
+    // Query semantic block for last command output.
+    auto const result = _semanticBlockClient->queryLastCommand();
+    if (result.status != tui::SemanticBlockStatus::Success || !result.block.has_value())
+        return; // Silently fail — terminal may not support the extension or no data available.
+
+    auto const& block = *result.block;
+
+    // Determine effective action (session override takes precedence).
+    auto const effectiveAction =
+        _hasSessionOverride ? _sessionErrorRecoveryOverride : agentConfig.errorRecovery.action;
+
+    if (effectiveAction == agent::ErrorRecoveryAction::Analyze)
+    {
+        // Auto-analyze without asking.
+    }
+    else
+    {
+        // Ask the user via QuestionComponent.
+        auto& terminal = prompt.terminal();
+        auto& out = terminal.output();
+        auto const& theme = tui::currentTheme();
+
+        auto questionConfig = tui::QuestionConfig {
+            .questionText = std::format("Command failed (exit {}). Analyze this error?", exitCode),
+            .options = { "Analyze", "Analyze (always)", "Ignore", "Ignore (always)" },
+            .allowOther = false,
+        };
+        auto question = tui::QuestionComponent(questionConfig);
+
+        // Render the question inline.
+        auto const width = terminal.columns();
+        auto const prefSize = question.preferredSize();
+        auto const height = prefSize.height;
+
+        // Reserve room for the question.
+        for (auto i = 0; i < height; ++i)
+            out.linefeed();
+        out.moveUp(height);
+        out.saveCursor();
+
+        auto renderQuestion = [&] {
+            out.restoreCursor();
+            auto buffer = tui::Buffer(height, width);
+            auto canvas = tui::Canvas(buffer, tui::Rect { 0, 0, width, height }, theme);
+            question.setArea(tui::Rect { 0, 0, width, height });
+            question.setScreenBounds(tui::Rect { 0, 0, width, height });
+            question.render(canvas);
+            buffer.writeTo(out);
+            out.showCursor();
+            out.flush();
+        };
+
+        renderQuestion();
+
+        // Input loop for the question.
+        auto answered = false;
+        while (!answered)
+        {
+            auto events = terminal.input().poll(-1);
+            for (auto const& event: events)
+            {
+                auto const action = question.processInput(event);
+                switch (action)
+                {
+                    case tui::QuestionAction::Confirmed: answered = true; break;
+                    case tui::QuestionAction::Cancelled: {
+                        // Clean up the question display.
+                        out.restoreCursor();
+                        out.clearToEndOfDisplay();
+                        out.flush();
+                        return; // User cancelled — do nothing.
+                    }
+                    case tui::QuestionAction::Changed: renderQuestion(); break;
+                    case tui::QuestionAction::None: break;
+                }
+                if (answered)
+                    break;
+            }
+        }
+
+        // Clean up the question display.
+        out.restoreCursor();
+        out.clearToEndOfDisplay();
+        out.flush();
+
+        auto const answer = question.answer();
+        if (answer == "Ignore")
+            return;
+        if (answer == "Ignore (always)")
+        {
+            _hasSessionOverride = true;
+            _sessionErrorRecoveryOverride = agent::ErrorRecoveryAction::Ignore;
+            return;
+        }
+        if (answer == "Analyze (always)")
+        {
+            _hasSessionOverride = true;
+            _sessionErrorRecoveryOverride = agent::ErrorRecoveryAction::Analyze;
+        }
+        // "Analyze" or "Analyze (always)" — fall through to analysis.
+    }
+
+    // Build the initial message with error context.
+    auto output = block.output;
+    if (output.size() > agentConfig.maxToolResultSize)
+        output.resize(agentConfig.maxToolResultSize);
+
+    auto message = std::format("The following shell command failed with exit code {}:\n\n```\n{}\n```\n\n"
+                               "Command output:\n```\n{}\n```\n\n"
+                               "Please analyze why this command failed and suggest how to fix it.",
+                               exitCode,
+                               command,
+                               output);
+
+    // Enter agent mode with the pre-filled error context.
+    runAgentMode(std::move(message));
+
+    // Restore terminal dimensions after agent mode.
+    prompt.terminal().output().updateDimensions();
+}
+
+void Shell::runAgentMode(std::optional<std::string> initialMessage)
 {
     // Lazy initialization of agent infrastructure
     if (!_agentProviderFactory)
@@ -2571,6 +2738,41 @@ void Shell::runAgentMode()
                                   total / 1000),
                       dimStyle);
         out.flush();
+    }
+
+    // If an initial message was provided (e.g., from error recovery), submit it immediately.
+    if (initialMessage.has_value() && !initialMessage->empty())
+    {
+        // Ensure system prompt is ready.
+        if (!systemPromptReady)
+        {
+            auto result = contextFuture.get();
+            _agentSession->setSystemPrompt(std::move(result.systemPrompt));
+            if (auto* explore = dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
+                explore->setSystemPrompt(std::move(result.exploreSystemPrompt));
+            if (!result.gitBranch.empty())
+                inputComponent.setGitBranch(std::move(result.gitBranch));
+            if (!result.projectPath.empty())
+                inputComponent.setProjectPath(std::move(result.projectPath));
+            filePathProviderPtr->setFilePaths(result.projectContext.filePaths);
+            _cachedProjectContext = std::move(result.projectContext);
+            _cachedProjectContextCwd = cwd;
+            systemPromptReady = true;
+        }
+
+        mcpServerManager.processNotifications();
+
+        auto const query = std::move(*initialMessage);
+        initialMessage.reset();
+
+        out.carriageReturn();
+        out.linefeed();
+
+        screen.releaseCursor();
+
+        worker.inbound().push(agent::UserPromptMessage { .text = query });
+        streaming = true;
+        streamCancelled = false;
     }
 
     // --- Main event loop ---

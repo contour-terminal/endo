@@ -1494,6 +1494,20 @@ void Shell::registerAgentConfigBuiltins()
             if (count > 0 && count <= 20)
                 webSearchConfig.maxResults = static_cast<size_t>(count);
         });
+
+    // --- Error recovery ---
+
+    _runtime.registerProperty("agent_error_recovery_action", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) {
+            args.setResult(std::string(agent::errorRecoveryActionToString(agentConfig.errorRecovery.action)));
+        })
+        .onSet([this](CoreVM::Params& args) {
+            agentConfig.errorRecovery.action = agent::errorRecoveryActionFromString(args.getString(1));
+        });
+
+    _runtime.registerProperty("agent_error_recovery_model", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.errorRecovery.model)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.errorRecovery.model = std::string(args.getString(1)); });
     // clang-format on
 }
 

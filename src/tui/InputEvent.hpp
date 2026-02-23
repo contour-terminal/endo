@@ -89,6 +89,25 @@ struct FocusEvent
     bool focused; ///< True when terminal gained focus, false when lost.
 };
 
+/// @brief DCS (Device Control String) response from the terminal.
+///
+/// Emitted when the parser receives a complete DCS sequence (ESC P ... ESC \).
+/// The payload contains the full DCS content between the introducer and string terminator.
+struct DcsResponse
+{
+    std::string payload; ///< DCS content (excludes ESC P prefix and ST terminator).
+};
+
+/// @brief DECRQM (DEC Request Mode) response: CSI ? mode ; status $ y.
+///
+/// Reports whether a specific DEC private mode is set, reset, or unsupported.
+/// Status values: 0 = not recognized, 1 = set, 2 = reset, 3 = permanently set, 4 = permanently reset.
+struct DecModeReport
+{
+    int mode;   ///< The DEC private mode number queried.
+    int status; ///< Mode status (0=unknown, 1=set, 2=reset, 3=perm set, 4=perm reset).
+};
+
 /// @brief Discriminated union of all possible terminal input events.
 using InputEvent = std::variant<KeyEvent,
                                 MouseEvent,
@@ -97,6 +116,8 @@ using InputEvent = std::variant<KeyEvent,
                                 CursorPositionReport,
                                 ColorSchemeReport,
                                 CellSizeReport,
-                                FocusEvent>;
+                                FocusEvent,
+                                DcsResponse,
+                                DecModeReport>;
 
 } // namespace tui

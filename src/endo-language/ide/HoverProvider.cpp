@@ -153,6 +153,13 @@ namespace
             { "shell_is_interactive",
               "`shell_is_interactive` : `bool`\n\nWhether the shell is running in interactive mode "
               "(true for REPL, false for scripts and `-c` commands). Read-only." },
+            { "agent_error_recovery_action",
+              "`agent_error_recovery_action` : `string`\n\nAction when a shell command fails: "
+              "`\"ask\"` (prompt user), `\"analyze\"` (auto-analyze), `\"ignore\"` (do nothing). "
+              "Read or write with `<-`." },
+            { "agent_error_recovery_model",
+              "`agent_error_recovery_model` : `string`\n\nModel to use for error recovery analysis. "
+              "Empty string uses the active agent model. Read or write with `<-`." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

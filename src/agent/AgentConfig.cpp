@@ -164,6 +164,14 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
         parseExploreConfig(root["explore"], config.explore);
         parseTraceConfig(root["trace"], config.trace);
 
+        if (auto const& er = root["error_recovery"]; er && er.IsMap())
+        {
+            if (er["action"])
+                config.errorRecovery.action = errorRecoveryActionFromString(er["action"].as<std::string>());
+            if (er["model"])
+                config.errorRecovery.model = er["model"].as<std::string>();
+        }
+
         return config;
     }
     catch (YAML::Exception const& e)

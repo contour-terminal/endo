@@ -446,16 +446,29 @@ Use the LLM to enhance shell completions:
 - Agent suggests commands based on natural language intent
 - Integrate with existing `CompletionPopup` — agent suggestions labeled `[AI]`
 
-### Error Recovery Suggestions (Phase 10.3)
+### Error Recovery Suggestions (Phase 10.3) ✅
 
-**Status:** Not started | **Effort:** High
+**Status:** Completed | **Effort:** High
 
-When a shell command fails (non-zero exit code):
+When a shell command fails (non-zero exit code), inline AI-powered error analysis leveraging
+Contour's Semantic Block Query VT extension (DEC Mode 2034) to capture the last command's
+output without re-execution:
 
-- Offer inline agent analysis: "Want me to explain this error? `[y/n]`"
-- Agent reads the error output (via Contour VT extension or captured stderr)
-- Suggests corrective commands or code fixes
-- User can accept suggestions directly into the prompt
+- **VT protocol:** DCS parsing in `VtParser` (ESC P ... ESC \), DECRQM response (CSI ? mode ; status $ y)
+- **SemanticBlockClient:** Reusable TUI-layer component encapsulating the DEC Mode 2034 lifecycle
+  (enable/disable, token management, query, JSON response parsing)
+- **Configurable behavior** via `agent_error_recovery_action` property (`ask`/`analyze`/`ignore`)
+  and `agent_error_recovery_model` for choosing the analysis model
+- **Ask mode (default):** `QuestionComponent` offers Analyze / Analyze (always) / Ignore / Ignore (always)
+- **Analyze mode:** Automatically enters agent mode with error context (command, output, exit code)
+- **Session overrides:** "always" choices persist for the session without changing config
+- **Agent mode integration:** `runAgentMode()` accepts optional initial message for one-shot analysis,
+  user stays in agent mode for follow-up investigation
+- **Graceful fallback:** Silent no-op when terminal doesn't support DEC Mode 2034
+
+Key files: `src/tui/VtParser.hpp/cpp` (DCS states), `src/tui/InputEvent.hpp` (DcsResponse, DecModeReport),
+`src/tui/SemanticBlockClient.hpp/cpp`, `src/agent/AgentConfig.hpp/cpp` (ErrorRecoveryConfig),
+`src/shell/Shell.hpp/cpp` (offerErrorRecovery, runAgentMode initial message)
 
 ### Tool Execution Visualization (Phase 9.2)
 
@@ -527,15 +540,16 @@ Named configuration profiles for different workflows:
 - Profiles stored in `~/.config/endo/agent-profiles/`
 - `/profile <name>` slash command to switch mid-session
 
-### Contour VT Extension — Last Command Output (Phase 2.5)
+### Contour VT Extension — Last Command Output (Phase 2.5) ✅
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Completed (via Phase 10.3) | **Effort:** Medium
 
-Integrate the Contour terminal emulator's VT extension for reading last command output:
+Integrated Contour terminal emulator's Semantic Block Query VT extension (DEC Mode 2034):
 
-- Send `CSI ? 2040 n` to request output of the most recent command (between OSC 133 markers)
-- Agent can reference this output without re-running the command
-- Graceful fallback for non-Contour terminals (feature detection via DA response)
+- `SemanticBlockClient` enables/disables mode, queries last command output via DCS sequences
+- DCS parsing in `VtParser` handles ESC P ... ESC \ sequences
+- Used by Phase 10.3 (Error Recovery Suggestions) to capture failed command output
+- Graceful fallback for non-Contour terminals (enable returns false on timeout)
 
 ---
 
@@ -838,14 +852,14 @@ Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
    ├── Priority 3: Major Features
    │    ├── MCP HTTP/SSE Transport (Phase 8.3)
    │    ├── AI Shell Completion (Phase 10.2)
-   │    ├── Error Recovery (Phase 10.3)
+   │    ├── Error Recovery (Phase 10.3) ✅
    │    ├── Tool Execution Visualization (Phase 9.2)
    │    ├── Conversation Navigation (Phase 9.3)
    │    ├── Code Review Tool
    │    ├── Agent Hooks / Event System
    │    ├── Provider-Specific Prompt Optimization
    │    ├── Configuration Profiles
-   │    └── Contour VT Extension (Phase 2.5)
+   │    └── Contour VT Extension (Phase 2.5) ✅
    │
    └── Priority 4: Strategic
         ├── Local Models — llama.cpp (Phase 3) ── independent

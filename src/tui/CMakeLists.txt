@@ -18,6 +18,7 @@ add_library(tui
     MarkdownTable.cpp
     MockTerminalOutput.cpp
     Screen.cpp
+    SemanticBlockClient.cpp
     Sixel.cpp
     Spinner.cpp
     StbImageImpl.cpp
@@ -84,6 +85,7 @@ add_executable(test-tui
     Unicode_test.cpp
     VtParser_test.cpp
     ImageLoader_test.cpp
+    SemanticBlockClient_test.cpp
 )
 target_link_libraries(test-tui tui Catch2::Catch2)
 add_test(NAME test-tui COMMAND test-tui)

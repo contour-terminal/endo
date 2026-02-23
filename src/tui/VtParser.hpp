@@ -43,12 +43,15 @@ class VtParser
         Ss3,          ///< Received ESC O, waiting for final byte.
         PasteBody,    ///< Inside bracketed paste (ESC[200~), collecting text.
         Utf8Sequence, ///< Collecting UTF-8 continuation bytes.
+        DcsEntry,     ///< Received ESC P, collecting parameter/intermediate bytes.
+        DcsBody,      ///< Inside DCS body, collecting data until ST (ESC \).
     };
 
     State _state = State::Ground;
     std::string _paramBuf;  ///< Buffer for CSI parameter bytes.
     std::string _utf8Buf;   ///< Buffer for UTF-8 multi-byte sequence.
     std::string _pasteBuf;  ///< Buffer for bracketed paste content.
+    std::string _dcsBuf;    ///< Buffer for DCS (Device Control String) payload.
     int _utf8Remaining = 0; ///< Expected remaining UTF-8 continuation bytes.
 
     /// @brief Processes a single byte in the Ground state.
@@ -68,6 +71,12 @@ class VtParser
 
     /// @brief Processes a single byte in the Utf8Sequence state.
     void processUtf8(std::uint8_t byte, std::vector<InputEvent>& events);
+
+    /// @brief Processes a single byte in the DcsEntry state.
+    void processDcsEntry(std::uint8_t byte, std::vector<InputEvent>& events);
+
+    /// @brief Processes a single byte in the DcsBody state.
+    void processDcsBody(std::uint8_t byte, std::vector<InputEvent>& events);
 
     /// @brief Parses a complete CSI sequence from _paramBuf and the final byte.
     void dispatchCsi(char finalByte, std::vector<InputEvent>& events);

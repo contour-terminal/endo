@@ -83,6 +83,47 @@ struct SessionConfig
     bool showResumeContext = true; ///< Whether to show a summary message when resuming a session.
 };
 
+/// @brief Default action for error recovery on failed shell commands.
+enum class ErrorRecoveryAction : std::uint8_t
+{
+    Ask,     ///< Ask the user via QuestionComponent (default).
+    Analyze, ///< Automatically analyze without asking.
+    Ignore,  ///< Do nothing on command failure.
+};
+
+/// @brief Converts an ErrorRecoveryAction to its string representation.
+/// @param action The action to convert.
+/// @return String view of the action name ("ask", "analyze", or "ignore").
+[[nodiscard]] constexpr auto errorRecoveryActionToString(ErrorRecoveryAction action) -> std::string_view
+{
+    switch (action)
+    {
+        case ErrorRecoveryAction::Ask: return "ask";
+        case ErrorRecoveryAction::Analyze: return "analyze";
+        case ErrorRecoveryAction::Ignore: return "ignore";
+    }
+    return "ask";
+}
+
+/// @brief Parses an ErrorRecoveryAction from a string.
+/// @param str The string to parse ("ask", "analyze", or "ignore").
+/// @return The corresponding action (defaults to Ask for unknown strings).
+[[nodiscard]] constexpr auto errorRecoveryActionFromString(std::string_view str) -> ErrorRecoveryAction
+{
+    if (str == "analyze")
+        return ErrorRecoveryAction::Analyze;
+    if (str == "ignore")
+        return ErrorRecoveryAction::Ignore;
+    return ErrorRecoveryAction::Ask;
+}
+
+/// @brief Configuration for error recovery suggestions on failed shell commands.
+struct ErrorRecoveryConfig
+{
+    ErrorRecoveryAction action = ErrorRecoveryAction::Ask; ///< Default action on command failure.
+    std::string model; ///< Model to use for error analysis (empty = use active agent model).
+};
+
 /// Top-level agent configuration supporting multiple LLM providers.
 struct AgentConfig
 {
@@ -98,11 +139,12 @@ struct AgentConfig
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
     bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.
 
-    PlanModeConfig planMode;      ///< Plan mode configuration.
-    ExploreConfig explore;        ///< Explore sub-agent configuration.
-    TraceConfig trace;            ///< Tool I/O tracing configuration.
-    SessionConfig session;        ///< Session management configuration.
-    PermissionConfig permissions; ///< Tool permission configuration.
+    PlanModeConfig planMode;           ///< Plan mode configuration.
+    ExploreConfig explore;             ///< Explore sub-agent configuration.
+    TraceConfig trace;                 ///< Tool I/O tracing configuration.
+    SessionConfig session;             ///< Session management configuration.
+    PermissionConfig permissions;      ///< Tool permission configuration.
+    ErrorRecoveryConfig errorRecovery; ///< Error recovery suggestions configuration.
 };
 
 /// Loads agent configuration from a YAML file.

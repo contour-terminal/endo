@@ -167,6 +167,8 @@ auto VtParser::feed(std::string_view data) -> std::vector<InputEvent>
             case State::Ss3: processSs3(byte, events); break;
             case State::PasteBody: processPaste(byte, events); break;
             case State::Utf8Sequence: processUtf8(byte, events); break;
+            case State::DcsEntry: processDcsEntry(byte, events); break;
+            case State::DcsBody: processDcsBody(byte, events); break;
         }
     }
     return events;
@@ -255,6 +257,14 @@ void VtParser::processEscape(std::uint8_t byte, std::vector<InputEvent>& events)
     if (byte == 'O')
     {
         _state = State::Ss3;
+        return;
+    }
+
+    // DCS introducer: ESC P
+    if (byte == 'P')
+    {
+        _dcsBuf.clear();
+        _state = State::DcsEntry;
         return;
     }
 
@@ -657,6 +667,20 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
         }
     }
 
+    // DECRQM response: CSI ? mode ; status $ y
+    // _paramBuf contains "?mode;status$" and finalByte is 'y'.
+    if (finalByte == 'y' && _paramBuf.starts_with("?") && _paramBuf.ends_with("$"))
+    {
+        // Strip the leading '?' and trailing '$' to get "mode;status".
+        auto const inner = std::string_view(_paramBuf).substr(1, _paramBuf.size() - 2);
+        auto const params = parseCsiParams(inner);
+        if (params.size() >= 2)
+        {
+            events.emplace_back(DecModeReport { .mode = params[0], .status = params[1] });
+            return;
+        }
+    }
+
     // Standard CSI sequences (cursor keys, function keys, etc.)
     // Skip sequences with private markers (>, ?, but not <)
     if (!_paramBuf.empty() && (_paramBuf[0] == '>' || _paramBuf[0] == '?'))
@@ -666,6 +690,57 @@ void VtParser::dispatchCsi(char finalByte, std::vector<InputEvent>& events)
     if (auto key = mapCsiKey(finalByte, params))
     {
         events.emplace_back(*key);
+    }
+}
+
+void VtParser::processDcsEntry(std::uint8_t byte, std::vector<InputEvent>& events)
+{
+    // DCS parameter/intermediate bytes: 0x20-0x7E range before the body starts.
+    // The "final byte" of the DCS header is the first byte >= 0x40 in the range [0x40,0x7E].
+    // Parameter bytes: 0x30-0x3F (digits, semicolons, etc.)
+    // Intermediate bytes: 0x20-0x2F
+    if (byte >= 0x20 && byte <= 0x3F)
+    {
+        _dcsBuf += static_cast<char>(byte);
+        return;
+    }
+
+    // Final byte of DCS header — transition to body collection.
+    if (byte >= 0x40 && byte <= 0x7E)
+    {
+        _dcsBuf += static_cast<char>(byte);
+        _state = State::DcsBody;
+        return;
+    }
+
+    // ESC in DcsEntry starts potential ST (ESC \) — but could also be malformed.
+    // For robustness, if we see ESC here, check next byte in DcsBody.
+    if (byte == 0x1B)
+    {
+        _state = State::DcsBody;
+        // Re-feed this byte in DcsBody to check for ST.
+        processDcsBody(byte, events);
+        return;
+    }
+
+    // Unexpected byte — abort DCS, return to ground.
+    _dcsBuf.clear();
+    _state = State::Ground;
+}
+
+void VtParser::processDcsBody(std::uint8_t byte, std::vector<InputEvent>& events)
+{
+    _dcsBuf += static_cast<char>(byte);
+
+    // Check for ST (String Terminator): ESC \ (0x1B 0x5C)
+    if (_dcsBuf.size() >= 2 && _dcsBuf[_dcsBuf.size() - 2] == '\x1B' && _dcsBuf.back() == '\\')
+    {
+        // Remove the trailing ESC \ from the payload.
+        _dcsBuf.resize(_dcsBuf.size() - 2);
+        events.emplace_back(DcsResponse { .payload = std::move(_dcsBuf) });
+        _dcsBuf.clear();
+        _state = State::Ground;
+        return;
     }
 }
 

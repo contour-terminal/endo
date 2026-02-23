@@ -114,6 +114,12 @@ namespace
         EnumValueEntry { "api_key", "API key authentication" },
     };
 
+    constexpr std::array errorRecoveryActionValues = {
+        EnumValueEntry { "ask", "Ask user before analyzing (default)" },
+        EnumValueEntry { "analyze", "Automatically analyze failed commands" },
+        EnumValueEntry { "ignore", "Do nothing on command failure" },
+    };
+
     /// @brief Standard library function entry with name and signature description.
     struct StdLibEntry
     {
@@ -490,6 +496,17 @@ std::vector<CompletionCandidate> builtinCandidates()
           "Google Custom Search Engine ID",
           "",
           CompletionKind::Property },
+        // Error recovery properties
+        { "agent_error_recovery_action",
+          "agent_error_recovery_action",
+          "Action on command failure (ask/analyze/ignore)",
+          "",
+          CompletionKind::Property },
+        { "agent_error_recovery_model",
+          "agent_error_recovery_model",
+          "Model for error analysis (empty = active model)",
+          "",
+          CompletionKind::Property },
     };
 }
 
@@ -634,6 +651,8 @@ bool isBuiltinWithArgumentCompletion(std::string const& commandName)
         "agent_openai_compat_thinking_mode",
         "agent_gemini_thinking_mode",
         "agent_claude_auth_type",
+        "agent_error_recovery_action",
+        "agent_error_recovery_model",
     };
     return names.contains(commandName);
 }
@@ -683,6 +702,18 @@ std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& co
         return collectValues(thinkingModeValues);
     if (commandName == "agent_claude_auth_type")
         return collectValues(authTypeValues);
+    if (commandName == "agent_error_recovery_action")
+        return collectValues(errorRecoveryActionValues);
+    if (commandName == "agent_error_recovery_model")
+    {
+        // Offer all known models across all providers.
+        auto results = collectValues(claudeModelValues);
+        auto openai = collectValues(openaiModelValues);
+        auto gemini = collectValues(geminiModelValues);
+        results.insert(results.end(), openai.begin(), openai.end());
+        results.insert(results.end(), gemini.begin(), gemini.end());
+        return results;
+    }
 
     return {};
 }
