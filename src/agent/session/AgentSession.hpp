@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <expected>
 #include <functional>
@@ -44,6 +45,14 @@ struct AgentError
 /// Callback invoked when a tool begins execution.
 /// @param call The tool call being executed, including name and arguments.
 using ToolStatusCallback = std::function<void(ToolCall const& call)>;
+
+/// Callback invoked when a tool finishes execution.
+/// @param name The tool name.
+/// @param content The tool output content.
+/// @param isError Whether the tool returned an error.
+/// @param duration The wall-clock execution duration.
+using ToolResultCallback = std::function<void(
+    std::string const& name, std::string const& content, bool isError, std::chrono::milliseconds duration)>;
 
 /// Manages a conversation with an LLM provider.
 ///
@@ -130,6 +139,10 @@ class AgentSession
     /// @param callback Callback invoked with the tool name when a tool starts executing.
     void setToolStatusCallback(ToolStatusCallback callback);
 
+    /// @brief Sets an optional callback for tool execution results.
+    /// @param callback Callback invoked when a tool finishes execution with its result.
+    void setToolResultCallback(ToolResultCallback callback);
+
     /// @brief Sets the agent tracer for full I/O tracing.
     /// @param tracer Pointer to the agent tracer (must outlive the session), or nullptr to disable.
     void setTracer(AgentTracer* tracer);
@@ -201,6 +214,7 @@ class AgentSession
     size_t _maxExplorationIterations = 15;
     size_t _maxToolResultSize = 30720;
     ToolStatusCallback _toolStatusCallback;
+    ToolResultCallback _toolResultCallback;
     std::unique_ptr<ConversationCompactor> _compactor;
     TokenUsage _sessionUsage;
     TokenUsage _lastTurnUsage;

@@ -1207,6 +1207,24 @@ Component (base class)
 - [x] Session-only cycling — Ctrl+./Ctrl+/ changes are session-only; users persist via `init.endo`
 - [x] Auto-completion for model names, thinking modes, and auth types in shell and LSP
 
+### Phase 3.21: Tool Execution Visualization ✅
+
+**Dependency:** Phase 3.6
+
+**Tasks:**
+- [x] `ToolResultCallback` in `AgentSession` — mirrors `ToolStatusCallback` pattern, invoked after tool execution with name, content, isError, duration
+- [x] `ToolResultMessage` wired in `AgentWorker` — pushes completion messages to outbound queue
+- [x] `ToolStatusComponent` — `tui::Component` subclass rendering tool execution status via Canvas
+  - [x] `ToolEntry` data model with name, args summary, start time, and optional completion info
+  - [x] Per-row layout: left bar, spinner/status icon, tool name, args summary, right-aligned duration + output size
+  - [x] `formatArgsSummary()` — shell commands show `$ command`, other tools show path/pattern or compact JSON
+  - [x] `formatElapsed()` — human-readable durations (0.3s, 3.2s, 1m 12s)
+  - [x] `formatSize()` — human-readable byte sizes (42 B, 4.8 KB, 2.1 MB)
+  - [x] `MaxVisibleCompleted` capping — oldest completed entries scroll off after 5
+  - [x] Spinner animation during active tool execution
+- [x] Shell.cpp integration — component rendered via off-screen buffer, spinner ticked during poll, cleared on completion
+- [x] Unit tests: 13 test cases, 50 assertions covering all component functionality
+
 ---
 
 ## Milestone 4: Windows Support

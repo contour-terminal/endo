@@ -13,6 +13,15 @@ AgentWorker::AgentWorker(AgentSession& session, platform::MessageQueue<FromAgent
     // Wire tool status callback to push ToolStatusMessage to outbound queue.
     _session.setToolStatusCallback(
         [this](ToolCall const& call) { _outbound.push(ToolStatusMessage { .call = call }); });
+
+    // Wire tool result callback to push ToolResultMessage to outbound queue.
+    _session.setToolResultCallback([this](std::string const& name,
+                                          std::string const& content,
+                                          bool isError,
+                                          std::chrono::milliseconds duration) {
+        _outbound.push(
+            ToolResultMessage { .name = name, .content = content, .isError = isError, .duration = duration });
+    });
 }
 
 AgentWorker::~AgentWorker()

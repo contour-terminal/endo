@@ -80,6 +80,7 @@
 #include <agent/tracing/AgentTracer.hpp>
 #include <agent/ui/AgentInputComponent.hpp>
 #include <agent/ui/AgentResponseRenderer.hpp>
+#include <agent/ui/ToolStatusComponent.hpp>
 #include <nlohmann/json.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
@@ -2176,6 +2177,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     };
     auto screen = tui::Screen(terminal, screenConfig);
     auto inputComponent = agent::AgentInputComponent {};
+    auto toolStatusComponent = agent::ToolStatusComponent {};
     inputComponent.setTopPadding(prompt.promptConfig().promptSpacing);
     inputComponent.setPromptIndicator(agentConfig.promptIndicator);
     auto const modelInfo = provider->modelInfo();
@@ -2836,6 +2838,25 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         buffer.writeTo(out);
     };
 
+    // Render toolStatusComponent to an off-screen buffer and write to TerminalOutput.
+    auto renderToolStatusDirect = [&] {
+        if (!toolStatusComponent.hasEntries())
+            return;
+        auto const& theme = tui::currentTheme();
+        auto const prefSize = toolStatusComponent.preferredSize();
+        auto const width = terminal.columns();
+        auto const height = prefSize.height;
+        if (height <= 0)
+            return;
+
+        auto buffer = tui::Buffer(height, width);
+        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+        toolStatusComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+        toolStatusComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
+        toolStatusComponent.render(canvas);
+        buffer.writeTo(out);
+    };
+
     /// Clear the streaming prompt, restoring cursor to content end position.
     auto clearStreamingPrompt = [&] {
         if (!streamingPromptVisible)
@@ -2954,59 +2975,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         // Skip ask_user — the QuestionComponent renders the question text.
                         if (agentConfig.logToolUses && m.call.name != "ask_user")
                         {
-                            auto const barStyle = tui::Style { .fg = theme.agentColors.leftBar };
-                            auto const toolNameStyle =
-                                tui::Style { .fg = theme.agentColors.leftBar, .bold = true };
-                            auto const argsStyle = tui::Style { .fg = theme.agentColors.statusText };
-                            auto const shellPromptStyle =
-                                tui::Style { .fg = theme.colors.accent, .bold = true };
-                            auto const shellCommandStyle = tui::Style { .fg = theme.colors.text };
-
-                            out.carriageReturn();
-                            out.clearToEndOfLine();
-
-                            auto const [prefix, text] = formatToolStatusLine(m.call);
-
-                            out.writeText("\u2502 ", barStyle);
-                            if (m.call.name == "shell_execute" || m.call.name == "endo_execute")
-                            {
-                                auto const language = m.call.name == "endo_execute" ? tui::LanguageId::Endo
-                                                                                    : tui::LanguageId::Bash;
-                                auto hlState = tui::HighlightState::Normal;
-                                auto remaining = std::string_view { text };
-                                auto firstLine = true;
-                                while (!remaining.empty())
-                                {
-                                    auto const newlinePos = remaining.find('\n');
-                                    auto const line = remaining.substr(0, newlinePos);
-                                    remaining = newlinePos != std::string_view::npos
-                                                    ? remaining.substr(newlinePos + 1)
-                                                    : std::string_view {};
-
-                                    if (firstLine)
-                                    {
-                                        out.writeText(prefix, shellPromptStyle);
-                                        firstLine = false;
-                                    }
-                                    else
-                                    {
-                                        out.linefeed();
-                                        out.writeText("\u2502   ", barStyle);
-                                    }
-
-                                    auto [highlights, nextState] =
-                                        tui::highlightLine(line, language, hlState);
-                                    hlState = nextState;
-                                    tui::renderHighlightedLine(out, line, highlights, tui::Style {}, theme);
-                                }
-                            }
-                            else
-                            {
-                                out.writeText(prefix, toolNameStyle);
-                                if (!text.empty())
-                                    out.writeText(text, argsStyle);
-                            }
-                            out.linefeed();
+                            toolStatusComponent.toolStarted(m.call);
+                            renderToolStatusDirect();
 
                             // Render inline diff preview for edit_file.
                             if (m.call.name == "edit_file" && m.call.arguments.contains("old_string")
@@ -3031,6 +3001,15 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
                             if (activeRenderer && activeRenderer->isThinking())
                                 activeRenderer->renderSpinner();
+                            out.flush();
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, agent::ToolResultMessage>)
+                    {
+                        toolStatusComponent.toolCompleted(m);
+                        if (agentConfig.logToolUses)
+                        {
+                            renderToolStatusDirect();
                             out.flush();
                         }
                     }
@@ -3088,6 +3067,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         }
 
                         teardownStreaming();
+                        toolStatusComponent.clear();
                         inputComponent.setThinkingActive(false);
                         saveHistory();
 
@@ -3254,6 +3234,9 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         {
             if (auto const spinnerTimeout = inputComponent.spinnerTimeoutMs(); spinnerTimeout >= 0)
                 pollTimeout = std::min(spinnerTimeout, pollTimeout);
+            if (auto const toolSpinnerTimeout = toolStatusComponent.spinnerTimeoutMs();
+                toolSpinnerTimeout >= 0)
+                pollTimeout = std::min(toolSpinnerTimeout, pollTimeout);
         }
 
         // 3. Poll terminal input.
@@ -3298,6 +3281,16 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                         activeRenderer->renderSpinner();
                         renderStreamingPrompt();
                     }
+                }
+
+                // Tick the tool status spinner during tool execution.
+                if (streaming && toolStatusComponent.tickSpinner() && !anyPromptActive())
+                {
+                    auto guard = out.syncGuard();
+                    clearStreamingPrompt();
+                    renderToolStatusDirect();
+                    out.flush();
+                    renderStreamingPrompt();
                 }
 
                 // Tick the input component's info line spinner.

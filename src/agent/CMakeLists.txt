@@ -50,6 +50,7 @@ add_library(endo-agent STATIC
     # UI
     ui/AgentInputComponent.hpp ui/AgentInputComponent.cpp
     ui/AgentResponseRenderer.hpp ui/AgentResponseRenderer.cpp
+    ui/ToolStatusComponent.hpp ui/ToolStatusComponent.cpp
 
     # Providers
     providers/LlmProvider.hpp
@@ -171,6 +172,9 @@ add_executable(test-endo-agent
     tools/ListDirectoryTool_test.cpp
     tools/AskUserTool_test.cpp
     tools/DiffRenderer_test.cpp
+
+    # UI tests
+    ui/ToolStatusComponent_test.cpp
 
     # MCP tests
     mcp/JsonRpc_test.cpp

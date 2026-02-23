@@ -204,6 +204,11 @@ void AgentSession::setToolStatusCallback(ToolStatusCallback callback)
     _toolStatusCallback = std::move(callback);
 }
 
+void AgentSession::setToolResultCallback(ToolResultCallback callback)
+{
+    _toolResultCallback = std::move(callback);
+}
+
 void AgentSession::setSystemPrompt(std::string systemPrompt)
 {
     _history.setSystemPrompt(std::move(systemPrompt));
@@ -521,6 +526,10 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
                     });
                 }
 
+                if (_toolResultCallback)
+                    _toolResultCallback(
+                        call.name, deniedResult.content, true, std::chrono::milliseconds { 0 });
+
                 results.push_back(std::move(deniedResult));
                 continue;
             }
@@ -532,6 +541,9 @@ auto AgentSession::executeToolCalls(std::span<ToolCall const> calls) -> std::vec
             std::chrono::steady_clock::now() - startTime);
 
         truncateToolResult(result, _maxToolResultSize);
+
+        if (_toolResultCallback)
+            _toolResultCallback(call.name, result.content, result.isError, elapsed);
 
         if (_tracer)
         {
