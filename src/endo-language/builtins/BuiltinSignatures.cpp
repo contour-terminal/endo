@@ -836,6 +836,8 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     registerPropertyResolved(rt, resolve, "agent_claude_api_key_env", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_claude_thinking_mode", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_auth_type", CoreVM::LiteralType::String);
 
     // --- OpenAI provider ---
     registerPropertyResolved(rt, resolve, "agent_openai_api_key", CoreVM::LiteralType::String);
@@ -843,6 +845,7 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     registerPropertyResolved(rt, resolve, "agent_openai_model", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_openai_base_url", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_openai_max_tokens", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_openai_thinking_mode", CoreVM::LiteralType::String);
 
     // --- OpenAI-compatible provider ---
     registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key", CoreVM::LiteralType::String);
@@ -850,12 +853,14 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     registerPropertyResolved(rt, resolve, "agent_openai_compat_model", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_openai_compat_base_url", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_openai_compat_max_tokens", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_thinking_mode", CoreVM::LiteralType::String);
 
     // --- Gemini provider ---
     registerPropertyResolved(rt, resolve, "agent_gemini_api_key", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_gemini_api_key_env", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_gemini_model", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_gemini_max_tokens", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_gemini_thinking_mode", CoreVM::LiteralType::String);
 
     // --- Plan mode ---
     registerPropertyResolved(rt, resolve, "agent_plan_mode_enabled", CoreVM::LiteralType::Boolean);
@@ -865,16 +870,29 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     // --- Explore sub-agent ---
     registerPropertyResolved(rt, resolve, "agent_explore_max_turns", CoreVM::LiteralType::Number);
 
+    // --- Session ---
+    registerPropertyResolved(rt, resolve, "agent_auto_resume", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_session_replay", CoreVM::LiteralType::Boolean);
+
     // --- Trace ---
     registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean);
     registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_trace_max_files", CoreVM::LiteralType::Number);
+
+    // --- Permissions ---
+    registerPropertyResolved(rt, resolve, "agent_permissions_policy", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_trusted_tool", CoreVM::LiteralType::Object);
+    registerPropertyResolved(rt, resolve, "agent_blocked_pattern", CoreVM::LiteralType::Object);
 
     // --- Web search ---
     registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_web_search_api_key", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_web_search_cx", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_web_search_max_results", CoreVM::LiteralType::Number);
+
+    // --- Error recovery ---
+    registerPropertyResolved(rt, resolve, "agent_error_recovery_action", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_error_recovery_model", CoreVM::LiteralType::String);
 
     // clang-format on
 }
