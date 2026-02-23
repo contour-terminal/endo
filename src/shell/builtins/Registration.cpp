@@ -665,6 +665,16 @@ void Shell::registerLanguageBuiltins()
         .returnType(CoreVM::LiteralType::String)
         .bind(endo::builtins::formatDatetime);
 
+    // DateTime constructors
+    _runtime.registerFunction("datetime_now")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::dateTimeNow);
+
+    _runtime.registerFunction("datetime_from_epoch")
+        .param<CoreVM::CoreNumber>("epoch")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::dateTimeFromEpoch);
+
     _runtime.registerFunction("format_mode")
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::String)
