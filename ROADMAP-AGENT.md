@@ -470,14 +470,21 @@ Key files: `src/tui/VtParser.hpp/cpp` (DCS states), `src/tui/InputEvent.hpp` (Dc
 `src/tui/SemanticBlockClient.hpp/cpp`, `src/agent/AgentConfig.hpp/cpp` (ErrorRecoveryConfig),
 `src/shell/Shell.hpp/cpp` (offerErrorRecovery, runAgentMode initial message)
 
-### Tool Execution Visualization (Phase 9.2)
+### Tool Execution Visualization (Phase 9.2) ✅
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
-- Show a status line per tool call: tool name, arguments summary, elapsed time
-- Use existing `Spinner` with tool-specific labels during execution
-- Display tool result summary (success/error, output size) after completion
-- Diff rendering for `edit_file` results (green additions, red deletions)
+Per-tool-call status lines with spinner animation, argument summaries, elapsed time,
+and result indicators. `ToolStatusComponent` renders inline during agent execution,
+driven by `ToolStatusMessage`/`ToolResultMessage` callbacks from `AgentSession` through
+`AgentWorker`. Diff preview for `edit_file` via `DiffRenderer` with syntax highlighting.
+
+- Status line per tool call: tool name, arguments summary, elapsed time ✅
+- Spinner (`tui::SpinnerType::Dots`) with tool-specific labels during execution ✅
+- Tool result summary (✓ success / ✗ error, output size via `formatSize()`) ✅
+- Diff rendering for `edit_file` results (syntax-highlighted, green/red, truncation at 50 lines) ✅
+- **Key files:** `src/agent/ui/ToolStatusComponent.hpp/cpp`, `src/agent/tools/DiffRenderer.hpp/cpp`,
+  `src/agent/session/AgentMessages.hpp`
 
 ### Conversation History Navigation (Phase 9.3)
 
@@ -853,7 +860,7 @@ Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
    │    ├── MCP HTTP/SSE Transport (Phase 8.3)
    │    ├── AI Shell Completion (Phase 10.2)
    │    ├── Error Recovery (Phase 10.3) ✅
-   │    ├── Tool Execution Visualization (Phase 9.2)
+   │    ├── Tool Execution Visualization (Phase 9.2) ✅
    │    ├── Conversation Navigation (Phase 9.3)
    │    ├── Code Review Tool
    │    ├── Agent Hooks / Event System
