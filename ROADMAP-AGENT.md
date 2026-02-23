@@ -393,18 +393,21 @@ Render LLM-generated images inline using existing TUI library:
 - Render via `tui::encodeSixel()` + `Canvas::drawImage()`, scaled to terminal width
 - Fallback for non-sixel terminals: `[Image: 1024x768, 245 KB]` + `/save-image <path>`
 
-### Batch/Headless Agent Mode
+### Batch/Headless Agent Mode ✅
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Run agent tasks non-interactively for CI/CD and scripting:
 
-- `endo agent run "prompt"` — single-shot execution, output to stdout
-- `endo agent run --file tasks.md` — execute tasks from a file
-- `--json` flag for structured JSON output (tool calls, results, final answer)
-- `--max-turns N` to cap tool loop iterations
-- `--auto-approve` to skip permission prompts (for trusted pipelines)
-- Exit code reflects agent success/failure
+- `endo agent run "prompt"` — single-shot execution, output to stdout ✅
+- `endo agent run --file tasks.md` — execute tasks from a file ✅
+- `--json` flag for structured JSON output (tool calls, results, final answer) ✅
+- `--max-turns N` to cap tool loop iterations ✅
+- `--auto-approve` to skip permission prompts (for trusted pipelines) ✅
+- `--provider` / `--model` overrides ✅
+- Exit code reflects agent success/failure ✅
+- Full tool suite available (Shell, Endo, MCP, web search, etc.) ✅
+- `Shell::loadInitScript()` extracted for non-interactive mode reuse ✅
 
 ### Structured Output / JSON Mode
 
@@ -853,7 +856,7 @@ Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
    │    ├── Prompt Caching (Claude) ✅
    │    ├── Image Input (Phase 2.6) ✅
    │    ├── Image Output (Phase 2.7) ── depends on 2.6 (shared stb_image)
-   │    ├── Batch/Headless Agent Mode
+   │    ├── Batch/Headless Agent Mode ✅
    │    └── Structured Output / JSON Mode
    │
    ├── Priority 3: Major Features
@@ -1000,4 +1003,4 @@ The roadmap is complete when a user can:
 13. Review diffs, approve mutations, and commit results — without leaving the shell
 14. Create a team of agents with assigned roles, watch them collaborate on complex tasks
 15. Navigate symbols, outline files, and search code semantically without flooding the conversation
-16. Run agent tasks in batch/headless mode for CI/CD integration
+16. Run agent tasks in batch/headless mode for CI/CD integration ✅

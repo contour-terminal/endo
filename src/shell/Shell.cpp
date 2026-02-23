@@ -57,6 +57,8 @@
 #include <agent/providers/ProviderModels.hpp>
 #include <agent/session/AgentMessages.hpp>
 #include <agent/session/AgentSession.hpp>
+#include <agent/HeadlessRunner.hpp>
+#include <agent/RunCommand.hpp>
 #include <agent/session/AgentWorker.hpp>
 #include <agent/session/PlanExecutor.hpp>
 #include <agent/tools/AskUserTool.hpp>
@@ -599,18 +601,12 @@ void Shell::emitCurrentWorkingDirectory()
     _tty.writeToStdout(std::format("\033]7;file://{}{}\033\\", hostname.data(), encoded));
 }
 
-int Shell::run()
+void Shell::loadInitScript()
 {
-    if (_interactive && !_tty.isTerminal())
-    {
-        std::cerr << "endo: interactive mode requires a terminal.\n";
-        return EXIT_FAILURE;
-    }
-
     // Load API keys from agent.yml (init.endo overrides all other settings).
     agentConfig = agent::loadAgentConfig();
 
-    // Auto-execute init.endo if it exists (only in interactive mode)
+    // Auto-execute init.endo if it exists.
     if (auto const* home = std::getenv("HOME"))
     {
         auto const initPath = std::filesystem::path(home) / ".config" / "endo" / "init.endo";
@@ -630,6 +626,17 @@ int Shell::run()
             }
         }
     }
+}
+
+int Shell::run()
+{
+    if (_interactive && !_tty.isTerminal())
+    {
+        std::cerr << "endo: interactive mode requires a terminal.\n";
+        return EXIT_FAILURE;
+    }
+
+    loadInitScript();
 
     // Enable semantic block query extension (DEC mode 2034) for error recovery.
     // This silently fails on terminals that don't support it.
@@ -1583,6 +1590,343 @@ namespace
     }
 
 } // namespace
+
+int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
+{
+    // --- Provider setup (same lazy init as runAgentMode) ---
+    if (!_agentProviderFactory)
+    {
+        _agentHttpClient = std::make_unique<http::HttpClient>();
+        _agentProviderFactory = std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
+    }
+
+    // Apply provider override if requested.
+    if (options.provider.has_value())
+    {
+        if (!_agentProviderFactory->switchProvider(*options.provider))
+        {
+            std::print(stderr, "endo agent run: unknown or unauthenticated provider '{}'\n", *options.provider);
+            return EXIT_FAILURE;
+        }
+    }
+
+    auto* provider = _agentProviderFactory->activeProvider();
+    if (!provider)
+    {
+        std::print(stderr,
+                   "endo agent run: no AI provider configured or authenticated.\n"
+                   "Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n");
+        return EXIT_FAILURE;
+    }
+
+    // Apply model override if requested.
+    // NOTE: Model override is provider-specific; currently not directly supported
+    // via the LlmProvider interface. The model is configured via AgentConfig at
+    // provider construction time. For now, we log a warning if the user tries
+    // to override.
+    if (options.model.has_value())
+    {
+        // Model override would require re-creating the provider with a different model.
+        // For now, this is a best-effort: the user can set the model in init.endo.
+        std::print(stderr, "endo agent run: --model override is not yet implemented; using configured model.\n");
+    }
+
+    // --- Session creation ---
+    _agentSession = std::make_unique<agent::AgentSession>(*provider);
+
+    // --- Tool registration (same tools as interactive mode) ---
+    auto toolRegistry = agent::ToolRegistry {};
+
+    auto const shellPath = [&]() -> std::string {
+        if (access("/bin/bash", X_OK) == 0)
+            return "/bin/bash";
+        if (access("/usr/bin/bash", X_OK) == 0)
+            return "/usr/bin/bash";
+        return "/bin/sh";
+    }();
+
+    auto shellExecCb = [shellPath](std::string const& command,
+                                   std::chrono::milliseconds timeout) -> agent::ShellExecResult {
+        auto pipeFds = std::array<int, 2> {};
+        if (pipe(pipeFds.data()) != 0)
+            return agent::ShellExecResult { .output = "Failed to create pipe", .exitCode = -1 };
+
+        auto const pid = fork();
+        if (pid < 0)
+        {
+            close(pipeFds[0]);
+            close(pipeFds[1]);
+            return agent::ShellExecResult { .output = "Failed to fork process", .exitCode = -1 };
+        }
+
+        if (pid == 0)
+        {
+            close(pipeFds[0]);
+            dup2(pipeFds[1], STDOUT_FILENO);
+            dup2(pipeFds[1], STDERR_FILENO);
+            close(pipeFds[1]);
+
+            sigset_t mask;
+            sigemptyset(&mask);
+            sigaddset(&mask, SIGCHLD);
+            sigaddset(&mask, SIGTSTP);
+            sigaddset(&mask, SIGCONT);
+            sigaddset(&mask, SIGINT);
+            sigprocmask(SIG_UNBLOCK, &mask, nullptr);
+
+            signal(SIGINT, SIG_DFL);
+            signal(SIGTSTP, SIG_DFL);
+            signal(SIGPIPE, SIG_DFL);
+
+            execl(shellPath.c_str(), shellPath.c_str(), "-c", command.c_str(), nullptr);
+            _exit(127);
+        }
+
+        close(pipeFds[1]);
+
+        auto output = std::string {};
+        auto buffer = std::array<char, 4096> {};
+        auto const deadline = std::chrono::steady_clock::now() + timeout;
+        auto timedOut = false;
+
+        auto pfd = pollfd { .fd = pipeFds[0], .events = POLLIN, .revents = 0 };
+        for (;;)
+        {
+            auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (remaining.count() <= 0)
+            {
+                timedOut = true;
+                break;
+            }
+            auto const pollResult = poll(&pfd, 1, static_cast<int>(remaining.count()));
+            if (pollResult < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                break;
+            }
+            if (pollResult == 0)
+            {
+                timedOut = true;
+                break;
+            }
+            auto const bytesRead = read(pipeFds[0], buffer.data(), buffer.size());
+            if (bytesRead < 0)
+            {
+                if (errno == EINTR)
+                    continue;
+                break;
+            }
+            if (bytesRead == 0)
+                break;
+            output.append(buffer.data(), static_cast<size_t>(bytesRead));
+        }
+        close(pipeFds[0]);
+
+        if (timedOut)
+        {
+            kill(pid, SIGKILL);
+            waitpid(pid, nullptr, 0);
+            return agent::ShellExecResult { .output = std::move(output), .exitCode = -1, .timedOut = true };
+        }
+
+        auto status = 0;
+        waitpid(pid, &status, 0);
+        auto const exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+
+        return agent::ShellExecResult { .output = std::move(output), .exitCode = exitCode };
+    };
+
+    auto endoExecCb = [this](std::string const& source,
+                             std::chrono::milliseconds /*timeout*/) -> agent::EndoExecResult {
+        auto* tmpFile = tmpfile();
+        if (!tmpFile)
+            return agent::EndoExecResult { .output = "Failed to create temporary file", .exitCode = -1 };
+
+        auto const tmpFd = fileno(tmpFile);
+        auto const savedStdout = dup(STDOUT_FILENO);
+        auto const savedStderr = dup(STDERR_FILENO);
+
+        fflush(stdout);
+        fflush(stderr);
+        dup2(tmpFd, STDOUT_FILENO);
+        dup2(tmpFd, STDERR_FILENO);
+
+        auto const exitCode = this->execute(source);
+
+        fflush(stdout);
+        fflush(stderr);
+        dup2(savedStdout, STDOUT_FILENO);
+        dup2(savedStderr, STDERR_FILENO);
+        close(savedStdout);
+        close(savedStderr);
+
+        fflush(tmpFile);
+        auto const outputSize = lseek(tmpFd, 0, SEEK_END);
+        lseek(tmpFd, 0, SEEK_SET);
+
+        auto output = std::string {};
+        if (outputSize > 0)
+        {
+            output.resize(static_cast<size_t>(outputSize));
+            auto const bytesRead = ::read(tmpFd, output.data(), output.size());
+            if (bytesRead >= 0)
+                output.resize(static_cast<size_t>(bytesRead));
+            else
+                output.clear();
+        }
+        fclose(tmpFile);
+
+        return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
+    };
+
+    toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::EditFileTool>());
+    toolRegistry.registerTool(std::make_unique<agent::GlobTool>());
+    toolRegistry.registerTool(std::make_unique<agent::GrepTool>());
+    toolRegistry.registerTool(std::make_unique<agent::SearchTool>());
+    toolRegistry.registerTool(std::make_unique<agent::ListDirectoryTool>());
+    toolRegistry.registerTool(std::make_unique<agent::ShellExecuteTool>(shellExecCb));
+    toolRegistry.registerTool(std::make_unique<agent::EndoExecuteTool>(endoExecCb));
+    toolRegistry.registerTool(std::make_unique<agent::GitTool>(shellExecCb));
+    toolRegistry.registerTool(
+        std::make_unique<agent::SaveMemoryTool>([this]() { _cachedProjectContext.reset(); }));
+    toolRegistry.registerTool(std::make_unique<agent::SubmitPlanTool>());
+    toolRegistry.registerTool(
+        std::make_unique<agent::ExploreTool>(*provider, shellExecCb, agentConfig.explore));
+    toolRegistry.registerTool(std::make_unique<agent::WebSearchTool>(*_agentHttpClient, webSearchConfig));
+
+    auto const webFetchConfig = agent::WebFetchConfig {};
+    toolRegistry.registerTool(std::make_unique<agent::WebFetchTool>(*_agentHttpClient, webFetchConfig));
+
+    // AskUserTool returns cancelled in headless mode (no user to interact with).
+    toolRegistry.registerTool(
+        std::make_unique<agent::AskUserTool>([](agent::UserQuestion const&) -> agent::UserAnswer {
+            return { .answer = "User unavailable in headless mode.", .cancelled = true };
+        }));
+
+    // Start MCP servers and register their tools.
+    auto mcpServerManager = agent::mcp::ServerManager {};
+    for (auto const& config: mcpServerConfigs)
+    {
+        auto result = mcpServerManager.addServer(config);
+        if (!result)
+            std::println(stderr, "MCP: Failed to connect server '{}': {}", config.name, result.error());
+    }
+    for (auto const& toolDef: mcpServerManager.allTools())
+        toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, toolDef));
+
+    mcpServerManager.setToolsChangedCallback([&toolRegistry,
+                                              &mcpServerManager](std::string_view /*serverName*/,
+                                                                 std::span<agent::ToolDefinition const> added,
+                                                                 std::vector<std::string> const& removed) {
+        for (auto const& name: removed)
+            toolRegistry.unregisterTool(name);
+        for (auto const& def: added)
+            toolRegistry.registerTool(std::make_unique<agent::mcp::McpToolAdapter>(mcpServerManager, def));
+    });
+
+    _agentSession->setToolRegistry(&toolRegistry);
+    _agentSession->setMaxToolResultSize(agentConfig.maxToolResultSize);
+    _agentSession->setMaxToolIterations(options.maxTurns);
+    _agentSession->setTracer(nullptr);
+    _agentSession->setToolStatusCallback(nullptr);
+
+    // --- Permission manager ---
+    auto permConfig = agentConfig.permissions;
+    if (options.autoApprove)
+        permConfig.policy = agent::PermissionPolicy::TrustAll;
+    auto permissionManager = agent::PermissionManager(permConfig);
+    // In non-auto-approve mode, deny by default (no TTY for prompting).
+    if (!options.autoApprove)
+        permissionManager.setPromptCallback([](agent::PermissionPrompt const&) {
+            return agent::PermissionDecision::Denied;
+        });
+    _agentSession->setPermissionManager(&permissionManager);
+
+    // --- System prompt ---
+    auto const cwd = std::filesystem::current_path();
+    auto agentContext = buildAgentContext(agentConfig, cwd, std::nullopt, std::nullopt);
+    _agentSession->setSystemPrompt(std::move(agentContext.systemPrompt));
+    if (auto* explore = dynamic_cast<agent::ExploreTool*>(toolRegistry.findTool("explore")))
+        explore->setSystemPrompt(std::move(agentContext.exploreSystemPrompt));
+
+    // --- Collect tool call records ---
+    auto headlessResult = agent::HeadlessRunResult {};
+    auto const modelInfo = provider->modelInfo();
+    headlessResult.providerName = modelInfo.providerName;
+    headlessResult.modelName = modelInfo.modelName;
+
+    _agentSession->setToolStatusCallback(nullptr);
+    _agentSession->setToolResultCallback(
+        [&headlessResult](
+            std::string const& name, std::string const& content, bool isError, std::chrono::milliseconds duration) {
+            headlessResult.toolCalls.push_back(agent::ToolCallRecord {
+                .name = name,
+                .result = content,
+                .isError = isError,
+                .duration = duration,
+            });
+        });
+
+    // --- Execute synchronously ---
+    auto streamCb = agent::StreamCallback {};
+    if (!options.jsonOutput)
+    {
+        // In text mode, stream tokens directly to stdout.
+        streamCb = [](std::string_view token) -> bool {
+            std::print("{}", token);
+            return true;
+        };
+    }
+
+    auto result = _agentSession->processMessage(options.prompt, streamCb);
+
+    if (result.has_value())
+    {
+        headlessResult.success = true;
+        headlessResult.response = std::move(*result);
+    }
+    else
+    {
+        headlessResult.success = false;
+        headlessResult.errorMessage = result.error().message;
+    }
+
+    headlessResult.tokenUsage = _agentSession->sessionUsage();
+    headlessResult.turnCount = _agentSession->turnCount();
+
+    // --- Output ---
+    if (options.jsonOutput)
+    {
+        std::println("{}", agent::toJson(headlessResult).dump(2));
+    }
+    else
+    {
+        // Ensure final newline after streamed text.
+        if (headlessResult.success && !headlessResult.response.empty()
+            && headlessResult.response.back() != '\n')
+            std::println("");
+
+        if (!headlessResult.success)
+            std::print(stderr, "Error: {}\n", headlessResult.errorMessage);
+
+        // Print token usage summary to stderr.
+        std::print(stderr,
+                   "\n[{}/{} | {} turns | in:{} out:{} cache_r:{} cache_w:{}]\n",
+                   headlessResult.providerName,
+                   headlessResult.modelName,
+                   headlessResult.turnCount,
+                   agent::formatTokenCount(headlessResult.tokenUsage.inputTokens),
+                   agent::formatTokenCount(headlessResult.tokenUsage.outputTokens),
+                   agent::formatTokenCount(headlessResult.tokenUsage.cacheReadTokens),
+                   agent::formatTokenCount(headlessResult.tokenUsage.cacheCreationTokens));
+    }
+
+    return headlessResult.success ? EXIT_SUCCESS : EXIT_FAILURE;
+}
 
 void Shell::offerErrorRecovery(int exitCode, std::string const& command)
 {

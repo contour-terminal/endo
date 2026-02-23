@@ -32,6 +32,7 @@ namespace endo::agent
 class AgentSession;
 class AgentWorker;
 class ProviderFactory;
+struct AgentRunOptions;
 } // namespace endo::agent
 
 #include <shell/completion/Completer.hpp>
@@ -93,6 +94,15 @@ class Shell final: public SignalCallback
 
     int run();
     int execute(std::string const& lineBuffer);
+
+    /// @brief Loads ~/.config/endo/init.endo and agent config if they exist.
+    /// Call after construction for non-interactive modes that need shell config.
+    void loadInitScript();
+
+    /// @brief Runs the agent in headless/batch mode (no TUI).
+    /// @param options Parsed command-line options for the headless run.
+    /// @return Exit code (0 = success, non-zero = failure).
+    int runAgentHeadless(agent::AgentRunOptions const& options);
 
     /// Updates LINES and COLUMNS environment variables from current TTY size.
     void updateTerminalSizeEnv();

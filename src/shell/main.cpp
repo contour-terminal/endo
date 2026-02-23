@@ -23,6 +23,7 @@
 
 #include "CrashHandler.hpp"
 #include "Shell.hpp"
+#include <agent/RunCommand.hpp>
 #include <agent/auth/LoginCommand.hpp>
 #include <agent/tracing/TraceReplay.hpp>
 
@@ -290,8 +291,22 @@ int main(int argc, char const* argv[])
             std::print(stderr, "Usage: {} agent trace replay <FILE>\n", programName);
             return EXIT_FAILURE;
         }
+        if (subcommand == "run")
+        {
+            auto const runArgs = args.subspan(3);
+            auto parsedRun = endo::agent::parseAgentRunArgs(runArgs);
+            if (!parsedRun.has_value())
+            {
+                std::print(stderr, "endo agent run: {}\n", parsedRun.error());
+                return EXIT_FAILURE;
+            }
+            auto shell = endo::Shell {};
+            shell.setInteractive(false);
+            shell.loadInitScript();
+            return shell.runAgentHeadless(*parsedRun);
+        }
         std::print(stderr, "Unknown agent command: {}\n", subcommand);
-        std::print(stderr, "Available commands: login, status, logout, trace\n");
+        std::print(stderr, "Available commands: login, status, logout, trace, run\n");
         return EXIT_FAILURE;
     }
 

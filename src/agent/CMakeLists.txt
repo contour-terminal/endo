@@ -7,6 +7,8 @@ add_library(endo-agent STATIC
     AgentConfig.hpp AgentConfig.cpp
     PermissionManager.hpp PermissionManager.cpp
     CommandSafetyAnalyzer.hpp CommandSafetyAnalyzer.cpp
+    RunCommand.hpp RunCommand.cpp
+    HeadlessRunner.hpp HeadlessRunner.cpp
 
     # Auth
     auth/OAuthFlow.hpp auth/OAuthFlow.cpp
@@ -109,6 +111,8 @@ add_executable(test-endo-agent
     AgentConfig_test.cpp
     PermissionManager_test.cpp
     CommandSafetyAnalyzer_test.cpp
+    RunCommand_test.cpp
+    HeadlessRunner_test.cpp
 
     # Auth tests
     auth/OAuthFlow_test.cpp
