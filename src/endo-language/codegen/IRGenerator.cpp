@@ -7314,7 +7314,18 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     else
     {
         if (bodyResult)
+        {
+            // Void-returning builtin calls (e.g., add_mcp_server, export) don't push a value
+            // onto the TargetCodeGenerator's stack. If the function body ends with such a call,
+            // the FunctionRetInstr would reference an unloadable value, crashing emitLoad().
+            // Replace with unit (0) since the function semantically returns unit.
+            if (auto* callInstr = dynamic_cast<CoreVM::CallInstr*>(bodyResult);
+                callInstr && callInstr->callee()->signature().returnType() == CoreVM::LiteralType::Void)
+            {
+                bodyResult = _builder.get(CoreVM::CoreNumber(0));
+            }
             _builder.createFunctionRet(bodyResult, "ret");
+        }
     }
 
     popFSharpScope();

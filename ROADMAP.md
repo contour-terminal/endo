@@ -416,6 +416,7 @@ src/
     - [x] `parameterCount` property on `IRFunction` for parameter alloca skip logic
   - [x] Phase 3: Compile non-recursive F# functions as separate IRFunctions
     - [x] `compileFunctionBody()` creates IRFunction, parameter allocas, codegens body, emits FunctionRet
+    - [x] Fix: void-returning native calls (e.g., `add_mcp_server`, `export`) as last expression in compiled function body now replaced with unit (0) to prevent TargetCodeGenerator SIGABRT in emitLoad
     - [x] Functions with ALL parameters type-annotated compile as functions (UCALL/URET)
     - [x] Functions without annotations fall back to AST inlining (backward compatible)
     - [x] Error recovery: removes malformed function and truncates report on compilation failure

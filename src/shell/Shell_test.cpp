@@ -3413,6 +3413,17 @@ TEST_CASE("shell.bare_expr.tuple")
     CHECK(escape(shell.output()) == escape("(1, 2)\n"));
 }
 
+TEST_CASE("shell.compiled_function.void_last_expr")
+{
+    TestShell shell;
+    // display_result(N)V returns void. When it's the last expression of a compiled
+    // function (unit parameter -> IRFunction), compileFunctionBody must not pass the
+    // void CallInstr to FunctionRetInstr, or TargetCodeGenerator crashes in emitLoad.
+    shell("let show_value () = display_result 42");
+    shell("show_value ()");
+    CHECK(escape(shell.output()) == escape("42\n"));
+}
+
 // ============================================================================
 // Table Formatter Tests
 // ============================================================================
