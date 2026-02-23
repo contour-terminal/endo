@@ -35,6 +35,9 @@ class Parser
     /// Sets the known variadic function names for shell-mode argument parsing at statement level.
     void setKnownVariadicFunctions(std::unordered_set<std::string> names);
 
+    /// Enables auto-display of bare expression results (for interactive REPL mode).
+    void setAutoDisplay(bool enabled) noexcept { _autoDisplay = enabled; }
+
   private:
     /// Converts the current lexer location to CoreVM SourceLocation format.
     [[nodiscard]] CoreVM::SourceLocation currentLocation() const;
@@ -240,6 +243,7 @@ class Parser
 
     int _placeholderCount = 0;            ///< Number of `_` placeholders in current scope
     bool _placeholderScopeActive = false; ///< Suppresses postfix wrapping inside parens
+    bool _autoDisplay = false;            ///< When true, bare expressions get displayResult=true (REPL mode)
 };
 
 // Template implementations

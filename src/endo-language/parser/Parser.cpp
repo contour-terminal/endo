@@ -194,7 +194,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             _lexer.leaveFSharpExpr();
             if (!expr)
                 return nullptr;
-            return std::make_unique<ast::ExprStmt>(std::move(expr));
+            return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
         }
         case Token::Type:
             // Record type definition: type Person = { name: str; age: int }
@@ -206,7 +206,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
             _lexer.leaveFSharpExpr();
             if (!expr)
                 return nullptr;
-            return std::make_unique<ast::ExprStmt>(std::move(expr));
+            return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
         }
         case Token::String:
         case Token::Identifier:
@@ -218,7 +218,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 _lexer.leaveFSharpExpr();
                 if (!expr)
                     return nullptr;
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
             else if (_lexer.isDirective("while"))
                 return parseWhile();
@@ -273,7 +273,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     }
                     _lexer.leaveFSharpExpr();
                 }
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
             else if (_lexer.currentLiteral() == "exec")
             {
@@ -406,9 +406,10 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
                     }
                     _lexer.leaveFSharpExpr();
-                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                           /*displayResult=*/_autoDisplay);
                 }
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
             else if (_knownVariadicFunctions.contains(_lexer.currentLiteral()))
             {
@@ -451,10 +452,11 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
                     }
                     _lexer.leaveFSharpExpr();
-                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                           /*displayResult=*/_autoDisplay);
                 }
 
-                return std::make_unique<ast::ExprStmt>(std::move(result));
+                return std::make_unique<ast::ExprStmt>(std::move(result), /*displayResult=*/_autoDisplay);
             }
             else if (_knownFSharpFunctions.contains(_lexer.currentLiteral()))
             {
@@ -510,9 +512,10 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         pipeline = std::make_unique<ast::PipelineExpr>(std::move(pipeline), std::move(right));
                     }
                     _lexer.leaveFSharpExpr();
-                    return std::make_unique<ast::ExprStmt>(std::move(pipeline));
+                    return std::make_unique<ast::ExprStmt>(std::move(pipeline),
+                                                           /*displayResult=*/_autoDisplay);
                 }
-                return std::make_unique<ast::ExprStmt>(std::move(expr));
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
             else
             {

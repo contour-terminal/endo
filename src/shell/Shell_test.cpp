@@ -3413,6 +3413,61 @@ TEST_CASE("shell.bare_expr.tuple")
     CHECK(escape(shell.output()) == escape("(1, 2)\n"));
 }
 
+TEST_CASE("shell.bare_expr.function_call")
+{
+    TestShell shell;
+    shell("let add x y = x + y");
+    shell("add 3 4");
+    CHECK(escape(shell.output()) == escape("7\n"));
+}
+
+TEST_CASE("shell.bare_expr.string_quoted")
+{
+    TestShell shell;
+    shell("let greet () = \"hello\"");
+    shell("greet ()");
+    CHECK(escape(shell.output()) == escape("\"hello\"\n"));
+}
+
+TEST_CASE("shell.bare_expr.match")
+{
+    TestShell shell;
+    shell("match Some 42 with | Some x -> x | None -> 0");
+    CHECK(escape(shell.output()) == escape("42\n"));
+}
+
+TEST_CASE("shell.bare_expr.if_then_else")
+{
+    TestShell shell;
+    shell("if true then 10 else 20");
+    CHECK(escape(shell.output()) == escape("10\n"));
+}
+
+TEST_CASE("shell.bare_expr.rand")
+{
+    TestShell shell;
+    shell("rand 5 5");
+    CHECK(escape(shell.output()) == escape("5\n"));
+}
+
+TEST_CASE("shell.bare_expr.unit_suppressed")
+{
+    TestShell shell;
+    shell("print \"hello\"");
+    // print outputs "hello" but should NOT auto-display extra "0"
+    CHECK(escape(shell.output()) == escape("hello"));
+}
+
+TEST_CASE("shell.bare_expr.unit_function_no_display")
+{
+    TestShell shell;
+    // Define a function whose body is print (returns unit)
+    shell("let setup () = print \"configured\"");
+    shell("setup ()");
+    // Should see "configured" from print, but NO extra "0" from auto-display
+    CHECK(escape(shell.output()) == escape("configured"));
+}
+
 TEST_CASE("shell.compiled_function.void_last_expr")
 {
     TestShell shell;

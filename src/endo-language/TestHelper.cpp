@@ -305,7 +305,19 @@ TestRuntime::TestRuntime()
         if (name == "display_result" && arity == 1)
             return Functor([this](CoreVM::Params& args) {
                 auto rawVal = static_cast<uint64_t>(args.getInt(1));
-                capturedOutput += builtins::valueToString(rawVal, args.caller());
+                auto* runner = args.caller();
+                if (runner->isKnownString(rawVal))
+                {
+                    auto const* str =
+                        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal));
+                    capturedOutput += '"';
+                    capturedOutput += std::string_view(*str);
+                    capturedOutput += '"';
+                }
+                else
+                {
+                    capturedOutput += builtins::valueToString(rawVal, runner);
+                }
                 capturedOutput += '\n';
             });
 

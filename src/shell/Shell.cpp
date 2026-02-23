@@ -620,7 +620,12 @@ void Shell::loadInitScript()
             {
                 auto ifs = std::ifstream(initPath);
                 auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+                // init.endo is a configuration script, not interactive user input —
+                // suppress auto-display to avoid printing return values like "0".
+                auto const savedInteractive = _interactive;
+                _interactive = false;
                 auto const initResult = execute(content);
+                _interactive = savedInteractive;
                 if (initResult != 0)
                     std::println(std::cerr, "endo: warning: init.endo exited with code {}", initResult);
             }
@@ -939,6 +944,7 @@ int Shell::execute(std::string const& lineBuffer)
             parser.setKnownFSharpFunctions(std::move(names));
             parser.setKnownVariadicFunctions(std::move(variadicNames));
         }
+        parser.setAutoDisplay(_interactive);
         auto rootNode = parser.parse();
 
         // Check for parser errors

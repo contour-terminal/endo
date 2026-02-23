@@ -787,6 +787,26 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         return ifE->elseExpr ? isUnitProducingExprImpl(ifE->elseExpr.get(), visited) : true;
     }
 
+    // Bare identifier (zero-arg function call at statement level)
+    if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(expr))
+    {
+        auto const& name = ident->name;
+        if (visited.contains(name))
+            return false;
+        for (auto const* cb: _runtime.builtins())
+            if (cb->signature().name() == name && cb->signature().returnType() == CoreVM::LiteralType::Void)
+                return true;
+        if (auto const* func = lookupFSharpFunction(name))
+        {
+            if (!func->builtinHOF.empty())
+                return func->resultKind == ResultKind::Unit;
+            visited.insert(name);
+            auto result = isUnitProducingExprImpl(func->body, visited);
+            visited.erase(name);
+            return result;
+        }
+    }
+
     return false;
 }
 
@@ -5355,6 +5375,12 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 {
     TRACE_SCOPE("visit(ExprStmt)");
 
+    // At statement level, shell commands should run with normal I/O (not capture mode)
+    auto const savedCaptureMode = _shellCommandCaptureMode;
+    _shellCommandCaptureMode = false;
+
+    CoreVM::Value* value = nullptr;
+
     // Bare variadic function at statement level → invoke with zero args
     if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(node.expr.get()))
     {
@@ -5362,24 +5388,20 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         {
             if (func->hasVariadicParam)
             {
-                auto const savedCaptureMode = _shellCommandCaptureMode;
-                _shellCommandCaptureMode = false; // Statement level → normal I/O
-
                 // Build empty list for the variadic parameter
                 auto* list = emitNilList(CoreVM::LiteralType::Void, "varargs.nil");
                 std::vector<CoreVM::Value*> args = { list };
 
                 generateFSharpCall(func, ident->name, args);
-                _shellCommandCaptureMode = savedCaptureMode;
-                return;
+                value = _result;
             }
         }
     }
 
-    // At statement level, shell commands should run with normal I/O (not capture mode)
-    auto const savedCaptureMode = _shellCommandCaptureMode;
-    _shellCommandCaptureMode = false;
-    auto* value = codegen(node.expr.get());
+    // Normal expression codegen (when not handled by variadic path above)
+    if (!value)
+        value = codegen(node.expr.get());
+
     _shellCommandCaptureMode = savedCaptureMode;
 
     // When a boolean literal is used as a statement (e.g., bare `true` or `false`),
@@ -5401,11 +5423,14 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         auto const type = value->type();
         if (type == CoreVM::LiteralType::String)
         {
-            // String: display directly via println
+            // String: display with surrounding quotes via println
+            auto* quote = _builder.get(std::string("\""));
+            auto* quoted = _builder.createSAdd(quote, value, "display.quote.pre");
+            quoted = _builder.createSAdd(quoted, quote, "display.quote");
             auto* callback = findCallback("println(S)V");
             if (callback)
                 _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { value }, "display.println");
+                    _builder.getBuiltinFunction(*callback), { quoted }, "display.println");
         }
         else if (type == CoreVM::LiteralType::Boolean || type == CoreVM::LiteralType::Float)
         {

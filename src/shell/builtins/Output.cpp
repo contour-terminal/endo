@@ -188,6 +188,15 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
         }
     }
 
+    // Check if the value is a raw string pointer — quote it for display
+    if (runner->isKnownString(rawVal))
+    {
+        auto const* coreStr = reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(rawVal));
+        auto str = std::format("\"{}\"\n", std::string_view(*coreStr));
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+        return;
+    }
+
     // Fallback: convert to string and print with newline
     auto str = endo::builtins::valueToString(rawVal, runner);
     str += '\n';
