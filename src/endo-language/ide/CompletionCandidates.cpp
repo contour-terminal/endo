@@ -669,6 +669,21 @@ std::vector<CompletionCandidate> dotAccessCandidates(
             }
         }
 
+        // Module function pattern: if firstSegment is a record type name (e.g., "DateTime"),
+        // module functions return that type (e.g., DateTime.now -> DateTime)
+        if (!resolved && recordFields.contains(firstSegment))
+        {
+            if (auto const fieldsIt = recordFields.find(firstSegment); fieldsIt != recordFields.end())
+            {
+                for (auto const& field: fieldsIt->second)
+                    addCandidate(objectPart + "." + field.name,
+                                 field.name,
+                                 firstSegment + "." + field.name + ": " + field.typeName,
+                                 CompletionKind::Field);
+                resolved = true;
+            }
+        }
+
         // Fall through to generic behavior if we couldn't resolve the type chain
         if (!resolved)
         {

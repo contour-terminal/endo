@@ -255,6 +255,35 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_filter_f", "[completion]")
     CHECK(candidates[0].text == "DateTime.fromEpoch");
 }
 
+TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_returns_DateTime_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    auto candidates = dotAccessCandidates("DateTime.now", "", fields);
+    CHECK(candidates.size() == 7);
+    CHECK(hasCandidate(candidates, "DateTime.now.year"));
+    CHECK(hasCandidate(candidates, "DateTime.now.month"));
+    CHECK(hasCandidate(candidates, "DateTime.now.day"));
+    CHECK(hasCandidate(candidates, "DateTime.now.hour"));
+    CHECK(hasCandidate(candidates, "DateTime.now.minute"));
+    CHECK(hasCandidate(candidates, "DateTime.now.second"));
+    CHECK(hasCandidate(candidates, "DateTime.now.epoch"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_filter_by_prefix", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    auto candidates = dotAccessCandidates("DateTime.now", "m", fields);
+    REQUIRE(candidates.size() == 2);
+    CHECK(hasCandidate(candidates, "DateTime.now.month"));
+    CHECK(hasCandidate(candidates, "DateTime.now.minute"));
+}
+
 TEST_CASE("CompletionCandidates.dotAccess.nested_dot_resolves_through_types", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;

@@ -329,6 +329,71 @@ TEST_CASE("FSharpCompleter.edge.nested_dot")
     CHECK(hasCompletion(results, "a.b.cpu"));
 }
 
+// ============================================================================
+// DateTime.now. completions (module function return type resolution)
+// ============================================================================
+
+TEST_CASE("FSharpCompleter.DateTime_now.returns_only_DateTime_fields")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["DateTime"] = {
+        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
+        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" }, { "cpu", "float" }, { "command", "str" },
+    };
+    state.recordTypeFields["GitCommit"] = {
+        { "author", "str" }, { "email", "str" }, { "date", "str" },
+    };
+    endo::FSharpCompleter completer(state);
+
+    auto results = completer.complete(makeContext("DateTime.now."));
+    CHECK(results.size() == 7);
+    CHECK(hasCompletion(results, "DateTime.now.year"));
+    CHECK(hasCompletion(results, "DateTime.now.month"));
+    CHECK(hasCompletion(results, "DateTime.now.day"));
+    CHECK(hasCompletion(results, "DateTime.now.hour"));
+    CHECK(hasCompletion(results, "DateTime.now.minute"));
+    CHECK(hasCompletion(results, "DateTime.now.second"));
+    CHECK(hasCompletion(results, "DateTime.now.epoch"));
+    // Must NOT contain fields from other types
+    CHECK_FALSE(hasCompletion(results, "DateTime.now.pid"));
+    CHECK_FALSE(hasCompletion(results, "DateTime.now.author"));
+    CHECK_FALSE(hasCompletion(results, "DateTime.now.cpu"));
+}
+
+TEST_CASE("FSharpCompleter.DateTime_now.filter_by_prefix")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["DateTime"] = {
+        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
+        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+    };
+    state.recordTypeFields["ProcessInfo"] = { { "mem", "float" } };
+    endo::FSharpCompleter completer(state);
+
+    auto results = completer.complete(makeContext("DateTime.now.m"));
+    REQUIRE(results.size() == 2);
+    CHECK(hasCompletion(results, "DateTime.now.month"));
+    CHECK(hasCompletion(results, "DateTime.now.minute"));
+}
+
+TEST_CASE("FSharpCompleter.DateTime_fromEpoch.returns_only_DateTime_fields")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["DateTime"] = {
+        { "year", "int" }, { "month", "int" }, { "day", "int" },
+    };
+    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" } };
+    endo::FSharpCompleter completer(state);
+
+    auto results = completer.complete(makeContext("DateTime.fromEpoch."));
+    CHECK(results.size() == 3);
+    CHECK(hasCompletion(results, "DateTime.fromEpoch.year"));
+    CHECK_FALSE(hasCompletion(results, "DateTime.fromEpoch.pid"));
+}
+
 TEST_CASE("FSharpCompleter.canHandle")
 {
     endo::FSharpPersistentState state;
