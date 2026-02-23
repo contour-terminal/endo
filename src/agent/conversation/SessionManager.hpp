@@ -73,6 +73,16 @@ class SessionManager
     /// @return A unique, filesystem-safe session name.
     [[nodiscard]] auto generateSessionName(std::string_view text) const -> std::string;
 
+    /// @brief Renames a saved session from @p oldName to @p newName.
+    ///
+    /// Renames the session file, updates the metadata name field, and updates
+    /// the `.last` marker if it pointed to @p oldName.
+    /// @param oldName The current session name.
+    /// @param newName The desired new session name.
+    /// @return void on success, or an error if the source doesn't exist or the target already exists.
+    [[nodiscard]] auto renameSession(std::string_view oldName, std::string_view newName) const
+        -> std::expected<void, HistoryStoreError>;
+
     /// @brief Returns the names of all saved sessions (for tab completion).
     /// @return A sorted vector of session name strings.
     [[nodiscard]] auto sessionNames() const -> std::vector<std::string>;

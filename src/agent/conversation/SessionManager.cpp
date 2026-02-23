@@ -164,6 +164,49 @@ auto SessionManager::generateSessionName(std::string_view text) const -> std::st
     return candidate;
 }
 
+auto SessionManager::renameSession(std::string_view oldName, std::string_view newName) const
+    -> std::expected<void, HistoryStoreError>
+{
+    auto const oldPath = sessionPath(oldName);
+    auto const newPath = sessionPath(newName);
+    auto ec = std::error_code {};
+
+    if (!std::filesystem::exists(oldPath, ec))
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Session not found: " + std::string(oldName),
+        });
+
+    if (std::filesystem::exists(newPath, ec))
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Session already exists: " + std::string(newName),
+        });
+
+    std::filesystem::rename(oldPath, newPath, ec);
+    if (ec)
+        return std::unexpected(HistoryStoreError {
+            .code = HistoryStoreErrorCode::IoError,
+            .message = "Failed to rename session file: " + ec.message(),
+        });
+
+    // Load the session, update the name in metadata, and re-save.
+    auto const store = ConversationHistoryStore(newPath);
+    auto loaded = store.loadWithMetadata();
+    if (loaded.has_value())
+    {
+        auto& [meta, messages] = *loaded;
+        meta.name = std::string(newName);
+        (void) store.save(messages, meta);
+    }
+
+    // Update the .last marker if it pointed to the old name.
+    if (lastActiveSession() == oldName)
+        setLastActiveSession(newName);
+
+    return {};
+}
+
 auto SessionManager::sessionNames() const -> std::vector<std::string>
 {
     auto ec = std::error_code {};

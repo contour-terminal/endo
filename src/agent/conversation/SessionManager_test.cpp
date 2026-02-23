@@ -252,3 +252,59 @@ TEST_CASE("SessionManager.sessionNames_returnsSortedNames")
     CHECK(names[1] == "bravo");
     CHECK(names[2] == "charlie");
 }
+
+TEST_CASE("SessionManager.renameSession_roundTrip")
+{
+    auto const dir = tempSessionDir();
+    auto const guard = DirGuard { dir };
+    auto const manager = SessionManager(dir);
+
+    auto const messages = makeSampleMessages();
+    auto const metadata = makeSampleMetadata("alpha");
+    REQUIRE(manager.saveSession("alpha", messages, metadata).has_value());
+    manager.setLastActiveSession("alpha");
+
+    auto result = manager.renameSession("alpha", "beta");
+    REQUIRE(result.has_value());
+
+    CHECK(!manager.sessionExists("alpha"));
+    CHECK(manager.sessionExists("beta"));
+
+    // Metadata name should be updated.
+    auto loaded = manager.loadSession("beta");
+    REQUIRE(loaded.has_value());
+    CHECK(loaded->first.name == "beta");
+
+    // .last marker should track the rename.
+    CHECK(manager.lastActiveSession() == "beta");
+}
+
+TEST_CASE("SessionManager.renameSession_targetExists_fails")
+{
+    auto const dir = tempSessionDir();
+    auto const guard = DirGuard { dir };
+    auto const manager = SessionManager(dir);
+
+    auto const messages = makeSampleMessages();
+    REQUIRE(manager.saveSession("a", messages, makeSampleMetadata("a")).has_value());
+    REQUIRE(manager.saveSession("b", messages, makeSampleMetadata("b")).has_value());
+
+    auto result = manager.renameSession("a", "b");
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code == HistoryStoreErrorCode::IoError);
+
+    // Both sessions should still exist untouched.
+    CHECK(manager.sessionExists("a"));
+    CHECK(manager.sessionExists("b"));
+}
+
+TEST_CASE("SessionManager.renameSession_nonexistent_fails")
+{
+    auto const dir = tempSessionDir();
+    auto const guard = DirGuard { dir };
+    auto const manager = SessionManager(dir);
+
+    auto result = manager.renameSession("ghost", "new-name");
+    REQUIRE(!result.has_value());
+    CHECK(result.error().code == HistoryStoreErrorCode::IoError);
+}

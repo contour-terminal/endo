@@ -41,6 +41,7 @@ Slash commands are typed directly in the agent prompt:
 | `/help` | List available commands |
 | `/tools` | List all active agent tools |
 | `/plan [query]` | Enter plan mode (also activated with **Shift+Tab**) |
+| `/rename <new-name>` | Rename the current session |
 | `/exit` | Leave agent mode (same as `Ctrl+D`) |
 
 ## Plan Mode

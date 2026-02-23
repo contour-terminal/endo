@@ -2423,6 +2423,39 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
         "delete-session", "Delete a saved session", deleteHandler));
 
+    // /rename: Rename the current session.
+    slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
+        "rename",
+        "Rename the current session",
+        [&](std::string_view arguments) -> agent::SlashCommandResult {
+            auto newName = std::string(arguments);
+            while (!newName.empty() && newName.front() == ' ')
+                newName.erase(newName.begin());
+            while (!newName.empty() && newName.back() == ' ')
+                newName.pop_back();
+
+            if (newName.empty())
+                return agent::DirectOutput { .text = "Usage: /rename <new-name>\n" };
+
+            if (sessionManager.sessionExists(newName))
+                return agent::DirectOutput { .text = "Session '" + newName + "' already exists.\n" };
+
+            if (_activeSessionName.empty())
+            {
+                // No session saved yet — just set the name for the next save.
+                _activeSessionName = newName;
+                return agent::DirectOutput { .text = "Session will be saved as '" + newName + "'.\n" };
+            }
+
+            auto result = sessionManager.renameSession(_activeSessionName, newName);
+            if (!result.has_value())
+                return agent::DirectOutput { .text = "Failed to rename session: " + result.error().message
+                                                     + "\n" };
+
+            _activeSessionName = newName;
+            return agent::DirectOutput { .text = "Session renamed to '" + newName + "'.\n" };
+        }));
+
     // /list (alias: /sessions): List saved sessions.
     auto listHandler = std::function<agent::SlashCommandResult(std::string_view)>(
         [&](std::string_view) -> agent::SlashCommandResult {
