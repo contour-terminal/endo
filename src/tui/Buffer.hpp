@@ -19,8 +19,9 @@ class TerminalOutput;
 /// Represents a pre-encoded sixel image covering a rectangular region of terminal cells.
 struct ImageRegion
 {
-    Rect cellArea;            ///< Which cells this image covers (buffer coordinates).
-    std::string encodedSixel; ///< Pre-encoded sixel data (without DCS framing).
+    Rect cellArea;               ///< Which cells this image covers (buffer coordinates).
+    std::string encodedSixel;    ///< Pre-encoded sixel data (without DCS framing).
+    std::size_t contentHash = 0; ///< Hash of encodedSixel for fast diff comparison.
 };
 
 /// A 2D grid of terminal cells representing a virtual screen buffer.

@@ -215,9 +215,11 @@ void Buffer::setCursor(int row, int col) noexcept
 
 void Buffer::addImage(Rect cellArea, std::string encodedSixel)
 {
+    auto const hash = std::hash<std::string> {}(encodedSixel);
     _images.push_back(ImageRegion {
         .cellArea = cellArea,
         .encodedSixel = std::move(encodedSixel),
+        .contentHash = hash,
     });
 }
 

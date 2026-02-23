@@ -721,6 +721,14 @@ void Screen::flushInline()
     for (auto const& img: _current.images())
         imageAtRow[img.cellArea.y] = &img;
 
+    // Build previous image lookup for diffing — skip sixel re-emission when unchanged
+    auto previousImageAtRow = std::unordered_map<int, ImageRegion const*> {};
+    if (useDiff)
+    {
+        for (auto const& img: _previous.images())
+            previousImageAtRow[img.cellArea.y] = &img;
+    }
+
     for (int row = 0; row < contentHeight; ++row)
     {
         out.carriageReturn(); // Move to start of line
@@ -729,7 +737,17 @@ void Screen::flushInline()
         if (auto it = imageAtRow.find(row); it != imageAtRow.end())
         {
             auto const& img = *it->second;
-            if (!img.encodedSixel.empty())
+
+            // Only emit sixel when the image actually changed from the previous frame.
+            auto needsEmit = !useDiff;
+            if (!needsEmit)
+            {
+                auto const prevIt = previousImageAtRow.find(row);
+                needsEmit = (prevIt == previousImageAtRow.end() || prevIt->second->cellArea != img.cellArea
+                             || prevIt->second->contentHash != img.contentHash);
+            }
+
+            if (needsEmit && !img.encodedSixel.empty())
             {
                 // Save cursor before sixel — the terminal may advance the cursor
                 // below the image (DECSIXEL mode 80 set), which would corrupt
