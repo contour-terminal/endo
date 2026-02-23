@@ -174,6 +174,8 @@ void PromptComponent::setPromptContext(PromptContext context)
         || context.lastDuration != _context.lastDuration)
     {
         _moduleCacheValid = false;
+        for (auto& [name, mod]: _modules)
+            mod->invalidateCache();
     }
 
     _context = std::move(context);

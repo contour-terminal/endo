@@ -82,6 +82,12 @@ class PromptModule
     {
         return std::nullopt;
     }
+
+    /// @brief Invalidates any internal cache held by this module.
+    ///
+    /// Called after a command completes to force modules to re-query their data
+    /// on the next evaluation, regardless of TTL-based caching.
+    virtual void invalidateCache() {}
 };
 
 } // namespace endo
