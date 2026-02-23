@@ -118,6 +118,25 @@ auto& irLog()
     return endo::log::vmIR();
 }
 
+/// Simple RAII scope guard that invokes a callable on destruction.
+template <typename F>
+struct ScopeGuard
+{
+    F cleanup;
+    bool active = true;
+
+    explicit ScopeGuard(F f): cleanup(std::move(f)) {}
+
+    ~ScopeGuard()
+    {
+        if (active)
+            cleanup();
+    }
+
+    ScopeGuard(ScopeGuard const&) = delete;
+    ScopeGuard& operator=(ScopeGuard const&) = delete;
+};
+
 } // namespace
 
 namespace endo
@@ -736,9 +755,8 @@ int Shell::run()
                 names.insert(binding.name);
             prompt.setKnownFSharpNames(std::move(names));
 
-            // Offer error recovery if command failed and semantic block is available.
-            if (_exitCode != 0 && !lineBuffer.empty() && _semanticBlockClient
-                && _semanticBlockClient->isEnabled())
+            // Offer error recovery if command failed.
+            if (_exitCode != 0 && !lineBuffer.empty())
             {
                 auto const effectiveAction =
                     _hasSessionOverride ? _sessionErrorRecoveryOverride : agentConfig.errorRecovery.action;
@@ -842,9 +860,8 @@ int Shell::run()
             names.insert(binding.name);
         prompt.setKnownFSharpNames(std::move(names));
 
-        // Offer error recovery if command failed and semantic block is available.
-        if (_exitCode != 0 && !lineBuffer.empty() && _semanticBlockClient
-            && _semanticBlockClient->isEnabled())
+        // Offer error recovery if command failed.
+        if (_exitCode != 0 && !lineBuffer.empty())
         {
             auto const effectiveAction =
                 _hasSessionOverride ? _sessionErrorRecoveryOverride : agentConfig.errorRecovery.action;
@@ -1557,12 +1574,14 @@ namespace
 
 void Shell::offerErrorRecovery(int exitCode, std::string const& command)
 {
-    // Query semantic block for last command output.
-    auto const result = _semanticBlockClient->queryLastCommand();
-    if (result.status != tui::SemanticBlockStatus::Success || !result.block.has_value())
-        return; // Silently fail — terminal may not support the extension or no data available.
-
-    auto const& block = *result.block;
+    // Try to capture command output via semantic block query (Contour VT extension).
+    auto commandOutput = std::string {};
+    if (_semanticBlockClient && _semanticBlockClient->isEnabled())
+    {
+        auto const result = _semanticBlockClient->queryLastCommand();
+        if (result.status == tui::SemanticBlockStatus::Success && result.block.has_value())
+            commandOutput = result.block->output;
+    }
 
     // Determine effective action (session override takes precedence).
     auto const effectiveAction =
@@ -1660,18 +1679,90 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     }
 
     // Build the initial message with error context.
-    auto output = block.output;
-    if (output.size() > agentConfig.maxToolResultSize)
-        output.resize(agentConfig.maxToolResultSize);
+    if (commandOutput.size() > agentConfig.maxToolResultSize)
+        commandOutput.resize(agentConfig.maxToolResultSize);
 
-    auto message = std::format("The following shell command failed with exit code {}:\n\n```\n{}\n```\n\n"
-                               "Command output:\n```\n{}\n```\n\n"
-                               "Please analyze why this command failed and suggest how to fix it.",
-                               exitCode,
-                               command,
-                               output);
+    auto message = std::string {};
+    if (!commandOutput.empty())
+    {
+        message = std::format("The following shell command failed with exit code {}:\n\n```\n{}\n```\n\n"
+                              "Command output:\n```\n{}\n```\n\n"
+                              "Please analyze why this command failed and suggest how to fix it.",
+                              exitCode,
+                              command,
+                              commandOutput);
+    }
+    else
+    {
+        message = std::format("The following shell command failed with exit code {}:\n\n```\n{}\n```\n\n"
+                              "Please analyze why this command failed and suggest how to fix it.",
+                              exitCode,
+                              command);
+    }
 
-    // Enter agent mode with the pre-filled error context.
+    // If agent_error_recovery_model is configured, temporarily override the active provider/model
+    // so that error recovery uses the specified model instead of the current agent model.
+    auto const& errorModel = agentConfig.errorRecovery.model;
+    if (!errorModel.empty())
+    {
+        auto const preferredProvider =
+            _agentProviderFactory ? _agentProviderFactory->activeProviderName() : std::string {};
+        auto const match = agent::findModelByName(errorModel, preferredProvider);
+        if (!match)
+        {
+            std::println(
+                stderr, "Warning: Unknown error recovery model '{}', using active agent model.", errorModel);
+        }
+        else
+        {
+            // Resolve the model config pointer for the matched provider.
+            std::string* modelPtr = nullptr;
+            if (match->providerName == "claude")
+                modelPtr = &agentConfig.claude.model;
+            else if (match->providerName == "openai")
+                modelPtr = &agentConfig.openai.model;
+            else if (match->providerName == "openai_compat")
+                modelPtr = &agentConfig.openaiCompat.model;
+            else if (match->providerName == "gemini")
+                modelPtr = &agentConfig.gemini.model;
+
+            if (modelPtr)
+            {
+                // Save original config values.
+                auto const savedActiveProvider =
+                    std::exchange(agentConfig.activeProvider, std::string(match->providerName));
+                auto const savedModel = std::exchange(*modelPtr, std::string(match->modelName));
+                auto savedSession = std::move(_agentSession);
+                _agentProviderFactory.reset();
+
+                // Scope guard restores original config regardless of how runAgentMode exits.
+                auto guard = ScopeGuard([&] {
+                    agentConfig.activeProvider = savedActiveProvider;
+                    *modelPtr = savedModel;
+                    _agentSession = std::move(savedSession);
+                    _agentProviderFactory.reset();
+
+                    // Eagerly recreate the factory and rebind the existing session's provider
+                    // to avoid a dangling pointer from the destroyed temporary factory.
+                    if (_agentSession)
+                    {
+                        _agentProviderFactory =
+                            std::make_unique<agent::ProviderFactory>(*_agentHttpClient, agentConfig);
+                        if (auto* restoredProvider = _agentProviderFactory->activeProvider())
+                            _agentSession->setProvider(*restoredProvider);
+                    }
+                });
+
+                runAgentMode(std::move(message));
+
+                // Restore terminal dimensions after agent mode.
+                prompt.terminal().output().updateDimensions();
+                return;
+            }
+        }
+    }
+
+    // Enter agent mode with the pre-filled error context (default: active agent model).
     runAgentMode(std::move(message));
 
     // Restore terminal dimensions after agent mode.
