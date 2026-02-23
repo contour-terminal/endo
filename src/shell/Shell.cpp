@@ -179,6 +179,7 @@ std::string readLine(TTY& tty, std::string_view prompt)
 auto Shell::PipelineBuilder::requestShellPipe(bool lastInChain) -> IODescriptors
 {
     NativeHandle const stdinFd = !currentPipe ? defaultStdinFd : currentPipe->releaseReader();
+    lastReleasedReaderFd = (stdinFd != defaultStdinFd) ? stdinFd : InvalidHandle;
     if (lastInChain)
         currentPipe = nullptr;
     else if (auto pipeResult = createPipe(); pipeResult.has_value())
@@ -193,6 +194,16 @@ void Shell::PipelineBuilder::closeCurrentPipeWriter()
 {
     if (currentPipe)
         currentPipe->closeWriter();
+}
+
+void Shell::PipelineBuilder::closePipeFdsInParent()
+{
+    if (lastReleasedReaderFd != InvalidHandle)
+    {
+        ::close(lastReleasedReaderFd);
+        lastReleasedReaderFd = InvalidHandle;
+    }
+    closeCurrentPipeWriter();
 }
 
 // ========================================================================

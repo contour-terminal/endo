@@ -355,11 +355,15 @@ class Shell final: public SignalCallback
         NativeHandle defaultStdinFd = InvalidHandle;
         NativeHandle defaultStdoutFd = InvalidHandle;
         std::unique_ptr<Pipe> currentPipe = nullptr;
+        NativeHandle lastReleasedReaderFd = InvalidHandle;
 
         auto requestShellPipe(bool lastInChain) -> IODescriptors;
 
         /// Close the current pipe's writer (for builtin commands that write to pipe)
         void closeCurrentPipeWriter();
+
+        /// Close pipe file descriptors retained by the parent after child process spawn.
+        void closePipeFdsInParent();
     };
 
     PipelineBuilder _currentPipelineBuilder;

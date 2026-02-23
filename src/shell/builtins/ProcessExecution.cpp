@@ -271,6 +271,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         }
         _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
 
@@ -295,6 +296,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         error("Failed to spawn {}: {}", program, toString(spawnResult.error()));
         _exitCode = EXIT_FAILURE;
         context.setResult(CoreVM::CoreNumber(EXIT_FAILURE));
+        _currentPipelineBuilder.closePipeFdsInParent();
         return;
     }
 
@@ -302,6 +304,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
     _leftPid = _rightPid;
     _rightPid = pid;
     _currentProcessGroupPids.push_back(pid);
+    _currentPipelineBuilder.closePipeFdsInParent();
 
     // Track command string for job table display
     std::string cmdString;

@@ -1498,8 +1498,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
                                     std::string_view programName,
                                     CoreVM::Params& context)
 {
-    if (!lastInChain)
-        _currentPipelineBuilder.closeCurrentPipeWriter();
+    _currentPipelineBuilder.closePipeFdsInParent();
 
     // Track command for job table
     std::string cmdString(programName);
