@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: DateTime.fromEpoch constructs a DateTime and access year
+# expect: 2023
+
+let d = DateTime.fromEpoch 1700000000
+print d.year

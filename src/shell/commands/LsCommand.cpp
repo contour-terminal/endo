@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "LsCommand.hpp"
 
+#include <endo-language/builtins/BuiltinImpls.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
@@ -35,7 +37,8 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(file.name)));
         record->setSlot(1, static_cast<uint64_t>(file.size));
         record->setSlot(2, static_cast<uint64_t>(file.mode));
-        record->setSlot(3, static_cast<uint64_t>(file.mtime));
+        auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, file.mtime);
+        record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
         record->setSlot(4, static_cast<uint64_t>(file.isDir ? 1 : 0));
 
         // Cons this record onto the list

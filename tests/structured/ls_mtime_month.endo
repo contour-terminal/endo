@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract mtime month values
+# expect: [11; 11; 11]
+
+let months = ls |> map (fun f -> f.mtime.month)
+print months

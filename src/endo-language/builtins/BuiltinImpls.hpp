@@ -145,6 +145,22 @@ void modeIsWritable(CoreVM::Params& args);
 void modeIsExecutable(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// DateTime operations
+// ---------------------------------------------------------------------------
+
+/// Creates a DateTime record object from a Unix epoch timestamp.
+/// @param runner The runner instance for object allocation
+/// @param epoch Unix epoch timestamp (seconds since 1970-01-01 UTC)
+/// @return Pointer to the newly allocated DateTime TypedObject
+CoreVM::TypedObject* makeDateTimeFromEpoch(CoreVM::Runner* runner, int64_t epoch);
+
+/// datetime_now() -> number: Returns a DateTime record with the current UTC time.
+void dateTimeNow(CoreVM::Params& args);
+
+/// datetime_from_epoch(epoch: number) -> number: Converts epoch to a DateTime record.
+void dateTimeFromEpoch(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Random number generation
 // ---------------------------------------------------------------------------
 

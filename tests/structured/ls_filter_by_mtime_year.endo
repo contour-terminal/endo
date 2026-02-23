@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Filter files by mtime year and count
+# expect: 3
+
+let count = ls |> filter (fun f -> f.mtime.year == 2023) |> length
+print count

@@ -37,6 +37,30 @@ namespace
                 return str ? std::string(*str) : "(null)";
             }
             case CoreVM::LiteralType::Boolean: return slotVal ? "true" : "false";
+            case CoreVM::LiteralType::Object: {
+                // Check for known nested object types (e.g., DateTime)
+                if (runner && runner->isKnownObject(slotVal))
+                {
+                    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(slotVal));
+                    if (obj->type->id == CoreVM::BuiltinTypeId::DateTime)
+                    {
+                        auto const year = static_cast<int>(obj->getSlot(0));
+                        auto const month = static_cast<int>(obj->getSlot(1));
+                        auto const day = static_cast<int>(obj->getSlot(2));
+                        auto const hour = static_cast<int>(obj->getSlot(3));
+                        auto const minute = static_cast<int>(obj->getSlot(4));
+                        auto const second = static_cast<int>(obj->getSlot(5));
+                        return std::format("{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}",
+                                           year,
+                                           month,
+                                           day,
+                                           hour,
+                                           minute,
+                                           second);
+                    }
+                }
+                return std::to_string(static_cast<int64_t>(slotVal));
+            }
             default: return std::to_string(static_cast<int64_t>(slotVal));
         }
     }

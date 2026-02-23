@@ -129,6 +129,7 @@ namespace BuiltinTypeId
     constexpr uint16_t ProcessInfo = 6;
     constexpr uint16_t FileInfo = 7;
     constexpr uint16_t JobInfo = 8;
+    constexpr uint16_t DateTime = 9;
     constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 

@@ -801,6 +801,8 @@ class IRGenerator final: public ast::Visitor
         std::string name;                      ///< Type name
         std::vector<CoreVM::FieldInfo> fields; ///< Field definitions (name + offset)
         std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes; ///< Field name → VM literal type
+        std::unordered_map<std::string, uint16_t>
+            fieldObjectTypeIds; ///< Object-typed field → nested record type ID
     };
 
     /// Maps record type names to their metadata.

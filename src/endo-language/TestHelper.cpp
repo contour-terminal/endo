@@ -86,7 +86,8 @@ namespace
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
             record->setSlot(1, static_cast<uint64_t>(f.size));
             record->setSlot(2, static_cast<uint64_t>(f.mode));
-            record->setSlot(3, static_cast<uint64_t>(f.mtime));
+            auto* mtimeObj = builtins::makeDateTimeFromEpoch(runner, f.mtime);
+            record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
             record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));
             list =
                 runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
@@ -434,6 +435,12 @@ TestRuntime::TestRuntime()
             return Functor(mockStructuredGitLog);
         if (name == "structured_git_status" && arity == 0)
             return Functor(mockStructuredGitStatus);
+
+        // DateTime operations
+        if (name == "datetime_now" && arity == 0)
+            return Functor(builtins::dateTimeNow);
+        if (name == "datetime_from_epoch" && arity == 1)
+            return Functor(builtins::dateTimeFromEpoch);
 
         // Fall back to shared stateless implementations (list_*, string_*, format_*, rand, etc.)
         return builtins::resolveSharedImpl(name, arity);

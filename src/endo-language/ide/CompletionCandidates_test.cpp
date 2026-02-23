@@ -238,6 +238,55 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_typed_fields", "[completion
     CHECK(ageCand->description == "field: int");
 }
 
+TEST_CASE("CompletionCandidates.dotAccess.DateTime_returns_methods", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    auto candidates = dotAccessCandidates("DateTime", "", fields);
+    CHECK(candidates.size() == 2);
+    CHECK(hasCandidate(candidates, "DateTime.now"));
+    CHECK(hasCandidate(candidates, "DateTime.fromEpoch"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.DateTime_filter_f", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    auto candidates = dotAccessCandidates("DateTime", "f", fields);
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].text == "DateTime.fromEpoch");
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_dot_resolves_through_types", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "name", "str" }, { "size", "int" }, { "mtime", "DateTime" } };
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    std::unordered_map<std::string, std::string> variableTypes;
+    variableTypes["f"] = "FileInfo";
+    auto candidates = dotAccessCandidates("f.mtime", "", fields, variableTypes);
+    CHECK(candidates.size() == 7);
+    CHECK(hasCandidate(candidates, "f.mtime.year"));
+    CHECK(hasCandidate(candidates, "f.mtime.month"));
+    CHECK(hasCandidate(candidates, "f.mtime.day"));
+    CHECK(hasCandidate(candidates, "f.mtime.hour"));
+    CHECK(hasCandidate(candidates, "f.mtime.minute"));
+    CHECK(hasCandidate(candidates, "f.mtime.second"));
+    CHECK(hasCandidate(candidates, "f.mtime.epoch"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_dot_filter_by_prefix", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "name", "str" }, { "mtime", "DateTime" } };
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    std::unordered_map<std::string, std::string> variableTypes;
+    variableTypes["f"] = "FileInfo";
+    auto candidates = dotAccessCandidates("f.mtime", "y", fields, variableTypes);
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].text == "f.mtime.year");
+}
+
 // =============================================================================
 // symbolCandidates tests
 // =============================================================================
@@ -495,10 +544,10 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 // standardLibraryCandidates tests
 // =============================================================================
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_51_entries", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_53_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 51);
+    CHECK(stdlib.size() == 53);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -604,6 +653,13 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.env_system_functions",
     CHECK(hasCandidate(stdlib, "ls"));
     CHECK(hasCandidate(stdlib, "rand"));
     CHECK(hasCandidate(stdlib, "fetch"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.datetime_constructors", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "DateTime.now"));
+    CHECK(hasCandidate(stdlib, "DateTime.fromEpoch"));
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[completion][stdlib]")

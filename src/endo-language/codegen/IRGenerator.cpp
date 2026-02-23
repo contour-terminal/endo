@@ -346,6 +346,22 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["ProcessInfo"] = std::move(processInfoType);
     }
 
+    // Pre-register DateTime record type.
+    {
+        RecordTypeInfo dateTimeType;
+        dateTimeType.typeId = CoreVM::BuiltinTypeId::DateTime;
+        dateTimeType.name = "DateTime";
+        dateTimeType.fields = {
+            { "year", 0, CoreVM::LiteralType::Number },   { "month", 1, CoreVM::LiteralType::Number },
+            { "day", 2, CoreVM::LiteralType::Number },    { "hour", 3, CoreVM::LiteralType::Number },
+            { "minute", 4, CoreVM::LiteralType::Number }, { "second", 5, CoreVM::LiteralType::Number },
+            { "epoch", 6, CoreVM::LiteralType::Number },
+        };
+        for (auto const& f: dateTimeType.fields)
+            dateTimeType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["DateTime"] = std::move(dateTimeType);
+    }
+
     // Pre-register FileInfo record type for the ls builtin.
     {
         RecordTypeInfo fileInfoType;
@@ -353,11 +369,12 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         fileInfoType.name = "FileInfo";
         fileInfoType.fields = {
             { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Number },
-            { "mode", 2, CoreVM::LiteralType::Number },   { "mtime", 3, CoreVM::LiteralType::Number },
+            { "mode", 2, CoreVM::LiteralType::Number },   { "mtime", 3, CoreVM::LiteralType::Object },
             { "isDir", 4, CoreVM::LiteralType::Boolean },
         };
         for (auto const& f: fileInfoType.fields)
             fileInfoType.fieldTypes[f.name] = f.type;
+        fileInfoType.fieldObjectTypeIds["mtime"] = CoreVM::BuiltinTypeId::DateTime;
         generator._recordTypes["FileInfo"] = std::move(fileInfoType);
     }
 
@@ -4451,8 +4468,7 @@ bool IRGenerator::tryGenerateNativeCall(std::string const& name, std::vector<Cor
             convertedArgs.push_back(arg);
         }
 
-        _builder.createCallFunction(_builder.getBuiltinFunction(*builtin), convertedArgs, name);
-        _result = _builder.get(CoreVM::CoreNumber(0)); // Native functions return unit
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*builtin), convertedArgs, name);
         return true;
     }
     return false;
@@ -6480,6 +6496,32 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
         {
             if (modIdent->name == "Option" && tryGenerateOptionCall(method, argExprs))
                 return;
+
+            // DateTime.fromEpoch epoch → datetime_from_epoch(epoch)
+            if (modIdent->name == "DateTime" && method == "fromEpoch" && argExprs.size() == 1)
+            {
+                auto* epochArg = codegen(argExprs[0]);
+                if (!epochArg)
+                {
+                    reportTypeError("Failed to evaluate epoch argument for DateTime.fromEpoch");
+                    return;
+                }
+                if (tryGenerateNativeCall("datetime_from_epoch", { epochArg }))
+                {
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::DateTime);
+                    return;
+                }
+            }
+
+            // DateTime.now → datetime_now()
+            if (modIdent->name == "DateTime" && method == "now" && argExprs.empty())
+            {
+                if (tryGenerateNativeCall("datetime_now", {}))
+                {
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::DateTime);
+                    return;
+                }
+            }
         }
 
         // Case 2: Method-style — opt.map f
@@ -9532,6 +9574,30 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
 {
     TRACE_SCOPE("visit(FieldAccessExpr)");
 
+    // Handle DateTime module-qualified access (DateTime.now, DateTime.fromEpoch)
+    if (auto const* modIdent = dynamic_cast<ast::IdentifierExpr const*>(node.object.get()))
+    {
+        if (modIdent->name == "DateTime")
+        {
+            if (node.fieldName == "now")
+            {
+                if (tryGenerateNativeCall("datetime_now", {}))
+                {
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::DateTime);
+                    return;
+                }
+            }
+            if (node.fieldName == "fromEpoch")
+            {
+                // DateTime.fromEpoch requires an argument — handled in ApplicationExpr
+                reportTypeError("DateTime.fromEpoch requires an epoch argument");
+                return;
+            }
+            reportTypeError("DateTime has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+    }
+
     // Codegen the object expression
     auto* obj = codegen(node.object.get());
     if (!obj)
@@ -9663,6 +9729,11 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             // Annotate the result with the field's literal type for correct convertToString dispatch
             if (auto it = typeInfo->fieldTypes.find(node.fieldName); it != typeInfo->fieldTypes.end())
                 annotateInnerType(_result, it->second);
+
+            // For Object-typed fields with a known nested record type, propagate the type ID
+            if (auto it = typeInfo->fieldObjectTypeIds.find(node.fieldName);
+                it != typeInfo->fieldObjectTypeIds.end())
+                annotateObjectTypeId(_result, it->second);
 
             found = true;
             break;

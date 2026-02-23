@@ -91,6 +91,20 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(processInfoType));
 
+    // DateTime: Product type with 7 fields for date/time representation
+    auto dateTimeType = std::make_unique<TypeDescriptor>();
+    dateTimeType->kind = TypeKind::Product;
+    dateTimeType->id = BuiltinTypeId::DateTime;
+    dateTimeType->name = "DateTime";
+    dateTimeType->slotCount = 7;
+    dateTimeType->fields = {
+        { "year", 0, LiteralType::Number },   { "month", 1, LiteralType::Number },
+        { "day", 2, LiteralType::Number },    { "hour", 3, LiteralType::Number },
+        { "minute", 4, LiteralType::Number }, { "second", 5, LiteralType::Number },
+        { "epoch", 6, LiteralType::Number },
+    };
+    addType(std::move(dateTimeType));
+
     // FileInfo: Product type with 5 fields for file/directory information
     auto fileInfoType = std::make_unique<TypeDescriptor>();
     fileInfoType->kind = TypeKind::Product;
@@ -99,7 +113,7 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->slotCount = 5;
     fileInfoType->fields = {
         { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Number },
-        { "mode", 2, LiteralType::Number },   { "mtime", 3, LiteralType::Number },
+        { "mode", 2, LiteralType::Number },   { "mtime", 3, LiteralType::Object },
         { "isDir", 4, LiteralType::Boolean },
     };
     addType(std::move(fileInfoType));
@@ -119,7 +133,7 @@ void TypeRegistry::registerBuiltins()
     addType(std::move(jobInfoType));
 
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::JobInfo + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::DateTime + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

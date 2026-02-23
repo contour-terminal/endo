@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract mtime day values
+# expect: [14; 14; 14]
+
+let days = ls |> map (fun f -> f.mtime.day)
+print days

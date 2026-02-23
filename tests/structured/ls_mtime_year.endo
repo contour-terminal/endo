@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract mtime year values
+# expect: [2023; 2023; 2023]
+
+let years = ls |> map (fun f -> f.mtime.year)
+print years

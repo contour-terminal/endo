@@ -160,6 +160,16 @@ namespace
             { "agent_error_recovery_model",
               "`agent_error_recovery_model` : `string`\n\nModel to use for error recovery analysis. "
               "Empty string uses the active agent model. Read or write with `<-`." },
+            { "DateTime",
+              "`DateTime` \u2014 Record type for date/time values (UTC)\n\n"
+              "**Fields:** `year`, `month`, `day`, `hour`, `minute`, `second`, `epoch`\n\n"
+              "```endo\nDateTime.now         // current UTC time\n"
+              "DateTime.fromEpoch n // DateTime from Unix epoch\n"
+              "d.year               // access individual fields\n```" },
+            { "DateTime.now", "`DateTime.now` : `DateTime`\n\nReturns the current UTC date and time." },
+            { "DateTime.fromEpoch",
+              "`DateTime.fromEpoch` : `int -> DateTime`\n\nConverts a Unix epoch timestamp to a "
+              "DateTime record." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

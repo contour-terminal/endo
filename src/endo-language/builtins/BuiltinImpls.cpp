@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <bit>
+#include <chrono>
 #include <format>
 #include <locale>
 #include <random>
@@ -121,6 +122,18 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
                 return "Error " + slotValueToString(obj->getSlot(0), innerType, runner);
             return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
         }
+        if (typeId == CoreVM::BuiltinTypeId::DateTime)
+        {
+            // Render DateTime as "YYYY-MM-DD HH:MM:SS"
+            auto const year = static_cast<int>(obj->getSlot(0));
+            auto const month = static_cast<int>(obj->getSlot(1));
+            auto const day = static_cast<int>(obj->getSlot(2));
+            auto const hour = static_cast<int>(obj->getSlot(3));
+            auto const minute = static_cast<int>(obj->getSlot(4));
+            auto const second = static_cast<int>(obj->getSlot(5));
+            return std::format(
+                "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}", year, month, day, hour, minute, second);
+        }
         if (obj->type->kind == CoreVM::TypeKind::Product)
         {
             // Check if this is a ProcessInfo record (has "cpu" float field)
@@ -140,6 +153,11 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
                 {
                     auto const cpuVal = std::bit_cast<double>(slotVal);
                     result += std::format("{:.1f}", cpuVal);
+                }
+                else if (obj->type->fields[i].type == CoreVM::LiteralType::Object)
+                {
+                    // Nested object field — recursively render
+                    result += valueToString(slotVal, runner);
                 }
                 else
                 {
@@ -710,6 +728,47 @@ void modeIsExecutable(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
+// DateTime operations
+// ---------------------------------------------------------------------------
+
+CoreVM::TypedObject* makeDateTimeFromEpoch(CoreVM::Runner* runner, int64_t epoch)
+{
+    auto const epochTime = static_cast<time_t>(epoch);
+    struct tm tm {};
+#ifdef _WIN32
+    gmtime_s(&tm, &epochTime);
+#else
+    gmtime_r(&epochTime, &tm);
+#endif
+
+    auto* dt = runner->allocObject(CoreVM::BuiltinTypeId::DateTime);
+    dt->setSlot(0, static_cast<uint64_t>(tm.tm_year + 1900)); // year
+    dt->setSlot(1, static_cast<uint64_t>(tm.tm_mon + 1));     // month (1-12)
+    dt->setSlot(2, static_cast<uint64_t>(tm.tm_mday));        // day
+    dt->setSlot(3, static_cast<uint64_t>(tm.tm_hour));        // hour
+    dt->setSlot(4, static_cast<uint64_t>(tm.tm_min));         // minute
+    dt->setSlot(5, static_cast<uint64_t>(tm.tm_sec));         // second
+    dt->setSlot(6, static_cast<uint64_t>(epoch));             // epoch
+    return dt;
+}
+
+void dateTimeNow(CoreVM::Params& args)
+{
+    auto const now =
+        std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
+            .count();
+    auto* dt = makeDateTimeFromEpoch(args.caller(), static_cast<int64_t>(now));
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(dt)));
+}
+
+void dateTimeFromEpoch(CoreVM::Params& args)
+{
+    auto const epoch = args.getInt(1);
+    auto* dt = makeDateTimeFromEpoch(args.caller(), epoch);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(dt)));
+}
+
+// ---------------------------------------------------------------------------
 // Random number generation
 // ---------------------------------------------------------------------------
 
@@ -806,6 +865,12 @@ std::optional<CoreVM::NativeCallback::Functor> resolveSharedImpl(std::string_vie
         return &modeIsWritable;
     if (name == "mode_isExecutable" && arity == 1)
         return &modeIsExecutable;
+
+    // DateTime operations
+    if (name == "datetime_now" && arity == 0)
+        return &dateTimeNow;
+    if (name == "datetime_from_epoch" && arity == 1)
+        return &dateTimeFromEpoch;
 
     // Random number generation
     if (name == "rand" && arity == 0)

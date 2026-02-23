@@ -3,5 +3,5 @@
 # description: Map to extract mtime epoch values
 # expect: [1700000000; 1700001000; 1700002000]
 
-let mtimes = ls |> map (fun f -> f.mtime.epoch)
-print mtimes
+let epochs = ls |> map (fun f -> f.mtime.epoch)
+print epochs

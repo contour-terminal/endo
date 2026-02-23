@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Map to extract mtime hour values
+# expect: [22; 22; 22]
+
+let hours = ls |> map (fun f -> f.mtime.hour)
+print hours

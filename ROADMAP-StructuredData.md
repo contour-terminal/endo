@@ -54,7 +54,9 @@ This new milestone will focus on building the infrastructure and features requir
 
 1.  **`ls`:** ✅
     *   Create a new `ls` built-in that outputs a stream of `FileInfo` records.
-    *   `FileInfo` record fields: `name: string`, `size: int`, `mode: int`, `mtime: int (epoch seconds)`, `isDir: bool`.
+    *   `FileInfo` record fields: `name: string`, `size: int`, `mode: int`, `mtime: DateTime`, `isDir: bool`.
+    *   `DateTime` builtin record type (`BuiltinTypeId::DateTime = 9`) with fields: `year`, `month`, `day`, `hour`, `minute`, `second`, `epoch`.
+    *   `DateTime.now` and `DateTime.fromEpoch` constructors. Nested field access: `f.mtime.year`.
     *   Fully integrated with pipeline operations: `ls |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)`.
     *   `FileInfo` registered as well-known type (`BuiltinTypeId::FileInfo = 7`) with field access support.
     *   Platform-abstracted via `LinuxFileInfoProvider` (uses `std::filesystem`).

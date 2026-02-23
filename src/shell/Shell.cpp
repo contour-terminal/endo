@@ -41,7 +41,9 @@
 #include "Error.hpp"
 #include "TTY.hpp"
 #include <agent/AgentConfig.hpp>
+#include <agent/HeadlessRunner.hpp>
 #include <agent/PermissionManager.hpp>
+#include <agent/RunCommand.hpp>
 #include <agent/commands/AgentHistoryProvider.hpp>
 #include <agent/commands/FilePathCompleter.hpp>
 #include <agent/commands/SlashCommandCompleter.hpp>
@@ -57,8 +59,6 @@
 #include <agent/providers/ProviderModels.hpp>
 #include <agent/session/AgentMessages.hpp>
 #include <agent/session/AgentSession.hpp>
-#include <agent/HeadlessRunner.hpp>
-#include <agent/RunCommand.hpp>
 #include <agent/session/AgentWorker.hpp>
 #include <agent/session/PlanExecutor.hpp>
 #include <agent/tools/AskUserTool.hpp>
@@ -389,7 +389,11 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
     };
     _fsharpState.recordTypeFields["FileInfo"] = {
-        { "name", "str" }, { "size", "int" }, { "mode", "int" }, { "mtime", "int" }, { "isDir", "bool" },
+        { "name", "str" }, { "size", "int" }, { "mode", "int" }, { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    _fsharpState.recordTypeFields["DateTime"] = {
+        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
+        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
     };
     _fsharpState.recordTypeFields["JobInfo"] = {
         { "id", "int" },
@@ -1605,7 +1609,8 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     {
         if (!_agentProviderFactory->switchProvider(*options.provider))
         {
-            std::print(stderr, "endo agent run: unknown or unauthenticated provider '{}'\n", *options.provider);
+            std::print(
+                stderr, "endo agent run: unknown or unauthenticated provider '{}'\n", *options.provider);
             return EXIT_FAILURE;
         }
     }
@@ -1628,7 +1633,8 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     {
         // Model override would require re-creating the provider with a different model.
         // For now, this is a best-effort: the user can set the model in init.endo.
-        std::print(stderr, "endo agent run: --model override is not yet implemented; using configured model.\n");
+        std::print(stderr,
+                   "endo agent run: --model override is not yet implemented; using configured model.\n");
     }
 
     // --- Session creation ---
@@ -1841,9 +1847,8 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     auto permissionManager = agent::PermissionManager(permConfig);
     // In non-auto-approve mode, deny by default (no TTY for prompting).
     if (!options.autoApprove)
-        permissionManager.setPromptCallback([](agent::PermissionPrompt const&) {
-            return agent::PermissionDecision::Denied;
-        });
+        permissionManager.setPromptCallback(
+            [](agent::PermissionPrompt const&) { return agent::PermissionDecision::Denied; });
     _agentSession->setPermissionManager(&permissionManager);
 
     // --- System prompt ---
@@ -1860,16 +1865,17 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     headlessResult.modelName = modelInfo.modelName;
 
     _agentSession->setToolStatusCallback(nullptr);
-    _agentSession->setToolResultCallback(
-        [&headlessResult](
-            std::string const& name, std::string const& content, bool isError, std::chrono::milliseconds duration) {
-            headlessResult.toolCalls.push_back(agent::ToolCallRecord {
-                .name = name,
-                .result = content,
-                .isError = isError,
-                .duration = duration,
-            });
+    _agentSession->setToolResultCallback([&headlessResult](std::string const& name,
+                                                           std::string const& content,
+                                                           bool isError,
+                                                           std::chrono::milliseconds duration) {
+        headlessResult.toolCalls.push_back(agent::ToolCallRecord {
+            .name = name,
+            .result = content,
+            .isError = isError,
+            .duration = duration,
         });
+    });
 
     // --- Execute synchronously ---
     auto streamCb = agent::StreamCallback {};

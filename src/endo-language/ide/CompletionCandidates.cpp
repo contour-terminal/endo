@@ -188,6 +188,9 @@ namespace
         StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>" },
         StdLibEntry { "rand", "rand -> int  |  rand min max -> int" },
         StdLibEntry { "fetch", "fetch url -> result<string, string>" },
+        // DateTime constructors
+        StdLibEntry { "DateTime.now", "DateTime.now -> DateTime (current UTC time)" },
+        StdLibEntry { "DateTime.fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
     };
     // clang-format on
 
@@ -571,11 +574,26 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         });
     };
 
+    // DateTime module methods
+    constexpr std::array dateTimeMethods = {
+        OptionMethod { "now", "DateTime.now -> DateTime (current UTC time)" },
+        OptionMethod { "fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
+    };
+
     if (objectPart == "Option")
     {
         // Static Option module methods
         for (auto const& method: optionMethods)
             addCandidate("Option." + std::string(method.name),
+                         std::string(method.name),
+                         std::string(method.description),
+                         CompletionKind::Function);
+    }
+    else if (objectPart == "DateTime")
+    {
+        // Static DateTime module methods
+        for (auto const& method: dateTimeMethods)
+            addCandidate("DateTime." + std::string(method.name),
                          std::string(method.name),
                          std::string(method.description),
                          CompletionKind::Function);
@@ -591,6 +609,80 @@ std::vector<CompletionCandidate> dotAccessCandidates(
                 if (seen.insert(field.name).second)
                     addCandidate(
                         "_." + field.name, field.name, "field: " + field.typeName, CompletionKind::Field);
+            }
+        }
+    }
+    else if (objectPart.find('.') != std::string::npos)
+    {
+        // Nested dot access: e.g., "f.mtime" → resolve f → FileInfo, mtime → DateTime
+        auto const firstDot = objectPart.find('.');
+        auto const firstSegment = objectPart.substr(0, firstDot);
+        auto const rest = objectPart.substr(firstDot + 1);
+
+        // Resolve the first segment via variableTypes
+        std::string currentType;
+        if (auto const it = variableTypes.find(firstSegment); it != variableTypes.end())
+            currentType = it->second;
+
+        bool resolved = false;
+        // Walk remaining segments through recordFields
+        if (!currentType.empty())
+        {
+            auto remaining = rest;
+            while (!remaining.empty() && !currentType.empty())
+            {
+                auto const dot = remaining.find('.');
+                auto const segment = remaining.substr(0, dot);
+
+                // Look up this segment's type in the current record type's fields
+                std::string nextType;
+                if (auto const fieldsIt = recordFields.find(currentType); fieldsIt != recordFields.end())
+                {
+                    for (auto const& field: fieldsIt->second)
+                    {
+                        if (field.name == segment)
+                        {
+                            nextType = field.typeName;
+                            break;
+                        }
+                    }
+                }
+                currentType = nextType;
+
+                if (dot == std::string::npos)
+                    break;
+                remaining = remaining.substr(dot + 1);
+            }
+
+            // If we resolved to a record type, offer its fields
+            if (!currentType.empty())
+            {
+                if (auto const fieldsIt = recordFields.find(currentType); fieldsIt != recordFields.end())
+                {
+                    for (auto const& field: fieldsIt->second)
+                        addCandidate(objectPart + "." + field.name,
+                                     field.name,
+                                     currentType + "." + field.name + ": " + field.typeName,
+                                     CompletionKind::Field);
+                    resolved = true;
+                }
+            }
+        }
+
+        // Fall through to generic behavior if we couldn't resolve the type chain
+        if (!resolved)
+        {
+            std::set<std::string> seen;
+            for (auto const& [typeName, typeFields]: recordFields)
+            {
+                for (auto const& field: typeFields)
+                {
+                    if (seen.insert(field.name).second)
+                        addCandidate(objectPart + "." + field.name,
+                                     field.name,
+                                     "field: " + field.typeName,
+                                     CompletionKind::Field);
+                }
             }
         }
     }

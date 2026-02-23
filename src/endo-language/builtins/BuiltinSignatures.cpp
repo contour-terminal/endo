@@ -266,6 +266,17 @@ void registerFSharpBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve
         .param<CoreVM::CoreNumber>("max")
         .returnType(CoreVM::LiteralType::Number), resolve, "rand", 2);
 
+    // --- DateTime operations ---
+
+    // datetime_now() -> number (DateTime record)
+    bindResolved(rt.registerFunction("datetime_now")
+        .returnType(CoreVM::LiteralType::Number), resolve, "datetime_now", 0);
+
+    // datetime_from_epoch(epoch: number) -> number (DateTime record)
+    bindResolved(rt.registerFunction("datetime_from_epoch")
+        .param<CoreVM::CoreNumber>("epoch")
+        .returnType(CoreVM::LiteralType::Number), resolve, "datetime_from_epoch", 1);
+
     // --- HTTP fetch ---
 
     // fetch(url: string) -> number (Result)
