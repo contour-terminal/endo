@@ -1774,7 +1774,13 @@ void Shell::offerErrorRecovery(int exitCode, std::string const& command)
     }
 
     // Enter agent mode with the pre-filled error context (default: active agent model).
-    runAgentMode(std::move(message));
+    // Use an isolated session so that prior agent conversation context does not
+    // leak into error recovery (the LLM should only see the failing command).
+    {
+        auto savedSession = std::move(_agentSession);
+        runAgentMode(std::move(message));
+        _agentSession = std::move(savedSession);
+    }
 
     // Restore terminal dimensions after agent mode.
     prompt.terminal().output().updateDimensions();
