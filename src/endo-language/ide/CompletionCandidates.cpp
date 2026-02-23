@@ -270,6 +270,7 @@ std::vector<CompletionCandidate> builtinCandidates()
         { "print", "print", "F# print function", "", CompletionKind::Builtin },
         { "println", "println", "F# print with newline", "", CompletionKind::Builtin },
         { "echo", "echo", "builtin", "", CompletionKind::Builtin },
+        { "mv", "mv", "builtin", "", CompletionKind::Builtin },
         { "rm", "rm", "builtin", "", CompletionKind::Builtin },
         // Shell/Prompt properties
         { "shell_prompt_preset", "shell_prompt_preset", "Prompt theme preset", "", CompletionKind::Property },

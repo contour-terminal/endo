@@ -1553,6 +1553,287 @@ TEST_CASE("shell.builtin.cp_missing_destination")
 }
 
 // ============================================================================
+// mv builtin
+// ============================================================================
+
+TEST_CASE("shell.builtin.mv_help")
+{
+    TestShell shell;
+    auto output = shell("mv --help").output();
+    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("--no-clobber") != std::string::npos);
+    CHECK(shell.exitCode == 0);
+}
+
+TEST_CASE("shell.builtin.mv_single_file")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_single";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "hello world";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(src));
+    CHECK(fs::exists(dst));
+
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "hello world");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_to_directory")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_todir";
+    fs::remove_all(base);
+    fs::create_directories(base / "subdir");
+    auto const src = base / "file.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "data";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {} {}", src.string(), (base / "subdir").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(src));
+    CHECK(fs::exists(base / "subdir" / "file.txt"));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_nonexistent")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_noexist";
+    fs::remove_all(base);
+    fs::create_directories(base);
+
+    TestShell shell;
+    shell(std::format("mv {}/nosuchfile {}/dest", base.string(), base.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_no_operand")
+{
+    TestShell shell;
+    shell("mv");
+    CHECK(shell.exitCode == 1);
+}
+
+TEST_CASE("shell.builtin.mv_missing_destination")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_missdest";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "data";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {}", src.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_no_clobber")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_noclobber";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "source content";
+    }
+    {
+        std::ofstream ofs(dst);
+        ofs << "existing content";
+    }
+
+    TestShell shell;
+    shell(std::format("mv -n {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    // Source should still exist (move was skipped)
+    CHECK(fs::exists(src));
+    // Destination should retain original content
+    {
+        std::ifstream ifs(dst);
+        std::string content;
+        std::getline(ifs, content);
+        CHECK(content == "existing content");
+    }
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_verbose")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_verbose";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "data";
+    }
+
+    TestShell shell;
+    auto output = shell(std::format("mv -v {} {}", src.string(), dst.string())).output();
+    CHECK(shell.exitCode == 0);
+    CHECK(output.find("->") != std::string::npos);
+    CHECK(!fs::exists(src));
+    CHECK(fs::exists(dst));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_double_dash")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_ddash";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "-dashfile.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream ofs(src);
+        ofs << "data";
+    }
+
+    TestShell shell;
+    shell(std::format("mv -- {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(src));
+    CHECK(fs::exists(dst));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_multiple_to_dir")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_multidir";
+    fs::remove_all(base);
+    fs::create_directories(base / "target");
+    auto const src1 = base / "a.txt";
+    auto const src2 = base / "b.txt";
+
+    {
+        std::ofstream(src1) << "aaa";
+        std::ofstream(src2) << "bbb";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {} {} {}", src1.string(), src2.string(), (base / "target").string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(src1));
+    CHECK(!fs::exists(src2));
+    CHECK(fs::exists(base / "target" / "a.txt"));
+    CHECK(fs::exists(base / "target" / "b.txt"));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_multiple_to_file")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_multifile";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src1 = base / "a.txt";
+    auto const src2 = base / "b.txt";
+    auto const dst = base / "notadir.txt";
+
+    {
+        std::ofstream(src1) << "aaa";
+        std::ofstream(src2) << "bbb";
+        std::ofstream(dst) << "existing";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {} {} {}", src1.string(), src2.string(), dst.string()));
+    CHECK(shell.exitCode == 1);
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_directory")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_dir";
+    fs::remove_all(base);
+    fs::create_directories(base / "srcdir" / "sub");
+    auto const dst = base / "dstdir";
+
+    {
+        std::ofstream(base / "srcdir" / "file.txt") << "data";
+        std::ofstream(base / "srcdir" / "sub" / "nested.txt") << "nested";
+    }
+
+    TestShell shell;
+    shell(std::format("mv {} {}", (base / "srcdir").string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(!fs::exists(base / "srcdir"));
+    CHECK(fs::exists(dst / "file.txt"));
+    CHECK(fs::exists(dst / "sub" / "nested.txt"));
+
+    fs::remove_all(base);
+}
+
+TEST_CASE("shell.builtin.mv_combined_flags")
+{
+    namespace fs = std::filesystem;
+    auto const base = fs::temp_directory_path() / "endo_mv_test_combined";
+    fs::remove_all(base);
+    fs::create_directories(base);
+    auto const src = base / "source.txt";
+    auto const dst = base / "dest.txt";
+
+    {
+        std::ofstream(src) << "source";
+        std::ofstream(dst) << "existing";
+    }
+
+    TestShell shell;
+    // -nv: no-clobber + verbose; should skip move
+    shell(std::format("mv -nv {} {}", src.string(), dst.string()));
+    CHECK(shell.exitCode == 0);
+    CHECK(fs::exists(src)); // Source still exists (no-clobber)
+
+    fs::remove_all(base);
+}
+
+// ============================================================================
 // Variable Substitution - $VAR and ${VAR}
 // ============================================================================
 

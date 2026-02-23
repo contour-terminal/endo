@@ -460,6 +460,44 @@ cp a.txt b.txt c.txt target-directory/
 
 ---
 
+## mv
+
+Move or rename files and directories.
+
+**Syntax:**
+
+```
+mv [-fnvi] [--force] [--no-clobber] [--verbose] [--interactive] [--] source... dest
+```
+
+**Description:** Moves SOURCE to DEST, or multiple SOURCE(s) to an existing DIRECTORY.
+If the destination is on a different filesystem, the file is copied and the source is removed.
+By default, overwrites existing destination files without prompting.
+
+**Options:**
+
+| Option | Description |
+|---|---|
+| `-f`, `--force` | Do not prompt before overwriting |
+| `-n`, `--no-clobber` | Do not overwrite existing files |
+| `-v`, `--verbose` | Print each file as it is moved |
+| `-i`, `--interactive` | Prompt before overwriting |
+| `--` | End of options; treat subsequent arguments as file names |
+
+<!-- endo-no-check -->
+**Examples:**
+
+```endo
+mv file.txt renamed.txt
+mv file.txt /tmp/
+mv -v old.txt new.txt
+mv -n important.txt dest/
+mv -- -starts-with-dash.txt dest.txt
+mv a.txt b.txt c.txt target-directory/
+```
+
+---
+
 ## sleep
 
 Wait for a specified duration.

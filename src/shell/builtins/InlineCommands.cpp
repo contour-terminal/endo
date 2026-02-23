@@ -1493,6 +1493,205 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
     return success ? 0 : 1;
 }
 
+int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
+{
+    auto writeOutput = [outputFd](std::string const& str) {
+        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
+    };
+
+    bool force = false;
+    bool noClobber = false;
+    bool verbose = false;
+    bool interactive = false;
+    bool endOfOptions = false;
+    std::vector<std::string> paths;
+
+    for (size_t i = 1; i < args.size(); ++i)
+    {
+        std::string_view const arg = args.at(i);
+
+        if (!endOfOptions && arg == "--")
+        {
+            endOfOptions = true;
+            continue;
+        }
+
+        if (!endOfOptions && arg == "--help")
+        {
+            writeOutput("Usage: mv [OPTION]... SOURCE... DEST\n");
+            writeOutput("Move SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n");
+            writeOutput("\n");
+            writeOutput("Options:\n");
+            writeOutput("  -f, --force          do not prompt before overwriting\n");
+            writeOutput("  -n, --no-clobber     do not overwrite existing files\n");
+            writeOutput("  -v, --verbose        explain what is being done\n");
+            writeOutput("  -i, --interactive    prompt before overwrite\n");
+            writeOutput("      --help           display this help and exit\n");
+            return 0;
+        }
+
+        if (!endOfOptions && arg == "--force")
+        {
+            force = true;
+            noClobber = false;
+            interactive = false;
+            continue;
+        }
+        if (!endOfOptions && arg == "--no-clobber")
+        {
+            noClobber = true;
+            force = false;
+            interactive = false;
+            continue;
+        }
+        if (!endOfOptions && arg == "--verbose")
+        {
+            verbose = true;
+            continue;
+        }
+        if (!endOfOptions && arg == "--interactive")
+        {
+            interactive = true;
+            force = false;
+            noClobber = false;
+            continue;
+        }
+
+        if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
+        {
+            bool validFlags = true;
+            for (size_t j = 1; j < arg.size(); ++j)
+            {
+                switch (arg[j])
+                {
+                    case 'f':
+                        force = true;
+                        noClobber = false;
+                        interactive = false;
+                        break;
+                    case 'n':
+                        noClobber = true;
+                        force = false;
+                        interactive = false;
+                        break;
+                    case 'v': verbose = true; break;
+                    case 'i':
+                        interactive = true;
+                        force = false;
+                        noClobber = false;
+                        break;
+                    default: validFlags = false; break;
+                }
+                if (!validFlags)
+                    break;
+            }
+            if (validFlags)
+                continue;
+        }
+
+        paths.emplace_back(arg);
+    }
+
+    if (paths.empty())
+    {
+        error("mv: missing file operand");
+        return 1;
+    }
+
+    if (paths.size() == 1)
+    {
+        error("mv: missing destination file operand after '{}'", paths.front());
+        return 1;
+    }
+
+    namespace fs = std::filesystem;
+
+    auto const dest = fs::path(paths.back());
+    auto const sources = std::span(paths.data(), paths.size() - 1);
+    auto const destIsDir = fs::is_directory(dest);
+
+    if (sources.size() > 1 && !destIsDir)
+    {
+        error("mv: target '{}' is not a directory", dest.string());
+        return 1;
+    }
+
+    auto success = true;
+    for (auto const& src: sources)
+    {
+        auto const srcPath = fs::path(src);
+        std::error_code ec;
+
+        auto const srcStatus = fs::symlink_status(srcPath, ec);
+        if (ec || !fs::exists(srcStatus))
+        {
+            error("mv: cannot stat '{}': No such file or directory", src);
+            success = false;
+            continue;
+        }
+
+        auto const target = destIsDir ? dest / srcPath.filename() : dest;
+
+        // Check if target already exists
+        if (fs::exists(target))
+        {
+            if (noClobber)
+                continue;
+
+            if (interactive && !force)
+            {
+                auto const prompt = std::format("mv: overwrite '{}'? ", target.string());
+                [[maybe_unused]] auto w = platformWrite(standardError(), prompt.data(), prompt.size());
+                if (!_tty.isTerminal())
+                    continue;
+                std::string response;
+                std::getline(std::cin, response);
+                if (response.empty() || (response[0] != 'y' && response[0] != 'Y'))
+                    continue;
+            }
+        }
+
+        // Attempt rename (fast path: same filesystem)
+        fs::rename(srcPath, target, ec);
+        if (ec)
+        {
+            // Cross-device move: fallback to copy + remove
+            if (ec == std::errc::cross_device_link)
+            {
+                auto copyOptions = fs::copy_options::recursive | fs::copy_options::overwrite_existing;
+                fs::copy(srcPath, target, copyOptions, ec);
+                if (ec)
+                {
+                    error("mv: cannot move '{}' to '{}': {}", src, target.string(), ec.message());
+                    success = false;
+                    continue;
+                }
+                fs::remove_all(srcPath, ec);
+                if (ec)
+                {
+                    error("mv: moved '{}' to '{}' but failed to remove source: {}",
+                          src,
+                          target.string(),
+                          ec.message());
+                    success = false;
+                    continue;
+                }
+            }
+            else
+            {
+                error("mv: cannot move '{}' to '{}': {}", src, target.string(), ec.message());
+                success = false;
+                continue;
+            }
+        }
+
+        if (verbose)
+            writeOutput(std::format("'{}' -> '{}'\n", src, target.string()));
+    }
+
+    return success ? 0 : 1;
+}
+
 void Shell::finalizePipelineBuiltin(bool lastInChain,
                                     CoreVM::CoreStringArray const& args,
                                     std::string_view programName,

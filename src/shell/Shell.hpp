@@ -181,6 +181,8 @@ class Shell final: public SignalCallback
     [[nodiscard]] int executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the cp builtin, writing verbose output to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
+    /// Executes the mv builtin, writing verbose output to outputFd. Returns exit code.
+    [[nodiscard]] int executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Executes the find builtin, writing matching paths to outputFd. Returns exit code.
     [[nodiscard]] int executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle outputFd);
     /// Finalizes a pipeline builtin: closes pipe, tracks command, waits for downstream.

@@ -87,6 +87,13 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         return;
     }
 
+    if (program == "mv")
+    {
+        _exitCode = executeInlineMv(args, outputFd);
+        context.setResult(CoreVM::CoreNumber(_exitCode));
+        return;
+    }
+
     if (program == "find")
     {
         _exitCode = executeInlineFind(args, outputFd);
@@ -240,6 +247,14 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
         auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
         _exitCode = executeInlineCp(args, stdoutFd);
         finalizePipelineBuiltin(lastInChain, args, "cp", context);
+        return;
+    }
+
+    if (program == "mv")
+    {
+        auto const [stdinFd, stdoutFd] = _currentPipelineBuilder.requestShellPipe(lastInChain);
+        _exitCode = executeInlineMv(args, stdoutFd);
+        finalizePipelineBuiltin(lastInChain, args, "mv", context);
         return;
     }
 

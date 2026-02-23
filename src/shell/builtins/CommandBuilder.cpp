@@ -77,6 +77,8 @@ void Shell::builtinCmdExec(CoreVM::Params& context)
             _exitCode = executeInlineMkdir(cmdBuilderArgs(), outputFd);
         else if (program == "cp")
             _exitCode = executeInlineCp(cmdBuilderArgs(), outputFd);
+        else if (program == "mv")
+            _exitCode = executeInlineMv(cmdBuilderArgs(), outputFd);
         else if (program == "find")
             _exitCode = executeInlineFind(cmdBuilderArgs(), outputFd);
         else
@@ -172,6 +174,8 @@ void Shell::builtinCmdExecPiped(CoreVM::Params& context)
             _exitCode = executeInlineMkdir(cmdBuilderArgs(), stdoutFd);
         else if (program == "cp")
             _exitCode = executeInlineCp(cmdBuilderArgs(), stdoutFd);
+        else if (program == "mv")
+            _exitCode = executeInlineMv(cmdBuilderArgs(), stdoutFd);
         else if (program == "find")
             _exitCode = executeInlineFind(cmdBuilderArgs(), stdoutFd);
         else
