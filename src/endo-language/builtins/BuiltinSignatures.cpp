@@ -837,6 +837,7 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String);
     registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number);
     registerPropertyResolved(rt, resolve, "agent_claude_thinking_mode", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_prompt_caching", CoreVM::LiteralType::Boolean);
     registerPropertyResolved(rt, resolve, "agent_claude_auth_type", CoreVM::LiteralType::String);
 
     // --- OpenAI provider ---

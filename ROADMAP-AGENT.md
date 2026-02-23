@@ -355,17 +355,17 @@ Upgrade `AgentSession::executeToolCalls()`:
 - Collect results and return in original order
 - Serial fallback for tools with side effects on shared state
 
-### Prompt Caching
+### Prompt Caching (Claude) ✅
 
-**Status:** Not started | **Effort:** Medium
+**Status:** Completed | **Effort:** Medium
 
 Leverage provider-specific prompt caching to reduce costs and latency for long conversations.
 
-- **Claude:** Use `cache_control` breakpoints on system prompt and tool definitions
-- **OpenAI:** Automatic prompt caching (>= 1024 token prefix)
-- **Gemini:** Context caching API for repeated prefixes
-- Track cache hit/miss rates in token display
-- Configure caching strategy via `init.endo` properties
+- **Claude:** `cache_control: { type: "ephemeral" }` added to request body (GA, no beta header)
+- **OpenAI:** Automatic prompt caching (>= 1024 token prefix) — no request changes needed
+- **Gemini:** Context caching API deferred (requires separate `cachedContents` endpoint with TTL management)
+- Cache write tokens shown in per-turn token display
+- Configurable via `agent_claude_prompt_caching` property (default: `true`)
 
 ### Image Input — Clipboard Paste (Phase 2.6) ✅
 
@@ -850,7 +850,7 @@ Completed Foundation (Phases 1, 2, 5, 7, 7b, 7c, 8.1-8.2, 9.1, 10.4, 10.5, 12C)
    │    ├── Permission & Safety System (Phase 6) ✅
    │    ├── Undo/Rollback System
    │    ├── Parallel Tool Execution
-   │    ├── Prompt Caching
+   │    ├── Prompt Caching (Claude) ✅
    │    ├── Image Input (Phase 2.6) ✅
    │    ├── Image Output (Phase 2.7) ── depends on 2.6 (shared stb_image)
    │    ├── Batch/Headless Agent Mode

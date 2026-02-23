@@ -26,8 +26,8 @@ ClaudeProvider::ClaudeProvider(http::HttpClient const& httpClient, ClaudeProvide
 auto ClaudeProvider::buildRequest(std::span<ChatMessage const> messages,
                                   std::span<ToolDefinition const> tools) const -> http::HttpRequest
 {
-    auto const requestBody =
-        serializeRequest(messages, tools, _config.model, _config.maxTokens, _config.thinkingMode);
+    auto const requestBody = serializeRequest(
+        messages, tools, _config.model, _config.maxTokens, _config.thinkingMode, _config.promptCaching);
 
     auto request = http::HttpRequest {};
     request.url = std::format("{}/v1/messages", _config.baseUrl);
@@ -267,7 +267,8 @@ auto ClaudeProvider::serializeRequest(std::span<ChatMessage const> messages,
                                       std::span<ToolDefinition const> tools,
                                       std::string const& model,
                                       size_t maxTokens,
-                                      ThinkingMode thinkingMode) -> nlohmann::json
+                                      ThinkingMode thinkingMode,
+                                      bool promptCaching) -> nlohmann::json
 {
     auto body = nlohmann::json {
         { "model", model },
@@ -346,6 +347,10 @@ auto ClaudeProvider::serializeRequest(std::span<ChatMessage const> messages,
         }
         body["tools"] = std::move(toolsArray);
     }
+
+    // Enable prompt caching — the API places the cache breakpoint on the last cacheable block.
+    if (promptCaching)
+        body["cache_control"] = { { "type", "ephemeral" } };
 
     return body;
 }

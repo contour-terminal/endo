@@ -2427,9 +2427,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
     // /rename: Rename the current session.
     slashRegistry.registerCommand(std::make_unique<agent::CallbackSlashCommand>(
-        "rename",
-        "Rename the current session",
-        [&](std::string_view arguments) -> agent::SlashCommandResult {
+        "rename", "Rename the current session", [&](std::string_view arguments) -> agent::SlashCommandResult {
             auto newName = std::string(arguments);
             while (!newName.empty() && newName.front() == ' ')
                 newName.erase(newName.begin());
@@ -2850,7 +2848,8 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
             return;
 
         auto buffer = tui::Buffer(height, width);
-        auto canvas = tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
+        auto canvas =
+            tui::Canvas(buffer, tui::Rect { .x = 0, .y = 0, .width = width, .height = height }, theme);
         toolStatusComponent.setArea(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
         toolStatusComponent.setScreenBounds(tui::Rect { .x = 0, .y = 0, .width = width, .height = height });
         toolStatusComponent.render(canvas);
@@ -3047,6 +3046,9 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                             if (tu.cacheReadTokens > 0)
                                 usageLine +=
                                     std::format(" ({} cached)", agent::formatTokenCount(tu.cacheReadTokens));
+                            if (tu.cacheCreationTokens > 0)
+                                usageLine += std::format(" ({} cache-write)",
+                                                         agent::formatTokenCount(tu.cacheCreationTokens));
                             if (cost > 0.0)
                                 usageLine += std::format(" ~${:.4f}", cost);
                             usageLine += "\n";

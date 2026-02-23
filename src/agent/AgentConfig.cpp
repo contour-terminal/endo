@@ -27,6 +27,8 @@ namespace
             config.authPreference = node["auth_preference"].as<std::string>();
         if (node["thinking_mode"])
             config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
+        if (node["prompt_caching"])
+            config.promptCaching = node["prompt_caching"].as<bool>();
     }
 
     void parseOpenAiConfig(YAML::Node const& node, OpenAiConfig& config)

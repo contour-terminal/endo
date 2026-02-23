@@ -22,6 +22,7 @@ struct ClaudeConfig
     size_t maxTokens = 8192;                       ///< Maximum output tokens per request.
     std::string authPreference = "auto";           ///< Auth method: "auto", "oauth", "api_key".
     ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
+    bool promptCaching = true;                     ///< Enable prompt caching via cache_control.
 };
 
 /// Configuration for OpenAI-compatible providers.

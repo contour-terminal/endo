@@ -200,6 +200,7 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
             .model = config.claude.model,
             .maxTokens = config.claude.maxTokens,
             .thinkingMode = config.claude.thinkingMode,
+            .promptCaching = config.claude.promptCaching,
         };
 
         // Attach a token refresher when using an OAuth token.
@@ -324,6 +325,7 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
                 .model = _config.claude.model,
                 .maxTokens = _config.claude.maxTokens,
                 .thinkingMode = _config.claude.thinkingMode,
+                .promptCaching = _config.claude.promptCaching,
             };
             if (isOAuthToken(providerConfig.apiKey))
                 providerConfig.tokenRefresher = makeClaudeTokenRefresher();

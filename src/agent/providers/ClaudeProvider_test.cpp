@@ -131,6 +131,56 @@ TEST_CASE("agent.claude.serialize_tool_result_block")
     CHECK(content[0]["content"] == "Found 42 cats");
 }
 
+TEST_CASE("agent.claude.serialize_with_prompt_caching")
+{
+    auto messages = std::vector<ChatMessage> {
+        ChatMessage::text(Role::System, "You are a helpful assistant."),
+        ChatMessage::text(Role::User, "Hello!"),
+    };
+
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-6", 1024, ThinkingMode::Off, true);
+
+    REQUIRE(json.contains("cache_control"));
+    CHECK(json["cache_control"]["type"] == "ephemeral");
+    // System prompt stays as a string, not converted to array.
+    CHECK(json["system"].is_string());
+    CHECK(json["system"] == "You are a helpful assistant.");
+}
+
+TEST_CASE("agent.claude.serialize_without_prompt_caching")
+{
+    auto messages = std::vector<ChatMessage> {
+        ChatMessage::text(Role::User, "Hello!"),
+    };
+
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, {}, "claude-sonnet-4-6", 1024, ThinkingMode::Off, false);
+
+    CHECK(!json.contains("cache_control"));
+}
+
+TEST_CASE("agent.claude.serialize_with_caching_and_tools")
+{
+    auto messages = std::vector<ChatMessage> {
+        ChatMessage::text(Role::User, "Search for cats"),
+    };
+
+    auto tools = std::vector<ToolDefinition> {
+        { .name = "search",
+          .description = "Search the web",
+          .inputSchema = nlohmann::json { { "type", "object" } } },
+    };
+
+    auto const json =
+        ClaudeProvider::serializeRequest(messages, tools, "claude-sonnet-4-6", 1024, ThinkingMode::Off, true);
+
+    REQUIRE(json.contains("cache_control"));
+    CHECK(json["cache_control"]["type"] == "ephemeral");
+    REQUIRE(json.contains("tools"));
+    CHECK(json["tools"].size() == 1);
+}
+
 // =============================================================================
 // SSE event parsing tests
 // =============================================================================

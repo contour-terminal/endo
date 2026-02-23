@@ -26,6 +26,7 @@ struct ClaudeProviderConfig
     size_t maxTokens = 8192;                           ///< Maximum output tokens per request.
     size_t contextWindowSize = 200000;                 ///< Maximum context window in tokens.
     ThinkingMode thinkingMode = ThinkingMode::Off;     ///< Thinking/reasoning mode.
+    bool promptCaching = false;                        ///< Enable prompt caching via cache_control.
     TokenRefresher tokenRefresher;                     ///< Optional: refreshes OAuth token on 401.
 };
 
@@ -106,12 +107,14 @@ class ClaudeProvider final: public LlmProvider
     /// @param model        Model identifier string.
     /// @param maxTokens    Maximum output tokens.
     /// @param thinkingMode Thinking/reasoning mode to apply.
+    /// @param promptCaching Whether to include cache_control for prompt caching.
     /// @return JSON request body ready for the Claude Messages API.
     [[nodiscard]] static auto serializeRequest(std::span<ChatMessage const> messages,
                                                std::span<ToolDefinition const> tools,
                                                std::string const& model,
                                                size_t maxTokens,
-                                               ThinkingMode thinkingMode) -> nlohmann::json;
+                                               ThinkingMode thinkingMode,
+                                               bool promptCaching = false) -> nlohmann::json;
 
     /// Parses a single SSE event from the Claude streaming API.
     /// @param event        The SSE event to parse.

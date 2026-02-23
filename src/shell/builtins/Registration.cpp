@@ -1254,6 +1254,10 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agent::thinkingModeToString(agentConfig.claude.thinkingMode))); })
         .onSet([this](CoreVM::Params& args) { agentConfig.claude.thinkingMode = agent::thinkingModeFromString(args.getString(1)); _agentProviderFactory.reset(); });
 
+    _runtime.registerProperty("agent_claude_prompt_caching", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.claude.promptCaching); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.claude.promptCaching = args.getBool(1); _agentProviderFactory.reset(); });
+
     _runtime.registerProperty("agent_claude_auth_type", CoreVM::LiteralType::String)
         .onGet([this](CoreVM::Params& args) {
             // Return the effective auth type based on the current preference.
