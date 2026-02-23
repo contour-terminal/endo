@@ -2512,7 +2512,7 @@ class IRProgram
     std::vector<std::unique_ptr<IRFunction>> _functions;
     std::vector<CustomProductType> _customProductTypes;
     std::vector<CustomSumType> _customSumTypes;
-    uint16_t _nextCustomTypeId = BuiltinTypeId::DateTime + 1; ///< Next type ID for custom types
+    uint16_t _nextCustomTypeId = BuiltinTypeId::Size + 1; ///< Next type ID for custom types
 
     friend class IRBuilder;
 };

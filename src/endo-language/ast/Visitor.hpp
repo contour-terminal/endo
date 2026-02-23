@@ -61,6 +61,7 @@ struct IdentifierExpr;
 struct IntLiteralExpr;
 struct FloatLiteralExpr;
 struct BoolLiteralExpr;
+struct SizeLiteralExpr;
 struct ParenExpr;
 struct LambdaExpr;
 struct MatchExpr;
@@ -154,6 +155,7 @@ struct Visitor
     virtual void visit(IntLiteralExpr const&) = 0;
     virtual void visit(FloatLiteralExpr const&) = 0;
     virtual void visit(BoolLiteralExpr const&) = 0;
+    virtual void visit(SizeLiteralExpr const&) = 0;
     virtual void visit(BreakExpr const&) = 0;
     virtual void visit(ContinueExpr const&) = 0;
     virtual void visit(ParenExpr const&) = 0;

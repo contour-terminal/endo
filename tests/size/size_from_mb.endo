@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size.fromMB constructor
+# expect: 5 MB
+
+print (Size.fromMB 5)

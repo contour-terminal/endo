@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size greater-than comparison
+# expect: true
+
+print (1_GB > 1_MB)

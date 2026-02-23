@@ -760,6 +760,24 @@ void ASTPrinter::visit(BoolLiteralExpr const& node)
     _result += node.value ? "true" : "false";
 }
 
+void ASTPrinter::visit(SizeLiteralExpr const& node)
+{
+    constexpr int64_t KB = 1024;
+    constexpr int64_t MB = KB * 1024;
+    constexpr int64_t GB = MB * 1024;
+    constexpr int64_t TB = GB * 1024;
+    if (node.bytes >= TB && node.bytes % TB == 0)
+        _result += std::to_string(node.bytes / TB) + "_TB";
+    else if (node.bytes >= GB && node.bytes % GB == 0)
+        _result += std::to_string(node.bytes / GB) + "_GB";
+    else if (node.bytes >= MB && node.bytes % MB == 0)
+        _result += std::to_string(node.bytes / MB) + "_MB";
+    else if (node.bytes >= KB && node.bytes % KB == 0)
+        _result += std::to_string(node.bytes / KB) + "_KB";
+    else
+        _result += std::to_string(node.bytes) + "_B";
+}
+
 void ASTPrinter::visit(BreakExpr const& /*node*/)
 {
     _result += "break";

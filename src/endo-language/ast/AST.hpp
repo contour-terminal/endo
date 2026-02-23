@@ -1209,6 +1209,18 @@ struct BoolLiteralExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Size literal expression: `42_B`, `1_KB`, `5_MB`, `2_GB`, `1_TB`
+///
+/// Stores the size in bytes. The suffix determines the multiplier applied at parse time.
+struct SizeLiteralExpr final: public Expr
+{
+    int64_t bytes;
+
+    explicit SizeLiteralExpr(int64_t b): bytes(b) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Break expression: `break` inside F# expressions (e.g., in if-then-else within loops)
 struct BreakExpr final: public Expr
 {

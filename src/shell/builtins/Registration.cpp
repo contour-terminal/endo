@@ -665,6 +665,32 @@ void Shell::registerLanguageBuiltins()
         .returnType(CoreVM::LiteralType::String)
         .bind(endo::builtins::formatDatetime);
 
+    // Size constructors
+    _runtime.registerFunction("size_from_bytes")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::sizeFromBytes);
+
+    _runtime.registerFunction("size_from_kb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::sizeFromKB);
+
+    _runtime.registerFunction("size_from_mb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::sizeFromMB);
+
+    _runtime.registerFunction("size_from_gb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::sizeFromGB);
+
+    _runtime.registerFunction("size_from_tb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::sizeFromTB);
+
     // DateTime constructors
     _runtime.registerFunction("datetime_now")
         .returnType(CoreVM::LiteralType::Number)

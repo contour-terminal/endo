@@ -197,6 +197,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::IntLiteralExpr const& node) override;
     void visit(ast::FloatLiteralExpr const& node) override;
     void visit(ast::BoolLiteralExpr const& node) override;
+    void visit(ast::SizeLiteralExpr const& node) override;
     void visit(ast::BreakExpr const& node) override;
     void visit(ast::ContinueExpr const& node) override;
     void visit(ast::ParenExpr const& node) override;

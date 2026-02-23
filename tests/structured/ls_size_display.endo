@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Display formatted Size values from ls
+# mode: structured
+# expect: [4 KB; 42 B; 256 B]
+
+print (ls |> map (fun f -> f.size))

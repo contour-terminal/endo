@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size display for sub-KB values shows bytes
+# expect: 500 B
+
+print (Size.fromBytes 500)

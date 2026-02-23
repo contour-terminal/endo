@@ -5473,6 +5473,31 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     value = 0;
             }
             _lexer.nextToken();
+
+            // Check for size literal suffix: 1_B, 1_KB, 1_MB, 1_GB, 1_TB
+            if (_lexer.currentToken() == Token::Identifier)
+            {
+                auto const& suffix = _lexer.currentLiteral();
+                int64_t multiplier = 0;
+                if (suffix == "_B")
+                    multiplier = 1;
+                else if (suffix == "_KB")
+                    multiplier = 1024;
+                else if (suffix == "_MB")
+                    multiplier = int64_t { 1024 } * 1024;
+                else if (suffix == "_GB")
+                    multiplier = int64_t { 1024 } * 1024 * 1024;
+                else if (suffix == "_TB")
+                    multiplier = int64_t { 1024 } * 1024 * 1024 * 1024;
+                if (multiplier > 0)
+                {
+                    _lexer.nextToken();
+                    auto sizeNode = std::make_unique<ast::SizeLiteralExpr>(value * multiplier);
+                    sizeNode->location = loc;
+                    return sizeNode;
+                }
+            }
+
             auto node = std::make_unique<ast::IntLiteralExpr>(value);
             node->location = loc;
             return node;

@@ -112,7 +112,7 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->name = "FileInfo";
     fileInfoType->slotCount = 5;
     fileInfoType->fields = {
-        { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Number },
+        { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Object },
         { "mode", 2, LiteralType::Number },   { "mtime", 3, LiteralType::Object },
         { "isDir", 4, LiteralType::Boolean },
     };
@@ -132,8 +132,19 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(jobInfoType));
 
+    // Size: Product type with 1 field for byte count
+    auto sizeType = std::make_unique<TypeDescriptor>();
+    sizeType->kind = TypeKind::Product;
+    sizeType->id = BuiltinTypeId::Size;
+    sizeType->name = "Size";
+    sizeType->slotCount = 1;
+    sizeType->fields = {
+        { "bytes", 0, LiteralType::Number },
+    };
+    addType(std::move(sizeType));
+
     // Update _nextId to be after the builtin type IDs
-    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::DateTime + 1));
+    _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::Size + 1));
 }
 
 TypeDescriptor* TypeRegistry::registerSumType(std::string name, std::vector<VariantInfo> variants)

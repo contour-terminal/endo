@@ -362,19 +362,33 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["DateTime"] = std::move(dateTimeType);
     }
 
+    // Pre-register Size record type.
+    {
+        RecordTypeInfo sizeType;
+        sizeType.typeId = CoreVM::BuiltinTypeId::Size;
+        sizeType.name = "Size";
+        sizeType.fields = {
+            { "bytes", 0, CoreVM::LiteralType::Number },
+        };
+        for (auto const& f: sizeType.fields)
+            sizeType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["Size"] = std::move(sizeType);
+    }
+
     // Pre-register FileInfo record type for the ls builtin.
     {
         RecordTypeInfo fileInfoType;
         fileInfoType.typeId = CoreVM::BuiltinTypeId::FileInfo;
         fileInfoType.name = "FileInfo";
         fileInfoType.fields = {
-            { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Number },
+            { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Object },
             { "mode", 2, CoreVM::LiteralType::Number },   { "mtime", 3, CoreVM::LiteralType::Object },
             { "isDir", 4, CoreVM::LiteralType::Boolean },
         };
         for (auto const& f: fileInfoType.fields)
             fileInfoType.fieldTypes[f.name] = f.type;
         fileInfoType.fieldObjectTypeIds["mtime"] = CoreVM::BuiltinTypeId::DateTime;
+        fileInfoType.fieldObjectTypeIds["size"] = CoreVM::BuiltinTypeId::Size;
         generator._recordTypes["FileInfo"] = std::move(fileInfoType);
     }
 
@@ -5096,7 +5110,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::RecordExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::SizeLiteralExpr const*>(node.value.get()) != nullptr;
 
     // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
     // Users should compose with |> join ":" to convert lists before exporting.
@@ -5499,6 +5514,18 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     };
     if (checkWrappedType(left, "left") || checkWrappedType(right, "right"))
         return;
+
+    // Size auto-unwrapping: extract .bytes for comparison/arithmetic
+    auto const unwrapSize = [&](CoreVM::Value*& operand) {
+        if (auto const typeId = getObjectTypeId(operand))
+        {
+            if (*typeId == CoreVM::BuiltinTypeId::Size)
+                operand =
+                    _builder.createObjGetSlot(operand, _builder.get(CoreVM::CoreNumber(0)), "size.bytes");
+        }
+    };
+    unwrapSize(left);
+    unwrapSize(right);
 
     // String concatenation: if + operator and either operand is a string, concat
     if (node.op == ast::BinaryOp::Add
@@ -6522,6 +6549,30 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     return;
                 }
             }
+
+            // Size.fromBytes n → size_from_bytes(n)
+            if (modIdent->name == "Size" && argExprs.size() == 1)
+            {
+                static std::unordered_map<std::string_view, std::string_view> const sizeMethods = {
+                    { "fromBytes", "size_from_bytes" }, { "fromKB", "size_from_kb" },
+                    { "fromMB", "size_from_mb" },       { "fromGB", "size_from_gb" },
+                    { "fromTB", "size_from_tb" },
+                };
+                if (auto const it = sizeMethods.find(method); it != sizeMethods.end())
+                {
+                    auto* arg = codegen(argExprs[0]);
+                    if (!arg)
+                    {
+                        reportTypeError("Failed to evaluate argument for Size.{}", method);
+                        return;
+                    }
+                    if (tryGenerateNativeCall(std::string(it->second), { arg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
+                        return;
+                    }
+                }
+            }
         }
 
         // Case 2: Method-style — opt.map f
@@ -7412,6 +7463,12 @@ void IRGenerator::visit(ast::FloatLiteralExpr const& node)
 void IRGenerator::visit(ast::BoolLiteralExpr const& node)
 {
     _result = _builder.getBoolean(node.value);
+}
+
+void IRGenerator::visit(ast::SizeLiteralExpr const& node)
+{
+    if (tryGenerateNativeCall("size_from_bytes", { _builder.get(CoreVM::CoreNumber(node.bytes)) }))
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
 }
 
 void IRGenerator::visit(ast::ParenExpr const& node)
@@ -9596,6 +9653,21 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             reportTypeError("DateTime has no member '{}'", std::string_view(node.fieldName));
             return;
         }
+        if (modIdent->name == "Size")
+        {
+            auto const isSizeMethod = node.fieldName == "fromBytes" || node.fieldName == "fromKB"
+                                      || node.fieldName == "fromMB" || node.fieldName == "fromGB"
+                                      || node.fieldName == "fromTB";
+            auto const found = isSizeMethod;
+            if (found)
+            {
+                // Size.fromXX requires an argument — handled in ApplicationExpr
+                reportTypeError("Size.{} requires a numeric argument", std::string_view(node.fieldName));
+                return;
+            }
+            reportTypeError("Size has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
     }
 
     // Codegen the object expression
@@ -11665,6 +11737,14 @@ void IRGenerator::generateSortByIR(std::string const& funcParamName, CoreVM::Val
     {
         reportTypeError("sortBy: failed to apply key function to element");
         return;
+    }
+
+    // Unwrap Size objects to their raw byte count for numeric comparison
+    if (auto const keyTypeId = getObjectTypeId(keyValue))
+    {
+        if (*keyTypeId == CoreVM::BuiltinTypeId::Size)
+            keyValue = _builder.createObjGetSlot(
+                keyValue, _builder.get(CoreVM::CoreNumber(0)), "sortBy.key.size.bytes");
     }
 
     // Store key and elem in temp allocas (must survive Tuple2 ObjAlloc)

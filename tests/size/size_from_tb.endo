@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size.fromTB constructor
+# expect: 1 TB
+
+print (Size.fromTB 1)

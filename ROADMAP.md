@@ -533,6 +533,7 @@ and system interaction (object pipelines, structured commands, data manipulation
 Phase 6.1 (StructuredCommand interface, platform abstraction) and Phase 6.2 (`ps` builtin) are implemented.
 HOF list element type annotation propagation fixed for `find`, `reverse`, `take`, `drop`, `sortBy` — enables chained record pipelines.
 `DateTime` builtin record type added (year/month/day/hour/minute/second/epoch fields). `ls` mtime is now a structured DateTime object. `DateTime.now` and `DateTime.fromEpoch` constructors available. Nested field access (`f.mtime.year`) and completion support included.
+`Size` builtin record type added with human-readable display (e.g., "1.5 KB"). Size literals (`1_B`, `1_KB`, `1_MB`, `1_GB`, `1_TB`) and module constructors (`Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`) supported. `ls` file size is now a `Size` object. Size values support comparison operators and `.bytes` field access. IDE completions and hover documentation included.
 
 ---
 

@@ -35,7 +35,8 @@ CoreVM::TypedObject* LsCommand::execute(CoreVM::Runner& runner) const
         // Allocate a FileInfo record
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(file.name)));
-        record->setSlot(1, static_cast<uint64_t>(file.size));
+        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, file.size);
+        record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
         record->setSlot(2, static_cast<uint64_t>(file.mode));
         auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, file.mtime);
         record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));

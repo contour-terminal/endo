@@ -188,6 +188,12 @@ namespace
         StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>" },
         StdLibEntry { "rand", "rand -> int  |  rand min max -> int" },
         StdLibEntry { "fetch", "fetch url -> result<string, string>" },
+        // Size constructors
+        StdLibEntry { "Size.fromBytes", "Size.fromBytes n -> Size" },
+        StdLibEntry { "Size.fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
+        StdLibEntry { "Size.fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
+        StdLibEntry { "Size.fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
+        StdLibEntry { "Size.fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
         // DateTime constructors
         StdLibEntry { "DateTime.now", "DateTime.now -> DateTime (current UTC time)" },
         StdLibEntry { "DateTime.fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
@@ -580,11 +586,29 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         OptionMethod { "fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
     };
 
+    // Size module methods
+    constexpr std::array sizeMethods = {
+        OptionMethod { "fromBytes", "Size.fromBytes n -> Size" },
+        OptionMethod { "fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
+        OptionMethod { "fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
+        OptionMethod { "fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
+        OptionMethod { "fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
+    };
+
     if (objectPart == "Option")
     {
         // Static Option module methods
         for (auto const& method: optionMethods)
             addCandidate("Option." + std::string(method.name),
+                         std::string(method.name),
+                         std::string(method.description),
+                         CompletionKind::Function);
+    }
+    else if (objectPart == "Size")
+    {
+        // Static Size module methods
+        for (auto const& method: sizeMethods)
+            addCandidate("Size." + std::string(method.name),
                          std::string(method.name),
                          std::string(method.description),
                          CompletionKind::Function);

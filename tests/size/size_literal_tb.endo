@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size literal in terabytes
+# expect: 1 TB
+
+print 1_TB

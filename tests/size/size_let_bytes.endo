@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access bytes field on Size from let binding
+# expect: 10485760
+
+let s = 10_MB; print s.bytes

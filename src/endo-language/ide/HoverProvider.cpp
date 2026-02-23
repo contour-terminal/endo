@@ -160,6 +160,22 @@ namespace
             { "agent_error_recovery_model",
               "`agent_error_recovery_model` : `string`\n\nModel to use for error recovery analysis. "
               "Empty string uses the active agent model. Read or write with `<-`." },
+            { "Size",
+              "`Size` \u2014 Record type for byte sizes with human-readable display\n\n"
+              "**Fields:** `bytes`\n\n"
+              "```endo\nSize.fromBytes 1024  // 1 KB\n"
+              "Size.fromKB 5       // 5 KB\n"
+              "1_MB                 // size literal: 1 MB\n"
+              "s.bytes              // raw byte count\n```" },
+            { "Size.fromBytes", "`Size.fromBytes` : `int -> Size`\n\nCreates a Size from a raw byte count." },
+            { "Size.fromKB",
+              "`Size.fromKB` : `int -> Size`\n\nCreates a Size from kilobytes (n \u00d7 1024)." },
+            { "Size.fromMB",
+              "`Size.fromMB` : `int -> Size`\n\nCreates a Size from megabytes (n \u00d7 1024\u00b2)." },
+            { "Size.fromGB",
+              "`Size.fromGB` : `int -> Size`\n\nCreates a Size from gigabytes (n \u00d7 1024\u00b3)." },
+            { "Size.fromTB",
+              "`Size.fromTB` : `int -> Size`\n\nCreates a Size from terabytes (n \u00d7 1024\u2074)." },
             { "DateTime",
               "`DateTime` \u2014 Record type for date/time values (UTC)\n\n"
               "**Fields:** `year`, `month`, `day`, `hour`, `minute`, `second`, `epoch`\n\n"

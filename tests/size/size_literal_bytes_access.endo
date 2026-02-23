@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access bytes field on Size literal
+# expect: 1048576
+
+print 1_MB.bytes

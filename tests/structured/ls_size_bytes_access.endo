@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access bytes field on ls file size
+# mode: structured
+# expect: [4096; 42; 256]
+
+print (ls |> map (fun f -> f.size.bytes))

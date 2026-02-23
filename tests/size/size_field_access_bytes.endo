@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access bytes field on Size from constructor
+# expect: 1024
+
+print (Size.fromKB 1).bytes

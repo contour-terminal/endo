@@ -145,6 +145,31 @@ void modeIsWritable(CoreVM::Params& args);
 void modeIsExecutable(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Size operations
+// ---------------------------------------------------------------------------
+
+/// Creates a Size record object from a raw byte count.
+/// @param runner The runner instance for object allocation
+/// @param bytes Raw byte count
+/// @return Pointer to the newly allocated Size TypedObject
+CoreVM::TypedObject* makeSizeFromBytes(CoreVM::Runner* runner, int64_t bytes);
+
+/// size_from_bytes(n) -> Size: Creates a Size from raw bytes.
+void sizeFromBytes(CoreVM::Params& args);
+
+/// size_from_kb(n) -> Size: Creates a Size from kilobytes (n * 1024).
+void sizeFromKB(CoreVM::Params& args);
+
+/// size_from_mb(n) -> Size: Creates a Size from megabytes (n * 1024^2).
+void sizeFromMB(CoreVM::Params& args);
+
+/// size_from_gb(n) -> Size: Creates a Size from gigabytes (n * 1024^3).
+void sizeFromGB(CoreVM::Params& args);
+
+/// size_from_tb(n) -> Size: Creates a Size from terabytes (n * 1024^4).
+void sizeFromTB(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // DateTime operations
 // ---------------------------------------------------------------------------
 

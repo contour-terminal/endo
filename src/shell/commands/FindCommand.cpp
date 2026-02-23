@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "FindCommand.hpp"
 
+#include <endo-language/builtins/BuiltinImpls.hpp>
+
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
 
@@ -135,9 +137,11 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
 
         auto* record = runner.allocObject(CoreVM::BuiltinTypeId::FileInfo);
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(match.path)));
-        record->setSlot(1, static_cast<uint64_t>(match.size));
+        auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, match.size);
+        record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
         record->setSlot(2, match.mode);
-        record->setSlot(3, static_cast<uint64_t>(match.mtime));
+        auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, match.mtime);
+        record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
         record->setSlot(4, static_cast<uint64_t>(match.isDir ? 1 : 0));
 
         auto* cons = runner.allocObject(CoreVM::BuiltinTypeId::List);

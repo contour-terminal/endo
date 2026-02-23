@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size value in let binding
+# expect: 10 MB
+
+let s = 10_MB; print s

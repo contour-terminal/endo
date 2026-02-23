@@ -266,6 +266,33 @@ void registerFSharpBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve
         .param<CoreVM::CoreNumber>("max")
         .returnType(CoreVM::LiteralType::Number), resolve, "rand", 2);
 
+    // --- Size operations ---
+
+    // size_from_bytes(n: number) -> number (Size record)
+    bindResolved(rt.registerFunction("size_from_bytes")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "size_from_bytes", 1);
+
+    // size_from_kb(n: number) -> number (Size record)
+    bindResolved(rt.registerFunction("size_from_kb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "size_from_kb", 1);
+
+    // size_from_mb(n: number) -> number (Size record)
+    bindResolved(rt.registerFunction("size_from_mb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "size_from_mb", 1);
+
+    // size_from_gb(n: number) -> number (Size record)
+    bindResolved(rt.registerFunction("size_from_gb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "size_from_gb", 1);
+
+    // size_from_tb(n: number) -> number (Size record)
+    bindResolved(rt.registerFunction("size_from_tb")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "size_from_tb", 1);
+
     // --- DateTime operations ---
 
     // datetime_now() -> number (DateTime record)

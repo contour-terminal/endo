@@ -84,7 +84,8 @@ namespace
             auto const& f = files[i];
             auto* record = runner->allocObject(CoreVM::BuiltinTypeId::FileInfo);
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
-            record->setSlot(1, static_cast<uint64_t>(f.size));
+            auto* sizeObj = builtins::makeSizeFromBytes(runner, f.size);
+            record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
             record->setSlot(2, static_cast<uint64_t>(f.mode));
             auto* mtimeObj = builtins::makeDateTimeFromEpoch(runner, f.mtime);
             record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));

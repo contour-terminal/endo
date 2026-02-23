@@ -86,5 +86,34 @@ $"{{literal braces}}"   # produces: {literal braces}
 2.5e-3
 ```
 
+### 2.7 Size Literals
+
+Size literals represent byte counts and produce a `Size` value.
+They are formed by an integer followed by a unit suffix:
+
+```endo
+42_B        # 42 bytes
+1_KB        # 1 kilobyte  (1024 bytes)
+5_MB        # 5 megabytes (5 * 1024^2 bytes)
+2_GB        # 2 gigabytes (2 * 1024^3 bytes)
+1_TB        # 1 terabyte  (1 * 1024^4 bytes)
+```
+
+Size values display in the most appropriate unit (e.g., `1536` bytes displays as `1.5 KB`).
+The raw byte count is accessible via the `.bytes` field:
+
+```endo
+let s = 10_MB
+print s           # 10 MB
+print s.bytes     # 10485760
+```
+
+Size values support comparison operators:
+
+```endo
+1_KB < 1_MB       # true
+1_KB == Size.fromBytes 1024  # true
+```
+
 ---
 **See also:** [Type System](type-system.md) | [Grammar](grammar.md) | [Philosophy & Goals](index.md)

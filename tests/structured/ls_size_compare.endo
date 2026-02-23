@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Filter ls entries by Size comparison with literal
+# mode: structured
+# expect: [docs; script.sh]
+
+print (ls |> filter (fun f -> f.size > 100_B) |> map (fun f -> f.name))

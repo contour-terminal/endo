@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size.fromKB constructor
+# expect: 1 KB
+
+print (Size.fromKB 1)

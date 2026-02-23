@@ -122,6 +122,39 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
                 return "Error " + slotValueToString(obj->getSlot(0), innerType, runner);
             return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
         }
+        if (typeId == CoreVM::BuiltinTypeId::Size)
+        {
+            auto const bytes = static_cast<int64_t>(obj->getSlot(0));
+            constexpr int64_t KB = 1024;
+            constexpr int64_t MB = KB * 1024;
+            constexpr int64_t GB = MB * 1024;
+            constexpr int64_t TB = GB * 1024;
+            if (bytes >= TB)
+            {
+                auto const whole = bytes / TB;
+                auto const frac = (bytes % TB) * 10 / TB;
+                return frac == 0 ? std::format("{} TB", whole) : std::format("{}.{} TB", whole, frac);
+            }
+            if (bytes >= GB)
+            {
+                auto const whole = bytes / GB;
+                auto const frac = (bytes % GB) * 10 / GB;
+                return frac == 0 ? std::format("{} GB", whole) : std::format("{}.{} GB", whole, frac);
+            }
+            if (bytes >= MB)
+            {
+                auto const whole = bytes / MB;
+                auto const frac = (bytes % MB) * 10 / MB;
+                return frac == 0 ? std::format("{} MB", whole) : std::format("{}.{} MB", whole, frac);
+            }
+            if (bytes >= KB)
+            {
+                auto const whole = bytes / KB;
+                auto const frac = (bytes % KB) * 10 / KB;
+                return frac == 0 ? std::format("{} KB", whole) : std::format("{}.{} KB", whole, frac);
+            }
+            return std::format("{} B", bytes);
+        }
         if (typeId == CoreVM::BuiltinTypeId::DateTime)
         {
             // Render DateTime as "YYYY-MM-DD HH:MM:SS"
@@ -728,6 +761,52 @@ void modeIsExecutable(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
+// Size operations
+// ---------------------------------------------------------------------------
+
+CoreVM::TypedObject* makeSizeFromBytes(CoreVM::Runner* runner, int64_t bytes)
+{
+    auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::Size);
+    obj->setSlot(0, static_cast<uint64_t>(bytes));
+    return obj;
+}
+
+void sizeFromBytes(CoreVM::Params& args)
+{
+    auto const bytes = args.getInt(1);
+    auto* obj = makeSizeFromBytes(args.caller(), bytes);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void sizeFromKB(CoreVM::Params& args)
+{
+    auto const kb = args.getInt(1);
+    auto* obj = makeSizeFromBytes(args.caller(), kb * 1024);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void sizeFromMB(CoreVM::Params& args)
+{
+    auto const mb = args.getInt(1);
+    auto* obj = makeSizeFromBytes(args.caller(), mb * 1024 * 1024);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void sizeFromGB(CoreVM::Params& args)
+{
+    auto const gb = args.getInt(1);
+    auto* obj = makeSizeFromBytes(args.caller(), gb * int64_t { 1024 } * 1024 * 1024);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void sizeFromTB(CoreVM::Params& args)
+{
+    auto const tb = args.getInt(1);
+    auto* obj = makeSizeFromBytes(args.caller(), tb * int64_t { 1024 } * 1024 * 1024 * 1024);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+// ---------------------------------------------------------------------------
 // DateTime operations
 // ---------------------------------------------------------------------------
 
@@ -865,6 +944,18 @@ std::optional<CoreVM::NativeCallback::Functor> resolveSharedImpl(std::string_vie
         return &modeIsWritable;
     if (name == "mode_isExecutable" && arity == 1)
         return &modeIsExecutable;
+
+    // Size operations
+    if (name == "size_from_bytes" && arity == 1)
+        return &sizeFromBytes;
+    if (name == "size_from_kb" && arity == 1)
+        return &sizeFromKB;
+    if (name == "size_from_mb" && arity == 1)
+        return &sizeFromMB;
+    if (name == "size_from_gb" && arity == 1)
+        return &sizeFromGB;
+    if (name == "size_from_tb" && arity == 1)
+        return &sizeFromTB;
 
     // DateTime operations
     if (name == "datetime_now" && arity == 0)

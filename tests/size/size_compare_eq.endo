@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size equality comparison
+# expect: true
+
+print (1_KB == Size.fromBytes 1024)
