@@ -58,8 +58,8 @@ TEST_CASE("SlashCommandCompleter.prefix_match_he", "[agent][slash][completer]")
     auto completer = SlashCommandCompleter(registry);
 
     auto const items = completer.complete("/he", 3);
-    REQUIRE(items.size() == 1);
-    CHECK(items[0].text == "/help");
+    REQUIRE(!items.empty());
+    CHECK(items[0].text == "/help"); // name match ranks first
 }
 
 TEST_CASE("SlashCommandCompleter.fuzzy_match_pln", "[agent][slash][completer]")
@@ -117,8 +117,8 @@ TEST_CASE("SlashCommandCompleter.dynamically_registered_commands_appear", "[agen
     auto completer = SlashCommandCompleter(registry);
 
     auto const items = completer.complete("/co", 3);
-    REQUIRE(items.size() == 1);
-    CHECK(items[0].text == "/commit");
+    REQUIRE(!items.empty());
+    CHECK(items[0].text == "/commit"); // name match ranks first
     CHECK(items[0].description == "Generate a git commit");
 }
 
@@ -132,6 +132,42 @@ TEST_CASE("SlashCommandCompleter.completion_text_includes_leading_slash", "[agen
     {
         CHECK(item.text.starts_with("/"));
     }
+}
+
+TEST_CASE("SlashCommandCompleter.fuzzy_match_on_description", "[agent][slash][completer]")
+{
+    auto registry = createTestRegistry();
+    registry.registerCommand(std::make_unique<CallbackSlashCommand>(
+        "commit", "Generate a git commit", [](std::string_view) -> SlashCommandResult {
+            return DirectOutput { .text = "ok" };
+        }));
+    auto completer = SlashCommandCompleter(registry);
+
+    // "git" doesn't match any command name, but matches "commit" description
+    auto const items = completer.complete("/git", 4);
+    REQUIRE(items.size() == 1);
+    CHECK(items[0].text == "/commit");
+}
+
+TEST_CASE("SlashCommandCompleter.name_match_ranks_above_description_match", "[agent][slash][completer]")
+{
+    auto registry = SlashCommandRegistry {};
+    registry.registerCommand(std::make_unique<CallbackSlashCommand>(
+        "plan", "Enter plan mode", [](std::string_view) -> SlashCommandResult {
+            return DirectOutput { .text = "ok" };
+        }));
+    registry.registerCommand(std::make_unique<CallbackSlashCommand>(
+        "commit", "Plan and generate a commit", [](std::string_view) -> SlashCommandResult {
+            return DirectOutput { .text = "ok" };
+        }));
+    auto completer = SlashCommandCompleter(registry);
+
+    // "plan" matches /plan by name and /commit by description
+    auto const items = completer.complete("/plan", 5);
+    REQUIRE(items.size() == 2);
+    CHECK(items[0].text == "/plan");   // name match ranked first
+    CHECK(items[1].text == "/commit"); // description match ranked second
+    CHECK(items[0].score > items[1].score);
 }
 
 TEST_CASE("SlashCommandCompleter.no_match_returns_empty", "[agent][slash][completer]")

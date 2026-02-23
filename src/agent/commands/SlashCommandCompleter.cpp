@@ -33,7 +33,8 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
         auto const argPrefix = inputUpToCursor.substr(spacePos + 1);
         if (cmdName == "model")
             return completeModelArgument(argPrefix);
-        if (cmdName == "load" || cmdName == "load-session" || cmdName == "delete" || cmdName == "delete-session")
+        if (cmdName == "load" || cmdName == "load-session" || cmdName == "delete"
+            || cmdName == "delete-session")
             return completeSessionArgument(cmdName, argPrefix);
         return {};
     }
@@ -60,7 +61,7 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
             continue;
         }
 
-        // Fall back to fuzzy match
+        // Fall back to fuzzy match on name
         auto const fuzzyResult = tui::FuzzyMatch::matchSmartCase(cmdName, prefix);
         if (fuzzyResult.matches)
         {
@@ -75,6 +76,19 @@ std::vector<tui::CompletionItem> SlashCommandCompleter::complete(std::string_vie
                 .description = std::string(cmd->description()),
                 .score = score,
                 .matchPositions = std::move(positions),
+            });
+            continue;
+        }
+
+        // Fall back to fuzzy match on description
+        auto const descResult = tui::FuzzyMatch::matchSmartCase(cmd->description(), prefix);
+        if (descResult.matches)
+        {
+            auto const score = tui::FuzzyMatch::calculateScore(25, cmd->description(), prefix, descResult);
+            items.push_back(tui::CompletionItem {
+                .text = fullText,
+                .description = std::string(cmd->description()),
+                .score = score,
             });
         }
     }
