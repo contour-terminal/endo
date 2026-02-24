@@ -153,6 +153,9 @@ namespace
             { "shell_ls_icons",
               "`shell_ls_icons` : `bool`\n\nShow Nerd Font icons next to filenames in `ls` output "
               "(default: `true`). Requires a Nerd Font. Read or write with `<-`." },
+            { "shell_ls_directory_slash",
+              "`shell_ls_directory_slash` : `bool`\n\nAppend a trailing `/` to directory names in "
+              "`ls` output (default: `true`). Read or write with `<-`." },
             { "shell_is_interactive",
               "`shell_is_interactive` : `bool`\n\nWhether the shell is running in interactive mode "
               "(true for REPL, false for scripts and `-c` commands). Read-only." },

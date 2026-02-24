@@ -178,6 +178,7 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.style = useColor ? TableStyle::Bordered : TableStyle::Plain;
             config.useColor = useColor;
             config.showIcons = _lsIcons;
+            config.showDirectorySlash = _lsDirectorySlash;
             if (useColor)
             {
                 if (auto size = _tty.getSize(); size.has_value())

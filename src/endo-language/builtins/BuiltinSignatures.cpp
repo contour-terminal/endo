@@ -852,6 +852,7 @@ void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const&
     registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number);
     registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number);
     registerPropertyResolved(rt, resolve, "shell_ls_icons", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "shell_ls_directory_slash", CoreVM::LiteralType::Boolean);
     registerReadOnlyPropertyResolved(rt, resolve, "shell_is_interactive", CoreVM::LiteralType::Boolean);
     // clang-format on
 }

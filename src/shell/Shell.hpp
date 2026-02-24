@@ -389,6 +389,7 @@ class Shell final: public SignalCallback
     std::chrono::milliseconds _lastCommandDuration { 0 }; ///< Duration of the last command
     bool _interactive = true;                             ///< Whether running in interactive mode
     bool _lsIcons = true;                                 ///< Show Nerd Font icons in ls output
+    bool _lsDirectorySlash = true;                        ///< Append trailing '/' to directory names
     ProcessId _shellPid = 0;
     ProcessId _shellPgid = 0; ///< Shell's process group ID
     int _signalFd = -1;       ///< signalfd for Linux, -1 otherwise

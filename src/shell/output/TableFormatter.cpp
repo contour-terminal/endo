@@ -218,12 +218,12 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         row.reserve(numCols);
 
         // Compute file decoration for this row (if applicable)
+        auto const isDir = decorateFiles && record->getSlot(4) != 0;
         if (decorateFiles)
         {
             auto const nameSlot = record->getSlot(0);
             auto const* nameStr =
                 reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(nameSlot));
-            auto const isDir = record->getSlot(4) != 0;
             auto const mode = static_cast<int64_t>(record->getSlot(2));
             fileDecorations.push_back(
                 getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode));
@@ -233,6 +233,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         {
             auto slotVal = record->getSlot(static_cast<uint8_t>(col));
             auto cell = fieldValueToString(slotVal, fields[col], runner, isProcessInfo);
+            if (config.showDirectorySlash && col == 0 && isDir)
+                cell += '/';
             cell = truncate(cell, config.maxColumnWidth);
             auto cellDisplayWidth = static_cast<int>(cell.size());
             if (decorateFiles && config.showIcons && col == 0)

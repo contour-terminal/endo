@@ -178,6 +178,18 @@ shell_ls_icons <- true
 
 This requires a [Nerd Font](https://www.nerdfonts.com/) to render icons correctly.
 
+### Directory Trailing Slash
+
+By default, directory names in `ls` output are shown with a trailing `/` suffix for easy identification:
+
+```endo
+# Disable trailing slash on directories
+shell_ls_directory_slash <- false
+
+# Re-enable trailing slash (default)
+shell_ls_directory_slash <- true
+```
+
 ### Interactive Mode Detection
 
 The read-only property `shell_is_interactive` indicates whether the shell is running

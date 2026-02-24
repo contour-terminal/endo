@@ -82,6 +82,7 @@ namespace
             "shell_prompt_duration_threshold",
             "shell_prompt_spacing",
             "shell_ls_icons",
+            "shell_ls_directory_slash",
             "shell_is_interactive",
         };
         return names;

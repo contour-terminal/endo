@@ -1234,6 +1234,10 @@ void Shell::registerPromptBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(_lsIcons); })
         .onSet([this](CoreVM::Params& args) { _lsIcons = args.getBool(1); });
 
+    _runtime.registerProperty("shell_ls_directory_slash", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_lsDirectorySlash); })
+        .onSet([this](CoreVM::Params& args) { _lsDirectorySlash = args.getBool(1); });
+
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });
     // clang-format on
