@@ -4,3 +4,4 @@ indentWidth: 4
 useSpaces: true
 maxLineWidth: 100
 trailingNewline: true
+blankLinesBetweenTopLevel: 1

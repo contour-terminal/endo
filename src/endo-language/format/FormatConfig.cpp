@@ -42,15 +42,15 @@ std::expected<FormatConfig, std::string> FormatConfig::load(std::filesystem::pat
         if (valEnd != std::string::npos)
             value = value.substr(0, valEnd + 1);
 
-        if (key == "indent_width")
+        if (key == "indentWidth" || key == "indent_width")
             config.indentWidth = static_cast<uint32_t>(std::stoul(value));
-        else if (key == "use_spaces")
+        else if (key == "useSpaces" || key == "use_spaces")
             config.useSpaces = (value == "true" || value == "yes" || value == "1");
-        else if (key == "max_line_width")
+        else if (key == "maxLineWidth" || key == "max_line_width")
             config.maxLineWidth = static_cast<uint32_t>(std::stoul(value));
-        else if (key == "trailing_newline")
+        else if (key == "trailingNewline" || key == "trailing_newline")
             config.trailingNewline = (value == "true" || value == "yes" || value == "1");
-        else if (key == "blank_lines_between_top_level")
+        else if (key == "blankLinesBetweenTopLevel" || key == "blank_lines_between_top_level")
             config.blankLinesBetweenTopLevel = static_cast<uint32_t>(std::stoul(value));
     }
 
