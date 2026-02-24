@@ -184,7 +184,31 @@ void SourceFormatter::emitCommentsBeforeLine(int line)
         }
         emit(comment.text);
         emitNewline();
+
+        // The comment's end.line points to the line AFTER the comment text
+        // (because the newline terminating the comment advances the line counter).
+        auto const commentEndLine = comment.location.end.line;
         ++_nextCommentIndex;
+
+        // Determine the line of whatever comes next (next leading comment or the code)
+        auto nextContentLine = line;
+        for (auto i = _nextCommentIndex; i < _comments.size(); ++i)
+        {
+            if (_comments[i].location.begin.line >= line)
+                break;
+            if (!_comments[i].isTrailing)
+            {
+                nextContentLine = _comments[i].location.begin.line;
+                break;
+            }
+        }
+
+        // Preserve blank lines from the original source (capped by config).
+        // No extra -1 needed: commentEndLine already points past the comment's newline.
+        auto const gap = nextContentLine - commentEndLine;
+        auto const maxBlanks = static_cast<int>(_config.blankLinesBetweenTopLevel);
+        for (int i = 0; i < std::min(gap, maxBlanks); ++i)
+            emitNewline();
     }
 }
 

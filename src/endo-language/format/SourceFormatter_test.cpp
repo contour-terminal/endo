@@ -115,6 +115,14 @@ TEST_CASE("SourceFormatter.comment_preservation", "[format]")
     CHECK(result.find("let x = 42") != std::string::npos);
 }
 
+TEST_CASE("SourceFormatter.blank_line_between_comments_and_code", "[format]")
+{
+    auto const result = SourceFormatter::format("# c1\n# c2\n\nlet x = 42");
+    INFO("Formatted result: [" << result << "]");
+    // The blank line between comments and code should be preserved
+    CHECK(result.find("# c2\n\nlet x = 42") != std::string::npos);
+}
+
 TEST_CASE("SourceFormatter.trailing_newline", "[format]")
 {
     auto const result = SourceFormatter::format("let x = 42");
