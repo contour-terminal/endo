@@ -9,6 +9,12 @@ NativeProperty::NativeProperty(std::string name, LiteralType type):
 {
 }
 
+NativeProperty& NativeProperty::description(std::string desc)
+{
+    _description = std::move(desc);
+    return *this;
+}
+
 NativeProperty& NativeProperty::onGet(Getter cb)
 {
     _getter = std::move(cb);

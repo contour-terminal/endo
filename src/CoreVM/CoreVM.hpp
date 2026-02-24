@@ -1217,6 +1217,12 @@ class NativeProperty
     /// @return The value type of this property.
     [[nodiscard]] LiteralType type() const noexcept { return _type; }
 
+    /// @return The human-readable description of this property.
+    [[nodiscard]] std::string const& description() const noexcept { return _description; }
+
+    /// Sets the human-readable description. Returns *this for chaining.
+    NativeProperty& description(std::string desc);
+
     /// @return true if a getter callback is set.
     [[nodiscard]] bool hasGetter() const noexcept { return _getter != nullptr; }
 
@@ -1252,6 +1258,7 @@ class NativeProperty
   private:
     std::string _name;
     LiteralType _type;
+    std::string _description;
     Getter _getter;
     Setter _setter;
 };

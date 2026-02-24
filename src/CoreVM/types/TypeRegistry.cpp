@@ -24,6 +24,11 @@ void TypeRegistry::registerBuiltins()
         { "None", 0 }, // tag 0: no payload
         { "Some", 1 }, // tag 1: 1 slot payload
     };
+    optionType->moduleFunctions = {
+        { "map", "Option.map f opt -> option" },
+        { "bind", "Option.bind f opt -> option" },
+        { "defaultValue", "Option.defaultValue d opt -> value" },
+    };
     addType(std::move(optionType));
 
     // Result<T,E>: Error (tag=0, 1 payload slot) | Ok (tag=1, 1 payload slot)
@@ -82,12 +87,9 @@ void TypeRegistry::registerBuiltins()
     processInfoType->name = "ProcessInfo";
     processInfoType->slotCount = 6;
     processInfoType->fields = {
-        { "pid", 0, LiteralType::Number },
-        { "ppid", 1, LiteralType::Number },
-        { "user", 2, LiteralType::String },
-        { "cpu", 3, LiteralType::Number }, // stored as bit_cast<uint64_t>(double)
-        { "mem", 4, LiteralType::Number },
-        { "command", 5, LiteralType::String },
+        { "pid", 0, LiteralType::Number },  { "ppid", 1, LiteralType::Number },
+        { "user", 2, LiteralType::String }, { "cpu", 3, LiteralType::Float },
+        { "mem", 4, LiteralType::Float },   { "command", 5, LiteralType::String },
     };
     addType(std::move(processInfoType));
 
@@ -103,6 +105,10 @@ void TypeRegistry::registerBuiltins()
         { "minute", 4, LiteralType::Number }, { "second", 5, LiteralType::Number },
         { "epoch", 6, LiteralType::Number },
     };
+    dateTimeType->moduleFunctions = {
+        { "now", "DateTime.now -> DateTime (current UTC time)" },
+        { "fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
+    };
     addType(std::move(dateTimeType));
 
     // FileInfo: Product type with 5 fields for file/directory information
@@ -112,8 +118,10 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->name = "FileInfo";
     fileInfoType->slotCount = 5;
     fileInfoType->fields = {
-        { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Object },
-        { "mode", 2, LiteralType::Object },   { "mtime", 3, LiteralType::Object },
+        { "name", 0, LiteralType::String },
+        { "size", 1, LiteralType::Object, "Size" },
+        { "mode", 2, LiteralType::Object, "FileMode" },
+        { "mtime", 3, LiteralType::Object, "DateTime" },
         { "isDir", 4, LiteralType::Boolean },
     };
     addType(std::move(fileInfoType));
@@ -141,6 +149,13 @@ void TypeRegistry::registerBuiltins()
     sizeType->fields = {
         { "bytes", 0, LiteralType::Number },
     };
+    sizeType->moduleFunctions = {
+        { "fromBytes", "Size.fromBytes n -> Size" },
+        { "fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
+        { "fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
+        { "fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
+        { "fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
+    };
     addType(std::move(sizeType));
 
     // FileMode: Product type with 1 field for raw Unix permission bits
@@ -151,6 +166,9 @@ void TypeRegistry::registerBuiltins()
     fileModeType->slotCount = 1;
     fileModeType->fields = {
         { "bits", 0, LiteralType::Number },
+    };
+    fileModeType->moduleFunctions = {
+        { "fromBits", "FileMode.fromBits n -> FileMode" },
     };
     addType(std::move(fileModeType));
 

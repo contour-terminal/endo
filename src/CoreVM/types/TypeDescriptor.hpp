@@ -25,6 +25,14 @@ struct FieldInfo
     std::string name;                       ///< Field name (empty string for tuple positions)
     uint8_t offset;                         ///< Slot offset within the object's data area
     LiteralType type = LiteralType::Number; ///< The VM type of this field's value
+    std::string nestedTypeName; ///< For Object-typed fields, the nested type name (e.g., "Size", "DateTime")
+};
+
+/// Information about a module-level function associated with a type.
+struct ModuleFunctionInfo
+{
+    std::string name;      ///< Function name (e.g., "now", "fromEpoch")
+    std::string signature; ///< Signature description (e.g., "DateTime.now -> DateTime (current UTC time)")
 };
 
 /// Information about a variant in a sum type.
@@ -56,6 +64,9 @@ struct TypeDescriptor
 
     /// Field information (only for Product types).
     std::vector<FieldInfo> fields;
+
+    /// Module-level functions associated with this type (e.g., DateTime.now, Size.fromBytes).
+    std::vector<ModuleFunctionInfo> moduleFunctions;
 
     /// For Function types: number of captured variables.
     uint16_t captureCount = 0;

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <memory>
+#include <span>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -72,6 +73,9 @@ class TypeRegistry
 
     /// Returns the total number of registered types.
     [[nodiscard]] size_t size() const { return _types.size(); }
+
+    /// Returns a read-only view of all registered type descriptors.
+    [[nodiscard]] std::span<std::unique_ptr<TypeDescriptor> const> allTypes() const { return _types; }
 
     /// Returns the Option type descriptor.
     [[nodiscard]] const TypeDescriptor* optionType() const { return get(BuiltinTypeId::Option); }
