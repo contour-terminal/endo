@@ -38,6 +38,8 @@ add_library(endo-lsp STATIC
     RenameProvider.cpp
     CompletionProvider.hpp
     CompletionProvider.cpp
+    FormattingProvider.hpp
+    FormattingProvider.cpp
 
     # Server core
     LspServer.hpp

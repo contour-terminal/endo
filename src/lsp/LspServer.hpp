@@ -53,6 +53,7 @@ class LspServer
     [[nodiscard]] nlohmann::json handleRename(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handlePrepareRename(nlohmann::json const& params);
     [[nodiscard]] nlohmann::json handleCompletion(nlohmann::json const& params);
+    [[nodiscard]] nlohmann::json handleFormatting(nlohmann::json const& params);
 
     // Notifications
     void publishDiagnostics(std::string const& uri);

@@ -8,6 +8,7 @@
 #include "DefinitionProvider.hpp"
 #include "DiagnosticsProvider.hpp"
 #include "DocumentSymbolProvider.hpp"
+#include "FormattingProvider.hpp"
 #include "HoverProvider.hpp"
 #include "JsonRpc.hpp"
 #include "ReferencesProvider.hpp"
@@ -116,6 +117,11 @@ void LspServer::dispatch(nlohmann::json const& message)
             auto const params = message.value("params", nlohmann::json::object());
             writeMessage(_output, makeResponse(id, handleCompletion(params)));
         }
+        else if (method == "textDocument/formatting")
+        {
+            auto const params = message.value("params", nlohmann::json::object());
+            writeMessage(_output, makeResponse(id, handleFormatting(params)));
+        }
         else
         {
             writeMessage(_output,
@@ -174,6 +180,7 @@ nlohmann::json LspServer::handleInitialize(nlohmann::json const& /*params*/)
                 nlohmann::json {
                     { "triggerCharacters", nlohmann::json::array({ ".", "$", " " }) },
                 } },
+              { "documentFormattingProvider", true },
               { "renameProvider", nlohmann::json { { "prepareProvider", true } } },
               { "semanticTokensProvider",
                 nlohmann::json {
@@ -362,6 +369,21 @@ nlohmann::json LspServer::handleCompletion(nlohmann::json const& params)
         return nlohmann::json::array();
 
     return computeCompletion(*source, position);
+}
+
+nlohmann::json LspServer::handleFormatting(nlohmann::json const& params)
+{
+    auto const textDoc = params.at("textDocument").get<TextDocumentIdentifier>();
+    auto const* source = _documents.get(textDoc.uri);
+    if (!source)
+        return nlohmann::json::array();
+
+    auto edits = computeFormatting(*source);
+
+    auto result = nlohmann::json::array();
+    for (auto const& edit: edits)
+        result.push_back(edit);
+    return result;
 }
 
 void LspServer::publishDiagnostics(std::string const& uri)
