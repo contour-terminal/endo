@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/builtins/PropertyDescriptors.hpp>
+#include <endo-language/builtins/StdlibDescriptors.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
 #include <CoreVM/types/TypeRegistry.hpp>
 
-#include <array>
 #include <set>
 
 namespace endo
@@ -13,229 +14,6 @@ namespace endo
 
 namespace
 {
-    /// @brief Enumerated argument value with description.
-    struct EnumValueEntry
-    {
-        std::string_view value;
-        std::string_view description;
-    };
-
-    constexpr std::array presetValues = {
-        EnumValueEntry { "minimal-arrow", "Clean arrow-based prompt" },
-        EnumValueEntry { "lambda-clean", "Lambda symbol prompt" },
-        EnumValueEntry { "opencode-bar", "OpenCode-style bar prompt" },
-        EnumValueEntry { "powerline", "Powerline-style segments" },
-        EnumValueEntry { "transient", "Minimal transient prompt" },
-        EnumValueEntry { "dashboard", "Dashboard-style prompt" },
-        EnumValueEntry { "boxed-module", "Boxed module prompt" },
-        EnumValueEntry { "gradient-glow", "Gradient glow prompt" },
-        EnumValueEntry { "context-adaptive", "Context-adaptive prompt" },
-        EnumValueEntry { "endo-signature", "Endo signature prompt" },
-    };
-
-    constexpr std::array layoutValues = {
-        EnumValueEntry { "single-line", "Single line prompt" },
-        EnumValueEntry { "two-line", "Two line prompt" },
-        EnumValueEntry { "boxed", "Boxed prompt layout" },
-        EnumValueEntry { "powerline", "Powerline prompt layout" },
-    };
-
-    constexpr std::array separatorValues = {
-        EnumValueEntry { "none", "No separator" },
-        EnumValueEntry { "bar", "Bar separator (|)" },
-        EnumValueEntry { "powerline", "Powerline separator" },
-        EnumValueEntry { "rounded", "Rounded separator" },
-        EnumValueEntry { "boxed", "Boxed separator" },
-    };
-
-    constexpr std::array transientValues = {
-        EnumValueEntry { "off", "Disable transient prompt" },
-        EnumValueEntry { "minimal", "Minimal transient prompt" },
-        EnumValueEntry { "arrow", "Arrow transient prompt" },
-    };
-
-    constexpr std::array providerValues = {
-        EnumValueEntry { "claude", "Anthropic Claude" },
-        EnumValueEntry { "openai", "OpenAI" },
-        EnumValueEntry { "gemini", "Google Gemini" },
-        EnumValueEntry { "openai_compat", "OpenAI-compatible endpoint" },
-    };
-
-    constexpr std::array boolValues = {
-        EnumValueEntry { "true", "Enable" },
-        EnumValueEntry { "false", "Disable" },
-    };
-
-    constexpr std::array webSearchEngineValues = {
-        EnumValueEntry { "duckduckgo", "DuckDuckGo (no API key required)" },
-        EnumValueEntry { "brave", "Brave Search" },
-        EnumValueEntry { "google", "Google Custom Search" },
-    };
-
-    constexpr std::array claudeModelValues = {
-        EnumValueEntry { "claude-opus-4-6", "Claude Opus 4.6" },
-        EnumValueEntry { "claude-sonnet-4-6", "Claude Sonnet 4.6" },
-        EnumValueEntry { "claude-haiku-4-5-20251001", "Claude Haiku 4.5" },
-        EnumValueEntry { "claude-sonnet-4-5-20250929", "Claude Sonnet 4.5" },
-        EnumValueEntry { "claude-opus-4-20250514", "Claude Opus 4" },
-    };
-
-    constexpr std::array openaiModelValues = {
-        EnumValueEntry { "gpt-4o", "GPT-4o" },
-        EnumValueEntry { "gpt-4o-mini", "GPT-4o Mini" },
-        EnumValueEntry { "o3-mini", "O3 Mini" },
-        EnumValueEntry { "o1", "O1" },
-    };
-
-    constexpr std::array geminiModelValues = {
-        EnumValueEntry { "gemini-2.5-flash", "Gemini 2.5 Flash" },
-        EnumValueEntry { "gemini-2.5-pro", "Gemini 2.5 Pro" },
-        EnumValueEntry { "gemini-2.0-flash", "Gemini 2.0 Flash" },
-    };
-
-    constexpr std::array thinkingModeValues = {
-        EnumValueEntry { "off", "No thinking (provider default)" },
-        EnumValueEntry { "normal", "Moderate thinking budget" },
-        EnumValueEntry { "extended", "Maximum thinking budget" },
-    };
-
-    constexpr std::array authTypeValues = {
-        EnumValueEntry { "auto", "Auto-detect (OAuth preferred)" },
-        EnumValueEntry { "oauth", "OAuth authentication" },
-        EnumValueEntry { "api_key", "API key authentication" },
-    };
-
-    constexpr std::array errorRecoveryActionValues = {
-        EnumValueEntry { "ask", "Ask user before analyzing (default)" },
-        EnumValueEntry { "analyze", "Automatically analyze failed commands" },
-        EnumValueEntry { "ignore", "Do nothing on command failure" },
-    };
-
-    /// @brief Standard library function entry with name, signature description, and detail.
-    struct StdLibEntry
-    {
-        std::string_view name;
-        std::string_view description;
-        std::string_view detail;
-    };
-
-    // clang-format off
-    constexpr std::array stdLibFunctions = {
-        // Type Conversion
-        StdLibEntry { "string_length", "string_length s -> int",
-            "**string_length** `s -> int`\n\nReturns the length of string **s** in characters." },
-        StdLibEntry { "int_of_string", "int_of_string s -> int",
-            "**int_of_string** `s -> int`\n\nParses string **s** as an integer." },
-        StdLibEntry { "string_of_int", "string_of_int n -> string",
-            "**string_of_int** `n -> string`\n\nConverts integer **n** to its string representation." },
-        StdLibEntry { "not", "not b -> bool",
-            "**not** `b -> bool`\n\nLogical negation of boolean **b**." },
-        // String Operations
-        StdLibEntry { "trim", "trim s -> string",
-            "**trim** `s -> string`\n\nRemoves leading and trailing whitespace from **s**." },
-        StdLibEntry { "toLower", "toLower s -> string",
-            "**toLower** `s -> string`\n\nConverts all characters in **s** to lowercase." },
-        StdLibEntry { "toUpper", "toUpper s -> string",
-            "**toUpper** `s -> string`\n\nConverts all characters in **s** to uppercase." },
-        StdLibEntry { "contains", "contains substr s -> bool",
-            "**contains** `substr s -> bool`\n\nReturns true if **s** contains **substr**." },
-        StdLibEntry { "startsWith", "startsWith prefix s -> bool",
-            "**startsWith** `prefix s -> bool`\n\nReturns true if **s** starts with **prefix**." },
-        StdLibEntry { "endsWith", "endsWith suffix s -> bool",
-            "**endsWith** `suffix s -> bool`\n\nReturns true if **s** ends with **suffix**." },
-        StdLibEntry { "replace", "replace old new s -> string",
-            "**replace** `old new s -> string`\n\nReplaces all occurrences of **old** with **new** in **s**." },
-        StdLibEntry { "split", "split delim s -> list<string>",
-            "**split** `delim s -> list<string>`\n\nSplits **s** by delimiter **delim**." },
-        StdLibEntry { "join", "join delim lst -> string",
-            "**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },
-        // List Basic
-        StdLibEntry { "head", "head lst -> 'a",
-            "**head** `lst -> 'a`\n\nReturns the first element of the list." },
-        StdLibEntry { "tail", "tail lst -> list<'a>",
-            "**tail** `lst -> list<'a>`\n\nReturns the list without its first element." },
-        StdLibEntry { "length", "length lst -> int",
-            "**length** `lst -> int`\n\nReturns the number of elements in the list." },
-        StdLibEntry { "isEmpty", "isEmpty lst -> bool",
-            "**isEmpty** `lst -> bool`\n\nReturns true if the list is empty." },
-        StdLibEntry { "nth", "nth n lst -> 'a",
-            "**nth** `n lst -> 'a`\n\nReturns the element at index **n** (0-based)." },
-        StdLibEntry { "last", "last lst -> 'a",
-            "**last** `lst -> 'a`\n\nReturns the last element of the list." },
-        StdLibEntry { "replicate", "replicate n x -> list<'a>",
-            "**replicate** `n x -> list<'a>`\n\nCreates a list of **n** copies of **x**." },
-        // List HOFs
-        StdLibEntry { "map", "map f lst -> list<'b>",
-            "**map** `f lst -> list<'b>`\n\nApplies function **f** to each element of the list." },
-        StdLibEntry { "filter", "filter pred lst -> list<'a>",
-            "**filter** `pred lst -> list<'a>`\n\nKeeps only elements satisfying **pred**." },
-        StdLibEntry { "fold", "fold f init lst -> 'b",
-            "**fold** `f init lst -> 'b`\n\nReduces the list from the left with **f** and initial value **init**." },
-        StdLibEntry { "reduce", "reduce f lst -> 'a",
-            "**reduce** `f lst -> 'a`\n\nReduces the list from the left with **f** using the first element as initial." },
-        StdLibEntry { "find", "find pred lst -> option<'a>",
-            "**find** `pred lst -> option<'a>`\n\nReturns `Some x` for the first element matching **pred**, or `None`." },
-        StdLibEntry { "exists", "exists pred lst -> bool",
-            "**exists** `pred lst -> bool`\n\nReturns true if any element satisfies **pred**." },
-        StdLibEntry { "forall", "forall pred lst -> bool",
-            "**forall** `pred lst -> bool`\n\nReturns true if all elements satisfy **pred**." },
-        StdLibEntry { "each", "each f lst -> unit",
-            "**each** `f lst -> unit`\n\nApplies **f** to each element for side effects." },
-        // List Transforms
-        StdLibEntry { "sort", "sort lst -> list<'a>",
-            "**sort** `lst -> list<'a>`\n\nReturns the list sorted in ascending order." },
-        StdLibEntry { "reverse", "reverse lst -> list<'a>",
-            "**reverse** `lst -> list<'a>`\n\nReturns the list in reverse order." },
-        StdLibEntry { "distinct", "distinct lst -> list<'a>",
-            "**distinct** `lst -> list<'a>`\n\nRemoves duplicate elements from the list." },
-        StdLibEntry { "sortBy", "sortBy f lst -> list<'a>",
-            "**sortBy** `f lst -> list<'a>`\n\nSorts the list by the key returned by **f**." },
-        StdLibEntry { "groupBy", "groupBy f lst -> list<list<'a>>",
-            "**groupBy** `f lst -> list<list<'a>>`\n\nGroups consecutive elements with equal keys from **f**." },
-        StdLibEntry { "take", "take n lst -> list<'a>",
-            "**take** `n lst -> list<'a>`\n\nReturns the first **n** elements of the list." },
-        StdLibEntry { "drop", "drop n lst -> list<'a>",
-            "**drop** `n lst -> list<'a>`\n\nSkips the first **n** elements and returns the rest." },
-        StdLibEntry { "zip", "zip lst1 lst2 -> list<'a * 'b>",
-            "**zip** `lst1 lst2 -> list<'a * 'b>`\n\nCombines two lists into a list of pairs." },
-        StdLibEntry { "flatten", "flatten lst -> list<'a>",
-            "**flatten** `lst -> list<'a>`\n\nFlattens a list of lists into a single list." },
-        // Formatting Helpers
-        StdLibEntry { "formatNumber", "formatNumber sep n -> string  |  formatNumber n -> string (locale)",
-            "**formatNumber** `sep n -> string`\n\nFormats a number with thousands separator **sep**.\nAlso: `formatNumber n` uses locale default." },
-        StdLibEntry { "formatDateTime", "formatDateTime epoch -> string",
-            "**formatDateTime** `epoch -> string`\n\nFormats an epoch timestamp as a human-readable date/time." },
-        StdLibEntry { "formatMode", "formatMode mode -> string (rwxrwxrwx)",
-            "**formatMode** `mode -> string`\n\nFormats a file mode as `rwxrwxrwx` permission string." },
-        StdLibEntry { "toText", "toText obj -> string",
-            "**toText** `obj -> string`\n\nConverts a structured object to a text representation." },
-        StdLibEntry { "string", "string x -> string",
-            "**string** `x -> string`\n\nConverts any value to its string representation." },
-        // Permission Tests
-        StdLibEntry { "isReadable", "isReadable mode -> bool",
-            "**isReadable** `mode -> bool`\n\nReturns true if the file mode indicates read permission." },
-        StdLibEntry { "isWritable", "isWritable mode -> bool",
-            "**isWritable** `mode -> bool`\n\nReturns true if the file mode indicates write permission." },
-        StdLibEntry { "isExecutable", "isExecutable mode -> bool",
-            "**isExecutable** `mode -> bool`\n\nReturns true if the file mode indicates execute permission." },
-        // Environment/System
-        StdLibEntry { "env", "env name -> option<string>",
-            "**env** `name -> option<string>`\n\nLooks up environment variable **name**. Returns `Some value` or `None`." },
-        StdLibEntry { "which", "which name -> option<string>",
-            "**which** `name -> option<string>`\n\nFinds the full path of command **name** in `$PATH`." },
-        StdLibEntry { "ps", "ps -> list<ProcessInfo>",
-            "**ps** `-> list<ProcessInfo>`\n\nReturns a list of running processes with pid, user, cpu, mem, command fields." },
-        StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>",
-            "**ls** `-> list<FileInfo>`\n\nLists files in the current directory (or given **path**) as structured records." },
-        StdLibEntry { "rand", "rand -> int  |  rand min max -> int",
-            "**rand** `-> int`\n\nReturns a random integer.\nAlso: `rand min max` for a random integer in range." },
-        StdLibEntry { "fetch", "fetch url -> result<string, string>",
-            "**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
-        // Module function constructors (Size.*, FileMode.*, DateTime.*) are now
-        // generated from the TypeRegistry via moduleFunctionStdLibCandidates().
-    };
-    // clang-format on
-
     /// @brief Helper to check if a name starts with a given prefix (case-sensitive).
     [[nodiscard]] bool startsWith(std::string_view name, std::string_view prefix)
     {
@@ -561,107 +339,52 @@ std::vector<CompletionCandidate> dotAccessCandidates(
 
 bool isBuiltinWithArgumentCompletion(std::string const& commandName)
 {
-    static auto const names = std::set<std::string> {
-        "shell_prompt_preset",
-        "shell_prompt_indicator",
-        "shell_prompt_layout",
-        "shell_prompt_separator",
-        "shell_prompt_transient",
-        "shell_prompt_duration_threshold",
-        "agent_provider",
-        "agent_log_tool_uses",
-        "agent_plan_mode_enabled",
-        "agent_plan_mode_pause_between_steps",
-        "agent_trace_enabled",
-        "agent_web_search_engine",
-        "agent_claude_model",
-        "agent_openai_model",
-        "agent_openai_compat_model",
-        "agent_gemini_model",
-        "agent_claude_thinking_mode",
-        "agent_openai_thinking_mode",
-        "agent_openai_compat_thinking_mode",
-        "agent_gemini_thinking_mode",
-        "agent_claude_auth_type",
-        "agent_error_recovery_action",
-        "agent_error_recovery_model",
-    };
-    return names.contains(commandName);
+    for (auto const& desc: allPropertyDescriptors())
+        if (desc.name == commandName && !desc.enumValues.empty())
+            return true;
+    return false;
 }
 
 std::vector<CompletionCandidate> builtinArgumentCandidates(std::string const& commandName,
                                                            std::string const& prefix)
 {
-    auto collectValues = [&](auto const& entries) {
-        std::vector<CompletionCandidate> results;
-        for (auto const& entry: entries)
-        {
-            if (startsWith(entry.value, prefix))
-                results.push_back(CompletionCandidate {
-                    .text = std::string(entry.value),
-                    .displayText = std::string(entry.value),
-                    .description = std::string(entry.description),
-                    .detail = {},
-                    .kind = CompletionKind::EnumValue,
-                });
-        }
-        return results;
-    };
-
-    if (commandName == "shell_prompt_preset")
-        return collectValues(presetValues);
-    if (commandName == "shell_prompt_layout")
-        return collectValues(layoutValues);
-    if (commandName == "shell_prompt_separator")
-        return collectValues(separatorValues);
-    if (commandName == "shell_prompt_transient")
-        return collectValues(transientValues);
-    if (commandName == "agent_provider")
-        return collectValues(providerValues);
-    if (commandName == "agent_web_search_engine")
-        return collectValues(webSearchEngineValues);
-    if (commandName == "agent_log_tool_uses" || commandName == "agent_plan_mode_enabled"
-        || commandName == "agent_plan_mode_pause_between_steps" || commandName == "agent_trace_enabled")
-        return collectValues(boolValues);
-    if (commandName == "agent_claude_model")
-        return collectValues(claudeModelValues);
-    if (commandName == "agent_openai_model" || commandName == "agent_openai_compat_model")
-        return collectValues(openaiModelValues);
-    if (commandName == "agent_gemini_model")
-        return collectValues(geminiModelValues);
-    if (commandName == "agent_claude_thinking_mode" || commandName == "agent_openai_thinking_mode"
-        || commandName == "agent_openai_compat_thinking_mode" || commandName == "agent_gemini_thinking_mode")
-        return collectValues(thinkingModeValues);
-    if (commandName == "agent_claude_auth_type")
-        return collectValues(authTypeValues);
-    if (commandName == "agent_error_recovery_action")
-        return collectValues(errorRecoveryActionValues);
-    if (commandName == "agent_error_recovery_model")
+    for (auto const& desc: allPropertyDescriptors())
     {
-        // Offer all known models across all providers.
-        auto results = collectValues(claudeModelValues);
-        auto openai = collectValues(openaiModelValues);
-        auto gemini = collectValues(geminiModelValues);
-        results.insert(results.end(), openai.begin(), openai.end());
-        results.insert(results.end(), gemini.begin(), gemini.end());
-        return results;
+        if (desc.name == commandName && !desc.enumValues.empty())
+        {
+            std::vector<CompletionCandidate> results;
+            for (auto const& entry: desc.enumValues)
+            {
+                if (startsWith(entry.value, prefix))
+                    results.push_back(CompletionCandidate {
+                        .text = std::string(entry.value),
+                        .displayText = std::string(entry.value),
+                        .description = std::string(entry.description),
+                        .detail = {},
+                        .kind = CompletionKind::EnumValue,
+                    });
+            }
+            return results;
+        }
     }
-
     return {};
 }
 
 std::vector<CompletionCandidate> standardLibraryCandidates()
 {
     std::vector<CompletionCandidate> results;
-    results.reserve(stdLibFunctions.size());
-    for (auto const& entry: stdLibFunctions)
+    for (auto const& desc: stdlibDescriptors())
+    {
+        if (desc.userFacingName.empty())
+            continue;
         results.push_back(CompletionCandidate {
-            .text = std::string(entry.name),
-            .displayText = std::string(entry.name),
-            .description = std::string(entry.description),
-            .detail = std::string(entry.detail),
+            .text = std::string(desc.userFacingName),
+            .displayText = std::string(desc.userFacingName),
+            .description = std::string(desc.description),
+            .detail = std::string(desc.detail),
             .kind = CompletionKind::Function,
         });
+    }
     return results;
 }
 

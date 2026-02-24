@@ -572,11 +572,11 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.model_filters_by_prefi
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.set_prompt_commands", "[completion]")
 {
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_preset"));
-    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_indicator"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("shell_prompt_indicator")); // free-form string, no enum values
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_layout"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_separator"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_transient"));
-    CHECK(isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold"));
+    CHECK_FALSE(isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold")); // numeric, no enum values
 }
 
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.agent_model_and_thinking", "[completion]")

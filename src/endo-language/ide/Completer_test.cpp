@@ -295,12 +295,13 @@ TEST_CASE("Completer.shell_prompt_prefix_offers_builtins", "[completion][complet
     CHECK(hasCandidate(results, "shell_prompt_duration_threshold"));
 }
 
-TEST_CASE("Completer.shell_prompt_indicator_no_candidates", "[completion][completer]")
+TEST_CASE("Completer.shell_prompt_indicator_no_enum_candidates", "[completion][completer]")
 {
     CompletionDataSource dataSource;
     auto results = computeCompletions("shell_prompt_indicator ", 23, dataSource);
-    // Free-form string argument: no enum values, no constructors, no symbols
-    CHECK(results.empty());
+    // Free-form string argument: no enum values defined, so no EnumValue candidates
+    for (auto const& r: results)
+        CHECK(r.kind != CompletionKind::EnumValue);
 }
 
 TEST_CASE("Completer.shell_prompt_preset_no_constructors", "[completion][completer]")

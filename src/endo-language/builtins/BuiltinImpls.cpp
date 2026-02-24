@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinImpls.hpp>
+#include <endo-language/builtins/StdlibDescriptors.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -950,124 +951,12 @@ void randRange(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
-// Shared implementation resolver
+// Shared implementation resolver — delegates to StdlibDescriptors table
 // ---------------------------------------------------------------------------
 
 std::optional<CoreVM::NativeCallback::Functor> resolveSharedImpl(std::string_view name, size_t arity)
 {
-    // List operations
-    if (name == "list_concat" && arity == 2)
-        return &listConcat;
-    if (name == "list_head" && arity == 1)
-        return &listHead;
-    if (name == "list_tail" && arity == 1)
-        return &listTail;
-    if (name == "list_length" && arity == 1)
-        return &listLength;
-    if (name == "list_isEmpty" && arity == 1)
-        return &listIsEmpty;
-    if (name == "list_sort" && arity == 1)
-        return &listSort;
-    if (name == "list_distinct" && arity == 1)
-        return &listDistinct;
-    if (name == "list_sort_pairs" && arity == 1)
-        return &listSortPairs;
-    if (name == "list_group_pairs" && arity == 1)
-        return &listGroupPairs;
-    if (name == "list_nth" && arity == 2)
-        return &listNth;
-    if (name == "list_last" && arity == 1)
-        return &listLast;
-    if (name == "list_replicate" && arity == 2)
-        return &listReplicate;
-    if (name == "list_char_range" && arity == 2)
-        return &listCharRange;
-    if (name == "list_range" && arity == 3)
-        return &listRange;
-    if (name == "list_to_string" && arity == 1)
-        return &listToString;
-    if (name == "object_to_string" && arity == 1)
-        return &objectToString;
-
-    // String operations
-    if (name == "string_repeat" && arity == 2)
-        return &stringRepeat;
-    if (name == "string_replace" && arity == 3)
-        return &stringReplace;
-    if (name == "string_split" && arity == 2)
-        return &stringSplit;
-    if (name == "string_join" && arity == 2)
-        return &stringJoin;
-    if (name == "string_trim" && arity == 1)
-        return &stringTrim;
-    if (name == "string_toLower" && arity == 1)
-        return &stringToLower;
-    if (name == "string_toUpper" && arity == 1)
-        return &stringToUpper;
-    if (name == "string_contains" && arity == 2)
-        return &stringContains;
-    if (name == "string_startsWith" && arity == 2)
-        return &stringStartsWith;
-    if (name == "string_endsWith" && arity == 2)
-        return &stringEndsWith;
-
-    // Formatting helpers
-    if (name == "format_datetime" && arity == 1)
-        return &formatDatetime;
-    if (name == "format_mode" && arity == 1)
-        return &formatMode;
-    if (name == "format_number" && arity == 2)
-        return &formatNumber;
-    if (name == "format_number" && arity == 1)
-        return &formatNumberWithLocale;
-    if (name == "mode_isReadable" && arity == 1)
-        return &modeIsReadable;
-    if (name == "mode_isWritable" && arity == 1)
-        return &modeIsWritable;
-    if (name == "mode_isExecutable" && arity == 1)
-        return &modeIsExecutable;
-
-    // FileMode operations
-    if (name == "filemode_from_bits" && arity == 1)
-        return &fileModeFromBits;
-    if (name == "filemode_is_readable" && arity == 1)
-        return &fileModeIsReadable;
-    if (name == "filemode_is_writable" && arity == 1)
-        return &fileModeIsWritable;
-    if (name == "filemode_is_executable" && arity == 1)
-        return &fileModeIsExecutable;
-    if (name == "filemode_owner" && arity == 1)
-        return &fileModeOwner;
-    if (name == "filemode_group" && arity == 1)
-        return &fileModeGroup;
-    if (name == "filemode_other" && arity == 1)
-        return &fileModeOther;
-
-    // Size operations
-    if (name == "size_from_bytes" && arity == 1)
-        return &sizeFromBytes;
-    if (name == "size_from_kb" && arity == 1)
-        return &sizeFromKB;
-    if (name == "size_from_mb" && arity == 1)
-        return &sizeFromMB;
-    if (name == "size_from_gb" && arity == 1)
-        return &sizeFromGB;
-    if (name == "size_from_tb" && arity == 1)
-        return &sizeFromTB;
-
-    // DateTime operations
-    if (name == "datetime_now" && arity == 0)
-        return &dateTimeNow;
-    if (name == "datetime_from_epoch" && arity == 1)
-        return &dateTimeFromEpoch;
-
-    // Random number generation
-    if (name == "rand" && arity == 0)
-        return &randNoArgs;
-    if (name == "rand" && arity == 2)
-        return &randRange;
-
-    return std::nullopt;
+    return resolveStdlibImpl(name, arity);
 }
 
 } // namespace endo::builtins

@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/builtins/PropertyDescriptors.hpp>
+
+#include <array>
 
 namespace endo
 {
@@ -885,19 +888,13 @@ namespace
 
 void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
 {
-    // clang-format off
-    registerPropertyResolved(rt, resolve, "shell_prompt_preset", CoreVM::LiteralType::String, "Prompt theme preset");
-    registerPropertyResolved(rt, resolve, "shell_prompt_indicator", CoreVM::LiteralType::String, "Prompt indicator character(s)");
-    registerPropertyResolved(rt, resolve, "shell_prompt_layout", CoreVM::LiteralType::String, "Prompt layout style");
-    registerPropertyResolved(rt, resolve, "shell_prompt_separator", CoreVM::LiteralType::String, "Prompt separator style");
-    registerPropertyResolved(rt, resolve, "shell_prompt_transient", CoreVM::LiteralType::String, "Transient prompt mode");
-    registerPropertyResolved(rt, resolve, "shell_prompt_duration_threshold", CoreVM::LiteralType::Number, "Duration display threshold (ms)");
-    registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number, "Blank lines above/below prompt (0 or 1)");
-    registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number, "Exit confirmation timeout (ms)");
-    registerPropertyResolved(rt, resolve, "shell_ls_icons", CoreVM::LiteralType::Boolean, "Show Nerd Font icons in ls output (default: true)");
-    registerPropertyResolved(rt, resolve, "shell_ls_directory_slash", CoreVM::LiteralType::Boolean, "Append trailing '/' to directory names in ls output (default: true)");
-    registerReadOnlyPropertyResolved(rt, resolve, "shell_is_interactive", CoreVM::LiteralType::Boolean, "Whether running interactively (read-only)");
-    // clang-format on
+    for (auto const& desc: promptPropertyDescriptors())
+    {
+        if (desc.readOnly)
+            registerReadOnlyPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+        else
+            registerPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -906,79 +903,13 @@ void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const&
 
 void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
 {
-    // clang-format off
-
-    // --- Top-level agent settings ---
-    registerPropertyResolved(rt, resolve, "agent_provider", CoreVM::LiteralType::String, "Active AI provider");
-    registerPropertyResolved(rt, resolve, "agent_prompt_indicator", CoreVM::LiteralType::String, "Agent prompt indicator character(s)");
-    registerPropertyResolved(rt, resolve, "agent_max_tool_result_size", CoreVM::LiteralType::Number, "Max bytes for tool result truncation");
-    registerPropertyResolved(rt, resolve, "agent_log_tool_uses", CoreVM::LiteralType::Boolean, "Enable/disable tool invocation logging");
-
-    // --- Claude provider ---
-    registerPropertyResolved(rt, resolve, "agent_claude_api_key", CoreVM::LiteralType::String, "Claude API key");
-    registerPropertyResolved(rt, resolve, "agent_claude_api_key_env", CoreVM::LiteralType::String, "Claude API key environment variable");
-    registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String, "Claude model identifier");
-    registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number, "Claude max output tokens");
-    registerPropertyResolved(rt, resolve, "agent_claude_thinking_mode", CoreVM::LiteralType::String, "Claude thinking/reasoning mode (off/normal/extended)");
-    registerPropertyResolved(rt, resolve, "agent_claude_prompt_caching", CoreVM::LiteralType::Boolean, "Enable Claude prompt caching (true/false)");
-    registerPropertyResolved(rt, resolve, "agent_claude_auth_type", CoreVM::LiteralType::String, "Claude auth method (auto/oauth/api_key)");
-
-    // --- OpenAI provider ---
-    registerPropertyResolved(rt, resolve, "agent_openai_api_key", CoreVM::LiteralType::String, "OpenAI API key");
-    registerPropertyResolved(rt, resolve, "agent_openai_api_key_env", CoreVM::LiteralType::String, "OpenAI API key environment variable");
-    registerPropertyResolved(rt, resolve, "agent_openai_model", CoreVM::LiteralType::String, "OpenAI model identifier");
-    registerPropertyResolved(rt, resolve, "agent_openai_base_url", CoreVM::LiteralType::String, "OpenAI base URL");
-    registerPropertyResolved(rt, resolve, "agent_openai_max_tokens", CoreVM::LiteralType::Number, "OpenAI max output tokens");
-    registerPropertyResolved(rt, resolve, "agent_openai_thinking_mode", CoreVM::LiteralType::String, "OpenAI thinking/reasoning mode");
-
-    // --- OpenAI-compatible provider ---
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key", CoreVM::LiteralType::String, "OpenAI-compatible API key");
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key_env", CoreVM::LiteralType::String, "OpenAI-compatible API key environment variable");
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_model", CoreVM::LiteralType::String, "OpenAI-compatible model identifier");
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_base_url", CoreVM::LiteralType::String, "OpenAI-compatible base URL");
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_max_tokens", CoreVM::LiteralType::Number, "OpenAI-compatible max output tokens");
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_thinking_mode", CoreVM::LiteralType::String, "OpenAI-compatible thinking mode");
-
-    // --- Gemini provider ---
-    registerPropertyResolved(rt, resolve, "agent_gemini_api_key", CoreVM::LiteralType::String, "Gemini API key");
-    registerPropertyResolved(rt, resolve, "agent_gemini_api_key_env", CoreVM::LiteralType::String, "Gemini API key environment variable");
-    registerPropertyResolved(rt, resolve, "agent_gemini_model", CoreVM::LiteralType::String, "Gemini model identifier");
-    registerPropertyResolved(rt, resolve, "agent_gemini_max_tokens", CoreVM::LiteralType::Number, "Gemini max output tokens");
-    registerPropertyResolved(rt, resolve, "agent_gemini_thinking_mode", CoreVM::LiteralType::String, "Gemini thinking/reasoning mode");
-
-    // --- Plan mode ---
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_enabled", CoreVM::LiteralType::Boolean, "Enable/disable plan mode");
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_pause_between_steps", CoreVM::LiteralType::Boolean, "Pause for confirmation between plan steps");
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_max_exploration_turns", CoreVM::LiteralType::Number, "Max exploration iterations");
-
-    // --- Explore sub-agent ---
-    registerPropertyResolved(rt, resolve, "agent_explore_max_turns", CoreVM::LiteralType::Number, "Max explore sub-agent iterations");
-
-    // --- Session ---
-    registerPropertyResolved(rt, resolve, "agent_auto_resume", CoreVM::LiteralType::Boolean, "Auto-resume last agent session");
-    registerPropertyResolved(rt, resolve, "agent_session_replay", CoreVM::LiteralType::Boolean, "Replay history when resuming");
-
-    // --- Trace ---
-    registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean, "Enable/disable trace logging");
-    registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String, "Trace file path");
-    registerPropertyResolved(rt, resolve, "agent_trace_max_files", CoreVM::LiteralType::Number, "Max trace files to retain");
-
-    // --- Permissions ---
-    registerPropertyResolved(rt, resolve, "agent_permissions_policy", CoreVM::LiteralType::String, "Agent permission policy");
-    registerPropertyResolved(rt, resolve, "agent_trusted_tool", CoreVM::LiteralType::Object, "Auto-approved tools");
-    registerPropertyResolved(rt, resolve, "agent_blocked_pattern", CoreVM::LiteralType::Object, "Blocked shell command patterns");
-
-    // --- Web search ---
-    registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String, "Web search engine");
-    registerPropertyResolved(rt, resolve, "agent_web_search_api_key", CoreVM::LiteralType::String, "Web search API key");
-    registerPropertyResolved(rt, resolve, "agent_web_search_cx", CoreVM::LiteralType::String, "Google Custom Search Engine ID");
-    registerPropertyResolved(rt, resolve, "agent_web_search_max_results", CoreVM::LiteralType::Number, "Max web search results per query");
-
-    // --- Error recovery ---
-    registerPropertyResolved(rt, resolve, "agent_error_recovery_action", CoreVM::LiteralType::String, "Action on command failure (ask/analyze/ignore)");
-    registerPropertyResolved(rt, resolve, "agent_error_recovery_model", CoreVM::LiteralType::String, "Model for error analysis (empty = active model)");
-
-    // clang-format on
+    for (auto const& desc: agentPropertyDescriptors())
+    {
+        if (desc.readOnly)
+            registerReadOnlyPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+        else
+            registerPropertyResolved(rt, resolve, desc.name, desc.type, desc.description);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -995,124 +926,84 @@ std::vector<std::string> userFacingBuiltinNames()
     return names;
 }
 
-std::vector<BuiltinInfo> userFacingBuiltins()
+namespace
 {
+    /// @brief Describes a non-property shell builtin or keyword for completion.
+    struct ShellBuiltinDescriptor
+    {
+        std::string_view name;
+        std::string_view description;
+        std::string_view detail;
+    };
+
     // clang-format off
-    return {
-        // Shell builtins
-        { "cat", "builtin", false, "**cat** -- builtin\n\nConcatenates and displays file contents." },
-        { "cd", "builtin", false, "**cd** -- builtin\n\nChanges the current working directory.\n\n```\ncd /tmp\ncd ~\n```" },
-        { "exit", "builtin", false, "**exit** -- builtin\n\nExits the shell with an optional exit code.\n\n```\nexit\nexit 1\n```" },
-        { "export", "builtin", false, "**export** -- builtin\n\nSets an environment variable.\n\n```\nexport PATH=\"/usr/bin:$PATH\"\n```" },
-        { "mv", "builtin", false, "**mv** -- builtin\n\nMoves or renames files and directories." },
-        { "rm", "builtin", false, "**rm** -- builtin\n\nRemoves files and directories." },
-        { "set", "builtin", false, "**set** -- builtin\n\nSets a shell variable." },
-        { "unset", "builtin", false, "**unset** -- builtin\n\nRemoves a shell variable." },
-        { "read", "builtin", false, "**read** -- builtin\n\nReads a line of input into a variable." },
-        { "sleep", "builtin", false, "**sleep** -- builtin\n\nPauses execution for a given duration.\n\n```\nsleep 2\n```" },
-        { "true", "builtin", false, "**true** -- builtin\n\nReturns exit code 0 (success)." },
-        { "false", "builtin", false, "**false** -- builtin\n\nReturns exit code 1 (failure)." },
-        { "jobs", "builtin", false, "**jobs** -- builtin\n\nLists background jobs." },
-        { "fg", "builtin", false, "**fg** -- builtin\n\nBrings a background job to the foreground." },
-        { "bg", "builtin", false, "**bg** -- builtin\n\nResumes a suspended job in the background." },
-        { "wait", "builtin", false, "**wait** -- builtin\n\nWaits for background jobs to complete." },
-        { "bind", "builtin", false, "**bind** -- builtin\n\nBinds a key sequence to a command." },
-        { "which", "builtin", false, "**which** -- builtin\n\nLocates a command in `$PATH`." },
-        { "echo", "builtin", false, "**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
-        { "print", "F# print function", false, "**print** -- builtin\n\nPrints a value without newline (F# style).\n\n```\nprint 42\nprint \"hello\"\n```" },
-        { "println", "F# print with newline", false, "**println** -- builtin\n\nPrints a value followed by a newline (F# style).\n\n```\nprintln \"hello world\"\n```" },
+    constexpr std::array shellBuiltinDescriptors = {
+        ShellBuiltinDescriptor { "cat", "builtin", "**cat** -- builtin\n\nConcatenates and displays file contents." },
+        ShellBuiltinDescriptor { "cd", "builtin", "**cd** -- builtin\n\nChanges the current working directory.\n\n```\ncd /tmp\ncd ~\n```" },
+        ShellBuiltinDescriptor { "exit", "builtin", "**exit** -- builtin\n\nExits the shell with an optional exit code.\n\n```\nexit\nexit 1\n```" },
+        ShellBuiltinDescriptor { "export", "builtin", "**export** -- builtin\n\nSets an environment variable.\n\n```\nexport PATH=\"/usr/bin:$PATH\"\n```" },
+        ShellBuiltinDescriptor { "mv", "builtin", "**mv** -- builtin\n\nMoves or renames files and directories." },
+        ShellBuiltinDescriptor { "rm", "builtin", "**rm** -- builtin\n\nRemoves files and directories." },
+        ShellBuiltinDescriptor { "set", "builtin", "**set** -- builtin\n\nSets a shell variable." },
+        ShellBuiltinDescriptor { "unset", "builtin", "**unset** -- builtin\n\nRemoves a shell variable." },
+        ShellBuiltinDescriptor { "read", "builtin", "**read** -- builtin\n\nReads a line of input into a variable." },
+        ShellBuiltinDescriptor { "sleep", "builtin", "**sleep** -- builtin\n\nPauses execution for a given duration.\n\n```\nsleep 2\n```" },
+        ShellBuiltinDescriptor { "true", "builtin", "**true** -- builtin\n\nReturns exit code 0 (success)." },
+        ShellBuiltinDescriptor { "false", "builtin", "**false** -- builtin\n\nReturns exit code 1 (failure)." },
+        ShellBuiltinDescriptor { "jobs", "builtin", "**jobs** -- builtin\n\nLists background jobs." },
+        ShellBuiltinDescriptor { "fg", "builtin", "**fg** -- builtin\n\nBrings a background job to the foreground." },
+        ShellBuiltinDescriptor { "bg", "builtin", "**bg** -- builtin\n\nResumes a suspended job in the background." },
+        ShellBuiltinDescriptor { "wait", "builtin", "**wait** -- builtin\n\nWaits for background jobs to complete." },
+        ShellBuiltinDescriptor { "bind", "builtin", "**bind** -- builtin\n\nBinds a key sequence to a command." },
+        ShellBuiltinDescriptor { "which", "builtin", "**which** -- builtin\n\nLocates a command in `$PATH`." },
+        ShellBuiltinDescriptor { "echo", "builtin", "**echo** -- builtin\n\nPrints arguments to stdout.\n\n```\necho \"hello world\"\n```" },
+        ShellBuiltinDescriptor { "print", "F# print function", "**print** -- builtin\n\nPrints a value without newline (F# style).\n\n```\nprint 42\nprint \"hello\"\n```" },
+        ShellBuiltinDescriptor { "println", "F# print with newline", "**println** -- builtin\n\nPrints a value followed by a newline (F# style).\n\n```\nprintln \"hello world\"\n```" },
         // MCP server management
-        { "add_mcp_server", "Register an MCP server", false, "**add_mcp_server** -- builtin\n\nRegisters an MCP (Model Context Protocol) server for agent use." },
-        { "set_mcp_env", "Set environment variable for an MCP server", false, "**set_mcp_env** -- builtin\n\nSets an environment variable for a registered MCP server." },
-        { "remove_mcp_server", "Remove an MCP server", false, "**remove_mcp_server** -- builtin\n\nRemoves a previously registered MCP server." },
-        // Control flow keywords (also completable)
-        { "if", "builtin", false, "**if** -- shell keyword\n\n```\nif condition then\n  body\nfi\n```" },
-        { "then", "builtin", false, "**then** -- shell keyword\n\nFollows the condition in a shell `if` statement." },
-        { "else", "builtin", false, "**else** -- shell keyword\n\nAlternative branch in a shell `if` statement." },
-        { "elif", "builtin", false, "**elif** -- shell keyword\n\nElse-if branch in a shell `if` statement." },
-        { "for", "builtin", false, "**for** -- shell keyword\n\n```\nfor x in [1; 2; 3] do\n  print x\ndone\n```" },
-        { "while", "builtin", false, "**while** -- shell keyword\n\nLoop while a condition holds." },
-        { "do", "builtin", false, "**do** -- shell keyword\n\nBegins the body of a for/while loop." },
-        { "end", "builtin", false, "**end** -- shell keyword\n\nEnds a block statement." },
-        { "in", "builtin", false, "**in** -- shell keyword\n\nSeparates variable from iterable in for loops." },
-        { "return", "builtin", false, "**return** -- shell keyword\n\nReturns from a function." },
-        { "break", "builtin", false, "**break** -- shell keyword\n\nExits the innermost loop." },
-        { "continue", "builtin", false, "**continue** -- shell keyword\n\nSkips to the next iteration of the innermost loop." },
-        // Shell/Prompt properties
-        { "shell_prompt_preset", "Prompt theme preset", true, "**shell_prompt_preset** -- property\n\nSets the prompt theme preset.\n\n```\nshell_prompt_preset powerline\n```" },
-        { "shell_prompt_indicator", "Prompt indicator character(s)", true, "**shell_prompt_indicator** -- property\n\nSets the prompt indicator character(s)." },
-        { "shell_prompt_layout", "Prompt layout style", true, "**shell_prompt_layout** -- property\n\nSets the prompt layout style (single-line, two-line, boxed, powerline)." },
-        { "shell_prompt_separator", "Prompt separator style", true, "**shell_prompt_separator** -- property\n\nSets the separator style between prompt modules." },
-        { "shell_prompt_transient", "Transient prompt mode", true, "**shell_prompt_transient** -- property\n\nControls transient prompt behavior (off, minimal, arrow)." },
-        { "shell_prompt_duration_threshold", "Duration display threshold (ms)", true, "**shell_prompt_duration_threshold** -- property\n\nMinimum command duration (ms) before showing elapsed time." },
-        { "shell_prompt_spacing", "Blank lines above/below prompt (0 or 1)", true, "**shell_prompt_spacing** -- property\n\nNumber of blank lines above/below the prompt (0 or 1)." },
-        { "shell_exit_confirm_timeout", "Exit confirmation timeout (ms)", true, "**shell_exit_confirm_timeout** -- property\n\nTimeout (ms) for exit confirmation when background jobs exist." },
-        { "shell_ls_icons", "Show Nerd Font icons in ls output (default: true)", true, "**shell_ls_icons** -- property\n\nWhether to show Nerd Font icons in `ls` output." },
-        { "shell_ls_directory_slash",
-          "Append trailing '/' to directory names in ls output (default: true)",
-          true,
-          "**shell_ls_directory_slash** -- property\n\nWhether to append trailing `/` to directory names in `ls` output." },
-        { "shell_is_interactive", "Whether running interactively (read-only)", true, "**shell_is_interactive** -- property (read-only)\n\nReturns whether the shell is running interactively." },
-        // Agent general properties
-        { "agent_provider", "Active AI provider", true, "**agent_provider** -- property\n\nSets the active AI provider (claude, openai, gemini, openai_compat)." },
-        { "agent_prompt_indicator", "Agent prompt indicator character(s)", true, "**agent_prompt_indicator** -- property\n\nSets the agent prompt indicator character(s)." },
-        { "agent_max_tool_result_size", "Max bytes for tool result truncation", true, "**agent_max_tool_result_size** -- property\n\nMaximum bytes for tool result truncation." },
-        { "agent_log_tool_uses", "Enable/disable tool invocation logging", true, "**agent_log_tool_uses** -- property\n\nEnables or disables logging of tool invocations." },
-        // Claude provider properties
-        { "agent_claude_api_key", "Claude API key", true, "**agent_claude_api_key** -- property\n\nSets the Claude API key." },
-        { "agent_claude_api_key_env", "Claude API key environment variable", true, "**agent_claude_api_key_env** -- property\n\nEnvironment variable name containing the Claude API key." },
-        { "agent_claude_model", "Claude model identifier", true, "**agent_claude_model** -- property\n\nSets the Claude model identifier." },
-        { "agent_claude_max_tokens", "Claude max output tokens", true, "**agent_claude_max_tokens** -- property\n\nMaximum output tokens for Claude responses." },
-        { "agent_claude_thinking_mode", "Claude thinking/reasoning mode (off/normal/extended)", true, "**agent_claude_thinking_mode** -- property\n\nSets Claude thinking/reasoning mode (off, normal, extended)." },
-        { "agent_claude_prompt_caching", "Enable Claude prompt caching (true/false)", true, "**agent_claude_prompt_caching** -- property\n\nEnables or disables Claude prompt caching." },
-        { "agent_claude_auth_type", "Claude auth method (auto/oauth/api_key)", true, "**agent_claude_auth_type** -- property\n\nSets the Claude authentication method (auto, oauth, api_key)." },
-        // OpenAI provider properties
-        { "agent_openai_api_key", "OpenAI API key", true, "**agent_openai_api_key** -- property\n\nSets the OpenAI API key." },
-        { "agent_openai_api_key_env", "OpenAI API key environment variable", true, "**agent_openai_api_key_env** -- property\n\nEnvironment variable name containing the OpenAI API key." },
-        { "agent_openai_model", "OpenAI model identifier", true, "**agent_openai_model** -- property\n\nSets the OpenAI model identifier." },
-        { "agent_openai_base_url", "OpenAI base URL", true, "**agent_openai_base_url** -- property\n\nSets the OpenAI API base URL." },
-        { "agent_openai_max_tokens", "OpenAI max output tokens", true, "**agent_openai_max_tokens** -- property\n\nMaximum output tokens for OpenAI responses." },
-        { "agent_openai_thinking_mode", "OpenAI thinking/reasoning mode", true, "**agent_openai_thinking_mode** -- property\n\nSets OpenAI thinking/reasoning mode." },
-        // OpenAI-compatible provider properties
-        { "agent_openai_compat_api_key", "OpenAI-compatible API key", true, "**agent_openai_compat_api_key** -- property\n\nSets the OpenAI-compatible API key." },
-        { "agent_openai_compat_api_key_env", "OpenAI-compatible API key environment variable", true, "**agent_openai_compat_api_key_env** -- property\n\nEnvironment variable name containing the API key." },
-        { "agent_openai_compat_model", "OpenAI-compatible model identifier", true, "**agent_openai_compat_model** -- property\n\nSets the OpenAI-compatible model identifier." },
-        { "agent_openai_compat_base_url", "OpenAI-compatible base URL", true, "**agent_openai_compat_base_url** -- property\n\nSets the OpenAI-compatible API base URL." },
-        { "agent_openai_compat_max_tokens", "OpenAI-compatible max output tokens", true, "**agent_openai_compat_max_tokens** -- property\n\nMaximum output tokens." },
-        { "agent_openai_compat_thinking_mode", "OpenAI-compatible thinking mode", true, "**agent_openai_compat_thinking_mode** -- property\n\nSets the thinking mode." },
-        // Gemini provider properties
-        { "agent_gemini_api_key", "Gemini API key", true, "**agent_gemini_api_key** -- property\n\nSets the Gemini API key." },
-        { "agent_gemini_api_key_env", "Gemini API key environment variable", true, "**agent_gemini_api_key_env** -- property\n\nEnvironment variable name containing the Gemini API key." },
-        { "agent_gemini_model", "Gemini model identifier", true, "**agent_gemini_model** -- property\n\nSets the Gemini model identifier." },
-        { "agent_gemini_max_tokens", "Gemini max output tokens", true, "**agent_gemini_max_tokens** -- property\n\nMaximum output tokens for Gemini responses." },
-        { "agent_gemini_thinking_mode", "Gemini thinking/reasoning mode", true, "**agent_gemini_thinking_mode** -- property\n\nSets Gemini thinking/reasoning mode." },
-        // Plan mode properties
-        { "agent_plan_mode_enabled", "Enable/disable plan mode", true, "**agent_plan_mode_enabled** -- property\n\nEnables or disables plan mode." },
-        { "agent_plan_mode_pause_between_steps", "Pause for confirmation between plan steps", true, "**agent_plan_mode_pause_between_steps** -- property\n\nPause for confirmation between plan steps." },
-        { "agent_plan_mode_max_exploration_turns", "Max exploration iterations", true, "**agent_plan_mode_max_exploration_turns** -- property\n\nMaximum number of exploration iterations." },
-        // Explore sub-agent properties
-        { "agent_explore_max_turns", "Max explore sub-agent iterations", true, "**agent_explore_max_turns** -- property\n\nMaximum explore sub-agent iterations." },
-        // Session / lifecycle properties
-        { "agent_auto_resume", "Auto-resume last agent session", true, "**agent_auto_resume** -- property\n\nAuto-resume the last agent session on startup." },
-        { "agent_session_replay", "Replay history when resuming", true, "**agent_session_replay** -- property\n\nReplay conversation history when resuming a session." },
-        // Trace properties
-        { "agent_trace_enabled", "Enable/disable trace logging", true, "**agent_trace_enabled** -- property\n\nEnables or disables trace logging." },
-        { "agent_trace_default_path", "Trace file path", true, "**agent_trace_default_path** -- property\n\nDefault path for trace log files." },
-        { "agent_trace_max_files", "Max trace files to retain", true, "**agent_trace_max_files** -- property\n\nMaximum number of trace files to retain." },
-        // Permissions properties
-        { "agent_permissions_policy", "Agent permission policy", true, "**agent_permissions_policy** -- property\n\nSets the agent permission policy." },
-        { "agent_trusted_tool", "Auto-approved tools", true, "**agent_trusted_tool** -- property\n\nTools that are auto-approved without user confirmation." },
-        { "agent_blocked_pattern", "Blocked shell command patterns", true, "**agent_blocked_pattern** -- property\n\nShell command patterns blocked from agent execution." },
-        // Web search properties
-        { "agent_web_search_engine", "Web search engine", true, "**agent_web_search_engine** -- property\n\nSets the web search engine (duckduckgo, brave, google)." },
-        { "agent_web_search_api_key", "Web search API key", true, "**agent_web_search_api_key** -- property\n\nAPI key for the selected web search engine." },
-        { "agent_web_search_cx", "Google Custom Search Engine ID", true, "**agent_web_search_cx** -- property\n\nGoogle Custom Search Engine ID." },
-        { "agent_web_search_max_results", "Max web search results per query", true, "**agent_web_search_max_results** -- property\n\nMaximum number of web search results per query." },
-        // Error recovery properties
-        { "agent_error_recovery_action", "Action on command failure (ask/analyze/ignore)", true, "**agent_error_recovery_action** -- property\n\nAction on command failure (ask, analyze, ignore)." },
-        { "agent_error_recovery_model", "Model for error analysis (empty = active model)", true, "**agent_error_recovery_model** -- property\n\nModel to use for error analysis. Empty uses the active model." },
+        ShellBuiltinDescriptor { "add_mcp_server", "Register an MCP server", "**add_mcp_server** -- builtin\n\nRegisters an MCP (Model Context Protocol) server for agent use." },
+        ShellBuiltinDescriptor { "set_mcp_env", "Set environment variable for an MCP server", "**set_mcp_env** -- builtin\n\nSets an environment variable for a registered MCP server." },
+        ShellBuiltinDescriptor { "remove_mcp_server", "Remove an MCP server", "**remove_mcp_server** -- builtin\n\nRemoves a previously registered MCP server." },
+    };
+
+    constexpr std::array keywordDescriptors = {
+        ShellBuiltinDescriptor { "if", "builtin", "**if** -- shell keyword\n\n```\nif condition then\n  body\nfi\n```" },
+        ShellBuiltinDescriptor { "then", "builtin", "**then** -- shell keyword\n\nFollows the condition in a shell `if` statement." },
+        ShellBuiltinDescriptor { "else", "builtin", "**else** -- shell keyword\n\nAlternative branch in a shell `if` statement." },
+        ShellBuiltinDescriptor { "elif", "builtin", "**elif** -- shell keyword\n\nElse-if branch in a shell `if` statement." },
+        ShellBuiltinDescriptor { "for", "builtin", "**for** -- shell keyword\n\n```\nfor x in [1; 2; 3] do\n  print x\ndone\n```" },
+        ShellBuiltinDescriptor { "while", "builtin", "**while** -- shell keyword\n\nLoop while a condition holds." },
+        ShellBuiltinDescriptor { "do", "builtin", "**do** -- shell keyword\n\nBegins the body of a for/while loop." },
+        ShellBuiltinDescriptor { "end", "builtin", "**end** -- shell keyword\n\nEnds a block statement." },
+        ShellBuiltinDescriptor { "in", "builtin", "**in** -- shell keyword\n\nSeparates variable from iterable in for loops." },
+        ShellBuiltinDescriptor { "return", "builtin", "**return** -- shell keyword\n\nReturns from a function." },
+        ShellBuiltinDescriptor { "break", "builtin", "**break** -- shell keyword\n\nExits the innermost loop." },
+        ShellBuiltinDescriptor { "continue", "builtin", "**continue** -- shell keyword\n\nSkips to the next iteration of the innermost loop." },
     };
     // clang-format on
+} // namespace
+
+std::vector<BuiltinInfo> userFacingBuiltins()
+{
+    std::vector<BuiltinInfo> result;
+    result.reserve(shellBuiltinDescriptors.size() + keywordDescriptors.size()
+                   + allPropertyDescriptors().size());
+
+    // Shell builtins
+    for (auto const& desc: shellBuiltinDescriptors)
+        result.push_back(
+            { std::string(desc.name), std::string(desc.description), false, std::string(desc.detail) });
+
+    // Keywords
+    for (auto const& desc: keywordDescriptors)
+        result.push_back(
+            { std::string(desc.name), std::string(desc.description), false, std::string(desc.detail) });
+
+    // Properties (from PropertyDescriptors)
+    for (auto const& desc: allPropertyDescriptors())
+        result.push_back(
+            { std::string(desc.name), std::string(desc.description), true, std::string(desc.detail) });
+
+    return result;
 }
 
 } // namespace endo

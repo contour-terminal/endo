@@ -61,6 +61,10 @@ add_library(endo STATIC
     builtins/BuiltinSignatures.cpp
     builtins/BuiltinImpls.hpp
     builtins/BuiltinImpls.cpp
+    builtins/PropertyDescriptors.hpp
+    builtins/PropertyDescriptors.cpp
+    builtins/StdlibDescriptors.hpp
+    builtins/StdlibDescriptors.cpp
     builtins/StubRuntime.hpp
 
     # Logging (used by parser tracing)
