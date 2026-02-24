@@ -67,6 +67,12 @@ add_library(endo STATIC
     builtins/StdlibDescriptors.cpp
     builtins/StubRuntime.hpp
 
+    # Source Code Formatter
+    format/FormatConfig.hpp
+    format/FormatConfig.cpp
+    format/SourceFormatter.hpp
+    format/SourceFormatter.cpp
+
     # Logging (used by parser tracing)
     LogCategories.hpp
     LogCategories.cpp
@@ -104,6 +110,8 @@ if(ENDO_TESTING)
         ide/HoverProvider_test.cpp
         ide/DiagnosticsCollector_test.cpp
         ide/TypeRegistryCompletionAdapter_test.cpp
+
+        format/SourceFormatter_test.cpp
     )
     target_link_libraries(test-endo-language endo Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE
