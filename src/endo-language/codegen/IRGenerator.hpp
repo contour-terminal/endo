@@ -93,6 +93,10 @@ struct FSharpPersistentState
     /// Key format: "docker\0ps" (command + NUL + args joined by NUL)
     std::unordered_map<std::string, StructuredCommandInfo> structuredCommands;
 
+    /// Maps simple command names to their output record type name for pipeline completion.
+    /// e.g., "ls" -> "FileInfo", "ps" -> "ProcessInfo"
+    std::unordered_map<std::string, std::string> commandOutputTypes;
+
     /// A persisted property definition with get/set accessor AST pointers.
     struct PersistedProperty
     {

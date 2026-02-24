@@ -27,7 +27,7 @@ std::vector<CompletionItem> FSharpCompleter::complete(CompletionContext const& c
     auto const objectPart = prefix.substr(0, dotPos);
     auto const memberPrefix = prefix.substr(dotPos + 1);
 
-    return completeDotAccess(objectPart, memberPrefix, prefix);
+    return completeDotAccess(objectPart, memberPrefix, prefix, context.fullInput);
 }
 
 bool FSharpCompleter::canHandle(CompletionContextType type) const
@@ -37,10 +37,17 @@ bool FSharpCompleter::canHandle(CompletionContextType type) const
 
 std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const& objectPart,
                                                                std::string const& memberPrefix,
-                                                               std::string const& /*fullPrefix*/) const
+                                                               std::string const& /*fullPrefix*/,
+                                                               std::string const& fullInput) const
 {
+    // Resolve pipeline element type for underscore completions
+    auto const pipelineType = (objectPart == "_")
+                                  ? resolvePipelineSourceType(fullInput, _state.commandOutputTypes)
+                                  : std::string {};
+
     // Delegate to shared completion engine for candidate generation (already prefix-filtered)
-    auto candidates = dotAccessCandidates(objectPart, memberPrefix, _state.recordTypeFields);
+    auto candidates =
+        dotAccessCandidates(objectPart, memberPrefix, _state.recordTypeFields, {}, pipelineType);
 
     // Convert to tui::CompletionItem with fuzzy scoring on the member name (not full text)
     std::vector<CompletionItem> results;

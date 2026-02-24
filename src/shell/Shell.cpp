@@ -406,6 +406,11 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
         { "pid", "int" },
     };
 
+    // Register builtin command -> output type mapping for pipeline completion
+    _fsharpState.commandOutputTypes["ls"] = "FileInfo";
+    _fsharpState.commandOutputTypes["ps"] = "ProcessInfo";
+    _fsharpState.commandOutputTypes["jobs"] = "JobInfo";
+
     // Load output definition files for structured pipelines
 #if defined(ENDO_DEFINITIONS_DIR)
     _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR);
@@ -444,7 +449,7 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
                 }
                 _fsharpState.outputDefinitionTypes[variant.recordTypeName] = std::move(defType);
 
-                // Register structured command lookup
+                // Register structured command lookup and output type mapping
                 for (auto const& matchPattern: variant.matches)
                 {
                     std::string key = def.command;
@@ -458,6 +463,8 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
                         .recordTypeId = nextTypeId,
                         .recordTypeName = variant.recordTypeName,
                     };
+                    // Register for pipeline completion (NUL-key for multi-word, bare for simple)
+                    _fsharpState.commandOutputTypes[key] = variant.recordTypeName;
                 }
 
                 // Register record type fields for completion

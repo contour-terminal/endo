@@ -10,13 +10,16 @@ namespace
 {
 
 /// @brief Helper to create a CompletionContext with a given prefix at command position.
-endo::CompletionContext makeContext(std::string prefix)
+endo::CompletionContext makeContext(std::string prefix, std::string fullInput = {})
 {
+    if (fullInput.empty())
+        fullInput = prefix;
     return endo::CompletionContext {
         .type = endo::CompletionContextType::Command,
         .prefix = std::move(prefix),
         .prefixStart = 0,
         .cursorPosition = 0,
+        .fullInput = std::move(fullInput),
     };
 }
 
@@ -341,10 +344,14 @@ TEST_CASE("FSharpCompleter.DateTime_now.returns_only_DateTime_fields")
         { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
     };
     state.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" }, { "cpu", "float" }, { "command", "str" },
+        { "pid", "int" },
+        { "cpu", "float" },
+        { "command", "str" },
     };
     state.recordTypeFields["GitCommit"] = {
-        { "author", "str" }, { "email", "str" }, { "date", "str" },
+        { "author", "str" },
+        { "email", "str" },
+        { "date", "str" },
     };
     endo::FSharpCompleter completer(state);
 
@@ -383,7 +390,9 @@ TEST_CASE("FSharpCompleter.DateTime_fromEpoch.returns_only_DateTime_fields")
 {
     endo::FSharpPersistentState state;
     state.recordTypeFields["DateTime"] = {
-        { "year", "int" }, { "month", "int" }, { "day", "int" },
+        { "year", "int" },
+        { "month", "int" },
+        { "day", "int" },
     };
     state.recordTypeFields["ProcessInfo"] = { { "pid", "int" } };
     endo::FSharpCompleter completer(state);
@@ -412,4 +421,124 @@ TEST_CASE("FSharpCompleter.priority")
     endo::FSharpCompleter completer(state);
 
     CHECK(completer.priority() == 95);
+}
+
+// ============================================================================
+// Pipeline type-aware underscore completions
+// ============================================================================
+
+TEST_CASE("FSharpCompleter.underscore.pipeline_type_aware")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    state.commandOutputTypes["ps"] = "ProcessInfo";
+    endo::FSharpCompleter completer(state);
+
+    // ls |> map _. → only FileInfo fields
+    auto results = completer.complete(makeContext("_.", "ls |> map _."));
+    CHECK(results.size() == 5);
+    CHECK(hasCompletion(results, "_.name"));
+    CHECK(hasCompletion(results, "_.size"));
+    CHECK(hasCompletion(results, "_.mode"));
+    CHECK(hasCompletion(results, "_.mtime"));
+    CHECK(hasCompletion(results, "_.isDir"));
+    CHECK_FALSE(hasCompletion(results, "_.pid"));
+    CHECK_FALSE(hasCompletion(results, "_.cpu"));
+}
+
+TEST_CASE("FSharpCompleter.underscore.pipeline_ps_type_aware")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },
+        { "size", "Size" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
+        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    state.commandOutputTypes["ps"] = "ProcessInfo";
+    endo::FSharpCompleter completer(state);
+
+    // ps |> filter _. → only ProcessInfo fields
+    auto results = completer.complete(makeContext("_.", "ps |> filter _."));
+    CHECK(results.size() == 6);
+    CHECK(hasCompletion(results, "_.pid"));
+    CHECK(hasCompletion(results, "_.cpu"));
+    CHECK_FALSE(hasCompletion(results, "_.name"));
+}
+
+TEST_CASE("FSharpCompleter.underscore.chained_pipeline")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },
+        { "cpu", "float" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    endo::FSharpCompleter completer(state);
+
+    // ls |> filter (_.isDir) |> map _. → still FileInfo (filter preserves type)
+    auto results = completer.complete(makeContext("_.", "ls |> filter (_.isDir) |> map _."));
+    CHECK(results.size() == 5);
+    CHECK(hasCompletion(results, "_.name"));
+    CHECK(hasCompletion(results, "_.isDir"));
+    CHECK_FALSE(hasCompletion(results, "_.pid"));
+}
+
+TEST_CASE("FSharpCompleter.underscore.no_pipeline_fallback")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },
+        { "isDir", "bool" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },
+        { "cpu", "float" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    endo::FSharpCompleter completer(state);
+
+    // No |> operator → show all fields (fallback)
+    auto results = completer.complete(makeContext("_."));
+    CHECK(results.size() == 4);
+    CHECK(hasCompletion(results, "_.name"));
+    CHECK(hasCompletion(results, "_.isDir"));
+    CHECK(hasCompletion(results, "_.pid"));
+    CHECK(hasCompletion(results, "_.cpu"));
+}
+
+TEST_CASE("FSharpCompleter.underscore.unknown_command_fallback")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },
+        { "isDir", "bool" },
+    };
+    state.recordTypeFields["ProcessInfo"] = {
+        { "pid", "int" },
+        { "cpu", "float" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    endo::FSharpCompleter completer(state);
+
+    // Unknown command → show all fields (fallback)
+    auto results = completer.complete(makeContext("_.", "someRandomCommand |> map _."));
+    CHECK(results.size() == 4);
+    CHECK(hasCompletion(results, "_.name"));
+    CHECK(hasCompletion(results, "_.pid"));
 }

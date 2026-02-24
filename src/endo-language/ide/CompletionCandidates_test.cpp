@@ -737,3 +737,88 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.signature_descriptions
     REQUIRE(foldEntry != nullptr);
     CHECK(foldEntry->description == "fold f init lst -> 'b");
 }
+
+// =============================================================================
+// resolvePipelineSourceType tests
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.simple_command", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    outputTypes["ls"] = "FileInfo";
+    outputTypes["ps"] = "ProcessInfo";
+
+    CHECK(resolvePipelineSourceType("ls |> map _.", outputTypes) == "FileInfo");
+    CHECK(resolvePipelineSourceType("ps |> filter (_.cpu > 5)", outputTypes) == "ProcessInfo");
+}
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.chained_pipeline", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    outputTypes["ls"] = "FileInfo";
+
+    // Chained pipelines: first |> determines source
+    CHECK(resolvePipelineSourceType("ls |> filter (_.isDir) |> map _.", outputTypes) == "FileInfo");
+}
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.no_pipeline", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    outputTypes["ls"] = "FileInfo";
+
+    CHECK(resolvePipelineSourceType("echo hello", outputTypes).empty());
+}
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.unknown_command", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    outputTypes["ls"] = "FileInfo";
+
+    CHECK(resolvePipelineSourceType("someCommand |> map _.", outputTypes).empty());
+}
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.multi_word_command", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    // NUL-separated key for multi-word command
+    std::string key = "docker";
+    key += '\0';
+    key += "ps";
+    outputTypes[key] = "DockerContainer";
+
+    CHECK(resolvePipelineSourceType("docker ps |> map _.names", outputTypes) == "DockerContainer");
+}
+
+TEST_CASE("CompletionCandidates.resolvePipelineSourceType.empty_input", "[completion]")
+{
+    std::unordered_map<std::string, std::string> outputTypes;
+    CHECK(resolvePipelineSourceType("", outputTypes).empty());
+    CHECK(resolvePipelineSourceType("|> map _.", outputTypes).empty());
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.underscore_with_pipeline_type", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "name", "str" }, { "isDir", "bool" } };
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+
+    // With pipeline type: only FileInfo fields
+    auto candidates = dotAccessCandidates("_", "", fields, {}, "FileInfo");
+    CHECK(candidates.size() == 2);
+    CHECK(hasCandidate(candidates, "_.name"));
+    CHECK(hasCandidate(candidates, "_.isDir"));
+    CHECK(!hasCandidate(candidates, "_.pid"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.underscore_without_pipeline_type", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "name", "str" }, { "isDir", "bool" } };
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+
+    // Without pipeline type: all fields (existing behavior)
+    auto candidates = dotAccessCandidates("_", "", fields, {}, "");
+    CHECK(candidates.size() == 4);
+    CHECK(hasCandidate(candidates, "_.name"));
+    CHECK(hasCandidate(candidates, "_.pid"));
+}

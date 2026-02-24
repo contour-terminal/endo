@@ -36,10 +36,12 @@ class FSharpCompleter: public CompletionProvider
     /// @param objectPart The part before the last dot (e.g., "Option", "_", "myVar").
     /// @param memberPrefix The part after the last dot (may be empty).
     /// @param fullPrefix The full prefix string for matching.
+    /// @param fullInput The complete input line for pipeline type resolution.
     /// @return List of completion items.
     [[nodiscard]] std::vector<CompletionItem> completeDotAccess(std::string const& objectPart,
                                                                 std::string const& memberPrefix,
-                                                                std::string const& fullPrefix) const;
+                                                                std::string const& fullPrefix,
+                                                                std::string const& fullInput) const;
 };
 
 } // namespace endo

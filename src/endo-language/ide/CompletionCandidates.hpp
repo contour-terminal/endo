@@ -4,6 +4,7 @@
 #include <endo-language/ide/CompletionItem.hpp>
 
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -38,12 +39,14 @@ namespace endo
 /// @param memberPrefix The part after the last dot (may be empty).
 /// @param recordFields Record type fields (type name -> field info with types).
 /// @param variableTypes Variable name -> record type name for type-specific completion.
+/// @param pipelineElementType When non-empty, restricts underscore completions to this type only.
 /// @return Matching completion candidates.
 [[nodiscard]] std::vector<CompletionCandidate> dotAccessCandidates(
     std::string const& objectPart,
     std::string const& memberPrefix,
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> const& recordFields,
-    std::unordered_map<std::string, std::string> const& variableTypes = {});
+    std::unordered_map<std::string, std::string> const& variableTypes = {},
+    std::string const& pipelineElementType = {});
 
 /// @brief Checks if a command is a builtin whose argument space is fully handled.
 ///
@@ -69,6 +72,18 @@ namespace endo
 /// @brief Returns standard library function completion candidates.
 /// Includes type conversion, string operations, list operations, HOFs, transforms, and system functions.
 [[nodiscard]] std::vector<CompletionCandidate> standardLibraryCandidates();
+
+/// @brief Resolves the record type name of the pipeline source from a full input line.
+///
+/// Looks for the first command before `|>` and maps it via commandOutputTypes.
+/// Supports both simple commands ("ls" -> "FileInfo") and multi-word commands
+/// with NUL-separated keys ("docker\0ps" -> "DockerContainer").
+///
+/// @param fullInput The complete input line (e.g., "ls |> map _.").
+/// @param commandOutputTypes Command name -> record type name mapping.
+/// @return The record type name, or empty string if no pipeline or no matching type.
+[[nodiscard]] std::string resolvePipelineSourceType(
+    std::string_view fullInput, std::unordered_map<std::string, std::string> const& commandOutputTypes);
 
 /// @brief Returns symbol-based completion candidates from the given definitions.
 ///

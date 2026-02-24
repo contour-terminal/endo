@@ -592,7 +592,8 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     std::string const& objectPart,
     std::string const& memberPrefix,
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> const& recordFields,
-    std::unordered_map<std::string, std::string> const& variableTypes)
+    std::unordered_map<std::string, std::string> const& variableTypes,
+    std::string const& pipelineElementType)
 {
     std::vector<CompletionCandidate> results;
 
@@ -673,15 +674,28 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     }
     else if (objectPart == "_")
     {
-        // Underscore field access: offer all record fields with deduplication
-        std::set<std::string> seen;
-        for (auto const& [typeName, fields]: recordFields)
+        if (!pipelineElementType.empty())
         {
-            for (auto const& field: fields)
+            // Type-aware: only show fields from the pipeline element type
+            if (auto it = recordFields.find(pipelineElementType); it != recordFields.end())
             {
-                if (seen.insert(field.name).second)
+                for (auto const& field: it->second)
                     addCandidate(
                         "_." + field.name, field.name, "field: " + field.typeName, CompletionKind::Field);
+            }
+        }
+        else
+        {
+            // Fallback: show all record fields (no pipeline context)
+            std::set<std::string> seen;
+            for (auto const& [typeName, fields]: recordFields)
+            {
+                for (auto const& field: fields)
+                {
+                    if (seen.insert(field.name).second)
+                        addCandidate(
+                            "_." + field.name, field.name, "field: " + field.typeName, CompletionKind::Field);
+                }
             }
         }
     }
@@ -941,6 +955,64 @@ std::vector<CompletionCandidate> symbolCandidates(std::vector<SymbolDefinitionIn
     }
 
     return results;
+}
+
+std::string resolvePipelineSourceType(std::string_view fullInput,
+                                      std::unordered_map<std::string, std::string> const& commandOutputTypes)
+{
+    // Find the first |> operator
+    auto const pipePos = fullInput.find("|>");
+    if (pipePos == std::string_view::npos)
+        return {};
+
+    // Extract text before the first |> and trim whitespace
+    auto source = fullInput.substr(0, pipePos);
+    while (!source.empty() && (source.back() == ' ' || source.back() == '\t'))
+        source.remove_suffix(1);
+    while (!source.empty() && (source.front() == ' ' || source.front() == '\t'))
+        source.remove_prefix(1);
+
+    if (source.empty())
+        return {};
+
+    // Split into words
+    std::vector<std::string_view> words;
+    size_t pos = 0;
+    while (pos < source.size())
+    {
+        while (pos < source.size() && (source[pos] == ' ' || source[pos] == '\t'))
+            ++pos;
+        if (pos >= source.size())
+            break;
+        auto const start = pos;
+        while (pos < source.size() && source[pos] != ' ' && source[pos] != '\t')
+            ++pos;
+        words.push_back(source.substr(start, pos - start));
+    }
+
+    if (words.empty())
+        return {};
+
+    auto const commandName = std::string(words[0]);
+
+    // Try direct command -> type lookup (handles single-word commands)
+    if (auto it = commandOutputTypes.find(commandName); it != commandOutputTypes.end())
+        return it->second;
+
+    // Try NUL-separated key for multi-word commands (e.g., "docker\0ps")
+    if (words.size() > 1)
+    {
+        auto key = commandName;
+        for (size_t i = 1; i < words.size(); ++i)
+        {
+            key += '\0';
+            key += std::string(words[i]);
+        }
+        if (auto it = commandOutputTypes.find(key); it != commandOutputTypes.end())
+            return it->second;
+    }
+
+    return {};
 }
 
 } // namespace endo
