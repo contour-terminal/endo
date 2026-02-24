@@ -287,7 +287,8 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_now_filter_by_prefix", "[comp
 TEST_CASE("CompletionCandidates.dotAccess.nested_dot_resolves_through_types", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    fields["FileInfo"] = { { "name", "str" }, { "size", "int" }, { "mtime", "DateTime" } };
+    fields["FileInfo"] = { { "name", "str" }, { "size", "Size" }, { "mtime", "DateTime" } };
+    fields["Size"] = { { "bytes", "int" } };
     fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
                            { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
     std::unordered_map<std::string, std::string> variableTypes;
@@ -301,6 +302,23 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_dot_resolves_through_types", "[
     CHECK(hasCandidate(candidates, "f.mtime.minute"));
     CHECK(hasCandidate(candidates, "f.mtime.second"));
     CHECK(hasCandidate(candidates, "f.mtime.epoch"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_dot_FileInfo_size_bytes", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    fields["Size"] = { { "bytes", "int" } };
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    std::unordered_map<std::string, std::string> variableTypes;
+    variableTypes["f"] = "FileInfo";
+    auto candidates = dotAccessCandidates("f.size", "", fields, variableTypes);
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "f.size.bytes"));
 }
 
 TEST_CASE("CompletionCandidates.dotAccess.nested_dot_filter_by_prefix", "[completion]")

@@ -389,11 +389,15 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
     };
     _fsharpState.recordTypeFields["FileInfo"] = {
-        { "name", "str" }, { "size", "int" }, { "mode", "int" }, { "mtime", "DateTime" }, { "isDir", "bool" },
+        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
     };
     _fsharpState.recordTypeFields["DateTime"] = {
         { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
         { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+    };
+    _fsharpState.recordTypeFields["Size"] = {
+        { "bytes", "int" },
     };
     _fsharpState.recordTypeFields["JobInfo"] = {
         { "id", "int" },

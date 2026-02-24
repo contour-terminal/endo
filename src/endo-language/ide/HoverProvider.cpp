@@ -186,6 +186,71 @@ namespace
             { "DateTime.fromEpoch",
               "`DateTime.fromEpoch` : `int -> DateTime`\n\nConverts a Unix epoch timestamp to a "
               "DateTime record." },
+            { "FileInfo",
+              "`FileInfo` \u2014 Record type for file/directory information\n\n"
+              "**Fields:** `name: str`, `size: Size`, `mode: int`, `mtime: DateTime`, `isDir: bool`\n\n"
+              "Returned by `ls`. Supports dot access and pattern matching.\n\n"
+              "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```" },
+            { "ProcessInfo",
+              "`ProcessInfo` \u2014 Record type for process information\n\n"
+              "**Fields:** `pid: int`, `ppid: int`, `user: str`, `cpu: float`, `mem: float`, "
+              "`command: str`\n\n"
+              "Returned by `ps`. Supports dot access and pattern matching.\n\n"
+              "```endo\nps |> filter (_.cpu > 5.0) |> sortBy _.cpu\n```" },
+            { "JobInfo",
+              "`JobInfo` \u2014 Record type for background job information\n\n"
+              "**Fields:** `id: int`, `state: str`, `command: str`, `pid: int`\n\n"
+              "Returned by `jobs`. Supports dot access and pattern matching.\n\n"
+              "```endo\njobs |> filter (_.state == \"Running\")\n```" },
+            { "ls",
+              "`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
+              "Lists directory contents as structured FileInfo records.\n\n"
+              "**Fields:** `name: str`, `size: Size`, `mode: int`, `mtime: DateTime`, `isDir: bool`" },
+            { "ps",
+              "`ps` : `list<ProcessInfo>`\n\n"
+              "Lists running processes as structured ProcessInfo records.\n\n"
+              "**Fields:** `pid: int`, `ppid: int`, `user: str`, `cpu: float`, `mem: float`, "
+              "`command: str`" },
+            { "jobs",
+              "`jobs` : `list<JobInfo>`\n\n"
+              "Lists background jobs as structured JobInfo records.\n\n"
+              "**Fields:** `id: int`, `state: str`, `command: str`, `pid: int`" },
+            { "fetch",
+              "`fetch` : `str -> result<str, str>`\n\n"
+              "Fetches content from a URL. Returns `Ok body` on success, `Error message` on failure." },
+            { "which",
+              "`which` : `str -> option<str>`\n\n"
+              "Searches `$PATH` for a program. Returns `Some path` if found, `None` otherwise." },
+            { "rand",
+              "`rand` : `int` | `rand min max` : `int`\n\n"
+              "Returns a random positive integer, or a random integer in `[min, max]`." },
+            { "formatDateTime",
+              "`formatDateTime` : `int -> str`\n\n"
+              "Formats a Unix epoch timestamp as `YYYY-MM-DD HH:MM:SS`." },
+            { "formatMode",
+              "`formatMode` : `int -> str`\n\n"
+              "Formats a Unix file mode as a `rwxrwxrwx` permission string." },
+            { "toText",
+              "`toText` : `'a -> str`\n\n"
+              "Converts any value to its string representation." },
+            { "isReadable",
+              "`isReadable` : `int -> bool`\n\n"
+              "Tests if any read permission bit is set in a Unix file mode." },
+            { "isWritable",
+              "`isWritable` : `int -> bool`\n\n"
+              "Tests if any write permission bit is set in a Unix file mode." },
+            { "isExecutable",
+              "`isExecutable` : `int -> bool`\n\n"
+              "Tests if any execute permission bit is set in a Unix file mode." },
+            { "formatNumber",
+              "`formatNumber` : `str -> int -> str` | `int -> str`\n\n"
+              "Formats an integer with thousand separators. In the 1-arg form, uses the locale separator." },
+            { "string",
+              "`string` : `'a -> str`\n\n"
+              "Universal conversion to string. Works with integers, floats, booleans, and strings." },
+            { "not",
+              "`not` : `bool -> bool`\n\n"
+              "Boolean negation." },
         };
 
         if (auto const it = builtins.find(name); it != builtins.end())

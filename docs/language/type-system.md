@@ -186,5 +186,74 @@ let s = "hello"
 print s.length                        # 5
 ```
 
+### 3.7 Built-in Record Types
+
+Endo provides several built-in record types for shell data. These are returned by
+built-in commands and support dot access, pattern matching, and pipeline operations.
+
+#### `Size`
+
+Represents byte quantities with human-readable display.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bytes` | `int` | Raw byte count |
+
+**Constructors:** `Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`
+
+**Literals:** `42_B`, `1_KB`, `5_MB`, `2_GB`, `1_TB`
+
+#### `DateTime`
+
+Represents a point in time (UTC).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `year` | `int` | Year (e.g. 2024) |
+| `month` | `int` | Month (1--12) |
+| `day` | `int` | Day of month (1--31) |
+| `hour` | `int` | Hour (0--23) |
+| `minute` | `int` | Minute (0--59) |
+| `second` | `int` | Second (0--59) |
+| `epoch` | `int` | Unix epoch timestamp |
+
+**Constructors:** `DateTime.now`, `DateTime.fromEpoch`
+
+#### `FileInfo`
+
+Returned by `ls`. Represents a file or directory entry.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | File name |
+| `size` | `Size` | File size |
+| `mode` | `int` | Unix permission bits |
+| `mtime` | `DateTime` | Last modification time |
+| `isDir` | `bool` | Whether entry is a directory |
+
+#### `ProcessInfo`
+
+Returned by `ps`. Represents a running process.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pid` | `int` | Process ID |
+| `ppid` | `int` | Parent process ID |
+| `user` | `str` | Owning user |
+| `cpu` | `float` | CPU usage percentage |
+| `mem` | `float` | Memory usage percentage |
+| `command` | `str` | Command name |
+
+#### `JobInfo`
+
+Returned by `jobs`. Represents a background job.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `int` | Job number |
+| `state` | `str` | Job state |
+| `command` | `str` | Command string |
+| `pid` | `int` | Process ID |
+
 ---
 **See also:** [Lexical Elements](lexical-elements.md) | [Variables & Bindings](variables-and-bindings.md) | [Pattern Matching](pattern-matching.md)

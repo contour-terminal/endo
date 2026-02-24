@@ -17,6 +17,12 @@ by category. Each example is executable and verified by the documentation test s
 - [15.10 Random](#1510-random) -- `rand`
 - [15.11 Number Formatting](#1511-number-formatting) -- `formatNumber`
 - [15.12 Composition Examples](#1512-composition-examples)
+- [15.13 Size Type](#1513-size-type) -- `Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`, size literals
+- [15.14 DateTime Type](#1514-datetime-type) -- `DateTime.now`, `DateTime.fromEpoch`, `formatDateTime`
+- [15.15 Shell Data Commands](#1515-shell-data-commands) -- `ls`, `ps`, `jobs`
+- [15.16 File Permission Helpers](#1516-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
+- [15.17 Display Formatting](#1517-display-formatting) -- `toText`, `string`
+- [15.18 HTTP](#1518-http) -- `fetch`
 
 ---
 
@@ -900,6 +906,345 @@ print ([1; 2; 3; 4; 5] |> take 3 |> map (fun x -> x * 10))   # => [10; 20; 30]
 
 ```endo
 print ([1; 2; 3; 4; 5] |> drop 2 |> fold 0 (fun a x -> a + x))   # => 12
+```
+
+---
+
+## 15.13 Size Type
+
+The `Size` type represents byte quantities with human-readable display formatting.
+
+**Record fields:** `bytes: int`
+
+#### Size Literals
+
+Size values can be written directly using numeric suffixes:
+
+```endo
+print 42_B    # => 42 B
+```
+
+```endo
+print 1_KB    # => 1 KB
+```
+
+```endo
+print 5_MB    # => 5 MB
+```
+
+```endo
+print 2_GB    # => 2 GB
+```
+
+```endo
+print 1_TB    # => 1 TB
+```
+
+#### `Size.fromBytes`
+
+**Signature:** `Size.fromBytes n : Size`
+
+Creates a Size from a raw byte count.
+
+```endo
+print (Size.fromBytes 1024)   # => 1 KB
+```
+
+#### `Size.fromKB`
+
+**Signature:** `Size.fromKB n : Size`
+
+Creates a Size from kilobytes (n × 1024 bytes).
+
+```endo
+print (Size.fromKB 5)   # => 5 KB
+```
+
+#### `Size.fromMB`
+
+**Signature:** `Size.fromMB n : Size`
+
+Creates a Size from megabytes (n × 1024² bytes).
+
+```endo
+print (Size.fromMB 1)   # => 1 MB
+```
+
+#### `Size.fromGB`
+
+**Signature:** `Size.fromGB n : Size`
+
+Creates a Size from gigabytes (n × 1024³ bytes).
+
+```endo
+print (Size.fromGB 1)   # => 1 GB
+```
+
+#### `Size.fromTB`
+
+**Signature:** `Size.fromTB n : Size`
+
+Creates a Size from terabytes (n × 1024⁴ bytes).
+
+```endo
+print (Size.fromTB 1)   # => 1 TB
+```
+
+#### Field Access
+
+Access the raw byte count via the `.bytes` field:
+
+```endo
+print (1_KB).bytes   # => 1024
+```
+
+#### Size Comparison
+
+Size values support comparison operators:
+
+```endo
+print (1_KB < 1_MB)   # => true
+```
+
+```endo
+print (1_KB == Size.fromBytes 1024)   # => true
+```
+
+---
+
+## 15.14 DateTime Type
+
+The `DateTime` type represents a point in time (UTC) with named field access.
+
+**Record fields:** `year: int`, `month: int`, `day: int`, `hour: int`, `minute: int`, `second: int`, `epoch: int`
+
+#### `DateTime.now`
+
+**Signature:** `DateTime.now : DateTime`
+
+Returns the current UTC date and time.
+
+<!-- endo-no-check -->
+```endo
+let dt = DateTime.now
+println dt              # 2024-06-15 14:30:00
+println dt.year         # 2024
+println dt.month        # 6
+```
+
+#### `DateTime.fromEpoch`
+
+**Signature:** `DateTime.fromEpoch epoch : DateTime`
+
+Converts a Unix epoch timestamp to a DateTime record.
+
+<!-- endo-no-check -->
+```endo
+let dt = DateTime.fromEpoch 1700000000
+println dt.year         # 2023
+println dt.month        # 11
+println dt.day          # 14
+```
+
+#### `formatDateTime`
+
+**Signature:** `formatDateTime epoch : str`
+
+Formats a Unix epoch timestamp as `YYYY-MM-DD HH:MM:SS`.
+
+<!-- endo-no-check -->
+```endo
+print (formatDateTime 1700000000)   # 2023-11-14 22:13:20
+```
+
+---
+
+## 15.15 Shell Data Commands
+
+These built-in commands return structured records that support dot access, pattern matching,
+and pipeline operations.
+
+#### `ls`
+
+**Signature:** `ls : list<FileInfo>` or `ls path : list<FileInfo>`
+
+Lists directory contents as structured records.
+
+**FileInfo fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `str` | File name |
+| `size` | `Size` | File size |
+| `mode` | `int` | Unix permission bits |
+| `mtime` | `DateTime` | Last modification time |
+| `isDir` | `bool` | Whether entry is a directory |
+
+<!-- endo-no-check -->
+```endo
+# List all file names
+ls |> map _.name
+
+# Find large files (> 1 MB)
+ls |> filter (_.size.bytes > 1048576) |> map _.name
+
+# Sort by modification time
+ls |> sortBy _.mtime.epoch
+
+# Filter directories only
+ls |> filter _.isDir |> map _.name
+
+# Access nested fields
+match head ls with
+| Some f -> println $"{f.name}: {f.size}"
+| None   -> println "empty directory"
+```
+
+#### `ps`
+
+**Signature:** `ps : list<ProcessInfo>`
+
+Lists running processes as structured records.
+
+**ProcessInfo fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `pid` | `int` | Process ID |
+| `ppid` | `int` | Parent process ID |
+| `user` | `str` | Owning user |
+| `cpu` | `float` | CPU usage percentage |
+| `mem` | `float` | Memory usage percentage |
+| `command` | `str` | Command name |
+
+<!-- endo-no-check -->
+```endo
+# Filter by CPU usage
+ps |> filter (_.cpu > 5.0) |> sortBy _.cpu
+
+# Find processes by name
+ps |> filter (_.command |> contains "firefox")
+
+# Count processes per user
+ps |> groupBy _.user |> map (fun (u, procs) -> (u, length procs))
+```
+
+#### `jobs`
+
+**Signature:** `jobs : list<JobInfo>`
+
+Lists background jobs as structured records.
+
+**JobInfo fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `int` | Job number |
+| `state` | `str` | Job state (e.g. "Running", "Stopped") |
+| `command` | `str` | Command string |
+| `pid` | `int` | Process ID |
+
+<!-- endo-no-check -->
+```endo
+# List running background jobs
+jobs |> filter (_.state == "Running") |> map _.command
+```
+
+---
+
+## 15.16 File Permission Helpers
+
+These functions operate on Unix file mode integers (as found in `FileInfo.mode`).
+
+#### `formatMode`
+
+**Signature:** `formatMode mode : str`
+
+Formats a Unix file mode as a `rwxrwxrwx` permission string.
+
+<!-- endo-no-check -->
+```endo
+ls |> map (fun f -> (f.name, formatMode f.mode))
+```
+
+#### `isReadable`
+
+**Signature:** `isReadable mode : bool`
+
+Tests if any read permission bit is set.
+
+<!-- endo-no-check -->
+```endo
+ls |> filter (fun f -> isReadable f.mode) |> map _.name
+```
+
+#### `isWritable`
+
+**Signature:** `isWritable mode : bool`
+
+Tests if any write permission bit is set.
+
+<!-- endo-no-check -->
+```endo
+ls |> filter (fun f -> isWritable f.mode) |> map _.name
+```
+
+#### `isExecutable`
+
+**Signature:** `isExecutable mode : bool`
+
+Tests if any execute permission bit is set.
+
+<!-- endo-no-check -->
+```endo
+ls |> filter (fun f -> isExecutable f.mode) |> map _.name
+```
+
+---
+
+## 15.17 Display Formatting
+
+#### `toText`
+
+**Signature:** `toText value : str`
+
+Converts any value to its string representation. Useful for converting structured records
+to plain text.
+
+<!-- endo-no-check -->
+```endo
+ls |> map toText |> each println
+```
+
+#### `string`
+
+**Signature:** `string value : str`
+
+Universal conversion to string. Works with integers, floats, booleans, and strings.
+
+```endo
+print (string 42)      # => 42
+```
+
+```endo
+print (string true)    # => true
+```
+
+---
+
+## 15.18 HTTP
+
+#### `fetch`
+
+**Signature:** `fetch url : result<str, str>`
+
+Fetches content from a URL. Returns `Ok body` on success, `Error message` on failure.
+
+<!-- endo-no-check -->
+```endo
+match fetch "https://example.com" with
+| Ok body  -> println body
+| Error e  -> println $"Failed: {e}"
 ```
 
 ---
