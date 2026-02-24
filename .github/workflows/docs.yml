@@ -23,6 +23,10 @@ jobs:
       # Build WASM playground
       - name: Get vendored libraries
         run: ./scripts/get_contour_dirs.sh
+      - name: Pre-generate libunicode tablegen files
+        run: |
+          cmake -B build/native -DCPM_SOURCE_CACHE=.cache/cpm -DCMAKE_BUILD_TYPE=Release -GNinja
+          cmake --build build/native --target unicode
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:

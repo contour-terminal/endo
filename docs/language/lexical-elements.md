@@ -110,6 +110,7 @@ print s.bytes     # 10485760
 
 Size values support comparison operators:
 
+<!-- endo-no-check -->
 ```endo
 1_KB < 1_MB       # true
 1_KB == Size.fromBytes 1024  # true

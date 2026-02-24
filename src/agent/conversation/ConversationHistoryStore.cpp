@@ -24,7 +24,11 @@ namespace
     {
         auto const tt = std::chrono::system_clock::to_time_t(tp);
         auto tm = std::tm {};
+#if defined(_WIN32)
+        gmtime_s(&tm, &tt);
+#else
         gmtime_r(&tt, &tm);
+#endif
         auto buf = std::array<char, 32> {};
         std::strftime(buf.data(), buf.size(), "%Y-%m-%dT%H:%M:%SZ", &tm);
         return std::string(buf.data());
@@ -37,7 +41,11 @@ namespace
         ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
         if (ss.fail())
             return {};
+#if defined(_WIN32)
+        return std::chrono::system_clock::from_time_t(_mkgmtime(&tm));
+#else
         return std::chrono::system_clock::from_time_t(timegm(&tm));
+#endif
     }
 
     auto tokenUsageToJson(TokenUsage const& usage) -> nlohmann::json

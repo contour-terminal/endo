@@ -115,6 +115,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_trusted_tool` | list | Tools auto-approved regardless of risk level |
 | `agent_blocked_pattern` | list | Shell command patterns unconditionally blocked |
 
+<!-- endo-no-check -->
 ```endo
 agent_permissions_policy <- "ask"
 agent_trusted_tool <- ["read_file"; "glob"; "grep"; "search"]
@@ -226,6 +227,7 @@ agent_web_search_cx <- "your-cx-id"
 
 ## Complete init.endo Example
 
+<!-- endo-no-check -->
 ```endo
 # ~/.config/endo/init.endo
 

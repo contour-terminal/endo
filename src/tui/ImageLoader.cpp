@@ -11,7 +11,14 @@
 #include <string>
 
 #include <stb_image.h>
+#if defined(_MSC_VER) || defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#endif
 #include <stb_image_resize2.h>
+#if defined(_MSC_VER) || defined(__clang__)
+    #pragma clang diagnostic pop
+#endif
 
 namespace tui
 {
@@ -143,6 +150,7 @@ auto isImageExtension(std::string_view ext) -> bool
            || lower == ".ppm";
 }
 
+#if !defined(_WIN32)
 namespace
 {
 
@@ -169,6 +177,7 @@ namespace
     }
 
 } // namespace
+#endif
 
 auto readClipboardImage() -> std::optional<ClipboardImage>
 {

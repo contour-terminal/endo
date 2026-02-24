@@ -17,7 +17,9 @@ namespace
     TerminalInput* gActiveInput = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 } // namespace
 
-Terminal::Terminal() = default;
+Terminal::Terminal(): _output(std::make_unique<TerminalOutput>())
+{
+}
 
 Terminal::~Terminal()
 {
@@ -30,7 +32,7 @@ auto Terminal::initialize() -> VoidResult
         return {};
 
     // Initialize output first (queries dimensions)
-    if (auto result = _output.initialize(); !result)
+    if (auto result = _output->initialize(); !result)
         return result;
 
     // Initialize input (raw mode, protocols)
@@ -67,7 +69,7 @@ auto Terminal::input() noexcept -> TerminalInput&
 
 auto Terminal::output() noexcept -> TerminalOutput&
 {
-    return _output;
+    return *_output;
 }
 
 auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
@@ -94,12 +96,12 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
 
 auto Terminal::columns() const noexcept -> int
 {
-    return _output.columns();
+    return _output->columns();
 }
 
 auto Terminal::rows() const noexcept -> int
 {
-    return _output.rows();
+    return _output->rows();
 }
 
 void Terminal::suspend()
@@ -121,8 +123,8 @@ auto Terminal::isSuspended() const noexcept -> bool
 
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
-    _output.requestCursorPosition();
-    _output.flush();
+    _output->requestCursorPosition();
+    _output->flush();
 
     auto constexpr totalTimeout = std::chrono::milliseconds(100);
     auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
@@ -157,8 +159,8 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
 auto Terminal::queryCellSize() -> std::pair<int, int>
 {
-    _output.requestCellSize();
-    _output.flush();
+    _output->requestCellSize();
+    _output->flush();
 
     auto constexpr totalTimeout = std::chrono::milliseconds(100);
     auto const deadline = std::chrono::steady_clock::now() + totalTimeout;

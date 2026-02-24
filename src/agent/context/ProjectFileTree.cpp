@@ -18,7 +18,11 @@ namespace
     /// Runs a command and captures its stdout output.
     [[nodiscard]] auto runCommand(std::string const& command) -> std::string
     {
+#if defined(_WIN32)
+        auto* pipe = _popen(command.c_str(), "r");
+#else
         auto* pipe = popen(command.c_str(), "r");
+#endif
         if (!pipe)
             return {};
 
@@ -27,7 +31,11 @@ namespace
         while (auto const bytesRead = fread(buffer.data(), 1, buffer.size(), pipe))
             output.append(buffer.data(), bytesRead);
 
+#if defined(_WIN32)
+        _pclose(pipe);
+#else
         pclose(pipe);
+#endif
 
         // Trim trailing newline
         while (!output.empty() && output.back() == '\n')

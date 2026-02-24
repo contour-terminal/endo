@@ -11,7 +11,9 @@
 #include <string>
 #include <string_view>
 
-#if !defined(_WIN32)
+#if defined(_WIN32)
+    #include <io.h>
+#else
     #include <unistd.h>
 #endif
 
