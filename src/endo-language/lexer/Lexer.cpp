@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/lexer/Lexer.hpp>
 
-#include <libunicode/utf8.h>
-
 #include <algorithm>
+
+#include <libunicode/utf8.h>
 
 using namespace std::string_view_literals;
 
@@ -405,8 +405,32 @@ void Lexer::consumeWhitespace()
         if (_currentChar == U'#')
         {
             _precedingSpace = true;
-            while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+            if (_collectComments)
+            {
+                auto const startLoc = _source->currentSourceLocation();
+                std::string text;
+                text += '#';
                 nextChar();
+                while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                {
+                    text += static_cast<char>(_currentChar);
+                    nextChar();
+                }
+                auto const endLoc = _source->currentSourceLocation();
+                _comments.push_back(CommentTrivia {
+                    .style = CommentStyle::Shell,
+                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
+                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                                  .name = startLoc.name },
+                    .text = std::move(text),
+                    .isTrailing = (_lastTokenEndLine == startLoc.line),
+                });
+            }
+            else
+            {
+                while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                    nextChar();
+            }
             continue;
         }
 
@@ -414,8 +438,34 @@ void Lexer::consumeWhitespace()
         if (_currentChar == U'/' && _source->peekChar() == U'/')
         {
             _precedingSpace = true;
-            while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+            if (_collectComments)
+            {
+                auto const startLoc = _source->currentSourceLocation();
+                std::string text;
+                text += '/';
                 nextChar();
+                text += '/';
+                nextChar();
+                while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                {
+                    text += static_cast<char>(_currentChar);
+                    nextChar();
+                }
+                auto const endLoc = _source->currentSourceLocation();
+                _comments.push_back(CommentTrivia {
+                    .style = CommentStyle::CStyle,
+                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
+                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                                  .name = startLoc.name },
+                    .text = std::move(text),
+                    .isTrailing = (_lastTokenEndLine == startLoc.line),
+                });
+            }
+            else
+            {
+                while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
+                    nextChar();
+            }
             continue;
         }
 
@@ -423,26 +473,72 @@ void Lexer::consumeWhitespace()
         if (_currentChar == U'(' && _source->peekChar() == U'*')
         {
             _precedingSpace = true;
-            nextChar(); // consume '('
-            nextChar(); // consume '*'
-            auto depth = 1;
-            while (!eof() && depth > 0)
+            if (_collectComments)
             {
-                if (_currentChar == U'(' && _source->peekChar() == U'*')
+                auto const startLoc = _source->currentSourceLocation();
+                std::string text;
+                text += '(';
+                nextChar();
+                text += '*';
+                nextChar();
+                auto depth = 1;
+                while (!eof() && depth > 0)
                 {
-                    nextChar();
-                    nextChar();
-                    ++depth;
+                    if (_currentChar == U'(' && _source->peekChar() == U'*')
+                    {
+                        text += '(';
+                        nextChar();
+                        text += '*';
+                        nextChar();
+                        ++depth;
+                    }
+                    else if (_currentChar == U'*' && _source->peekChar() == U')')
+                    {
+                        text += '*';
+                        nextChar();
+                        text += ')';
+                        nextChar();
+                        --depth;
+                    }
+                    else
+                    {
+                        text += static_cast<char>(_currentChar);
+                        nextChar();
+                    }
                 }
-                else if (_currentChar == U'*' && _source->peekChar() == U')')
+                auto const endLoc = _source->currentSourceLocation();
+                _comments.push_back(CommentTrivia {
+                    .style = CommentStyle::FSharp,
+                    .location = { .begin = { startLoc.line, std::max(0, startLoc.column - 1) },
+                                  .end = { endLoc.line, std::max(0, endLoc.column - 1) },
+                                  .name = startLoc.name },
+                    .text = std::move(text),
+                    .isTrailing = (_lastTokenEndLine == startLoc.line),
+                });
+            }
+            else
+            {
+                nextChar(); // consume '('
+                nextChar(); // consume '*'
+                auto depth = 1;
+                while (!eof() && depth > 0)
                 {
-                    nextChar();
-                    nextChar();
-                    --depth;
-                }
-                else
-                {
-                    nextChar();
+                    if (_currentChar == U'(' && _source->peekChar() == U'*')
+                    {
+                        nextChar();
+                        nextChar();
+                        ++depth;
+                    }
+                    else if (_currentChar == U'*' && _source->peekChar() == U')')
+                    {
+                        nextChar();
+                        nextChar();
+                        --depth;
+                    }
+                    else
+                    {
+                        nextChar();
+                    }
                 }
             }
             continue;
@@ -1185,6 +1281,12 @@ Token Lexer::confirmToken(Token token)
     auto const [a, b, _] = _source->currentSourceLocation();
     _nextToken.location.end = { .line = a, .column = std::max(0, b - 1) };
     _currentToken = _nextToken;
+
+    // Track end line for trailing comment detection (skip LineFeed/Semicolon tokens
+    // because their end position is on the next line, which would incorrectly mark
+    // standalone comments on the following line as "trailing")
+    if (token != Token::LineFeed && token != Token::Semicolon)
+        _lastTokenEndLine = _currentToken.location.end.line;
 
     _nextToken.literal = {};
     _nextToken.location.name = _source->currentSourceLocation().name;

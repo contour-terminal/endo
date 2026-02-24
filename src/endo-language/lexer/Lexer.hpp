@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
 #include <cstring>
 #include <format>
 #include <memory>
@@ -172,6 +173,23 @@ struct TokenInfo
     SourceLocationRange location;
 };
 
+/// Style of comment syntax used.
+enum class CommentStyle : uint8_t
+{
+    Shell,  ///< # comment
+    CStyle, ///< // comment
+    FSharp, ///< (* comment *)
+};
+
+/// A single comment captured during lexing.
+struct CommentTrivia
+{
+    CommentStyle style;            ///< Which comment syntax was used
+    SourceLocationRange location;  ///< Source location range of the comment
+    std::string text;              ///< The comment text (including delimiters)
+    bool isTrailing = false;       ///< True if on the same line as the preceding token
+};
+
 class Source
 {
   public:
@@ -277,7 +295,11 @@ class StringSource final: public Source
 class Lexer
 {
   public:
-    explicit Lexer(std::unique_ptr<Source> source): _source { std::move(source) }
+    /// Constructs a lexer and produces the first token.
+    /// @param source The source to lex.
+    /// @param collectComments When true, enables comment trivia collection from the start.
+    explicit Lexer(std::unique_ptr<Source> source, bool collectComments = false):
+        _source { std::move(source) }, _collectComments { collectComments }
     {
         nextChar();
         nextToken();
@@ -331,6 +353,20 @@ class Lexer
         _currentToken = TokenInfo { .token = token, .literal = std::move(literal), .location = location };
     }
 
+    /// Enables or disables comment trivia collection.
+    ///
+    /// When enabled, comments encountered during lexing are stored in a side-channel
+    /// vector instead of being silently discarded. This is opt-in to avoid any
+    /// performance impact on existing code paths.
+    /// @param enable True to start collecting comments, false to stop.
+    void setCollectComments(bool enable) noexcept { _collectComments = enable; }
+
+    /// Returns the collected comment trivia.
+    ///
+    /// Only populated when comment collection is enabled via setCollectComments(true).
+    /// @return Reference to the vector of collected comments.
+    [[nodiscard]] std::vector<CommentTrivia> const& comments() const noexcept { return _comments; }
+
   private:
     [[nodiscard]] bool eof() const noexcept { return _currentChar == char32_t(-1); }
 
@@ -366,6 +402,11 @@ class Lexer
     TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
     bool _atStatementStart = true; // True when next token starts a new statement (for [ disambiguation)
     bool _precedingSpace = true;   // True when whitespace precedes the current token
+
+    // Comment trivia collection (opt-in)
+    bool _collectComments = false;           // When true, comments are stored in _comments
+    std::vector<CommentTrivia> _comments;    // Collected comment trivia
+    int _lastTokenEndLine = -1;              // End line of previous token (for trailing comment detection)
 };
 
 /// Converts a Token to its string representation.
