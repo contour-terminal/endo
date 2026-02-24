@@ -72,7 +72,7 @@ Returns a stream of `FileInfo` records.
 |-------|------|-------------|
 | `name` | string | File name |
 | `size` | int | File size in bytes |
-| `mode` | int | File permission bits |
+| `mode` | FileMode | File permissions |
 | `mtime` | int | Modification time (epoch seconds) |
 | `isDir` | bool | Whether the entry is a directory |
 

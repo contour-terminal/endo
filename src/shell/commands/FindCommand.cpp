@@ -139,7 +139,8 @@ CoreVM::TypedObject* FindCommand::execute(CoreVM::Runner& runner) const
         record->setSlot(0, reinterpret_cast<uintptr_t>(runner.newString(match.path)));
         auto* sizeObj = endo::builtins::makeSizeFromBytes(&runner, match.size);
         record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
-        record->setSlot(2, match.mode);
+        auto* modeObj = endo::builtins::makeFileModeFromBits(&runner, static_cast<int64_t>(match.mode));
+        record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));
         auto* mtimeObj = endo::builtins::makeDateTimeFromEpoch(&runner, match.mtime);
         record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
         record->setSlot(4, static_cast<uint64_t>(match.isDir ? 1 : 0));

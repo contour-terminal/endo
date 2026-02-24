@@ -113,7 +113,7 @@ void TypeRegistry::registerBuiltins()
     fileInfoType->slotCount = 5;
     fileInfoType->fields = {
         { "name", 0, LiteralType::String },   { "size", 1, LiteralType::Object },
-        { "mode", 2, LiteralType::Number },   { "mtime", 3, LiteralType::Object },
+        { "mode", 2, LiteralType::Object },   { "mtime", 3, LiteralType::Object },
         { "isDir", 4, LiteralType::Boolean },
     };
     addType(std::move(fileInfoType));
@@ -142,6 +142,17 @@ void TypeRegistry::registerBuiltins()
         { "bytes", 0, LiteralType::Number },
     };
     addType(std::move(sizeType));
+
+    // FileMode: Product type with 1 field for raw Unix permission bits
+    auto fileModeType = std::make_unique<TypeDescriptor>();
+    fileModeType->kind = TypeKind::Product;
+    fileModeType->id = BuiltinTypeId::FileMode;
+    fileModeType->name = "FileMode";
+    fileModeType->slotCount = 1;
+    fileModeType->fields = {
+        { "bits", 0, LiteralType::Number },
+    };
+    addType(std::move(fileModeType));
 
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));

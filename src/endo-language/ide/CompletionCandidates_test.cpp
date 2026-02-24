@@ -594,7 +594,7 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_53_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 58);
+    CHECK(stdlib.size() == 59);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -707,6 +707,12 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.datetime_constructors"
     auto stdlib = standardLibraryCandidates();
     CHECK(hasCandidate(stdlib, "DateTime.now"));
     CHECK(hasCandidate(stdlib, "DateTime.fromEpoch"));
+}
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.filemode_constructors", "[completion][stdlib]")
+{
+    auto stdlib = standardLibraryCandidates();
+    CHECK(hasCandidate(stdlib, "FileMode.fromBits"));
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[completion][stdlib]")

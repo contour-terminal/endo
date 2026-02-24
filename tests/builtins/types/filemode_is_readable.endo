@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileMode.isReadable property
+# expect: true
+
+let m = FileMode.fromBits 420
+print m.isReadable

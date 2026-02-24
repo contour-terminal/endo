@@ -124,6 +124,8 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
         }
         if (typeId == CoreVM::BuiltinTypeId::Size)
             return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
+        if (typeId == CoreVM::BuiltinTypeId::FileMode)
+            return formatFileModeToString(static_cast<int64_t>(obj->getSlot(0)));
         if (typeId == CoreVM::BuiltinTypeId::DateTime)
         {
             // Render DateTime as "YYYY-MM-DD HH:MM:SS"
@@ -648,20 +650,23 @@ void formatDatetime(CoreVM::Params& args)
     args.setResult(args.caller()->newString(result));
 }
 
+/// Extracts raw permission bits from either a raw integer or a FileMode object.
+int extractModeBits(CoreVM::Params& args)
+{
+    auto const rawVal = static_cast<uint64_t>(args.getInt(1));
+    if (args.caller()->isKnownObject(rawVal))
+    {
+        auto const* obj = reinterpret_cast<CoreVM::TypedObject const*>(static_cast<uintptr_t>(rawVal));
+        if (obj->type->id == CoreVM::BuiltinTypeId::FileMode)
+            return static_cast<int>(obj->getSlot(0));
+    }
+    return static_cast<int>(rawVal);
+}
+
 void formatMode(CoreVM::Params& args)
 {
-    auto const mode = static_cast<int>(args.getInt(1));
-    std::string result;
-    result += (mode & 0400) ? 'r' : '-';
-    result += (mode & 0200) ? 'w' : '-';
-    result += (mode & 0100) ? 'x' : '-';
-    result += (mode & 0040) ? 'r' : '-';
-    result += (mode & 0020) ? 'w' : '-';
-    result += (mode & 0010) ? 'x' : '-';
-    result += (mode & 0004) ? 'r' : '-';
-    result += (mode & 0002) ? 'w' : '-';
-    result += (mode & 0001) ? 'x' : '-';
-    args.setResult(args.caller()->newString(result));
+    auto const mode = extractModeBits(args);
+    args.setResult(args.caller()->newString(formatFileModeToString(mode)));
 }
 
 namespace
@@ -713,20 +718,95 @@ void formatNumberWithLocale(CoreVM::Params& args)
 
 void modeIsReadable(CoreVM::Params& args)
 {
-    auto const mode = static_cast<int>(args.getInt(1));
+    auto const mode = extractModeBits(args);
     args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0444) != 0 ? 1 : 0));
 }
 
 void modeIsWritable(CoreVM::Params& args)
 {
-    auto const mode = static_cast<int>(args.getInt(1));
+    auto const mode = extractModeBits(args);
     args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0222) != 0 ? 1 : 0));
 }
 
 void modeIsExecutable(CoreVM::Params& args)
 {
-    auto const mode = static_cast<int>(args.getInt(1));
+    auto const mode = extractModeBits(args);
     args.setResult(static_cast<CoreVM::CoreNumber>((mode & 0111) != 0 ? 1 : 0));
+}
+
+// ---------------------------------------------------------------------------
+// FileMode operations
+// ---------------------------------------------------------------------------
+
+std::string formatFileModeToString(int64_t mode)
+{
+    std::string result;
+    result += (mode & 0400) ? 'r' : '-';
+    result += (mode & 0200) ? 'w' : '-';
+    result += (mode & 0100) ? 'x' : '-';
+    result += (mode & 0040) ? 'r' : '-';
+    result += (mode & 0020) ? 'w' : '-';
+    result += (mode & 0010) ? 'x' : '-';
+    result += (mode & 0004) ? 'r' : '-';
+    result += (mode & 0002) ? 'w' : '-';
+    result += (mode & 0001) ? 'x' : '-';
+    return result;
+}
+
+CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode)
+{
+    auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::FileMode);
+    obj->setSlot(0, static_cast<uint64_t>(mode));
+    return obj;
+}
+
+void fileModeFromBits(CoreVM::Params& args)
+{
+    auto const bits = args.getInt(1);
+    auto* obj = makeFileModeFromBits(args.caller(), bits);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void fileModeIsReadable(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>((bits & 0444) != 0 ? 1 : 0));
+}
+
+void fileModeIsWritable(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>((bits & 0222) != 0 ? 1 : 0));
+}
+
+void fileModeIsExecutable(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>((bits & 0111) != 0 ? 1 : 0));
+}
+
+void fileModeOwner(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>((bits >> 6) & 7));
+}
+
+void fileModeGroup(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>((bits >> 3) & 7));
+}
+
+void fileModeOther(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const bits = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(static_cast<CoreVM::CoreNumber>(bits & 7));
 }
 
 // ---------------------------------------------------------------------------
@@ -946,6 +1026,22 @@ std::optional<CoreVM::NativeCallback::Functor> resolveSharedImpl(std::string_vie
         return &modeIsWritable;
     if (name == "mode_isExecutable" && arity == 1)
         return &modeIsExecutable;
+
+    // FileMode operations
+    if (name == "filemode_from_bits" && arity == 1)
+        return &fileModeFromBits;
+    if (name == "filemode_is_readable" && arity == 1)
+        return &fileModeIsReadable;
+    if (name == "filemode_is_writable" && arity == 1)
+        return &fileModeIsWritable;
+    if (name == "filemode_is_executable" && arity == 1)
+        return &fileModeIsExecutable;
+    if (name == "filemode_owner" && arity == 1)
+        return &fileModeOwner;
+    if (name == "filemode_group" && arity == 1)
+        return &fileModeGroup;
+    if (name == "filemode_other" && arity == 1)
+        return &fileModeOther;
 
     // Size operations
     if (name == "size_from_bytes" && arity == 1)

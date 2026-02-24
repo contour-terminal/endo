@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileMode.group returns octal group digit (0-7)
+# expect: 5
+
+let m = FileMode.fromBits 493
+print m.group

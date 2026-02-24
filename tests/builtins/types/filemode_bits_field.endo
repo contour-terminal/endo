@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileMode.bits field access returns raw permission bits
+# expect: 493
+
+let m = FileMode.fromBits 493
+print m.bits

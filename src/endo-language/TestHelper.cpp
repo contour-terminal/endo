@@ -86,7 +86,8 @@ namespace
             record->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(f.name)));
             auto* sizeObj = builtins::makeSizeFromBytes(runner, f.size);
             record->setSlot(1, reinterpret_cast<uintptr_t>(sizeObj));
-            record->setSlot(2, static_cast<uint64_t>(f.mode));
+            auto* modeObj = builtins::makeFileModeFromBits(runner, f.mode);
+            record->setSlot(2, reinterpret_cast<uintptr_t>(modeObj));
             auto* mtimeObj = builtins::makeDateTimeFromEpoch(runner, f.mtime);
             record->setSlot(3, reinterpret_cast<uintptr_t>(mtimeObj));
             record->setSlot(4, static_cast<uint64_t>(f.isDir ? 1 : 0));

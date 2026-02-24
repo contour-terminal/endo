@@ -254,6 +254,43 @@ void registerFSharpBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve
         .param<CoreVM::CoreNumber>("mode")
         .returnType(CoreVM::LiteralType::Boolean), resolve, "mode_isExecutable", 1);
 
+    // --- FileMode operations ---
+
+    // filemode_from_bits(n: number) -> number (FileMode record)
+    bindResolved(rt.registerFunction("filemode_from_bits")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number), resolve, "filemode_from_bits", 1);
+
+    // filemode_is_readable(obj: number) -> bool
+    bindResolved(rt.registerFunction("filemode_is_readable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean), resolve, "filemode_is_readable", 1);
+
+    // filemode_is_writable(obj: number) -> bool
+    bindResolved(rt.registerFunction("filemode_is_writable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean), resolve, "filemode_is_writable", 1);
+
+    // filemode_is_executable(obj: number) -> bool
+    bindResolved(rt.registerFunction("filemode_is_executable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean), resolve, "filemode_is_executable", 1);
+
+    // filemode_owner(obj: number) -> number
+    bindResolved(rt.registerFunction("filemode_owner")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number), resolve, "filemode_owner", 1);
+
+    // filemode_group(obj: number) -> number
+    bindResolved(rt.registerFunction("filemode_group")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number), resolve, "filemode_group", 1);
+
+    // filemode_other(obj: number) -> number
+    bindResolved(rt.registerFunction("filemode_other")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number), resolve, "filemode_other", 1);
+
     // --- Random number generation ---
 
     // rand() -> number

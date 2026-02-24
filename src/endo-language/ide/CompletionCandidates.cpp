@@ -194,6 +194,8 @@ namespace
         StdLibEntry { "Size.fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
         StdLibEntry { "Size.fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
         StdLibEntry { "Size.fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
+        // FileMode constructors
+        StdLibEntry { "FileMode.fromBits", "FileMode.fromBits n -> FileMode" },
         // DateTime constructors
         StdLibEntry { "DateTime.now", "DateTime.now -> DateTime (current UTC time)" },
         StdLibEntry { "DateTime.fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
@@ -628,6 +630,11 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         OptionMethod { "fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
     };
 
+    // FileMode module methods
+    constexpr std::array fileModeMethods = {
+        OptionMethod { "fromBits", "FileMode.fromBits n -> FileMode" },
+    };
+
     if (objectPart == "Option")
     {
         // Static Option module methods
@@ -651,6 +658,15 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         // Static DateTime module methods
         for (auto const& method: dateTimeMethods)
             addCandidate("DateTime." + std::string(method.name),
+                         std::string(method.name),
+                         std::string(method.description),
+                         CompletionKind::Function);
+    }
+    else if (objectPart == "FileMode")
+    {
+        // Static FileMode module methods
+        for (auto const& method: fileModeMethods)
+            addCandidate("FileMode." + std::string(method.name),
                          std::string(method.name),
                          std::string(method.description),
                          CompletionKind::Function);

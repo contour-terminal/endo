@@ -329,6 +329,17 @@ namespace
               "`Size.fromGB` : `int -> Size`\n\nCreates a Size from gigabytes (n \u00d7 1024\u00b3)." },
             { "Size.fromTB",
               "`Size.fromTB` : `int -> Size`\n\nCreates a Size from terabytes (n \u00d7 1024\u2074)." },
+            { "FileMode",
+              "`FileMode` \u2014 Record type for Unix file permissions\n\n"
+              "**Fields:** `bits: int`\n\n"
+              "**Properties:** `isReadable`, `isWritable`, `isExecutable`, `owner`, `group`, `other`\n\n"
+              "```endo\nlet m = FileMode.fromBits 0o755\n"
+              "print m              // rwxr-xr-x\n"
+              "print m.isExecutable // true\n"
+              "print m.owner        // 7\n```" },
+            { "FileMode.fromBits",
+              "`FileMode.fromBits` : `int -> FileMode`\n\nCreates a FileMode from raw Unix permission "
+              "bits." },
             { "DateTime",
               "`DateTime` \u2014 Record type for date/time values (UTC)\n\n"
               "**Fields:** `year`, `month`, `day`, `hour`, `minute`, `second`, `epoch`\n\n"
@@ -341,7 +352,8 @@ namespace
               "DateTime record." },
             { "FileInfo",
               "`FileInfo` \u2014 Record type for file/directory information\n\n"
-              "**Fields:** `name: str`, `size: Size`, `mode: int`, `mtime: DateTime`, `isDir: bool`\n\n"
+              "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
+              "bool`\n\n"
               "Returned by `ls`. Supports dot access and pattern matching.\n\n"
               "```endo\nls |> filter (_.size.bytes > 1024) |> map _.name\n```" },
             { "ProcessInfo",
@@ -358,7 +370,8 @@ namespace
             { "ls",
               "`ls` : `list<FileInfo>` | `ls path` : `list<FileInfo>`\n\n"
               "Lists directory contents as structured FileInfo records.\n\n"
-              "**Fields:** `name: str`, `size: Size`, `mode: int`, `mtime: DateTime`, `isDir: bool`" },
+              "**Fields:** `name: str`, `size: Size`, `mode: FileMode`, `mtime: DateTime`, `isDir: "
+              "bool`" },
             { "ps",
               "`ps` : `list<ProcessInfo>`\n\n"
               "Lists running processes as structured ProcessInfo records.\n\n"
@@ -381,20 +394,24 @@ namespace
               "`formatDateTime` : `int -> str`\n\n"
               "Formats a Unix epoch timestamp as `YYYY-MM-DD HH:MM:SS`." },
             { "formatMode",
-              "`formatMode` : `int -> str`\n\n"
-              "Formats a Unix file mode as a `rwxrwxrwx` permission string." },
+              "`formatMode` : `int | FileMode -> str`\n\n"
+              "Formats a Unix file mode as a `rwxrwxrwx` permission string.\n\n"
+              "Accepts either raw permission bits (int) or a FileMode object." },
             { "toText",
               "`toText` : `'a -> str`\n\n"
               "Converts any value to its string representation." },
             { "isReadable",
-              "`isReadable` : `int -> bool`\n\n"
-              "Tests if any read permission bit is set in a Unix file mode." },
+              "`isReadable` : `int | FileMode -> bool`\n\n"
+              "Tests if any read permission bit is set in a Unix file mode.\n\n"
+              "Accepts either raw permission bits (int) or a FileMode object." },
             { "isWritable",
-              "`isWritable` : `int -> bool`\n\n"
-              "Tests if any write permission bit is set in a Unix file mode." },
+              "`isWritable` : `int | FileMode -> bool`\n\n"
+              "Tests if any write permission bit is set in a Unix file mode.\n\n"
+              "Accepts either raw permission bits (int) or a FileMode object." },
             { "isExecutable",
-              "`isExecutable` : `int -> bool`\n\n"
-              "Tests if any execute permission bit is set in a Unix file mode." },
+              "`isExecutable` : `int | FileMode -> bool`\n\n"
+              "Tests if any execute permission bit is set in a Unix file mode.\n\n"
+              "Accepts either raw permission bits (int) or a FileMode object." },
             { "formatNumber",
               "`formatNumber` : `str -> int -> str` | `int -> str`\n\n"
               "Formats an integer with thousand separators. In the 1-arg form, uses the locale separator." },

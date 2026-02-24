@@ -732,6 +732,42 @@ void Shell::registerLanguageBuiltins()
         .returnType(CoreVM::LiteralType::Boolean)
         .bind(endo::builtins::modeIsExecutable);
 
+    // F# FileMode builtins
+    _runtime.registerFunction("filemode_from_bits")
+        .param<CoreVM::CoreNumber>("n")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::fileModeFromBits);
+
+    _runtime.registerFunction("filemode_is_readable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(endo::builtins::fileModeIsReadable);
+
+    _runtime.registerFunction("filemode_is_writable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(endo::builtins::fileModeIsWritable);
+
+    _runtime.registerFunction("filemode_is_executable")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Boolean)
+        .bind(endo::builtins::fileModeIsExecutable);
+
+    _runtime.registerFunction("filemode_owner")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::fileModeOwner);
+
+    _runtime.registerFunction("filemode_group")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::fileModeGroup);
+
+    _runtime.registerFunction("filemode_other")
+        .param<CoreVM::CoreNumber>("obj")
+        .returnType(CoreVM::LiteralType::Number)
+        .bind(endo::builtins::fileModeOther);
+
     // F# rand builtins
     _runtime.registerFunction("rand")
         .returnType(CoreVM::LiteralType::Number)

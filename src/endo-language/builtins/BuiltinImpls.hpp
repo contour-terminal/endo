@@ -145,6 +145,42 @@ void modeIsWritable(CoreVM::Params& args);
 void modeIsExecutable(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// FileMode operations
+// ---------------------------------------------------------------------------
+
+/// Formats raw Unix permission bits as a "rwxrwxrwx" permission string.
+/// @param mode Raw Unix permission bits
+/// @return Permission string (e.g., "rwxr-xr-x")
+std::string formatFileModeToString(int64_t mode);
+
+/// Creates a FileMode record object from raw Unix permission bits.
+/// @param runner The runner instance for object allocation
+/// @param mode Raw Unix permission bits
+/// @return Pointer to the newly allocated FileMode TypedObject
+CoreVM::TypedObject* makeFileModeFromBits(CoreVM::Runner* runner, int64_t mode);
+
+/// filemode_from_bits(n) -> FileMode: Creates a FileMode from raw permission bits.
+void fileModeFromBits(CoreVM::Params& args);
+
+/// filemode_is_readable(obj) -> bool: Tests if any read bit is set.
+void fileModeIsReadable(CoreVM::Params& args);
+
+/// filemode_is_writable(obj) -> bool: Tests if any write bit is set.
+void fileModeIsWritable(CoreVM::Params& args);
+
+/// filemode_is_executable(obj) -> bool: Tests if any execute bit is set.
+void fileModeIsExecutable(CoreVM::Params& args);
+
+/// filemode_owner(obj) -> int: Returns the owner permission digit (0-7).
+void fileModeOwner(CoreVM::Params& args);
+
+/// filemode_group(obj) -> int: Returns the group permission digit (0-7).
+void fileModeGroup(CoreVM::Params& args);
+
+/// filemode_other(obj) -> int: Returns the other permission digit (0-7).
+void fileModeOther(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Size operations
 // ---------------------------------------------------------------------------
 

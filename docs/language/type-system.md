@@ -227,9 +227,21 @@ Returned by `ls`. Represents a file or directory entry.
 |-------|------|-------------|
 | `name` | `str` | File name |
 | `size` | `Size` | File size |
-| `mode` | `int` | Unix permission bits |
+| `mode` | `FileMode` | Unix file permissions |
 | `mtime` | `DateTime` | Last modification time |
 | `isDir` | `bool` | Whether entry is a directory |
+
+#### `FileMode`
+
+Represents Unix file permissions with human-readable display.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bits` | `int` | Raw permission bits |
+
+**Computed properties:** `isReadable : bool`, `isWritable : bool`, `isExecutable : bool`, `owner : int` (0-7), `group : int` (0-7), `other : int` (0-7).
+
+**Constructor:** `FileMode.fromBits n`
 
 #### `ProcessInfo`
 

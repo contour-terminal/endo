@@ -375,6 +375,19 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["Size"] = std::move(sizeType);
     }
 
+    // Pre-register FileMode record type.
+    {
+        RecordTypeInfo fileModeType;
+        fileModeType.typeId = CoreVM::BuiltinTypeId::FileMode;
+        fileModeType.name = "FileMode";
+        fileModeType.fields = {
+            { "bits", 0, CoreVM::LiteralType::Number },
+        };
+        for (auto const& f: fileModeType.fields)
+            fileModeType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["FileMode"] = std::move(fileModeType);
+    }
+
     // Pre-register FileInfo record type for the ls builtin.
     {
         RecordTypeInfo fileInfoType;
@@ -382,11 +395,12 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         fileInfoType.name = "FileInfo";
         fileInfoType.fields = {
             { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Object },
-            { "mode", 2, CoreVM::LiteralType::Number },   { "mtime", 3, CoreVM::LiteralType::Object },
+            { "mode", 2, CoreVM::LiteralType::Object },   { "mtime", 3, CoreVM::LiteralType::Object },
             { "isDir", 4, CoreVM::LiteralType::Boolean },
         };
         for (auto const& f: fileInfoType.fields)
             fileInfoType.fieldTypes[f.name] = f.type;
+        fileInfoType.fieldObjectTypeIds["mode"] = CoreVM::BuiltinTypeId::FileMode;
         fileInfoType.fieldObjectTypeIds["mtime"] = CoreVM::BuiltinTypeId::DateTime;
         fileInfoType.fieldObjectTypeIds["size"] = CoreVM::BuiltinTypeId::Size;
         generator._recordTypes["FileInfo"] = std::move(fileInfoType);
@@ -4467,6 +4481,84 @@ bool IRGenerator::tryGenerateBuiltinPropertyAccess(CoreVM::Value* obj, std::stri
         return false;
     }
 
+    // --- FileMode dot properties ---
+    if (*objTypeId == CoreVM::BuiltinTypeId::FileMode)
+    {
+        if (fieldName == "isReadable")
+        {
+            auto* callback = findCallback("filemode_is_readable(I)B");
+            if (!callback)
+            {
+                reportTypeError("filemode_is_readable builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.isReadable");
+            return true;
+        }
+        if (fieldName == "isWritable")
+        {
+            auto* callback = findCallback("filemode_is_writable(I)B");
+            if (!callback)
+            {
+                reportTypeError("filemode_is_writable builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.isWritable");
+            return true;
+        }
+        if (fieldName == "isExecutable")
+        {
+            auto* callback = findCallback("filemode_is_executable(I)B");
+            if (!callback)
+            {
+                reportTypeError("filemode_is_executable builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.isExecutable");
+            return true;
+        }
+        if (fieldName == "owner")
+        {
+            auto* callback = findCallback("filemode_owner(I)I");
+            if (!callback)
+            {
+                reportTypeError("filemode_owner builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.owner");
+            return true;
+        }
+        if (fieldName == "group")
+        {
+            auto* callback = findCallback("filemode_group(I)I");
+            if (!callback)
+            {
+                reportTypeError("filemode_group builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.group");
+            return true;
+        }
+        if (fieldName == "other")
+        {
+            auto* callback = findCallback("filemode_other(I)I");
+            if (!callback)
+            {
+                reportTypeError("filemode_other builtin not found");
+                return true;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { obj }, "filemode.other");
+            return true;
+        }
+        return false; // Fall through to field access (bits) via normal Product field lookup
+    }
+
     return false;
 }
 
@@ -6596,6 +6688,22 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
                         return;
                     }
+                }
+            }
+
+            // FileMode.fromBits n → filemode_from_bits(n)
+            if (modIdent->name == "FileMode" && method == "fromBits" && argExprs.size() == 1)
+            {
+                auto* arg = codegen(argExprs[0]);
+                if (!arg)
+                {
+                    reportTypeError("Failed to evaluate argument for FileMode.fromBits");
+                    return;
+                }
+                if (tryGenerateNativeCall("filemode_from_bits", { arg }))
+                {
+                    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::FileMode);
+                    return;
                 }
             }
         }
@@ -9704,6 +9812,17 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             reportTypeError("Size has no member '{}'", std::string_view(node.fieldName));
             return;
         }
+        if (modIdent->name == "FileMode")
+        {
+            if (node.fieldName == "fromBits")
+            {
+                // FileMode.fromBits requires an argument — handled in ApplicationExpr
+                reportTypeError("FileMode.fromBits requires a numeric argument");
+                return;
+            }
+            reportTypeError("FileMode has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
     }
 
     // Codegen the object expression
@@ -9850,6 +9969,10 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
 
     if (!found)
     {
+        // Try built-in type computed properties (FileMode.isReadable, etc.)
+        if (tryGenerateBuiltinPropertyAccess(obj, node.fieldName))
+            return;
+
         // Try function-as-method dot access: obj.funcName → funcName(obj)
         if (auto const* func = lookupFSharpFunction(node.fieldName))
         {

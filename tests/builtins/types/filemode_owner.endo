@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileMode.owner returns octal owner digit (0-7)
+# expect: 7
+
+let m = FileMode.fromBits 493
+print m.owner

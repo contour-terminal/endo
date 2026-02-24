@@ -20,9 +20,10 @@ by category. Each example is executable and verified by the documentation test s
 - [15.13 Size Type](#1513-size-type) -- `Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`, size literals
 - [15.14 DateTime Type](#1514-datetime-type) -- `DateTime.now`, `DateTime.fromEpoch`, `formatDateTime`
 - [15.15 Shell Data Commands](#1515-shell-data-commands) -- `ls`, `ps`, `jobs`
-- [15.16 File Permission Helpers](#1516-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
-- [15.17 Display Formatting](#1517-display-formatting) -- `toText`, `string`
-- [15.18 HTTP](#1518-http) -- `fetch`
+- [15.16 FileMode Type](#1516-filemode-type) -- `FileMode.fromBits`, `.isReadable`, `.isWritable`, `.isExecutable`, `.owner`, `.group`, `.other`
+- [15.17 File Permission Helpers](#1517-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
+- [15.18 Display Formatting](#1518-display-formatting) -- `toText`, `string`
+- [15.19 HTTP](#1519-http) -- `fetch`
 
 ---
 
@@ -1076,7 +1077,7 @@ Lists directory contents as structured records.
 |-------|------|-------------|
 | `name` | `str` | File name |
 | `size` | `Size` | File size |
-| `mode` | `int` | Unix permission bits |
+| `mode` | `FileMode` | Unix file permissions |
 | `mtime` | `DateTime` | Last modification time |
 | `isDir` | `bool` | Whether entry is a directory |
 
@@ -1152,9 +1153,44 @@ jobs |> filter (_.state == "Running") |> map _.command
 
 ---
 
-## 15.16 File Permission Helpers
+## 15.16 FileMode Type
 
-These functions operate on Unix file mode integers (as found in `FileInfo.mode`).
+The `FileMode` type represents Unix file permissions with human-readable display.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `bits` | `int` | Raw permission bits |
+
+**Computed properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `isReadable` | `bool` | Any read permission bit set |
+| `isWritable` | `bool` | Any write permission bit set |
+| `isExecutable` | `bool` | Any execute permission bit set |
+| `owner` | `int` | Owner digit (0-7) |
+| `group` | `int` | Group digit (0-7) |
+| `other` | `int` | Other digit (0-7) |
+
+#### `FileMode.fromBits`
+
+**Signature:** `FileMode.fromBits n : FileMode`
+
+Creates a FileMode from raw Unix permission bits.
+
+<!-- endo-no-check -->
+```endo
+let m = FileMode.fromBits 493
+print m              # rwxr-xr-x
+print m.isExecutable # true
+print m.owner        # 7
+```
+
+---
+
+## 15.17 File Permission Helpers
+
+These functions operate on Unix file modes (accept both `FileMode` objects and raw `int` permission bits).
 
 #### `formatMode`
 
@@ -1202,7 +1238,7 @@ ls |> filter (fun f -> isExecutable f.mode) |> map _.name
 
 ---
 
-## 15.17 Display Formatting
+## 15.18 Display Formatting
 
 #### `toText`
 
@@ -1232,7 +1268,7 @@ print (string true)    # => true
 
 ---
 
-## 15.18 HTTP
+## 15.19 HTTP
 
 #### `fetch`
 

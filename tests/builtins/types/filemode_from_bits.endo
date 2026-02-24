@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FileMode.fromBits creates a FileMode from raw bits
+# expect: rwxr-xr-x
+
+print (FileMode.fromBits 493)

@@ -70,6 +70,10 @@ namespace
                             text += ' ';
                         return text;
                     }
+                    if (obj->type->id == CoreVM::BuiltinTypeId::FileMode)
+                    {
+                        return builtins::formatFileModeToString(static_cast<int64_t>(obj->getSlot(0)));
+                    }
                 }
                 return std::to_string(static_cast<int64_t>(slotVal));
             }
@@ -224,7 +228,15 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             auto const nameSlot = record->getSlot(0);
             auto const* nameStr =
                 reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(nameSlot));
-            auto const mode = static_cast<int64_t>(record->getSlot(2));
+            int64_t mode = 0;
+            auto const modeSlot = record->getSlot(2);
+            if (runner && runner->isKnownObject(modeSlot))
+            {
+                auto const* modeObj =
+                    reinterpret_cast<CoreVM::TypedObject const*>(static_cast<uintptr_t>(modeSlot));
+                if (modeObj->type->id == CoreVM::BuiltinTypeId::FileMode)
+                    mode = static_cast<int64_t>(modeObj->getSlot(0));
+            }
             fileDecorations.push_back(
                 getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode));
         }

@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Access FileMode.isExecutable property through FileInfo
+# expect: [true; false; true]
+
+print (ls |> map (fun f -> f.mode.isExecutable))
