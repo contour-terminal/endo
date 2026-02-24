@@ -115,7 +115,6 @@ std::vector<CompletionCandidate> shellKeywordCandidates()
         { "if", "if", "Conditional expression", "", CompletionKind::Keyword },
         { "then", "then", "Then branch", "", CompletionKind::Keyword },
         { "else", "else", "Else branch", "", CompletionKind::Keyword },
-        { "elif", "elif", "Elif branch", "", CompletionKind::Keyword },
         { "for", "for", "For-in loop", "", CompletionKind::Keyword },
         { "while", "while", "While loop", "", CompletionKind::Keyword },
         { "do", "do", "Loop body", "", CompletionKind::Keyword },

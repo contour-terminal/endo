@@ -4,7 +4,7 @@
 
 ```
 let       mut       fun       type      match     with
-when      if        then      else      elif      end
+when      if        then      else      end
 for       in        do        while     try       finally
 return    break     continue  export    true      false
 Ok        Error     Some      None      rec       and

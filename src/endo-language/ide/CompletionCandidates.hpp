@@ -21,7 +21,7 @@ namespace endo
 [[nodiscard]] std::vector<CompletionCandidate> builtinCandidates();
 
 /// @brief Returns control flow keyword candidates.
-/// Keywords: if/then/else/elif, for/while/do/end, in, return, break, continue.
+/// Keywords: if/then/else, for/while/do/end, in, return, break, continue.
 [[nodiscard]] std::vector<CompletionCandidate> shellKeywordCandidates();
 
 /// @brief Returns type constructor candidates.

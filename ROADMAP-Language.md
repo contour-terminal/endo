@@ -177,7 +177,7 @@ This document tracks the implementation status of F# language features as define
 ## Control Flow
 
 - [x] If-then-else expressions (F# style, returns value)
-- [x] If-then-elif-else-fi statements (bash style)
+- [x] If-then-else-fi statements (bash style)
 - [x] Match expressions
 - [x] While loops
 - [x] For-in loops
