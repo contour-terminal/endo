@@ -22,6 +22,7 @@
 #endif
 
 #include "CrashHandler.hpp"
+#include "FormatCommand.hpp"
 #include "Shell.hpp"
 #include <agent/RunCommand.hpp>
 #include <agent/auth/LoginCommand.hpp>
@@ -50,6 +51,9 @@ Options:
   --log=<PATTERNS>   Enable logging for categories matching PATTERNS
                      (comma-separated, supports wildcards)
   --log-list         List all available log categories and exit
+
+Format:
+  format [OPTIONS] FILE...   Format Endo source files (see: endo format --help)
 
 Agent Commands:
   agent login [PROVIDER]    Authenticate with an LLM provider (claude, openai, gemini)
@@ -272,6 +276,10 @@ int main(int argc, char const* argv[])
 
     auto const args = std::span(argv, static_cast<size_t>(argc));
     auto const programName = args.empty() ? "endo"sv : std::string_view(args[0]);
+
+    // Handle `endo format <files>` before general argument parsing
+    if (args.size() >= 2 && std::string_view(args[1]) == "format"sv)
+        return endo::format::runFormatCommand(args.subspan(2));
 
     // Handle `endo agent <subcommand>` before general argument parsing
     if (args.size() >= 3 && std::string_view(args[1]) == "agent"sv)

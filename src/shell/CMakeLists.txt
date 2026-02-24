@@ -139,6 +139,10 @@ add_library(endo-shell STATIC
     builtins/UserCommands.cpp
     builtins/Output.cpp
 
+    # Format
+    FormatCommand.hpp
+    FormatCommand.cpp
+
     # Structured Commands
     commands/StructuredCommand.hpp
     commands/PsCommand.hpp
