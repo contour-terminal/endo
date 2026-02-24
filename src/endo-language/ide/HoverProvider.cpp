@@ -153,6 +153,153 @@ namespace
             { "shell_is_interactive",
               "`shell_is_interactive` : `bool`\n\nWhether the shell is running in interactive mode "
               "(true for REPL, false for scripts and `-c` commands). Read-only." },
+            { "shell_exit_confirm_timeout",
+              "`shell_exit_confirm_timeout` : `int`\n\nDouble Ctrl+D exit confirmation window in "
+              "milliseconds (0 = immediate exit, default 1000). Read or write with `<-`." },
+            // --- Agent general ---
+            { "agent_provider",
+              "`agent_provider` : `string`\n\nActive AI provider: `\"claude\"`, `\"openai\"`, "
+              "`\"gemini\"`, `\"openai_compat\"`. Auto-detects if unset. Read or write with `<-`." },
+            { "agent_prompt_indicator",
+              "`agent_prompt_indicator` : `string`\n\nCharacter(s) shown at the agent mode prompt "
+              "(default: `\"\u2771\"`). Read or write with `<-`." },
+            { "agent_max_tool_result_size",
+              "`agent_max_tool_result_size` : `int`\n\nMax bytes from a single tool call before "
+              "truncation (default: 30720). Read or write with `<-`." },
+            { "agent_log_tool_uses",
+              "`agent_log_tool_uses` : `bool`\n\nPrint tool invocations to the terminal "
+              "(default: `true`). Read or write with `<-`." },
+            // --- Claude provider ---
+            { "agent_claude_api_key",
+              "`agent_claude_api_key` : `string`\n\nAnthropic API key. "
+              "Read or write with `<-`." },
+            { "agent_claude_api_key_env",
+              "`agent_claude_api_key_env` : `string`\n\nEnvironment variable name for the Claude "
+              "API key (default: `\"ANTHROPIC_API_KEY\"`). Read or write with `<-`." },
+            { "agent_claude_model",
+              "`agent_claude_model` : `string`\n\nClaude model identifier "
+              "(default: `\"claude-sonnet-4-5-20250929\"`). Read or write with `<-`." },
+            { "agent_claude_max_tokens",
+              "`agent_claude_max_tokens` : `int`\n\nMax output tokens per Claude request "
+              "(default: 8192). Read or write with `<-`." },
+            { "agent_claude_thinking_mode",
+              "`agent_claude_thinking_mode` : `string`\n\nThinking/reasoning mode: `\"off\"`, "
+              "`\"normal\"`, `\"extended\"`. Read or write with `<-`." },
+            { "agent_claude_prompt_caching",
+              "`agent_claude_prompt_caching` : `bool`\n\nEnable prompt caching for Claude requests "
+              "(default: `true`). Read or write with `<-`." },
+            { "agent_claude_auth_type",
+              "`agent_claude_auth_type` : `string`\n\nAuthentication method: `\"auto\"`, "
+              "`\"oauth\"`, `\"api_key\"`. Read or write with `<-`." },
+            // --- OpenAI provider ---
+            { "agent_openai_api_key",
+              "`agent_openai_api_key` : `string`\n\nOpenAI API key. "
+              "Read or write with `<-`." },
+            { "agent_openai_api_key_env",
+              "`agent_openai_api_key_env` : `string`\n\nEnvironment variable name for the OpenAI "
+              "API key (default: `\"OPENAI_API_KEY\"`). Read or write with `<-`." },
+            { "agent_openai_model",
+              "`agent_openai_model` : `string`\n\nOpenAI model identifier "
+              "(default: `\"gpt-4o\"`). Read or write with `<-`." },
+            { "agent_openai_base_url",
+              "`agent_openai_base_url` : `string`\n\nCustom OpenAI-compatible base URL. "
+              "Read or write with `<-`." },
+            { "agent_openai_max_tokens",
+              "`agent_openai_max_tokens` : `int`\n\nMax output tokens per OpenAI request "
+              "(default: 4096). Read or write with `<-`." },
+            { "agent_openai_thinking_mode",
+              "`agent_openai_thinking_mode` : `string`\n\nOpenAI thinking/reasoning mode. "
+              "Read or write with `<-`." },
+            // --- OpenAI-compatible provider ---
+            { "agent_openai_compat_api_key",
+              "`agent_openai_compat_api_key` : `string`\n\nAPI key for the OpenAI-compatible "
+              "endpoint. Read or write with `<-`." },
+            { "agent_openai_compat_api_key_env",
+              "`agent_openai_compat_api_key_env` : `string`\n\nEnvironment variable name for the "
+              "OpenAI-compatible API key. Read or write with `<-`." },
+            { "agent_openai_compat_model",
+              "`agent_openai_compat_model` : `string`\n\nOpenAI-compatible model identifier. "
+              "Read or write with `<-`." },
+            { "agent_openai_compat_base_url",
+              "`agent_openai_compat_base_url` : `string`\n\nOpenAI-compatible endpoint base URL "
+              "(e.g. `\"http://localhost:11434/v1\"`). Read or write with `<-`." },
+            { "agent_openai_compat_max_tokens",
+              "`agent_openai_compat_max_tokens` : `int`\n\nMax output tokens per "
+              "OpenAI-compatible request (default: 4096). Read or write with `<-`." },
+            { "agent_openai_compat_thinking_mode",
+              "`agent_openai_compat_thinking_mode` : `string`\n\nOpenAI-compatible "
+              "thinking/reasoning mode. Read or write with `<-`." },
+            // --- Gemini provider ---
+            { "agent_gemini_api_key",
+              "`agent_gemini_api_key` : `string`\n\nGoogle Gemini API key. "
+              "Read or write with `<-`." },
+            { "agent_gemini_api_key_env",
+              "`agent_gemini_api_key_env` : `string`\n\nEnvironment variable name for the Gemini "
+              "API key (default: `\"GEMINI_API_KEY\"`). Read or write with `<-`." },
+            { "agent_gemini_model",
+              "`agent_gemini_model` : `string`\n\nGemini model identifier "
+              "(default: `\"gemini-2.5-flash\"`). Read or write with `<-`." },
+            { "agent_gemini_max_tokens",
+              "`agent_gemini_max_tokens` : `int`\n\nMax output tokens per Gemini request "
+              "(default: 8192). Read or write with `<-`." },
+            { "agent_gemini_thinking_mode",
+              "`agent_gemini_thinking_mode` : `string`\n\nGemini thinking/reasoning mode. "
+              "Read or write with `<-`." },
+            // --- Plan mode ---
+            { "agent_plan_mode_enabled",
+              "`agent_plan_mode_enabled` : `bool`\n\nWhether `/plan` is available "
+              "(default: `true`). Read or write with `<-`." },
+            { "agent_plan_mode_pause_between_steps",
+              "`agent_plan_mode_pause_between_steps` : `bool`\n\nPause for confirmation between "
+              "plan steps (default: `false`). Read or write with `<-`." },
+            { "agent_plan_mode_max_exploration_turns",
+              "`agent_plan_mode_max_exploration_turns` : `int`\n\nMax exploration iterations before "
+              "requiring a plan (default: 15). Read or write with `<-`." },
+            // --- Explore sub-agent ---
+            { "agent_explore_max_turns",
+              "`agent_explore_max_turns` : `int`\n\nMaximum iterations for the explore sub-agent "
+              "(default: 10). Read or write with `<-`." },
+            // --- Session / lifecycle ---
+            { "agent_auto_resume",
+              "`agent_auto_resume` : `bool`\n\nAutomatically resume the last agent session on "
+              "startup. Read or write with `<-`." },
+            { "agent_session_replay",
+              "`agent_session_replay` : `bool`\n\nReplay session history when resuming. "
+              "Read or write with `<-`." },
+            // --- Tracing ---
+            { "agent_trace_enabled",
+              "`agent_trace_enabled` : `bool`\n\nEnable tool I/O trace logging "
+              "(default: `false`). Read or write with `<-`." },
+            { "agent_trace_default_path",
+              "`agent_trace_default_path` : `string`\n\nTrace file path (empty = auto-generated "
+              "in `.endo/trace-logs/`). Read or write with `<-`." },
+            { "agent_trace_max_files",
+              "`agent_trace_max_files` : `int`\n\nMax auto-generated trace files to retain "
+              "(default: 20). Read or write with `<-`." },
+            // --- Permissions ---
+            { "agent_permissions_policy",
+              "`agent_permissions_policy` : `string`\n\nPermission policy: `\"ask\"` (default), "
+              "`\"trust_session\"`, `\"trust_all\"`, `\"read_only\"`. Read or write with `<-`." },
+            { "agent_trusted_tool",
+              "`agent_trusted_tool` : `list<string>`\n\nTools auto-approved regardless of risk "
+              "level. Read or write with `<-`." },
+            { "agent_blocked_pattern",
+              "`agent_blocked_pattern` : `list<string>`\n\nShell command patterns unconditionally "
+              "blocked. Read or write with `<-`." },
+            // --- Web search ---
+            { "agent_web_search_engine",
+              "`agent_web_search_engine` : `string`\n\nSearch engine: `\"duckduckgo\"` (default), "
+              "`\"brave\"`, `\"google\"`. Read or write with `<-`." },
+            { "agent_web_search_api_key",
+              "`agent_web_search_api_key` : `string`\n\nAPI key for Brave or Google search. "
+              "Read or write with `<-`." },
+            { "agent_web_search_cx",
+              "`agent_web_search_cx` : `string`\n\nGoogle Custom Search Engine ID. "
+              "Read or write with `<-`." },
+            { "agent_web_search_max_results",
+              "`agent_web_search_max_results` : `int`\n\nMax results per query "
+              "(default: 5, max: 20). Read or write with `<-`." },
+            // --- Error recovery ---
             { "agent_error_recovery_action",
               "`agent_error_recovery_action` : `string`\n\nAction when a shell command fails: "
               "`\"ask\"` (prompt user), `\"analyze\"` (auto-analyze), `\"ignore\"` (do nothing). "

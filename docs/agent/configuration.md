@@ -63,6 +63,9 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_claude_api_key_env` | string | Environment variable holding the API key (default: `"ANTHROPIC_API_KEY"`) |
 | `agent_claude_model` | string | Model identifier (default: `"claude-sonnet-4-5-20250929"`) |
 | `agent_claude_max_tokens` | int | Maximum output tokens per request (default: 8192) |
+| `agent_claude_thinking_mode` | string | Thinking/reasoning mode: `"off"`, `"normal"`, `"extended"` (default: `"normal"`) |
+| `agent_claude_prompt_caching` | bool | Enable prompt caching (default: `true`) |
+| `agent_claude_auth_type` | string | Auth method: `"auto"` (default), `"oauth"`, `"api_key"` |
 
 ### OpenAI
 
@@ -73,6 +76,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_openai_model` | string | Model identifier (default: `"gpt-4o"`) |
 | `agent_openai_base_url` | string | Custom base URL |
 | `agent_openai_max_tokens` | int | Maximum output tokens per request (default: 4096) |
+| `agent_openai_thinking_mode` | string | Thinking/reasoning mode (default: `"off"`) |
 
 ### OpenAI-Compatible
 
@@ -83,6 +87,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_openai_compat_model` | string | Model identifier |
 | `agent_openai_compat_base_url` | string | Endpoint base URL (e.g. `"http://localhost:11434/v1"`) |
 | `agent_openai_compat_max_tokens` | int | Maximum output tokens per request (default: 4096) |
+| `agent_openai_compat_thinking_mode` | string | Thinking/reasoning mode (default: `"off"`) |
 
 ### Google Gemini
 
@@ -92,6 +97,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_gemini_api_key_env` | string | Environment variable holding the API key (default: `"GEMINI_API_KEY"`) |
 | `agent_gemini_model` | string | Model identifier (default: `"gemini-2.5-flash"`) |
 | `agent_gemini_max_tokens` | int | Maximum output tokens per request (default: 8192) |
+| `agent_gemini_thinking_mode` | string | Thinking/reasoning mode (default: `"off"`) |
 
 ### Plan Mode
 
@@ -106,6 +112,13 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | Property | Type | Description |
 |----------|------|-------------|
 | `agent_explore_max_turns` | int | Maximum iterations for the explore sub-agent (default: 10) |
+
+### Session
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_auto_resume` | bool | Automatically resume the last agent session on startup (default: `false`) |
+| `agent_session_replay` | bool | Replay session history when resuming (default: `false`) |
 
 ### Permissions
 
