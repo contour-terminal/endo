@@ -1230,6 +1230,10 @@ void Shell::registerPromptBuiltins()
             prompt.setPromptConfig(std::move(config));
         });
 
+    _runtime.registerProperty("shell_ls_icons", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(_lsIcons); })
+        .onSet([this](CoreVM::Params& args) { _lsIcons = args.getBool(1); });
+
     _runtime.registerProperty("shell_is_interactive", CoreVM::LiteralType::Boolean)
         .onGet([this](CoreVM::Params& args) { args.setResult(_interactive); });
     // clang-format on

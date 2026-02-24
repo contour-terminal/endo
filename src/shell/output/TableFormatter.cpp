@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "FileTypeStyle.hpp"
+
 namespace endo
 {
 
@@ -181,6 +183,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     auto const& fields = records[0]->type->fields;
     auto const numCols = fields.size();
     bool const isProcessInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::ProcessInfo);
+    bool const isFileInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::FileInfo);
+    bool const decorateFiles = isFileInfo && config.useColor;
 
     // Determine per-column alignment from the first record's runtime types
     std::vector<bool> rightAligned(numCols, false);
@@ -193,24 +197,47 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     for (auto const& field: fields)
         headers.push_back(field.name);
 
-    // Build cell data and compute column widths
+    // Build cell data and compute column widths.
+    // When decorating FileInfo, per-row file decorations are stored for the name column.
     std::vector<std::vector<std::string>> rows;
     rows.reserve(records.size());
     std::vector<int> colWidths(numCols, 0);
+    std::vector<FileDecoration> fileDecorations; // one per row (only when decorateFiles)
 
     for (size_t col = 0; col < numCols; ++col)
         colWidths[col] = static_cast<int>(headers[col].size());
+
+    // When showing icons, reserve space for "icon " prefix in the name column header width
+    constexpr int IconDisplayWidth = 2; // 1 glyph (1 cell) + 1 space
+    if (decorateFiles && config.showIcons)
+        colWidths[0] = std::max(colWidths[0], static_cast<int>(headers[0].size()) + IconDisplayWidth);
 
     for (auto* record: records)
     {
         std::vector<std::string> row;
         row.reserve(numCols);
+
+        // Compute file decoration for this row (if applicable)
+        if (decorateFiles)
+        {
+            auto const nameSlot = record->getSlot(0);
+            auto const* nameStr =
+                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(nameSlot));
+            auto const isDir = record->getSlot(4) != 0;
+            auto const mode = static_cast<int64_t>(record->getSlot(2));
+            fileDecorations.push_back(
+                getFileDecoration(nameStr ? std::string_view(*nameStr) : "", isDir, mode));
+        }
+
         for (size_t col = 0; col < numCols; ++col)
         {
             auto slotVal = record->getSlot(static_cast<uint8_t>(col));
             auto cell = fieldValueToString(slotVal, fields[col], runner, isProcessInfo);
             cell = truncate(cell, config.maxColumnWidth);
-            colWidths[col] = std::max(colWidths[col], static_cast<int>(cell.size()));
+            auto cellDisplayWidth = static_cast<int>(cell.size());
+            if (decorateFiles && config.showIcons && col == 0)
+                cellDisplayWidth += IconDisplayWidth;
+            colWidths[col] = std::max(colWidths[col], cellDisplayWidth);
             row.push_back(std::move(cell));
         }
         rows.push_back(std::move(row));
@@ -251,12 +278,46 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
 
     std::string result;
 
+    // Helper: render a data cell, applying file decoration (icon prefix + SGR color) for the name
+    // column. The cell text is padded to the column width. SGR sequences wrap the padded content so
+    // they don't affect alignment. The icon (when shown) is part of the visible content and included
+    // in the padding calculation.
+    auto renderDataCell = [&](std::string& out, size_t rowIdx, size_t col, int width, bool rightAlign) {
+        auto const& cellText = rows[rowIdx][col];
+        if (decorateFiles && col == 0)
+        {
+            auto const& deco = fileDecorations[rowIdx];
+            auto const sgr = sgrSequence(deco.style);
+            auto const sgrReset = sgr.empty() ? std::string {} : std::string { "\033[m" };
+
+            if (config.showIcons)
+            {
+                // Build visible text: "icon name", then pad the whole thing
+                auto visible = std::string(deco.icon) + " " + cellText;
+                auto padded = padCell(visible, width, rightAlign);
+                out += sgr;
+                out += padded;
+                out += sgrReset;
+            }
+            else
+            {
+                out += sgr;
+                out += padCell(cellText, width, rightAlign);
+                out += sgrReset;
+            }
+        }
+        else
+        {
+            out += padCell(cellText, width, rightAlign);
+        }
+    };
+
     if (config.style == TableStyle::Bordered)
     {
         auto const bc = tui::BorderChars::fromStyle(tui::BorderStyle::Rounded);
-        auto const dim = config.useColor ? "\033[2m" : "";
-        auto const bold = config.useColor ? "\033[1m" : "";
-        auto const reset = config.useColor ? "\033[0m" : "";
+        auto const* const dim = config.useColor ? "\033[2m" : "";
+        auto const* const bold = config.useColor ? "\033[1m" : "";
+        auto const* const reset = config.useColor ? "\033[0m" : "";
 
         // Helper: build a horizontal rule line
         auto horizontalRule = [&](std::string_view left, std::string_view mid, std::string_view right) {
@@ -300,7 +361,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         result += horizontalRule(bc.leftT, bc.cross, bc.rightT);
 
         // Data rows
-        for (auto const& row: rows)
+        for (size_t rowIdx = 0; rowIdx < rows.size(); ++rowIdx)
         {
             result += dim;
             result += bc.vertical;
@@ -308,7 +369,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             for (size_t col = 0; col < numCols; ++col)
             {
                 result += ' ';
-                result += padCell(row[col], colWidths[col], rightAligned[col]);
+                renderDataCell(result, rowIdx, col, colWidths[col], rightAligned[col]);
                 result += ' ';
                 result += dim;
                 result += bc.vertical;
@@ -322,8 +383,8 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     }
     else if (config.style == TableStyle::Compact)
     {
-        auto const bold = config.useColor ? "\033[1m" : "";
-        auto const reset = config.useColor ? "\033[0m" : "";
+        auto const* const bold = config.useColor ? "\033[1m" : "";
+        auto const* const reset = config.useColor ? "\033[0m" : "";
 
         // Header row
         result += ' ';
@@ -349,21 +410,21 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         result += '\n';
 
         // Data rows
-        for (auto const& row: rows)
+        for (size_t rowIdx = 0; rowIdx < rows.size(); ++rowIdx)
         {
             result += ' ';
             for (size_t col = 0; col < numCols; ++col)
             {
                 if (col > 0)
                     result += "  ";
-                result += padCell(row[col], colWidths[col], rightAligned[col]);
+                renderDataCell(result, rowIdx, col, colWidths[col], rightAligned[col]);
             }
             result += '\n';
         }
     }
     else // Plain
     {
-        // Header row
+        // Header row (no icons/colors in Plain mode)
         for (size_t col = 0; col < numCols; ++col)
         {
             if (col > 0)

@@ -111,6 +111,8 @@ add_library(endo-shell STATIC
     output/OutputDefinitionRegistry.cpp
     output/OutputParser.hpp
     output/OutputParser.cpp
+    output/FileTypeStyle.hpp
+    output/FileTypeStyle.cpp
     output/TableFormatter.hpp
     output/TableFormatter.cpp
 

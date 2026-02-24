@@ -163,6 +163,21 @@ shell_exit_confirm_timeout <- 0
 
 The default timeout is 1000 ms.
 
+### File Listing Icons
+
+When listing files with `ls`, Nerd Font icons are shown next to each filename by default.
+You can disable icons while keeping colors:
+
+```endo
+# Disable file icons in ls output
+shell_ls_icons <- false
+
+# Re-enable file icons
+shell_ls_icons <- true
+```
+
+This requires a [Nerd Font](https://www.nerdfonts.com/) to render icons correctly.
+
 ### Interactive Mode Detection
 
 The read-only property `shell_is_interactive` indicates whether the shell is running

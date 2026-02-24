@@ -41,7 +41,8 @@ void registerInternalBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resol
 /// structured_docker_*, structured_git_*, open_json, open_csv, from_json, from_csv.
 void registerStructuredBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
-/// Registers prompt configuration properties: shell_prompt_*, shell_exit_confirm_timeout.
+/// Registers prompt configuration properties: shell_prompt_*, shell_exit_confirm_timeout,
+/// shell_ls_icons.
 void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve);
 
 /// Registers agent configuration properties: agent_*, agent_claude_*, agent_openai_*,

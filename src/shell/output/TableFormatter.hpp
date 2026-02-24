@@ -23,6 +23,7 @@ struct TableConfig
 {
     TableStyle style = TableStyle::Bordered; ///< Table style
     bool useColor = true;                    ///< Emit SGR escape sequences
+    bool showIcons = true;                   ///< Show file type icons (only when useColor is true)
     int maxColumnWidth = 40;                 ///< Max width per column
     int terminalWidth = 0;                   ///< Terminal width in columns (0 = no constraint)
 };
