@@ -190,10 +190,24 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     bool const isFileInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::FileInfo);
     bool const decorateFiles = isFileInfo && config.useColor;
 
-    // Determine per-column alignment from the first record's runtime types
+    // Determine per-column alignment and FileMode columns from the first record's runtime types
     std::vector<bool> rightAligned(numCols, false);
+    std::vector<bool> isFileModeCol(numCols, false);
     for (size_t col = 0; col < numCols; ++col)
+    {
         rightAligned[col] = isRightAlignedColumn(fields[col], records[0], runner);
+        if (fields[col].type == CoreVM::LiteralType::Object && runner)
+        {
+            auto const slotVal = records[0]->getSlot(fields[col].offset);
+            if (runner->isKnownObject(slotVal))
+            {
+                auto const* obj =
+                    reinterpret_cast<CoreVM::TypedObject const*>(static_cast<uintptr_t>(slotVal));
+                if (obj->type->id == CoreVM::BuiltinTypeId::FileMode)
+                    isFileModeCol[col] = true;
+            }
+        }
+    }
 
     // Build header names
     std::vector<std::string> headers;
@@ -321,6 +335,16 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
                 out += padCell(cellText, width, rightAlign);
                 out += sgrReset;
             }
+        }
+        else if (config.useColor && isFileModeCol[col])
+        {
+            // Permission string is always 9 chars; colorize each character by type.
+            // Padding must use the plain-text length, not the SGR-inflated length.
+            auto const colored = colorizePermissions(cellText);
+            out += colored;
+            auto const padding = width - static_cast<int>(cellText.size());
+            if (padding > 0)
+                out += std::string(static_cast<size_t>(padding), ' ');
         }
         else
         {

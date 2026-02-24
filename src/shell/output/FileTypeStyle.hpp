@@ -28,6 +28,15 @@ struct FileDecoration
 /// @return FileDecoration with an icon glyph and an SGR style.
 [[nodiscard]] FileDecoration getFileDecoration(std::string_view name, bool isDir, int64_t mode);
 
+/// Colorizes a permission string (e.g., "rwxr-xr-x") with per-character SGR colors.
+///
+/// Uses lsd-style coloring: read=green, write=yellow, execute=red, none=gray.
+/// Each character is individually wrapped in SGR set/reset sequences.
+///
+/// @param perms Plain 9-character permission string.
+/// @return Permission string with embedded SGR escape sequences.
+[[nodiscard]] std::string colorizePermissions(std::string_view perms);
+
 /// Builds an SGR escape sequence string for the given style.
 ///
 /// Returns an empty string if the style has no attributes set (all defaults).

@@ -63,6 +63,12 @@ namespace
     constexpr auto CSharpColor     = rgb(0x239120); // c# green
     constexpr auto XmlColor        = rgb(0xE34F26); // xml orange
     constexpr auto SqlColor        = rgb(0x336791); // sql blue
+
+    // ── Permission character colors (lsd-style) ─────────────────────────────────
+    constexpr auto PermReadColor   = rgb(0x50C878); // green
+    constexpr auto PermWriteColor  = rgb(0xE5C07B); // yellow
+    constexpr auto PermExecColor   = rgb(0xE06C75); // red
+    constexpr auto PermNoneColor   = rgb(0x5C6370); // dim gray
     // clang-format on
 
     // ── Nerd Font icons (UTF-8 encoded) ────────────────────────────────────────
@@ -352,6 +358,33 @@ std::string sgrSequence(tui::Style const& style)
     }
 
     result += 'm';
+    return result;
+}
+
+std::string colorizePermissions(std::string_view perms)
+{
+    // Build SGR sequences for each permission character type once.
+    static auto const sgrRead = sgrSequence({ .fg = PermReadColor });
+    static auto const sgrWrite = sgrSequence({ .fg = PermWriteColor });
+    static auto const sgrExec = sgrSequence({ .fg = PermExecColor });
+    static auto const sgrNone = sgrSequence({ .fg = PermNoneColor });
+    static constexpr auto sgrReset = "\033[m";
+
+    std::string result;
+    result.reserve(perms.size() * 20); // pre-allocate for SGR overhead
+    for (auto const c: perms)
+    {
+        switch (c)
+        {
+            case 'r': result += sgrRead; break;
+            case 'w': result += sgrWrite; break;
+            case 'x': result += sgrExec; break;
+            case '-': result += sgrNone; break;
+            default: break;
+        }
+        result += c;
+        result += sgrReset;
+    }
     return result;
 }
 
