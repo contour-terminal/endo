@@ -83,6 +83,8 @@ auto darkTheme() -> Theme
     theme.completionDesc.fg = theme.colors.textMuted;   // Description text
     theme.completionMatch.fg = theme.colors.info;       // Highlighted matched chars (cyan)
     theme.completionMatch.bold = true;
+    theme.completionDetail.fg = theme.colors.text;    // Detail panel text
+    theme.completionDetail.bg = theme.colors.overlay; // Detail panel background
 
     // Prompt colors - Tokyo Night inspired
     theme.promptColors = {
@@ -204,6 +206,8 @@ auto lightTheme() -> Theme
     theme.completionDesc.fg = theme.colors.textMuted;
     theme.completionMatch.fg = theme.colors.info;
     theme.completionMatch.bold = true;
+    theme.completionDetail.fg = theme.colors.text;
+    theme.completionDetail.bg = theme.colors.overlay;
 
     // Prompt colors - Light theme
     theme.promptColors = {
@@ -319,6 +323,8 @@ auto monoTheme() -> Theme
     theme.completionDesc.dim = true;
     theme.completionMatch.bold = true;
     theme.completionMatch.underline = true;
+    theme.completionDetail.fg = theme.colors.text;
+    theme.completionDetail.bg = theme.colors.overlay;
 
     // Prompt colors - Monochrome
     theme.promptColors = {

@@ -12,6 +12,7 @@
     #pragma clang diagnostic pop
 #endif
 
+#include <tui/Box.hpp>
 #include <tui/Canvas.hpp>
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
@@ -21,6 +22,9 @@ namespace tui
 
 namespace
 {
+    constexpr int detailMaxWidth = 40; ///< Maximum detail panel width.
+    constexpr int detailMinWidth = 20; ///< Minimum detail panel width.
+
     /// @brief Calculates display width of a UTF-8 string.
     auto stringWidth(std::string_view text) -> int
     {
@@ -261,6 +265,51 @@ void CompletionPopup::render(Canvas& canvas)
                    "\u25BC",
                    theme.textMuted); // U+25BC: Black Down-Pointing Triangle
     }
+
+    // ========================================================================
+    // Detail panel (side documentation popup)
+    // ========================================================================
+    auto const detailWidth = detailPanelWidth();
+    auto const availableForDetail = canvas.width() - menuWidth;
+
+    if (!_detailContent.empty() && detailWidth > 0 && availableForDetail >= detailMinWidth)
+    {
+        auto const panelWidth = std::min(detailWidth, availableForDetail);
+        auto const border = BorderChars::fromStyle(BorderStyle::Single);
+
+        // Replace main popup's right border with T-junctions for seamless merge
+        canvas.put(0, menuWidth - 1, border.topT, theme.dialogBorder);
+        canvas.put(menuHeight - 1, menuWidth - 1, border.bottomT, theme.dialogBorder);
+
+        // Draw detail panel top border (from shared border to right edge)
+        for (int col = menuWidth; col < menuWidth + panelWidth - 1; ++col)
+            canvas.put(0, col, border.horizontal, theme.dialogBorder);
+        canvas.put(0, menuWidth + panelWidth - 1, border.topRight, theme.dialogBorder);
+
+        // Draw detail panel bottom border
+        for (int col = menuWidth; col < menuWidth + panelWidth - 1; ++col)
+            canvas.put(menuHeight - 1, col, border.horizontal, theme.dialogBorder);
+        canvas.put(menuHeight - 1, menuWidth + panelWidth - 1, border.bottomRight, theme.dialogBorder);
+
+        // Draw right border
+        for (int row = 1; row < menuHeight - 1; ++row)
+            canvas.put(row, menuWidth + panelWidth - 1, border.vertical, theme.dialogBorder);
+
+        // Fill detail panel interior with background
+        auto const detailInnerWidth = panelWidth - 2; // minus shared border and right border
+        for (int row = 1; row < menuHeight - 1; ++row)
+            canvas.fill(Rect { .x = menuWidth, .y = row, .width = detailInnerWidth, .height = 1 },
+                        ' ',
+                        theme.completionDetail);
+
+        // Render styled detail content into a subcanvas
+        auto const detailInnerHeight = menuHeight - 2;
+        auto detailCanvas = canvas.subcanvas(
+            Rect { .x = menuWidth, .y = 1, .width = detailInnerWidth, .height = detailInnerHeight });
+        _detailContent.renderTo(detailCanvas, _detailScrollOffset, detailInnerHeight);
+
+        _renderedWidth = menuWidth + panelWidth;
+    }
 }
 
 EventResult CompletionPopup::onEvent(InputEvent const& event)
@@ -283,9 +332,14 @@ Size CompletionPopup::preferredSize() const
     if (_items.empty())
         return { 0, 0 };
 
-    size_t visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
-    int width = calculateWidth(200);                 // Use large max for preferred size
-    int height = static_cast<int>(visibleCount) + 2; // +2 for border
+    auto const visibleCount = std::min(static_cast<size_t>(_maxVisible), _items.size());
+    auto width = calculateWidth(200);                       // Use large max for preferred size
+    auto const height = static_cast<int>(visibleCount) + 2; // +2 for border
+
+    // Add detail panel width (shared border means -1)
+    auto const dpWidth = detailPanelWidth();
+    if (dpWidth > 0)
+        width += dpWidth - 1;
 
     return { width, height };
 }
@@ -301,6 +355,7 @@ void CompletionPopup::show(std::vector<CompletionItem> items)
     _scrollOffset = 0;
     _visible = !_items.empty();
     Component::setVisible(_visible); // Sync Component visibility state
+    updateDetailContent();
 }
 
 void CompletionPopup::hide()
@@ -311,6 +366,8 @@ void CompletionPopup::hide()
     _visible = false;
     _renderedHeight = 0;
     _renderedWidth = 0;
+    _detailContent.clear();
+    _detailScrollOffset = 0;
     Component::setVisible(false); // Sync Component visibility state
 }
 
@@ -341,6 +398,7 @@ void CompletionPopup::updateItems(std::vector<CompletionItem> items)
                 ensureSelectedVisible();
                 _visible = true;
                 Component::setVisible(true);
+                updateDetailContent();
                 return;
             }
         }
@@ -350,6 +408,7 @@ void CompletionPopup::updateItems(std::vector<CompletionItem> items)
     _selected = 0;
     _visible = true;
     Component::setVisible(true);
+    updateDetailContent();
 }
 
 bool CompletionPopup::visible() const noexcept
@@ -406,6 +465,7 @@ void CompletionPopup::selectNext()
         _selected = 0; // Wrap around
 
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::selectPrev()
@@ -419,6 +479,7 @@ void CompletionPopup::selectPrev()
         _selected = _items.size() - 1; // Wrap around
 
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::pageDown()
@@ -426,13 +487,14 @@ void CompletionPopup::pageDown()
     if (_items.empty())
         return;
 
-    size_t pageSize = static_cast<size_t>(_maxVisible);
+    auto const pageSize = static_cast<size_t>(_maxVisible);
     if (_selected + pageSize < _items.size())
         _selected += pageSize;
     else
         _selected = _items.size() - 1;
 
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::pageUp()
@@ -440,19 +502,21 @@ void CompletionPopup::pageUp()
     if (_items.empty())
         return;
 
-    size_t pageSize = static_cast<size_t>(_maxVisible);
+    auto const pageSize = static_cast<size_t>(_maxVisible);
     if (_selected > pageSize)
         _selected -= pageSize;
     else
         _selected = 0;
 
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::selectFirst()
 {
     _selected = 0;
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::selectLast()
@@ -460,6 +524,7 @@ void CompletionPopup::selectLast()
     if (!_items.empty())
         _selected = _items.size() - 1;
     ensureSelectedVisible();
+    updateDetailContent();
 }
 
 void CompletionPopup::ensureSelectedVisible()
@@ -608,6 +673,37 @@ int CompletionPopup::renderedHeight() const noexcept
 int CompletionPopup::renderedWidth() const noexcept
 {
     return _renderedWidth;
+}
+
+void CompletionPopup::updateDetailContent()
+{
+    _detailScrollOffset = 0;
+
+    if (_items.empty() || _selected >= _items.size())
+    {
+        _detailContent.clear();
+        return;
+    }
+
+    auto const& detail = _items[_selected].detail;
+    if (detail.empty())
+    {
+        _detailContent.clear();
+        return;
+    }
+
+    // Parse markdown with width clamped to detail panel max
+    _detailContent = StyledText::fromMarkdown(detail, detailMaxWidth - 2);
+}
+
+int CompletionPopup::detailPanelWidth() const
+{
+    if (_detailContent.empty())
+        return 0;
+
+    // Content width + 2 (shared left border + right border)
+    auto const contentWidth = std::min(_detailContent.maxLineWidth(), detailMaxWidth - 2);
+    return std::clamp(contentWidth + 2, detailMinWidth, detailMaxWidth);
 }
 
 } // namespace tui

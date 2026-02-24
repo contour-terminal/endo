@@ -23,6 +23,7 @@ struct CompletionItem
     std::string text;        ///< Full completion text (the actual value to insert).
     std::string displayText; ///< Text to display in menu (may be abbreviated).
     std::string description; ///< Help text / synopsis for the completion menu.
+    std::string detail;      ///< Detailed documentation (markdown) for the detail panel.
     int score = 0;           ///< Ranking score (higher = better match).
 
     /// @brief Grapheme cluster indices of matched characters for highlighting.

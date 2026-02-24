@@ -68,6 +68,7 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
             .text = name,
             .displayText = candidate.displayText.empty() ? name : candidate.displayText,
             .description = candidate.description,
+            .detail = candidate.detail,
             .score = score,
             .matchPositions = std::move(matchPositions),
         });

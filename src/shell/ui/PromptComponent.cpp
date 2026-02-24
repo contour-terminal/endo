@@ -1026,6 +1026,7 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
             .text = item.text,
             .displayText = item.displayText.empty() ? item.text : item.displayText,
             .description = item.description,
+            .detail = item.detail,
             .score = item.score,
         });
     }
@@ -1061,6 +1062,7 @@ void PromptComponent::updateCompletionPopup()
             .text = item.text,
             .displayText = item.displayText.empty() ? item.text : item.displayText,
             .description = item.description,
+            .detail = item.detail,
             .score = item.score,
         });
     }

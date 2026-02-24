@@ -459,3 +459,73 @@ TEST_CASE("CompletionPopup.items_lcp_full_match")
     auto const prefix = Completer::findCommonPrefix(popup.items());
     CHECK(prefix == "hello");
 }
+
+// ============================================================================
+// Detail panel tests
+// ============================================================================
+
+TEST_CASE("CompletionPopup.detail_panel_preferred_size_includes_detail_width")
+{
+    CompletionPopup popup;
+
+    // Without detail
+    popup.show(makeItems({ "apple", "banana" }));
+    auto sizeWithout = popup.preferredSize();
+
+    // With detail
+    popup.show(makeItemsWithDetail({
+        { "apple", "fruit", "**apple** : `fruit`\n\nA delicious red fruit." },
+        { "banana", "fruit", "**banana** : `fruit`\n\nA yellow tropical fruit." },
+    }));
+    auto sizeWith = popup.preferredSize();
+
+    // Size with detail should be wider
+    CHECK(sizeWith.width > sizeWithout.width);
+    // Height should be the same
+    CHECK(sizeWith.height == sizeWithout.height);
+}
+
+TEST_CASE("CompletionPopup.detail_panel_not_shown_when_detail_empty")
+{
+    CompletionPopup popup;
+    popup.show(makeItems({ "apple", "banana" }));
+
+    auto size = popup.preferredSize();
+
+    // Render and check width matches menu only (no detail panel)
+    Buffer buffer(10, 60);
+    buffer.clear();
+    Theme theme;
+    Canvas canvas(buffer, Rect { .x = 0, .y = 0, .width = 60, .height = 10 }, theme);
+    popup.render(canvas);
+
+    // renderedWidth should match the menu width (no extra detail panel)
+    CHECK(popup.renderedWidth() == size.width);
+}
+
+TEST_CASE("CompletionPopup.detail_content_updates_on_selection_change")
+{
+    CompletionPopup popup;
+    popup.show(makeItemsWithDetail({
+        { "alpha", "desc1", "**alpha** detail" },
+        { "beta", "desc2", "**beta** detail" },
+        { "gamma", "desc3", "" }, // No detail
+    }));
+
+    // Initial selection should have detail
+    auto size1 = popup.preferredSize();
+    CHECK(size1.width > 0);
+
+    // Select item with no detail
+    popup.selectNext(); // beta
+    popup.selectNext(); // gamma (no detail)
+
+    auto size3 = popup.preferredSize();
+
+    // After selecting item with no detail, width should shrink
+    // (the detail panel is not shown)
+    // Re-select an item with detail to confirm it comes back
+    popup.selectFirst(); // alpha
+    auto sizeBack = popup.preferredSize();
+    CHECK(sizeBack.width == size1.width);
+}

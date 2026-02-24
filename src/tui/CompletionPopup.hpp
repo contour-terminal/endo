@@ -3,6 +3,7 @@
 
 #include <tui/Component.hpp>
 #include <tui/InputEvent.hpp>
+#include <tui/StyledText.hpp>
 #include <tui/Theme.hpp>
 #include <tui/completer/CompletionItem.hpp>
 
@@ -174,6 +175,10 @@ class CompletionPopup: public Component
     int _renderedWidth = 0;
     bool _visible = false;
 
+    // Detail panel state
+    StyledText _detailContent;   ///< Parsed markdown for selected item's detail.
+    int _detailScrollOffset = 0; ///< Scroll offset within detail panel.
+
     /// @brief Ensures the selected item is visible by adjusting scroll offset.
     void ensureSelectedVisible();
 
@@ -182,6 +187,12 @@ class CompletionPopup: public Component
 
     /// @brief Handles a key event.
     [[nodiscard]] CompletionAction handleKey(KeyEvent const& key);
+
+    /// @brief Updates detail content from the currently selected item.
+    void updateDetailContent();
+
+    /// @brief Returns the width of the detail panel based on content.
+    [[nodiscard]] int detailPanelWidth() const;
 };
 
 } // namespace tui

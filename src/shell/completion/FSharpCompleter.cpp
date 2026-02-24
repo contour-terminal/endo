@@ -96,6 +96,7 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
         results.push_back(CompletionItem { .text = candidate.text,
                                            .displayText = candidate.text,
                                            .description = candidate.description,
+                                           .detail = candidate.detail,
                                            .score = score,
                                            .matchPositions = std::move(matchPositions) });
     }

@@ -10,6 +10,7 @@
 #include <tui/completer/CompletionItem.hpp>
 
 #include <string>
+#include <tuple>
 #include <vector>
 
 namespace tui::test
@@ -129,8 +130,12 @@ inline std::vector<CompletionItem> makeItems(std::initializer_list<std::string_v
     int score = static_cast<int>(texts.size()) * 10;
     for (auto text: texts)
     {
-        items.push_back(CompletionItem {
-            .text = std::string(text), .displayText = std::string(text), .description = "", .score = score });
+        items.push_back(CompletionItem { .text = std::string(text),
+                                         .displayText = std::string(text),
+                                         .description = "",
+                                         .detail = {},
+                                         .score = score,
+                                         .matchPositions = {} });
         score -= 10;
     }
     return items;
@@ -150,7 +155,31 @@ inline std::vector<CompletionItem> makeItemsWithDesc(
         result.push_back(CompletionItem { .text = std::string(text),
                                           .displayText = std::string(text),
                                           .description = std::string(desc),
-                                          .score = score });
+                                          .detail = {},
+                                          .score = score,
+                                          .matchPositions = {} });
+        score -= 10;
+    }
+    return result;
+}
+
+/// @brief Creates a vector of CompletionItems with detail text.
+/// @param items Triples of (text, description, detail).
+/// @return Vector of CompletionItems.
+inline std::vector<CompletionItem> makeItemsWithDetail(
+    std::initializer_list<std::tuple<std::string_view, std::string_view, std::string_view>> items)
+{
+    std::vector<CompletionItem> result;
+    result.reserve(items.size());
+    int score = static_cast<int>(items.size()) * 10;
+    for (auto const& [text, desc, detail]: items)
+    {
+        result.push_back(CompletionItem { .text = std::string(text),
+                                          .displayText = std::string(text),
+                                          .description = std::string(desc),
+                                          .detail = std::string(detail),
+                                          .score = score,
+                                          .matchPositions = {} });
         score -= 10;
     }
     return result;

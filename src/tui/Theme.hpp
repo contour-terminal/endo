@@ -88,6 +88,7 @@ struct Theme
     Style completionSelected; ///< Selected completion menu item.
     Style completionDesc;     ///< Description text in completion menu.
     Style completionMatch;    ///< Highlighted matched characters in fuzzy completion.
+    Style completionDetail;   ///< Detail panel text in completion popup.
 
     // Prompt color palette
     /// @brief Colors used by the shell prompt modules and layout engine.
