@@ -1,0 +1,6 @@
+# Source formatting for Endo
+
+indentWidth: 4
+useSpaces: true
+maxLineWidth: 100
+trailingNewline: true
