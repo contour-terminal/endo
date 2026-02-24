@@ -91,11 +91,17 @@ std::vector<CompletionCandidate> constructorCandidatesFromRegistry(CoreVM::TypeR
             else
                 description += " (value present)";
 
+            auto detail = "**" + variant.name + "** -- " + type->name + " constructor";
+            if (variant.payloadSlots == 0)
+                detail += "\n\nUnit constructor (no payload).";
+            else
+                detail += "\n\nWraps a value.\n\n```\n" + variant.name + " 42\n```";
+
             result.push_back(CompletionCandidate {
                 .text = variant.name,
                 .displayText = variant.name,
                 .description = std::move(description),
-                .detail = {},
+                .detail = std::move(detail),
                 .kind = CompletionKind::Constructor,
             });
         }
@@ -113,11 +119,12 @@ std::vector<CompletionCandidate> moduleFunctionStdLibCandidates(CoreVM::TypeRegi
         for (auto const& fn: type->moduleFunctions)
         {
             auto const qualifiedName = type->name + "." + fn.name;
+            auto detail = "**" + qualifiedName + "** : `" + fn.signature + "`";
             result.push_back(CompletionCandidate {
                 .text = qualifiedName,
                 .displayText = qualifiedName,
                 .description = fn.signature,
-                .detail = {},
+                .detail = std::move(detail),
                 .kind = CompletionKind::Function,
             });
         }

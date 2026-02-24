@@ -111,74 +111,126 @@ namespace
         EnumValueEntry { "ignore", "Do nothing on command failure" },
     };
 
-    /// @brief Standard library function entry with name and signature description.
+    /// @brief Standard library function entry with name, signature description, and detail.
     struct StdLibEntry
     {
         std::string_view name;
         std::string_view description;
+        std::string_view detail;
     };
 
     // clang-format off
     constexpr std::array stdLibFunctions = {
         // Type Conversion
-        StdLibEntry { "string_length", "string_length s -> int" },
-        StdLibEntry { "int_of_string", "int_of_string s -> int" },
-        StdLibEntry { "string_of_int", "string_of_int n -> string" },
-        StdLibEntry { "not", "not b -> bool" },
+        StdLibEntry { "string_length", "string_length s -> int",
+            "**string_length** `s -> int`\n\nReturns the length of string **s** in characters." },
+        StdLibEntry { "int_of_string", "int_of_string s -> int",
+            "**int_of_string** `s -> int`\n\nParses string **s** as an integer." },
+        StdLibEntry { "string_of_int", "string_of_int n -> string",
+            "**string_of_int** `n -> string`\n\nConverts integer **n** to its string representation." },
+        StdLibEntry { "not", "not b -> bool",
+            "**not** `b -> bool`\n\nLogical negation of boolean **b**." },
         // String Operations
-        StdLibEntry { "trim", "trim s -> string" },
-        StdLibEntry { "toLower", "toLower s -> string" },
-        StdLibEntry { "toUpper", "toUpper s -> string" },
-        StdLibEntry { "contains", "contains substr s -> bool" },
-        StdLibEntry { "startsWith", "startsWith prefix s -> bool" },
-        StdLibEntry { "endsWith", "endsWith suffix s -> bool" },
-        StdLibEntry { "replace", "replace old new s -> string" },
-        StdLibEntry { "split", "split delim s -> list<string>" },
-        StdLibEntry { "join", "join delim lst -> string" },
+        StdLibEntry { "trim", "trim s -> string",
+            "**trim** `s -> string`\n\nRemoves leading and trailing whitespace from **s**." },
+        StdLibEntry { "toLower", "toLower s -> string",
+            "**toLower** `s -> string`\n\nConverts all characters in **s** to lowercase." },
+        StdLibEntry { "toUpper", "toUpper s -> string",
+            "**toUpper** `s -> string`\n\nConverts all characters in **s** to uppercase." },
+        StdLibEntry { "contains", "contains substr s -> bool",
+            "**contains** `substr s -> bool`\n\nReturns true if **s** contains **substr**." },
+        StdLibEntry { "startsWith", "startsWith prefix s -> bool",
+            "**startsWith** `prefix s -> bool`\n\nReturns true if **s** starts with **prefix**." },
+        StdLibEntry { "endsWith", "endsWith suffix s -> bool",
+            "**endsWith** `suffix s -> bool`\n\nReturns true if **s** ends with **suffix**." },
+        StdLibEntry { "replace", "replace old new s -> string",
+            "**replace** `old new s -> string`\n\nReplaces all occurrences of **old** with **new** in **s**." },
+        StdLibEntry { "split", "split delim s -> list<string>",
+            "**split** `delim s -> list<string>`\n\nSplits **s** by delimiter **delim**." },
+        StdLibEntry { "join", "join delim lst -> string",
+            "**join** `delim lst -> string`\n\nJoins list elements with **delim** between them." },
         // List Basic
-        StdLibEntry { "head", "head lst -> 'a" },
-        StdLibEntry { "tail", "tail lst -> list<'a>" },
-        StdLibEntry { "length", "length lst -> int" },
-        StdLibEntry { "isEmpty", "isEmpty lst -> bool" },
-        StdLibEntry { "nth", "nth n lst -> 'a" },
-        StdLibEntry { "last", "last lst -> 'a" },
-        StdLibEntry { "replicate", "replicate n x -> list<'a>" },
+        StdLibEntry { "head", "head lst -> 'a",
+            "**head** `lst -> 'a`\n\nReturns the first element of the list." },
+        StdLibEntry { "tail", "tail lst -> list<'a>",
+            "**tail** `lst -> list<'a>`\n\nReturns the list without its first element." },
+        StdLibEntry { "length", "length lst -> int",
+            "**length** `lst -> int`\n\nReturns the number of elements in the list." },
+        StdLibEntry { "isEmpty", "isEmpty lst -> bool",
+            "**isEmpty** `lst -> bool`\n\nReturns true if the list is empty." },
+        StdLibEntry { "nth", "nth n lst -> 'a",
+            "**nth** `n lst -> 'a`\n\nReturns the element at index **n** (0-based)." },
+        StdLibEntry { "last", "last lst -> 'a",
+            "**last** `lst -> 'a`\n\nReturns the last element of the list." },
+        StdLibEntry { "replicate", "replicate n x -> list<'a>",
+            "**replicate** `n x -> list<'a>`\n\nCreates a list of **n** copies of **x**." },
         // List HOFs
-        StdLibEntry { "map", "map f lst -> list<'b>" },
-        StdLibEntry { "filter", "filter pred lst -> list<'a>" },
-        StdLibEntry { "fold", "fold f init lst -> 'b" },
-        StdLibEntry { "reduce", "reduce f lst -> 'a" },
-        StdLibEntry { "find", "find pred lst -> option<'a>" },
-        StdLibEntry { "exists", "exists pred lst -> bool" },
-        StdLibEntry { "forall", "forall pred lst -> bool" },
-        StdLibEntry { "each", "each f lst -> unit" },
+        StdLibEntry { "map", "map f lst -> list<'b>",
+            "**map** `f lst -> list<'b>`\n\nApplies function **f** to each element of the list." },
+        StdLibEntry { "filter", "filter pred lst -> list<'a>",
+            "**filter** `pred lst -> list<'a>`\n\nKeeps only elements satisfying **pred**." },
+        StdLibEntry { "fold", "fold f init lst -> 'b",
+            "**fold** `f init lst -> 'b`\n\nReduces the list from the left with **f** and initial value **init**." },
+        StdLibEntry { "reduce", "reduce f lst -> 'a",
+            "**reduce** `f lst -> 'a`\n\nReduces the list from the left with **f** using the first element as initial." },
+        StdLibEntry { "find", "find pred lst -> option<'a>",
+            "**find** `pred lst -> option<'a>`\n\nReturns `Some x` for the first element matching **pred**, or `None`." },
+        StdLibEntry { "exists", "exists pred lst -> bool",
+            "**exists** `pred lst -> bool`\n\nReturns true if any element satisfies **pred**." },
+        StdLibEntry { "forall", "forall pred lst -> bool",
+            "**forall** `pred lst -> bool`\n\nReturns true if all elements satisfy **pred**." },
+        StdLibEntry { "each", "each f lst -> unit",
+            "**each** `f lst -> unit`\n\nApplies **f** to each element for side effects." },
         // List Transforms
-        StdLibEntry { "sort", "sort lst -> list<'a>" },
-        StdLibEntry { "reverse", "reverse lst -> list<'a>" },
-        StdLibEntry { "distinct", "distinct lst -> list<'a>" },
-        StdLibEntry { "sortBy", "sortBy f lst -> list<'a>" },
-        StdLibEntry { "groupBy", "groupBy f lst -> list<list<'a>>" },
-        StdLibEntry { "take", "take n lst -> list<'a>" },
-        StdLibEntry { "drop", "drop n lst -> list<'a>" },
-        StdLibEntry { "zip", "zip lst1 lst2 -> list<'a * 'b>" },
-        StdLibEntry { "flatten", "flatten lst -> list<'a>" },
+        StdLibEntry { "sort", "sort lst -> list<'a>",
+            "**sort** `lst -> list<'a>`\n\nReturns the list sorted in ascending order." },
+        StdLibEntry { "reverse", "reverse lst -> list<'a>",
+            "**reverse** `lst -> list<'a>`\n\nReturns the list in reverse order." },
+        StdLibEntry { "distinct", "distinct lst -> list<'a>",
+            "**distinct** `lst -> list<'a>`\n\nRemoves duplicate elements from the list." },
+        StdLibEntry { "sortBy", "sortBy f lst -> list<'a>",
+            "**sortBy** `f lst -> list<'a>`\n\nSorts the list by the key returned by **f**." },
+        StdLibEntry { "groupBy", "groupBy f lst -> list<list<'a>>",
+            "**groupBy** `f lst -> list<list<'a>>`\n\nGroups consecutive elements with equal keys from **f**." },
+        StdLibEntry { "take", "take n lst -> list<'a>",
+            "**take** `n lst -> list<'a>`\n\nReturns the first **n** elements of the list." },
+        StdLibEntry { "drop", "drop n lst -> list<'a>",
+            "**drop** `n lst -> list<'a>`\n\nSkips the first **n** elements and returns the rest." },
+        StdLibEntry { "zip", "zip lst1 lst2 -> list<'a * 'b>",
+            "**zip** `lst1 lst2 -> list<'a * 'b>`\n\nCombines two lists into a list of pairs." },
+        StdLibEntry { "flatten", "flatten lst -> list<'a>",
+            "**flatten** `lst -> list<'a>`\n\nFlattens a list of lists into a single list." },
         // Formatting Helpers
-        StdLibEntry { "formatNumber", "formatNumber sep n -> string  |  formatNumber n -> string (locale)" },
-        StdLibEntry { "formatDateTime", "formatDateTime epoch -> string" },
-        StdLibEntry { "formatMode", "formatMode mode -> string (rwxrwxrwx)" },
-        StdLibEntry { "toText", "toText obj -> string" },
-        StdLibEntry { "string", "string x -> string" },
+        StdLibEntry { "formatNumber", "formatNumber sep n -> string  |  formatNumber n -> string (locale)",
+            "**formatNumber** `sep n -> string`\n\nFormats a number with thousands separator **sep**.\nAlso: `formatNumber n` uses locale default." },
+        StdLibEntry { "formatDateTime", "formatDateTime epoch -> string",
+            "**formatDateTime** `epoch -> string`\n\nFormats an epoch timestamp as a human-readable date/time." },
+        StdLibEntry { "formatMode", "formatMode mode -> string (rwxrwxrwx)",
+            "**formatMode** `mode -> string`\n\nFormats a file mode as `rwxrwxrwx` permission string." },
+        StdLibEntry { "toText", "toText obj -> string",
+            "**toText** `obj -> string`\n\nConverts a structured object to a text representation." },
+        StdLibEntry { "string", "string x -> string",
+            "**string** `x -> string`\n\nConverts any value to its string representation." },
         // Permission Tests
-        StdLibEntry { "isReadable", "isReadable mode -> bool" },
-        StdLibEntry { "isWritable", "isWritable mode -> bool" },
-        StdLibEntry { "isExecutable", "isExecutable mode -> bool" },
+        StdLibEntry { "isReadable", "isReadable mode -> bool",
+            "**isReadable** `mode -> bool`\n\nReturns true if the file mode indicates read permission." },
+        StdLibEntry { "isWritable", "isWritable mode -> bool",
+            "**isWritable** `mode -> bool`\n\nReturns true if the file mode indicates write permission." },
+        StdLibEntry { "isExecutable", "isExecutable mode -> bool",
+            "**isExecutable** `mode -> bool`\n\nReturns true if the file mode indicates execute permission." },
         // Environment/System
-        StdLibEntry { "env", "env name -> option<string>" },
-        StdLibEntry { "which", "which name -> option<string>" },
-        StdLibEntry { "ps", "ps -> list<ProcessInfo>" },
-        StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>" },
-        StdLibEntry { "rand", "rand -> int  |  rand min max -> int" },
-        StdLibEntry { "fetch", "fetch url -> result<string, string>" },
+        StdLibEntry { "env", "env name -> option<string>",
+            "**env** `name -> option<string>`\n\nLooks up environment variable **name**. Returns `Some value` or `None`." },
+        StdLibEntry { "which", "which name -> option<string>",
+            "**which** `name -> option<string>`\n\nFinds the full path of command **name** in `$PATH`." },
+        StdLibEntry { "ps", "ps -> list<ProcessInfo>",
+            "**ps** `-> list<ProcessInfo>`\n\nReturns a list of running processes with pid, user, cpu, mem, command fields." },
+        StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>",
+            "**ls** `-> list<FileInfo>`\n\nLists files in the current directory (or given **path**) as structured records." },
+        StdLibEntry { "rand", "rand -> int  |  rand min max -> int",
+            "**rand** `-> int`\n\nReturns a random integer.\nAlso: `rand min max` for a random integer in range." },
+        StdLibEntry { "fetch", "fetch url -> result<string, string>",
+            "**fetch** `url -> result<string, string>`\n\nFetches content from **url**. Returns `Ok body` or `Error msg`." },
         // Module function constructors (Size.*, FileMode.*, DateTime.*) are now
         // generated from the TypeRegistry via moduleFunctionStdLibCandidates().
     };
@@ -223,24 +275,42 @@ namespace
 
 std::vector<CompletionCandidate> keywordCandidates()
 {
+    // clang-format off
     return {
-        { "let", "let", "F# value/function binding", "", CompletionKind::Keyword },
-        { "rec", "rec", "Recursive function modifier", "", CompletionKind::Keyword },
-        { "mut", "mut", "Mutable binding modifier", "", CompletionKind::Keyword },
-        { "fun", "fun", "Lambda expression", "", CompletionKind::Keyword },
-        { "match", "match", "Pattern matching expression", "", CompletionKind::Keyword },
-        { "with", "with", "Match arm separator", "", CompletionKind::Keyword },
-        { "when", "when", "Pattern guard", "", CompletionKind::Keyword },
-        { "if", "if", "Conditional expression", "", CompletionKind::Keyword },
-        { "then", "then", "Then branch", "", CompletionKind::Keyword },
-        { "else", "else", "Else branch", "", CompletionKind::Keyword },
-        { "type", "type", "Type definition", "", CompletionKind::Keyword },
-        { "of", "of", "Type constructor clause", "", CompletionKind::Keyword },
-        { "try", "try", "Try expression", "", CompletionKind::Keyword },
-        { "finally", "finally", "Finally clause", "", CompletionKind::Keyword },
-        { "true", "true", "Boolean literal", "", CompletionKind::Keyword },
-        { "false", "false", "Boolean literal", "", CompletionKind::Keyword },
+        { "let", "let", "F# value/function binding",
+            "**let** -- keyword\n\n```\nlet x = 42\nlet add x y = x + y\n```", CompletionKind::Keyword },
+        { "rec", "rec", "Recursive function modifier",
+            "**rec** -- keyword\n\n```\nlet rec fact n =\n  if n <= 1 then 1\n  else n * fact (n - 1)\n```", CompletionKind::Keyword },
+        { "mut", "mut", "Mutable binding modifier",
+            "**mut** -- keyword\n\n```\nlet mut x = 0\nx <- x + 1\n```", CompletionKind::Keyword },
+        { "fun", "fun", "Lambda expression",
+            "**fun** -- keyword\n\n```\nfun x -> x + 1\nfun x y -> x * y\n```", CompletionKind::Keyword },
+        { "match", "match", "Pattern matching expression",
+            "**match** -- keyword\n\n```\nmatch x with\n| Some v -> v\n| None -> 0\n```", CompletionKind::Keyword },
+        { "with", "with", "Match arm separator",
+            "**with** -- keyword\n\nSeparates the scrutinee from the match arms.", CompletionKind::Keyword },
+        { "when", "when", "Pattern guard",
+            "**when** -- keyword\n\n```\nmatch x with\n| n when n > 0 -> \"positive\"\n| _ -> \"other\"\n```", CompletionKind::Keyword },
+        { "if", "if", "Conditional expression",
+            "**if** -- keyword\n\n```\nif x > 0 then \"yes\" else \"no\"\n```", CompletionKind::Keyword },
+        { "then", "then", "Then branch",
+            "**then** -- keyword\n\nFollows the condition in an `if` expression.", CompletionKind::Keyword },
+        { "else", "else", "Else branch",
+            "**else** -- keyword\n\nAlternative branch in an `if` expression.", CompletionKind::Keyword },
+        { "type", "type", "Type definition",
+            "**type** -- keyword\n\n```\ntype Color = Red | Green | Blue\n```", CompletionKind::Keyword },
+        { "of", "of", "Type constructor clause",
+            "**of** -- keyword\n\nDeclares the payload type of a variant constructor.", CompletionKind::Keyword },
+        { "try", "try", "Try expression",
+            "**try** -- keyword\n\n```\ntry risky_op () with\n| Error e -> handle e\n```", CompletionKind::Keyword },
+        { "finally", "finally", "Finally clause",
+            "**finally** -- keyword\n\nCode that runs after try/with regardless of outcome.", CompletionKind::Keyword },
+        { "true", "true", "Boolean literal",
+            "**true** -- keyword\n\nBoolean true value.", CompletionKind::Keyword },
+        { "false", "false", "Boolean literal",
+            "**false** -- keyword\n\nBoolean false value.", CompletionKind::Keyword },
     };
+    // clang-format on
 }
 
 std::vector<CompletionCandidate> builtinCandidates()
@@ -254,7 +324,7 @@ std::vector<CompletionCandidate> builtinCandidates()
             .text = info.name,
             .displayText = info.name,
             .description = info.description,
-            .detail = {},
+            .detail = info.detail,
             .kind = info.isProperty ? CompletionKind::Property : CompletionKind::Builtin,
         });
     }
@@ -305,11 +375,15 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         for (auto const& existing: results)
             if (existing.text == completionText)
                 return;
+
+        // Build detail from member info
+        std::string detail = "**" + memberName + "** : `" + description + "`";
+
         results.push_back(CompletionCandidate {
             .text = completionText,
             .displayText = completionText,
             .description = description,
-            .detail = {},
+            .detail = std::move(detail),
             .kind = kind,
         });
     };
@@ -585,7 +659,7 @@ std::vector<CompletionCandidate> standardLibraryCandidates()
             .text = std::string(entry.name),
             .displayText = std::string(entry.name),
             .description = std::string(entry.description),
-            .detail = {},
+            .detail = std::string(entry.detail),
             .kind = CompletionKind::Function,
         });
     return results;
@@ -603,11 +677,22 @@ std::vector<CompletionCandidate> symbolCandidates(std::vector<SymbolDefinitionIn
                            : sym.isMutable ? std::string("mutable value")
                                            : std::string("value");
 
+        // Build detail from symbol info
+        std::string detail;
+        if (sym.isFunction)
+        {
+            detail = "**" + sym.name + "** `" + description + "`\n\nUser-defined function.";
+        }
+        else
+        {
+            detail = "**" + sym.name + "** -- " + description;
+        }
+
         results.push_back(CompletionCandidate {
             .text = sym.name,
             .displayText = sym.name,
             .description = std::move(description),
-            .detail = {},
+            .detail = std::move(detail),
             .kind = kind,
         });
     }

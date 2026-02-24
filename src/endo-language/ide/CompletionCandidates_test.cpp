@@ -839,3 +839,58 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_without_pipeline_type", "[c
     CHECK(hasCandidate(candidates, "_.name"));
     CHECK(hasCandidate(candidates, "_.pid"));
 }
+
+// =============================================================================
+// detail field tests
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_detail", "[completion][detail]")
+{
+    auto stdlib = standardLibraryCandidates();
+    for (auto const& entry: stdlib)
+        CHECK(!entry.detail.empty());
+}
+
+TEST_CASE("CompletionCandidates.builtinCandidates.all_have_detail", "[completion][detail]")
+{
+    auto builtins = builtinCandidates();
+    for (auto const& b: builtins)
+        CHECK(!b.detail.empty());
+}
+
+TEST_CASE("CompletionCandidates.keywordCandidates.all_have_detail", "[completion][detail]")
+{
+    auto keywords = keywordCandidates();
+    for (auto const& kw: keywords)
+        CHECK(!kw.detail.empty());
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.fields_have_detail", "[completion][detail]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    auto candidates = dotAccessCandidates("_", "", fields);
+    for (auto const& c: candidates)
+        CHECK(!c.detail.empty());
+}
+
+TEST_CASE("CompletionCandidates.constructorCandidates.all_have_detail", "[completion][detail]")
+{
+    auto ctors = constructorCandidates();
+    for (auto const& c: ctors)
+        CHECK(!c.detail.empty());
+}
+
+TEST_CASE("CompletionCandidates.symbolCandidates.functions_have_detail", "[completion][detail]")
+{
+    std::vector<SymbolDefinitionInfo> symbols = { {
+        .name = "add",
+        .isFunction = true,
+        .parameterNames = { "x", "y" },
+        .parameterTypes = { std::nullopt, std::nullopt },
+    } };
+    auto candidates = symbolCandidates(symbols);
+    REQUIRE(candidates.size() == 1);
+    CHECK(!candidates[0].detail.empty());
+    CHECK(candidates[0].detail.find("add") != std::string::npos);
+}

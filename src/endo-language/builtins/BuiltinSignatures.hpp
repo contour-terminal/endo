@@ -60,6 +60,7 @@ struct BuiltinInfo
     std::string name;        ///< Command name (e.g., "cd", "echo")
     std::string description; ///< Short description for completion display
     bool isProperty = false; ///< True for properties (shell_prompt_*, agent_*), false for commands
+    std::string detail;      ///< Detailed documentation (markdown) for detail panel
 };
 
 /// Returns the list of user-facing builtins with descriptions.
