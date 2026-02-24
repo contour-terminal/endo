@@ -188,6 +188,33 @@ TEST_CASE("TypeRegistryAdapter.constructorCandidates.excludes_List", "[completio
 }
 
 // =============================================================================
+// builtinCommandOutputTypes tests
+// =============================================================================
+
+TEST_CASE("TypeRegistryAdapter.builtinCommandOutputTypes.returns_expected_mappings", "[completion][adapter]")
+{
+    CoreVM::TypeRegistry registry;
+    auto types = builtinCommandOutputTypes(registry);
+    REQUIRE(types.contains("ls"));
+    CHECK(types.at("ls") == "FileInfo");
+    REQUIRE(types.contains("ps"));
+    CHECK(types.at("ps") == "ProcessInfo");
+    REQUIRE(types.contains("jobs"));
+    CHECK(types.at("jobs") == "JobInfo");
+}
+
+TEST_CASE("TypeRegistryAdapter.builtinCommandOutputTypes.no_spurious_entries", "[completion][adapter]")
+{
+    CoreVM::TypeRegistry registry;
+    auto types = builtinCommandOutputTypes(registry);
+    // Only types with producingCommand should appear
+    CHECK(types.size() == 3);
+    CHECK(!types.contains("DateTime"));
+    CHECK(!types.contains("Size"));
+    CHECK(!types.contains("Option"));
+}
+
+// =============================================================================
 // moduleFunctionStdLibCandidates tests
 // =============================================================================
 

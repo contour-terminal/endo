@@ -384,17 +384,13 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
 
-    // Seed built-in record type fields and module functions from TypeRegistry
+    // Seed built-in record type fields, module functions, and command output types from TypeRegistry
     {
         CoreVM::TypeRegistry registry;
         _fsharpState.recordTypeFields = endo::builtinRecordFields(registry);
         _fsharpState.moduleFunctions = endo::builtinModuleFunctions(registry);
+        _fsharpState.commandOutputTypes = endo::builtinCommandOutputTypes(registry);
     }
-
-    // Register builtin command -> output type mapping for pipeline completion
-    _fsharpState.commandOutputTypes["ls"] = "FileInfo";
-    _fsharpState.commandOutputTypes["ps"] = "ProcessInfo";
-    _fsharpState.commandOutputTypes["jobs"] = "JobInfo";
 
     // Load output definition files for structured pipelines
 #if defined(ENDO_DEFINITIONS_DIR)

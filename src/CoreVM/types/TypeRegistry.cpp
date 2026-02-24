@@ -91,6 +91,7 @@ void TypeRegistry::registerBuiltins()
         { "user", 2, LiteralType::String }, { "cpu", 3, LiteralType::Float },
         { "mem", 4, LiteralType::Float },   { "command", 5, LiteralType::String },
     };
+    processInfoType->producingCommand = "ps";
     addType(std::move(processInfoType));
 
     // DateTime: Product type with 7 fields for date/time representation
@@ -124,6 +125,7 @@ void TypeRegistry::registerBuiltins()
         { "mtime", 3, LiteralType::Object, "DateTime" },
         { "isDir", 4, LiteralType::Boolean },
     };
+    fileInfoType->producingCommand = "ls";
     addType(std::move(fileInfoType));
 
     // JobInfo: Product type with 4 fields for background job information
@@ -138,6 +140,7 @@ void TypeRegistry::registerBuiltins()
         { "command", 2, LiteralType::String },
         { "pid", 3, LiteralType::Number },
     };
+    jobInfoType->producingCommand = "jobs";
     addType(std::move(jobInfoType));
 
     // Size: Product type with 1 field for byte count

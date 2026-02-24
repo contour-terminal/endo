@@ -133,4 +133,15 @@ std::vector<CompletionCandidate> moduleFunctionStdLibCandidates(CoreVM::TypeRegi
     return result;
 }
 
+std::unordered_map<std::string, std::string> builtinCommandOutputTypes(CoreVM::TypeRegistry const& registry)
+{
+    std::unordered_map<std::string, std::string> result;
+    for (auto const& type: registry.allTypes())
+    {
+        if (!type->producingCommand.empty())
+            result[type->producingCommand] = type->name;
+    }
+    return result;
+}
+
 } // namespace endo

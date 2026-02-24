@@ -54,4 +54,13 @@ using ModuleFunctionMap = std::unordered_map<std::string, std::vector<CoreVM::Mo
 [[nodiscard]] std::vector<CompletionCandidate> moduleFunctionStdLibCandidates(
     CoreVM::TypeRegistry const& registry);
 
+/// @brief Derives command -> output type name mappings from the TypeRegistry.
+///
+/// Iterates types with non-empty producingCommand and emits command -> type name entries.
+///
+/// @param registry The type registry to extract command mappings from.
+/// @return Map from command name to record type name.
+[[nodiscard]] std::unordered_map<std::string, std::string> builtinCommandOutputTypes(
+    CoreVM::TypeRegistry const& registry);
+
 } // namespace endo

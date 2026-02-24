@@ -68,6 +68,9 @@ struct TypeDescriptor
     /// Module-level functions associated with this type (e.g., DateTime.now, Size.fromBytes).
     std::vector<ModuleFunctionInfo> moduleFunctions;
 
+    /// Shell command that produces this type (e.g., "ls" for FileInfo).
+    std::string producingCommand;
+
     /// For Function types: number of captured variables.
     uint16_t captureCount = 0;
 
