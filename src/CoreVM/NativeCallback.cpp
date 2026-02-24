@@ -24,6 +24,14 @@ const Signature& NativeCallback::signature() const noexcept
     return _signature;
 }
 
+NativeCallback& NativeCallback::param(LiteralType type, const std::string& name)
+{
+    _signature.args().push_back(type);
+    _names.push_back(name);
+    _defaults.emplace_back(std::monostate {});
+    return *this;
+}
+
 int NativeCallback::findParamByName(const std::string& name) const
 {
     for (int i = 0, e = _names.size(); i != e; ++i)

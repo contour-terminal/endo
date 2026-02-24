@@ -1146,6 +1146,9 @@ class NativeCallback
     /** Declare the return type. */
     NativeCallback& returnType(LiteralType type);
 
+    /** Declare a single named parameter by LiteralType (data-driven alternative to param<T>). */
+    NativeCallback& param(LiteralType type, const std::string& name);
+
     /** Declare a single named parameter without default value. */
     template <typename T>
     NativeCallback& param(const std::string& name);
