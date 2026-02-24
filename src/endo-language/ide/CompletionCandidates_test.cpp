@@ -236,6 +236,18 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_unknown_type_fallback", "[com
     CHECK(hasCandidate(candidates, "bob.name"));
 }
 
+TEST_CASE("CompletionCandidates.dotAccess.stdlib_function_not_qualifiable", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["ProcessInfo"] = { { "pid", "int" } };
+    // Stdlib function names like ps, head, trim, rand should produce no dot-access candidates
+    for (auto const& name: { "ps", "head", "trim", "rand" })
+    {
+        auto candidates = dotAccessCandidates(name, "", fields, {}, {}, testModuleFunctions());
+        CHECK(candidates.empty());
+    }
+}
+
 TEST_CASE("CompletionCandidates.dotAccess.underscore_typed_fields", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
@@ -572,11 +584,13 @@ TEST_CASE("CompletionCandidates.builtinArgumentCandidates.model_filters_by_prefi
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.set_prompt_commands", "[completion]")
 {
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_preset"));
-    CHECK_FALSE(isBuiltinWithArgumentCompletion("shell_prompt_indicator")); // free-form string, no enum values
+    CHECK_FALSE(
+        isBuiltinWithArgumentCompletion("shell_prompt_indicator")); // free-form string, no enum values
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_layout"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_separator"));
     CHECK(isBuiltinWithArgumentCompletion("shell_prompt_transient"));
-    CHECK_FALSE(isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold")); // numeric, no enum values
+    CHECK_FALSE(
+        isBuiltinWithArgumentCompletion("shell_prompt_duration_threshold")); // numeric, no enum values
 }
 
 TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.agent_model_and_thinking", "[completion]")

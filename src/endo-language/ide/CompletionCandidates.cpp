@@ -7,6 +7,7 @@
 
 #include <CoreVM/types/TypeRegistry.hpp>
 
+#include <algorithm>
 #include <set>
 
 namespace endo
@@ -312,23 +313,32 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     }
     else
     {
-        // Generic value: offer module functions for Option (most common wrapper type) and record fields
-        if (auto it = moduleFunctions.find("Option"); it != moduleFunctions.end())
-        {
-            for (auto const& fn: it->second)
-                addCandidate(objectPart + "." + fn.name, fn.name, fn.signature, CompletionKind::Function);
-        }
+        // Don't offer dot-access for stdlib function names (ps, head, trim, etc.)
+        // — they are function calls, not qualifiable identifiers.
+        auto const isStdlibFunction = std::ranges::any_of(stdlibDescriptors(), [&](auto const& desc) {
+            return !desc.userFacingName.empty() && desc.userFacingName == objectPart;
+        });
 
-        std::set<std::string> seen;
-        for (auto const& [typeName, fields]: recordFields)
+        if (!isStdlibFunction)
         {
-            for (auto const& field: fields)
+            // Generic value: offer module functions for Option (most common wrapper type) and record fields
+            if (auto it = moduleFunctions.find("Option"); it != moduleFunctions.end())
             {
-                if (seen.insert(field.name).second)
-                    addCandidate(objectPart + "." + field.name,
-                                 field.name,
-                                 "field: " + field.typeName,
-                                 CompletionKind::Field);
+                for (auto const& fn: it->second)
+                    addCandidate(objectPart + "." + fn.name, fn.name, fn.signature, CompletionKind::Function);
+            }
+
+            std::set<std::string> seen;
+            for (auto const& [typeName, fields]: recordFields)
+            {
+                for (auto const& field: fields)
+                {
+                    if (seen.insert(field.name).second)
+                        addCandidate(objectPart + "." + field.name,
+                                     field.name,
+                                     "field: " + field.typeName,
+                                     CompletionKind::Field);
+                }
             }
         }
     }
