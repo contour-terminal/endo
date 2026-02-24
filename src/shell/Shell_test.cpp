@@ -252,7 +252,7 @@ TEST_CASE("shell.builtin.read.help")
 {
     TestShell shell;
     auto output = shell("read --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# read") != std::string::npos);
     CHECK(output.find("-p PROMPT") != std::string::npos);
     CHECK(output.find("-r") != std::string::npos);
     CHECK(output.find("-s") != std::string::npos);
@@ -424,7 +424,8 @@ TEST_CASE("shell.builtin.which_help")
     TestShell shell;
     // which with no arguments should show help and return 0
     auto output = shell("which").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# which") != std::string::npos);
+    CHECK(output.find("## Usage") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
 
@@ -432,7 +433,7 @@ TEST_CASE("shell.builtin.which_help_flag")
 {
     TestShell shell;
     auto output = shell("which --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("## Usage") != std::string::npos);
     CHECK(output.find("--all") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
@@ -495,7 +496,7 @@ TEST_CASE("shell.builtin.cat_help")
 {
     TestShell shell;
     auto output = shell("cat --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# cat") != std::string::npos);
     CHECK(output.find("--number") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
@@ -504,7 +505,7 @@ TEST_CASE("shell.builtin.cat_help_short")
 {
     TestShell shell;
     auto output = shell("cat -h").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# cat") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
 
@@ -756,8 +757,8 @@ TEST_CASE("shell.builtin.sleep_help")
 {
     TestShell shell;
     auto output = shell("sleep --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
-    CHECK(output.find("SUFFIX") != std::string::npos);
+    CHECK(output.find("# sleep") != std::string::npos);
+    CHECK(output.find("Suffix") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
 
@@ -765,7 +766,7 @@ TEST_CASE("shell.builtin.sleep_help_short")
 {
     TestShell shell;
     auto output = shell("sleep -h").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# sleep") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
 
@@ -861,7 +862,7 @@ TEST_CASE("shell.builtin.rm_help")
 {
     TestShell shell;
     auto output = shell("rm --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# rm") != std::string::npos);
     CHECK(output.find("--force") != std::string::npos);
     CHECK(output.find("--recursive") != std::string::npos);
     CHECK(shell.exitCode == 0);
@@ -1055,7 +1056,7 @@ TEST_CASE("shell.builtin.mkdir_help")
 {
     TestShell shell;
     auto output = shell("mkdir --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# mkdir") != std::string::npos);
     CHECK(output.find("--parents") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
@@ -1210,7 +1211,7 @@ TEST_CASE("shell.builtin.cp_help")
 {
     TestShell shell;
     auto output = shell("cp --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# cp") != std::string::npos);
     CHECK(output.find("--recursive") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }
@@ -1560,7 +1561,7 @@ TEST_CASE("shell.builtin.mv_help")
 {
     TestShell shell;
     auto output = shell("mv --help").output();
-    CHECK(output.find("Usage:") != std::string::npos);
+    CHECK(output.find("# mv") != std::string::npos);
     CHECK(output.find("--no-clobber") != std::string::npos);
     CHECK(shell.exitCode == 0);
 }

@@ -295,6 +295,17 @@ class Shell final: public SignalCallback
     void builtinBind(CoreVM::Params& context);
     void builtinWhich(CoreVM::Params& context);
 
+    // --- Shared helpers ---
+
+    /// @brief Renders markdown help text to a file descriptor.
+    ///
+    /// When outputFd is a TTY, uses tui::MarkdownRenderer for styled output;
+    /// otherwise falls back to raw text.
+    /// @param outputFd File descriptor to write to.
+    /// @param markdownContent The markdown text to render.
+    /// @return Always 0.
+    [[nodiscard]] static int renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent);
+
     // --- Output builtins (builtins/Output.cpp) ---
     void builtinPrint(CoreVM::Params& context);
     void builtinPrintln(CoreVM::Params& context);

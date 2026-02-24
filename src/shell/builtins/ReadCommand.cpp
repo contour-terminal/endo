@@ -2,6 +2,9 @@
 #include <shell/Shell.hpp>
 #include <shell/TTY.hpp>
 
+#include <tui/MarkdownRenderer.hpp>
+#include <tui/TerminalOutput.hpp>
+
 #include <chrono>
 #include <format>
 #include <iostream>
@@ -202,23 +205,31 @@ void Shell::builtinRead(CoreVM::Params& context)
 
         if (arg == "-h" || arg == "--help")
         {
-            auto writeOutput = [this](std::string const& str) {
-                NativeHandle const outputFd = _redirectState.getEffectiveStdoutFd(
-                    _currentPipelineBuilder.defaultStdoutFd, _processManager);
-                [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
-            };
-            writeOutput("Usage: read [OPTIONS] [VAR...]\n");
-            writeOutput("Read a line from standard input.\n\n");
-            writeOutput("Options:\n");
-            writeOutput("  -p PROMPT   Display PROMPT before reading\n");
-            writeOutput("  -r          Raw mode (don't interpret backslashes)\n");
-            writeOutput("  -s          Silent mode (don't echo input)\n");
-            writeOutput("  -n NCHARS   Read at most NCHARS characters\n");
-            writeOutput("  -t TIMEOUT  Timeout in seconds\n");
-            writeOutput("  -d DELIM    Use DELIM as line delimiter (default: newline)\n");
-            writeOutput("  -h, --help  Display this help\n\n");
-            writeOutput("If no VAR specified, input is stored in REPLY.\n");
-            writeOutput("Multiple VARs split input by $IFS (default: space/tab/newline).\n");
+            NativeHandle const outputFd =
+                _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+            (void) renderMarkdownHelp(outputFd,
+                               "# read\n"
+                               "\n"
+                               "Read a line from standard input.\n"
+                               "\n"
+                               "## Usage\n"
+                               "\n"
+                               "`read [OPTIONS] [VAR...]`\n"
+                               "\n"
+                               "## Options\n"
+                               "\n"
+                               "| Option | Description |\n"
+                               "|--------|-------------|\n"
+                               "| `-p PROMPT` | Display PROMPT before reading |\n"
+                               "| `-r` | Raw mode (don't interpret backslashes) |\n"
+                               "| `-s` | Silent mode (don't echo input) |\n"
+                               "| `-n NCHARS` | Read at most NCHARS characters |\n"
+                               "| `-t TIMEOUT` | Timeout in seconds |\n"
+                               "| `-d DELIM` | Use DELIM as line delimiter (default: newline) |\n"
+                               "| `-h`, `--help` | Display this help |\n"
+                               "\n"
+                               "If no VAR specified, input is stored in `REPLY`.\n"
+                               "Multiple VARs split input by `$IFS` (default: space/tab/newline).\n");
             _exitCode = 0;
             context.setResult(CoreVM::CoreString(""));
             return;

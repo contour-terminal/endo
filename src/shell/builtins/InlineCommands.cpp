@@ -4,7 +4,9 @@
 
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
+#include <tui/MarkdownRenderer.hpp>
 #include <tui/Sixel.hpp>
+#include <tui/TerminalOutput.hpp>
 #include <tui/Theme.hpp>
 
 #include <charconv>
@@ -184,11 +186,65 @@ std::expected<std::pair<std::optional<int>, std::optional<int>>, std::string> pa
 namespace endo
 {
 
+int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownContent)
+{
+#if !defined(_WIN32)
+    if (isatty(outputFd) != 0 && outputFd == standardOutput())
+    {
+        tui::TerminalOutput termOutput;
+        tui::MarkdownRenderer renderer(termOutput);
+        renderer.render(markdownContent);
+        termOutput.flush();
+        return 0;
+    }
+#endif
+    [[maybe_unused]] auto written = platformWrite(outputFd, markdownContent.data(), markdownContent.size());
+    written = platformWrite(outputFd, "\n", 1);
+    return 0;
+}
+
 int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
     std::vector<std::string> echoArgs;
     for (size_t i = 1; i < args.size(); ++i)
         echoArgs.push_back(args.at(i));
+
+    // Check for --help before flag parsing
+    for (auto const& arg: echoArgs)
+    {
+        if (arg == "--help" || arg == "-h")
+            return renderMarkdownHelp(outputFd,
+                                      "# echo\n"
+                                      "\n"
+                                      "Write arguments to standard output.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`echo [OPTION]... [STRING]...`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-n` | Do not output the trailing newline |\n"
+                                      "| `-e` | Enable interpretation of backslash escapes |\n"
+                                      "| `--help` | Display this help |\n"
+                                      "\n"
+                                      "## Escape Sequences (with `-e`)\n"
+                                      "\n"
+                                      "| Sequence | Meaning |\n"
+                                      "|----------|----------|\n"
+                                      "| `\\\\` | Backslash |\n"
+                                      "| `\\a` | Alert (bell) |\n"
+                                      "| `\\b` | Backspace |\n"
+                                      "| `\\e` | Escape character |\n"
+                                      "| `\\f` | Form feed |\n"
+                                      "| `\\n` | Newline |\n"
+                                      "| `\\r` | Carriage return |\n"
+                                      "| `\\t` | Horizontal tab |\n"
+                                      "| `\\0NNN` | Octal value NNN (1 to 3 digits) |\n"
+                                      "| `\\xHH` | Hexadecimal value HH (1 to 2 digits) |\n");
+    }
 
     bool suppressNewline = false;
     bool interpretEscapes = false;
@@ -518,22 +574,33 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 
     if (showHelp)
     {
-        writeOutput("Usage: cat [OPTION]... [FILE]...\n");
-        writeOutput("Concatenate FILE(s) to standard output.\n");
-        writeOutput("With no FILE, or when FILE is -, read standard input.\n");
-        writeOutput("\n");
-        writeOutput("  -n, --number           number all output lines\n");
-        writeOutput("  -b, --number-nonblank  number non-blank output lines (overrides -n)\n");
-        writeOutput("  -s, --squeeze-blank    suppress repeated empty output lines\n");
-        writeOutput("  -E, --show-ends        display $ at end of each line\n");
-        writeOutput("  -T, --show-tabs        display TAB characters as ^I\n");
-        writeOutput("  -A, --show-all         equivalent to -ET\n");
-        writeOutput("  -r, --range START..END show only lines in the given range\n");
-        writeOutput("  -c, --columns N        target image width in terminal columns\n");
-        writeOutput("  -R, --rows N           target image height in terminal rows\n");
-        writeOutput("      --raw              disable inline image rendering\n");
-        writeOutput("  -h, --help             display this help and exit\n");
-        return 0;
+        return renderMarkdownHelp(
+            outputFd,
+            "# cat\n"
+            "\n"
+            "Concatenate FILE(s) to standard output.\n"
+            "\n"
+            "## Usage\n"
+            "\n"
+            "`cat [OPTION]... [FILE]...`\n"
+            "\n"
+            "With no FILE, or when FILE is `-`, read standard input.\n"
+            "\n"
+            "## Options\n"
+            "\n"
+            "| Option | Description |\n"
+            "|--------|-------------|\n"
+            "| `-n`, `--number` | Number all output lines |\n"
+            "| `-b`, `--number-nonblank` | Number non-blank output lines (overrides `-n`) |\n"
+            "| `-s`, `--squeeze-blank` | Suppress repeated empty output lines |\n"
+            "| `-E`, `--show-ends` | Display `$` at end of each line |\n"
+            "| `-T`, `--show-tabs` | Display TAB characters as `^I` |\n"
+            "| `-A`, `--show-all` | Equivalent to `-ET` |\n"
+            "| `-r`, `--range START..END` | Show only lines in the given range |\n"
+            "| `-c`, `--columns N` | Target image width in terminal columns |\n"
+            "| `-R`, `--rows N` | Target image height in terminal rows |\n"
+            "| `--raw` | Disable inline image rendering |\n"
+            "| `-h`, `--help` | Display this help |\n");
     }
 
     // Detect whether output goes to a TTY for syntax highlighting
@@ -815,27 +882,31 @@ int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle 
     for (size_t i = 1; i < args.size(); ++i)
         sleepArgs.push_back(args.at(i));
 
-    auto writeOutput = [outputFd](std::string const& str) {
-        [[maybe_unused]] auto written = platformWrite(outputFd, str.data(), str.size());
-    };
-
     // Check for help
     for (auto const& arg: sleepArgs)
     {
         if (arg == "-h" || arg == "--help")
         {
-            writeOutput("Usage: sleep NUMBER[SUFFIX]...\n");
-            writeOutput("Pause for NUMBER seconds.\n");
-            writeOutput("\n");
-            writeOutput("SUFFIX may be:\n");
-            writeOutput("  s   seconds (default)\n");
-            writeOutput("  m   minutes\n");
-            writeOutput("  h   hours\n");
-            writeOutput("  d   days\n");
-            writeOutput("\n");
-            writeOutput("Multiple arguments are summed together.\n");
-            writeOutput("NUMBER may be an integer or floating-point number.\n");
-            return 0;
+            return renderMarkdownHelp(outputFd,
+                                      "# sleep\n"
+                                      "\n"
+                                      "Pause for NUMBER seconds.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`sleep NUMBER[SUFFIX]...`\n"
+                                      "\n"
+                                      "## Suffixes\n"
+                                      "\n"
+                                      "| Suffix | Meaning |\n"
+                                      "|--------|----------|\n"
+                                      "| `s` | Seconds (default) |\n"
+                                      "| `m` | Minutes |\n"
+                                      "| `h` | Hours |\n"
+                                      "| `d` | Days |\n"
+                                      "\n"
+                                      "Multiple arguments are summed together.\n"
+                                      "NUMBER may be an integer or floating-point number.\n");
         }
     }
 
@@ -937,19 +1008,28 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
-        if (!endOfOptions && arg == "--help")
+        if (!endOfOptions && (arg == "--help" || arg == "-h"))
         {
-            writeOutput("Usage: rm [OPTION]... [FILE]...\n");
-            writeOutput("Remove (unlink) the FILE(s).\n");
-            writeOutput("\n");
-            writeOutput("Options:\n");
-            writeOutput("  -f, --force       ignore nonexistent files, never prompt\n");
-            writeOutput("  -i                prompt before every removal\n");
-            writeOutput("  -r, -R, --recursive  remove directories and their contents recursively\n");
-            writeOutput("  -d, --dir         remove empty directories\n");
-            writeOutput("  -v, --verbose     explain what is being done\n");
-            writeOutput("      --help        display this help and exit\n");
-            return 0;
+            return renderMarkdownHelp(
+                outputFd,
+                "# rm\n"
+                "\n"
+                "Remove (unlink) the FILE(s).\n"
+                "\n"
+                "## Usage\n"
+                "\n"
+                "`rm [OPTION]... [FILE]...`\n"
+                "\n"
+                "## Options\n"
+                "\n"
+                "| Option | Description |\n"
+                "|--------|-------------|\n"
+                "| `-f`, `--force` | Ignore nonexistent files, never prompt |\n"
+                "| `-i` | Prompt before every removal |\n"
+                "| `-r`, `-R`, `--recursive` | Remove directories and their contents recursively |\n"
+                "| `-d`, `--dir` | Remove empty directories |\n"
+                "| `-v`, `--verbose` | Explain what is being done |\n"
+                "| `--help` | Display this help |\n");
         }
 
         if (!endOfOptions && arg == "--recursive")
@@ -1180,16 +1260,24 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
             continue;
         }
 
-        if (!endOfOptions && arg == "--help")
+        if (!endOfOptions && (arg == "--help" || arg == "-h"))
         {
-            writeOutput("Usage: mkdir [OPTION]... DIRECTORY...\n");
-            writeOutput("Create the DIRECTORY(ies), if they do not already exist.\n");
-            writeOutput("\n");
-            writeOutput("Options:\n");
-            writeOutput("  -p, --parents     make parent directories as needed\n");
-            writeOutput("  -v, --verbose     print a message for each created directory\n");
-            writeOutput("      --help        display this help and exit\n");
-            return 0;
+            return renderMarkdownHelp(outputFd,
+                                      "# mkdir\n"
+                                      "\n"
+                                      "Create the DIRECTORY(ies), if they do not already exist.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`mkdir [OPTION]... DIRECTORY...`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-p`, `--parents` | Make parent directories as needed |\n"
+                                      "| `-v`, `--verbose` | Print a message for each created directory |\n"
+                                      "| `--help` | Display this help |\n");
         }
 
         if (!endOfOptions && arg == "--parents")
@@ -1296,18 +1384,26 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
-        if (!endOfOptions && arg == "--help")
+        if (!endOfOptions && (arg == "--help" || arg == "-h"))
         {
-            writeOutput("Usage: cp [OPTION]... SOURCE... DEST\n");
-            writeOutput("Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n");
-            writeOutput("\n");
-            writeOutput("Options:\n");
-            writeOutput("  -r, -R, --recursive  copy directories recursively\n");
-            writeOutput("  -f, --force          force overwrite; remove destination if needed\n");
-            writeOutput("  -n, --no-clobber     do not overwrite existing files\n");
-            writeOutput("  -v, --verbose        explain what is being done\n");
-            writeOutput("      --help           display this help and exit\n");
-            return 0;
+            return renderMarkdownHelp(outputFd,
+                                      "# cp\n"
+                                      "\n"
+                                      "Copy SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`cp [OPTION]... SOURCE... DEST`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-r`, `-R`, `--recursive` | Copy directories recursively |\n"
+                                      "| `-f`, `--force` | Force overwrite; remove destination if needed |\n"
+                                      "| `-n`, `--no-clobber` | Do not overwrite existing files |\n"
+                                      "| `-v`, `--verbose` | Explain what is being done |\n"
+                                      "| `--help` | Display this help |\n");
         }
 
         if (!endOfOptions && arg == "--recursive")
@@ -1516,18 +1612,26 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
             continue;
         }
 
-        if (!endOfOptions && arg == "--help")
+        if (!endOfOptions && (arg == "--help" || arg == "-h"))
         {
-            writeOutput("Usage: mv [OPTION]... SOURCE... DEST\n");
-            writeOutput("Move SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n");
-            writeOutput("\n");
-            writeOutput("Options:\n");
-            writeOutput("  -f, --force          do not prompt before overwriting\n");
-            writeOutput("  -n, --no-clobber     do not overwrite existing files\n");
-            writeOutput("  -v, --verbose        explain what is being done\n");
-            writeOutput("  -i, --interactive    prompt before overwrite\n");
-            writeOutput("      --help           display this help and exit\n");
-            return 0;
+            return renderMarkdownHelp(outputFd,
+                                      "# mv\n"
+                                      "\n"
+                                      "Move SOURCE to DEST, or multiple SOURCE(s) to DIRECTORY.\n"
+                                      "\n"
+                                      "## Usage\n"
+                                      "\n"
+                                      "`mv [OPTION]... SOURCE... DEST`\n"
+                                      "\n"
+                                      "## Options\n"
+                                      "\n"
+                                      "| Option | Description |\n"
+                                      "|--------|-------------|\n"
+                                      "| `-f`, `--force` | Do not prompt before overwriting |\n"
+                                      "| `-n`, `--no-clobber` | Do not overwrite existing files |\n"
+                                      "| `-v`, `--verbose` | Explain what is being done |\n"
+                                      "| `-i`, `--interactive` | Prompt before overwrite |\n"
+                                      "| `--help` | Display this help |\n");
         }
 
         if (!endOfOptions && arg == "--force")
@@ -1739,6 +1843,55 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
     std::vector<std::string> findArgs;
     for (size_t i = 1; i < args.size(); ++i)
         findArgs.push_back(args.at(i));
+
+    // Check for --help before parsing
+    for (auto const& arg: findArgs)
+    {
+        if (arg == "--help" || arg == "-h")
+            return renderMarkdownHelp(
+                outputFd,
+                "# find\n"
+                "\n"
+                "Search for files in a directory hierarchy.\n"
+                "\n"
+                "## Usage\n"
+                "\n"
+                "`find [PATH...] [EXPRESSION]`\n"
+                "\n"
+                "If no PATH is given, the current directory is used.\n"
+                "\n"
+                "## Options\n"
+                "\n"
+                "| Option | Description |\n"
+                "|--------|-------------|\n"
+                "| `-maxdepth N` | Descend at most N levels |\n"
+                "| `-mindepth N` | Do not apply tests at levels less than N |\n"
+                "| `-print0` | Print entries separated by null instead of newline |\n"
+                "| `--help` | Display this help |\n"
+                "\n"
+                "## Predicates\n"
+                "\n"
+                "| Predicate | Description |\n"
+                "|-----------|-------------|\n"
+                "| `-name PATTERN` | Match filename against glob pattern |\n"
+                "| `-iname PATTERN` | Like `-name` but case-insensitive |\n"
+                "| `-path PATTERN` | Match full path against glob pattern |\n"
+                "| `-ipath PATTERN` | Like `-path` but case-insensitive |\n"
+                "| `-type TYPE` | Match file type: `f` (file), `d` (directory), `l` (symlink) |\n"
+                "| `-size [+\\|-]N[c\\|k\\|M\\|G]` | Match file size (c=bytes, k=KiB, M=MiB, G=GiB) |\n"
+                "| `-mtime [+\\|-]N` | Match modification time in 24-hour periods |\n"
+                "| `-newer FILE` | Match files newer than FILE |\n"
+                "| `-empty` | Match empty files or directories |\n"
+                "\n"
+                "## Operators\n"
+                "\n"
+                "| Operator | Description |\n"
+                "|----------|-------------|\n"
+                "| `-a`, `-and` | Logical AND (implicit between predicates) |\n"
+                "| `-o`, `-or` | Logical OR |\n"
+                "| `-not`, `!` | Logical NOT |\n"
+                "| `( expr )` | Group expressions |\n");
+    }
 
     auto parsed = find::parseFindArgs(findArgs);
     if (!parsed.has_value())

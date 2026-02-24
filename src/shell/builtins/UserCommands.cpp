@@ -2,6 +2,9 @@
 #include <shell/Shell.hpp>
 #include <shell/util/CommandResolver.hpp>
 
+#include <tui/MarkdownRenderer.hpp>
+#include <tui/TerminalOutput.hpp>
+
 #include <crispy/utils.h>
 
 #include <filesystem>
@@ -9,6 +12,10 @@
 #include <print>
 
 #include <platform/Types.hpp>
+
+#if !defined(_WIN32)
+    #include <unistd.h>
+#endif
 
 namespace endo
 {
@@ -88,40 +95,62 @@ void Shell::builtinBind(CoreVM::Params& context)
 
     if (args[0] == "-h" || args[0] == "--help")
     {
-        std::println("Usage: bind [options] [key action]");
-        std::println("");
-        std::println("Options:");
-        std::println("  -l, --list    List all keybindings");
-        std::println("  -r, --remove  Remove a keybinding: bind -r ctrl+y");
-        std::println("  --reset       Reset all keybindings to defaults");
-        std::println("  -h, --help    Show this help message");
-        std::println("");
-        std::println("Examples:");
-        std::println("  bind                     # List all bindings");
-        std::println("  bind ctrl+y redo         # Bind Ctrl+Y to redo");
-        std::println("  bind ctrl+y yank         # Bind Ctrl+Y to yank (Emacs-style)");
-        std::println("  bind -r ctrl+y           # Remove Ctrl+Y binding");
-        std::println("  bind --reset             # Reset to defaults");
-        std::println("");
-        std::println("Key format: [modifier+]...key");
-        std::println("  Modifiers: ctrl, alt, shift, super");
-        std::println("  Keys: a-z, enter, backspace, delete, tab, escape,");
-        std::println("        up, down, left, right, home, end, f1-f12");
-        std::println("");
-        std::println("Actions:");
-        std::println("  Movement:  move-forward-char, move-backward-char, move-forward-word,");
-        std::println("             move-backward-word, move-to-line-start, move-to-line-end,");
-        std::println("             move-to-buffer-start, move-to-buffer-end, move-up, move-down,");
-        std::println("             smart-move-to-line-start, smart-move-to-line-end");
-        std::println("  Editing:   delete-char-backward, delete-char-forward, delete-word,");
-        std::println("             delete-word-backward, kill-to-end, kill-to-start, transpose");
-        std::println("  Undo:      undo, redo");
-        std::println("  Kill Ring: yank, yank-pop");
-        std::println("  Selection: select-all");
-        std::println("  Clipboard: cut, copy, paste");
-        std::println("  Control:   submit, abort, insert-newline, agent-mode,");
-        std::println("             cycle-agent-mode, cycle-thinking-mode, cycle-model");
-        std::println("  History:   history-prev, history-next");
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+        (void) renderMarkdownHelp(outputFd,
+                           "# bind\n"
+                           "\n"
+                           "Manage key bindings for the line editor.\n"
+                           "\n"
+                           "## Usage\n"
+                           "\n"
+                           "`bind [OPTIONS] [KEY ACTION]`\n"
+                           "\n"
+                           "## Options\n"
+                           "\n"
+                           "| Option | Description |\n"
+                           "|--------|-------------|\n"
+                           "| `-l`, `--list` | List all keybindings |\n"
+                           "| `-r`, `--remove` | Remove a keybinding: `bind -r ctrl+y` |\n"
+                           "| `--reset` | Reset all keybindings to defaults |\n"
+                           "| `-h`, `--help` | Show this help message |\n"
+                           "\n"
+                           "## Examples\n"
+                           "\n"
+                           "```\n"
+                           "bind                     # List all bindings\n"
+                           "bind ctrl+y redo         # Bind Ctrl+Y to redo\n"
+                           "bind ctrl+y yank         # Bind Ctrl+Y to yank (Emacs-style)\n"
+                           "bind -r ctrl+y           # Remove Ctrl+Y binding\n"
+                           "bind --reset             # Reset to defaults\n"
+                           "```\n"
+                           "\n"
+                           "## Key Format\n"
+                           "\n"
+                           "`[modifier+]...key`\n"
+                           "\n"
+                           "**Modifiers:** `ctrl`, `alt`, `shift`, `super`\n"
+                           "\n"
+                           "**Keys:** `a`-`z`, `enter`, `backspace`, `delete`, `tab`, `escape`,\n"
+                           "`up`, `down`, `left`, `right`, `home`, `end`, `f1`-`f12`\n"
+                           "\n"
+                           "## Actions\n"
+                           "\n"
+                           "| Category | Actions |\n"
+                           "|----------|----------|\n"
+                           "| Movement | `move-forward-char`, `move-backward-char`, `move-forward-word`, "
+                           "`move-backward-word`, `move-to-line-start`, `move-to-line-end`, "
+                           "`move-to-buffer-start`, `move-to-buffer-end`, `move-up`, `move-down`, "
+                           "`smart-move-to-line-start`, `smart-move-to-line-end` |\n"
+                           "| Editing | `delete-char-backward`, `delete-char-forward`, `delete-word`, "
+                           "`delete-word-backward`, `kill-to-end`, `kill-to-start`, `transpose` |\n"
+                           "| Undo | `undo`, `redo` |\n"
+                           "| Kill Ring | `yank`, `yank-pop` |\n"
+                           "| Selection | `select-all` |\n"
+                           "| Clipboard | `cut`, `copy`, `paste` |\n"
+                           "| Control | `submit`, `abort`, `insert-newline`, `agent-mode`, "
+                           "`cycle-agent-mode`, `cycle-thinking-mode`, `cycle-model` |\n"
+                           "| History | `history-prev`, `history-next` |\n");
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;
@@ -208,19 +237,31 @@ void Shell::builtinWhich(CoreVM::Params& context)
     // Show help if requested or no arguments given
     if (showHelp || programs.empty())
     {
-        std::string help = "Usage: which [OPTIONS] PROGRAM...\n"
+        NativeHandle const outputFd =
+            _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+        (void) renderMarkdownHelp(outputFd,
+                           "# which\n"
                            "\n"
                            "Locate executables in the PATH.\n"
                            "\n"
-                           "Options:\n"
-                           "  -a, --all         Print all matching executables in PATH, not just the first\n"
-                           "  -h, --help        Show this help message\n"
-                           "  -i, --read-alias  Also show aliases (not yet implemented)\n"
+                           "## Usage\n"
                            "\n"
-                           "Exit status:\n"
-                           "  0  if all programs were found\n"
-                           "  1  if one or more programs were not found\n";
-        writeOutput(help);
+                           "`which [OPTIONS] PROGRAM...`\n"
+                           "\n"
+                           "## Options\n"
+                           "\n"
+                           "| Option | Description |\n"
+                           "|--------|-------------|\n"
+                           "| `-a`, `--all` | Print all matching executables in PATH, not just the first |\n"
+                           "| `-h`, `--help` | Show this help message |\n"
+                           "| `-i`, `--read-alias` | Also show aliases (not yet implemented) |\n"
+                           "\n"
+                           "## Exit Status\n"
+                           "\n"
+                           "| Code | Meaning |\n"
+                           "|------|----------|\n"
+                           "| `0` | All programs were found |\n"
+                           "| `1` | One or more programs were not found |\n");
         _exitCode = 0;
         context.setResult(CoreVM::CoreNumber(0));
         return;
