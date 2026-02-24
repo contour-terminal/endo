@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Markdown.render outputs content text via pipeline
+# expect: # Hello
+# expect:
+
+let md = markdown "# Hello"
+md |> Markdown.render

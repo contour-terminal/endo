@@ -172,6 +172,22 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(fileModeType));
 
+    // Markdown: Product type with 1 field for raw markdown content string
+    auto markdownType = std::make_unique<TypeDescriptor>();
+    markdownType->kind = TypeKind::Product;
+    markdownType->id = BuiltinTypeId::Markdown;
+    markdownType->name = "Markdown";
+    markdownType->slotCount = 1;
+    markdownType->fields = {
+        { "content", 0, LiteralType::String },
+    };
+    markdownType->moduleFunctions = {
+        { "render", "Markdown.render md -> unit (renders to terminal)" },
+        { "toHtml", "Markdown.toHtml md -> string (converts to HTML)" },
+        { "toText", "Markdown.toText md -> string (strips formatting)" },
+    };
+    addType(std::move(markdownType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: markdown constructor stores content string
+# expect: # Hello
+
+let md = markdown "# Hello"
+print (Markdown.content md)

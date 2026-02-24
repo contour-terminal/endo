@@ -127,6 +127,12 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
             return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
         if (typeId == CoreVM::BuiltinTypeId::FileMode)
             return formatFileModeToString(static_cast<int64_t>(obj->getSlot(0)));
+        if (typeId == CoreVM::BuiltinTypeId::Markdown)
+        {
+            auto const* content =
+                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+            return content ? std::string(*content) : "";
+        }
         if (typeId == CoreVM::BuiltinTypeId::DateTime)
         {
             // Render DateTime as "YYYY-MM-DD HH:MM:SS"
@@ -928,6 +934,251 @@ void dateTimeFromEpoch(CoreVM::Params& args)
     auto const epoch = args.getInt(1);
     auto* dt = makeDateTimeFromEpoch(args.caller(), epoch);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(dt)));
+}
+
+// ---------------------------------------------------------------------------
+// Markdown operations
+// ---------------------------------------------------------------------------
+
+CoreVM::TypedObject* makeMarkdown(CoreVM::Runner* runner, std::string const& content)
+{
+    auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::Markdown);
+    obj->setSlot(0, reinterpret_cast<uintptr_t>(runner->newString(content)));
+    return obj;
+}
+
+void markdownCreate(CoreVM::Params& args)
+{
+    auto const& text = args.getString(1);
+    auto* obj = makeMarkdown(args.caller(), std::string(text));
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void markdownToHtml(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const* content =
+        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+    if (!content)
+    {
+        args.setResult(args.caller()->newString(""));
+        return;
+    }
+
+    auto const& md = *content;
+    std::string html;
+    bool inCodeBlock = false;
+
+    auto lines = std::vector<std::string>();
+    size_t pos = 0;
+    while (pos < md.size())
+    {
+        auto const nl = md.find('\n', pos);
+        if (nl == std::string::npos)
+        {
+            lines.emplace_back(md.substr(pos));
+            break;
+        }
+        lines.emplace_back(md.substr(pos, nl - pos));
+        pos = nl + 1;
+    }
+
+    for (auto const& line: lines)
+    {
+        if (line.starts_with("```"))
+        {
+            if (inCodeBlock)
+            {
+                html += "</code></pre>\n";
+                inCodeBlock = false;
+            }
+            else
+            {
+                html += "<pre><code>";
+                inCodeBlock = true;
+            }
+            continue;
+        }
+
+        if (inCodeBlock)
+        {
+            html += line + "\n";
+            continue;
+        }
+
+        if (line.starts_with("### "))
+        {
+            html += "<h3>" + line.substr(4) + "</h3>\n";
+        }
+        else if (line.starts_with("## "))
+        {
+            html += "<h2>" + line.substr(3) + "</h2>\n";
+        }
+        else if (line.starts_with("# "))
+        {
+            html += "<h1>" + line.substr(2) + "</h1>\n";
+        }
+        else if (line.starts_with("> "))
+        {
+            html += "<blockquote>" + line.substr(2) + "</blockquote>\n";
+        }
+        else if (line.starts_with("- ") || line.starts_with("* "))
+        {
+            html += "<ul><li>" + line.substr(2) + "</li></ul>\n";
+        }
+        else if (!line.empty())
+        {
+            // Inline formatting: **bold**, *italic*, `code`
+            auto processed = std::string();
+            for (size_t i = 0; i < line.size(); ++i)
+            {
+                if (line[i] == '`')
+                {
+                    auto const end = line.find('`', i + 1);
+                    if (end != std::string::npos)
+                    {
+                        processed += "<code>" + line.substr(i + 1, end - i - 1) + "</code>";
+                        i = end;
+                        continue;
+                    }
+                }
+                if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '*')
+                {
+                    auto const end = line.find("**", i + 2);
+                    if (end != std::string::npos)
+                    {
+                        processed += "<strong>" + line.substr(i + 2, end - i - 2) + "</strong>";
+                        i = end + 1;
+                        continue;
+                    }
+                }
+                if (line[i] == '*')
+                {
+                    auto const end = line.find('*', i + 1);
+                    if (end != std::string::npos)
+                    {
+                        processed += "<em>" + line.substr(i + 1, end - i - 1) + "</em>";
+                        i = end;
+                        continue;
+                    }
+                }
+                processed += line[i];
+            }
+            html += "<p>" + processed + "</p>\n";
+        }
+    }
+
+    if (inCodeBlock)
+        html += "</code></pre>\n";
+
+    args.setResult(args.caller()->newString(html));
+}
+
+void markdownToText(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const* content =
+        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+    if (!content)
+    {
+        args.setResult(args.caller()->newString(""));
+        return;
+    }
+
+    auto const& md = *content;
+    std::string text;
+    bool inCodeBlock = false;
+
+    size_t pos = 0;
+    while (pos < md.size())
+    {
+        auto const nl = md.find('\n', pos);
+        auto const lineEnd = (nl == std::string::npos) ? md.size() : nl;
+        auto line = md.substr(pos, lineEnd - pos);
+        pos = (nl == std::string::npos) ? md.size() : nl + 1;
+
+        if (line.starts_with("```"))
+        {
+            inCodeBlock = !inCodeBlock;
+            continue;
+        }
+
+        if (inCodeBlock)
+        {
+            if (!text.empty())
+                text += '\n';
+            text += line;
+            continue;
+        }
+
+        // Strip heading markers
+        while (line.starts_with("#"))
+            line = line.substr(1);
+        if (line.starts_with(" "))
+            line = line.substr(1);
+
+        // Strip blockquote markers
+        if (line.starts_with("> "))
+            line = line.substr(2);
+
+        // Strip list markers
+        if (line.starts_with("- ") || line.starts_with("* "))
+            line = line.substr(2);
+
+        // Strip inline formatting: **bold**, *italic*, `code`
+        auto stripped = std::string();
+        for (size_t i = 0; i < line.size(); ++i)
+        {
+            if (line[i] == '`')
+            {
+                auto const end = line.find('`', i + 1);
+                if (end != std::string::npos)
+                {
+                    stripped += line.substr(i + 1, end - i - 1);
+                    i = end;
+                    continue;
+                }
+            }
+            if (i + 1 < line.size() && line[i] == '*' && line[i + 1] == '*')
+            {
+                auto const end = line.find("**", i + 2);
+                if (end != std::string::npos)
+                {
+                    stripped += line.substr(i + 2, end - i - 2);
+                    i = end + 1;
+                    continue;
+                }
+            }
+            if (line[i] == '*')
+            {
+                auto const end = line.find('*', i + 1);
+                if (end != std::string::npos)
+                {
+                    stripped += line.substr(i + 1, end - i - 1);
+                    i = end;
+                    continue;
+                }
+            }
+            stripped += line[i];
+        }
+
+        if (!text.empty() && !stripped.empty())
+            text += '\n';
+        text += stripped;
+    }
+
+    args.setResult(args.caller()->newString(text));
+}
+
+void markdownContent(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const* content =
+        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+    if (content)
+        args.setResult(args.caller()->newString(std::string(*content)));
+    else
+        args.setResult(args.caller()->newString(""));
 }
 
 // ---------------------------------------------------------------------------

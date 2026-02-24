@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Markdown.toText strips formatting characters
+# expect: Hello World
+
+let md = markdown "# Hello World"
+print (Markdown.toText md)

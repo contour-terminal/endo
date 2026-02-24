@@ -227,6 +227,28 @@ void dateTimeNow(CoreVM::Params& args);
 void dateTimeFromEpoch(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// Markdown operations
+// ---------------------------------------------------------------------------
+
+/// Creates a Markdown record object from a raw markdown content string.
+/// @param runner The runner instance for object allocation
+/// @param content Raw markdown content string
+/// @return Pointer to the newly allocated Markdown TypedObject
+CoreVM::TypedObject* makeMarkdown(CoreVM::Runner* runner, std::string const& content);
+
+/// markdown_create(text) -> Markdown: Creates a Markdown object from a string.
+void markdownCreate(CoreVM::Params& args);
+
+/// markdown_to_html(md) -> string: Converts markdown to basic HTML.
+void markdownToHtml(CoreVM::Params& args);
+
+/// markdown_to_text(md) -> string: Strips markdown formatting, returns plain text.
+void markdownToText(CoreVM::Params& args);
+
+/// markdown_content(md) -> string: Extracts the raw content string from a Markdown object.
+void markdownContent(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Random number generation
 // ---------------------------------------------------------------------------
 

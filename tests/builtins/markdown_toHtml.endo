@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Markdown.toHtml converts heading to HTML
+# expect: <h1>Hello</h1>
+# expect:
+
+let md = markdown "# Hello"
+print (Markdown.toHtml md)

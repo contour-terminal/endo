@@ -6,6 +6,9 @@
 
 #include <http/HttpClient.hpp>
 
+#include <tui/MarkdownRenderer.hpp>
+#include <tui/TerminalOutput.hpp>
+
 #include <CoreVM/types/TypedObject.hpp>
 
 #include <filesystem>
@@ -154,6 +157,33 @@ void Shell::builtinPrintln(CoreVM::Params& context)
     written = platformWrite(outputFd, "\n", 1);
 }
 
+void Shell::builtinMarkdownRender(CoreVM::Params& context)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(context.getInt(1)));
+    auto const* content =
+        reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+    if (!content)
+        return;
+
+    NativeHandle const outputFd =
+        _redirectState.getEffectiveStdoutFd(_currentPipelineBuilder.defaultStdoutFd, _processManager);
+
+#if !defined(_WIN32)
+    if (isatty(outputFd) != 0)
+    {
+        tui::TerminalOutput termOutput;
+        tui::MarkdownRenderer renderer(termOutput);
+        renderer.render(*content);
+        termOutput.flush();
+        return;
+    }
+#endif
+    // Fallback: write raw markdown text
+    auto const& text = *content;
+    [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
+    written = platformWrite(outputFd, "\n", 1);
+}
+
 void Shell::builtinDisplayResult(CoreVM::Params& context)
 {
     auto rawVal = static_cast<uint64_t>(context.getInt(1));
@@ -167,6 +197,34 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
 #else
     bool const useColor = isatty(outputFd) != 0;
 #endif
+
+    // Check if this is a Markdown object — render with terminal formatting
+    if (runner->isKnownObject(rawVal))
+    {
+        auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawVal));
+        if (obj->type->id == CoreVM::BuiltinTypeId::Markdown)
+        {
+            auto const* content =
+                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+            if (content)
+            {
+#if !defined(_WIN32)
+                if (useColor)
+                {
+                    tui::TerminalOutput termOutput;
+                    tui::MarkdownRenderer renderer(termOutput);
+                    renderer.render(*content);
+                    termOutput.flush();
+                    return;
+                }
+#endif
+                auto const& text = *content;
+                [[maybe_unused]] auto written = platformWrite(outputFd, text.data(), text.size());
+                written = platformWrite(outputFd, "\n", 1);
+            }
+            return;
+        }
+    }
 
     // Check if this is a list of records — if so, render as table
     if (runner->isKnownObject(rawVal))

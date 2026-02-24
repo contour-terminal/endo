@@ -4264,6 +4264,27 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // markdown: 1 arg (text) → Markdown object
+    if (name == "markdown")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("markdown requires exactly 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* argVal = codegen(argExprs[0]);
+        if (!argVal)
+        {
+            reportTypeError("Failed to evaluate markdown argument");
+            return true;
+        }
+        if (tryGenerateNativeCall("markdown_create", { argVal }))
+        {
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Markdown);
+            return true;
+        }
+    }
+
     if (name == "rand")
     {
         if (argExprs.size() == 0)
@@ -6056,6 +6077,15 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 _builder.getBuiltinFunction(*callback), { value }, "formatNumber");
             return;
         }
+        // markdown constructor in pipeline: "# Hello" |> markdown
+        if (funcIdent->name == "markdown")
+        {
+            if (tryGenerateNativeCall("markdown_create", { value }))
+            {
+                annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Markdown);
+                return;
+            }
+        }
 
         // Named function or stored lambda
         funcName = funcIdent->name;
@@ -6420,6 +6450,35 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         popFSharpScope();
         return;
     }
+    else if (auto const* fieldAccess = dynamic_cast<ast::FieldAccessExpr const*>(funcExpr))
+    {
+        // Module-qualified methods in pipeline: value |> Markdown.toText, value |> Markdown.render
+        if (auto const* modIdent = dynamic_cast<ast::IdentifierExpr const*>(fieldAccess->object.get()))
+        {
+            if (modIdent->name == "Markdown")
+            {
+                static std::unordered_map<std::string_view, std::string_view> const markdownMethods = {
+                    { "render", "markdown_render" },
+                    { "toHtml", "markdown_to_html" },
+                    { "toText", "markdown_to_text" },
+                    { "content", "markdown_content" },
+                };
+                if (auto const it = markdownMethods.find(fieldAccess->fieldName); it != markdownMethods.end())
+                {
+                    if (tryGenerateNativeCall(std::string(it->second), { value }))
+                    {
+                        if (fieldAccess->fieldName == "render")
+                            _result = _builder.get(CoreVM::CoreNumber(0)); // render returns unit
+                        return;
+                    }
+                }
+                reportTypeError("Markdown has no member '{}'", std::string_view(fieldAccess->fieldName));
+                return;
+            }
+        }
+        reportTypeError("Pipeline function must be an identifier, lambda, or partial application");
+        return;
+    }
     else
     {
         reportTypeError("Pipeline function must be an identifier, lambda, or partial application");
@@ -6704,6 +6763,32 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 {
                     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::FileMode);
                     return;
+                }
+            }
+
+            // Markdown.render md, Markdown.toHtml md, Markdown.toText md
+            if (modIdent->name == "Markdown" && argExprs.size() == 1)
+            {
+                static std::unordered_map<std::string_view, std::string_view> const markdownMethods = {
+                    { "render", "markdown_render" },
+                    { "toHtml", "markdown_to_html" },
+                    { "toText", "markdown_to_text" },
+                    { "content", "markdown_content" },
+                };
+                if (auto const it = markdownMethods.find(method); it != markdownMethods.end())
+                {
+                    auto* arg = codegen(argExprs[0]);
+                    if (!arg)
+                    {
+                        reportTypeError("Failed to evaluate argument for Markdown.{}", method);
+                        return;
+                    }
+                    if (tryGenerateNativeCall(std::string(it->second), { arg }))
+                    {
+                        if (method == "render")
+                            _result = _builder.get(CoreVM::CoreNumber(0)); // render returns unit
+                        return;
+                    }
                 }
             }
         }
@@ -9821,6 +9906,18 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
             reportTypeError("FileMode has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "Markdown")
+        {
+            if (node.fieldName == "render" || node.fieldName == "toHtml" || node.fieldName == "toText"
+                || node.fieldName == "content")
+            {
+                // Markdown methods require an argument — handled in ApplicationExpr
+                reportTypeError("Markdown.{} requires a Markdown argument", std::string_view(node.fieldName));
+                return;
+            }
+            reportTypeError("Markdown has no member '{}'", std::string_view(node.fieldName));
             return;
         }
     }

@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: markdown pipeline create and extract text
+# expect: Hello
+# expect:
+
+let md = "# Hello" |> markdown
+(Markdown.toText md) |> println

@@ -299,6 +299,7 @@ class Shell final: public SignalCallback
     void builtinPrint(CoreVM::Params& context);
     void builtinPrintln(CoreVM::Params& context);
     void builtinDisplayResult(CoreVM::Params& context);
+    void builtinMarkdownRender(CoreVM::Params& context);
     void builtinFetch(CoreVM::Params& context);
     void builtinFetchWithHeaders(CoreVM::Params& context);
 

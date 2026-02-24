@@ -505,6 +505,12 @@ void Shell::registerOutputBuiltins()
         .returnType(CoreVM::LiteralType::Void)
         .bind(&Shell::builtinDisplayResult, this);
 
+    // Markdown render builtin
+    _runtime.registerFunction("markdown_render")
+        .param<CoreVM::CoreNumber>("md")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind(&Shell::builtinMarkdownRender, this);
+
     // HTTP fetch builtins: fetch(url) and fetch(url, headers)
     _runtime.registerFunction("fetch")
         .param<CoreVM::CoreString>("url")

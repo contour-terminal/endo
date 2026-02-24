@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: string conversion of markdown returns raw content
+# expect: # Hello
+
+let md = markdown "# Hello"
+print (string md)

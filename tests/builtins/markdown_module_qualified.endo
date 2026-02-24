@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: module-qualified Markdown methods work correctly
+# expect: Bold text
+# expect: <p><strong>Bold</strong> text</p>
+# expect:
+
+let md = markdown "**Bold** text"
+println (Markdown.toText md)
+print (Markdown.toHtml md)

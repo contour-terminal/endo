@@ -28,6 +28,7 @@ static constexpr ParamDescriptor urlStringParam[] = { { "url", LT::String } };
 static constexpr ParamDescriptor nameStringParam[] = { { "name", LT::String } };
 static constexpr ParamDescriptor valueNumberParam[] = { { "value", LT::Number } };
 static constexpr ParamDescriptor pairsNumberParam[] = { { "pairs", LT::Number } };
+static constexpr ParamDescriptor mdNumberParam[] = { { "md", LT::Number } };
 
 // Multi-param patterns
 static constexpr ParamDescriptor exportTwoParams[] = { { "name", LT::String }, { "value", LT::String } };
@@ -299,6 +300,15 @@ static const std::array descriptors = {
     // DateTime operations
     StdlibDescriptor { "", "datetime_now", LT::Number, {}, &builtins::dateTimeNow, "", "" },
     StdlibDescriptor { "", "datetime_from_epoch", LT::Number, epochNumberParam, &builtins::dateTimeFromEpoch, "", "" },
+
+    // Markdown operations
+    StdlibDescriptor { "markdown", "markdown_create", LT::Number, textStringParam, &builtins::markdownCreate,
+        "markdown text -> Markdown",
+        "**markdown** `text -> Markdown`\n\nCreates a Markdown object from a string." },
+    StdlibDescriptor { "", "markdown_to_html", LT::String, mdNumberParam, &builtins::markdownToHtml, "", "" },
+    StdlibDescriptor { "", "markdown_to_text", LT::String, mdNumberParam, &builtins::markdownToText, "", "" },
+    StdlibDescriptor { "", "markdown_content", LT::String, mdNumberParam, &builtins::markdownContent, "", "" },
+    StdlibDescriptor { "", "markdown_render", LT::Void, mdNumberParam, nullptr, "", "" },
 };
 // clang-format on
 

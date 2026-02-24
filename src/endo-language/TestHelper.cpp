@@ -456,6 +456,19 @@ TestRuntime::TestRuntime()
         if (name == "datetime_from_epoch" && arity == 1)
             return Functor(builtins::dateTimeFromEpoch);
 
+        // Markdown render (test mock — writes raw content to captured output)
+        if (name == "markdown_render" && arity == 1)
+            return Functor([this](CoreVM::Params& args) {
+                auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+                auto const* content =
+                    reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
+                if (content)
+                {
+                    capturedOutput += *content;
+                    capturedOutput += '\n';
+                }
+            });
+
         // Fall back to shared stateless implementations (list_*, string_*, format_*, rand, etc.)
         return builtins::resolveSharedImpl(name, arity);
     };
