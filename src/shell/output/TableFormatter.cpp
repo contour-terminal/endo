@@ -292,11 +292,13 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
 
             if (config.showIcons)
             {
-                // Build visible text: "icon name", then pad the whole thing
-                auto visible = std::string(deco.icon) + " " + cellText;
-                auto padded = padCell(visible, width, rightAlign);
+                // Pad name alone, then prepend the icon + space so that
+                // icon (1 col) + space (1 col) + paddedName (width-2 cols) = width cols.
+                auto paddedName = padCell(cellText, width - IconDisplayWidth, rightAlign);
                 out += sgr;
-                out += padded;
+                out += std::string(deco.icon);
+                out += ' ';
+                out += paddedName;
                 out += sgrReset;
             }
             else
