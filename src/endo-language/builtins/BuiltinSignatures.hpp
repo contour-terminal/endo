@@ -54,4 +54,16 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
 /// Includes shell builtins (cd, exit, ...) and control flow keywords.
 std::vector<std::string> userFacingBuiltinNames();
 
+/// Describes a user-facing builtin command for completion and diagnostics.
+struct BuiltinInfo
+{
+    std::string name;        ///< Command name (e.g., "cd", "echo")
+    std::string description; ///< Short description for completion display
+    bool isProperty = false; ///< True for properties (shell_prompt_*, agent_*), false for commands
+};
+
+/// Returns the list of user-facing builtins with descriptions.
+/// Includes shell builtins (cd, exit, ...), control flow keywords, and F# output functions.
+[[nodiscard]] std::vector<BuiltinInfo> userFacingBuiltins();
+
 } // namespace endo

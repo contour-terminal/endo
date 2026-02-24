@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/ide/Completer.hpp>
 #include <endo-language/ide/CompletionContext.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
+
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -15,6 +18,16 @@ namespace
 bool hasCandidate(std::vector<CompletionCandidate> const& items, std::string const& text)
 {
     return std::ranges::any_of(items, [&](auto const& c) { return c.text == text; });
+}
+
+/// @brief Returns the builtin module functions map for tests.
+ModuleFunctionMap const& testModuleFunctions()
+{
+    static auto const map = [] {
+        CoreVM::TypeRegistry registry;
+        return builtinModuleFunctions(registry);
+    }();
+    return map;
 }
 
 } // namespace
@@ -110,6 +123,7 @@ TEST_CASE("Completer.le_prefix_returns_let", "[completion][completer]")
 TEST_CASE("Completer.Option_dot_returns_methods", "[completion][completer]")
 {
     CompletionDataSource dataSource;
+    dataSource.moduleFunctions = testModuleFunctions();
     auto results = computeCompletions("Option.", 7, dataSource);
     CHECK(hasCandidate(results, "Option.map"));
     CHECK(hasCandidate(results, "Option.bind"));

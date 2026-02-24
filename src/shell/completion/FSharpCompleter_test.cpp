@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
+
+#include <CoreVM/types/TypeRegistry.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "FSharpCompleter.hpp"
@@ -42,6 +46,16 @@ bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string co
     return false;
 }
 
+/// @brief Returns the builtin module functions map for tests.
+endo::ModuleFunctionMap const& testModuleFunctions()
+{
+    static auto const map = [] {
+        CoreVM::TypeRegistry registry;
+        return endo::builtinModuleFunctions(registry);
+    }();
+    return map;
+}
+
 } // namespace
 
 // ============================================================================
@@ -51,6 +65,7 @@ bool hasCompletion(std::vector<tui::CompletionItem> const& items, std::string co
 TEST_CASE("FSharpCompleter.Option.all_methods")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option."));
@@ -63,6 +78,7 @@ TEST_CASE("FSharpCompleter.Option.all_methods")
 TEST_CASE("FSharpCompleter.Option.prefix_m")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option.m"));
@@ -73,6 +89,7 @@ TEST_CASE("FSharpCompleter.Option.prefix_m")
 TEST_CASE("FSharpCompleter.Option.prefix_de")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option.de"));
@@ -83,6 +100,7 @@ TEST_CASE("FSharpCompleter.Option.prefix_de")
 TEST_CASE("FSharpCompleter.Option.prefix_b")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option.b"));
@@ -93,6 +111,7 @@ TEST_CASE("FSharpCompleter.Option.prefix_b")
 TEST_CASE("FSharpCompleter.Option.no_match")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option.x"));
@@ -102,6 +121,7 @@ TEST_CASE("FSharpCompleter.Option.no_match")
 TEST_CASE("FSharpCompleter.Option.description")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     endo::FSharpCompleter completer(state);
 
     auto results = completer.complete(makeContext("Option.m"));
@@ -222,6 +242,7 @@ TEST_CASE("FSharpCompleter.underscore.description_shows_type")
 TEST_CASE("FSharpCompleter.value.offers_methods_and_fields")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
         { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
@@ -241,6 +262,7 @@ TEST_CASE("FSharpCompleter.value.offers_methods_and_fields")
 TEST_CASE("FSharpCompleter.value.filter_m")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
         { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
@@ -256,6 +278,7 @@ TEST_CASE("FSharpCompleter.value.filter_m")
 TEST_CASE("FSharpCompleter.value.filter_bi")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["ProcessInfo"] = {
         { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
         { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
@@ -339,6 +362,7 @@ TEST_CASE("FSharpCompleter.edge.nested_dot")
 TEST_CASE("FSharpCompleter.DateTime_now.returns_only_DateTime_fields")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
         { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
         { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
@@ -373,6 +397,7 @@ TEST_CASE("FSharpCompleter.DateTime_now.returns_only_DateTime_fields")
 TEST_CASE("FSharpCompleter.DateTime_now.filter_by_prefix")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
         { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
         { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
@@ -389,6 +414,7 @@ TEST_CASE("FSharpCompleter.DateTime_now.filter_by_prefix")
 TEST_CASE("FSharpCompleter.DateTime_fromEpoch.returns_only_DateTime_fields")
 {
     endo::FSharpPersistentState state;
+    state.moduleFunctions = testModuleFunctions();
     state.recordTypeFields["DateTime"] = {
         { "year", "int" },
         { "month", "int" },

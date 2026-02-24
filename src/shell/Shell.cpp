@@ -9,6 +9,7 @@
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 
@@ -383,28 +384,12 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     // Initialize signal handling (returns signalfd on Linux, -1 otherwise)
     _signalFd = SignalHandler::initialize(this);
 
-    // Seed built-in record type fields for completion support
-    _fsharpState.recordTypeFields["ProcessInfo"] = {
-        { "pid", "int" },   { "ppid", "int" },  { "user", "str" },
-        { "cpu", "float" }, { "mem", "float" }, { "command", "str" },
-    };
-    _fsharpState.recordTypeFields["FileInfo"] = {
-        { "name", "str" },       { "size", "Size" },  { "mode", "int" },
-        { "mtime", "DateTime" }, { "isDir", "bool" },
-    };
-    _fsharpState.recordTypeFields["DateTime"] = {
-        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
-        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
-    };
-    _fsharpState.recordTypeFields["Size"] = {
-        { "bytes", "int" },
-    };
-    _fsharpState.recordTypeFields["JobInfo"] = {
-        { "id", "int" },
-        { "state", "str" },
-        { "command", "str" },
-        { "pid", "int" },
-    };
+    // Seed built-in record type fields and module functions from TypeRegistry
+    {
+        CoreVM::TypeRegistry registry;
+        _fsharpState.recordTypeFields = endo::builtinRecordFields(registry);
+        _fsharpState.moduleFunctions = endo::builtinModuleFunctions(registry);
+    }
 
     // Register builtin command -> output type mapping for pipeline completion
     _fsharpState.commandOutputTypes["ls"] = "FileInfo";

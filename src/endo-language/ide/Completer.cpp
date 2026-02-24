@@ -4,6 +4,7 @@
 #include <endo-language/ide/Completer.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
 #include <endo-language/ide/CompletionContext.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
@@ -121,8 +122,12 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
     {
         auto const objectPart = prefix.substr(0, dotPos);
         auto const memberPrefix = prefix.substr(dotPos + 1);
-        return dotAccessCandidates(
-            objectPart, memberPrefix, dataSource.recordFields, dataSource.variableTypes);
+        return dotAccessCandidates(objectPart,
+                                   memberPrefix,
+                                   dataSource.recordFields,
+                                   dataSource.variableTypes,
+                                   {},
+                                   dataSource.moduleFunctions);
     }
 
     switch (ctx.type)
@@ -134,6 +139,12 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
             deduplicateInto(results, filterByPrefix(constructorCandidates(), prefix));
             deduplicateInto(results, filterByPrefix(symbolCandidates(dataSource.symbols), prefix));
             deduplicateInto(results, filterByPrefix(standardLibraryCandidates(), prefix));
+            {
+                // Module function stdlib candidates (DateTime.now, Size.fromBytes, etc.)
+                static CoreVM::TypeRegistry const builtinRegistry;
+                deduplicateInto(results,
+                                filterByPrefix(moduleFunctionStdLibCandidates(builtinRegistry), prefix));
+            }
             deduplicateInto(results, filterByPrefix(dataSource.additionalCandidates, prefix));
             break;
         }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/ast/AST.hpp>
+#include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/builtins/StubRuntime.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/ide/DiagnosticsCollector.hpp>
@@ -19,72 +20,22 @@ namespace endo
 namespace
 {
 
-    /// @brief Known shell builtin command names.
+    /// @brief Known shell builtin command names, derived from BuiltinSignatures.
     [[nodiscard]] std::set<std::string> const& builtinNames()
     {
-        static auto const names = std::set<std::string> {
-            "cat",
-            "cd",
-            "exit",
-            "export",
-            "set",
-            "unset",
-            "read",
-            "sleep",
-            "jobs",
-            "fg",
-            "bg",
-            "wait",
-            "bind",
-            "which",
-            "if",
-            "then",
-            "else",
-            "elif",
-            "for",
-            "while",
-            "do",
-            "end",
-            "in",
-            "return",
-            "break",
-            "continue",
-            "echo",
-            "printf",
-            "test",
-            "source",
-            ".",
-            "exec",
-            "eval",
-            "shift",
-            "trap",
-            "type",
-            "local",
-            "declare",
-            "typeset",
-            "alias",
-            "unalias",
-            "command",
-            "builtin",
-            "hash",
-            "let",
-            "readonly",
-            "select",
-            "time",
-            "until",
-            "print",
-            "println",
-            "shell_prompt_preset",
-            "shell_prompt_indicator",
-            "shell_prompt_layout",
-            "shell_prompt_separator",
-            "shell_prompt_transient",
-            "shell_prompt_duration_threshold",
-            "shell_prompt_spacing",
-            "shell_ls_icons",
-            "shell_ls_directory_slash",
-            "shell_is_interactive",
-        };
+        static auto const names = [] {
+            auto const builtins = userFacingBuiltins();
+            auto result = std::set<std::string>();
+            for (auto const& info: builtins)
+                result.insert(info.name);
+            // Additional names recognized by the shell parser but not user-completable
+            for (auto const& name:
+                 { "printf", "test",  "source",   ".",       "exec",  "eval",    "shift",   "trap",
+                   "type",   "local", "declare",  "typeset", "alias", "unalias", "command", "builtin",
+                   "hash",   "let",   "readonly", "select",  "time",  "until" })
+                result.insert(name);
+            return result;
+        }();
         return names;
     }
 

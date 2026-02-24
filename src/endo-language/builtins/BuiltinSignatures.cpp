@@ -845,9 +845,12 @@ namespace
     void registerPropertyResolved(CoreVM::Runtime& rt,
                                   CallbackResolver const& resolve,
                                   std::string_view name,
-                                  CoreVM::LiteralType type)
+                                  CoreVM::LiteralType type,
+                                  std::string_view desc = {})
     {
         auto& prop = rt.registerProperty(std::string(name), type);
+        if (!desc.empty())
+            prop.description(std::string(desc));
 
         if (auto getterCb = resolve(name, 0))
             prop.onGet(*getterCb);
@@ -866,9 +869,12 @@ namespace
     void registerReadOnlyPropertyResolved(CoreVM::Runtime& rt,
                                           CallbackResolver const& resolve,
                                           std::string_view name,
-                                          CoreVM::LiteralType type)
+                                          CoreVM::LiteralType type,
+                                          std::string_view desc = {})
     {
         auto& prop = rt.registerProperty(std::string(name), type);
+        if (!desc.empty())
+            prop.description(std::string(desc));
         if (auto getterCb = resolve(name, 0))
             prop.onGet(*getterCb);
         else
@@ -880,17 +886,17 @@ namespace
 void registerPromptPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
 {
     // clang-format off
-    registerPropertyResolved(rt, resolve, "shell_prompt_preset", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "shell_prompt_indicator", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "shell_prompt_layout", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "shell_prompt_separator", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "shell_prompt_transient", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "shell_prompt_duration_threshold", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "shell_ls_icons", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "shell_ls_directory_slash", CoreVM::LiteralType::Boolean);
-    registerReadOnlyPropertyResolved(rt, resolve, "shell_is_interactive", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "shell_prompt_preset", CoreVM::LiteralType::String, "Prompt theme preset");
+    registerPropertyResolved(rt, resolve, "shell_prompt_indicator", CoreVM::LiteralType::String, "Prompt indicator character(s)");
+    registerPropertyResolved(rt, resolve, "shell_prompt_layout", CoreVM::LiteralType::String, "Prompt layout style");
+    registerPropertyResolved(rt, resolve, "shell_prompt_separator", CoreVM::LiteralType::String, "Prompt separator style");
+    registerPropertyResolved(rt, resolve, "shell_prompt_transient", CoreVM::LiteralType::String, "Transient prompt mode");
+    registerPropertyResolved(rt, resolve, "shell_prompt_duration_threshold", CoreVM::LiteralType::Number, "Duration display threshold (ms)");
+    registerPropertyResolved(rt, resolve, "shell_prompt_spacing", CoreVM::LiteralType::Number, "Blank lines above/below prompt (0 or 1)");
+    registerPropertyResolved(rt, resolve, "shell_exit_confirm_timeout", CoreVM::LiteralType::Number, "Exit confirmation timeout (ms)");
+    registerPropertyResolved(rt, resolve, "shell_ls_icons", CoreVM::LiteralType::Boolean, "Show Nerd Font icons in ls output (default: true)");
+    registerPropertyResolved(rt, resolve, "shell_ls_directory_slash", CoreVM::LiteralType::Boolean, "Append trailing '/' to directory names in ls output (default: true)");
+    registerReadOnlyPropertyResolved(rt, resolve, "shell_is_interactive", CoreVM::LiteralType::Boolean, "Whether running interactively (read-only)");
     // clang-format on
 }
 
@@ -903,74 +909,74 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
     // clang-format off
 
     // --- Top-level agent settings ---
-    registerPropertyResolved(rt, resolve, "agent_provider", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_prompt_indicator", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_max_tool_result_size", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "agent_log_tool_uses", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_provider", CoreVM::LiteralType::String, "Active AI provider");
+    registerPropertyResolved(rt, resolve, "agent_prompt_indicator", CoreVM::LiteralType::String, "Agent prompt indicator character(s)");
+    registerPropertyResolved(rt, resolve, "agent_max_tool_result_size", CoreVM::LiteralType::Number, "Max bytes for tool result truncation");
+    registerPropertyResolved(rt, resolve, "agent_log_tool_uses", CoreVM::LiteralType::Boolean, "Enable/disable tool invocation logging");
 
     // --- Claude provider ---
-    registerPropertyResolved(rt, resolve, "agent_claude_api_key", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_claude_api_key_env", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "agent_claude_thinking_mode", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_claude_prompt_caching", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "agent_claude_auth_type", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_claude_api_key", CoreVM::LiteralType::String, "Claude API key");
+    registerPropertyResolved(rt, resolve, "agent_claude_api_key_env", CoreVM::LiteralType::String, "Claude API key environment variable");
+    registerPropertyResolved(rt, resolve, "agent_claude_model", CoreVM::LiteralType::String, "Claude model identifier");
+    registerPropertyResolved(rt, resolve, "agent_claude_max_tokens", CoreVM::LiteralType::Number, "Claude max output tokens");
+    registerPropertyResolved(rt, resolve, "agent_claude_thinking_mode", CoreVM::LiteralType::String, "Claude thinking/reasoning mode (off/normal/extended)");
+    registerPropertyResolved(rt, resolve, "agent_claude_prompt_caching", CoreVM::LiteralType::Boolean, "Enable Claude prompt caching (true/false)");
+    registerPropertyResolved(rt, resolve, "agent_claude_auth_type", CoreVM::LiteralType::String, "Claude auth method (auto/oauth/api_key)");
 
     // --- OpenAI provider ---
-    registerPropertyResolved(rt, resolve, "agent_openai_api_key", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_api_key_env", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_model", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_base_url", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_max_tokens", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "agent_openai_thinking_mode", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_api_key", CoreVM::LiteralType::String, "OpenAI API key");
+    registerPropertyResolved(rt, resolve, "agent_openai_api_key_env", CoreVM::LiteralType::String, "OpenAI API key environment variable");
+    registerPropertyResolved(rt, resolve, "agent_openai_model", CoreVM::LiteralType::String, "OpenAI model identifier");
+    registerPropertyResolved(rt, resolve, "agent_openai_base_url", CoreVM::LiteralType::String, "OpenAI base URL");
+    registerPropertyResolved(rt, resolve, "agent_openai_max_tokens", CoreVM::LiteralType::Number, "OpenAI max output tokens");
+    registerPropertyResolved(rt, resolve, "agent_openai_thinking_mode", CoreVM::LiteralType::String, "OpenAI thinking/reasoning mode");
 
     // --- OpenAI-compatible provider ---
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key_env", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_model", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_base_url", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_max_tokens", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "agent_openai_compat_thinking_mode", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key", CoreVM::LiteralType::String, "OpenAI-compatible API key");
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_api_key_env", CoreVM::LiteralType::String, "OpenAI-compatible API key environment variable");
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_model", CoreVM::LiteralType::String, "OpenAI-compatible model identifier");
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_base_url", CoreVM::LiteralType::String, "OpenAI-compatible base URL");
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_max_tokens", CoreVM::LiteralType::Number, "OpenAI-compatible max output tokens");
+    registerPropertyResolved(rt, resolve, "agent_openai_compat_thinking_mode", CoreVM::LiteralType::String, "OpenAI-compatible thinking mode");
 
     // --- Gemini provider ---
-    registerPropertyResolved(rt, resolve, "agent_gemini_api_key", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_gemini_api_key_env", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_gemini_model", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_gemini_max_tokens", CoreVM::LiteralType::Number);
-    registerPropertyResolved(rt, resolve, "agent_gemini_thinking_mode", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_gemini_api_key", CoreVM::LiteralType::String, "Gemini API key");
+    registerPropertyResolved(rt, resolve, "agent_gemini_api_key_env", CoreVM::LiteralType::String, "Gemini API key environment variable");
+    registerPropertyResolved(rt, resolve, "agent_gemini_model", CoreVM::LiteralType::String, "Gemini model identifier");
+    registerPropertyResolved(rt, resolve, "agent_gemini_max_tokens", CoreVM::LiteralType::Number, "Gemini max output tokens");
+    registerPropertyResolved(rt, resolve, "agent_gemini_thinking_mode", CoreVM::LiteralType::String, "Gemini thinking/reasoning mode");
 
     // --- Plan mode ---
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_enabled", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_pause_between_steps", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "agent_plan_mode_max_exploration_turns", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_enabled", CoreVM::LiteralType::Boolean, "Enable/disable plan mode");
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_pause_between_steps", CoreVM::LiteralType::Boolean, "Pause for confirmation between plan steps");
+    registerPropertyResolved(rt, resolve, "agent_plan_mode_max_exploration_turns", CoreVM::LiteralType::Number, "Max exploration iterations");
 
     // --- Explore sub-agent ---
-    registerPropertyResolved(rt, resolve, "agent_explore_max_turns", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_explore_max_turns", CoreVM::LiteralType::Number, "Max explore sub-agent iterations");
 
     // --- Session ---
-    registerPropertyResolved(rt, resolve, "agent_auto_resume", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "agent_session_replay", CoreVM::LiteralType::Boolean);
+    registerPropertyResolved(rt, resolve, "agent_auto_resume", CoreVM::LiteralType::Boolean, "Auto-resume last agent session");
+    registerPropertyResolved(rt, resolve, "agent_session_replay", CoreVM::LiteralType::Boolean, "Replay history when resuming");
 
     // --- Trace ---
-    registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean);
-    registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_trace_max_files", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_trace_enabled", CoreVM::LiteralType::Boolean, "Enable/disable trace logging");
+    registerPropertyResolved(rt, resolve, "agent_trace_default_path", CoreVM::LiteralType::String, "Trace file path");
+    registerPropertyResolved(rt, resolve, "agent_trace_max_files", CoreVM::LiteralType::Number, "Max trace files to retain");
 
     // --- Permissions ---
-    registerPropertyResolved(rt, resolve, "agent_permissions_policy", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_trusted_tool", CoreVM::LiteralType::Object);
-    registerPropertyResolved(rt, resolve, "agent_blocked_pattern", CoreVM::LiteralType::Object);
+    registerPropertyResolved(rt, resolve, "agent_permissions_policy", CoreVM::LiteralType::String, "Agent permission policy");
+    registerPropertyResolved(rt, resolve, "agent_trusted_tool", CoreVM::LiteralType::Object, "Auto-approved tools");
+    registerPropertyResolved(rt, resolve, "agent_blocked_pattern", CoreVM::LiteralType::Object, "Blocked shell command patterns");
 
     // --- Web search ---
-    registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_web_search_api_key", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_web_search_cx", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_web_search_max_results", CoreVM::LiteralType::Number);
+    registerPropertyResolved(rt, resolve, "agent_web_search_engine", CoreVM::LiteralType::String, "Web search engine");
+    registerPropertyResolved(rt, resolve, "agent_web_search_api_key", CoreVM::LiteralType::String, "Web search API key");
+    registerPropertyResolved(rt, resolve, "agent_web_search_cx", CoreVM::LiteralType::String, "Google Custom Search Engine ID");
+    registerPropertyResolved(rt, resolve, "agent_web_search_max_results", CoreVM::LiteralType::Number, "Max web search results per query");
 
     // --- Error recovery ---
-    registerPropertyResolved(rt, resolve, "agent_error_recovery_action", CoreVM::LiteralType::String);
-    registerPropertyResolved(rt, resolve, "agent_error_recovery_model", CoreVM::LiteralType::String);
+    registerPropertyResolved(rt, resolve, "agent_error_recovery_action", CoreVM::LiteralType::String, "Action on command failure (ask/analyze/ignore)");
+    registerPropertyResolved(rt, resolve, "agent_error_recovery_model", CoreVM::LiteralType::String, "Model for error analysis (empty = active model)");
 
     // clang-format on
 }
@@ -981,38 +987,128 @@ void registerAgentConfigPropertyBuiltins(CoreVM::Runtime& rt, CallbackResolver c
 
 std::vector<std::string> userFacingBuiltinNames()
 {
+    auto builtins = userFacingBuiltins();
+    std::vector<std::string> names;
+    names.reserve(builtins.size());
+    for (auto& b: builtins)
+        names.push_back(std::move(b.name));
+    return names;
+}
+
+std::vector<BuiltinInfo> userFacingBuiltins()
+{
     return {
         // Shell builtins
-        "cat",
-        "cd",
-        "exit",
-        "export",
-        "rm",
-        "set",
-        "unset",
-        "read",
-        "sleep",
-        "true",
-        "false",
-        "jobs",
-        "fg",
-        "bg",
-        "wait",
-        "bind",
-        "which",
+        { "cat", "builtin" },
+        { "cd", "builtin" },
+        { "exit", "builtin" },
+        { "export", "builtin" },
+        { "mv", "builtin" },
+        { "rm", "builtin" },
+        { "set", "builtin" },
+        { "unset", "builtin" },
+        { "read", "builtin" },
+        { "sleep", "builtin" },
+        { "true", "builtin" },
+        { "false", "builtin" },
+        { "jobs", "builtin" },
+        { "fg", "builtin" },
+        { "bg", "builtin" },
+        { "wait", "builtin" },
+        { "bind", "builtin" },
+        { "which", "builtin" },
+        { "echo", "builtin" },
+        { "print", "F# print function" },
+        { "println", "F# print with newline" },
+        // MCP server management
+        { "add_mcp_server", "Register an MCP server" },
+        { "set_mcp_env", "Set environment variable for an MCP server" },
+        { "remove_mcp_server", "Remove an MCP server" },
         // Control flow keywords (also completable)
-        "if",
-        "then",
-        "else",
-        "elif",
-        "for",
-        "while",
-        "do",
-        "end",
-        "in",
-        "return",
-        "break",
-        "continue",
+        { "if", "builtin" },
+        { "then", "builtin" },
+        { "else", "builtin" },
+        { "elif", "builtin" },
+        { "for", "builtin" },
+        { "while", "builtin" },
+        { "do", "builtin" },
+        { "end", "builtin" },
+        { "in", "builtin" },
+        { "return", "builtin" },
+        { "break", "builtin" },
+        { "continue", "builtin" },
+        // Shell/Prompt properties
+        { "shell_prompt_preset", "Prompt theme preset", true },
+        { "shell_prompt_indicator", "Prompt indicator character(s)", true },
+        { "shell_prompt_layout", "Prompt layout style", true },
+        { "shell_prompt_separator", "Prompt separator style", true },
+        { "shell_prompt_transient", "Transient prompt mode", true },
+        { "shell_prompt_duration_threshold", "Duration display threshold (ms)", true },
+        { "shell_prompt_spacing", "Blank lines above/below prompt (0 or 1)", true },
+        { "shell_exit_confirm_timeout", "Exit confirmation timeout (ms)", true },
+        { "shell_ls_icons", "Show Nerd Font icons in ls output (default: true)", true },
+        { "shell_ls_directory_slash",
+          "Append trailing '/' to directory names in ls output (default: true)",
+          true },
+        { "shell_is_interactive", "Whether running interactively (read-only)", true },
+        // Agent general properties
+        { "agent_provider", "Active AI provider", true },
+        { "agent_prompt_indicator", "Agent prompt indicator character(s)", true },
+        { "agent_max_tool_result_size", "Max bytes for tool result truncation", true },
+        { "agent_log_tool_uses", "Enable/disable tool invocation logging", true },
+        // Claude provider properties
+        { "agent_claude_api_key", "Claude API key", true },
+        { "agent_claude_api_key_env", "Claude API key environment variable", true },
+        { "agent_claude_model", "Claude model identifier", true },
+        { "agent_claude_max_tokens", "Claude max output tokens", true },
+        { "agent_claude_thinking_mode", "Claude thinking/reasoning mode (off/normal/extended)", true },
+        { "agent_claude_prompt_caching", "Enable Claude prompt caching (true/false)", true },
+        { "agent_claude_auth_type", "Claude auth method (auto/oauth/api_key)", true },
+        // OpenAI provider properties
+        { "agent_openai_api_key", "OpenAI API key", true },
+        { "agent_openai_api_key_env", "OpenAI API key environment variable", true },
+        { "agent_openai_model", "OpenAI model identifier", true },
+        { "agent_openai_base_url", "OpenAI base URL", true },
+        { "agent_openai_max_tokens", "OpenAI max output tokens", true },
+        { "agent_openai_thinking_mode", "OpenAI thinking/reasoning mode", true },
+        // OpenAI-compatible provider properties
+        { "agent_openai_compat_api_key", "OpenAI-compatible API key", true },
+        { "agent_openai_compat_api_key_env", "OpenAI-compatible API key environment variable", true },
+        { "agent_openai_compat_model", "OpenAI-compatible model identifier", true },
+        { "agent_openai_compat_base_url", "OpenAI-compatible base URL", true },
+        { "agent_openai_compat_max_tokens", "OpenAI-compatible max output tokens", true },
+        { "agent_openai_compat_thinking_mode", "OpenAI-compatible thinking mode", true },
+        // Gemini provider properties
+        { "agent_gemini_api_key", "Gemini API key", true },
+        { "agent_gemini_api_key_env", "Gemini API key environment variable", true },
+        { "agent_gemini_model", "Gemini model identifier", true },
+        { "agent_gemini_max_tokens", "Gemini max output tokens", true },
+        { "agent_gemini_thinking_mode", "Gemini thinking/reasoning mode", true },
+        // Plan mode properties
+        { "agent_plan_mode_enabled", "Enable/disable plan mode", true },
+        { "agent_plan_mode_pause_between_steps", "Pause for confirmation between plan steps", true },
+        { "agent_plan_mode_max_exploration_turns", "Max exploration iterations", true },
+        // Explore sub-agent properties
+        { "agent_explore_max_turns", "Max explore sub-agent iterations", true },
+        // Session / lifecycle properties
+        { "agent_auto_resume", "Auto-resume last agent session", true },
+        { "agent_session_replay", "Replay history when resuming", true },
+        // Trace properties
+        { "agent_trace_enabled", "Enable/disable trace logging", true },
+        { "agent_trace_default_path", "Trace file path", true },
+        { "agent_trace_max_files", "Max trace files to retain", true },
+        // Permissions properties
+        { "agent_permissions_policy", "Agent permission policy", true },
+        { "agent_trusted_tool", "Auto-approved tools", true },
+        { "agent_blocked_pattern", "Blocked shell command patterns", true },
+        // Web search properties
+        { "agent_web_search_engine", "Web search engine", true },
+        { "agent_web_search_api_key", "Web search API key", true },
+        { "agent_web_search_cx", "Google Custom Search Engine ID", true },
+        { "agent_web_search_max_results", "Max web search results per query", true },
+        // Error recovery properties
+        { "agent_error_recovery_action", "Action on command failure (ask/analyze/ignore)", true },
+        { "agent_error_recovery_model", "Model for error analysis (empty = active model)", true },
     };
 }
 

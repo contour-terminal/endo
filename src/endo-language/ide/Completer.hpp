@@ -2,6 +2,7 @@
 #pragma once
 
 #include <endo-language/ide/CompletionItem.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
 #include <string>
 #include <string_view>
@@ -20,7 +21,8 @@ struct CompletionDataSource
     std::unordered_map<std::string, std::string>
         variableTypes; ///< Variable name -> record type name (for type-specific completion).
     std::vector<CompletionCandidate>
-        additionalCandidates; ///< Extra candidates (e.g., PATH commands, env vars, history).
+        additionalCandidates;          ///< Extra candidates (e.g., PATH commands, env vars, history).
+    ModuleFunctionMap moduleFunctions; ///< Module-level functions per type (e.g., Option.map, DateTime.now).
 };
 
 /// @brief Record info collected from a document for completion support.

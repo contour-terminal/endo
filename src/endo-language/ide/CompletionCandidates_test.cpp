@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/ide/CompletionCandidates.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
+
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -23,6 +26,16 @@ CompletionCandidate const* findCandidate(std::vector<CompletionCandidate> const&
 {
     auto it = std::ranges::find_if(items, [&](auto const& c) { return c.text == text; });
     return it != items.end() ? &*it : nullptr;
+}
+
+/// @brief Returns the builtin module functions map for tests.
+ModuleFunctionMap const& testModuleFunctions()
+{
+    static auto const map = [] {
+        CoreVM::TypeRegistry registry;
+        return builtinModuleFunctions(registry);
+    }();
+    return map;
 }
 
 } // namespace
@@ -111,7 +124,7 @@ TEST_CASE("CompletionCandidates.constructorCandidates.kind_is_constructor", "[co
 TEST_CASE("CompletionCandidates.dotAccess.Option_returns_methods", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    auto candidates = dotAccessCandidates("Option", "", fields);
+    auto candidates = dotAccessCandidates("Option", "", fields, {}, {}, testModuleFunctions());
     CHECK(candidates.size() == 3);
     CHECK(hasCandidate(candidates, "Option.map"));
     CHECK(hasCandidate(candidates, "Option.bind"));
@@ -121,7 +134,7 @@ TEST_CASE("CompletionCandidates.dotAccess.Option_returns_methods", "[completion]
 TEST_CASE("CompletionCandidates.dotAccess.Option_filter_m", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    auto candidates = dotAccessCandidates("Option", "m", fields);
+    auto candidates = dotAccessCandidates("Option", "m", fields, {}, {}, testModuleFunctions());
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].text == "Option.map");
 }
@@ -150,7 +163,7 @@ TEST_CASE("CompletionCandidates.dotAccess.generic_var_returns_methods_and_fields
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
     fields["ProcessInfo"] = { { "pid", "int" } };
-    auto candidates = dotAccessCandidates("myVar", "", fields);
+    auto candidates = dotAccessCandidates("myVar", "", fields, {}, {}, testModuleFunctions());
     // 3 Option methods + 1 field = 4
     CHECK(candidates.size() == 4);
     CHECK(hasCandidate(candidates, "myVar.map"));
@@ -217,7 +230,7 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_unknown_type_fallback", "[com
     fields["Person"] = { { "name", "str" } };
     std::unordered_map<std::string, std::string> variableTypes;
     // "bob" is NOT in variableTypes -> fallback to generic behavior
-    auto candidates = dotAccessCandidates("bob", "", fields, variableTypes);
+    auto candidates = dotAccessCandidates("bob", "", fields, variableTypes, {}, testModuleFunctions());
     // Should get Option methods + all fields
     CHECK(hasCandidate(candidates, "bob.map"));
     CHECK(hasCandidate(candidates, "bob.name"));
@@ -241,7 +254,7 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_typed_fields", "[completion
 TEST_CASE("CompletionCandidates.dotAccess.DateTime_returns_methods", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    auto candidates = dotAccessCandidates("DateTime", "", fields);
+    auto candidates = dotAccessCandidates("DateTime", "", fields, {}, {}, testModuleFunctions());
     CHECK(candidates.size() == 2);
     CHECK(hasCandidate(candidates, "DateTime.now"));
     CHECK(hasCandidate(candidates, "DateTime.fromEpoch"));
@@ -250,7 +263,7 @@ TEST_CASE("CompletionCandidates.dotAccess.DateTime_returns_methods", "[completio
 TEST_CASE("CompletionCandidates.dotAccess.DateTime_filter_f", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
-    auto candidates = dotAccessCandidates("DateTime", "f", fields);
+    auto candidates = dotAccessCandidates("DateTime", "f", fields, {}, {}, testModuleFunctions());
     REQUIRE(candidates.size() == 1);
     CHECK(candidates[0].text == "DateTime.fromEpoch");
 }
@@ -591,10 +604,10 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 // standardLibraryCandidates tests
 // =============================================================================
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_53_entries", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_51_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 59);
+    CHECK(stdlib.size() == 51);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -702,17 +715,21 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.env_system_functions",
     CHECK(hasCandidate(stdlib, "fetch"));
 }
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.datetime_constructors", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.module_functions_from_registry",
+          "[completion][stdlib]")
 {
-    auto stdlib = standardLibraryCandidates();
-    CHECK(hasCandidate(stdlib, "DateTime.now"));
-    CHECK(hasCandidate(stdlib, "DateTime.fromEpoch"));
-}
-
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.filemode_constructors", "[completion][stdlib]")
-{
-    auto stdlib = standardLibraryCandidates();
-    CHECK(hasCandidate(stdlib, "FileMode.fromBits"));
+    // Module function constructors (DateTime.*, Size.*, FileMode.*) are now generated
+    // from the TypeRegistry via moduleFunctionStdLibCandidates(), not stdLibFunctions.
+    CoreVM::TypeRegistry registry;
+    auto moduleCandidates = moduleFunctionStdLibCandidates(registry);
+    CHECK(hasCandidate(moduleCandidates, "DateTime.now"));
+    CHECK(hasCandidate(moduleCandidates, "DateTime.fromEpoch"));
+    CHECK(hasCandidate(moduleCandidates, "FileMode.fromBits"));
+    CHECK(hasCandidate(moduleCandidates, "Size.fromBytes"));
+    CHECK(hasCandidate(moduleCandidates, "Size.fromKB"));
+    CHECK(hasCandidate(moduleCandidates, "Size.fromMB"));
+    CHECK(hasCandidate(moduleCandidates, "Size.fromGB"));
+    CHECK(hasCandidate(moduleCandidates, "Size.fromTB"));
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[completion][stdlib]")

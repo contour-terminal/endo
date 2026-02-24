@@ -48,6 +48,8 @@ add_library(endo STATIC
     ide/CompletionCandidates.cpp
     ide/Completer.hpp
     ide/Completer.cpp
+    ide/TypeRegistryCompletionAdapter.hpp
+    ide/TypeRegistryCompletionAdapter.cpp
     ide/HoverInfo.hpp
     ide/HoverProvider.hpp
     ide/HoverProvider.cpp
@@ -97,6 +99,7 @@ if(ENDO_TESTING)
         ide/Completer_test.cpp
         ide/HoverProvider_test.cpp
         ide/DiagnosticsCollector_test.cpp
+        ide/TypeRegistryCompletionAdapter_test.cpp
     )
     target_link_libraries(test-endo-language endo Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <endo-language/ide/CompletionItem.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
 #include <string>
 #include <string_view>
@@ -40,13 +41,15 @@ namespace endo
 /// @param recordFields Record type fields (type name -> field info with types).
 /// @param variableTypes Variable name -> record type name for type-specific completion.
 /// @param pipelineElementType When non-empty, restricts underscore completions to this type only.
+/// @param moduleFunctions Module-level functions per type (e.g., Option.map, DateTime.now).
 /// @return Matching completion candidates.
 [[nodiscard]] std::vector<CompletionCandidate> dotAccessCandidates(
     std::string const& objectPart,
     std::string const& memberPrefix,
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> const& recordFields,
     std::unordered_map<std::string, std::string> const& variableTypes = {},
-    std::string const& pipelineElementType = {});
+    std::string const& pipelineElementType = {},
+    ModuleFunctionMap const& moduleFunctions = {});
 
 /// @brief Checks if a command is a builtin whose argument space is fully handled.
 ///

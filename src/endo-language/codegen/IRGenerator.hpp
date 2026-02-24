@@ -4,6 +4,7 @@
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/Visitor.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -96,6 +97,9 @@ struct FSharpPersistentState
     /// Maps simple command names to their output record type name for pipeline completion.
     /// e.g., "ls" -> "FileInfo", "ps" -> "ProcessInfo"
     std::unordered_map<std::string, std::string> commandOutputTypes;
+
+    /// Module-level functions per type for completion (e.g., Option.map, DateTime.now).
+    ModuleFunctionMap moduleFunctions;
 
     /// A persisted property definition with get/set accessor AST pointers.
     struct PersistedProperty

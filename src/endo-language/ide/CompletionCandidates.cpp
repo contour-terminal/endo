@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <endo-language/builtins/BuiltinSignatures.hpp>
 #include <endo-language/ide/CompletionCandidates.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
+
+#include <CoreVM/types/TypeRegistry.hpp>
 
 #include <array>
 #include <set>
@@ -9,19 +13,6 @@ namespace endo
 
 namespace
 {
-    /// @brief Static table of Option module methods with descriptions.
-    struct OptionMethod
-    {
-        std::string_view name;
-        std::string_view description;
-    };
-
-    constexpr std::array optionMethods = {
-        OptionMethod { "map", "Option.map f opt -> option" },
-        OptionMethod { "bind", "Option.bind f opt -> option" },
-        OptionMethod { "defaultValue", "Option.defaultValue d opt -> value" },
-    };
-
     /// @brief Enumerated argument value with description.
     struct EnumValueEntry
     {
@@ -188,17 +179,8 @@ namespace
         StdLibEntry { "ls", "ls -> list<FileInfo>  |  ls path -> list<FileInfo>" },
         StdLibEntry { "rand", "rand -> int  |  rand min max -> int" },
         StdLibEntry { "fetch", "fetch url -> result<string, string>" },
-        // Size constructors
-        StdLibEntry { "Size.fromBytes", "Size.fromBytes n -> Size" },
-        StdLibEntry { "Size.fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
-        StdLibEntry { "Size.fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
-        StdLibEntry { "Size.fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
-        StdLibEntry { "Size.fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
-        // FileMode constructors
-        StdLibEntry { "FileMode.fromBits", "FileMode.fromBits n -> FileMode" },
-        // DateTime constructors
-        StdLibEntry { "DateTime.now", "DateTime.now -> DateTime (current UTC time)" },
-        StdLibEntry { "DateTime.fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
+        // Module function constructors (Size.*, FileMode.*, DateTime.*) are now
+        // generated from the TypeRegistry via moduleFunctionStdLibCandidates().
     };
     // clang-format on
 
@@ -263,301 +245,20 @@ std::vector<CompletionCandidate> keywordCandidates()
 
 std::vector<CompletionCandidate> builtinCandidates()
 {
-    return {
-        { "cat", "cat", "builtin", "", CompletionKind::Builtin },
-        { "cd", "cd", "builtin", "", CompletionKind::Builtin },
-        { "exit", "exit", "builtin", "", CompletionKind::Builtin },
-        { "export", "export", "builtin", "", CompletionKind::Builtin },
-        { "set", "set", "builtin", "", CompletionKind::Builtin },
-        { "unset", "unset", "builtin", "", CompletionKind::Builtin },
-        { "read", "read", "builtin", "", CompletionKind::Builtin },
-        { "sleep", "sleep", "builtin", "", CompletionKind::Builtin },
-        { "jobs", "jobs", "builtin", "", CompletionKind::Builtin },
-        { "fg", "fg", "builtin", "", CompletionKind::Builtin },
-        { "bg", "bg", "builtin", "", CompletionKind::Builtin },
-        { "wait", "wait", "builtin", "", CompletionKind::Builtin },
-        { "bind", "bind", "builtin", "", CompletionKind::Builtin },
-        { "which", "which", "builtin", "", CompletionKind::Builtin },
-        { "print", "print", "F# print function", "", CompletionKind::Builtin },
-        { "println", "println", "F# print with newline", "", CompletionKind::Builtin },
-        { "echo", "echo", "builtin", "", CompletionKind::Builtin },
-        { "mv", "mv", "builtin", "", CompletionKind::Builtin },
-        { "rm", "rm", "builtin", "", CompletionKind::Builtin },
-        // Shell/Prompt properties
-        { "shell_prompt_preset", "shell_prompt_preset", "Prompt theme preset", "", CompletionKind::Property },
-        { "shell_prompt_indicator",
-          "shell_prompt_indicator",
-          "Prompt indicator character(s)",
-          "",
-          CompletionKind::Property },
-        { "shell_prompt_layout", "shell_prompt_layout", "Prompt layout style", "", CompletionKind::Property },
-        { "shell_prompt_separator",
-          "shell_prompt_separator",
-          "Prompt separator style",
-          "",
-          CompletionKind::Property },
-        { "shell_prompt_transient",
-          "shell_prompt_transient",
-          "Transient prompt mode",
-          "",
-          CompletionKind::Property },
-        { "shell_prompt_duration_threshold",
-          "shell_prompt_duration_threshold",
-          "Duration display threshold (ms)",
-          "",
-          CompletionKind::Property },
-        { "shell_prompt_spacing",
-          "shell_prompt_spacing",
-          "Blank lines above/below prompt (0 or 1)",
-          "",
-          CompletionKind::Property },
-        { "shell_exit_confirm_timeout",
-          "shell_exit_confirm_timeout",
-          "Exit confirmation timeout (ms)",
-          "",
-          CompletionKind::Property },
-        { "shell_ls_icons",
-          "shell_ls_icons",
-          "Show Nerd Font icons in ls output (default: true)",
-          "",
-          CompletionKind::Property },
-        { "shell_ls_directory_slash",
-          "shell_ls_directory_slash",
-          "Append trailing '/' to directory names in ls output (default: true)",
-          "",
-          CompletionKind::Property },
-        { "shell_is_interactive",
-          "shell_is_interactive",
-          "Whether running interactively (read-only)",
-          "",
-          CompletionKind::Property },
-        // Agent general properties
-        { "agent_provider", "agent_provider", "Active AI provider", "", CompletionKind::Property },
-        { "agent_prompt_indicator",
-          "agent_prompt_indicator",
-          "Agent prompt indicator character(s)",
-          "",
-          CompletionKind::Property },
-        { "agent_max_tool_result_size",
-          "agent_max_tool_result_size",
-          "Max bytes for tool result truncation",
-          "",
-          CompletionKind::Property },
-        { "agent_log_tool_uses",
-          "agent_log_tool_uses",
-          "Enable/disable tool invocation logging",
-          "",
-          CompletionKind::Property },
-        // Claude provider properties
-        { "agent_claude_api_key", "agent_claude_api_key", "Claude API key", "", CompletionKind::Property },
-        { "agent_claude_api_key_env",
-          "agent_claude_api_key_env",
-          "Claude API key environment variable",
-          "",
-          CompletionKind::Property },
-        { "agent_claude_model",
-          "agent_claude_model",
-          "Claude model identifier",
-          "",
-          CompletionKind::Property },
-        { "agent_claude_max_tokens",
-          "agent_claude_max_tokens",
-          "Claude max output tokens",
-          "",
-          CompletionKind::Property },
-        { "agent_claude_thinking_mode",
-          "agent_claude_thinking_mode",
-          "Claude thinking/reasoning mode (off/normal/extended)",
-          "",
-          CompletionKind::Property },
-        { "agent_claude_prompt_caching",
-          "agent_claude_prompt_caching",
-          "Enable Claude prompt caching (true/false)",
-          "",
-          CompletionKind::Property },
-        { "agent_claude_auth_type",
-          "agent_claude_auth_type",
-          "Claude auth method (auto/oauth/api_key)",
-          "",
-          CompletionKind::Property },
-        // OpenAI provider properties
-        { "agent_openai_api_key", "agent_openai_api_key", "OpenAI API key", "", CompletionKind::Property },
-        { "agent_openai_api_key_env",
-          "agent_openai_api_key_env",
-          "OpenAI API key environment variable",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_model",
-          "agent_openai_model",
-          "OpenAI model identifier",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_base_url", "agent_openai_base_url", "OpenAI base URL", "", CompletionKind::Property },
-        { "agent_openai_max_tokens",
-          "agent_openai_max_tokens",
-          "OpenAI max output tokens",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_thinking_mode",
-          "agent_openai_thinking_mode",
-          "OpenAI thinking/reasoning mode",
-          "",
-          CompletionKind::Property },
-        // OpenAI-compatible provider properties
-        { "agent_openai_compat_api_key",
-          "agent_openai_compat_api_key",
-          "OpenAI-compatible API key",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_compat_api_key_env",
-          "agent_openai_compat_api_key_env",
-          "OpenAI-compatible API key environment variable",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_compat_model",
-          "agent_openai_compat_model",
-          "OpenAI-compatible model identifier",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_compat_base_url",
-          "agent_openai_compat_base_url",
-          "OpenAI-compatible base URL",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_compat_max_tokens",
-          "agent_openai_compat_max_tokens",
-          "OpenAI-compatible max output tokens",
-          "",
-          CompletionKind::Property },
-        { "agent_openai_compat_thinking_mode",
-          "agent_openai_compat_thinking_mode",
-          "OpenAI-compatible thinking mode",
-          "",
-          CompletionKind::Property },
-        // Gemini provider properties
-        { "agent_gemini_api_key", "agent_gemini_api_key", "Gemini API key", "", CompletionKind::Property },
-        { "agent_gemini_api_key_env",
-          "agent_gemini_api_key_env",
-          "Gemini API key environment variable",
-          "",
-          CompletionKind::Property },
-        { "agent_gemini_model",
-          "agent_gemini_model",
-          "Gemini model identifier",
-          "",
-          CompletionKind::Property },
-        { "agent_gemini_max_tokens",
-          "agent_gemini_max_tokens",
-          "Gemini max output tokens",
-          "",
-          CompletionKind::Property },
-        { "agent_gemini_thinking_mode",
-          "agent_gemini_thinking_mode",
-          "Gemini thinking/reasoning mode",
-          "",
-          CompletionKind::Property },
-        // Plan mode properties
-        { "agent_plan_mode_enabled",
-          "agent_plan_mode_enabled",
-          "Enable/disable plan mode",
-          "",
-          CompletionKind::Property },
-        { "agent_plan_mode_pause_between_steps",
-          "agent_plan_mode_pause_between_steps",
-          "Pause for confirmation between plan steps",
-          "",
-          CompletionKind::Property },
-        { "agent_plan_mode_max_exploration_turns",
-          "agent_plan_mode_max_exploration_turns",
-          "Max exploration iterations",
-          "",
-          CompletionKind::Property },
-        // Explore sub-agent properties
-        { "agent_explore_max_turns",
-          "agent_explore_max_turns",
-          "Max explore sub-agent iterations",
-          "",
-          CompletionKind::Property },
-        // Trace properties
-        { "agent_trace_enabled",
-          "agent_trace_enabled",
-          "Enable/disable trace logging",
-          "",
-          CompletionKind::Property },
-        { "agent_trace_default_path",
-          "agent_trace_default_path",
-          "Trace file path",
-          "",
-          CompletionKind::Property },
-        { "agent_trace_max_files",
-          "agent_trace_max_files",
-          "Max trace files to retain",
-          "",
-          CompletionKind::Property },
-        // MCP server management (multi-arg functions, not properties)
-        { "add_mcp_server", "add_mcp_server", "Register an MCP server", "", CompletionKind::Builtin },
-        { "set_mcp_env",
-          "set_mcp_env",
-          "Set environment variable for an MCP server",
-          "",
-          CompletionKind::Builtin },
-        { "remove_mcp_server", "remove_mcp_server", "Remove an MCP server", "", CompletionKind::Builtin },
-        // Web search properties
-        { "agent_web_search_engine",
-          "agent_web_search_engine",
-          "Web search engine",
-          "",
-          CompletionKind::Property },
-        { "agent_web_search_api_key",
-          "agent_web_search_api_key",
-          "Web search API key",
-          "",
-          CompletionKind::Property },
-        { "agent_web_search_max_results",
-          "agent_web_search_max_results",
-          "Max web search results per query",
-          "",
-          CompletionKind::Property },
-        { "agent_web_search_cx",
-          "agent_web_search_cx",
-          "Google Custom Search Engine ID",
-          "",
-          CompletionKind::Property },
-        // Session / lifecycle properties
-        { "agent_auto_resume",
-          "agent_auto_resume",
-          "Auto-resume last agent session",
-          "",
-          CompletionKind::Property },
-        { "agent_session_replay",
-          "agent_session_replay",
-          "Replay history when resuming",
-          "",
-          CompletionKind::Property },
-        // Permissions properties
-        { "agent_permissions_policy",
-          "agent_permissions_policy",
-          "Agent permission policy",
-          "",
-          CompletionKind::Property },
-        { "agent_trusted_tool", "agent_trusted_tool", "Auto-approved tools", "", CompletionKind::Property },
-        { "agent_blocked_pattern",
-          "agent_blocked_pattern",
-          "Blocked shell command patterns",
-          "",
-          CompletionKind::Property },
-        // Error recovery properties
-        { "agent_error_recovery_action",
-          "agent_error_recovery_action",
-          "Action on command failure (ask/analyze/ignore)",
-          "",
-          CompletionKind::Property },
-        { "agent_error_recovery_model",
-          "agent_error_recovery_model",
-          "Model for error analysis (empty = active model)",
-          "",
-          CompletionKind::Property },
-    };
+    auto const builtins = userFacingBuiltins();
+    std::vector<CompletionCandidate> results;
+    results.reserve(builtins.size());
+    for (auto const& info: builtins)
+    {
+        results.push_back(CompletionCandidate {
+            .text = info.name,
+            .displayText = info.name,
+            .description = info.description,
+            .detail = {},
+            .kind = info.isProperty ? CompletionKind::Property : CompletionKind::Builtin,
+        });
+    }
+    return results;
 }
 
 std::vector<CompletionCandidate> shellKeywordCandidates()
@@ -580,12 +281,8 @@ std::vector<CompletionCandidate> shellKeywordCandidates()
 
 std::vector<CompletionCandidate> constructorCandidates()
 {
-    return {
-        { "Some", "Some", "Option constructor (value present)", "", CompletionKind::Constructor },
-        { "None", "None", "Option constructor (no value)", "", CompletionKind::Constructor },
-        { "Ok", "Ok", "Result constructor (success)", "", CompletionKind::Constructor },
-        { "Error", "Error", "Result constructor (failure)", "", CompletionKind::Constructor },
-    };
+    static CoreVM::TypeRegistry const builtinRegistry;
+    return constructorCandidatesFromRegistry(builtinRegistry);
 }
 
 std::vector<CompletionCandidate> dotAccessCandidates(
@@ -593,7 +290,8 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     std::string const& memberPrefix,
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> const& recordFields,
     std::unordered_map<std::string, std::string> const& variableTypes,
-    std::string const& pipelineElementType)
+    std::string const& pipelineElementType,
+    ModuleFunctionMap const& moduleFunctions)
 {
     std::vector<CompletionCandidate> results;
 
@@ -616,61 +314,21 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         });
     };
 
-    // DateTime module methods
-    constexpr std::array dateTimeMethods = {
-        OptionMethod { "now", "DateTime.now -> DateTime (current UTC time)" },
-        OptionMethod { "fromEpoch", "DateTime.fromEpoch epoch -> DateTime" },
+    /// @brief Helper to add module function candidates for a given type name.
+    auto addModuleFunctions = [&](std::string const& typeName) -> bool {
+        if (auto it = moduleFunctions.find(typeName); it != moduleFunctions.end())
+        {
+            for (auto const& fn: it->second)
+                addCandidate(typeName + "." + fn.name, fn.name, fn.signature, CompletionKind::Function);
+            return true;
+        }
+        return false;
     };
 
-    // Size module methods
-    constexpr std::array sizeMethods = {
-        OptionMethod { "fromBytes", "Size.fromBytes n -> Size" },
-        OptionMethod { "fromKB", "Size.fromKB n -> Size (n * 1024 bytes)" },
-        OptionMethod { "fromMB", "Size.fromMB n -> Size (n * 1024² bytes)" },
-        OptionMethod { "fromGB", "Size.fromGB n -> Size (n * 1024³ bytes)" },
-        OptionMethod { "fromTB", "Size.fromTB n -> Size (n * 1024⁴ bytes)" },
-    };
-
-    // FileMode module methods
-    constexpr std::array fileModeMethods = {
-        OptionMethod { "fromBits", "FileMode.fromBits n -> FileMode" },
-    };
-
-    if (objectPart == "Option")
+    // Check if objectPart is a known module type (Option, DateTime, Size, FileMode, etc.)
+    if (moduleFunctions.contains(objectPart))
     {
-        // Static Option module methods
-        for (auto const& method: optionMethods)
-            addCandidate("Option." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         CompletionKind::Function);
-    }
-    else if (objectPart == "Size")
-    {
-        // Static Size module methods
-        for (auto const& method: sizeMethods)
-            addCandidate("Size." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         CompletionKind::Function);
-    }
-    else if (objectPart == "DateTime")
-    {
-        // Static DateTime module methods
-        for (auto const& method: dateTimeMethods)
-            addCandidate("DateTime." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         CompletionKind::Function);
-    }
-    else if (objectPart == "FileMode")
-    {
-        // Static FileMode module methods
-        for (auto const& method: fileModeMethods)
-            addCandidate("FileMode." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         CompletionKind::Function);
+        addModuleFunctions(objectPart);
     }
     else if (objectPart == "_")
     {
@@ -803,12 +461,12 @@ std::vector<CompletionCandidate> dotAccessCandidates(
     }
     else
     {
-        // Generic value: offer both Option methods and record fields
-        for (auto const& method: optionMethods)
-            addCandidate(objectPart + "." + std::string(method.name),
-                         std::string(method.name),
-                         std::string(method.description),
-                         CompletionKind::Function);
+        // Generic value: offer module functions for Option (most common wrapper type) and record fields
+        if (auto it = moduleFunctions.find("Option"); it != moduleFunctions.end())
+        {
+            for (auto const& fn: it->second)
+                addCandidate(objectPart + "." + fn.name, fn.name, fn.signature, CompletionKind::Function);
+        }
 
         std::set<std::string> seen;
         for (auto const& [typeName, fields]: recordFields)

@@ -3,6 +3,7 @@
 
 #include <endo-language/ide/Completer.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
+#include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 
 #include "SymbolCollector.hpp"
 
@@ -100,6 +101,18 @@ nlohmann::json computeCompletion(std::string const& source, Position position)
     auto recordInfo = endo::collectRecordInfo(source);
     dataSource.recordFields = std::move(recordInfo.recordFields);
     dataSource.variableTypes = std::move(recordInfo.variableTypes);
+
+    // Merge builtin type data from TypeRegistry (ProcessInfo, FileInfo, DateTime, etc.)
+    {
+        static CoreVM::TypeRegistry const builtinRegistry;
+        auto builtinFields = endo::builtinRecordFields(builtinRegistry);
+        for (auto& [name, fields]: builtinFields)
+        {
+            if (!dataSource.recordFields.contains(name))
+                dataSource.recordFields[name] = std::move(fields);
+        }
+        dataSource.moduleFunctions = endo::builtinModuleFunctions(builtinRegistry);
+    }
 
     // Compute completions using shared engine
     auto candidates = endo::computeCompletions(source, byteOffset, dataSource);

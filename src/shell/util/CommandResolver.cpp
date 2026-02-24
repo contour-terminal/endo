@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "CommandResolver.hpp"
 
+#include <endo-language/builtins/BuiltinSignatures.hpp>
+
 #include <crispy/utils.h>
 
 #include <filesystem>
@@ -153,40 +155,13 @@ void CommandResolver::refreshCacheIfNeeded() const
 
 std::set<std::string> const& CommandResolver::builtinNames()
 {
-    static std::set<std::string> const names = {
-        // Shell builtins
-        "cat",
-        "cd",
-        "exit",
-        "export",
-        "mv",
-        "rm",
-        "set",
-        "unset",
-        "read",
-        "sleep",
-        "true",
-        "false",
-        "jobs",
-        "fg",
-        "bg",
-        "wait",
-        "bind",
-        "which",
-        // Control flow keywords
-        "if",
-        "then",
-        "else",
-        "elif",
-        "for",
-        "while",
-        "do",
-        "end",
-        "in",
-        "return",
-        "break",
-        "continue",
-    };
+    static auto const names = [] {
+        auto const builtins = userFacingBuiltins();
+        auto result = std::set<std::string>();
+        for (auto const& info: builtins)
+            result.insert(info.name);
+        return result;
+    }();
     return names;
 }
 
