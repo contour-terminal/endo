@@ -23,6 +23,8 @@ struct CompletionDataSource
     std::vector<CompletionCandidate>
         additionalCandidates;          ///< Extra candidates (e.g., PATH commands, env vars, history).
     ModuleFunctionMap moduleFunctions; ///< Module-level functions per type (e.g., Option.map, DateTime.now).
+    std::unordered_map<std::string, std::string>
+        commandOutputTypes; ///< Command -> record type name for pipeline completion.
 };
 
 /// @brief Record info collected from a document for completion support.

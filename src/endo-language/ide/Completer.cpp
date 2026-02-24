@@ -122,11 +122,25 @@ std::vector<CompletionCandidate> computeCompletions(std::string_view source,
     {
         auto const objectPart = prefix.substr(0, dotPos);
         auto const memberPrefix = prefix.substr(dotPos + 1);
+
+        // Resolve pipeline type for underscore patterns
+        std::string pipelineType;
+        if (objectPart == "_" || objectPart.starts_with("_."))
+        {
+            auto lineStart = source.rfind('\n', cursorByteOffset > 0 ? cursorByteOffset - 1 : 0);
+            lineStart = (lineStart == std::string_view::npos) ? 0 : lineStart + 1;
+            auto lineEnd = source.find('\n', cursorByteOffset);
+            if (lineEnd == std::string_view::npos)
+                lineEnd = source.size();
+            pipelineType = resolvePipelineSourceType(source.substr(lineStart, lineEnd - lineStart),
+                                                     dataSource.commandOutputTypes);
+        }
+
         return dotAccessCandidates(objectPart,
                                    memberPrefix,
                                    dataSource.recordFields,
                                    dataSource.variableTypes,
-                                   {},
+                                   pipelineType,
                                    dataSource.moduleFunctions);
     }
 

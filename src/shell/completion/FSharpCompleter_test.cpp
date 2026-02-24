@@ -548,6 +548,53 @@ TEST_CASE("FSharpCompleter.underscore.no_pipeline_fallback")
     CHECK(hasCompletion(results, "_.cpu"));
 }
 
+TEST_CASE("FSharpCompleter.underscore.nested_mode_pipeline_type_aware")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    state.recordTypeFields["FileMode"] = { { "bits", "int" } };
+    state.recordTypeFields["DateTime"] = {
+        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
+        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+    };
+    state.recordTypeFields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" } };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    endo::FSharpCompleter completer(state);
+
+    // ls |> map _.mode. → only FileMode fields
+    auto results = completer.complete(makeContext("_.mode.", "ls |> map _.mode."));
+    REQUIRE(results.size() == 1);
+    CHECK(hasCompletion(results, "_.mode.bits"));
+    CHECK_FALSE(hasCompletion(results, "_.mode.pid"));
+}
+
+TEST_CASE("FSharpCompleter.underscore.nested_mtime_pipeline_type_aware")
+{
+    endo::FSharpPersistentState state;
+    state.recordTypeFields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    state.recordTypeFields["FileMode"] = { { "bits", "int" } };
+    state.recordTypeFields["DateTime"] = {
+        { "year", "int" },   { "month", "int" },  { "day", "int" },   { "hour", "int" },
+        { "minute", "int" }, { "second", "int" }, { "epoch", "int" },
+    };
+    state.commandOutputTypes["ls"] = "FileInfo";
+    endo::FSharpCompleter completer(state);
+
+    // ls |> map _.mtime. → only DateTime fields
+    auto results = completer.complete(makeContext("_.mtime.", "ls |> map _.mtime."));
+    CHECK(results.size() == 7);
+    CHECK(hasCompletion(results, "_.mtime.year"));
+    CHECK(hasCompletion(results, "_.mtime.month"));
+    CHECK(hasCompletion(results, "_.mtime.epoch"));
+    CHECK_FALSE(hasCompletion(results, "_.mtime.bits"));
+}
+
 TEST_CASE("FSharpCompleter.underscore.unknown_command_fallback")
 {
     endo::FSharpPersistentState state;

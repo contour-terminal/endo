@@ -112,6 +112,7 @@ nlohmann::json computeCompletion(std::string const& source, Position position)
                 dataSource.recordFields[name] = std::move(fields);
         }
         dataSource.moduleFunctions = endo::builtinModuleFunctions(builtinRegistry);
+        dataSource.commandOutputTypes = endo::builtinCommandOutputTypes(builtinRegistry);
     }
 
     // Compute completions using shared engine

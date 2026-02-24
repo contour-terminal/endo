@@ -855,6 +855,69 @@ TEST_CASE("CompletionCandidates.dotAccess.underscore_without_pipeline_type", "[c
 }
 
 // =============================================================================
+// Nested underscore dot-access tests (pipeline type resolution)
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mode_shows_FileMode_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    fields["FileMode"] = { { "bits", "int" } };
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+    fields["Size"] = { { "bytes", "int" } };
+
+    auto candidates = dotAccessCandidates("_.mode", "", fields, {}, "FileInfo");
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "_.mode.bits"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mtime_shows_DateTime_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = {
+        { "name", "str" },       { "size", "Size" },  { "mode", "FileMode" },
+        { "mtime", "DateTime" }, { "isDir", "bool" },
+    };
+    fields["FileMode"] = { { "bits", "int" } };
+    fields["DateTime"] = { { "year", "int" },   { "month", "int" },  { "day", "int" },  { "hour", "int" },
+                           { "minute", "int" }, { "second", "int" }, { "epoch", "int" } };
+
+    auto candidates = dotAccessCandidates("_.mtime", "", fields, {}, "FileInfo");
+    CHECK(candidates.size() == 7);
+    CHECK(hasCandidate(candidates, "_.mtime.year"));
+    CHECK(hasCandidate(candidates, "_.mtime.month"));
+    CHECK(hasCandidate(candidates, "_.mtime.epoch"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_mode_filter_by_prefix", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "mode", "FileMode" } };
+    fields["FileMode"] = { { "bits", "int" } };
+
+    auto candidates = dotAccessCandidates("_.mode", "b", fields, {}, "FileInfo");
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].text == "_.mode.bits");
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_no_pipeline_type_falls_back", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["FileInfo"] = { { "mode", "FileMode" } };
+    fields["FileMode"] = { { "bits", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" } };
+
+    // No pipeline type → falls through to fallback (all fields)
+    auto candidates = dotAccessCandidates("_.mode", "", fields, {}, "");
+    // Can't resolve chain without pipeline type, so falls back to all fields
+    CHECK(!candidates.empty());
+}
+
+// =============================================================================
 // detail field tests
 // =============================================================================
 

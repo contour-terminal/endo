@@ -216,9 +216,11 @@ std::vector<CompletionCandidate> dotAccessCandidates(
         auto const firstSegment = objectPart.substr(0, firstDot);
         auto const rest = objectPart.substr(firstDot + 1);
 
-        // Resolve the first segment via variableTypes
+        // Resolve the first segment via pipelineElementType or variableTypes
         std::string currentType;
-        if (auto const it = variableTypes.find(firstSegment); it != variableTypes.end())
+        if (firstSegment == "_" && !pipelineElementType.empty())
+            currentType = pipelineElementType;
+        else if (auto const it = variableTypes.find(firstSegment); it != variableTypes.end())
             currentType = it->second;
 
         bool resolved = false;

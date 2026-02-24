@@ -41,7 +41,7 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
                                                                std::string const& fullInput) const
 {
     // Resolve pipeline element type for underscore completions
-    auto const pipelineType = (objectPart == "_")
+    auto const pipelineType = (objectPart == "_" || objectPart.starts_with("_."))
                                   ? resolvePipelineSourceType(fullInput, _state.commandOutputTypes)
                                   : std::string {};
 
