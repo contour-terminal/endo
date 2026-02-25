@@ -236,6 +236,20 @@ TEST_CASE("CompletionCandidates.dotAccess.variable_unknown_type_fallback", "[com
     CHECK(hasCandidate(candidates, "bob.name"));
 }
 
+TEST_CASE("CompletionCandidates.dotAccess.typed_variable_TimeSpan", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    fields["DateTime"] = { { "year", "int" }, { "month", "int" }, { "epoch", "int" } };
+    std::unordered_map<std::string, std::string> variableTypes;
+    variableTypes["x"] = "TimeSpan";
+    auto candidates = dotAccessCandidates("x", "", fields, variableTypes, {}, testModuleFunctions());
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "x.milliseconds"));
+    CHECK(!hasCandidate(candidates, "x.year"));
+    CHECK(!hasCandidate(candidates, "x.map"));
+}
+
 TEST_CASE("CompletionCandidates.dotAccess.stdlib_function_not_qualifiable", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;

@@ -58,7 +58,8 @@ struct FSharpPersistentState
         bool isMutable;
         bool isObjectExpr; ///< Whether value is Option/Result/Tuple (for ORELEASE)
         CoreVM::LiteralType storageType = CoreVM::LiteralType::Void; ///< IR type of the stored value
-        bool isExported = false; ///< Whether binding is exported as environment variable
+        bool isExported = false;    ///< Whether binding is exported as environment variable
+        std::string objectTypeName; ///< Record type name for completion (e.g., "TimeSpan", "FileInfo")
     };
 
     /// Value bindings persisted across REPL prompts, in definition order.
@@ -100,6 +101,10 @@ struct FSharpPersistentState
 
     /// Module-level functions per type for completion (e.g., Option.map, DateTime.now).
     ModuleFunctionMap moduleFunctions;
+
+    /// Maps variable name -> record type name for dot-completion type narrowing.
+    /// e.g., "x" -> "TimeSpan" when `let x = TimeSpan.fromSeconds 5` was defined.
+    std::unordered_map<std::string, std::string> variableTypes;
 
     /// A persisted property definition with get/set accessor AST pointers.
     struct PersistedProperty

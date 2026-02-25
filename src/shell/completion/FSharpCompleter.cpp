@@ -46,8 +46,12 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
                                   : std::string {};
 
     // Delegate to shared completion engine for candidate generation (already prefix-filtered)
-    auto candidates = dotAccessCandidates(
-        objectPart, memberPrefix, _state.recordTypeFields, {}, pipelineType, _state.moduleFunctions);
+    auto candidates = dotAccessCandidates(objectPart,
+                                          memberPrefix,
+                                          _state.recordTypeFields,
+                                          _state.variableTypes,
+                                          pipelineType,
+                                          _state.moduleFunctions);
 
     // Convert to tui::CompletionItem with fuzzy scoring on the member name (not full text)
     std::vector<CompletionItem> results;

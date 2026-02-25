@@ -502,6 +502,12 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             else
                 persistentState->valueBindings.push_back(vb);
         }
+
+        // Rebuild variable type map for dot-completion narrowing
+        persistentState->variableTypes.clear();
+        for (auto const& vb: persistentState->valueBindings)
+            if (!vb.objectTypeName.empty())
+                persistentState->variableTypes[vb.name] = vb.objectTypeName;
     }
 
     // Clean up F# scope
@@ -5389,8 +5395,23 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         emitExportVariable(storage, node.name);
 
     // Record for REPL persistence (re-evaluated at each subsequent prompt)
-    _newValueBindings.push_back(
-        { node.name, node.value.get(), node.isMutable, isObjectExpr, storageType, node.isExported });
+    std::string objectTypeName;
+    if (auto objTypeId = getObjectTypeId(value))
+    {
+        for (auto const& [rtName, rtInfo]: _recordTypes)
+            if (rtInfo.typeId == *objTypeId)
+            {
+                objectTypeName = rtName;
+                break;
+            }
+    }
+    _newValueBindings.push_back({ node.name,
+                                  node.value.get(),
+                                  node.isMutable,
+                                  isObjectExpr,
+                                  storageType,
+                                  node.isExported,
+                                  objectTypeName });
 
     // Let bindings as statements don't produce a result value
     _result = nullptr;
