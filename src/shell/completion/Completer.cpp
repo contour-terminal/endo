@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
 #include <shell/completion/GitSpec.hpp>
+#include <shell/completion/ScriptedCompleter.hpp>
 
 #include <tui/completer/Completer.hpp>
 
@@ -151,6 +152,20 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
     });
 
     return allResults;
+}
+
+std::vector<std::string> Completer::takeLastErrors()
+{
+    for (auto& provider: _providers)
+    {
+        if (auto* scripted = dynamic_cast<ScriptedCompleter*>(provider.get()))
+        {
+            auto errors = scripted->takeLastErrors();
+            if (!errors.empty())
+                return errors;
+        }
+    }
+    return {};
 }
 
 std::string Completer::findCommonPrefix(std::vector<CompletionItem> const& items)

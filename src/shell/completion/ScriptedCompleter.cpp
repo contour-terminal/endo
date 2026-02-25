@@ -5,6 +5,7 @@
 #include <endo-language/ide/CompletionContext.hpp>
 
 #include <sstream>
+#include <utility>
 
 namespace endo
 {
@@ -55,18 +56,26 @@ std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const&
     }
 
     // Execute the completer function
-    auto results = _callback(*funcName, args, context.prefix);
+    auto result = _callback(*funcName, args, context.prefix);
+
+    // Capture any errors for later display
+    _lastErrors = std::move(result.errors);
 
     // Cache the results
-    _cache[cacheKey] = CacheEntry { .results = results, .timestamp = now };
+    _cache[cacheKey] = CacheEntry { .results = result.completions, .timestamp = now };
 
     // Convert to CompletionCandidates and apply fuzzy scoring
     std::vector<CompletionCandidate> candidates;
-    candidates.reserve(results.size());
-    for (auto& text: results)
+    candidates.reserve(result.completions.size());
+    for (auto& text: result.completions)
         candidates.push_back({ .text = std::move(text), .kind = CompletionKind::EnumValue });
 
     return applyFuzzyScoring(candidates, context.prefix, 60);
+}
+
+std::vector<std::string> ScriptedCompleter::takeLastErrors()
+{
+    return std::exchange(_lastErrors, {});
 }
 
 std::string ScriptedCompleter::makeCacheKey(std::string_view funcName, std::vector<std::string> const& args)

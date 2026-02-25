@@ -188,3 +188,53 @@ TEST_CASE("RichConsoleReport.multi_char_underline", "[RichConsoleReport]")
 
     CHECK(result.find("~~~~~") != std::string::npos);
 }
+
+// =================================================================================================
+// BufferingConsoleReport tests
+// =================================================================================================
+
+TEST_CASE("BufferingConsoleReport.buffers_messages", "[BufferingConsoleReport]")
+{
+    auto report = BufferingConsoleReport();
+    report.push_back(Message(Type::TypeError, SourceLocation(), "test error"));
+    CHECK(report.containsFailures());
+    CHECK(report.hasMessages());
+    CHECK(report.formattedMessages().size() == 1);
+    CHECK(report.formattedMessages()[0].find("test error") != std::string::npos);
+}
+
+TEST_CASE("BufferingConsoleReport.no_failures_when_empty", "[BufferingConsoleReport]")
+{
+    auto report = BufferingConsoleReport();
+    CHECK_FALSE(report.containsFailures());
+    CHECK_FALSE(report.hasMessages());
+    CHECK(report.formattedMessages().empty());
+}
+
+TEST_CASE("BufferingConsoleReport.warnings_dont_count_as_failures", "[BufferingConsoleReport]")
+{
+    auto report = BufferingConsoleReport();
+    report.push_back(Message(Type::Warning, SourceLocation(), "just a warning"));
+    CHECK_FALSE(report.containsFailures());
+    CHECK(report.hasMessages());
+    CHECK(report.formattedMessages().size() == 1);
+}
+
+TEST_CASE("BufferingConsoleReport.multiple_messages", "[BufferingConsoleReport]")
+{
+    auto report = BufferingConsoleReport();
+    report.push_back(Message(Type::TypeError, SourceLocation(), "error one"));
+    report.push_back(Message(Type::SyntaxError, SourceLocation(), "error two"));
+    CHECK(report.containsFailures());
+    CHECK(report.formattedMessages().size() == 2);
+}
+
+TEST_CASE("BufferingConsoleReport.fills_missing_context_snippet", "[BufferingConsoleReport]")
+{
+    auto report = BufferingConsoleReport();
+    report.setSourceText("let x = 42");
+    report.push_back(Message(Type::SyntaxError, makeLoc("stdin", 1, 5, 6), "Error here"));
+    CHECK(report.hasMessages());
+    // The formatted message should contain the source text
+    CHECK(report.formattedMessages()[0].find("let x = 42") != std::string::npos);
+}

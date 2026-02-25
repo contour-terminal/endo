@@ -75,6 +75,10 @@ class Completer
     /// @param cursorPosition The cursor byte offset.
     [[nodiscard]] CompletionContext analyzeContext(std::string_view input, size_t cursorPosition) const;
 
+    /// @brief Takes and clears any errors from the last scripted completion execution.
+    /// @return Formatted error messages, or empty if no scripted completer ran or no errors.
+    [[nodiscard]] std::vector<std::string> takeLastErrors();
+
   private:
     std::vector<std::unique_ptr<CompletionProvider>> _providers;
     CompletionConfig _config;

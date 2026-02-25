@@ -14,13 +14,20 @@
 namespace endo
 {
 
+/// @brief Result of executing a completer function, including any compilation errors.
+struct CompleterExecutionResult
+{
+    std::vector<std::string> completions; ///< Completion candidate strings.
+    std::vector<std::string> errors;      ///< Formatted diagnostic messages (if any).
+};
+
 /// @brief Callback type for executing an endo completer function.
 ///
 /// @param funcName The function name to invoke (e.g., "flatpak_complete").
 /// @param args Tokens after the command name, excluding the current word.
 /// @param prefix The current word being typed (may be empty).
-/// @return List of completion candidate strings.
-using CompleterExecutionCallback = std::function<std::vector<std::string>(
+/// @return Completions and any compilation errors.
+using CompleterExecutionCallback = std::function<CompleterExecutionResult(
     std::string_view funcName, std::vector<std::string> const& args, std::string_view prefix)>;
 
 /// @brief Completion provider that delegates to endo-scripted completer functions.
@@ -43,6 +50,10 @@ class ScriptedCompleter: public CompletionProvider
 
     [[nodiscard]] bool isExclusiveFor(CompletionContext const& context) const override;
 
+    /// @brief Takes and clears any errors from the last completion execution.
+    /// @return Formatted error messages from the last completer execution.
+    [[nodiscard]] std::vector<std::string> takeLastErrors();
+
   private:
     CompleterFunctionRegistry const& _registry;
     CompleterExecutionCallback _callback;
@@ -64,6 +75,8 @@ class ScriptedCompleter: public CompletionProvider
     [[nodiscard]] static std::vector<std::string> extractArgs(std::string_view fullInput,
                                                               std::string_view command,
                                                               std::string_view prefix);
+
+    std::vector<std::string> _lastErrors; ///< Errors from the most recent completer execution.
 };
 
 } // namespace endo

@@ -117,8 +117,8 @@ namespace
                     clusterLen = 4;
             }
 
-            auto const inUnderlineSpan =
-                underlineColor && underlineLength > 0 && graphemeIdx >= underlineColumn && graphemeIdx < underlineEnd;
+            auto const inUnderlineSpan = underlineColor && underlineLength > 0
+                                         && graphemeIdx >= underlineColumn && graphemeIdx < underlineEnd;
 
             auto const color = categoryColor(highlightMap[graphemeIdx], theme);
             appendFg(out, color);
@@ -205,8 +205,7 @@ std::string formatDiagnostic(Message const& message, bool useColor)
             appendReset(out);
 
         // Compute underline span (0-based column and length)
-        auto const column =
-            loc.begin.column > 0 ? static_cast<size_t>(loc.begin.column) - 1 : size_t { 0 };
+        auto const column = loc.begin.column > 0 ? static_cast<size_t>(loc.begin.column) - 1 : size_t { 0 };
         auto const length =
             (loc.end.column > loc.begin.column) ? (loc.end.column - loc.begin.column) : size_t { 1 };
 
@@ -300,6 +299,53 @@ void RichConsoleReport::push_back(CoreVM::diagnostics::Message message)
 bool RichConsoleReport::containsFailures() const noexcept
 {
     return _errorCount > 0;
+}
+
+// =================================================================================================
+// BufferingConsoleReport
+// =================================================================================================
+
+BufferingConsoleReport::BufferingConsoleReport()
+{
+    auto const* noColor = std::getenv("NO_COLOR");
+    _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
+}
+
+void BufferingConsoleReport::setSourceText(std::string_view source)
+{
+    _sourceText = source;
+}
+
+void BufferingConsoleReport::push_back(CoreVM::diagnostics::Message message)
+{
+    if (!isWarning(message.type))
+        _errorCount++;
+
+    // Fill in missing context snippet from source text if available.
+    if (!message.contextSnippet.has_value() && !_sourceText.empty() && message.sourceLocation.begin.line > 0)
+    {
+        auto const line =
+            extractSourceLine(_sourceText, static_cast<int>(message.sourceLocation.begin.line) - 1);
+        if (!line.empty())
+            message.contextSnippet = line;
+    }
+
+    _formattedMessages.push_back(formatDiagnostic(message, _useColor));
+}
+
+bool BufferingConsoleReport::containsFailures() const noexcept
+{
+    return _errorCount > 0;
+}
+
+std::vector<std::string> const& BufferingConsoleReport::formattedMessages() const noexcept
+{
+    return _formattedMessages;
+}
+
+bool BufferingConsoleReport::hasMessages() const noexcept
+{
+    return !_formattedMessages.empty();
 }
 
 } // namespace endo

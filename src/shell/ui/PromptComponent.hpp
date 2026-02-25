@@ -199,6 +199,13 @@ class PromptComponent: public tui::Component
 
     [[nodiscard]] tui::CompletionPopup const& completionPopup() const noexcept { return _completionPopup; }
 
+    /// @brief Takes and clears any pending completion errors for display.
+    /// @return Formatted error messages from the last completion attempt.
+    [[nodiscard]] std::vector<std::string> takePendingCompletionErrors();
+
+    /// @brief Returns whether there are pending completion errors to display.
+    [[nodiscard]] bool hasPendingCompletionErrors() const noexcept;
+
     /// @brief Result of processing input.
     enum class Action
     {
@@ -377,6 +384,9 @@ class PromptComponent: public tui::Component
 
     /// @brief Resets inline history cycling state.
     void resetHistoryCycling();
+
+    // Completion error buffering
+    std::vector<std::string> _pendingCompletionErrors; ///< Errors from last completion for TUI display.
 
     // Aurora sixel fade cache
     std::string _auroraFadeSixelCache;        ///< Pre-encoded sixel string.

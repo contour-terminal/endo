@@ -46,4 +46,33 @@ class RichConsoleReport: public CoreVM::diagnostics::Report
     std::string_view _sourceText;
 };
 
+/// A diagnostic report that buffers formatted messages in memory instead of writing to stderr.
+///
+/// Used when compilation errors must be captured and displayed later (e.g., during
+/// tab-completion callbacks where direct stderr output would corrupt the TUI prompt).
+class BufferingConsoleReport: public CoreVM::diagnostics::Report
+{
+  public:
+    BufferingConsoleReport();
+
+    /// Sets the source text for context snippet extraction.
+    /// @param source The full source text being compiled.
+    void setSourceText(std::string_view source);
+
+    void push_back(CoreVM::diagnostics::Message message) override;
+    [[nodiscard]] bool containsFailures() const noexcept override;
+
+    /// Returns the buffered formatted diagnostic messages.
+    [[nodiscard]] std::vector<std::string> const& formattedMessages() const noexcept;
+
+    /// Returns whether any messages have been buffered.
+    [[nodiscard]] bool hasMessages() const noexcept;
+
+  private:
+    size_t _errorCount = 0;
+    bool _useColor = false;
+    std::string_view _sourceText;
+    std::vector<std::string> _formattedMessages;
+};
+
 } // namespace endo

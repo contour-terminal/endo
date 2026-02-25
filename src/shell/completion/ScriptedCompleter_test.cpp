@@ -39,15 +39,15 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
 {
     return [](std::string_view funcName,
               std::vector<std::string> const& args,
-              std::string_view /*prefix*/) -> std::vector<std::string> {
+              std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         if (funcName == "flatpak_complete")
         {
             if (args.empty())
-                return { "run", "install", "uninstall", "update", "list", "info", "search" };
+                return { { "run", "install", "uninstall", "update", "list", "info", "search" }, {} };
             if (args.size() == 1 && args[0] == "run")
-                return { "com.visualstudio.code", "org.mozilla.firefox", "org.gnome.Calculator" };
+                return { { "com.visualstudio.code", "org.mozilla.firefox", "org.gnome.Calculator" }, {} };
             if (args.size() == 1 && args[0] == "--")
-                return { "--user", "--system", "--verbose", "-v" };
+                return { { "--user", "--system", "--verbose", "-v" }, {} };
         }
         return {};
     };
@@ -157,9 +157,9 @@ TEST_CASE("ScriptedCompleter.cache_reuse")
     int callCount = 0;
     auto countingCallback = [&callCount](std::string_view /*funcName*/,
                                          std::vector<std::string> const& /*args*/,
-                                         std::string_view /*prefix*/) -> std::vector<std::string> {
+                                         std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
-        return { "run", "install", "update" };
+        return { { "run", "install", "update" }, {} };
     };
 
     endo::CompleterFunctionRegistry registry;
@@ -189,10 +189,10 @@ TEST_CASE("ScriptedCompleter.args_extraction")
     std::vector<std::string> capturedArgs;
     auto captureCallback = [&](std::string_view /*funcName*/,
                                std::vector<std::string> const& args,
-                               std::string_view /*prefix*/) -> std::vector<std::string> {
+                               std::string_view /*prefix*/) -> endo::CompleterExecutionResult {
         ++callCount;
         capturedArgs = args;
-        return { "result" };
+        return { { "result" }, {} };
     };
 
     endo::CompleterFunctionRegistry registry;

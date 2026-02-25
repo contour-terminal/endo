@@ -691,7 +691,7 @@ void Shell::loadCompleters()
     }
 }
 
-std::vector<std::string> Shell::executeCompleterFunction(std::string_view funcName,
+CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcName,
                                                          std::vector<std::string> const& args,
                                                          std::string_view prefix)
 {
@@ -737,9 +737,13 @@ std::vector<std::string> Shell::executeCompleterFunction(std::string_view funcNa
     auto const savedStdout = _currentPipelineBuilder.defaultStdoutFd;
     _currentPipelineBuilder.defaultStdoutFd = pipe->writer();
 
+    // Use buffering report to capture errors instead of writing to stderr
+    BufferingConsoleReport bufferingReport;
+    bufferingReport.setSourceText(expr);
+
     auto const savedInteractive = _interactive;
     _interactive = false;
-    (void) execute(expr);
+    (void) execute(expr, bufferingReport);
     _interactive = savedInteractive;
 
     _currentPipelineBuilder.defaultStdoutFd = savedStdout;
@@ -758,20 +762,28 @@ std::vector<std::string> Shell::executeCompleterFunction(std::string_view funcNa
     pipe->closeReader();
 
     // Split by newlines
-    std::vector<std::string> results;
+    CompleterExecutionResult result;
     size_t pos = 0;
     while (pos < output.size())
     {
         auto const nl = output.find('\n', pos);
         auto line = (nl == std::string::npos) ? output.substr(pos) : output.substr(pos, nl - pos);
         if (!line.empty())
-            results.push_back(std::move(line));
+            result.completions.push_back(std::move(line));
         if (nl == std::string::npos)
             break;
         pos = nl + 1;
     }
 
-    return results;
+    // Capture any compilation/link errors
+    if (bufferingReport.hasMessages())
+    {
+        result.errors.reserve(bufferingReport.formattedMessages().size());
+        for (auto const& msg: bufferingReport.formattedMessages())
+            result.errors.push_back(msg);
+    }
+
+    return result;
 }
 
 int Shell::run()
@@ -1052,6 +1064,15 @@ int Shell::run()
 
 int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)
 {
+    RichConsoleReport report;
+    report.setSourceText(lineBuffer);
+    return execute(lineBuffer, report, sourceName);
+}
+
+int Shell::execute(std::string const& lineBuffer,
+                   CoreVM::diagnostics::Report& report,
+                   std::string_view sourceName)
+{
     // Clear any leftover redirect state from previous commands
     _redirectState.clear();
 
@@ -1061,8 +1082,6 @@ int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)
         auto const effectiveSourceName = !_interactive && !_positionalParameters.empty()
                                              ? std::string_view(_positionalParameters[0])
                                              : sourceName;
-        RichConsoleReport report;
-        report.setSourceText(lineBuffer);
         auto parser = endo::Parser(
             _runtime, report, std::make_unique<endo::StringSource>(lineBuffer, effectiveSourceName));
         parser.setSourceText(lineBuffer);

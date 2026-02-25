@@ -276,6 +276,31 @@ std::string Prompt::read()
             }
         }
 
+        // Display completion errors above the prompt if any
+        if (_promptComponent->hasPendingCompletionErrors())
+        {
+            auto errors = _promptComponent->takePendingCompletionErrors();
+            auto& out = _terminal.output();
+            // Hide prompt: clear inline viewport
+            _screen->clearAndRelease();
+            // Write each error line
+            for (auto const& err: errors)
+            {
+                out.writeRaw(err);
+                out.carriageReturn();
+                out.linefeed();
+            }
+            out.flush();
+            // Update saved cursor to AFTER errors so flushInline()'s restoreCursor() lands here
+            out.saveCursor();
+            // Re-render prompt below the errors
+            _promptComponent->flushDeferredUpdates();
+            auto pSize = _promptComponent->preferredSize();
+            _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+            _screen->draw();
+            continue; // skip the normal needsRedraw path
+        }
+
         if (needsRedraw)
         {
             _promptComponent->flushDeferredUpdates();

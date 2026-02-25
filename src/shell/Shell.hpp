@@ -37,6 +37,7 @@ struct AgentRunOptions;
 
 #include <shell/completion/Completer.hpp>
 #include <shell/completion/CompleterFunctionRegistry.hpp>
+#include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/history/History.hpp>
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/OutputDefinitionRegistry.hpp>
@@ -98,6 +99,14 @@ class Shell final: public SignalCallback
     /// @param lineBuffer The source code to execute.
     /// @param sourceName The source name for error messages (defaults to "stdin").
     int execute(std::string const& lineBuffer, std::string_view sourceName = "stdin");
+
+    /// @brief Executes a line of shell/F# code with an external diagnostic report.
+    /// @param lineBuffer The source code to execute.
+    /// @param report The diagnostic report to use (errors will be reported here).
+    /// @param sourceName The source name for error messages (defaults to "stdin").
+    int execute(std::string const& lineBuffer,
+                CoreVM::diagnostics::Report& report,
+                std::string_view sourceName = "stdin");
 
     /// @brief Loads ~/.config/endo/init.endo and agent config if they exist.
     /// Call after construction for non-interactive modes that need shell config.
@@ -174,12 +183,12 @@ class Shell final: public SignalCallback
     /// @brief Loads .endo completer scripts from user and system directories.
     void loadCompleters();
 
-    /// @brief Executes a registered completer function and returns completion strings.
+    /// @brief Executes a registered completer function and returns completion strings and errors.
     /// @param funcName The function name to invoke.
     /// @param args Tokens after the command, excluding the current word.
     /// @param prefix The current word being typed.
-    /// @return List of completion candidate strings.
-    [[nodiscard]] std::vector<std::string> executeCompleterFunction(std::string_view funcName,
+    /// @return Completions and any compilation/link errors.
+    [[nodiscard]] CompleterExecutionResult executeCompleterFunction(std::string_view funcName,
                                                                     std::vector<std::string> const& args,
                                                                     std::string_view prefix);
 

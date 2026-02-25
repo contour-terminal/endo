@@ -16,6 +16,7 @@
 #include <tui/completer/Completer.hpp>
 
 #include <algorithm>
+#include <utility>
 
 #include "Gradient.hpp"
 #include "modules/BatteryModule.hpp"
@@ -1001,6 +1002,11 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
     // Get completions
     auto completions = _completer->complete(text, cursor);
 
+    // Capture any compilation errors from scripted completers
+    auto errors = _completer->takeLastErrors();
+    if (!errors.empty())
+        _pendingCompletionErrors = std::move(errors);
+
     if (completions.empty())
     {
         dismissPopup();
@@ -1046,6 +1052,11 @@ void PromptComponent::updateCompletionPopup()
 
     // Get filtered completions
     auto completions = _completer->complete(text, cursor);
+
+    // Capture any compilation errors from scripted completers
+    auto errors = _completer->takeLastErrors();
+    if (!errors.empty())
+        _pendingCompletionErrors = std::move(errors);
 
     if (completions.empty())
     {
@@ -1562,6 +1573,16 @@ int PromptComponent::moduleRefreshTimeoutMs() const
 
     auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(*_nextModuleRefresh - now);
     return std::max(100, static_cast<int>(remaining.count()));
+}
+
+std::vector<std::string> PromptComponent::takePendingCompletionErrors()
+{
+    return std::exchange(_pendingCompletionErrors, {});
+}
+
+bool PromptComponent::hasPendingCompletionErrors() const noexcept
+{
+    return !_pendingCompletionErrors.empty();
 }
 
 } // namespace endo
