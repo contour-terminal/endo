@@ -6542,6 +6542,66 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
+        // Handle split as partial application in pipeline:
+        // str |> split ":"  →  string_split(":", str)
+        if (baseIdent->name == "split")
+        {
+            if (explicitArgExprs.size() != 1)
+            {
+                reportTypeError("split in pipeline requires exactly 1 argument");
+                return;
+            }
+            auto* delimiterArg = codegen(explicitArgExprs[0]);
+            if (!delimiterArg)
+            {
+                reportTypeError("Failed to evaluate split delimiter argument");
+                return;
+            }
+            auto* callback = findCallback("string_split(SS)I");
+            if (!callback)
+            {
+                reportTypeError("string_split builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { delimiterArg, value }, "string_split");
+            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+            annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
+            return;
+        }
+
+        // Handle replace as partial application in pipeline:
+        // str |> replace "old" "new"  →  string_replace("old", "new", str)
+        if (baseIdent->name == "replace")
+        {
+            if (explicitArgExprs.size() != 2)
+            {
+                reportTypeError("replace in pipeline requires exactly 2 arguments");
+                return;
+            }
+            auto* oldArg = codegen(explicitArgExprs[0]);
+            if (!oldArg)
+            {
+                reportTypeError("Failed to evaluate replace old argument");
+                return;
+            }
+            auto* newArg = codegen(explicitArgExprs[1]);
+            if (!newArg)
+            {
+                reportTypeError("Failed to evaluate replace new argument");
+                return;
+            }
+            auto* callback = findCallback("string_replace(SSS)S");
+            if (!callback)
+            {
+                reportTypeError("string_replace builtin not found");
+                return;
+            }
+            _result = _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { oldArg, newArg, value }, "string_replace");
+            return;
+        }
+
         auto baseFuncName = baseIdent->name;
         auto const* baseFunc = lookupFSharpFunction(baseFuncName);
         if (!baseFunc)

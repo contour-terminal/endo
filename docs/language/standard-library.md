@@ -151,6 +151,10 @@ print (trim "  hello  ")   # => hello
 print (trim "   ")
 ```
 
+```endo
+print ("  hello  " |> trim)   # => hello
+```
+
 #### `toLower`
 
 **Signature:** `toLower str : str`
@@ -175,6 +179,10 @@ Converts a string to uppercase.
 print (toUpper "hello")   # => HELLO
 ```
 
+```endo
+print ("hello" |> toUpper)   # => HELLO
+```
+
 #### `contains`
 
 **Signature:** `contains substr text : bool`
@@ -187,6 +195,10 @@ print (contains "world" "hello world")   # => true
 
 ```endo
 print (contains "xyz" "hello")   # => false
+```
+
+```endo
+print ("hello world" |> contains "world")   # => true
 ```
 
 #### `startsWith`
@@ -203,6 +215,10 @@ print (startsWith "hel" "hello")   # => true
 print (startsWith "xyz" "hello")   # => false
 ```
 
+```endo
+print ("hello" |> startsWith "hel")   # => true
+```
+
 #### `endsWith`
 
 **Signature:** `endsWith suffix text : bool`
@@ -215,6 +231,10 @@ print (endsWith "llo" "hello")   # => true
 
 ```endo
 print (endsWith "xyz" "hello")   # => false
+```
+
+```endo
+print ("hello" |> endsWith "llo")   # => true
 ```
 
 #### `replace`
@@ -231,6 +251,10 @@ print (replace "l" "r" "hello")   # => herro
 print (replace "," "" "a,b,c")   # => abc
 ```
 
+```endo
+print ("a,b,c" |> replace "," "-")   # => a-b-c
+```
+
 #### `split`
 
 **Signature:** `split separator str : list<str>`
@@ -240,6 +264,15 @@ Splits a string by the given separator, returning a list of substrings.
 ```endo
 let parts = split "," "a,b,c"
 print (length parts)   # => 3
+```
+
+```endo
+let parts = "a:b:c" |> split ":"
+print (length parts)   # => 3
+```
+
+```endo
+print ("a:b:c" |> split ":" |> join "-")   # => a-b-c
 ```
 
 #### `join`

@@ -351,7 +351,7 @@ Consult this section to determine what to work on next.
 - [x] JSON output parser (NDJSON lines and JSON array formats)
 - [x] Delimited-fields output parser (e.g., NUL-separated, space-separated with max_fields)
 - [x] `StructuredPipelineSourceExpr` AST node bridging shell commands to F# pipelines
-- [x] Pipeline partial application for `contains`, `startsWith`, `endsWith`
+- [x] Pipeline partial application for `contains`, `startsWith`, `endsWith`, `split`, `replace`
 - [x] String comparison in F# expressions via SCmpXX instructions
 - [x] Shell integration: load definitions, register callbacks, spawn commands
 - [x] Bundled definitions for `docker ps`, `docker images`, `git log`, `git status`
