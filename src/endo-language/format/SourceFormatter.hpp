@@ -187,6 +187,9 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     // Let-binding parameter helper
     void emitParameters(std::vector<ast::TypedParameter> const& params);
 
+    /// Checks whether an expression is too complex to sit alongside a keyword on the same line.
+    [[nodiscard]] static bool isCompoundExpr(ast::Expr const& expr);
+
     FormatConfig _config;
     std::string _result;
     int _indentLevel = 0;

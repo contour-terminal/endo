@@ -157,6 +157,22 @@ std::optional<int> SourceFormatter::findFirstLine(ast::Node const& node)
                 return line;
     }
 
+    // ForInStmt: check source expression (pattern has no location)
+    if (auto const* fi = dynamic_cast<ast::ForInStmt const*>(&node))
+    {
+        if (fi->source)
+            if (auto line = findFirstLine(*fi->source))
+                return line;
+    }
+
+    // WhileStmt: check condition expression
+    if (auto const* ws = dynamic_cast<ast::WhileStmt const*>(&node))
+    {
+        if (ws->condition)
+            if (auto line = findFirstLine(*ws->condition))
+                return line;
+    }
+
     return std::nullopt;
 }
 
@@ -322,6 +338,18 @@ void SourceFormatter::emitParameters(std::vector<ast::TypedParameter> const& par
     }
 }
 
+bool SourceFormatter::isCompoundExpr(ast::Expr const& expr)
+{
+    // Unwrap parenthesized expressions
+    if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(&expr))
+        return paren->inner ? isCompoundExpr(*paren->inner) : false;
+
+    return dynamic_cast<ast::IfExpr const*>(&expr) || dynamic_cast<ast::MatchExpr const*>(&expr)
+           || dynamic_cast<ast::BlockExpr const*>(&expr) || dynamic_cast<ast::LambdaExpr const*>(&expr)
+           || dynamic_cast<ast::LetInExpr const*>(&expr) || dynamic_cast<ast::TryWithExpr const*>(&expr)
+           || dynamic_cast<ast::TryFinallyExpr const*>(&expr);
+}
+
 // ============================================================================
 // Shell construct visitors
 // ============================================================================
@@ -413,6 +441,18 @@ void SourceFormatter::visit(ast::CallPipeline const& node)
     emitTrailingComment(node);
 }
 
+/// Checks whether a statement is a declaration or block construct that warrants
+/// blank line separation from adjacent statements. Expression-like statements
+/// (calls, shell commands, assignments) can be grouped without blank lines.
+static bool isDeclarationOrBlock(ast::Node const& node)
+{
+    return dynamic_cast<ast::LetBindingStmt const*>(&node) != nullptr
+           || dynamic_cast<ast::RecordTypeDefStmt const*>(&node) != nullptr
+           || dynamic_cast<ast::UnionTypeDefStmt const*>(&node) != nullptr
+           || dynamic_cast<ast::WhileStmt const*>(&node) != nullptr
+           || dynamic_cast<ast::ForInStmt const*>(&node) != nullptr;
+}
+
 void SourceFormatter::visit(ast::CompoundStmt const& node)
 {
     emitLeadingComments(node);
@@ -421,9 +461,15 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
         if (i > 0)
         {
             emitNewline();
-            // Add blank lines between top-level statements
-            for (uint32_t b = 0; b < _config.blankLinesBetweenTopLevel && _indentLevel == 0; ++b)
-                emitNewline();
+            // Add blank lines between top-level statements, but not between
+            // consecutive expression-like statements (e.g., function calls, shell commands).
+            if (_indentLevel == 0
+                && (isDeclarationOrBlock(*node.statements[i - 1])
+                    || isDeclarationOrBlock(*node.statements[i])))
+            {
+                for (uint32_t b = 0; b < _config.blankLinesBetweenTopLevel; ++b)
+                    emitNewline();
+            }
         }
         node.statements[i]->accept(*this);
     }
@@ -890,24 +936,65 @@ void SourceFormatter::visit(ast::IfExpr const& node)
 {
     emitLeadingComments(node);
 
-    auto const totalWidth = estimateWidth(node);
-    auto const multiLine = totalWidth > _config.maxLineWidth;
-
     emit("if ");
     node.condition->accept(*this);
-    if (multiLine)
+
+    if (!node.elseExpr)
     {
-        emit(" then");
-        emitNewline();
-        indent();
-        node.thenExpr->accept(*this);
-        dedent();
-        if (node.elseExpr)
+        // No else branch: `if cond then thenBody` on one line when it fits
+        auto const totalWidth = estimateWidth(node);
+        if (totalWidth <= _config.maxLineWidth && !isCompoundExpr(*node.thenExpr))
         {
+            emit(" then ");
+            node.thenExpr->accept(*this);
+        }
+        else
+        {
+            emit(" then");
+            emitNewline();
+            indent();
+            node.thenExpr->accept(*this);
+            dedent();
+        }
+    }
+    else
+    {
+        // Has else branch: never put all three expressions on one line.
+        auto const condWidth = estimateWidth(*node.condition);
+        auto const thenWidth = estimateWidth(*node.thenExpr);
+        auto const thenIsCompound = isCompoundExpr(*node.thenExpr);
+        auto const elseIsCompound = node.elseExpr ? isCompoundExpr(*node.elseExpr) : false;
+        auto const isElseIf = dynamic_cast<ast::IfExpr const*>(node.elseExpr.get()) != nullptr;
+        auto const indentWidth = static_cast<size_t>(_indentLevel) * _config.indentWidth;
+
+        // Compact two-line: `if cond then thenBody\nelse elseBody`
+        auto const line1CompactWidth = indentWidth + 3 /*"if "*/ + condWidth + 6 /*" then "*/ + thenWidth;
+        auto const elseBodyWidth = estimateWidth(*node.elseExpr);
+        auto const line2CompactWidth = indentWidth + 5 /*"else "*/ + elseBodyWidth;
+        auto const compactFeasible = !thenIsCompound && !elseIsCompound && !isElseIf
+                                     && line1CompactWidth <= _config.maxLineWidth
+                                     && line2CompactWidth <= _config.maxLineWidth;
+
+        if (compactFeasible)
+        {
+            // Compact two-line format
+            emit(" then ");
+            node.thenExpr->accept(*this);
+            emitNewline();
+            emit("else ");
+            node.elseExpr->accept(*this);
+        }
+        else
+        {
+            // Multi-line format: both branches indented
+            emit(" then");
+            emitNewline();
+            indent();
+            node.thenExpr->accept(*this);
+            dedent();
             emitNewline();
             emit("else");
-            // Check if else branch is another if-expr (else if chain)
-            if (dynamic_cast<ast::IfExpr const*>(node.elseExpr.get()))
+            if (isElseIf)
             {
                 emit(" ");
                 node.elseExpr->accept(*this);
@@ -919,16 +1006,6 @@ void SourceFormatter::visit(ast::IfExpr const& node)
                 node.elseExpr->accept(*this);
                 dedent();
             }
-        }
-    }
-    else
-    {
-        emit(" then ");
-        node.thenExpr->accept(*this);
-        if (node.elseExpr)
-        {
-            emit(" else ");
-            node.elseExpr->accept(*this);
         }
     }
 
@@ -1069,9 +1146,23 @@ void SourceFormatter::visit(ast::LetInExpr const& node)
     emit(" = ");
     if (node.value)
         node.value->accept(*this);
-    emit(" in ");
-    if (node.body)
+
+    auto const bodyIsCompound = node.body && isCompoundExpr(*node.body);
+
+    if (bodyIsCompound)
+    {
+        emit(" in");
+        emitNewline();
+        indent();
         node.body->accept(*this);
+        dedent();
+    }
+    else
+    {
+        emit(" in ");
+        if (node.body)
+            node.body->accept(*this);
+    }
 }
 
 void SourceFormatter::visit(ast::ExprStmt const& node)
@@ -1209,9 +1300,20 @@ void SourceFormatter::visit(ast::LambdaExpr const& node)
         else
             emit(param.name);
     }
-    emit(" -> ");
-    if (node.body)
+    if (node.body && isCompoundExpr(*node.body))
+    {
+        emit(" ->");
+        emitNewline();
+        indent();
         node.body->accept(*this);
+        dedent();
+    }
+    else
+    {
+        emit(" -> ");
+        if (node.body)
+            node.body->accept(*this);
+    }
 }
 
 void SourceFormatter::visit(ast::MatchExpr const& node)
@@ -1232,8 +1334,19 @@ void SourceFormatter::visit(ast::MatchExpr const& node)
             emit(" when ");
             arm.guard->accept(*this);
         }
-        emit(" -> ");
-        arm.body->accept(*this);
+        if (arm.body && isCompoundExpr(*arm.body))
+        {
+            emit(" ->");
+            emitNewline();
+            indent();
+            arm.body->accept(*this);
+            dedent();
+        }
+        else
+        {
+            emit(" -> ");
+            arm.body->accept(*this);
+        }
     }
     emitTrailingComment(node);
 }
@@ -1371,10 +1484,23 @@ void SourceFormatter::visit(ast::OptionDefaultExpr const& node)
 void SourceFormatter::visit(ast::TryWithExpr const& node)
 {
     emitLeadingComments(node);
-    emit("try ");
-    if (node.body)
+    if (node.body && isCompoundExpr(*node.body))
+    {
+        emit("try");
+        emitNewline();
+        indent();
         node.body->accept(*this);
-    emit(" with");
+        dedent();
+        emitNewline();
+        emit("with");
+    }
+    else
+    {
+        emit("try ");
+        if (node.body)
+            node.body->accept(*this);
+        emit(" with");
+    }
     for (auto const& arm: node.handlers)
     {
         emitNewline();
@@ -1386,9 +1512,20 @@ void SourceFormatter::visit(ast::TryWithExpr const& node)
             emit(" when ");
             arm.guard->accept(*this);
         }
-        emit(" -> ");
-        if (arm.body)
+        if (arm.body && isCompoundExpr(*arm.body))
+        {
+            emit(" ->");
+            emitNewline();
+            indent();
             arm.body->accept(*this);
+            dedent();
+        }
+        else
+        {
+            emit(" -> ");
+            if (arm.body)
+                arm.body->accept(*this);
+        }
     }
     emitTrailingComment(node);
 }
@@ -1396,12 +1533,64 @@ void SourceFormatter::visit(ast::TryWithExpr const& node)
 void SourceFormatter::visit(ast::TryFinallyExpr const& node)
 {
     emitLeadingComments(node);
-    emit("try ");
-    if (node.body)
-        node.body->accept(*this);
-    emit(" finally ");
-    if (node.finallyExpr)
-        node.finallyExpr->accept(*this);
+    auto const bodyIsCompound = node.body && isCompoundExpr(*node.body);
+    auto const finallyIsCompound = node.finallyExpr && isCompoundExpr(*node.finallyExpr);
+    auto const useMultiLine = bodyIsCompound || finallyIsCompound;
+
+    if (useMultiLine)
+    {
+        // Multi-line: both branches indented (symmetry)
+        emit("try");
+        emitNewline();
+        indent();
+        if (node.body)
+            node.body->accept(*this);
+        dedent();
+        emitNewline();
+        emit("finally");
+        emitNewline();
+        indent();
+        if (node.finallyExpr)
+            node.finallyExpr->accept(*this);
+        dedent();
+    }
+    else
+    {
+        // Compact two-line: `try body\nfinally finallyBody`
+        auto const indentWidth = static_cast<size_t>(_indentLevel) * _config.indentWidth;
+        auto const bodyWidth = node.body ? estimateWidth(*node.body) : size_t { 0 };
+        auto const finallyWidth = node.finallyExpr ? estimateWidth(*node.finallyExpr) : size_t { 0 };
+        auto const line1Width = indentWidth + 4 /*"try "*/ + bodyWidth;
+        auto const line2Width = indentWidth + 8 /*"finally "*/ + finallyWidth;
+
+        if (line1Width <= _config.maxLineWidth && line2Width <= _config.maxLineWidth)
+        {
+            emit("try ");
+            if (node.body)
+                node.body->accept(*this);
+            emitNewline();
+            emit("finally ");
+            if (node.finallyExpr)
+                node.finallyExpr->accept(*this);
+        }
+        else
+        {
+            // Both exceed: indent both
+            emit("try");
+            emitNewline();
+            indent();
+            if (node.body)
+                node.body->accept(*this);
+            dedent();
+            emitNewline();
+            emit("finally");
+            emitNewline();
+            indent();
+            if (node.finallyExpr)
+                node.finallyExpr->accept(*this);
+            dedent();
+        }
+    }
     emitTrailingComment(node);
 }
 
