@@ -54,7 +54,7 @@ class Parser
     std::string consumeLiteral();
     std::unique_ptr<ast::WhileStmt> parseWhile();
     std::unique_ptr<ast::Statement> parseFor();
-    std::unique_ptr<ast::ForInStmt> parseForIn();
+    std::unique_ptr<ast::ForInStmt> parseForIn(SourceLocationRange const& forLoc);
     std::unique_ptr<ast::BreakStmt> parseBreak();
     std::unique_ptr<ast::ContinueStmt> parseContinue();
     [[nodiscard]] bool isRedirectToken() const noexcept;

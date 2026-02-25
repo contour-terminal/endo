@@ -762,6 +762,7 @@ std::unique_ptr<ast::WhileStmt> Parser::parseWhile()
 
     // Enter F# mode before consuming 'while' so the condition's first token is read in F# mode
     _lexer.enterFSharpExpr();
+    auto const whileLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'while'
     auto condition = parseFSharpExpr();
     _lexer.leaveFSharpExpr();
@@ -774,20 +775,24 @@ std::unique_ptr<ast::WhileStmt> Parser::parseWhile()
     consumeDirective("do");
 
     auto body = parseBlock("whileBody");
+    auto const endLoc = _lexer.currentRange();
     consumeDirective("end");
-    return std::make_unique<ast::WhileStmt>(std::move(condition), std::move(body));
+    auto node = std::make_unique<ast::WhileStmt>(std::move(condition), std::move(body));
+    node->location = SourceLocationRange { whileLoc.begin, endLoc.end };
+    return node;
 }
 
 std::unique_ptr<ast::Statement> Parser::parseFor()
 {
     TRACE_SCOPE("parseFor");
+    auto const forLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'for'
 
     // Always F# style: for pattern in expr do body done
-    return parseForIn();
+    return parseForIn(forLoc);
 }
 
-std::unique_ptr<ast::ForInStmt> Parser::parseForIn()
+std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& forLoc)
 {
     TRACE_SCOPE("parseForIn");
 
@@ -839,9 +844,12 @@ std::unique_ptr<ast::ForInStmt> Parser::parseForIn()
     consumeDirective("do");
 
     auto body = parseBlock("forInBody");
+    auto const endLoc = _lexer.currentRange();
     consumeDirective("end");
 
-    return std::make_unique<ast::ForInStmt>(std::move(pat), std::move(source), std::move(body));
+    auto node = std::make_unique<ast::ForInStmt>(std::move(pat), std::move(source), std::move(body));
+    node->location = SourceLocationRange { forLoc.begin, endLoc.end };
+    return node;
 }
 
 std::unique_ptr<ast::BreakStmt> Parser::parseBreak()
