@@ -184,10 +184,10 @@ enum class CommentStyle : uint8_t
 /// A single comment captured during lexing.
 struct CommentTrivia
 {
-    CommentStyle style;            ///< Which comment syntax was used
-    SourceLocationRange location;  ///< Source location range of the comment
-    std::string text;              ///< The comment text (including delimiters)
-    bool isTrailing = false;       ///< True if on the same line as the preceding token
+    CommentStyle style;           ///< Which comment syntax was used
+    SourceLocationRange location; ///< Source location range of the comment
+    std::string text;             ///< The comment text (including delimiters)
+    bool isTrailing = false;      ///< True if on the same line as the preceding token
 };
 
 class Source
@@ -205,8 +205,7 @@ class Source
 class StringSource final: public Source
 {
   public:
-    explicit StringSource(std::string source, std::string_view name = {}):
-        _source { std::move(source) }
+    explicit StringSource(std::string source, std::string_view name = {}): _source { std::move(source) }
     {
         _location.name = name;
     }
@@ -340,16 +339,14 @@ class Lexer
     /// and the current token is deferred to the next nextToken() call.
     void pushBackToken(Token token, std::string literal)
     {
-        _pushedBack = true;
-        _pushedBackToken = _currentToken;
+        _pushedBackTokens.push_back(_currentToken);
         _currentToken = TokenInfo { .token = token, .literal = std::move(literal) };
     }
 
     /// @brief Pushes back a token with its source location preserved.
     void pushBackToken(Token token, std::string literal, SourceLocationRange location)
     {
-        _pushedBack = true;
-        _pushedBackToken = _currentToken;
+        _pushedBackTokens.push_back(_currentToken);
         _currentToken = TokenInfo { .token = token, .literal = std::move(literal), .location = location };
     }
 
@@ -391,22 +388,21 @@ class Lexer
     TokenInfo _currentToken = TokenInfo {};
     TokenInfo _nextToken = TokenInfo {};
     SourceLocationRange _currentRange {};
-    bool _inDoubleQuote = false;   // State: inside double-quoted string
-    int _dquoteSubstDepth = 0;     // Nesting depth for $() and backticks inside double quotes
-    int _arithDepth = 0;           // Nesting depth for $(()), operators are reserved when > 0
-    int _fsharpDepth = 0;          // Nesting depth for F# expressions, operators are tokens when > 0
-    bool _inFString = false;       // State: inside an F#-style interpolated string
-    int _fstringBraceDepth = 0;    // Brace nesting depth inside expression holes (0 = string content)
-    std::string _fragmentBuffer;   // Buffer for accumulating string fragments
-    bool _pushedBack = false;      // True if a token has been pushed back
-    TokenInfo _pushedBackToken {}; // Token deferred for next nextToken() call
+    bool _inDoubleQuote = false; // State: inside double-quoted string
+    int _dquoteSubstDepth = 0;   // Nesting depth for $() and backticks inside double quotes
+    int _arithDepth = 0;         // Nesting depth for $(()), operators are reserved when > 0
+    int _fsharpDepth = 0;        // Nesting depth for F# expressions, operators are tokens when > 0
+    bool _inFString = false;     // State: inside an F#-style interpolated string
+    int _fstringBraceDepth = 0;  // Brace nesting depth inside expression holes (0 = string content)
+    std::string _fragmentBuffer; // Buffer for accumulating string fragments
+    std::vector<TokenInfo> _pushedBackTokens; // Stack of tokens pushed back for re-reading
     bool _atStatementStart = true; // True when next token starts a new statement (for [ disambiguation)
     bool _precedingSpace = true;   // True when whitespace precedes the current token
 
     // Comment trivia collection (opt-in)
-    bool _collectComments = false;           // When true, comments are stored in _comments
-    std::vector<CommentTrivia> _comments;    // Collected comment trivia
-    int _lastTokenEndLine = -1;              // End line of previous token (for trailing comment detection)
+    bool _collectComments = false;        // When true, comments are stored in _comments
+    std::vector<CommentTrivia> _comments; // Collected comment trivia
+    int _lastTokenEndLine = -1;           // End line of previous token (for trailing comment detection)
 };
 
 /// Converts a Token to its string representation.

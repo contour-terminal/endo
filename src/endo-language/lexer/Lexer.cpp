@@ -71,11 +71,11 @@ namespace
 
 Token Lexer::nextToken()
 {
-    // If a token was pushed back, return it
-    if (_pushedBack)
+    // If tokens were pushed back, return the most recently pushed one
+    if (!_pushedBackTokens.empty())
     {
-        _pushedBack = false;
-        _currentToken = _pushedBackToken;
+        _currentToken = std::move(_pushedBackTokens.back());
+        _pushedBackTokens.pop_back();
         _atStatementStart =
             (_currentToken.token == Token::Semicolon || _currentToken.token == Token::LineFeed);
         return _currentToken.token;

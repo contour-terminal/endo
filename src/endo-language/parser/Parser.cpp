@@ -361,20 +361,38 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                      && [this]() {
                             // Peek at next token to decide F# vs shell routing.
                             // Only route to F# when followed by end-of-stmt, pipeline, string,
-                            // paren, or unquoted path arg (identifier not starting with '-').
+                            // paren, or unquoted path arg (identifier not starting with '-')
+                            // that is NOT followed by a shell redirect (e.g. 2>&1).
                             auto const savedTok = _lexer.currentToken();
                             auto const savedLit = std::string(_lexer.currentLiteral());
                             auto const savedRange = _lexer.currentRange();
                             _lexer.nextToken();
                             auto const nextTok = _lexer.currentToken();
-                            auto const& nextLit = _lexer.currentLiteral();
+                            auto const nextLit = std::string(_lexer.currentLiteral());
+                            auto const nextRange = _lexer.currentRange();
+                            if (nextTok == Token::Identifier && !nextLit.starts_with("-"))
+                            {
+                                // Unquoted path arg — peek one more token to check for redirects
+                                // (e.g. `ls /path 2>&1` should fall through to shell mode).
+                                _lexer.nextToken();
+                                auto const afterPathTok = _lexer.currentToken();
+                                // Restore both tokens (path, then cmd) via pushback stack
+                                _lexer.pushBackToken(nextTok, nextLit, nextRange);
+                                _lexer.pushBackToken(savedTok, savedLit, savedRange);
+                                // If followed by a redirect token or a number (fd prefix), fall through
+                                // to shell mode so redirects are properly parsed.
+                                if (afterPathTok == Token::Greater || afterPathTok == Token::GreaterGreater
+                                    || afterPathTok == Token::GreaterAmp || afterPathTok == Token::Less
+                                    || afterPathTok == Token::LessLess || afterPathTok == Token::LessLessDash
+                                    || afterPathTok == Token::LessLessLess || afterPathTok == Token::Number)
+                                    return false;
+                                return true;
+                            }
                             _lexer.pushBackToken(savedTok, savedLit, savedRange);
                             return nextTok == Token::LineFeed || nextTok == Token::Semicolon
                                    || nextTok == Token::EndOfInput || nextTok == Token::ForwardPipe
                                    || nextTok == Token::String || nextTok == Token::DblQuoteStart
-                                   || nextTok == Token::RndOpen
-                                   // Unquoted path arg (not a flag):
-                                   || (nextTok == Token::Identifier && !nextLit.starts_with("-"));
+                                   || nextTok == Token::RndOpen;
                         }())
             {
                 // Structured commands: route as F# expressions with display for table rendering
