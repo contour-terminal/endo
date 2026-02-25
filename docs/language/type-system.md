@@ -219,6 +219,16 @@ Represents a point in time (UTC).
 
 **Constructors:** `DateTime.now`, `DateTime.fromEpoch`
 
+#### `TimeSpan`
+
+Represents a duration of time with millisecond precision.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `milliseconds` | `int` | Duration in milliseconds |
+
+**Constructors:** `TimeSpan.fromMilliseconds`, `TimeSpan.fromSeconds`, `TimeSpan.fromMinutes`, `TimeSpan.fromHours`, `TimeSpan.fromDays`
+
 #### `FileInfo`
 
 Returned by `ls`. Represents a file or directory entry.

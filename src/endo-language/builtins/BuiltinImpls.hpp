@@ -211,6 +211,42 @@ void sizeFromGB(CoreVM::Params& args);
 void sizeFromTB(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// TimeSpan operations
+// ---------------------------------------------------------------------------
+
+/// Formats a duration in milliseconds as a human-readable string (e.g., "1d 2h 30m 15s 100ms").
+/// @param milliseconds Duration in milliseconds
+/// @return Formatted duration string
+std::string formatTimeSpanToString(int64_t milliseconds);
+
+/// Creates a TimeSpan record object from a millisecond count.
+/// @param runner The runner instance for object allocation
+/// @param ms Duration in milliseconds
+/// @return Pointer to the newly allocated TimeSpan TypedObject
+CoreVM::TypedObject* makeTimeSpanFromMs(CoreVM::Runner* runner, int64_t ms);
+
+/// timespan_from_ms(n) -> TimeSpan: Creates a TimeSpan from milliseconds.
+void timespanFromMs(CoreVM::Params& args);
+
+/// timespan_from_seconds(n) -> TimeSpan: Creates a TimeSpan from seconds (n * 1000).
+void timespanFromSeconds(CoreVM::Params& args);
+
+/// timespan_from_minutes(n) -> TimeSpan: Creates a TimeSpan from minutes (n * 60000).
+void timespanFromMinutes(CoreVM::Params& args);
+
+/// timespan_from_hours(n) -> TimeSpan: Creates a TimeSpan from hours (n * 3600000).
+void timespanFromHours(CoreVM::Params& args);
+
+/// timespan_from_days(n) -> TimeSpan: Creates a TimeSpan from days (n * 86400000).
+void timespanFromDays(CoreVM::Params& args);
+
+/// timespan_sleep(obj) -> unit: Sleeps for the duration specified by a TimeSpan object.
+void timespanSleep(CoreVM::Params& args);
+
+/// format_timespan(obj) -> string: Formats a TimeSpan as a human-readable duration string.
+void formatTimeSpan(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // DateTime operations
 // ---------------------------------------------------------------------------
 

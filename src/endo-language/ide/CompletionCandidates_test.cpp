@@ -618,10 +618,10 @@ TEST_CASE("CompletionCandidates.isBuiltinWithArgumentCompletion.non_builtins_ret
 // standardLibraryCandidates tests
 // =============================================================================
 
-TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_52_entries", "[completion][stdlib]")
+TEST_CASE("CompletionCandidates.standardLibraryCandidates.returns_54_entries", "[completion][stdlib]")
 {
     auto stdlib = standardLibraryCandidates();
-    CHECK(stdlib.size() == 52);
+    CHECK(stdlib.size() == 54);
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.all_have_function_kind", "[completion][stdlib]")
@@ -744,6 +744,11 @@ TEST_CASE("CompletionCandidates.standardLibraryCandidates.module_functions_from_
     CHECK(hasCandidate(moduleCandidates, "Size.fromMB"));
     CHECK(hasCandidate(moduleCandidates, "Size.fromGB"));
     CHECK(hasCandidate(moduleCandidates, "Size.fromTB"));
+    CHECK(hasCandidate(moduleCandidates, "TimeSpan.fromMilliseconds"));
+    CHECK(hasCandidate(moduleCandidates, "TimeSpan.fromSeconds"));
+    CHECK(hasCandidate(moduleCandidates, "TimeSpan.fromMinutes"));
+    CHECK(hasCandidate(moduleCandidates, "TimeSpan.fromHours"));
+    CHECK(hasCandidate(moduleCandidates, "TimeSpan.fromDays"));
 }
 
 TEST_CASE("CompletionCandidates.standardLibraryCandidates.excludes_builtins", "[completion][stdlib]")

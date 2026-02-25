@@ -19,11 +19,12 @@ by category. Each example is executable and verified by the documentation test s
 - [15.12 Composition Examples](#1512-composition-examples)
 - [15.13 Size Type](#1513-size-type) -- `Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`, size literals
 - [15.14 DateTime Type](#1514-datetime-type) -- `DateTime.now`, `DateTime.fromEpoch`, `formatDateTime`
-- [15.15 Shell Data Commands](#1515-shell-data-commands) -- `ls`, `ps`, `jobs`
-- [15.16 FileMode Type](#1516-filemode-type) -- `FileMode.fromBits`, `.isReadable`, `.isWritable`, `.isExecutable`, `.owner`, `.group`, `.other`
-- [15.17 File Permission Helpers](#1517-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
-- [15.18 Display Formatting](#1518-display-formatting) -- `toText`, `string`
-- [15.19 HTTP](#1519-http) -- `fetch`
+- [15.15 TimeSpan Type](#1515-timespan-type) -- `TimeSpan.fromMilliseconds`, `TimeSpan.fromSeconds`, `TimeSpan.fromMinutes`, `TimeSpan.fromHours`, `TimeSpan.fromDays`, `sleep`, `formatTimeSpan`
+- [15.16 Shell Data Commands](#1516-shell-data-commands) -- `ls`, `ps`, `jobs`
+- [15.17 FileMode Type](#1517-filemode-type) -- `FileMode.fromBits`, `.isReadable`, `.isWritable`, `.isExecutable`, `.owner`, `.group`, `.other`
+- [15.18 File Permission Helpers](#1518-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
+- [15.19 Display Formatting](#1519-display-formatting) -- `toText`, `string`
+- [15.20 HTTP](#1520-http) -- `fetch`
 
 ---
 
@@ -1060,7 +1061,94 @@ print (formatDateTime 1700000000)   # 2023-11-14 22:13:20
 
 ---
 
-## 15.15 Shell Data Commands
+## 15.15 TimeSpan Type
+
+The `TimeSpan` type represents a duration of time with millisecond precision and human-readable display formatting.
+
+**Record fields:** `milliseconds: int`
+
+#### `TimeSpan.fromMilliseconds`
+
+**Signature:** `TimeSpan.fromMilliseconds n : TimeSpan`
+
+Creates a TimeSpan from a raw millisecond count.
+
+```endo
+print (TimeSpan.fromMilliseconds 1500)   # => 1s 500ms
+```
+
+#### `TimeSpan.fromSeconds`
+
+**Signature:** `TimeSpan.fromSeconds n : TimeSpan`
+
+Creates a TimeSpan from seconds (n × 1000 ms).
+
+```endo
+print (TimeSpan.fromSeconds 5)   # => 5s
+```
+
+#### `TimeSpan.fromMinutes`
+
+**Signature:** `TimeSpan.fromMinutes n : TimeSpan`
+
+Creates a TimeSpan from minutes (n × 60000 ms).
+
+```endo
+print (TimeSpan.fromMinutes 2)   # => 2m
+```
+
+#### `TimeSpan.fromHours`
+
+**Signature:** `TimeSpan.fromHours n : TimeSpan`
+
+Creates a TimeSpan from hours (n × 3600000 ms).
+
+```endo
+print (TimeSpan.fromHours 1)   # => 1h
+```
+
+#### `TimeSpan.fromDays`
+
+**Signature:** `TimeSpan.fromDays n : TimeSpan`
+
+Creates a TimeSpan from days (n × 86400000 ms).
+
+```endo
+print (TimeSpan.fromDays 3)   # => 3d
+```
+
+#### Field Access
+
+```endo
+let t = TimeSpan.fromSeconds 5
+print t.milliseconds   # => 5000
+```
+
+#### `sleep`
+
+**Signature:** `sleep ts : unit`
+
+Pauses execution for the given TimeSpan duration.
+
+<!-- endo-no-check -->
+```endo
+sleep (TimeSpan.fromMilliseconds 100)
+TimeSpan.fromSeconds 1 |> sleep
+```
+
+#### `formatTimeSpan`
+
+**Signature:** `formatTimeSpan ts : str`
+
+Formats a TimeSpan as a human-readable duration string.
+
+```endo
+print (formatTimeSpan (TimeSpan.fromSeconds 90))   # => 1m 30s
+```
+
+---
+
+## 15.16 Shell Data Commands
 
 These built-in commands return structured records that support dot access, pattern matching,
 and pipeline operations.
@@ -1153,7 +1241,7 @@ jobs |> filter (_.state == "Running") |> map _.command
 
 ---
 
-## 15.16 FileMode Type
+## 15.17 FileMode Type
 
 The `FileMode` type represents Unix file permissions with human-readable display.
 
@@ -1188,7 +1276,7 @@ print m.owner        # 7
 
 ---
 
-## 15.17 File Permission Helpers
+## 15.18 File Permission Helpers
 
 These functions operate on Unix file modes (accept both `FileMode` objects and raw `int` permission bits).
 
@@ -1238,7 +1326,7 @@ ls |> filter (fun f -> isExecutable f.mode) |> map _.name
 
 ---
 
-## 15.18 Display Formatting
+## 15.19 Display Formatting
 
 #### `toText`
 
@@ -1268,7 +1356,7 @@ print (string true)    # => true
 
 ---
 
-## 15.19 HTTP
+## 15.20 HTTP
 
 #### `fetch`
 

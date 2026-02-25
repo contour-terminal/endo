@@ -12,6 +12,7 @@
 #include <locale>
 #include <random>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -125,6 +126,8 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
         }
         if (typeId == CoreVM::BuiltinTypeId::Size)
             return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
+        if (typeId == CoreVM::BuiltinTypeId::TimeSpan)
+            return formatTimeSpanToString(static_cast<int64_t>(obj->getSlot(0)));
         if (typeId == CoreVM::BuiltinTypeId::FileMode)
             return formatFileModeToString(static_cast<int64_t>(obj->getSlot(0)));
         if (typeId == CoreVM::BuiltinTypeId::Markdown)
@@ -934,6 +937,106 @@ void dateTimeFromEpoch(CoreVM::Params& args)
     auto const epoch = args.getInt(1);
     auto* dt = makeDateTimeFromEpoch(args.caller(), epoch);
     args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(dt)));
+}
+
+// ---------------------------------------------------------------------------
+// TimeSpan operations
+// ---------------------------------------------------------------------------
+
+std::string formatTimeSpanToString(int64_t milliseconds)
+{
+    if (milliseconds == 0)
+        return "0ms";
+
+    auto const negative = milliseconds < 0;
+    auto ms = negative ? -milliseconds : milliseconds;
+
+    auto const days = ms / 86'400'000;
+    ms %= 86'400'000;
+    auto const hours = ms / 3'600'000;
+    ms %= 3'600'000;
+    auto const minutes = ms / 60'000;
+    ms %= 60'000;
+    auto const seconds = ms / 1'000;
+    ms %= 1'000;
+
+    std::string result;
+    if (negative)
+        result += "-";
+    if (days > 0)
+        result += std::format("{}d ", days);
+    if (hours > 0)
+        result += std::format("{}h ", hours);
+    if (minutes > 0)
+        result += std::format("{}m ", minutes);
+    if (seconds > 0)
+        result += std::format("{}s ", seconds);
+    if (ms > 0)
+        result += std::format("{}ms ", ms);
+
+    // Remove trailing space
+    if (!result.empty() && result.back() == ' ')
+        result.pop_back();
+
+    return result;
+}
+
+CoreVM::TypedObject* makeTimeSpanFromMs(CoreVM::Runner* runner, int64_t ms)
+{
+    auto* obj = runner->allocObject(CoreVM::BuiltinTypeId::TimeSpan);
+    obj->setSlot(0, static_cast<uint64_t>(ms));
+    return obj;
+}
+
+void timespanFromMs(CoreVM::Params& args)
+{
+    auto const ms = args.getInt(1);
+    auto* obj = makeTimeSpanFromMs(args.caller(), ms);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void timespanFromSeconds(CoreVM::Params& args)
+{
+    auto const seconds = args.getInt(1);
+    auto* obj = makeTimeSpanFromMs(args.caller(), seconds * 1'000);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void timespanFromMinutes(CoreVM::Params& args)
+{
+    auto const minutes = args.getInt(1);
+    auto* obj = makeTimeSpanFromMs(args.caller(), minutes * 60'000);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void timespanFromHours(CoreVM::Params& args)
+{
+    auto const hours = args.getInt(1);
+    auto* obj = makeTimeSpanFromMs(args.caller(), hours * 3'600'000);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void timespanFromDays(CoreVM::Params& args)
+{
+    auto const days = args.getInt(1);
+    auto* obj = makeTimeSpanFromMs(args.caller(), days * 86'400'000);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(obj)));
+}
+
+void timespanSleep(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const ms = static_cast<int64_t>(obj->getSlot(0));
+    if (ms > 0)
+        std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+    args.setResult(CoreVM::CoreNumber(0));
+}
+
+void formatTimeSpan(CoreVM::Params& args)
+{
+    auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(args.getInt(1)));
+    auto const ms = static_cast<int64_t>(obj->getSlot(0));
+    args.setResult(args.caller()->newString(formatTimeSpanToString(ms)));
 }
 
 // ---------------------------------------------------------------------------

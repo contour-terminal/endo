@@ -146,6 +146,30 @@ TEST_CASE("TypeRegistryAdapter.builtinModuleFunctions.contains_Size", "[completi
     CHECK(sizeFuncs.size() == 5); // fromBytes, fromKB, fromMB, fromGB, fromTB
 }
 
+TEST_CASE("TypeRegistryAdapter.builtinRecordFields.contains_TimeSpan", "[completion][adapter]")
+{
+    CoreVM::TypeRegistry registry;
+    auto fields = builtinRecordFields(registry);
+    REQUIRE(fields.contains("TimeSpan"));
+    auto const& tsFields = fields.at("TimeSpan");
+    auto hasMilliseconds =
+        std::ranges::any_of(tsFields, [](auto const& f) { return f.name == "milliseconds"; });
+    CHECK(hasMilliseconds);
+}
+
+TEST_CASE("TypeRegistryAdapter.builtinModuleFunctions.contains_TimeSpan", "[completion][adapter]")
+{
+    CoreVM::TypeRegistry registry;
+    auto funcs = builtinModuleFunctions(registry);
+    REQUIRE(funcs.contains("TimeSpan"));
+    auto const& tsFuncs = funcs.at("TimeSpan");
+    auto hasFromMs = std::ranges::any_of(tsFuncs, [](auto const& f) { return f.name == "fromMilliseconds"; });
+    auto hasFromSeconds = std::ranges::any_of(tsFuncs, [](auto const& f) { return f.name == "fromSeconds"; });
+    CHECK(hasFromMs);
+    CHECK(hasFromSeconds);
+    CHECK(tsFuncs.size() == 5); // fromMilliseconds, fromSeconds, fromMinutes, fromHours, fromDays
+}
+
 TEST_CASE("TypeRegistryAdapter.builtinModuleFunctions.contains_FileMode", "[completion][adapter]")
 {
     CoreVM::TypeRegistry registry;
@@ -232,6 +256,11 @@ TEST_CASE("TypeRegistryAdapter.moduleFunctionStdLibCandidates.returns_module_fun
     CHECK(hasCandidate(candidates, "Size.fromGB"));
     CHECK(hasCandidate(candidates, "Size.fromTB"));
     CHECK(hasCandidate(candidates, "FileMode.fromBits"));
+    CHECK(hasCandidate(candidates, "TimeSpan.fromMilliseconds"));
+    CHECK(hasCandidate(candidates, "TimeSpan.fromSeconds"));
+    CHECK(hasCandidate(candidates, "TimeSpan.fromMinutes"));
+    CHECK(hasCandidate(candidates, "TimeSpan.fromHours"));
+    CHECK(hasCandidate(candidates, "TimeSpan.fromDays"));
     CHECK(hasCandidate(candidates, "Option.map"));
     CHECK(hasCandidate(candidates, "Option.bind"));
     CHECK(hasCandidate(candidates, "Option.defaultValue"));

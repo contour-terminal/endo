@@ -290,6 +290,19 @@ static const std::array descriptors = {
     StdlibDescriptor { "", "filemode_group", LT::Number, objNumberParam, &builtins::fileModeGroup, "", "" },
     StdlibDescriptor { "", "filemode_other", LT::Number, objNumberParam, &builtins::fileModeOther, "", "" },
 
+    // TimeSpan operations
+    StdlibDescriptor { "", "timespan_from_ms", LT::Number, nNumberParam, &builtins::timespanFromMs, "", "" },
+    StdlibDescriptor { "", "timespan_from_seconds", LT::Number, nNumberParam, &builtins::timespanFromSeconds, "", "" },
+    StdlibDescriptor { "", "timespan_from_minutes", LT::Number, nNumberParam, &builtins::timespanFromMinutes, "", "" },
+    StdlibDescriptor { "", "timespan_from_hours", LT::Number, nNumberParam, &builtins::timespanFromHours, "", "" },
+    StdlibDescriptor { "", "timespan_from_days", LT::Number, nNumberParam, &builtins::timespanFromDays, "", "" },
+    StdlibDescriptor { "sleep", "timespan_sleep", LT::Number, objNumberParam, &builtins::timespanSleep,
+        "sleep ts -> unit",
+        "**sleep** `TimeSpan -> unit`\n\nPauses execution for the given TimeSpan duration." },
+    StdlibDescriptor { "formatTimeSpan", "format_timespan", LT::String, objNumberParam, &builtins::formatTimeSpan,
+        "formatTimeSpan ts -> string",
+        "**formatTimeSpan** `TimeSpan -> string`\n\nFormats a TimeSpan as a human-readable duration string." },
+
     // Size operations
     StdlibDescriptor { "", "size_from_bytes", LT::Number, nNumberParam, &builtins::sizeFromBytes, "", "" },
     StdlibDescriptor { "", "size_from_kb", LT::Number, nNumberParam, &builtins::sizeFromKB, "", "" },

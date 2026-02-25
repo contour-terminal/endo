@@ -329,6 +329,27 @@ namespace
               "`Size.fromGB` : `int -> Size`\n\nCreates a Size from gigabytes (n \u00d7 1024\u00b3)." },
             { "Size.fromTB",
               "`Size.fromTB` : `int -> Size`\n\nCreates a Size from terabytes (n \u00d7 1024\u2074)." },
+            { "TimeSpan",
+              "`TimeSpan` \u2014 Record type for time durations\n\n"
+              "**Fields:** `milliseconds: int`\n\n"
+              "```endo\nTimeSpan.fromSeconds 5   // 5s\n"
+              "TimeSpan.fromMinutes 2   // 2m\n"
+              "t.milliseconds           // raw millisecond count\n```" },
+            { "TimeSpan.fromMilliseconds",
+              "`TimeSpan.fromMilliseconds` : `int -> TimeSpan`\n\nCreates a TimeSpan from "
+              "milliseconds." },
+            { "TimeSpan.fromSeconds",
+              "`TimeSpan.fromSeconds` : `int -> TimeSpan`\n\nCreates a TimeSpan from seconds (n "
+              "\u00d7 1000 ms)." },
+            { "TimeSpan.fromMinutes",
+              "`TimeSpan.fromMinutes` : `int -> TimeSpan`\n\nCreates a TimeSpan from minutes (n "
+              "\u00d7 60000 ms)." },
+            { "TimeSpan.fromHours",
+              "`TimeSpan.fromHours` : `int -> TimeSpan`\n\nCreates a TimeSpan from hours (n \u00d7 "
+              "3600000 ms)." },
+            { "TimeSpan.fromDays",
+              "`TimeSpan.fromDays` : `int -> TimeSpan`\n\nCreates a TimeSpan from days (n \u00d7 "
+              "86400000 ms)." },
             { "FileMode",
               "`FileMode` \u2014 Record type for Unix file permissions\n\n"
               "**Fields:** `bits: int`\n\n"
@@ -393,6 +414,14 @@ namespace
             { "formatDateTime",
               "`formatDateTime` : `int -> str`\n\n"
               "Formats a Unix epoch timestamp as `YYYY-MM-DD HH:MM:SS`." },
+            { "formatTimeSpan",
+              "`formatTimeSpan` : `TimeSpan -> str`\n\n"
+              "Formats a TimeSpan as a human-readable duration string (e.g., `1m 30s`)." },
+            { "sleep",
+              "`sleep` : `TimeSpan -> unit`\n\n"
+              "Pauses execution for the given TimeSpan duration.\n\n"
+              "**Shell:** `sleep NUMBER[SUFFIX]...` (s/m/h/d)\n"
+              "**F#:** `sleep (TimeSpan.fromSeconds 5)` or `TimeSpan.fromSeconds 5 |> sleep`" },
             { "formatMode",
               "`formatMode` : `int | FileMode -> str`\n\n"
               "Formats a Unix file mode as a `rwxrwxrwx` permission string.\n\n"

@@ -375,6 +375,19 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         generator._recordTypes["Size"] = std::move(sizeType);
     }
 
+    // Pre-register TimeSpan record type.
+    {
+        RecordTypeInfo timeSpanType;
+        timeSpanType.typeId = CoreVM::BuiltinTypeId::TimeSpan;
+        timeSpanType.name = "TimeSpan";
+        timeSpanType.fields = {
+            { "milliseconds", 0, CoreVM::LiteralType::Number },
+        };
+        for (auto const& f: timeSpanType.fields)
+            timeSpanType.fieldTypes[f.name] = f.type;
+        generator._recordTypes["TimeSpan"] = std::move(timeSpanType);
+    }
+
     // Pre-register FileMode record type.
     {
         RecordTypeInfo fileModeType;
@@ -4109,6 +4122,55 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // formatTimeSpan: TimeSpan -> string (format TimeSpan as human-readable duration)
+    if (name == "formatTimeSpan")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("formatTimeSpan takes 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg = codegen(argExprs[0]);
+        if (!arg)
+        {
+            reportTypeError("Failed to evaluate formatTimeSpan argument");
+            return true;
+        }
+        auto* callback = findCallback("format_timespan(I)S");
+        if (!callback)
+        {
+            reportTypeError("format_timespan builtin not registered");
+            return true;
+        }
+        _result =
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "formatTimeSpan");
+        return true;
+    }
+
+    // sleep: TimeSpan -> unit (pause execution for a TimeSpan duration)
+    if (name == "sleep")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("sleep takes 1 argument, got {}", argExprs.size());
+            return true;
+        }
+        auto* arg = codegen(argExprs[0]);
+        if (!arg)
+        {
+            reportTypeError("Failed to evaluate sleep argument");
+            return true;
+        }
+        auto* callback = findCallback("timespan_sleep(I)I");
+        if (!callback)
+        {
+            reportTypeError("timespan_sleep builtin not registered");
+            return true;
+        }
+        _result = _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg }, "sleep");
+        return true;
+    }
+
     // formatMode: int -> string (format permission bits as rwx string)
     if (name == "formatMode")
     {
@@ -6086,6 +6148,28 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                 return;
             }
         }
+        // sleep in pipeline: TimeSpan.fromSeconds 5 |> sleep
+        if (funcIdent->name == "sleep")
+        {
+            auto* callback = findCallback("timespan_sleep(I)I");
+            if (callback)
+            {
+                _result =
+                    _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { value }, "sleep");
+                return;
+            }
+        }
+        // formatTimeSpan in pipeline: TimeSpan.fromSeconds 90 |> formatTimeSpan
+        if (funcIdent->name == "formatTimeSpan")
+        {
+            auto* callback = findCallback("format_timespan(I)S");
+            if (callback)
+            {
+                _result = _builder.createCallFunction(
+                    _builder.getBuiltinFunction(*callback), { value }, "formatTimeSpan");
+                return;
+            }
+        }
 
         // Named function or stored lambda
         funcName = funcIdent->name;
@@ -6745,6 +6829,30 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (tryGenerateNativeCall(std::string(it->second), { arg }))
                     {
                         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
+                        return;
+                    }
+                }
+            }
+
+            // TimeSpan.fromMilliseconds n → timespan_from_ms(n), etc.
+            if (modIdent->name == "TimeSpan" && argExprs.size() == 1)
+            {
+                static std::unordered_map<std::string_view, std::string_view> const timeSpanMethods = {
+                    { "fromMilliseconds", "timespan_from_ms" }, { "fromSeconds", "timespan_from_seconds" },
+                    { "fromMinutes", "timespan_from_minutes" }, { "fromHours", "timespan_from_hours" },
+                    { "fromDays", "timespan_from_days" },
+                };
+                if (auto const it = timeSpanMethods.find(method); it != timeSpanMethods.end())
+                {
+                    auto* arg = codegen(argExprs[0]);
+                    if (!arg)
+                    {
+                        reportTypeError("Failed to evaluate argument for TimeSpan.{}", method);
+                        return;
+                    }
+                    if (tryGenerateNativeCall(std::string(it->second), { arg }))
+                    {
+                        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::TimeSpan);
                         return;
                     }
                 }
@@ -9895,6 +10003,21 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
             reportTypeError("Size has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "TimeSpan")
+        {
+            auto const isTimeSpanMethod = node.fieldName == "fromMilliseconds"
+                                          || node.fieldName == "fromSeconds"
+                                          || node.fieldName == "fromMinutes" || node.fieldName == "fromHours"
+                                          || node.fieldName == "fromDays";
+            if (isTimeSpanMethod)
+            {
+                // TimeSpan.fromXX requires an argument — handled in ApplicationExpr
+                reportTypeError("TimeSpan.{} requires a numeric argument", std::string_view(node.fieldName));
+                return;
+            }
+            reportTypeError("TimeSpan has no member '{}'", std::string_view(node.fieldName));
             return;
         }
         if (modIdent->name == "FileMode")

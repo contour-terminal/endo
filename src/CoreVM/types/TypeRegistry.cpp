@@ -191,6 +191,24 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(markdownType));
 
+    // TimeSpan: Product type with 1 field for duration in milliseconds
+    auto timeSpanType = std::make_unique<TypeDescriptor>();
+    timeSpanType->kind = TypeKind::Product;
+    timeSpanType->id = BuiltinTypeId::TimeSpan;
+    timeSpanType->name = "TimeSpan";
+    timeSpanType->slotCount = 1;
+    timeSpanType->fields = {
+        { "milliseconds", 0, LiteralType::Number },
+    };
+    timeSpanType->moduleFunctions = {
+        { "fromMilliseconds", "TimeSpan.fromMilliseconds n -> TimeSpan" },
+        { "fromSeconds", "TimeSpan.fromSeconds n -> TimeSpan (n * 1000 ms)" },
+        { "fromMinutes", "TimeSpan.fromMinutes n -> TimeSpan (n * 60000 ms)" },
+        { "fromHours", "TimeSpan.fromHours n -> TimeSpan (n * 3600000 ms)" },
+        { "fromDays", "TimeSpan.fromDays n -> TimeSpan (n * 86400000 ms)" },
+    };
+    addType(std::move(timeSpanType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }
