@@ -1,11 +1,5 @@
 let ssh_options = ["-p"; "-i"; "-l"; "-L"; "-R"; "-D"; "-J"; "-F"; "-o"; "-N"; "-T"; "-t"; "-v"; "-X"; "-A"; "-C"; "-q"; "-4"; "-6"]
 
-let ssh_hosts _ =
-    $(grep -i "^Host " ~/.ssh/config) |> split "\n" |> filter (fun s -> s != "") |> map (fun line ->
-        let parts = split " " line in
-            if length parts > 1 then nth 1 parts
-            else "") |> filter (fun s -> s != "") |> filter (fun s -> not (contains "*" s))
-
 let ssh_complete args prefix =
     match args with
     | _ when startsWith "-" prefix -> ssh_options
