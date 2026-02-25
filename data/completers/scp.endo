@@ -1,10 +1,7 @@
-let scp_options = [
-  "-P"; "-i"; "-F"; "-o"; "-r"; "-v"; "-C"; "-q"; "-4"; "-6"; "-3"
-]
-
 let scp_complete args prefix =
-  match args with
-  | _ when startsWith "-" prefix -> scp_options
-  | _ -> ssh_hosts ()
+    let scp_options = ["-P"; "-i"; "-F"; "-o"; "-r"; "-v"; "-C"; "-q"; "-4"; "-6"; "-3"]
+    match args with
+    | _ when startsWith "-" prefix -> scp_options
+    | _ -> ssh_hosts ()
 
 register_completer "scp" scp_complete

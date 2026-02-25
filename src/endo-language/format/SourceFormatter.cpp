@@ -1346,15 +1346,33 @@ void SourceFormatter::visit(ast::UnitExpr const& /*node*/)
 
 void SourceFormatter::visit(ast::BlockExpr const& node)
 {
-    emit("{ ");
-    for (auto const& stmt: node.statements)
+    if (node.isBraceDelimited)
     {
-        stmt->accept(*this);
-        emit("; ");
+        emit("{ ");
+        for (auto const& stmt: node.statements)
+        {
+            stmt->accept(*this);
+            emit("; ");
+        }
+        if (node.result)
+            node.result->accept(*this);
+        emit(" }");
     }
-    if (node.result)
-        node.result->accept(*this);
-    emit(" }");
+    else
+    {
+        for (size_t i = 0; i < node.statements.size(); ++i)
+        {
+            if (i > 0)
+                emitNewline();
+            node.statements[i]->accept(*this);
+        }
+        if (node.result && !dynamic_cast<ast::UnitExpr const*>(node.result.get()))
+        {
+            if (!node.statements.empty())
+                emitNewline();
+            node.result->accept(*this);
+        }
+    }
 }
 
 void SourceFormatter::visit(ast::MutAssignStmt const& node)
@@ -1439,9 +1457,24 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         emitParameters(ab.parameters);
         if (ab.returnType)
             emit(": " + endo::toString(*ab.returnType));
-        emit(" = ");
+        emit(" =");
         if (ab.value)
-            ab.value->accept(*this);
+        {
+            auto const bodyWidth = estimateWidth(*ab.value);
+            if (wouldFormatMultiline(*ab.value)
+                || (!ab.parameters.empty() && bodyWidth > _config.maxLineWidth / 2))
+            {
+                emitNewline();
+                indent();
+                ab.value->accept(*this);
+                dedent();
+            }
+            else
+            {
+                emit(" ");
+                ab.value->accept(*this);
+            }
+        }
     }
 
     emitTrailingComment(node);

@@ -5173,7 +5173,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
             if (_lexer.currentToken() == Token::BraceClose)
             {
                 _lexer.nextToken(); // consume '}'
-                return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+                return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr), true);
             }
 
             statements.push_back(std::make_unique<ast::ExprStmt>(std::move(expr)));
@@ -5190,7 +5190,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
             return nullptr;
         }
         _lexer.nextToken(); // consume '}'
-        return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
+        return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>(), true);
     }
 
     // Check for record literal: Identifier followed by '='
@@ -5376,7 +5376,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
         if (_lexer.currentToken() == Token::BraceClose)
         {
             _lexer.nextToken(); // consume '}'
-            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr), true);
         }
 
         statements.push_back(std::make_unique<ast::ExprStmt>(std::move(expr)));
@@ -5393,7 +5393,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
         return nullptr;
     }
     _lexer.nextToken(); // consume '}'
-    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
+    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>(), true);
 }
 
 std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
@@ -5431,7 +5431,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
         {
             // This is the result expression
             _lexer.nextToken(); // consume '}'
-            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr));
+            return std::make_unique<ast::BlockExpr>(std::move(statements), std::move(expr), true);
         }
 
         // Otherwise, treat as a statement and continue
@@ -5452,7 +5452,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
     _lexer.nextToken(); // consume '}'
 
     // Empty block or block with only statements — result is unit (0)
-    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>());
+    return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>(), true);
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColumn,

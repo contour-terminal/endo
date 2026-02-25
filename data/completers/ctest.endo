@@ -1,24 +1,18 @@
-let ctest_options = [
-  "--preset"; "--list-presets"; "--parallel"; "-j";
-  "--build-config"; "-C"; "--test-dir";
-  "--output-on-failure"; "--stop-on-failure";
-  "-R"; "-E"; "-L"; "--verbose"; "-V";
-  "--timeout"; "--repeat"; "--rerun-failed"
-]
-
-let ctest_configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
-
-let ctest_presets_from json =
-  Json.query ".testPresets[].name" json
-
 let ctest_complete args prefix =
-  match args with
-  | ["--preset"] | [_; "--preset"] ->
-      let json1 = $(cat CMakePresets.json) in
-      let json2 = $(cat CMakeUserPresets.json) in
-      ctest_presets_from json1 @ ctest_presets_from json2
-  | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> ctest_configs
-  | _ when startsWith "-" prefix -> ctest_options
-  | _ -> []
+    let ctest_options = [
+        "--preset"; "--list-presets"; "--parallel"; "-j"; "--build-config"; "-C"; "--test-dir";
+        "--output-on-failure"; "--stop-on-failure"; "-R"; "-E"; "-L"; "--verbose"; "-V";
+        "--timeout"; "--repeat"; "--rerun-failed"
+    ]
+    let ctest_configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
+    let ctest_presets_from json = Json.query ".testPresets[].name" json
+    match args with
+    | ["--preset"] | [_; "--preset"] ->
+        let json1 = $(cat CMakePresets.json) in
+            let json2 = $(cat CMakeUserPresets.json) in ctest_presets_from json1
+                @ ctest_presets_from json2
+    | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> ctest_configs
+    | _ when startsWith "-" prefix -> ctest_options
+    | _ -> []
 
 register_completer "ctest" ctest_complete

@@ -1,6 +1,8 @@
-let ssh_options = ["-p"; "-i"; "-l"; "-L"; "-R"; "-D"; "-J"; "-F"; "-o"; "-N"; "-T"; "-t"; "-v"; "-X"; "-A"; "-C"; "-q"; "-4"; "-6"]
-
 let ssh_complete args prefix =
+    let ssh_options = [
+        "-p"; "-i"; "-l"; "-L"; "-R"; "-D"; "-J"; "-F"; "-o"; "-N"; "-T"; "-t"; "-v"; "-X";
+        "-A"; "-C"; "-q"; "-4"; "-6"
+    ]
     match args with
     | _ when startsWith "-" prefix -> ssh_options
     | _ -> ssh_hosts ()

@@ -1151,3 +1151,73 @@ TEST_CASE("SourceFormatter.pipeline_of_long_list_idempotency", "[format]")
     INFO("Second: [" << second << "]");
     CHECK(first == second);
 }
+
+// ============================================================================
+// Multi-line function bodies (implicit BlockExpr)
+// ============================================================================
+
+TEST_CASE("SourceFormatter.multiline_function_body", "[format]")
+{
+    auto const source = R"(let f x y =
+    let z = x + y
+    let w = z * 2
+    if w > 10 then w - 10
+    else z + w)";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    auto const expected = R"(let f x y =
+    let z = x + y
+    let w = z * 2
+    if w > 10 then w - 10
+    else z + w
+)";
+    CHECK(result == expected);
+}
+
+TEST_CASE("SourceFormatter.multiline_function_body_compound_result", "[format]")
+{
+    auto const source = R"(let f x y =
+    let z = x + y
+    let w = z * 2
+    match w with
+        | 0 -> "zero"
+        | _ -> "other")";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    // Multi-line body: let-bindings followed by compound result expression
+    CHECK(result.find("let z = x + y") != std::string::npos);
+    CHECK(result.find("let w = z * 2") != std::string::npos);
+    CHECK(result.find("match w with") != std::string::npos);
+    // No braces should appear
+    CHECK(result.find("{ ") == std::string::npos);
+    CHECK(result.find(" }") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.multiline_function_body_idempotency", "[format]")
+{
+    auto const source = R"(let f x y =
+    let z = x + y
+    let w = z * 2
+    if w > 10 then w - 10
+    else z + w
+)";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.simple_function_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let add x y = x + y");
+    CHECK(result == "let add x y = x + y\n");
+}
+
+TEST_CASE("SourceFormatter.brace_delimited_block_keeps_braces", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = { let a = 1; a + 2 }");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("{ ") != std::string::npos);
+    CHECK(result.find(" }") != std::string::npos);
+}

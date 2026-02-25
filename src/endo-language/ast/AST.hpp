@@ -1574,9 +1574,12 @@ struct BlockExpr final: public Expr
 {
     std::vector<std::unique_ptr<Statement>> statements; ///< Zero or more let bindings/statements
     std::unique_ptr<Expr> result;                       ///< Final expression (the block's value)
+    bool isBraceDelimited = false; ///< True for explicit `{ ... }` blocks, false for implicit sequences
 
-    BlockExpr(std::vector<std::unique_ptr<Statement>> stmts, std::unique_ptr<Expr> res):
-        statements(std::move(stmts)), result(std::move(res))
+    BlockExpr(std::vector<std::unique_ptr<Statement>> stmts,
+              std::unique_ptr<Expr> res,
+              bool braceDelimited = false):
+        statements(std::move(stmts)), result(std::move(res)), isBraceDelimited(braceDelimited)
     {
     }
 
