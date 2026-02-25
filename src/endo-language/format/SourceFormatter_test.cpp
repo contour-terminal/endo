@@ -509,6 +509,31 @@ TEST_CASE("SourceFormatter.while_body_trailing_comment_idempotency", "[format]")
     CHECK(first == second);
 }
 
+// --- LetBindingStmt leading comments ---
+
+TEST_CASE("SourceFormatter.let_binding_preserves_leading_comments", "[format]")
+{
+    auto const source = "# header comment\n\nlet xs = 1..5";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    // Comment must appear before the let binding, not after
+    auto const commentPos = result.find("# header comment");
+    auto const letPos = result.find("let xs");
+    REQUIRE(commentPos != std::string::npos);
+    REQUIRE(letPos != std::string::npos);
+    CHECK(commentPos < letPos);
+}
+
+TEST_CASE("SourceFormatter.let_binding_leading_comments_idempotency", "[format]")
+{
+    auto const source = "# header comment\n\nlet xs = 1..5";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
 // ============================================================================
 // Blank line grouping — consecutive expressions should not be separated
 // ============================================================================

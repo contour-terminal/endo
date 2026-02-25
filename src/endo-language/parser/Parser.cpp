@@ -3079,7 +3079,8 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     TRACE_SCOPE("parseLet");
 
     auto const letColumn = currentTokenColumn();
-    auto const letLine = _lexer.currentRange().begin.line;
+    auto const letLoc = _lexer.currentRange();
+    auto const letLine = letLoc.begin.line;
 
     // Enter F# expression mode BEFORE consuming 'let' so that the next token
     // (the binding name) is tokenized with F# reserved symbols (including ':')
@@ -3155,7 +3156,11 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         }
 
         _lexer.leaveFSharpExpr();
-        return std::make_unique<ast::LetBindingStmt>(isMutable, std::move(pat), std::move(value));
+        auto result = std::make_unique<ast::LetBindingStmt>(isMutable, std::move(pat), std::move(value));
+        result->location = result->value && result->value->location
+                               ? SourceLocationRange { letLoc.begin, result->value->location->end }
+                               : letLoc;
+        return result;
     }
 
     // Expect identifier (binding name)
@@ -3363,6 +3368,15 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
     {
         _knownFSharpFunctions.insert(result->name);
     }
+
+    // Set location spanning from 'let' keyword to end of value (or last and-binding)
+    auto endLoc = letLoc;
+    if (!result->andBindings.empty() && result->andBindings.back().value
+        && result->andBindings.back().value->location)
+        endLoc = *result->andBindings.back().value->location;
+    else if (result->value && result->value->location)
+        endLoc = *result->value->location;
+    result->location = SourceLocationRange { letLoc.begin, endLoc.end };
 
     _lexer.leaveFSharpExpr();
     return result;
@@ -4002,10 +4016,18 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpRange()
         auto endExpr = parseFSharpAddSub();
         if (!endExpr)
             return nullptr;
-        return std::make_unique<ast::ListRangeExpr>(std::move(start), std::move(second), std::move(endExpr));
+        auto result =
+            std::make_unique<ast::ListRangeExpr>(std::move(start), std::move(second), std::move(endExpr));
+        if (result->start->location && result->end->location)
+            result->location =
+                SourceLocationRange { result->start->location->begin, result->end->location->end };
+        return result;
     }
 
-    return std::make_unique<ast::ListRangeExpr>(std::move(start), nullptr, std::move(second));
+    auto result = std::make_unique<ast::ListRangeExpr>(std::move(start), nullptr, std::move(second));
+    if (result->start->location && result->end->location)
+        result->location = SourceLocationRange { result->start->location->begin, result->end->location->end };
+    return result;
 }
 
 std::unique_ptr<ast::Expr> Parser::parseFSharpAddSub()
