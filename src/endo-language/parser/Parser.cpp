@@ -2772,8 +2772,8 @@ bool Parser::isFSharpPrimary() const noexcept
             if (lit.empty())
                 return false;
             // Contextual keywords that should not be treated as primary expressions
-            if (lit == "in" || lit == "then" || lit == "else" || lit == "do" || lit == "break"
-                || lit == "continue" || lit == "exec")
+            if (lit == "in" || lit == "then" || lit == "else" || lit == "elif" || lit == "do"
+                || lit == "break" || lit == "continue" || lit == "exec")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -5400,9 +5400,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
             sawLineFeed = true;
         }
 
-        // Check for terminator keyword (e.g., "else")
-        if (terminatorKeyword.has_value() && _lexer.currentToken() == Token::Identifier
-            && _lexer.currentLiteral() == terminatorKeyword.value())
+        // Check for terminator keyword (e.g., "else") or "elif" (sugar for "else if")
+        if (_lexer.currentToken() == Token::Identifier
+            && ((terminatorKeyword.has_value() && _lexer.currentLiteral() == terminatorKeyword.value())
+                || _lexer.currentLiteral() == "elif"))
         {
             if (sawLineFeed)
                 _lexer.pushBackToken(Token::LineFeed, "\n");
@@ -5652,8 +5653,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 if (!thenExpr)
                     return nullptr;
 
-                // Else branch is optional — `if cond then expr` returns unit when false.
-                // Use pushback pattern: consume newlines to look for `else`, but push back
+                // Else/elif branch is optional — `if cond then expr` returns unit when false.
+                // Use pushback pattern: consume newlines to look for `else`/`elif`, but push back
                 // a LineFeed if not found, so the statement boundary is preserved.
                 std::unique_ptr<ast::Expr> elseExpr;
                 auto const skippedNewlines = consumeNewlines();
@@ -5665,9 +5666,19 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                     if (!elseExpr)
                         return nullptr;
                 }
+                else if (_lexer.currentToken() == Token::Identifier && _lexer.currentLiteral() == "elif")
+                {
+                    // `elif` is sugar for `else if` — rewrite to `if` and parse as nested
+                    // if-expression. This naturally handles chained elif via recursion.
+                    _lexer.nextToken(); // consume 'elif'
+                    _lexer.pushBackToken(Token::Identifier, "if");
+                    elseExpr = parseFSharpExpr();
+                    if (!elseExpr)
+                        return nullptr;
+                }
                 else if (skippedNewlines)
                 {
-                    // No `else` found — push back the newline to preserve statement boundary
+                    // No `else`/`elif` found — push back the newline to preserve statement boundary
                     _lexer.pushBackToken(Token::LineFeed, "\n");
                 }
 

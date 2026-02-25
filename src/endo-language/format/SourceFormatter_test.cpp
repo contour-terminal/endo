@@ -257,13 +257,34 @@ TEST_CASE("SourceFormatter.if_else_compound_else_multiline", "[format]")
     CHECK(result.find("else\n") != std::string::npos);
 }
 
-TEST_CASE("SourceFormatter.if_else_if_chain", "[format]")
+TEST_CASE("SourceFormatter.if_elif_chain", "[format]")
 {
+    auto const result =
+        SourceFormatter::format("let f x = if x > 0 then \"pos\" elif x == 0 then \"zero\" else \"neg\"");
+    INFO("Result: [" << result << "]");
+    // elif should appear aligned with if
+    CHECK(result.find("elif") != std::string::npos);
+    CHECK(result.find("else if") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.if_else_if_reformats_to_elif", "[format]")
+{
+    // `else if` input should be reformatted to `elif` in output
     auto const result =
         SourceFormatter::format("let f x = if x > 0 then \"pos\" else if x == 0 then \"zero\" else \"neg\"");
     INFO("Result: [" << result << "]");
-    // else if should stay on one line
-    CHECK(result.find("else if") != std::string::npos);
+    CHECK(result.find("elif") != std::string::npos);
+    CHECK(result.find("else if") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.elif_chain_idempotency", "[format]")
+{
+    auto const source = "let f x = if x > 0 then \"pos\" elif x == 0 then \"zero\" else \"neg\"";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
 }
 
 TEST_CASE("SourceFormatter.if_else_idempotency", "[format]")

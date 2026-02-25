@@ -540,14 +540,28 @@ void ASTPrinter::visit(BuiltinWhichStmt const& node)
 
 void ASTPrinter::visit(IfExpr const& node)
 {
-    _result += "if ";
+    printIfExpr(node, "if");
+}
+
+void ASTPrinter::printIfExpr(IfExpr const& node, std::string_view keyword)
+{
+    _result += keyword;
+    _result += " ";
     node.condition->accept(*this);
     _result += " then ";
     node.thenExpr->accept(*this);
     if (node.elseExpr)
     {
-        _result += " else ";
-        node.elseExpr->accept(*this);
+        if (auto const* nestedIf = dynamic_cast<IfExpr const*>(node.elseExpr.get()))
+        {
+            _result += " ";
+            printIfExpr(*nestedIf, "elif");
+        }
+        else
+        {
+            _result += " else ";
+            node.elseExpr->accept(*this);
+        }
     }
 }
 

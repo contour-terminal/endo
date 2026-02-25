@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Multi-line elif branches
+# expect: teenager
+
+let category age =
+    if age < 13 then
+        "child"
+    elif age < 20 then
+        "teenager"
+    elif age < 65 then
+        "adult"
+    else
+        "senior"
+print (category 15)

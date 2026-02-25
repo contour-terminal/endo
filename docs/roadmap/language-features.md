@@ -180,8 +180,7 @@ in the language specification.
 
 ## Control Flow
 
-- [x] If-then-else expressions (F# style, returns value)
-- [x] If-then-else-fi statements (Bash style)
+- [x] If-then-elif-else expressions (F# style, returns value)
 - [x] Match expressions
 - [x] While loops
 - [x] For-in loops

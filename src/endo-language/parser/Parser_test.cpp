@@ -1736,6 +1736,55 @@ TEST_CASE("Parser.FSharp.if_then_else_multiline")
     REQUIRE(ifExpr != nullptr);
 }
 
+TEST_CASE("Parser.FSharp.elif_simple")
+{
+    // elif should produce nested IfExpr (same as else if)
+    auto ast = parse("let r = if x > 0 then 1 elif x == 0 then 0 else -1");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* ifExpr = dynamic_cast<endo::ast::IfExpr*>(letStmt->value.get());
+    REQUIRE(ifExpr != nullptr);
+    // The else branch should be a nested IfExpr
+    auto* nestedIf = dynamic_cast<endo::ast::IfExpr*>(ifExpr->elseExpr.get());
+    REQUIRE(nestedIf != nullptr);
+    REQUIRE(nestedIf->elseExpr != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.elif_multiline")
+{
+    auto ast = parse("let r =\n"
+                     "    if x > 0 then\n"
+                     "        1\n"
+                     "    elif x == 0 then\n"
+                     "        0\n"
+                     "    else\n"
+                     "        -1");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* ifExpr = dynamic_cast<endo::ast::IfExpr*>(letStmt->value.get());
+    REQUIRE(ifExpr != nullptr);
+    auto* nestedIf = dynamic_cast<endo::ast::IfExpr*>(ifExpr->elseExpr.get());
+    REQUIRE(nestedIf != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.elif_chain")
+{
+    // Multiple elif branches
+    auto ast = parse("let r = if x > 0 then 1 elif x == 0 then 0 elif x > -10 then -1 else -2");
+    REQUIRE(ast != nullptr);
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(getFirstStatement(ast.get()));
+    REQUIRE(letStmt != nullptr);
+    auto* ifExpr = dynamic_cast<endo::ast::IfExpr*>(letStmt->value.get());
+    REQUIRE(ifExpr != nullptr);
+    auto* elif1 = dynamic_cast<endo::ast::IfExpr*>(ifExpr->elseExpr.get());
+    REQUIRE(elif1 != nullptr);
+    auto* elif2 = dynamic_cast<endo::ast::IfExpr*>(elif1->elseExpr.get());
+    REQUIRE(elif2 != nullptr);
+    REQUIRE(elif2->elseExpr != nullptr);
+}
+
 TEST_CASE("Parser.FSharp.lambda_multiline_body")
 {
     auto ast = parse("let f = fun x ->\n"

@@ -652,6 +652,7 @@ namespace
         ShellBuiltinDescriptor { "if", "builtin", "**if** -- shell keyword\n\n```\nif condition then\n  body\nfi\n```" },
         ShellBuiltinDescriptor { "then", "builtin", "**then** -- shell keyword\n\nFollows the condition in a shell `if` statement." },
         ShellBuiltinDescriptor { "else", "builtin", "**else** -- shell keyword\n\nAlternative branch in a shell `if` statement." },
+        ShellBuiltinDescriptor { "elif", "builtin", "**elif** -- shell keyword\n\nElse-if branch in a conditional expression." },
         ShellBuiltinDescriptor { "for", "builtin", "**for** -- shell keyword\n\n```\nfor x in [1; 2; 3] do\n  print x\ndone\n```" },
         ShellBuiltinDescriptor { "while", "builtin", "**while** -- shell keyword\n\nLoop while a condition holds." },
         ShellBuiltinDescriptor { "do", "builtin", "**do** -- shell keyword\n\nBegins the body of a for/while loop." },

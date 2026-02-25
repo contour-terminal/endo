@@ -53,7 +53,7 @@ The specification serves as the design document for Phase 1.8 implementation.
 | Process substitution (`<(cmd)`, `>(cmd)`) | ✅ |
 | Logical operators (`&&`, `||`) | ✅ |
 | Redirects (`>`, `>>`, `<`, `2>&1`, `<<<`) | ✅ |
-| If-then-else expressions (else optional, multi-expression branches) | ✅ |
+| If-then-elif-else expressions (else optional, multi-expression branches) | ✅ |
 | While-do-end statements | ✅ |
 | For-in loops (`for var in list do ... end`) | ✅ |
 | Break and continue statements | ✅ |

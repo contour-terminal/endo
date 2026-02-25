@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: elif chain with multiple branches
+# expect: B
+
+let grade x =
+    if x >= 90 then "A"
+    elif x >= 80 then "B"
+    elif x >= 70 then "C"
+    elif x >= 60 then "D"
+    else "F"
+print (grade 85)

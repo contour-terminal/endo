@@ -104,6 +104,7 @@ class ASTPrinter: public Visitor
     void visit(ExecPipelineExpr const& node) override;
 
   private:
+    void printIfExpr(IfExpr const& node, std::string_view keyword);
     void printComprehensionGenerator(ListComprehensionExpr const& node);
     void printArithExpr(ArithExpr const* expr);
 };

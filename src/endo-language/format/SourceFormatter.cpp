@@ -1031,10 +1031,18 @@ void SourceFormatter::visit(ast::DataSourceExpr const& node)
 
 void SourceFormatter::visit(ast::IfExpr const& node)
 {
+    formatIfExpr(node, "if");
+}
+
+void SourceFormatter::formatIfExpr(ast::IfExpr const& node, std::string_view keyword)
+{
     emitLeadingComments(node);
 
-    emit("if ");
+    emit(keyword);
+    emit(" ");
     node.condition->accept(*this);
+
+    auto const keywordWidth = keyword.size();
 
     if (!node.elseExpr)
     {
@@ -1061,14 +1069,15 @@ void SourceFormatter::visit(ast::IfExpr const& node)
         auto const thenWidth = estimateWidth(*node.thenExpr);
         auto const thenIsCompound = isCompoundExpr(*node.thenExpr);
         auto const elseIsCompound = node.elseExpr ? isCompoundExpr(*node.elseExpr) : false;
-        auto const isElseIf = dynamic_cast<ast::IfExpr const*>(node.elseExpr.get()) != nullptr;
+        auto const* nestedIf = dynamic_cast<ast::IfExpr const*>(node.elseExpr.get());
         auto const indentWidth = static_cast<size_t>(_indentLevel) * _config.indentWidth;
 
         // Compact two-line: `if cond then thenBody\nelse elseBody`
-        auto const line1CompactWidth = indentWidth + 3 /*"if "*/ + condWidth + 6 /*" then "*/ + thenWidth;
+        auto const line1CompactWidth =
+            indentWidth + keywordWidth + 1 /*" "*/ + condWidth + 6 /*" then "*/ + thenWidth;
         auto const elseBodyWidth = estimateWidth(*node.elseExpr);
         auto const line2CompactWidth = indentWidth + 5 /*"else "*/ + elseBodyWidth;
-        auto const compactFeasible = !thenIsCompound && !elseIsCompound && !isElseIf
+        auto const compactFeasible = !thenIsCompound && !elseIsCompound && nestedIf == nullptr
                                      && line1CompactWidth <= _config.maxLineWidth
                                      && line2CompactWidth <= _config.maxLineWidth;
 
@@ -1090,14 +1099,14 @@ void SourceFormatter::visit(ast::IfExpr const& node)
             node.thenExpr->accept(*this);
             dedent();
             emitNewline();
-            emit("else");
-            if (isElseIf)
+            if (nestedIf != nullptr)
             {
-                emit(" ");
-                node.elseExpr->accept(*this);
+                // Emit `elif` at the same column as `if`/`else`
+                formatIfExpr(*nestedIf, "elif");
             }
             else
             {
+                emit("else");
                 emitNewline();
                 indent();
                 node.elseExpr->accept(*this);

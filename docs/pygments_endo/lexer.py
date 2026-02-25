@@ -116,6 +116,7 @@ class EndoLexer(RegexLexer):
                         "if",
                         "then",
                         "else",
+                        "elif",
                         "fi",
                         "for",
                         "while",

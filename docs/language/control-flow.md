@@ -10,15 +10,15 @@ omitted, the false branch returns unit (like F#).
 # Simple if expression
 let status = if count > 0 then "has items" else "empty"
 let max = if a > b then a else b
-let sign = if n < 0 then -1 else if n > 0 then 1 else 0
+let sign = if n < 0 then -1 elif n > 0 then 1 else 0
 
 # Multi-line if expression
 let category =
     if age < 13 then
         "child"
-    else if age < 20 then
+    elif age < 20 then
         "teenager"
-    else if age < 65 then
+    elif age < 65 then
         "adult"
     else
         "senior"
@@ -51,9 +51,9 @@ if verbose then print "debug info"
 # Chained conditions
 if status == 200 then
     println "OK"
-else if status == 404 then
+elif status == 404 then
     println "Not found"
-else if status >= 500 then
+elif status >= 500 then
     println "Server error"
 else
     println $"Unknown: {status}"

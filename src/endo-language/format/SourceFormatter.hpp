@@ -149,6 +149,9 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void visit(pattern::GuardedPattern const& pat) override;
 
   private:
+    /// Formats an if-expression, using the given keyword ("if" or "elif") as the leading keyword.
+    void formatIfExpr(ast::IfExpr const& node, std::string_view keyword);
+
     explicit SourceFormatter(FormatConfig config,
                              std::vector<CommentTrivia> const& comments,
                              std::set<int> blankLines = {});
