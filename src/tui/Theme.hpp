@@ -181,4 +181,34 @@ class ThemeManager
 /// @brief Convenience function to get the current theme.
 [[nodiscard]] auto currentTheme() -> Theme const&;
 
+/// @brief Maps a category index to its color from the syntax palette.
+///
+/// This is the single source of truth for the category-to-color mapping, shared by
+/// both the generic syntax highlighter (tui::HighlightCategory) and the Endo-specific
+/// highlighter (endo::TokenCategory).
+///
+/// @param index Category ordinal (matching HighlightCategory / TokenCategory values).
+/// @param palette The syntax color palette.
+/// @return The color for the category, or defaultText for unknown indices.
+[[nodiscard]] constexpr RgbColor categoryColorFromIndex(int index,
+                                                        Theme::SyntaxHighlightPalette const& palette) noexcept
+{
+    switch (index)
+    {
+        case 0: return palette.defaultText; // Default
+        case 1: return palette.keyword;     // Keyword
+        case 2: return palette.number;      // Number
+        case 3: return palette.string;      // String
+        case 4: return palette.op;          // Operator
+        case 5: return palette.variable;    // Variable
+        case 6: return palette.constructor; // Constructor
+        case 7: return palette.comment;     // Comment
+        case 8: return palette.type;        // Type
+        case 9: return palette.punctuation; // Punctuation
+        case 10: return palette.function;   // Function
+        case 11: return palette.keyword;    // Preprocessor (tui-only, maps to keyword)
+        default: return palette.defaultText;
+    }
+}
+
 } // namespace tui

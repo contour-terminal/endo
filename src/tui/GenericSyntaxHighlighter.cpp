@@ -1716,22 +1716,7 @@ auto highlightLine(std::string_view line, LanguageId language, HighlightState st
 
 auto categoryColor(HighlightCategory cat, Theme const& theme) -> RgbColor
 {
-    switch (cat)
-    {
-        case HighlightCategory::Keyword: return theme.syntaxColors.keyword;
-        case HighlightCategory::Number: return theme.syntaxColors.number;
-        case HighlightCategory::String: return theme.syntaxColors.string;
-        case HighlightCategory::Operator: return theme.syntaxColors.op;
-        case HighlightCategory::Variable: return theme.syntaxColors.variable;
-        case HighlightCategory::Constructor: return theme.syntaxColors.constructor;
-        case HighlightCategory::Comment: return theme.syntaxColors.comment;
-        case HighlightCategory::Type: return theme.syntaxColors.type;
-        case HighlightCategory::Punctuation: return theme.syntaxColors.punctuation;
-        case HighlightCategory::Function: return theme.syntaxColors.function;
-        case HighlightCategory::Preprocessor: return theme.syntaxColors.keyword;
-        case HighlightCategory::Default: return theme.syntaxColors.defaultText;
-    }
-    return theme.syntaxColors.defaultText;
+    return categoryColorFromIndex(static_cast<int>(cat), theme.syntaxColors);
 }
 
 void renderHighlightedLine(TerminalOutput& output,

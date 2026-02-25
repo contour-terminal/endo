@@ -3,6 +3,7 @@
 
 #include <endo-language/lexer/TokenClassification.hpp>
 
+#include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/TerminalOutput.hpp>
 #include <tui/Theme.hpp>
 
@@ -11,6 +12,10 @@
 
 namespace endo
 {
+
+// Ensure TokenCategory and HighlightCategory ordinals stay in sync.
+static_assert(static_cast<int>(TokenCategory::Function) == static_cast<int>(tui::HighlightCategory::Function),
+              "TokenCategory and HighlightCategory ordinals must match");
 
 /// @brief Per-grapheme-cluster token category map for syntax highlighting.
 ///
@@ -29,23 +34,7 @@ using HighlightMap = std::vector<TokenCategory>;
 /// @return The RGB color to use for rendering.
 [[nodiscard]] inline tui::RgbColor categoryColor(TokenCategory category, tui::Theme const& theme) noexcept
 {
-    auto const& c = theme.syntaxColors;
-    using enum TokenCategory;
-    switch (category)
-    {
-        case Keyword: return c.keyword;
-        case Number: return c.number;
-        case String: return c.string;
-        case Operator: return c.op;
-        case Variable: return c.variable;
-        case Constructor: return c.constructor;
-        case Punctuation: return c.punctuation;
-        case Comment: return c.comment;
-        case Type: return c.type;
-        case Function: return c.function;
-        case Default: return c.defaultText;
-    }
-    return c.defaultText;
+    return tui::categoryColorFromIndex(static_cast<int>(category), theme.syntaxColors);
 }
 
 /// @brief Returns the display color for a given token category (using global theme).
