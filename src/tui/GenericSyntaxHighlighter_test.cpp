@@ -45,7 +45,21 @@ TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromExtension", "[tui][highlig
     CHECK(detectLanguageFromExtension(".cmake") == LanguageId::CMake);
     CHECK(detectLanguageFromExtension(".diff") == LanguageId::GitDiff);
     CHECK(detectLanguageFromExtension(".txt") == LanguageId::None);
-    CHECK(detectLanguageFromExtension(".rs") == LanguageId::None);
+    // Approximate mappings — C-family syntax
+    CHECK(detectLanguageFromExtension(".js") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".jsx") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".ts") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".tsx") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".rs") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".go") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".java") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".kt") == LanguageId::Cpp);
+    CHECK(detectLanguageFromExtension(".cs") == LanguageId::Cpp);
+    // Ruby/Lua map to Python
+    CHECK(detectLanguageFromExtension(".rb") == LanguageId::Python);
+    CHECK(detectLanguageFromExtension(".lua") == LanguageId::Python);
+    // TOML maps to YAML
+    CHECK(detectLanguageFromExtension(".toml") == LanguageId::Yaml);
 }
 
 TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromFenceTag", "[tui][highlight]")
@@ -63,8 +77,33 @@ TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromFenceTag", "[tui][highligh
     CHECK(detectLanguageFromFenceTag("markdown") == LanguageId::Markdown);
     CHECK(detectLanguageFromFenceTag("cmake") == LanguageId::CMake);
     CHECK(detectLanguageFromFenceTag("diff") == LanguageId::GitDiff);
-    CHECK(detectLanguageFromFenceTag("rust") == LanguageId::None);
     CHECK(detectLanguageFromFenceTag("") == LanguageId::None);
+    // Approximate mappings — C-family syntax
+    CHECK(detectLanguageFromFenceTag("javascript") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("js") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("jsx") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("typescript") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("ts") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("tsx") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("rust") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("rs") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("go") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("golang") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("java") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("kotlin") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("kt") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("csharp") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("cs") == LanguageId::Cpp);
+    CHECK(detectLanguageFromFenceTag("c#") == LanguageId::Cpp);
+    // Ruby/Lua map to Python
+    CHECK(detectLanguageFromFenceTag("ruby") == LanguageId::Python);
+    CHECK(detectLanguageFromFenceTag("rb") == LanguageId::Python);
+    CHECK(detectLanguageFromFenceTag("lua") == LanguageId::Python);
+    // Dockerfile maps to Bash
+    CHECK(detectLanguageFromFenceTag("dockerfile") == LanguageId::Bash);
+    CHECK(detectLanguageFromFenceTag("docker") == LanguageId::Bash);
+    // TOML maps to YAML
+    CHECK(detectLanguageFromFenceTag("toml") == LanguageId::Yaml);
 }
 
 TEST_CASE("GenericSyntaxHighlighter.detectLanguageFromPath", "[tui][highlight]")

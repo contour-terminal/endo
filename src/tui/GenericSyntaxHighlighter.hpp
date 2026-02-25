@@ -144,13 +144,16 @@ constexpr auto detectLanguageFromExtension(std::string_view ext) -> LanguageId
     if (ext == ".cpp" || ext == ".cxx" || ext == ".cc" || ext == ".c" || ext == ".hpp" || ext == ".hxx"
         || ext == ".hh" || ext == ".h" || ext == ".ipp")
         return LanguageId::Cpp;
-    if (ext == ".py" || ext == ".pyw" || ext == ".pyi")
+    if (ext == ".js" || ext == ".jsx" || ext == ".ts" || ext == ".tsx" || ext == ".rs" || ext == ".go"
+        || ext == ".java" || ext == ".kt" || ext == ".cs")
+        return LanguageId::Cpp;
+    if (ext == ".py" || ext == ".pyw" || ext == ".pyi" || ext == ".rb" || ext == ".lua")
         return LanguageId::Python;
     if (ext == ".sh" || ext == ".bash" || ext == ".zsh")
         return LanguageId::Bash;
     if (ext == ".json" || ext == ".jsonl")
         return LanguageId::Json;
-    if (ext == ".yml" || ext == ".yaml")
+    if (ext == ".yml" || ext == ".yaml" || ext == ".toml")
         return LanguageId::Yaml;
     if (ext == ".md" || ext == ".markdown")
         return LanguageId::Markdown;
@@ -169,13 +172,26 @@ constexpr auto detectLanguageFromFenceTag(std::string_view tag) -> LanguageId
 {
     if (tag == "cpp" || tag == "c++" || tag == "cxx" || tag == "c" || tag == "h" || tag == "hpp")
         return LanguageId::Cpp;
+    if (tag == "javascript" || tag == "js" || tag == "jsx" || tag == "typescript" || tag == "ts"
+        || tag == "tsx")
+        return LanguageId::Cpp;
+    if (tag == "rust" || tag == "rs" || tag == "go" || tag == "golang")
+        return LanguageId::Cpp;
+    if (tag == "java" || tag == "kotlin" || tag == "kt" || tag == "csharp" || tag == "cs" || tag == "c#")
+        return LanguageId::Cpp;
     if (tag == "python" || tag == "py")
         return LanguageId::Python;
+    if (tag == "ruby" || tag == "rb" || tag == "lua")
+        return LanguageId::Python;
     if (tag == "bash" || tag == "sh" || tag == "shell" || tag == "zsh")
+        return LanguageId::Bash;
+    if (tag == "dockerfile" || tag == "docker")
         return LanguageId::Bash;
     if (tag == "json" || tag == "jsonl")
         return LanguageId::Json;
     if (tag == "yaml" || tag == "yml")
+        return LanguageId::Yaml;
+    if (tag == "toml")
         return LanguageId::Yaml;
     if (tag == "markdown" || tag == "md")
         return LanguageId::Markdown;
