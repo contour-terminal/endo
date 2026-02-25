@@ -6335,6 +6335,26 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                         }
                         return;
                     }
+                    // json_str |> Json.query ".path" → json_query(path, json_str)
+                    if (modIdent->name == "Json" && method == "query")
+                    {
+                        if (explicitArgExprs.size() != 1)
+                        {
+                            reportTypeError("Json.query in pipeline requires exactly 1 path argument");
+                            return;
+                        }
+                        auto* pathArg = codegen(explicitArgExprs[0]);
+                        if (!pathArg)
+                        {
+                            reportTypeError("Failed to evaluate Json.query path argument");
+                            return;
+                        }
+                        if (tryGenerateNativeCall("json_query", { pathArg, value }))
+                        {
+                            annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
+                            return;
+                        }
+                    }
                 }
             }
             reportTypeError("Pipeline partial application requires a named function");
@@ -6628,6 +6648,17 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
                     }
                 }
                 reportTypeError("Markdown has no member '{}'", std::string_view(fieldAccess->fieldName));
+                return;
+            }
+            if (modIdent->name == "Json")
+            {
+                if (fieldAccess->fieldName == "query")
+                {
+                    reportTypeError(
+                        "Json.query in pipeline requires a path argument: value |> Json.query \".path\"");
+                    return;
+                }
+                reportTypeError("Json has no member '{}'", std::string_view(fieldAccess->fieldName));
                 return;
             }
         }
@@ -6966,6 +6997,21 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     {
                         if (method == "render")
                             _result = _builder.get(CoreVM::CoreNumber(0)); // render returns unit
+                        return;
+                    }
+                }
+            }
+
+            // Json.query path json → json_query(path, json)
+            if (modIdent->name == "Json" && method == "query" && argExprs.size() == 2)
+            {
+                auto* pathArg = codegen(argExprs[0]);
+                auto* jsonArg = codegen(argExprs[1]);
+                if (pathArg && jsonArg)
+                {
+                    if (tryGenerateNativeCall("json_query", { pathArg, jsonArg }))
+                    {
+                        annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
                         return;
                     }
                 }
@@ -10112,6 +10158,17 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
             reportTypeError("Markdown has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "Json")
+        {
+            if (node.fieldName == "query")
+            {
+                // Json.query requires arguments — handled in ApplicationExpr
+                reportTypeError("Json.query requires a path and json argument");
+                return;
+            }
+            reportTypeError("Json has no member '{}'", std::string_view(node.fieldName));
             return;
         }
     }

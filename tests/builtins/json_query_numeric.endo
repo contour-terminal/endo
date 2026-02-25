@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query converts numeric values to strings
+# expect: 42
+# expect:
+
+let json = "{\"count\": 42}"
+let r = Json.query ".count" json
+r |> each println

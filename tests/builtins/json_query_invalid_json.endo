@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query returns empty list for invalid JSON
+# expect-exit: 0
+
+let json = "not valid json {{"
+let r = Json.query ".name" json
+r |> each println

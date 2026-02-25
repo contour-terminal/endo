@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query returns empty list for missing key
+# expect-exit: 0
+
+let json = "{\"name\": \"hello\"}"
+let r = Json.query ".missing" json
+r |> each println

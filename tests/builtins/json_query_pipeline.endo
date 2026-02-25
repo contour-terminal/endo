@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query works in pipeline
+# expect: hello
+# expect:
+
+let json = "{\"name\": \"hello\"}"
+json |> Json.query ".name" |> each println

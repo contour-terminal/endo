@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query extracts CMake preset names
+# expect: clang-debug
+# expect: clang-release
+# expect:
+
+let json = "{\"configurePresets\":[{\"name\":\"clang-debug\"},{\"name\":\"clang-release\"}]}"
+let r = Json.query ".configurePresets[].name" json
+r |> each println

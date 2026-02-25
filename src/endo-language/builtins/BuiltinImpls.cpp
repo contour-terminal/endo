@@ -17,6 +17,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+
 namespace endo::builtins
 {
 
@@ -1282,6 +1284,121 @@ void markdownContent(CoreVM::Params& args)
         args.setResult(args.caller()->newString(std::string(*content)));
     else
         args.setResult(args.caller()->newString(""));
+}
+
+// ---------------------------------------------------------------------------
+// JSON operations
+// ---------------------------------------------------------------------------
+
+namespace
+{
+
+    struct JsonPathSegment
+    {
+        enum class Kind
+        {
+            Key,
+            Array,
+        };
+        Kind kind;
+        std::string key;
+    };
+
+    std::vector<JsonPathSegment> parseJsonPath(std::string_view path)
+    {
+        std::vector<JsonPathSegment> segments;
+        size_t i = 0;
+        while (i < path.size())
+        {
+            if (path[i] == '.')
+            {
+                ++i;
+                if (i >= path.size() || path[i] == '[')
+                    continue; // skip lone dot before [] or at end
+                auto const start = i;
+                while (i < path.size() && path[i] != '.' && path[i] != '[')
+                    ++i;
+                segments.push_back(
+                    { JsonPathSegment::Kind::Key, std::string(path.substr(start, i - start)) });
+            }
+            else if (path[i] == '[' && i + 1 < path.size() && path[i + 1] == ']')
+            {
+                segments.push_back({ JsonPathSegment::Kind::Array, {} });
+                i += 2;
+            }
+            else
+            {
+                ++i; // skip unexpected characters
+            }
+        }
+        return segments;
+    }
+
+    void walkJson(nlohmann::json const& node,
+                  std::vector<JsonPathSegment> const& segments,
+                  size_t index,
+                  std::vector<std::string>& results)
+    {
+        if (index == segments.size())
+        {
+            if (node.is_string())
+                results.push_back(node.get<std::string>());
+            else if (node.is_number_integer())
+                results.push_back(std::to_string(node.get<int64_t>()));
+            else if (node.is_number_float())
+                results.push_back(std::format("{}", node.get<double>()));
+            else if (node.is_boolean())
+                results.push_back(node.get<bool>() ? "true" : "false");
+            else if (node.is_null())
+                results.emplace_back("null");
+            return;
+        }
+
+        auto const& seg = segments[index];
+        if (seg.kind == JsonPathSegment::Kind::Key)
+        {
+            if (node.is_object() && node.contains(seg.key))
+                walkJson(node[seg.key], segments, index + 1, results);
+        }
+        else if (seg.kind == JsonPathSegment::Kind::Array)
+        {
+            if (node.is_array())
+            {
+                for (auto const& elem: node)
+                    walkJson(elem, segments, index + 1, results);
+            }
+        }
+    }
+
+} // namespace
+
+void jsonQuery(CoreVM::Params& args)
+{
+    auto const path = std::string(args.getString(1));
+    auto const json = std::string(args.getString(2));
+    auto* runner = args.caller();
+
+    std::vector<std::string> results;
+    try
+    {
+        auto const segments = parseJsonPath(path);
+        if (!segments.empty())
+        {
+            auto const doc = nlohmann::json::parse(json);
+            walkJson(doc, segments, 0, results);
+        }
+    }
+    catch (...)
+    {
+        // On parse error or any exception: return empty list
+    }
+
+    // Build cons-cell list right-to-left (same pattern as stringSplit)
+    auto* list = runner->makeNilList(CoreVM::LiteralType::String);
+    for (auto it = results.rbegin(); it != results.rend(); ++it)
+        list = runner->makeConsCell(
+            reinterpret_cast<uintptr_t>(runner->newString(*it)), list, CoreVM::LiteralType::String);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(list)));
 }
 
 // ---------------------------------------------------------------------------

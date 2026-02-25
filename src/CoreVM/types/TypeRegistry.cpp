@@ -209,6 +209,17 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(timeSpanType));
 
+    // Json: Stateless module providing JSON query functions (no instance fields)
+    auto jsonType = std::make_unique<TypeDescriptor>();
+    jsonType->kind = TypeKind::Product;
+    jsonType->id = 0; // No instances — module namespace only
+    jsonType->name = "Json";
+    jsonType->slotCount = 0;
+    jsonType->moduleFunctions = {
+        { "query", "Json.query path json -> list<string>" },
+    };
+    addType(std::move(jsonType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

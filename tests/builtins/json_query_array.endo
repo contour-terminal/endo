@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query extracts array element names
+# expect: alpha
+# expect: beta
+# expect:
+
+let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
+let r = Json.query ".items[].name" json
+r |> each println

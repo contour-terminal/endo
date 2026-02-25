@@ -331,6 +331,14 @@ static const std::array descriptors = {
     StdlibDescriptor { "", "markdown_to_text", LT::String, mdNumberParam, &builtins::markdownToText, "", "" },
     StdlibDescriptor { "", "markdown_content", LT::String, mdNumberParam, &builtins::markdownContent, "", "" },
     StdlibDescriptor { "", "markdown_render", LT::Void, mdNumberParam, nullptr, "", "" },
+
+    // Json operations
+    StdlibDescriptor { "", "json_query", LT::Number, jsonQueryParams, &builtins::jsonQuery,
+        "Json.query path json -> list<string>",
+        "**Json.query** `path json -> list<string>`\n\n"
+        "Extracts values from a JSON string using a dotted path.\n\n"
+        "Path syntax: `.key` accesses an object property, `[]` iterates array elements.\n"
+        "Example: `Json.query \".presets[].name\" json_str`" },
 };
 // clang-format on
 

@@ -298,6 +298,15 @@ void randNoArgs(CoreVM::Params& args);
 void randRange(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// JSON operations
+// ---------------------------------------------------------------------------
+
+/// json_query(path, json) -> list<string>: Extracts values from a JSON string using a dotted path.
+/// Path syntax: `.key` accesses an object property, `[]` iterates array elements.
+/// Returns an empty list on parse error or missing key.
+void jsonQuery(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

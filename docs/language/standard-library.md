@@ -26,6 +26,7 @@ by category. Each example is executable and verified by the documentation test s
 - [15.19 Display Formatting](#1519-display-formatting) -- `toText`, `string`
 - [15.20 HTTP](#1520-http) -- `fetch`
 - [15.21 Timing](#1521-timing) -- `time`
+- [15.22 JSON](#1522-json) -- `Json.query`
 
 ---
 
@@ -1391,6 +1392,48 @@ print (formatTimeSpan t)
 <!-- endo-no-check -->
 ```endo
 time { sleep (TimeSpan.fromMilliseconds 100) }
+```
+
+## 15.22 JSON
+
+#### `Json.query`
+
+**Signature:** `Json.query path json -> list<string>`
+
+Extracts values from a JSON string using a dotted path with `[]` for array iteration.
+Returns a `list<string>` of all matching leaf values (numeric/boolean values converted to strings).
+On parse error or missing key, returns an empty list.
+
+**Path syntax:**
+- `.key` — access an object property
+- `[]` — iterate array elements
+- Chained: `.key1[].key2` — access `key1` (array), iterate elements, access `key2` from each
+
+```endo
+let json = "{\"name\": \"hello\"}"
+let r = Json.query ".name" json
+r |> each println
+```
+
+```endo
+let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
+let r = Json.query ".items[].name" json
+r |> each println
+```
+
+Pipeline usage:
+
+```endo
+let json = "{\"name\": \"hello\"}"
+json |> Json.query ".name" |> each println
+```
+
+List append pattern (useful for merging results from multiple JSON files):
+
+<!-- endo-no-check -->
+```endo
+let r = Json.query ".presets[].name" json1 @ Json.query ".presets[].name" json2
+r |> each println
 ```
 
 ---

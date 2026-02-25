@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Json.query extracts nested keys
+# expect: val
+# expect:
+
+let json = "{\"a\": {\"b\": \"val\"}}"
+let r = Json.query ".a.b" json
+r |> each println
