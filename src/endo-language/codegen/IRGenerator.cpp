@@ -1137,6 +1137,20 @@ std::optional<CoreVM::LiteralType> IRGenerator::getListElementLiteralType(CoreVM
     return std::nullopt;
 }
 
+void IRGenerator::propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest)
+{
+    if (auto v = getInnerType(source))
+        annotateInnerType(dest, *v);
+    if (auto v = getObjectTypeId(source))
+        annotateObjectTypeId(dest, *v);
+    if (auto v = getInnerObjectTypeId(source))
+        annotateInnerObjectTypeId(dest, *v);
+    if (auto v = getListElementTypeId(source))
+        annotateListElementTypeId(dest, *v);
+    if (auto v = getListElementLiteralType(source))
+        annotateListElementLiteralType(dest, *v);
+}
+
 std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(
     std::span<CoreVM::Value* const> values)
 {
@@ -3308,7 +3322,11 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                 default: break;
             }
         }
-        // Fallback: assume numeric for unknown object types
+        // Fallback: use runtime type dispatch to safely handle unknown object types
+        // (prevents raw pointer printing when a string pointer is mistyped as Number)
+        if (auto* callback = findCallback("object_to_string(I)S"))
+            return _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".v2s");
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::Void)
@@ -3378,7 +3396,11 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                 }
             }
         }
-        // Fallback: assume numeric for unknown types
+        // Fallback: use runtime type dispatch to safely handle unknown Void-typed values
+        // (prevents raw pointer printing when a string pointer is mistyped as Number)
+        if (auto* callback = findCallback("object_to_string(I)S"))
+            return _builder.createCallFunction(
+                _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".v2s");
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::String)
@@ -5453,23 +5475,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Store the value
     _builder.createStore(storage, value, node.name);
 
-    // Propagate inner type annotation through the binding
-    if (auto innerType = getInnerType(value))
-        annotateInnerType(storage, *innerType);
-
-    // Propagate object type ID annotation through the binding
-    if (auto objTypeId = getObjectTypeId(value))
-        annotateObjectTypeId(storage, *objTypeId);
-
-    // Propagate inner object type ID annotation through the binding
-    if (auto innerObjTypeId = getInnerObjectTypeId(value))
-        annotateInnerObjectTypeId(storage, *innerObjTypeId);
-
-    // Propagate list element type annotation through the binding
-    if (auto elemTypeId = getListElementTypeId(value))
-        annotateListElementTypeId(storage, *elemTypeId);
-    if (auto elt = getListElementLiteralType(value))
-        annotateListElementLiteralType(storage, *elt);
+    // Propagate all type annotations through the binding
+    propagateAllAnnotations(value, storage);
 
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
@@ -5631,23 +5638,8 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         auto* storage = createAllocaInEntryBlock(value->type(), node.name);
         _builder.createStore(storage, value, node.name + ".store");
 
-        // Propagate inner type annotation through the binding
-        if (auto innerType = getInnerType(value))
-            annotateInnerType(storage, *innerType);
-
-        // Propagate object type ID annotation through the binding
-        if (auto objTypeId = getObjectTypeId(value))
-            annotateObjectTypeId(storage, *objTypeId);
-
-        // Propagate inner object type ID annotation through the binding
-        if (auto innerObjTypeId = getInnerObjectTypeId(value))
-            annotateInnerObjectTypeId(storage, *innerObjTypeId);
-
-        // Propagate list element type annotation through the binding
-        if (auto elemTypeId = getListElementTypeId(value))
-            annotateListElementTypeId(storage, *elemTypeId);
-        if (auto elt = getListElementLiteralType(value))
-            annotateListElementLiteralType(storage, *elt);
+        // Propagate all type annotations through the binding
+        propagateAllAnnotations(value, storage);
 
         bindFSharpVariable(node.name, storage);
     }
@@ -6881,17 +6873,8 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     _builder.createStore(storage, value, func->parameters[0]);
     bindFSharpVariable(func->parameters[0], storage);
 
-    // Propagate type annotations through piped parameter binding
-    if (auto objTypeId = getObjectTypeId(value))
-        annotateObjectTypeId(storage, *objTypeId);
-    if (auto innerObjTypeId = getInnerObjectTypeId(value))
-        annotateInnerObjectTypeId(storage, *innerObjTypeId);
-    if (auto innerType = getInnerType(value))
-        annotateInnerType(storage, *innerType);
-    if (auto elemTypeId = getListElementTypeId(value))
-        annotateListElementTypeId(storage, *elemTypeId);
-    if (auto elt = getListElementLiteralType(value))
-        annotateListElementLiteralType(storage, *elt);
+    // Propagate all type annotations through piped parameter binding
+    propagateAllAnnotations(value, storage);
 
     // Track function references passed as piped value (HOF support)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
@@ -7678,17 +7661,8 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
 
-        // Propagate type annotations through parameter bindings
-        if (auto objTypeId = getObjectTypeId(args[i]))
-            annotateObjectTypeId(storage, *objTypeId);
-        if (auto innerObjTypeId = getInnerObjectTypeId(args[i]))
-            annotateInnerObjectTypeId(storage, *innerObjTypeId);
-        if (auto innerType = getInnerType(args[i]))
-            annotateInnerType(storage, *innerType);
-        if (auto elemTypeId = getListElementTypeId(args[i]))
-            annotateListElementTypeId(storage, *elemTypeId);
-        if (auto elt = getListElementLiteralType(args[i]))
-            annotateListElementLiteralType(storage, *elt);
+        // Propagate all type annotations through parameter bindings
+        propagateAllAnnotations(args[i], storage);
 
         // Track function references passed as arguments (HOF support)
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
@@ -7985,23 +7959,8 @@ void IRGenerator::visit(ast::IdentifierExpr const& node)
     // Load the value from storage
     _result = _builder.createLoad(storage, node.name);
 
-    // Propagate inner type annotation through variable loads
-    if (auto innerType = getInnerType(storage))
-        annotateInnerType(_result, *innerType);
-
-    // Propagate object type ID annotation through variable loads
-    if (auto objTypeId = getObjectTypeId(storage))
-        annotateObjectTypeId(_result, *objTypeId);
-
-    // Propagate inner object type ID annotation through variable loads
-    if (auto innerObjTypeId = getInnerObjectTypeId(storage))
-        annotateInnerObjectTypeId(_result, *innerObjTypeId);
-
-    // Propagate list element type annotation through variable loads
-    if (auto elemTypeId = getListElementTypeId(storage))
-        annotateListElementTypeId(_result, *elemTypeId);
-    if (auto elt = getListElementLiteralType(storage))
-        annotateListElementLiteralType(_result, *elt);
+    // Propagate all type annotations through variable loads
+    propagateAllAnnotations(storage, _result);
 }
 
 void IRGenerator::visit(ast::IntLiteralExpr const& node)
@@ -8086,9 +8045,8 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     CoreVM::AllocaInstr* scrutineeStorage = createAllocaInEntryBlock(scrutinee->type(), "scrutinee");
     _builder.createStore(scrutineeStorage, scrutinee, "scrutinee.store");
 
-    // Propagate inner object type ID so pattern extraction can annotate bound values
-    if (auto innerObjTypeId = getInnerObjectTypeId(scrutinee))
-        annotateInnerObjectTypeId(scrutineeStorage, *innerObjTypeId);
+    // Propagate all type annotations from scrutinee to its storage
+    propagateAllAnnotations(scrutinee, scrutineeStorage);
 
     // Result storage is created lazily after we know the actual type from the first arm body.
     // createAllocaInEntryBlock() always inserts into the entry block, so calling it later is safe.
@@ -8256,6 +8214,16 @@ void IRGenerator::visit(ast::MatchExpr const& node)
                     if (auto it = recTypeInfo->fieldTypes.find(name); it != recTypeInfo->fieldTypes.end())
                         annotateInnerType(storage, it->second);
                 }
+
+                // For cons/list patterns on typed lists, annotate head element bindings
+                // with the list's element literal type so convertToString dispatches correctly.
+                // Also propagate list-level annotations for tail bindings (which are sublists).
+                if (isConsPattern || isListPattern)
+                {
+                    if (auto elemLitType = getListElementLiteralType(scrutineeStorage))
+                        annotateInnerType(storage, *elemLitType);
+                    propagateAllAnnotations(scrutineeStorage, storage);
+                }
             }
         }
         // For constructor patterns (Error e, Some x), we need to extract the payload
@@ -8284,9 +8252,8 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             for (auto const& [name, storage]: preAllocatedBindings)
             {
                 _builder.createStore(storage, bindingSource, name + ".store");
-                // Propagate object type ID to binding storage for convertToString
-                if (auto objTypeId = getObjectTypeId(bindingSource))
-                    annotateObjectTypeId(storage, *objTypeId);
+                // Propagate all type annotations to binding storage
+                propagateAllAnnotations(bindingSource, storage);
                 bindFSharpVariable(name, storage);
             }
         }
@@ -8337,11 +8304,8 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Store the result
         _builder.createStore(resultStorage, bodyResult, "match.result.store");
 
-        // Propagate type annotations through match result storage
-        if (auto innerType = getInnerType(bodyResult))
-            annotateInnerType(resultStorage, *innerType);
-        if (auto objTypeId = getObjectTypeId(bodyResult))
-            annotateObjectTypeId(resultStorage, *objTypeId);
+        // Propagate all type annotations through match result storage
+        propagateAllAnnotations(bodyResult, resultStorage);
 
         // Branch to merge block
         _builder.createBr(mergeBlock);
@@ -8353,11 +8317,8 @@ void IRGenerator::visit(ast::MatchExpr const& node)
     {
         _result = _builder.createLoad(resultStorage, "match.result.load");
 
-        // Propagate type annotations from storage to result
-        if (auto innerType = getInnerType(resultStorage))
-            annotateInnerType(_result, *innerType);
-        if (auto objTypeId = getObjectTypeId(resultStorage))
-            annotateObjectTypeId(_result, *objTypeId);
+        // Propagate all type annotations from storage to result
+        propagateAllAnnotations(resultStorage, _result);
     }
     else
         _result = nullptr; // All arms are tail calls — merge is unreachable
@@ -10788,13 +10749,8 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         _builder.createStore(storage, args[i], func->parameters[i]);
         bindFSharpVariable(func->parameters[i], storage);
 
-        // Propagate type annotations through HOF parameter bindings
-        if (auto objTypeId = getObjectTypeId(args[i]))
-            annotateObjectTypeId(storage, *objTypeId);
-        if (auto elemTypeId = getListElementTypeId(args[i]))
-            annotateListElementTypeId(storage, *elemTypeId);
-        if (auto elt = getListElementLiteralType(args[i]))
-            annotateListElementLiteralType(storage, *elt);
+        // Propagate all type annotations through HOF parameter bindings
+        propagateAllAnnotations(args[i], storage);
 
         // Track function references passed as arguments
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))

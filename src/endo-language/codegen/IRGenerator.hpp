@@ -803,6 +803,12 @@ class IRGenerator final: public ast::Visitor
     /// Retrieves the list element literal type annotation for a value, if any.
     [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementLiteralType(CoreVM::Value* val) const;
 
+    /// Copies all annotation maps (inner type, object type ID, inner object type ID,
+    /// list element type ID, list element literal type) from source to dest.
+    /// Use this instead of manually propagating individual annotations to avoid
+    /// incomplete propagation bugs where some maps are missed.
+    void propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest);
+
     /// Determines the common literal type of a collection of values.
     /// Returns the shared type if all values have the same non-Void type, std::nullopt otherwise.
     [[nodiscard]] static std::optional<CoreVM::LiteralType> determineCommonLiteralType(
