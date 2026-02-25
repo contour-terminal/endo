@@ -1,0 +1,111 @@
+// SPDX-License-Identifier: Apache-2.0
+#include <shell/completion/CompletionAdapter.hpp>
+#include <shell/completion/ScriptedCompleter.hpp>
+
+#include <endo-language/ide/CompletionContext.hpp>
+
+#include <sstream>
+
+namespace endo
+{
+
+ScriptedCompleter::ScriptedCompleter(CompleterFunctionRegistry const& registry,
+                                     CompleterExecutionCallback callback):
+    _registry(registry), _callback(std::move(callback))
+{
+}
+
+bool ScriptedCompleter::canHandle(CompletionContextType type) const
+{
+    return type == CompletionContextType::Argument || type == CompletionContextType::Option;
+}
+
+bool ScriptedCompleter::isExclusiveFor(CompletionContext const& context) const
+{
+    if (!context.command.has_value())
+        return false;
+    return _registry.hasCommand(*context.command);
+}
+
+std::vector<CompletionItem> ScriptedCompleter::complete(CompletionContext const& context)
+{
+    if (!context.command.has_value())
+        return {};
+
+    auto const funcName = _registry.functionForCommand(*context.command);
+    if (!funcName)
+        return {};
+
+    auto const args = extractArgs(context.fullInput, *context.command, context.prefix);
+    auto const cacheKey = makeCacheKey(*funcName, args);
+
+    // Check cache
+    auto const now = std::chrono::steady_clock::now();
+    if (auto it = _cache.find(cacheKey); it != _cache.end())
+    {
+        if (now - it->second.timestamp < cacheTTL)
+        {
+            // Reuse cached results with current prefix for fuzzy scoring
+            std::vector<CompletionCandidate> candidates;
+            candidates.reserve(it->second.results.size());
+            for (auto const& text: it->second.results)
+                candidates.push_back({ .text = text, .kind = CompletionKind::EnumValue });
+            return applyFuzzyScoring(candidates, context.prefix, 60);
+        }
+    }
+
+    // Execute the completer function
+    auto results = _callback(*funcName, args, context.prefix);
+
+    // Cache the results
+    _cache[cacheKey] = CacheEntry { .results = results, .timestamp = now };
+
+    // Convert to CompletionCandidates and apply fuzzy scoring
+    std::vector<CompletionCandidate> candidates;
+    candidates.reserve(results.size());
+    for (auto& text: results)
+        candidates.push_back({ .text = std::move(text), .kind = CompletionKind::EnumValue });
+
+    return applyFuzzyScoring(candidates, context.prefix, 60);
+}
+
+std::string ScriptedCompleter::makeCacheKey(std::string_view funcName, std::vector<std::string> const& args)
+{
+    std::string key(funcName);
+    for (auto const& arg: args)
+    {
+        key += '\0';
+        key += arg;
+    }
+    return key;
+}
+
+std::vector<std::string> ScriptedCompleter::extractArgs(std::string_view fullInput,
+                                                        std::string_view command,
+                                                        std::string_view prefix)
+{
+    std::vector<std::string> args;
+
+    // Find the command in the input
+    auto const cmdPos = fullInput.find(command);
+    if (cmdPos == std::string_view::npos)
+        return args;
+
+    // Get everything after the command
+    auto remaining = fullInput.substr(cmdPos + command.size());
+
+    // Tokenize by whitespace, excluding the prefix (last token)
+    auto stream = std::istringstream(std::string(remaining));
+    std::vector<std::string> tokens;
+    std::string token;
+    while (stream >> token)
+        tokens.push_back(std::move(token));
+
+    // Remove the last token if it matches the prefix (it's the word being typed)
+    if (!tokens.empty() && !prefix.empty() && tokens.back() == prefix)
+        tokens.pop_back();
+
+    return tokens;
+}
+
+} // namespace endo

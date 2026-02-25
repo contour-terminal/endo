@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Shell.hpp"
+#include <shell/completion/ScriptedCompleter.hpp>
 #include <shell/ui/Prompt.hpp>
 #include <shell/ui/RichConsoleReport.hpp>
 #include <shell/ui/SyntaxHighlighter.hpp>
@@ -629,6 +630,150 @@ void Shell::loadInitScript()
     }
 }
 
+void Shell::loadCompleters()
+{
+    std::set<std::string> seenBasenames;
+
+    auto const loadDir = [&](std::filesystem::path const& dir) {
+        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir))
+            return;
+
+        // Collect .endo files and sort alphabetically for deterministic load order
+        std::vector<std::filesystem::path> files;
+        for (auto const& entry: std::filesystem::directory_iterator(dir))
+        {
+            if (entry.is_regular_file() && entry.path().extension() == ".endo")
+                files.push_back(entry.path());
+        }
+        std::sort(files.begin(), files.end());
+
+        for (auto const& path: files)
+        {
+            auto const basename = path.filename().string();
+            if (seenBasenames.contains(basename))
+                continue;
+            seenBasenames.insert(basename);
+
+            try
+            {
+                auto ifs = std::ifstream(path);
+                auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
+                auto const savedInteractive = _interactive;
+                _interactive = false;
+                (void) execute(content, path.string());
+                _interactive = savedInteractive;
+            }
+            catch (std::exception const& e)
+            {
+                std::println(
+                    std::cerr, "endo: warning: error loading completer {}: {}", path.string(), e.what());
+            }
+        }
+    };
+
+    // User overrides first
+    if (auto const* home = std::getenv("HOME"))
+        loadDir(std::filesystem::path(home) / ".config" / "endo" / "completers");
+
+    // System/bundled completers
+#ifdef ENDO_COMPLETERS_DIR
+    loadDir(ENDO_COMPLETERS_DIR);
+#endif
+
+    // Register the ScriptedCompleter provider if any completers were loaded
+    if (!_completerFunctions.commands().empty())
+    {
+        completer->addProvider(std::make_unique<ScriptedCompleter>(
+            _completerFunctions,
+            [this](std::string_view funcName, std::vector<std::string> const& args, std::string_view prefix) {
+                return executeCompleterFunction(funcName, args, prefix);
+            }));
+    }
+}
+
+std::vector<std::string> Shell::executeCompleterFunction(std::string_view funcName,
+                                                         std::vector<std::string> const& args,
+                                                         std::string_view prefix)
+{
+    // Build the expression: funcName [arg1; arg2; ...] "prefix" |> each println
+    std::string expr;
+    expr += funcName;
+    expr += " [";
+    for (size_t i = 0; i < args.size(); ++i)
+    {
+        if (i > 0)
+            expr += "; ";
+        expr += '"';
+        // Escape quotes in args
+        for (auto c: args[i])
+        {
+            if (c == '"')
+                expr += "\\\"";
+            else if (c == '\\')
+                expr += "\\\\";
+            else
+                expr += c;
+        }
+        expr += '"';
+    }
+    expr += "] \"";
+    for (auto c: prefix)
+    {
+        if (c == '"')
+            expr += "\\\"";
+        else if (c == '\\')
+            expr += "\\\\";
+        else
+            expr += c;
+    }
+    expr += "\" |> each println";
+
+    // Capture stdout via pipe
+    auto pipeResult = createPipe();
+    if (!pipeResult.has_value())
+        return {};
+
+    auto& pipe = pipeResult.value();
+    auto const savedStdout = _currentPipelineBuilder.defaultStdoutFd;
+    _currentPipelineBuilder.defaultStdoutFd = pipe->writer();
+
+    auto const savedInteractive = _interactive;
+    _interactive = false;
+    (void) execute(expr);
+    _interactive = savedInteractive;
+
+    _currentPipelineBuilder.defaultStdoutFd = savedStdout;
+    pipe->closeWriter();
+
+    // Read captured output
+    std::string output;
+    char buf[4096];
+    while (true)
+    {
+        auto const n = platformRead(pipe->reader(), buf, sizeof(buf));
+        if (n <= 0)
+            break;
+        output.append(buf, static_cast<size_t>(n));
+    }
+    pipe->closeReader();
+
+    // Split by newlines
+    std::vector<std::string> results;
+    size_t pos = 0;
+    while (pos < output.size())
+    {
+        auto const nl = output.find('\n', pos);
+        auto line = (nl == std::string::npos) ? output.substr(pos) : output.substr(pos, nl - pos);
+        if (!line.empty())
+            results.push_back(std::move(line));
+        if (nl == std::string::npos)
+            break;
+        pos = nl + 1;
+    }
+
+    return results;
+}
+
 int Shell::run()
 {
     if (_interactive && !_tty.isTerminal())
@@ -638,6 +783,7 @@ int Shell::run()
     }
 
     loadInitScript();
+    loadCompleters();
 
     // Ensure terminal is initialized (raw mode, ECHO off) before sending
     // any terminal queries that produce response bytes.
@@ -904,21 +1050,21 @@ int Shell::run()
     return _quit ? _exitCode : EXIT_SUCCESS;
 }
 
-int Shell::execute(std::string const& lineBuffer)
+int Shell::execute(std::string const& lineBuffer, std::string_view sourceName)
 {
     // Clear any leftover redirect state from previous commands
     _redirectState.clear();
 
     try
     {
-        static constexpr std::string_view stdinName = "stdin";
-        auto const sourceName = !_interactive && !_positionalParameters.empty()
-                                    ? std::string_view(_positionalParameters[0])
-                                    : stdinName;
+        // Use positional parameters for script mode, otherwise use the provided source name
+        auto const effectiveSourceName = !_interactive && !_positionalParameters.empty()
+                                             ? std::string_view(_positionalParameters[0])
+                                             : sourceName;
         RichConsoleReport report;
         report.setSourceText(lineBuffer);
-        auto parser =
-            endo::Parser(_runtime, report, std::make_unique<endo::StringSource>(lineBuffer, sourceName));
+        auto parser = endo::Parser(
+            _runtime, report, std::make_unique<endo::StringSource>(lineBuffer, effectiveSourceName));
         parser.setSourceText(lineBuffer);
         {
             auto names = std::unordered_set<std::string> {};

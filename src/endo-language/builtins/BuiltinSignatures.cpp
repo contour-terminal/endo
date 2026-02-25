@@ -183,6 +183,12 @@ void registerShellBuiltins(CoreVM::Runtime& rt, CallbackResolver const& resolve)
         .param<CoreVM::CoreNumber>("code")
         .returnType(CoreVM::LiteralType::Void), resolve, "setvar.exitstatus", 1);
 
+    // register_completer(command: string, function_name: string) -> void
+    bindResolved(rt.registerFunction("register_completer")
+        .param<CoreVM::CoreString>("command")
+        .param<CoreVM::CoreString>("function_name")
+        .returnType(CoreVM::LiteralType::Void), resolve, "register_completer", 2);
+
     // clang-format on
 }
 

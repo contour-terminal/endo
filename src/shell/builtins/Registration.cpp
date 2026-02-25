@@ -51,6 +51,7 @@ void Shell::registerBuiltinFunctions()
     registerPromptBuiltins();
     registerAgentConfigBuiltins();
     registerMcpBuiltins();
+    registerCompleterBuiltins();
 }
 
 void Shell::registerEnvironmentBuiltins()
@@ -1404,6 +1405,21 @@ void Shell::registerMcpBuiltins()
             auto const& name = args.getString(1);
             std::erase_if(mcpServerConfigs,
                           [&name](auto const& config) { return config.name == name; });
+        });
+    // clang-format on
+}
+
+void Shell::registerCompleterBuiltins()
+{
+    // clang-format off
+    _runtime.registerFunction("register_completer")
+        .param<CoreVM::CoreString>("command")
+        .param<CoreVM::CoreString>("function_name")
+        .returnType(CoreVM::LiteralType::Void)
+        .bind([this](CoreVM::Params& args) {
+            auto command = std::string(args.getString(1));
+            auto functionName = std::string(args.getString(2));
+            _completerFunctions.registerFunction(std::move(command), std::move(functionName));
         });
     // clang-format on
 }

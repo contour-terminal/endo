@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "Completer.hpp"
-#include <shell/completion/CmakeSpec.hpp>
 #include <shell/completion/GitSpec.hpp>
-#include <shell/completion/SshSpec.hpp>
 
 #include <tui/completer/Completer.hpp>
 
@@ -21,13 +19,9 @@ Completer::Completer(EnvironmentProvider const& env,
     _providers.push_back(std::make_unique<CommandCompleter>(env));
     _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
 
-    // Generic command spec completer (replaces GitBranchCompleter)
+    // Git command spec completer (cmake/ssh/scp/ctest moved to scripted completers)
     auto specCompleter = std::make_unique<CommandSpecCompleter>();
     specCompleter->registerCommand(createGitSpec(), std::make_unique<GitQueryProvider>());
-    specCompleter->registerCommand(createCmakeSpec(), std::make_unique<CmakeQueryProvider>());
-    specCompleter->registerCommand(createCtestSpec(), std::make_unique<CmakeQueryProvider>());
-    specCompleter->registerCommand(createSshSpec(), std::make_unique<SshQueryProvider>());
-    specCompleter->registerCommand(createScpSpec(), std::make_unique<SshQueryProvider>());
     _providers.push_back(std::move(specCompleter));
 
     _providers.push_back(std::make_unique<LetBindingCompleter>(fsharpState));

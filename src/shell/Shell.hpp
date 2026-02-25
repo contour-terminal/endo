@@ -36,6 +36,7 @@ struct AgentRunOptions;
 } // namespace endo::agent
 
 #include <shell/completion/Completer.hpp>
+#include <shell/completion/CompleterFunctionRegistry.hpp>
 #include <shell/history/History.hpp>
 #include <shell/history/PersistentHistory.hpp>
 #include <shell/output/OutputDefinitionRegistry.hpp>
@@ -93,7 +94,10 @@ class Shell final: public SignalCallback
     void setPositionalParameters(std::vector<std::string> params);
 
     int run();
-    int execute(std::string const& lineBuffer);
+    /// @brief Executes a line of shell/F# code.
+    /// @param lineBuffer The source code to execute.
+    /// @param sourceName The source name for error messages (defaults to "stdin").
+    int execute(std::string const& lineBuffer, std::string_view sourceName = "stdin");
 
     /// @brief Loads ~/.config/endo/init.endo and agent config if they exist.
     /// Call after construction for non-interactive modes that need shell config.
@@ -165,6 +169,19 @@ class Shell final: public SignalCallback
     void registerPromptBuiltins();
     void registerAgentConfigBuiltins();
     void registerMcpBuiltins();
+    void registerCompleterBuiltins();
+
+    /// @brief Loads .endo completer scripts from user and system directories.
+    void loadCompleters();
+
+    /// @brief Executes a registered completer function and returns completion strings.
+    /// @param funcName The function name to invoke.
+    /// @param args Tokens after the command, excluding the current word.
+    /// @param prefix The current word being typed.
+    /// @return List of completion candidate strings.
+    [[nodiscard]] std::vector<std::string> executeCompleterFunction(std::string_view funcName,
+                                                                    std::vector<std::string> const& args,
+                                                                    std::string_view prefix);
 
     // --- Inline command implementations (builtins/InlineCommands.cpp) ---
     /// Executes the echo builtin, writing to outputFd. Returns exit code.
@@ -357,8 +374,9 @@ class Shell final: public SignalCallback
     CoreVM::Runtime _runtime;
     EnvironmentProvider& _env;
     TTY& _tty;
-    FSharpPersistentState _fsharpState;          ///< F# function definitions persisted across REPL prompts
-    OutputDefinitionRegistry _outputDefinitions; ///< Output definition registry for structured pipelines
+    FSharpPersistentState _fsharpState;            ///< F# function definitions persisted across REPL prompts
+    OutputDefinitionRegistry _outputDefinitions;   ///< Output definition registry for structured pipelines
+    CompleterFunctionRegistry _completerFunctions; ///< Scripted completer function registry
 
     ProcessManager& _processManager;
 

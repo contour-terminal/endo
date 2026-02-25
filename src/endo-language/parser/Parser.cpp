@@ -274,6 +274,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 return parseBreak();
             else if (_lexer.isDirective("continue"))
                 return parseContinue();
+            else if (_lexer.currentLiteral() == "register_completer")
+            {
+                // register_completer "cmd" funcName — parse as F# application for compile-time verification
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                return std::make_unique<ast::ExprStmt>(std::move(expr));
+            }
             else if (_lexer.currentLiteral() == "print" || _lexer.currentLiteral() == "println"
                      || _lexer.currentLiteral() == "each")
             {

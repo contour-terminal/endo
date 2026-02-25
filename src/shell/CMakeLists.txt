@@ -92,12 +92,11 @@ add_library(endo-shell STATIC
     completion/CommandSpec.hpp
     completion/QueryCache.hpp
     completion/QueryCache.cpp
-    completion/CmakeSpec.hpp
-    completion/CmakeSpec.cpp
+    completion/CompleterFunctionRegistry.hpp
+    completion/ScriptedCompleter.hpp
+    completion/ScriptedCompleter.cpp
     completion/GitSpec.hpp
     completion/GitSpec.cpp
-    completion/SshSpec.hpp
-    completion/SshSpec.cpp
 
     # History
     history/History.hpp
@@ -199,6 +198,7 @@ endif()
 
 target_compile_definitions(endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+    ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
 )
 
 if(ENDO_TRACE_VM)
@@ -225,6 +225,8 @@ add_executable(test-endo-shell
     completion/Completer_test.cpp
     completion/FSharpCompleter_test.cpp
     completion/CommandSpecCompleter_test.cpp
+    completion/CompleterFunctionRegistry_test.cpp
+    completion/ScriptedCompleter_test.cpp
     history/History_test.cpp
     history/PersistentHistory_test.cpp
     output/OutputDefinitionRegistry_test.cpp
@@ -237,6 +239,7 @@ add_executable(test-endo-shell
 target_link_libraries(test-endo-shell endo-shell Catch2::Catch2)
 target_compile_definitions(test-endo-shell PRIVATE
     ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+    ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
 )
 
 add_test(NAME test-endo-shell COMMAND test-endo-shell)

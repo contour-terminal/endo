@@ -4446,6 +4446,47 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    // register_completer "command" funcIdentifier — compile-time function verification
+    if (name == "register_completer")
+    {
+        if (argExprs.size() != 2)
+        {
+            reportTypeError("register_completer requires exactly 2 arguments, got {}", argExprs.size());
+            return true;
+        }
+
+        // First arg: command name (string)
+        auto* commandArg = codegen(argExprs[0]);
+        if (!commandArg)
+        {
+            reportTypeError("register_completer: failed to evaluate command name argument");
+            return true;
+        }
+
+        // Second arg: function identifier — compile-time verification
+        auto const* identExpr = dynamic_cast<ast::IdentifierExpr const*>(argExprs[1]);
+        if (!identExpr)
+        {
+            reportTypeError("register_completer: second argument must be a function identifier");
+            return true;
+        }
+
+        // Verify function exists at compile time
+        if (!lookupFSharpFunction(identExpr->name))
+        {
+            reportTypeError("register_completer: function '{}' is not defined", identExpr->name);
+            return true;
+        }
+
+        // Convert identifier name to string and call native callback
+        auto* funcNameStr = _builder.get(CoreVM::CoreString(identExpr->name));
+        if (tryGenerateNativeCall("register_completer", { commandArg, funcNameStr }))
+            return true;
+
+        reportTypeError("register_completer native callback not found");
+        return true;
+    }
+
     return false;
 }
 
