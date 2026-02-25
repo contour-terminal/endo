@@ -1,7 +1,18 @@
 let flatpak_complete args prefix =
-    let flatpak_subcommands = [ "run"; "install"; "uninstall"; "update"; "list"; "info"; "search"; "override"; "remotes"; "remote-add"; "remote-delete"; "remote-modify"; "remote-ls"; "remote-info"; "config"; "repair"; "history"; "ps"; "kill"; "enter"; "mask"; "pin"; "make-current"; "create-usb"; "repo"; "documents"; "document-export"; "document-unexport"; "document-info"; "permission-reset"; "permission-remove"; "permission-set"; "permission-show" ]
-    let flatpak_options = [ "--user"; "--system"; "--installation"; "--verbose"; "-v"; "--help"; "-h"; "--version" ]
-    let flatpak_run_options = [ "--branch"; "--arch"; "--command"; "--runtime"; "--user"; "--system"; "--verbose"; "-v" ]
+    let flatpak_subcommands = [
+        "run"; "install"; "uninstall"; "update"; "list"; "info"; "search"; "override";
+        "remotes"; "remote-add"; "remote-delete"; "remote-modify"; "remote-ls"; "remote-info";
+        "config"; "repair"; "history"; "ps"; "kill"; "enter"; "mask"; "pin"; "make-current";
+        "create-usb"; "repo"; "documents"; "document-export"; "document-unexport";
+        "document-info"; "permission-reset"; "permission-remove"; "permission-set";
+        "permission-show"
+    ]
+    let flatpak_options = [
+        "--user"; "--system"; "--installation"; "--verbose"; "-v"; "--help"; "-h"; "--version"
+    ]
+    let flatpak_run_options = [
+        "--branch"; "--arch"; "--command"; "--runtime"; "--user"; "--system"; "--verbose"; "-v"
+    ]
     match args with
     | [] when startsWith "-" prefix -> flatpak_options
     | [] -> flatpak_subcommands
