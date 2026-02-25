@@ -14,8 +14,39 @@ namespace endo::format
 // Construction and static entry points
 // ============================================================================
 
-SourceFormatter::SourceFormatter(FormatConfig config, std::vector<CommentTrivia> const& comments):
-    _config(config), _comments(comments)
+/// Scans source text and returns the set of 0-based line numbers that are blank
+/// (empty or whitespace-only).
+static std::set<int> computeBlankLines(std::string const& source)
+{
+    std::set<int> result;
+    int line = 0;
+    size_t pos = 0;
+    while (pos < source.size())
+    {
+        auto const eol = source.find('\n', pos);
+        auto const end = (eol == std::string::npos) ? source.size() : eol;
+        auto const lineContent = std::string_view(source).substr(pos, end - pos);
+        auto const isBlank =
+            lineContent.empty() || lineContent.find_first_not_of(" \t\r") == std::string_view::npos;
+        if (isBlank)
+            result.insert(line);
+        ++line;
+        pos = (eol == std::string::npos) ? source.size() : eol + 1;
+    }
+    return result;
+}
+
+bool SourceFormatter::hasBlankLineBetween(int afterLine, int beforeLine) const
+{
+    // Check if any blank line exists in the exclusive range (afterLine, beforeLine)
+    auto const it = _blankLines.lower_bound(afterLine + 1);
+    return it != _blankLines.end() && *it < beforeLine;
+}
+
+SourceFormatter::SourceFormatter(FormatConfig config,
+                                 std::vector<CommentTrivia> const& comments,
+                                 std::set<int> blankLines):
+    _config(config), _comments(comments), _blankLines(std::move(blankLines))
 {
 }
 
@@ -38,14 +69,15 @@ std::string SourceFormatter::format(std::string const& source, FormatConfig cons
         return source; // Parse failed — return original source unchanged
 
     // 3. Format
-    return format(*program, comments, config);
+    return format(*program, comments, config, computeBlankLines(source));
 }
 
 std::string SourceFormatter::format(ast::Node const& root,
                                     std::vector<CommentTrivia> const& comments,
-                                    FormatConfig const& config)
+                                    FormatConfig const& config,
+                                    std::set<int> blankLines)
 {
-    SourceFormatter formatter(config, comments);
+    SourceFormatter formatter(config, comments, std::move(blankLines));
     root.accept(formatter);
     formatter.emitRemainingComments();
 
@@ -461,15 +493,26 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
         if (i > 0)
         {
             emitNewline();
-            // Add blank lines between top-level statements, but not between
-            // consecutive expression-like statements (e.g., function calls, shell commands).
+            auto wantBlankLine = false;
+
+            // (A) Existing heuristic: declarations/blocks at top level always get blank lines
             if (_indentLevel == 0
                 && (isDeclarationOrBlock(*node.statements[i - 1])
                     || isDeclarationOrBlock(*node.statements[i])))
+                wantBlankLine = true;
+
+            // (B) Preserve user-authored blank lines at any indent level
+            if (!wantBlankLine && !_blankLines.empty())
             {
+                auto const prevStart = findFirstLine(*node.statements[i - 1]);
+                auto const nextStart = findFirstLine(*node.statements[i]);
+                if (prevStart && nextStart)
+                    wantBlankLine = hasBlankLineBetween(*prevStart, *nextStart);
+            }
+
+            if (wantBlankLine)
                 for (uint32_t b = 0; b < _config.blankLinesBetweenTopLevel; ++b)
                     emitNewline();
-            }
         }
         node.statements[i]->accept(*this);
     }

@@ -599,3 +599,135 @@ TEST_CASE("SourceFormatter.comment_preserves_unicode", "[format]")
     INFO("Result: [" << result << "]");
     CHECK(result.find("A \xe2\x80\x94 B") != std::string::npos);
 }
+
+// ============================================================================
+// User-authored blank line preservation
+// ============================================================================
+
+TEST_CASE("SourceFormatter.preserve_blank_line_between_print_calls", "[format]")
+{
+    auto const result = SourceFormatter::format("print 1\n\nprint 2");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("print 1\n\nprint 2") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.no_blank_line_when_user_omitted", "[format]")
+{
+    auto const result = SourceFormatter::format("print 1\nprint 2");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("print 1\nprint 2") != std::string::npos);
+    // Must NOT have a blank line inserted
+    CHECK(result.find("print 1\n\nprint 2") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.normalize_multiple_blank_lines_to_one", "[format]")
+{
+    auto const result = SourceFormatter::format("print 1\n\n\n\nprint 2");
+    INFO("Result: [" << result << "]");
+    // Should have exactly one blank line, not multiple
+    CHECK(result.find("print 1\n\nprint 2") != std::string::npos);
+    CHECK(result.find("print 1\n\n\nprint 2") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.preserve_blank_line_between_shell_commands", "[format]")
+{
+    auto const result = SourceFormatter::format("echo hello\n\necho world");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("echo hello\n\necho world") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.blank_line_preserved_at_nested_indent", "[format]")
+{
+    auto const result = SourceFormatter::format("while true do\nprint 1\n\nprint 2\nend");
+    INFO("Result: [" << result << "]");
+    // Inside the while body, the blank line should be preserved
+    CHECK(result.find("print 1\n\n") != std::string::npos);
+    CHECK(result.find("print 2") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.blank_line_preserved_inside_for_loop", "[format]")
+{
+    auto const result = SourceFormatter::format("for x in [1; 2; 3] do\nprint 1\n\nprint 2\nend");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("print 1\n\n") != std::string::npos);
+    CHECK(result.find("print 2") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.declaration_heuristic_still_adds_blank_line", "[format]")
+{
+    // Even without a user blank line, the declaration heuristic adds one at top level
+    auto const result = SourceFormatter::format("let x = 1\nprint x");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let x = 1\n\nprint x") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.user_blank_line_combined_with_heuristic", "[format]")
+{
+    // User blank line + declaration heuristic should produce exactly one blank line
+    auto const result = SourceFormatter::format("let x = 1\n\nprint x");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let x = 1\n\nprint x") != std::string::npos);
+    // Must not double the blank line
+    CHECK(result.find("let x = 1\n\n\nprint x") == std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.blank_line_preservation_idempotency", "[format]")
+{
+    auto const source = "print 1\n\nprint 2\nprint 3";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.multiple_blank_lines_normalization_idempotency", "[format]")
+{
+    auto const source = "print 1\n\n\n\nprint 2";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.nested_blank_line_idempotency", "[format]")
+{
+    auto const source = "while true do\nprint 1\n\nprint 2\nend";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.blank_line_with_comment_no_duplication", "[format]")
+{
+    auto const result = SourceFormatter::format("print 1\n\n# comment\nprint 2");
+    INFO("Result: [" << result << "]");
+    // Should not produce triple newlines
+    CHECK(result.find("\n\n\n") == std::string::npos);
+    CHECK(result.find("# comment") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.mixed_blank_and_no_blank_groups", "[format]")
+{
+    auto const result = SourceFormatter::format("print 1\nprint 2\n\nprint 3\nprint 4");
+    INFO("Result: [" << result << "]");
+    // No blank line between 1 and 2
+    CHECK(result.find("print 1\nprint 2") != std::string::npos);
+    // Blank line between 2 and 3
+    CHECK(result.find("print 2\n\nprint 3") != std::string::npos);
+    // No blank line between 3 and 4
+    CHECK(result.find("print 3\nprint 4") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.mixed_blank_groups_idempotency", "[format]")
+{
+    auto const source = "print 1\nprint 2\n\nprint 3\nprint 4";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}

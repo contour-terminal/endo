@@ -7,6 +7,7 @@
 #include <endo-language/format/FormatConfig.hpp>
 #include <endo-language/lexer/CommentTrivia.hpp>
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -39,7 +40,8 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     /// @return The formatted source code.
     [[nodiscard]] static std::string format(ast::Node const& root,
                                             std::vector<CommentTrivia> const& comments,
-                                            FormatConfig const& config = {});
+                                            FormatConfig const& config = {},
+                                            std::set<int> blankLines = {});
 
     // ========================================================================
     // ast::Visitor overrides — Shell constructs
@@ -147,7 +149,16 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void visit(pattern::GuardedPattern const& pat) override;
 
   private:
-    explicit SourceFormatter(FormatConfig config, std::vector<CommentTrivia> const& comments);
+    explicit SourceFormatter(FormatConfig config,
+                             std::vector<CommentTrivia> const& comments,
+                             std::set<int> blankLines = {});
+
+    /// Checks whether any blank line exists in the original source between two line numbers.
+    ///
+    /// @param afterLine  0-based line number of the previous statement's last line.
+    /// @param beforeLine 0-based line number of the next statement's first line.
+    /// @return true if at least one blank line exists in the exclusive range (afterLine, beforeLine).
+    [[nodiscard]] bool hasBlankLineBetween(int afterLine, int beforeLine) const;
 
     // Output helpers
     void emit(std::string_view text);
@@ -196,6 +207,7 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     bool _atLineStart = true;
     std::vector<CommentTrivia> const& _comments;
     size_t _nextCommentIndex = 0; ///< Index of next un-emitted comment
+    std::set<int> _blankLines;    ///< 0-based line numbers of blank lines in original source
 };
 
 } // namespace endo::format
