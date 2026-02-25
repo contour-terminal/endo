@@ -358,6 +358,23 @@ TEST_CASE("MarkdownTable.inlineDisplayWidth.inline_code")
     CHECK(inlineDisplayWidth("`code`") == 4);
 }
 
+TEST_CASE("MarkdownTable.inlineDisplayWidth.double_backtick_inline_code")
+{
+    // ``code with ` backtick`` — content is "code with ` backtick" (20 chars)
+    CHECK(inlineDisplayWidth("``code with ` backtick``") == 20);
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.double_backtick")
+{
+    CHECK(stripInlineMarkdown("``code with ` backtick``") == "code with ` backtick");
+}
+
+TEST_CASE("MarkdownTable.stripInlineMarkdown.double_backtick_space_stripping")
+{
+    // CommonMark: `` `code` `` → content " `code` " → strip spaces → "`code`"
+    CHECK(stripInlineMarkdown("`` `code` ``") == "`code`");
+}
+
 // ============================================================================
 // truncateToDisplayWidth tests
 // ============================================================================

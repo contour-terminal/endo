@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <tui/Box.hpp>
 #include <tui/GenericSyntaxHighlighter.hpp>
+#include <tui/MarkdownInline.hpp>
 #include <tui/MarkdownRenderer.hpp>
 #include <tui/MarkdownTable.hpp>
 #include <tui/Theme.hpp>
@@ -286,10 +287,10 @@ auto MarkdownRenderer::defaultTheme() -> MarkdownTheme
     headingEmphasis.fg = 0xFFD700_rgb; // Gold — stands out against heading base style
 
     auto codeBlock = Style {};
-    codeBlock.dim = true;
+    codeBlock.bg = 0x323440_rgb;
 
     auto codeInline = Style {};
-    codeInline.dim = true;
+    codeInline.bg = 0x323440_rgb;
 
     auto boldStyle = Style {};
     boldStyle.bold = true;
@@ -412,14 +413,13 @@ void MarkdownRenderer::renderInline(std::string_view text, Style const* baseStyl
     auto pos = std::size_t { 0 };
     while (pos < text.size())
     {
-        // Inline code: `...`
+        // Inline code: `...` or ``...`` (CommonMark multi-backtick)
         if (text[pos] == '`')
         {
-            auto const endTick = text.find('`', pos + 1);
-            if (endTick != std::string_view::npos)
+            if (auto const span = findInlineCodeEnd(text, pos))
             {
-                _output.writeText(text.substr(pos + 1, endTick - pos - 1), effectiveCode);
-                pos = endTick + 1;
+                _output.writeText(span->content, effectiveCode);
+                pos = span->endPos;
                 continue;
             }
         }

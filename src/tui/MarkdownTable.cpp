@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/MarkdownInline.hpp>
 #include <tui/MarkdownTable.hpp>
 #include <tui/Unicode.hpp>
 
@@ -370,14 +371,13 @@ auto stripInlineMarkdown(std::string_view text) -> std::string
 
     while (pos < text.size())
     {
-        // Inline code: `...`
+        // Inline code: `...` or ``...`` (CommonMark multi-backtick)
         if (text[pos] == '`')
         {
-            auto const endTick = text.find('`', pos + 1);
-            if (endTick != std::string_view::npos)
+            if (auto const span = findInlineCodeEnd(text, pos))
             {
-                result.append(text.substr(pos + 1, endTick - pos - 1));
-                pos = endTick + 1;
+                result.append(span->content);
+                pos = span->endPos;
                 continue;
             }
         }

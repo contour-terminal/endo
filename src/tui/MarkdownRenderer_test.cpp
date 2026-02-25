@@ -6,6 +6,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace tui;
 
@@ -25,6 +26,43 @@ class TextCapturingOutput: public TerminalOutput
     void writeRaw(std::string_view text) override { captured.append(text); }
 
     void flush() override {}
+};
+
+/// @brief A styled text span captured during rendering.
+struct StyledSpan
+{
+    std::string text;
+    Style style;
+    bool isRaw; ///< true if written via writeRaw (no style).
+};
+
+/// @brief A TerminalOutput subclass that captures style information alongside text.
+class StyledCapturingOutput: public TerminalOutput
+{
+  public:
+    std::vector<StyledSpan> spans;
+
+    void writeText(std::string_view text, Style const& style) override
+    {
+        spans.push_back({ .text = std::string(text), .style = style, .isRaw = false });
+    }
+
+    void writeRaw(std::string_view text) override
+    {
+        spans.push_back({ .text = std::string(text), .style = {}, .isRaw = true });
+    }
+
+    void flush() override {}
+
+    /// @brief Finds the first span containing the given substring.
+    /// @return Pointer to the span, or nullptr if not found.
+    [[nodiscard]] auto findSpan(std::string_view substr) const -> StyledSpan const*
+    {
+        for (auto const& span: spans)
+            if (span.text.find(substr) != std::string::npos)
+                return &span;
+        return nullptr;
+    }
 };
 } // namespace
 
@@ -217,6 +255,61 @@ TEST_CASE("MarkdownRenderer.table.bold_cells_aligned_borders")
     REQUIRE(contentLengths.size() >= 2);
     for (auto len: contentLengths)
         CHECK(len == contentLengths[0]);
+}
+
+// ============================================================================
+// Inline code rendering tests
+// ============================================================================
+
+TEST_CASE("MarkdownRenderer.inline_code.single_backtick_has_background")
+{
+    StyledCapturingOutput output;
+    MarkdownRenderer renderer(output);
+
+    renderer.render("Use `code` here\n");
+
+    auto const* span = output.findSpan("code");
+    REQUIRE(span != nullptr);
+    CHECK_FALSE(span->isRaw);
+    // Should have a background color set (0x323440)
+    CHECK(std::holds_alternative<RgbColor>(span->style.bg));
+    auto const bg = std::get<RgbColor>(span->style.bg);
+    CHECK(bg.r == 0x32);
+    CHECK(bg.g == 0x34);
+    CHECK(bg.b == 0x40);
+}
+
+TEST_CASE("MarkdownRenderer.inline_code.double_backtick")
+{
+    TextCapturingOutput output;
+    MarkdownRenderer renderer(output);
+
+    renderer.render("Use ``code with ` backtick`` here\n");
+
+    CHECK(output.captured.find("code with ` backtick") != std::string::npos);
+}
+
+TEST_CASE("MarkdownRenderer.inline_code.double_backtick_space_stripping")
+{
+    TextCapturingOutput output;
+    MarkdownRenderer renderer(output);
+
+    renderer.render("Use `` `code` `` here\n");
+
+    // CommonMark space stripping: leading+trailing spaces stripped, leaving "`code`"
+    CHECK(output.captured.find("`code`") != std::string::npos);
+}
+
+TEST_CASE("MarkdownRenderer.inline_code.unmatched_backtick_literal")
+{
+    TextCapturingOutput output;
+    MarkdownRenderer renderer(output);
+
+    renderer.render("This has a ` stray backtick\n");
+
+    // Unmatched backtick should appear literally
+    CHECK(output.captured.find("`") != std::string::npos);
+    CHECK(output.captured.find("stray backtick") != std::string::npos);
 }
 
 TEST_CASE("MarkdownRenderer.table.constrained_width_long_tool_names_aligned")
