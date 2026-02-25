@@ -7,6 +7,7 @@
 #include <endo-language/format/FormatConfig.hpp>
 #include <endo-language/lexer/CommentTrivia.hpp>
 
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -210,6 +211,50 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
 
     /// Checks whether an expression would produce multiline output when formatted.
     [[nodiscard]] bool wouldFormatMultiline(ast::Expr const& expr) const;
+
+    /// Returns the current column position (0-based) in the output.
+    [[nodiscard]] size_t currentColumn() const;
+
+    /// Emits a list of expression elements with adaptive wrapping.
+    ///
+    /// When the inline form fits within maxLineWidth, emits all elements on one line.
+    /// Otherwise, uses bin-packing for simple elements or one-per-line for complex ones.
+    ///
+    /// @param elements  The expressions to emit.
+    /// @param separator Separator between elements (e.g., "; " or ", ").
+    /// @param open      Opening delimiter (e.g., "[", "(").
+    /// @param close     Closing delimiter (e.g., "]", ")").
+    void emitWrappedElements(std::vector<std::unique_ptr<ast::Expr>> const& elements,
+                             std::string_view separator,
+                             std::string_view open,
+                             std::string_view close);
+
+    /// Emits a list of items with adaptive wrapping using a callback for each item.
+    ///
+    /// @param count          Number of items.
+    /// @param separator      Separator between items.
+    /// @param open           Opening delimiter.
+    /// @param close          Closing delimiter.
+    /// @param emitItem       Callback that emits item at given index.
+    /// @param estimateItem   Callback that returns estimated width of item at given index.
+    void emitWrappedWith(size_t count,
+                         std::string_view separator,
+                         std::string_view open,
+                         std::string_view close,
+                         std::function<void(size_t)> const& emitItem,
+                         std::function<size_t(size_t)> const& estimateItem,
+                         bool forceOnePerLine = false);
+
+    /// Checks whether any element in the expression vector is complex (compound or multiline).
+    [[nodiscard]] bool hasComplexElement(std::vector<std::unique_ptr<ast::Expr>> const& elements) const;
+
+    /// Collects a left-associative pipeline chain into a linear sequence.
+    /// @return [source, step1, step2, ...] where source is the initial value.
+    [[nodiscard]] static std::vector<ast::Expr const*> collectPipelineChain(ast::PipelineExpr const& node);
+
+    /// Collects a right-associative concat chain into a linear sequence.
+    /// @return [list1, list2, list3, ...].
+    [[nodiscard]] static std::vector<ast::Expr const*> collectConcatChain(ast::ConcatListExpr const& node);
 
     FormatConfig _config;
     std::string _result;

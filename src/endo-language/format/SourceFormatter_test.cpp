@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <sstream>
+
 using namespace endo::format;
 
 // ============================================================================
@@ -874,6 +876,233 @@ TEST_CASE("SourceFormatter.string_escape_idempotency", "[format]")
     auto const source = R"(let s = "line1\nline2\ttab")";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// List wrapping
+// ============================================================================
+
+TEST_CASE("SourceFormatter.list_short_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = [1; 2; 3]");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let x = [1; 2; 3]\n");
+}
+
+TEST_CASE("SourceFormatter.list_empty_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = []");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let x = []\n");
+}
+
+TEST_CASE("SourceFormatter.list_single_element_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = [42]");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let x = [42]\n");
+}
+
+TEST_CASE("SourceFormatter.list_long_wraps", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 40;
+    auto const result = SourceFormatter::format("let data = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12]", config);
+    INFO("Result: [" << result << "]");
+    // Should wrap: opening bracket, elements bin-packed, closing bracket on own line
+    CHECK(result.find("[\n") != std::string::npos);
+    CHECK(result.find("\n]") != std::string::npos);
+    // No line should exceed maxLineWidth
+    std::istringstream stream(result);
+    std::string line;
+    while (std::getline(stream, line))
+        CHECK(line.size() <= 40);
+}
+
+TEST_CASE("SourceFormatter.list_wrapping_idempotency", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 40;
+    auto const source = "let data = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12]";
+    auto const first = SourceFormatter::format(source, config);
+    auto const second = SourceFormatter::format(first, config);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Tuple wrapping
+// ============================================================================
+
+TEST_CASE("SourceFormatter.tuple_short_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let t = (1, 2, 3)");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let t = (1, 2, 3)\n");
+}
+
+TEST_CASE("SourceFormatter.tuple_long_wraps", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 30;
+    auto const result =
+        SourceFormatter::format("let t = (\"hello\", \"world\", \"testing\", \"wrap\")", config);
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("(\n") != std::string::npos);
+    // Closing paren on its own line (possibly indented from let binding context)
+    CHECK(result.find(")") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.tuple_wrapping_idempotency", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 30;
+    auto const source = "let t = (\"hello\", \"world\", \"testing\", \"wrap\")";
+    auto const first = SourceFormatter::format(source, config);
+    auto const second = SourceFormatter::format(first, config);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Pipeline wrapping
+// ============================================================================
+
+TEST_CASE("SourceFormatter.pipeline_single_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = data |> List.sum");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let x = data |> List.sum\n");
+}
+
+TEST_CASE("SourceFormatter.pipeline_chain_wraps", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = data |> List.filter (fun x -> x > 5) |> List.sum");
+    INFO("Result: [" << result << "]");
+    // 2+ operators should wrap with |> at start of continuation lines
+    CHECK(result.find("|> List.filter") != std::string::npos);
+    CHECK(result.find("|> List.sum") != std::string::npos);
+    // |> should appear at the beginning of indented continuation lines
+    CHECK(result.find("|> ") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.pipeline_chain_wrapping_idempotency", "[format]")
+{
+    auto const source = "let x = data |> List.filter (fun x -> x > 5) |> List.sum";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.pipeline_single_long_wraps", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 30;
+    auto const result = SourceFormatter::format(
+        "let x = some_very_long_variable_name |> some_very_long_function_name", config);
+    INFO("Result: [" << result << "]");
+    // Single pipe that exceeds width should wrap
+    CHECK(result.find("|> some_very_long_function_name") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.pipeline_single_long_wrapping_idempotency", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 30;
+    auto const source = "let x = some_very_long_variable_name |> some_very_long_function_name";
+    auto const first = SourceFormatter::format(source, config);
+    auto const second = SourceFormatter::format(first, config);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Concat wrapping
+// ============================================================================
+
+TEST_CASE("SourceFormatter.concat_single_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = a @ b");
+    INFO("Result: [" << result << "]");
+    CHECK(result == "let x = a @ b\n");
+}
+
+TEST_CASE("SourceFormatter.concat_chain_wraps", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = list1 @ list2 @ list3");
+    INFO("Result: [" << result << "]");
+    // 2+ operators should wrap with @ at start of continuation lines
+    CHECK(result.find("@ list2") != std::string::npos);
+    CHECK(result.find("@ list3") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.concat_chain_wrapping_idempotency", "[format]")
+{
+    auto const source = "let x = list1 @ list2 @ list3";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Adaptive wrapping (complex elements → one-per-line)
+// ============================================================================
+
+TEST_CASE("SourceFormatter.list_complex_elements_one_per_line", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 60;
+    auto const result =
+        SourceFormatter::format("let fns = [fun x -> x + 1; fun x -> x * 2; fun x -> x - 3]", config);
+    INFO("Result: [" << result << "]");
+    // Complex elements (lambdas) should force one-per-line wrapping
+    CHECK(result.find("[\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.list_complex_elements_idempotency", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 60;
+    auto const source = "let fns = [fun x -> x + 1; fun x -> x * 2; fun x -> x - 3]";
+    auto const first = SourceFormatter::format(source, config);
+    auto const second = SourceFormatter::format(first, config);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+// ============================================================================
+// Combined scenarios
+// ============================================================================
+
+TEST_CASE("SourceFormatter.pipeline_of_long_list", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 50;
+    auto const result =
+        SourceFormatter::format("let x = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] |> List.sum", config);
+    INFO("Result: [" << result << "]");
+    // Both list wrapping and pipeline wrapping should occur
+    CHECK(result.find("|> List.sum") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.pipeline_of_long_list_idempotency", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 50;
+    auto const source = "let x = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10] |> List.sum";
+    auto const first = SourceFormatter::format(source, config);
+    auto const second = SourceFormatter::format(first, config);
     INFO("First: [" << first << "]");
     INFO("Second: [" << second << "]");
     CHECK(first == second);

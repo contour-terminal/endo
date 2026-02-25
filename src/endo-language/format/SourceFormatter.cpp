@@ -5,6 +5,7 @@
 #include <endo-language/parser/Parser.hpp>
 #include <endo-language/types/Type.hpp>
 
+#include <algorithm>
 #include <format>
 #include <ranges>
 
@@ -471,7 +472,185 @@ bool SourceFormatter::wouldFormatMultiline(ast::Expr const& expr) const
     if (auto const* letIn = dynamic_cast<ast::LetInExpr const*>(&expr))
         return letIn->body && isCompoundExpr(*letIn->body);
 
+    // Pipeline with 2+ operators always wraps
+    if (auto const* pipeline = dynamic_cast<ast::PipelineExpr const*>(&expr))
+    {
+        auto const chain = collectPipelineChain(*pipeline);
+        if (chain.size() > 2)
+            return true;
+        return estimateWidth(expr) > _config.maxLineWidth;
+    }
+
+    // ConcatList with 2+ operators always wraps
+    if (auto const* concat = dynamic_cast<ast::ConcatListExpr const*>(&expr))
+    {
+        auto const chain = collectConcatChain(*concat);
+        if (chain.size() > 2)
+            return true;
+        return estimateWidth(expr) > _config.maxLineWidth;
+    }
+
+    // List/Tuple that would exceed line width
+    if (dynamic_cast<ast::ListExpr const*>(&expr) || dynamic_cast<ast::TupleExpr const*>(&expr))
+        return estimateWidth(expr) > _config.maxLineWidth;
+
     return false;
+}
+
+// ============================================================================
+// Current column tracking
+// ============================================================================
+
+size_t SourceFormatter::currentColumn() const
+{
+    if (_atLineStart)
+        return static_cast<size_t>(_indentLevel) * _config.indentWidth;
+
+    auto const lastNewline = _result.rfind('\n');
+    if (lastNewline == std::string::npos)
+        return _result.size();
+    return _result.size() - lastNewline - 1;
+}
+
+// ============================================================================
+// Chain-flattening helpers
+// ============================================================================
+
+std::vector<ast::Expr const*> SourceFormatter::collectPipelineChain(ast::PipelineExpr const& node)
+{
+    std::vector<ast::Expr const*> chain;
+    auto const* current = &node;
+    while (current)
+    {
+        chain.push_back(current->function.get());
+        if (auto const* inner = dynamic_cast<ast::PipelineExpr const*>(current->value.get()))
+            current = inner;
+        else
+        {
+            chain.push_back(current->value.get());
+            break;
+        }
+    }
+    std::ranges::reverse(chain);
+    return chain; // [source, step1, step2, ...]
+}
+
+std::vector<ast::Expr const*> SourceFormatter::collectConcatChain(ast::ConcatListExpr const& node)
+{
+    std::vector<ast::Expr const*> chain;
+    chain.push_back(node.left.get());
+    auto const* current = node.right.get();
+    while (auto const* inner = dynamic_cast<ast::ConcatListExpr const*>(current))
+    {
+        chain.push_back(inner->left.get());
+        current = inner->right.get();
+    }
+    chain.push_back(current);
+    return chain; // [list1, list2, list3, ...]
+}
+
+// ============================================================================
+// Adaptive wrapping helpers
+// ============================================================================
+
+bool SourceFormatter::hasComplexElement(std::vector<std::unique_ptr<ast::Expr>> const& elements) const
+{
+    return std::ranges::any_of(elements, [this](auto const& elem) {
+        return elem && (isCompoundExpr(*elem) || wouldFormatMultiline(*elem));
+    });
+}
+
+void SourceFormatter::emitWrappedElements(std::vector<std::unique_ptr<ast::Expr>> const& elements,
+                                          std::string_view separator,
+                                          std::string_view open,
+                                          std::string_view close)
+{
+    auto const forceOnePerLine = hasComplexElement(elements);
+    emitWrappedWith(
+        elements.size(),
+        separator,
+        open,
+        close,
+        [&](size_t i) {
+            if (elements[i])
+                elements[i]->accept(*this);
+        },
+        [&](size_t i) -> size_t { return elements[i] ? estimateWidth(*elements[i]) : 0; },
+        forceOnePerLine);
+}
+
+void SourceFormatter::emitWrappedWith(size_t count,
+                                      std::string_view separator,
+                                      std::string_view open,
+                                      std::string_view close,
+                                      std::function<void(size_t)> const& emitItem,
+                                      std::function<size_t(size_t)> const& estimateItem,
+                                      bool forceOnePerLine)
+{
+    if (count == 0)
+    {
+        emit(open);
+        emit(close);
+        return;
+    }
+
+    // Estimate total inline width
+    auto totalInlineWidth = currentColumn() + open.size() + close.size();
+    for (auto const i: std::views::iota(0uz, count))
+    {
+        if (i > 0)
+            totalInlineWidth += separator.size();
+        totalInlineWidth += estimateItem(i);
+    }
+
+    // Inline: everything fits on one line
+    if (totalInlineWidth <= _config.maxLineWidth)
+    {
+        emit(open);
+        for (auto const i: std::views::iota(0uz, count))
+        {
+            if (i > 0)
+                emit(separator);
+            emitItem(i);
+        }
+        emit(close);
+        return;
+    }
+
+    // Wrapped mode: separator core (without trailing space) for end-of-line placement
+    auto const sepCore = separator.ends_with(' ') ? separator.substr(0, separator.size() - 1) : separator;
+
+    emit(open);
+    emitNewline();
+    indent();
+
+    for (auto const i: std::views::iota(0uz, count))
+    {
+        if (i > 0)
+        {
+            emit(sepCore);
+            if (forceOnePerLine)
+            {
+                // One element per line for complex elements
+                emitNewline();
+            }
+            else
+            {
+                // Bin-pack: check if next item fits on current line
+                auto const nextWidth = estimateItem(i);
+                auto const widthAfterItem = currentColumn() + 1 /* space */ + nextWidth
+                                            + (i + 1 < count ? separator.size() : close.size());
+                if (widthAfterItem > _config.maxLineWidth)
+                    emitNewline();
+                else
+                    emit(" ");
+            }
+        }
+        emitItem(i);
+    }
+    emitNewline();
+    dedent();
+    emit(close);
 }
 
 // ============================================================================
@@ -1157,14 +1336,7 @@ void SourceFormatter::formatIfExpr(ast::IfExpr const& node, std::string_view key
 
 void SourceFormatter::visit(ast::TupleExpr const& node)
 {
-    emit("(");
-    for (auto const i: std::views::iota(0uz, node.elements.size()))
-    {
-        if (i > 0)
-            emit(", ");
-        node.elements[i]->accept(*this);
-    }
-    emit(")");
+    emitWrappedElements(node.elements, ", ", "(", ")");
 }
 
 void SourceFormatter::visit(ast::UnitExpr const& /*node*/)
@@ -1359,11 +1531,35 @@ void SourceFormatter::visit(ast::UnaryExpr const& node)
 
 void SourceFormatter::visit(ast::PipelineExpr const& node)
 {
-    if (node.value)
-        node.value->accept(*this);
-    emit(" |> ");
-    if (node.function)
-        node.function->accept(*this);
+    auto const chain = collectPipelineChain(node);
+
+    // Single pipe that fits inline: keep on one line
+    if (chain.size() <= 2)
+    {
+        auto const inlineWidth = currentColumn() + estimateWidth(node);
+        if (inlineWidth <= _config.maxLineWidth)
+        {
+            if (chain[0])
+                chain[0]->accept(*this);
+            emit(" |> ");
+            if (chain.size() > 1 && chain[1])
+                chain[1]->accept(*this);
+            return;
+        }
+    }
+
+    // Multi-pipe or exceeds width: wrap with |> at start of continuation lines
+    if (chain[0])
+        chain[0]->accept(*this);
+    indent();
+    for (auto const i: std::views::iota(1uz, chain.size()))
+    {
+        emitNewline();
+        emit("|> ");
+        if (chain[i])
+            chain[i]->accept(*this);
+    }
+    dedent();
 }
 
 void SourceFormatter::visit(ast::ApplicationExpr const& node)
@@ -1497,15 +1693,7 @@ void SourceFormatter::visit(ast::MatchExpr const& node)
 
 void SourceFormatter::visit(ast::ListExpr const& node)
 {
-    emit("[");
-    for (auto const i: std::views::iota(0uz, node.elements.size()))
-    {
-        if (i > 0)
-            emit("; ");
-        if (node.elements[i])
-            node.elements[i]->accept(*this);
-    }
-    emit("]");
+    emitWrappedElements(node.elements, "; ", "[", "]");
 }
 
 void SourceFormatter::visit(ast::ConsExpr const& node)
@@ -1519,11 +1707,35 @@ void SourceFormatter::visit(ast::ConsExpr const& node)
 
 void SourceFormatter::visit(ast::ConcatListExpr const& node)
 {
-    if (node.left)
-        node.left->accept(*this);
-    emit(" @ ");
-    if (node.right)
-        node.right->accept(*this);
+    auto const chain = collectConcatChain(node);
+
+    // Single concat that fits inline: keep on one line
+    if (chain.size() <= 2)
+    {
+        auto const inlineWidth = currentColumn() + estimateWidth(node);
+        if (inlineWidth <= _config.maxLineWidth)
+        {
+            if (chain[0])
+                chain[0]->accept(*this);
+            emit(" @ ");
+            if (chain.size() > 1 && chain[1])
+                chain[1]->accept(*this);
+            return;
+        }
+    }
+
+    // Multi-concat or exceeds width: wrap with @ at start of continuation lines
+    if (chain[0])
+        chain[0]->accept(*this);
+    indent();
+    for (auto const i: std::views::iota(1uz, chain.size()))
+    {
+        emitNewline();
+        emit("@ ");
+        if (chain[i])
+            chain[i]->accept(*this);
+    }
+    dedent();
 }
 
 void SourceFormatter::visit(ast::ListRangeExpr const& node)
@@ -1775,32 +1987,73 @@ void SourceFormatter::visit(ast::RecordTypeDefStmt const& node)
 
 void SourceFormatter::visit(ast::RecordExpr const& node)
 {
-    emit("{ ");
-    for (auto const i: std::views::iota(0uz, node.fields.size()))
-    {
-        if (i > 0)
-            emit("; ");
-        emit(node.fields[i].name);
-        emit(" = ");
-        node.fields[i].value->accept(*this);
-    }
-    emit(" }");
+    emitWrappedWith(
+        node.fields.size(),
+        "; ",
+        "{ ",
+        " }",
+        [&](size_t i) {
+            emit(node.fields[i].name);
+            emit(" = ");
+            node.fields[i].value->accept(*this);
+        },
+        [&](size_t i) -> size_t {
+            return node.fields[i].name.size() + 3 /* " = " */ + estimateWidth(*node.fields[i].value);
+        });
 }
 
 void SourceFormatter::visit(ast::RecordUpdateExpr const& node)
 {
-    emit("{ ");
-    node.base->accept(*this);
-    emit(" with ");
+    // Estimate inline width: "{ base with field1 = v1; field2 = v2 }"
+    auto const baseWidth = estimateWidth(*node.base);
+    auto totalInlineWidth = currentColumn() + 2 /* "{ " */ + baseWidth + 6 /* " with " */;
     for (auto const i: std::views::iota(0uz, node.updates.size()))
     {
         if (i > 0)
-            emit("; ");
-        emit(node.updates[i].name);
-        emit(" = ");
-        node.updates[i].value->accept(*this);
+            totalInlineWidth += 2; // "; "
+        totalInlineWidth += node.updates[i].name.size() + 3 + estimateWidth(*node.updates[i].value);
     }
-    emit(" }");
+    totalInlineWidth += 2; // " }"
+
+    if (totalInlineWidth <= _config.maxLineWidth)
+    {
+        // Inline
+        emit("{ ");
+        node.base->accept(*this);
+        emit(" with ");
+        for (auto const i: std::views::iota(0uz, node.updates.size()))
+        {
+            if (i > 0)
+                emit("; ");
+            emit(node.updates[i].name);
+            emit(" = ");
+            node.updates[i].value->accept(*this);
+        }
+        emit(" }");
+    }
+    else
+    {
+        // Wrapped
+        emit("{ ");
+        node.base->accept(*this);
+        emit(" with");
+        emitNewline();
+        indent();
+        for (auto const i: std::views::iota(0uz, node.updates.size()))
+        {
+            if (i > 0)
+            {
+                emit(";");
+                emitNewline();
+            }
+            emit(node.updates[i].name);
+            emit(" = ");
+            node.updates[i].value->accept(*this);
+        }
+        emitNewline();
+        dedent();
+        emit("}");
+    }
 }
 
 void SourceFormatter::visit(ast::FieldAccessExpr const& node)
