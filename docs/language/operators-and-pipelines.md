@@ -20,6 +20,7 @@ let h = -x          # Negation
 ```endo
 let eq = a == b     # Equal
 let ne = a != b     # Not equal
+let ne2 = a <> b    # Not equal (F# style, same as !=)
 let lt = a < b      # Less than
 let le = a <= b     # Less than or equal
 let gt = a > b      # Greater than

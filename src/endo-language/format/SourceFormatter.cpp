@@ -11,6 +11,41 @@
 namespace endo::format
 {
 
+namespace
+{
+    /// Re-escapes special characters in a string for source output.
+    /// The lexer unescapes `\n` → actual newline during parsing; this reverses that.
+    /// Non-printable characters are escaped as `\xHH` hex sequences.
+    std::string escapeString(std::string_view input)
+    {
+        std::string result;
+        result.reserve(input.size());
+        for (auto const ch: input)
+        {
+            switch (ch)
+            {
+                case '\n': result += "\\n"; break;
+                case '\t': result += "\\t"; break;
+                case '\r': result += "\\r"; break;
+                case '\0': result += "\\0"; break;
+                case '\a': result += "\\a"; break;
+                case '\b': result += "\\b"; break;
+                case '\f': result += "\\f"; break;
+                case '\v': result += "\\v"; break;
+                case '\\': result += "\\\\"; break;
+                case '"': result += "\\\""; break;
+                default:
+                    if (static_cast<unsigned char>(ch) < 0x20 || static_cast<unsigned char>(ch) == 0x7F)
+                        result += std::format("\\x{:02x}", static_cast<unsigned char>(ch));
+                    else
+                        result += ch;
+                    break;
+            }
+        }
+        return result;
+    }
+} // namespace
+
 // ============================================================================
 // Construction and static entry points
 // ============================================================================
@@ -782,7 +817,7 @@ void SourceFormatter::visit(ast::BuiltinWhichStmt const& node)
 void SourceFormatter::visit(ast::LiteralExpr const& node)
 {
     if (node.quoting == ast::LiteralQuoting::Quoted)
-        emit(std::format("\"{}\"", node.value));
+        emit(std::format("\"{}\"", escapeString(node.value)));
     else
         emit(node.value);
 }
@@ -1710,7 +1745,7 @@ void SourceFormatter::visit(ast::FStringExpr const& node)
     {
         if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(part.get()))
         {
-            emit(lit->value);
+            emit(escapeString(lit->value));
         }
         else
         {
@@ -1847,7 +1882,7 @@ void SourceFormatter::visit(pattern::LiteralPattern const& pat)
             else if constexpr (std::is_same_v<T, bool>)
                 emit(v ? "true" : "false");
             else if constexpr (std::is_same_v<T, std::string>)
-                emit("\"" + v + "\"");
+                emit("\"" + escapeString(v) + "\"");
         },
         pat.value);
 }

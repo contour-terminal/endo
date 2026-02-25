@@ -3923,8 +3923,15 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPipeline()
     if (!left)
         return nullptr;
 
-    while (_lexer.currentToken() == Token::ForwardPipe)
+    while (true)
     {
+        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+        if (_lexer.currentToken() != Token::ForwardPipe)
+        {
+            if (skippedNewlines)
+                _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
         _lexer.nextToken(); // consume '|>'
         auto right = parseFSharpComposition();
         if (!right)
@@ -4047,6 +4054,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpCons()
     if (!left)
         return nullptr;
 
+    auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+
     // Check for '::' cons operator (right-associative)
     if (_lexer.currentToken() == Token::ColonColon)
     {
@@ -4074,6 +4083,11 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpCons()
         }
         return std::make_unique<ast::ConcatListExpr>(std::move(left), std::move(right));
     }
+
+    // Push back the newline if we consumed one but didn't find a continuation operator,
+    // so the caller can see the statement boundary.
+    if (skippedNewlines)
+        _lexer.pushBackToken(Token::LineFeed, "\n");
 
     return left;
 }
@@ -6963,6 +6977,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
 
         // Check for or-pattern alternatives: | pat1 | pat2 | pat3 -> expr
         // Each alternative may itself be a bare tuple pattern.
+        consumeUntilNotOneOf(Token::LineFeed);
         if (_lexer.currentToken() == Token::Pipe)
         {
             std::vector<pattern::PatternPtr> alternatives;
@@ -6979,6 +6994,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
                 }
                 // If this alternative is followed by '->' or 'when', it's the last one
                 alternatives.push_back(std::move(alt));
+                consumeUntilNotOneOf(Token::LineFeed);
                 if (_lexer.currentToken() == Token::Arrow || _lexer.currentToken() == Token::When)
                     break;
             }
@@ -7009,7 +7025,8 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
                                                _lexer.currentLiteral());
             return nullptr;
         }
-        _lexer.nextToken(); // consume '->'
+        _lexer.nextToken();                    // consume '->'
+        consumeUntilNotOneOf(Token::LineFeed); // allow arm body on next line
 
         // Parse body expression
         auto body = parseFSharpExpr();
@@ -7136,6 +7153,7 @@ bool Parser::canStartPattern() const
         case Token::Identifier:
         case Token::Number:
         case Token::String:
+        case Token::DblQuoteStart:
         case Token::True:
         case Token::False:
         case Token::RndOpen:
@@ -7204,7 +7222,7 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
         }
 
         case Token::String: {
-            // String literal pattern
+            // String literal pattern (single-quoted)
             std::string str = _lexer.currentLiteral();
             // Remove quotes if present
             if (!str.empty() && (str.front() == '"' || str.front() == '\''))
@@ -7212,6 +7230,27 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
             if (!str.empty() && (str.back() == '"' || str.back() == '\''))
                 str = str.substr(0, str.size() - 1);
             _lexer.nextToken();
+            return pattern::patterns::literal(std::move(str));
+        }
+
+        case Token::DblQuoteStart: {
+            // Double-quoted string literal pattern: "hello"
+            _lexer.nextToken(); // consume DblQuoteStart
+            std::string str;
+            if (_lexer.currentToken() == Token::StringFragment)
+            {
+                str = _lexer.currentLiteral();
+                _lexer.nextToken(); // consume StringFragment
+            }
+            if (_lexer.currentToken() != Token::DblQuoteEnd)
+            {
+                _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                   {},
+                                                   currentContextSnippet(),
+                                                   "Only plain string literals are allowed in patterns");
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume DblQuoteEnd
             return pattern::patterns::literal(std::move(str));
         }
 

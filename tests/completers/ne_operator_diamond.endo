@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: F# style <> (not-equal) operator
+# expect: different
+
+let a = 1
+let b = 2
+let r = if a <> b then "different" else "same"
+print r

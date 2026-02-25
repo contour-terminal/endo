@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: list concat @ operator spanning multiple lines
+# expect: ["a"; "b"; "c"; "d"]
+
+let result =
+  ["a"; "b"]
+  @ ["c"; "d"]
+print (toText result)

@@ -149,6 +149,8 @@ Token Lexer::nextToken()
                 return consumeCharAndConfirmToken(Token::LeftArrow); // <- (mutation)
             else if (_currentChar == '=')
                 return consumeCharAndConfirmToken(Token::LessEqual);
+            else if (_currentChar == '>' && _fsharpDepth > 0)
+                return consumeCharAndConfirmToken(Token::NotEqual); // F# <> operator
             else if (_currentChar == '(')
                 return consumeCharAndConfirmToken(Token::LessRndOpen);
             else

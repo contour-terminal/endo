@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: cons :: operator spanning multiple lines
+# expect: [1; 2; 3]
+
+let result =
+  1
+  :: [2; 3]
+print (toText result)

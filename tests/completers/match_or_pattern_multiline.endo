@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: match or-pattern alternation across multiple lines with integers
+# expect: yes
+
+let x = 2
+let r = match x with
+  | 1
+  | 2 -> "yes"
+  | _ -> "no"
+print r

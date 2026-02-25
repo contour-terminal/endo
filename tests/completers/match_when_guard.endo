@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: match with when guard on integer comparison
+# expect: big
+
+let x = 42
+let r = match x with
+  | n when n > 10 -> "big"
+  | _ -> "small"
+print r

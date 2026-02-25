@@ -104,6 +104,8 @@ if(ENDO_TESTING)
         types/Type_test.cpp
         types/TypeInferencer_test.cpp
         codegen/ComputationExpressions_test.cpp
+        codegen/CompleterScripts_test.cpp
+        builtins/JsonQuery_test.cpp
 
         ide/CompletionCandidates_test.cpp
         ide/CompletionContext_test.cpp
@@ -117,6 +119,7 @@ if(ENDO_TESTING)
     target_link_libraries(test-endo-language endo Catch2::Catch2)
     target_compile_definitions(test-endo-language PRIVATE
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
+        ENDO_COMPLETERS_DIR="${CMAKE_SOURCE_DIR}/data/completers"
     )
     add_test(NAME test-endo-language COMMAND test-endo-language)
 

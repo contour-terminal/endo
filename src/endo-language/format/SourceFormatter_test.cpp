@@ -850,3 +850,31 @@ TEST_CASE("SourceFormatter.mixed_blank_groups_idempotency", "[format]")
     INFO("Second: [" << second << "]");
     CHECK(first == second);
 }
+
+TEST_CASE("SourceFormatter.string_escape_newline", "[format]")
+{
+    auto const result = SourceFormatter::format(R"(let s = "hello\nworld")");
+    CHECK(result.find("\"hello\\nworld\"") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.string_escape_tab", "[format]")
+{
+    auto const result = SourceFormatter::format(R"(let s = "col1\tcol2")");
+    CHECK(result.find("\"col1\\tcol2\"") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.string_escape_backslash", "[format]")
+{
+    auto const result = SourceFormatter::format(R"(let s = "path\\to\\file")");
+    CHECK(result.find("\"path\\\\to\\\\file\"") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.string_escape_idempotency", "[format]")
+{
+    auto const source = R"(let s = "line1\nline2\ttab")";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
