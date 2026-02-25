@@ -93,6 +93,32 @@ TEST_CASE("SourceFormatter.let_binding_simple", "[format]")
     CHECK(result == "let x = 42\n");
 }
 
+TEST_CASE("SourceFormatter.let_binding_simple_rhs_stays_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = 2 + 3 * 4");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let x = ") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.let_binding_compound_rhs_breaks_after_eq", "[format]")
+{
+    auto const result = SourceFormatter::format("let r = if true then 42 else 0");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("let r =\n") != std::string::npos);
+    CHECK(result.find("    if true then 42\n") != std::string::npos);
+    CHECK(result.find("    else 0\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.let_binding_compound_rhs_idempotency", "[format]")
+{
+    auto const source = "let r = if true then 42 else 0";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
 TEST_CASE("SourceFormatter.let_function", "[format]")
 {
     auto const result = SourceFormatter::format("let add x y = (x + y)");

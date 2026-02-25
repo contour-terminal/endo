@@ -205,6 +205,9 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     /// Checks whether an expression is too complex to sit alongside a keyword on the same line.
     [[nodiscard]] static bool isCompoundExpr(ast::Expr const& expr);
 
+    /// Checks whether an expression would produce multiline output when formatted.
+    [[nodiscard]] bool wouldFormatMultiline(ast::Expr const& expr) const;
+
     FormatConfig _config;
     std::string _result;
     int _indentLevel = 0;

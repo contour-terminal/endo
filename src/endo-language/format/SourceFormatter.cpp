@@ -405,6 +405,39 @@ bool SourceFormatter::isCompoundExpr(ast::Expr const& expr)
            || dynamic_cast<ast::TryFinallyExpr const*>(&expr);
 }
 
+bool SourceFormatter::wouldFormatMultiline(ast::Expr const& expr) const
+{
+    if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(&expr))
+        return paren->inner ? wouldFormatMultiline(*paren->inner) : false;
+
+    if (auto const* ifExpr = dynamic_cast<ast::IfExpr const*>(&expr))
+    {
+        if (ifExpr->elseExpr)
+            return true; // if-then-else always at least 2 lines
+        return isCompoundExpr(*ifExpr->thenExpr) || estimateWidth(expr) > _config.maxLineWidth;
+    }
+
+    // Match/TryWith/TryFinally/Block: always multiline
+    if (dynamic_cast<ast::MatchExpr const*>(&expr))
+        return true;
+    if (dynamic_cast<ast::TryWithExpr const*>(&expr))
+        return true;
+    if (dynamic_cast<ast::TryFinallyExpr const*>(&expr))
+        return true;
+    if (dynamic_cast<ast::BlockExpr const*>(&expr))
+        return true;
+
+    // Lambda: multiline when body is compound
+    if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(&expr))
+        return lambda->body && isCompoundExpr(*lambda->body);
+
+    // LetIn: multiline when body is compound
+    if (auto const* letIn = dynamic_cast<ast::LetInExpr const*>(&expr))
+        return letIn->body && isCompoundExpr(*letIn->body);
+
+    return false;
+}
+
 // ============================================================================
 // Shell construct visitors
 // ============================================================================
@@ -1168,7 +1201,8 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         {
             // Check if the body is complex enough to warrant multi-line
             auto const bodyWidth = estimateWidth(*node.value);
-            if (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty())
+            if (wouldFormatMultiline(*node.value)
+                || (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty()))
             {
                 emitNewline();
                 indent();
