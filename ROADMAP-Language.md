@@ -129,6 +129,7 @@ This document tracks the implementation status of F# language features as define
 
 ### Comparison
 - [x] `==`, `!=`, `<`, `<=`, `>`, `>=`
+- [x] `<>` (F#-style not-equal, alternative to `!=`)
 - [x] Dynamic comparison for values from pattern matching (VCMPEQ etc.)
 
 ### Logical
@@ -206,6 +207,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `nth`, `last` — indexed list access returning `option<T>`
 - [x] `replicate` — create list of N copies of a value
 - [ ] `fetch` — HTTP GET request, returns `result<str, str>`
+- [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration); returns `list<string>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
 - [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
