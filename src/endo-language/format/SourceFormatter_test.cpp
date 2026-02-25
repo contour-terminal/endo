@@ -462,6 +462,53 @@ TEST_CASE("SourceFormatter.while_leading_comments_idempotency", "[format]")
     CHECK(first == second);
 }
 
+// --- ForInStmt / WhileStmt dangling body comments ---
+
+TEST_CASE("SourceFormatter.for_in_preserves_body_trailing_comment", "[format]")
+{
+    auto const source = "for x in [1; 2] do\nprint x\n# end of body\nend";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    // Comment must appear inside the loop body (before "end"), not after it
+    auto const commentPos = result.find("# end of body");
+    auto const endPos = result.find("\nend");
+    REQUIRE(commentPos != std::string::npos);
+    REQUIRE(endPos != std::string::npos);
+    CHECK(commentPos < endPos);
+}
+
+TEST_CASE("SourceFormatter.for_in_body_trailing_comment_idempotency", "[format]")
+{
+    auto const source = "for x in [1; 2] do\nprint x\n# end of body\nend";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.while_preserves_body_trailing_comment", "[format]")
+{
+    auto const source = "while true do\nprint 1\n# end of body\nend";
+    auto const result = SourceFormatter::format(source);
+    INFO("Result: [" << result << "]");
+    auto const commentPos = result.find("# end of body");
+    auto const endPos = result.find("\nend");
+    REQUIRE(commentPos != std::string::npos);
+    REQUIRE(endPos != std::string::npos);
+    CHECK(commentPos < endPos);
+}
+
+TEST_CASE("SourceFormatter.while_body_trailing_comment_idempotency", "[format]")
+{
+    auto const source = "while true do\nprint 1\n# end of body\nend";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
 // ============================================================================
 // Blank line grouping — consecutive expressions should not be separated
 // ============================================================================

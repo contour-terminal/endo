@@ -177,6 +177,10 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void emitTrailingComment(ast::Node const& node);
     void emitRemainingComments();
 
+    /// Emits non-trailing comments that fall between the last body statement
+    /// and a block's closing keyword (e.g., `end`).
+    void emitDanglingBodyComments(ast::Node const& blockParent);
+
     /// Finds the first source line in a node's subtree (for nodes without locations).
     [[nodiscard]] static std::optional<int> findFirstLine(ast::Node const& node);
 

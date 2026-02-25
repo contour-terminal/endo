@@ -340,6 +340,29 @@ void SourceFormatter::emitRemainingComments()
     }
 }
 
+void SourceFormatter::emitDanglingBodyComments(ast::Node const& blockParent)
+{
+    if (!blockParent.location)
+        return;
+
+    auto const endLine = blockParent.location->end.line;
+
+    while (_nextCommentIndex < _comments.size())
+    {
+        auto const& comment = _comments[_nextCommentIndex];
+        if (comment.location.begin.line >= endLine)
+            break;
+        if (comment.isTrailing)
+        {
+            ++_nextCommentIndex;
+            continue;
+        }
+        emitNewline();
+        emit(comment.text);
+        ++_nextCommentIndex;
+    }
+}
+
 // ============================================================================
 // Width estimation
 // ============================================================================
@@ -528,6 +551,7 @@ void SourceFormatter::visit(ast::WhileStmt const& node)
     emitNewline();
     indent();
     node.body->accept(*this);
+    emitDanglingBodyComments(node);
     dedent();
     emitNewline();
     emit("end");
@@ -545,6 +569,7 @@ void SourceFormatter::visit(ast::ForInStmt const& node)
     emitNewline();
     indent();
     node.body->accept(*this);
+    emitDanglingBodyComments(node);
     dedent();
     emitNewline();
     emit("end");
