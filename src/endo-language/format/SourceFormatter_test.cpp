@@ -341,6 +341,42 @@ TEST_CASE("SourceFormatter.match_compound_idempotency", "[format]")
     CHECK(first == second);
 }
 
+TEST_CASE("SourceFormatter.match_pipeline_arm_multiline", "[format]")
+{
+    auto const result = SourceFormatter::format(
+        "let f x = match x with | xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("| xs ->\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.match_pipeline_arm_idempotency", "[format]")
+{
+    auto const source =
+        "let f x = match x with | xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.match_simple_if_arm_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let f x = match x with | 0 -> if true then 1 | _ -> 2");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("| 0 -> if true then 1") != std::string::npos);
+}
+
+// --- LambdaExpr ---
+
+TEST_CASE("SourceFormatter.lambda_pipeline_body_multiline", "[format]")
+{
+    auto const result = SourceFormatter::format(
+        "let f = fun xs -> xs |> map (fun x -> x + 1) |> filter (fun x -> x > 0) |> sum");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("fun xs ->\n") != std::string::npos);
+}
+
 // --- TryWithExpr ---
 
 TEST_CASE("SourceFormatter.try_with_simple_inline", "[format]")
@@ -376,6 +412,14 @@ TEST_CASE("SourceFormatter.try_with_idempotency", "[format]")
     INFO("First: [" << first << "]");
     INFO("Second: [" << second << "]");
     CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.try_with_pipeline_handler_multiline", "[format]")
+{
+    auto const result =
+        SourceFormatter::format("let f x = try x? with | Error e -> e |> toString |> print |> ignore");
+    INFO("Result: [" << result << "]");
+    CHECK(result.find("| Error e ->\n") != std::string::npos);
 }
 
 // --- TryFinallyExpr ---

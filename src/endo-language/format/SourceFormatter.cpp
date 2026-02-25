@@ -1640,7 +1640,7 @@ void SourceFormatter::visit(ast::LambdaExpr const& node)
         else
             emit(param.name);
     }
-    if (node.body && isCompoundExpr(*node.body))
+    if (node.body && wouldFormatMultiline(*node.body))
     {
         emit(" ->");
         emitNewline();
@@ -1674,7 +1674,7 @@ void SourceFormatter::visit(ast::MatchExpr const& node)
             emit(" when ");
             arm.guard->accept(*this);
         }
-        if (arm.body && isCompoundExpr(*arm.body))
+        if (arm.body && wouldFormatMultiline(*arm.body))
         {
             emit(" ->");
             emitNewline();
@@ -1868,7 +1868,7 @@ void SourceFormatter::visit(ast::TryWithExpr const& node)
             emit(" when ");
             arm.guard->accept(*this);
         }
-        if (arm.body && isCompoundExpr(*arm.body))
+        if (arm.body && wouldFormatMultiline(*arm.body))
         {
             emit(" ->");
             emitNewline();
