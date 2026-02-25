@@ -360,26 +360,59 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                       || _lexer.currentLiteral() == "jobs")
                      && [this]() {
                             // Peek at next token to decide F# vs shell routing.
-                            // Only route to F# when followed by end-of-stmt, pipeline, string, or paren.
+                            // Only route to F# when followed by end-of-stmt, pipeline, string,
+                            // paren, or unquoted path arg (identifier not starting with '-').
                             auto const savedTok = _lexer.currentToken();
                             auto const savedLit = std::string(_lexer.currentLiteral());
                             auto const savedRange = _lexer.currentRange();
                             _lexer.nextToken();
                             auto const nextTok = _lexer.currentToken();
+                            auto const& nextLit = _lexer.currentLiteral();
                             _lexer.pushBackToken(savedTok, savedLit, savedRange);
                             return nextTok == Token::LineFeed || nextTok == Token::Semicolon
                                    || nextTok == Token::EndOfInput || nextTok == Token::ForwardPipe
                                    || nextTok == Token::String || nextTok == Token::DblQuoteStart
-                                   || nextTok == Token::RndOpen;
+                                   || nextTok == Token::RndOpen
+                                   // Unquoted path arg (not a flag):
+                                   || (nextTok == Token::Identifier && !nextLit.starts_with("-"));
                         }())
             {
                 // Structured commands: route as F# expressions with display for table rendering
-                _lexer.enterFSharpExpr();
-                auto expr = parseFSharpApplication();
-                _lexer.leaveFSharpExpr();
-                if (!expr)
-                    return nullptr;
-                // Check for trailing |> pipeline (e.g., ps |> filter ...)
+                std::unique_ptr<ast::Expr> expr;
+
+                // Consume the command name to inspect the next token
+                auto const cmdLit = std::string(_lexer.currentLiteral());
+                auto const cmdLoc = _lexer.currentRange();
+                _lexer.nextToken(); // consume cmd -> restores peeked next token
+
+                if (_lexer.currentToken() == Token::Identifier && !_lexer.currentLiteral().starts_with("-"))
+                {
+                    // Unquoted path argument: construct AST directly.
+                    // F# mode can't be used because the F# lexer would re-lex
+                    // paths like /tmp as Div + Identifier.
+                    auto pathLit = std::string(_lexer.currentLiteral());
+                    auto const pathLoc = _lexer.currentRange();
+                    _lexer.nextToken(); // consume path
+
+                    auto cmdIdent = std::make_unique<ast::IdentifierExpr>(cmdLit);
+                    cmdIdent->location = cmdLoc;
+                    auto pathExpr =
+                        std::make_unique<ast::LiteralExpr>(std::move(pathLit), ast::LiteralQuoting::Quoted);
+                    pathExpr->location = pathLoc;
+                    expr = std::make_unique<ast::ApplicationExpr>(std::move(cmdIdent), std::move(pathExpr));
+                }
+                else
+                {
+                    // Quoted arg, parens, bare command, or pipe — restore cmd and use F# parsing
+                    _lexer.pushBackToken(Token::Identifier, cmdLit, cmdLoc);
+                    _lexer.enterFSharpExpr();
+                    expr = parseFSharpApplication();
+                    _lexer.leaveFSharpExpr();
+                    if (!expr)
+                        return nullptr;
+                }
+
+                // Common pipeline handling for both paths
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
