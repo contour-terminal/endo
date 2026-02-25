@@ -5,6 +5,5 @@
 
 let mut sum = 0
 for (x, _) in [(10, 0); (20, 0); (30, 0)] do
-sum <- sum + x
-end
+    sum <- sum + x
 print sum

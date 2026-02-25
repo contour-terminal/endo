@@ -655,7 +655,6 @@ namespace
         ShellBuiltinDescriptor { "for", "builtin", "**for** -- shell keyword\n\n```\nfor x in [1; 2; 3] do\n  print x\ndone\n```" },
         ShellBuiltinDescriptor { "while", "builtin", "**while** -- shell keyword\n\nLoop while a condition holds." },
         ShellBuiltinDescriptor { "do", "builtin", "**do** -- shell keyword\n\nBegins the body of a for/while loop." },
-        ShellBuiltinDescriptor { "end", "builtin", "**end** -- shell keyword\n\nEnds a block statement." },
         ShellBuiltinDescriptor { "in", "builtin", "**in** -- shell keyword\n\nSeparates variable from iterable in for loops." },
         ShellBuiltinDescriptor { "return", "builtin", "**return** -- shell keyword\n\nReturns from a function." },
         ShellBuiltinDescriptor { "break", "builtin", "**break** -- shell keyword\n\nExits the innermost loop." },

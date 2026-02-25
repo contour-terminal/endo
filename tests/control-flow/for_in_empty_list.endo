@@ -3,5 +3,4 @@
 # description: Empty list — body never executes
 
 for (x, y) in [] do
-print x
-end
+    print x

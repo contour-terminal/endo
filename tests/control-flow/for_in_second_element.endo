@@ -4,5 +4,4 @@
 # expect: 24
 
 for (_, y) in [(1, 2); (3, 4)] do
-print y
-end
+    print y

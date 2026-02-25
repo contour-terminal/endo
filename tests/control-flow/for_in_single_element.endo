@@ -4,6 +4,5 @@
 # expect: 427
 
 for (x, y) in [(42, 7)] do
-print x
-print y
-end
+    print x
+    print y

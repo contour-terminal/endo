@@ -5,6 +5,5 @@
 
 let mut r = 0
 for (x, y) in [(1, 2); (3, 4)] do
-r <- r + x + y
-end
+    r <- r + x + y
 print r

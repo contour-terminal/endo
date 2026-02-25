@@ -167,7 +167,6 @@ void ASTPrinter::visit(WhileStmt const& node)
     _result += print(*node.condition);
     _result += " do ";
     _result += print(*node.body);
-    _result += " end";
 }
 
 void ASTPrinter::visit(ForInStmt const& node)
@@ -178,7 +177,6 @@ void ASTPrinter::visit(ForInStmt const& node)
     node.source->accept(*this);
     _result += " do ";
     _result += print(*node.body);
-    _result += " end";
 }
 
 void ASTPrinter::visit(BreakStmt const& node)

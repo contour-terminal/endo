@@ -3,4 +3,4 @@
 # description: Stmt while basic
 # mode: ir-only
 
-while false do echo hi; end
+while false do echo hi

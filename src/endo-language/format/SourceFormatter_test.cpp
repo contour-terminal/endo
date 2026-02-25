@@ -445,7 +445,7 @@ TEST_CASE("SourceFormatter.let_in_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_preserves_leading_comments", "[format]")
 {
-    auto const source = "# header comment\n\nfor x in [1; 2] do\nprint x\nend";
+    auto const source = "# header comment\n\nfor x in [1; 2] do\n    print x";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     // Comment must appear before the for loop, not inside
@@ -458,7 +458,7 @@ TEST_CASE("SourceFormatter.for_in_preserves_leading_comments", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_leading_comments_idempotency", "[format]")
 {
-    auto const source = "# header\n\nfor x in [1; 2] do\nprint x\nend";
+    auto const source = "# header\n\nfor x in [1; 2] do\n    print x";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -468,7 +468,7 @@ TEST_CASE("SourceFormatter.for_in_leading_comments_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.while_preserves_leading_comments", "[format]")
 {
-    auto const source = "# header comment\n\nwhile true do\nprint 1\nend";
+    auto const source = "# header comment\n\nwhile true do\n    print 1";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     auto const commentPos = result.find("# header comment");
@@ -480,7 +480,7 @@ TEST_CASE("SourceFormatter.while_preserves_leading_comments", "[format]")
 
 TEST_CASE("SourceFormatter.while_leading_comments_idempotency", "[format]")
 {
-    auto const source = "# header\n\nwhile true do\nprint 1\nend";
+    auto const source = "# header\n\nwhile true do\n    print 1";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -492,20 +492,20 @@ TEST_CASE("SourceFormatter.while_leading_comments_idempotency", "[format]")
 
 TEST_CASE("SourceFormatter.for_in_preserves_body_trailing_comment", "[format]")
 {
-    auto const source = "for x in [1; 2] do\nprint x\n# end of body\nend";
+    auto const source = "for x in [1; 2] do\n    print x\n    # end of body";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
-    // Comment must appear inside the loop body (before "end"), not after it
+    // Comment must appear inside the loop body (indented under do)
     auto const commentPos = result.find("# end of body");
-    auto const endPos = result.find("\nend");
+    auto const printPos = result.find("print x");
     REQUIRE(commentPos != std::string::npos);
-    REQUIRE(endPos != std::string::npos);
-    CHECK(commentPos < endPos);
+    REQUIRE(printPos != std::string::npos);
+    CHECK(printPos < commentPos);
 }
 
 TEST_CASE("SourceFormatter.for_in_body_trailing_comment_idempotency", "[format]")
 {
-    auto const source = "for x in [1; 2] do\nprint x\n# end of body\nend";
+    auto const source = "for x in [1; 2] do\n    print x\n    # end of body";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -515,19 +515,19 @@ TEST_CASE("SourceFormatter.for_in_body_trailing_comment_idempotency", "[format]"
 
 TEST_CASE("SourceFormatter.while_preserves_body_trailing_comment", "[format]")
 {
-    auto const source = "while true do\nprint 1\n# end of body\nend";
+    auto const source = "while true do\n    print 1\n    # end of body";
     auto const result = SourceFormatter::format(source);
     INFO("Result: [" << result << "]");
     auto const commentPos = result.find("# end of body");
-    auto const endPos = result.find("\nend");
+    auto const printPos = result.find("print 1");
     REQUIRE(commentPos != std::string::npos);
-    REQUIRE(endPos != std::string::npos);
-    CHECK(commentPos < endPos);
+    REQUIRE(printPos != std::string::npos);
+    CHECK(printPos < commentPos);
 }
 
 TEST_CASE("SourceFormatter.while_body_trailing_comment_idempotency", "[format]")
 {
-    auto const source = "while true do\nprint 1\n# end of body\nend";
+    auto const source = "while true do\n    print 1\n    # end of body";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
@@ -736,7 +736,7 @@ TEST_CASE("SourceFormatter.preserve_blank_line_between_shell_commands", "[format
 
 TEST_CASE("SourceFormatter.blank_line_preserved_at_nested_indent", "[format]")
 {
-    auto const result = SourceFormatter::format("while true do\nprint 1\n\nprint 2\nend");
+    auto const result = SourceFormatter::format("while true do\n    print 1\n\n    print 2");
     INFO("Result: [" << result << "]");
     // Inside the while body, the blank line should be preserved
     CHECK(result.find("print 1\n\n") != std::string::npos);
@@ -745,7 +745,7 @@ TEST_CASE("SourceFormatter.blank_line_preserved_at_nested_indent", "[format]")
 
 TEST_CASE("SourceFormatter.blank_line_preserved_inside_for_loop", "[format]")
 {
-    auto const result = SourceFormatter::format("for x in [1; 2; 3] do\nprint 1\n\nprint 2\nend");
+    auto const result = SourceFormatter::format("for x in [1; 2; 3] do\n    print 1\n\n    print 2");
     INFO("Result: [" << result << "]");
     CHECK(result.find("print 1\n\n") != std::string::npos);
     CHECK(result.find("print 2") != std::string::npos);
@@ -791,7 +791,7 @@ TEST_CASE("SourceFormatter.multiple_blank_lines_normalization_idempotency", "[fo
 
 TEST_CASE("SourceFormatter.nested_blank_line_idempotency", "[format]")
 {
-    auto const source = "while true do\nprint 1\n\nprint 2\nend";
+    auto const source = "while true do\n    print 1\n\n    print 2";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");

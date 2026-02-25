@@ -88,7 +88,6 @@ bool Parser::isEndOfBlock() const noexcept
 {
     // clang-format off
     return _lexer.currentToken() == Token::EndOfInput
-        || _lexer.isDirective("end")
         || _lexer.currentLiteral() == "}"
         || _lexer.currentToken() == Token::DblSemicolon;
     // clang-format on
@@ -166,6 +165,53 @@ std::unique_ptr<ast::Statement> Parser::parseBlock(std::string_view traceMessage
     }
     TRACE_FMT(
         "Parsed scope.3 (current token: {}): {}", _lexer.currentLiteral(), ast::ASTPrinter::print(*scope));
+    return scope;
+}
+
+std::unique_ptr<ast::Statement> Parser::parseIndentedBlock(size_t referenceColumn)
+{
+    TRACE_SCOPE("parseIndentedBlock");
+    auto scope = std::make_unique<ast::CompoundStmt>();
+
+    // Consume leading separators (newline after 'do')
+    consumeUntilNotOneOf(Token::Semicolon, Token::LineFeed);
+
+    while (_lexer.currentToken() != Token::EndOfInput)
+    {
+        // Offside rule: if current token is at or before the reference column, stop
+        if (currentTokenColumn() <= referenceColumn)
+        {
+            _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+
+        auto stmt = parseStmt();
+        if (!stmt)
+            break;
+
+        TRACE_FMT("parseIndentedBlock: parsed statement: {}", ast::ASTPrinter::print(*stmt));
+        scope->statements.emplace_back(std::move(stmt));
+
+        // Consume separators between statements
+        bool sawLineFeed = false;
+        while (_lexer.currentToken() == Token::LineFeed || _lexer.currentToken() == Token::Semicolon)
+        {
+            if (_lexer.currentToken() == Token::LineFeed)
+                sawLineFeed = true;
+            _lexer.nextToken();
+        }
+
+        if (_lexer.currentToken() == Token::EndOfInput)
+            break;
+
+        // If we crossed a line boundary, check indentation
+        if (sawLineFeed && currentTokenColumn() <= referenceColumn)
+        {
+            _lexer.pushBackToken(Token::LineFeed, "\n");
+            break;
+        }
+    }
+
     return scope;
 }
 
@@ -760,6 +806,8 @@ std::unique_ptr<ast::WhileStmt> Parser::parseWhile()
 {
     TRACE_SCOPE("parseWhile");
 
+    auto const whileColumn = currentTokenColumn();
+
     // Enter F# mode before consuming 'while' so the condition's first token is read in F# mode
     _lexer.enterFSharpExpr();
     auto const whileLoc = _lexer.currentRange();
@@ -774,25 +822,25 @@ std::unique_ptr<ast::WhileStmt> Parser::parseWhile()
         _lexer.nextToken();
     consumeDirective("do");
 
-    auto body = parseBlock("whileBody");
-    auto const endLoc = _lexer.currentRange();
-    consumeDirective("end");
+    auto body = parseIndentedBlock(whileColumn);
+    auto const endPos = (body && body->location) ? body->location->end : whileLoc.end;
     auto node = std::make_unique<ast::WhileStmt>(std::move(condition), std::move(body));
-    node->location = SourceLocationRange { whileLoc.begin, endLoc.end };
+    node->location = SourceLocationRange { whileLoc.begin, endPos };
     return node;
 }
 
 std::unique_ptr<ast::Statement> Parser::parseFor()
 {
     TRACE_SCOPE("parseFor");
+    auto const forColumn = currentTokenColumn();
     auto const forLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'for'
 
-    // Always F# style: for pattern in expr do body done
-    return parseForIn(forLoc);
+    // Always F# style: for pattern in expr do body
+    return parseForIn(forLoc, forColumn);
 }
 
-std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& forLoc)
+std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& forLoc, size_t forColumn)
 {
     TRACE_SCOPE("parseForIn");
 
@@ -843,12 +891,11 @@ std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& fo
         _lexer.nextToken();
     consumeDirective("do");
 
-    auto body = parseBlock("forInBody");
-    auto const endLoc = _lexer.currentRange();
-    consumeDirective("end");
+    auto body = parseIndentedBlock(forColumn);
+    auto const endPos = (body && body->location) ? body->location->end : forLoc.end;
 
     auto node = std::make_unique<ast::ForInStmt>(std::move(pat), std::move(source), std::move(body));
-    node->location = SourceLocationRange { forLoc.begin, endLoc.end };
+    node->location = SourceLocationRange { forLoc.begin, endPos };
     return node;
 }
 
@@ -2725,7 +2772,7 @@ bool Parser::isFSharpPrimary() const noexcept
             if (lit.empty())
                 return false;
             // Contextual keywords that should not be treated as primary expressions
-            if (lit == "in" || lit == "then" || lit == "else" || lit == "do" || lit == "end" || lit == "break"
+            if (lit == "in" || lit == "then" || lit == "else" || lit == "do" || lit == "break"
                 || lit == "continue" || lit == "exec")
                 return false;
             // Variable identifiers start with alphanumeric or underscore

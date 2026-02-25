@@ -3,4 +3,4 @@
 # description: Stmt for simple variable
 # expect: 123
 
-for x in [1; 2; 3] do print x end
+for x in [1; 2; 3] do print x

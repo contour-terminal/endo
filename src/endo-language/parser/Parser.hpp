@@ -50,11 +50,16 @@ class Parser
     [[nodiscard]] bool isParameterToken() const noexcept;
 
     std::unique_ptr<ast::Statement> parseBlock(std::string_view traceMessage = {});
+
+    /// Parses statements in a block until indentation returns to or past the reference column.
+    /// Used for loop bodies where the closing keyword has been eliminated.
+    std::unique_ptr<ast::Statement> parseIndentedBlock(size_t referenceColumn);
+
     std::unique_ptr<ast::Statement> parseStmt();
     std::string consumeLiteral();
     std::unique_ptr<ast::WhileStmt> parseWhile();
     std::unique_ptr<ast::Statement> parseFor();
-    std::unique_ptr<ast::ForInStmt> parseForIn(SourceLocationRange const& forLoc);
+    std::unique_ptr<ast::ForInStmt> parseForIn(SourceLocationRange const& forLoc, size_t forColumn);
     std::unique_ptr<ast::BreakStmt> parseBreak();
     std::unique_ptr<ast::ContinueStmt> parseContinue();
     [[nodiscard]] bool isRedirectToken() const noexcept;

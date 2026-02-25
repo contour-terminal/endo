@@ -586,8 +586,6 @@ void SourceFormatter::visit(ast::WhileStmt const& node)
     node.body->accept(*this);
     emitDanglingBodyComments(node);
     dedent();
-    emitNewline();
-    emit("end");
     emitTrailingComment(node);
 }
 
@@ -604,8 +602,6 @@ void SourceFormatter::visit(ast::ForInStmt const& node)
     node.body->accept(*this);
     emitDanglingBodyComments(node);
     dedent();
-    emitNewline();
-    emit("end");
     emitTrailingComment(node);
 }
 

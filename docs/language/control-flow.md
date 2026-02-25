@@ -90,62 +90,59 @@ match command with
 
 ### 9.3 Loops
 
+Loop bodies use the **offside rule** — statements indented past the `for`/`while`
+keyword belong to the body. No closing keyword is needed.
+
 <!-- endo-no-check -->
 ```endo
 # For-in loop over list
 for item in [1; 2; 3; 4; 5] do
     println $"Item: {item}"
-end
 
 # For-in over range
 for i in 1..10 do
     println $"Count: {i}"
-end
 
 for i in 10..-1..1 do
     println $"Countdown: {i}"
-end
 
 # For-in over command output
 for file in $(ls *.txt) do
     println $"Processing: {file}"
     wc -l $file
-end
 
 # For-in with destructuring
 for (name, value) in entries do
     println $"{name} = {value}"
-end
 
 for { host; port } in servers do
     ping $host
-end
 
 # While loop
 let mut n = 10
 while n > 0 do
     println $"Countdown: {n}"
     n <- n - 1
-end
 
 # Infinite loop with break
 while true do
     let input = read
     if input == "quit" then break
     process input
-end
 
 # Break and continue
 for item in items do
     if item == "skip" then continue
     if item == "stop" then break
     process item
-end
 
 # While with complex condition
 while hasMoreData && !cancelled do
     processNextBatch
-end
+
+# Single-line loops
+for x in [1; 2; 3] do print x
+while count > 0 do count <- count - 1
 ```
 
 ---

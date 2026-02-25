@@ -119,7 +119,6 @@ std::vector<CompletionCandidate> shellKeywordCandidates()
         { "for", "for", "For-in loop", "", CompletionKind::Keyword },
         { "while", "while", "While loop", "", CompletionKind::Keyword },
         { "do", "do", "Loop body", "", CompletionKind::Keyword },
-        { "end", "end", "End loop", "", CompletionKind::Keyword },
         { "in", "in", "In clause", "", CompletionKind::Keyword },
         { "return", "return", "Return statement", "", CompletionKind::Keyword },
         { "break", "break", "Break statement", "", CompletionKind::Keyword },

@@ -3,4 +3,4 @@
 # description: Bracketed range still works
 # expect: 12345
 
-for i in [1..5] do print i end
+for i in [1..5] do print i

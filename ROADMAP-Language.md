@@ -182,7 +182,8 @@ This document tracks the implementation status of F# language features as define
 - [x] While loops
 - [x] For-in loops
 - [x] Break and continue
-- [x] For loops with destructuring: `for (name, value) in entries do ... end`
+- [x] For loops with destructuring: `for (name, value) in entries do ...`
+- [x] Indentation-based loop bodies (offside rule): `end` keyword eliminated from for/while loops
 - [x] Bare range expressions: `1..10` and `1..2..10` (standalone, not only inside `[...]`)
 
 ## Standard Library Builtins
