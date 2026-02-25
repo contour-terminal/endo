@@ -6,6 +6,7 @@
 #include <tui/completer/CompletionProvider.hpp>
 
 #include <format>
+#include <ranges>
 
 #include <agent/ui/AgentInputComponent.hpp>
 
@@ -105,7 +106,7 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
         // Render project path with blue→teal gradient coloring.
         auto const renderPathGradient = [&]() {
-            for (std::size_t i = 0; i < _projectPath.size(); ++i)
+            for (auto const i: std::views::iota(0uz, _projectPath.size()))
             {
                 auto const t = _projectPath.size() == 1
                                    ? 0.0f
@@ -133,7 +134,8 @@ void AgentInputComponent::render(tui::Canvas& canvas)
 
     // Draw left chrome for each visible input line (accounting for scroll offset)
     auto const scrollOff = _inputField.scrollOffset();
-    auto const fieldHeight = std::max(1, area.height - rowOff - HeaderHeight - imagePreviewHeight() - FooterHeight);
+    auto const fieldHeight =
+        std::max(1, area.height - rowOff - HeaderHeight - imagePreviewHeight() - FooterHeight);
     auto const visibleLines = std::min(lineCount - scrollOff, fieldHeight);
     for (auto row = 0; row < visibleLines && (rowOff + row + HeaderHeight) < area.height; ++row)
     {

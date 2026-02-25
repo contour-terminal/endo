@@ -9,6 +9,8 @@
 #include <tui/Theme.hpp>
 #include <tui/Unicode.hpp>
 
+#include <ranges>
+
 #if defined(__clang__)
     #pragma clang diagnostic push
     #pragma clang diagnostic ignored "-Wold-style-cast"
@@ -300,7 +302,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
         // Parse into a ParsedTable.
         auto table = ParsedTable {};
         auto separatorIdx = std::size_t { 0 };
-        for (std::size_t i = 0; i < tableLines.size(); ++i)
+        for (auto const i: std::views::iota(0uz, tableLines.size()))
         {
             if (detectTableSeparator(tableLines[i]))
             {
@@ -315,7 +317,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
         table.alignments = parseTableAlignments(tableLines[separatorIdx]);
         table.columnCount = table.headers.size();
 
-        for (auto i = separatorIdx + 1; i < tableLines.size(); ++i)
+        for (auto const i: std::views::iota(separatorIdx + 1, tableLines.size()))
         {
             auto cells = splitTableRow(tableLines[i]);
             cells.resize(table.columnCount);
@@ -330,9 +332,9 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
         auto buildHLine = [&](std::string_view left, std::string_view mid, std::string_view right) {
             std::string borderStr;
             borderStr.append(left);
-            for (std::size_t col = 0; col < table.columnCount; ++col)
+            for (auto const col: std::views::iota(0uz, table.columnCount))
             {
-                for (auto j = 0; j < widths[col] + 2; ++j)
+                for ([[maybe_unused]] auto _: std::views::iota(0, widths[col] + 2))
                     borderStr.append(border.horizontal);
                 if (col + 1 < table.columnCount)
                     borderStr.append(mid);
@@ -348,7 +350,7 @@ StyledText StyledText::fromMarkdown(std::string_view markdown, int maxWidth, Mar
             StyledLine styledLine;
             std::string vertStr(border.vertical);
             styledLine.push_back({ vertStr, mdTheme.tableBorder });
-            for (std::size_t col = 0; col < table.columnCount; ++col)
+            for (auto const col: std::views::iota(0uz, table.columnCount))
             {
                 auto const& text = (col < cells.size()) ? cells[col] : std::string {};
                 auto const alignment =
@@ -551,7 +553,7 @@ void StyledText::renderTo(Canvas& canvas, int startLine, int lineCount) const
                                   ? static_cast<int>(_lines.size()) - startLine
                                   : std::min(lineCount, static_cast<int>(_lines.size()) - startLine);
 
-    for (int i = 0; i < linesToRender && i < canvas.height(); ++i)
+    for (auto const i: std::views::iota(0, std::min(linesToRender, canvas.height())))
     {
         int const lineIdx = startLine + i;
         if (lineIdx < 0 || lineIdx >= static_cast<int>(_lines.size()))

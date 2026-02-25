@@ -6,6 +6,7 @@
 #include <endo-language/types/Type.hpp>
 
 #include <format>
+#include <ranges>
 
 namespace endo::format
 {
@@ -95,7 +96,7 @@ void SourceFormatter::emit(std::string_view text)
 {
     if (_atLineStart && !text.empty())
     {
-        for (int i = 0; i < _indentLevel; ++i)
+        for ([[maybe_unused]] auto _: std::views::iota(0, _indentLevel))
             _result += _config.indentString();
         _atLineStart = false;
     }
@@ -112,7 +113,7 @@ void SourceFormatter::emitIndent()
 {
     if (_atLineStart)
     {
-        for (int i = 0; i < _indentLevel; ++i)
+        for ([[maybe_unused]] auto _: std::views::iota(0, _indentLevel))
             _result += _config.indentString();
         _atLineStart = false;
     }
@@ -240,7 +241,7 @@ void SourceFormatter::emitCommentsBeforeLine(int line)
 
         // Determine the line of whatever comes next (next leading comment or the code)
         auto nextContentLine = line;
-        for (auto i = _nextCommentIndex; i < _comments.size(); ++i)
+        for (auto const i: std::views::iota(_nextCommentIndex, _comments.size()))
         {
             if (_comments[i].location.begin.line >= line)
                 break;
@@ -255,7 +256,7 @@ void SourceFormatter::emitCommentsBeforeLine(int line)
         // No extra -1 needed: commentEndLine already points past the comment's newline.
         auto const gap = nextContentLine - commentEndLine;
         auto const maxBlanks = static_cast<int>(_config.blankLinesBetweenTopLevel);
-        for (int i = 0; i < std::min(gap, maxBlanks); ++i)
+        for ([[maybe_unused]] auto _: std::views::iota(0, std::min(gap, maxBlanks)))
             emitNewline();
     }
 }
@@ -520,7 +521,7 @@ void SourceFormatter::visit(ast::ProgramCall const& node)
 void SourceFormatter::visit(ast::CallPipeline const& node)
 {
     emitLeadingComments(node);
-    for (size_t i = 0; i < node.calls.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.calls.size()))
     {
         if (i > 0)
             emit(" | ");
@@ -544,7 +545,7 @@ static bool isDeclarationOrBlock(ast::Node const& node)
 void SourceFormatter::visit(ast::CompoundStmt const& node)
 {
     emitLeadingComments(node);
-    for (size_t i = 0; i < node.statements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.statements.size()))
     {
         if (i > 0)
         {
@@ -567,7 +568,8 @@ void SourceFormatter::visit(ast::CompoundStmt const& node)
             }
 
             if (wantBlankLine)
-                for (uint32_t b = 0; b < _config.blankLinesBetweenTopLevel; ++b)
+                for ([[maybe_unused]] auto _:
+                     std::views::iota(uint32_t { 0 }, _config.blankLinesBetweenTopLevel))
                     emitNewline();
         }
         node.statements[i]->accept(*this);
@@ -1010,7 +1012,7 @@ void SourceFormatter::visit(ast::DataSourceExpr const& node)
     else
     {
         emit("{ ");
-        for (size_t i = 0; i < node.inlineFields.size(); ++i)
+        for (auto const i: std::views::iota(0uz, node.inlineFields.size()))
         {
             if (i > 0)
                 emit("; ");
@@ -1121,7 +1123,7 @@ void SourceFormatter::formatIfExpr(ast::IfExpr const& node, std::string_view key
 void SourceFormatter::visit(ast::TupleExpr const& node)
 {
     emit("(");
-    for (size_t i = 0; i < node.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.elements.size()))
     {
         if (i > 0)
             emit(", ");
@@ -1397,7 +1399,7 @@ void SourceFormatter::visit(ast::ParenExpr const& node)
 void SourceFormatter::visit(ast::LambdaExpr const& node)
 {
     emit("fun ");
-    for (size_t i = 0; i < node.parameters.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.parameters.size()))
     {
         if (i > 0)
             emit(" ");
@@ -1461,7 +1463,7 @@ void SourceFormatter::visit(ast::MatchExpr const& node)
 void SourceFormatter::visit(ast::ListExpr const& node)
 {
     emit("[");
-    for (size_t i = 0; i < node.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.elements.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1724,7 +1726,7 @@ void SourceFormatter::visit(ast::RecordTypeDefStmt const& node)
 {
     emitLeadingComments(node);
     emit(std::format("type {} = {{ ", node.name));
-    for (size_t i = 0; i < node.fields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.fields.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1739,7 +1741,7 @@ void SourceFormatter::visit(ast::RecordTypeDefStmt const& node)
 void SourceFormatter::visit(ast::RecordExpr const& node)
 {
     emit("{ ");
-    for (size_t i = 0; i < node.fields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.fields.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1755,7 +1757,7 @@ void SourceFormatter::visit(ast::RecordUpdateExpr const& node)
     emit("{ ");
     node.base->accept(*this);
     emit(" with ");
-    for (size_t i = 0; i < node.updates.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.updates.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1792,7 +1794,7 @@ void SourceFormatter::visit(ast::UnionTypeDefStmt const& node)
         if (!variant.payloadTypes.empty())
         {
             emit(" of ");
-            for (size_t i = 0; i < variant.payloadTypes.size(); ++i)
+            for (auto const i: std::views::iota(0uz, variant.payloadTypes.size()))
             {
                 if (i > 0)
                     emit(" * ");
@@ -1815,7 +1817,7 @@ void SourceFormatter::visit(ast::UnionConstructorExpr const& node)
 
 void SourceFormatter::visit(ast::ExecPipelineExpr const& node)
 {
-    for (size_t i = 0; i < node.commands.size(); ++i)
+    for (auto const i: std::views::iota(0uz, node.commands.size()))
     {
         if (i > 0)
             emit(" | ");
@@ -1865,7 +1867,7 @@ void SourceFormatter::visit(pattern::WildcardPattern const& /*pat*/)
 void SourceFormatter::visit(pattern::TuplePattern const& pat)
 {
     emit("(");
-    for (size_t i = 0; i < pat.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, pat.elements.size()))
     {
         if (i > 0)
             emit(", ");
@@ -1877,7 +1879,7 @@ void SourceFormatter::visit(pattern::TuplePattern const& pat)
 void SourceFormatter::visit(pattern::ListPattern const& pat)
 {
     emit("[");
-    for (size_t i = 0; i < pat.elements.size(); ++i)
+    for (auto const i: std::views::iota(0uz, pat.elements.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1903,7 +1905,7 @@ void SourceFormatter::visit(pattern::ConsPattern const& pat)
 void SourceFormatter::visit(pattern::RecordPattern const& pat)
 {
     emit("{ ");
-    for (size_t i = 0; i < pat.fields.size(); ++i)
+    for (auto const i: std::views::iota(0uz, pat.fields.size()))
     {
         if (i > 0)
             emit("; ");
@@ -1942,7 +1944,7 @@ void SourceFormatter::visit(pattern::AsPattern const& pat)
 
 void SourceFormatter::visit(pattern::OrPattern const& pat)
 {
-    for (size_t i = 0; i < pat.alternatives.size(); ++i)
+    for (auto const i: std::views::iota(0uz, pat.alternatives.size()))
     {
         if (i > 0)
             emit(" | ");

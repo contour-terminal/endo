@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <ranges>
 #include <string>
 
 namespace endo
@@ -241,7 +242,7 @@ std::vector<size_t> findPrefixMatches(std::string_view text, std::string_view pa
 {
     std::vector<size_t> matches;
 
-    for (size_t len = 0; len <= text.size(); ++len)
+    for (auto const len: std::views::iota(0uz, text.size() + 1))
     {
         if (globMatch(text.substr(0, len), pattern))
             matches.push_back(len);
@@ -254,7 +255,7 @@ std::vector<size_t> findSuffixMatches(std::string_view text, std::string_view pa
 {
     std::vector<size_t> matches;
 
-    for (size_t start = 0; start <= text.size(); ++start)
+    for (auto const start: std::views::iota(0uz, text.size() + 1))
     {
         if (globMatch(text.substr(start), pattern))
             matches.push_back(start);
@@ -265,7 +266,7 @@ std::vector<size_t> findSuffixMatches(std::string_view text, std::string_view pa
 
 std::optional<size_t> findPatternMatchLength(std::string_view text, std::string_view pattern)
 {
-    for (size_t len = 1; len <= text.size(); ++len)
+    for (auto const len: std::views::iota(1uz, text.size() + 1))
     {
         if (globMatch(text.substr(0, len), pattern))
             return len;

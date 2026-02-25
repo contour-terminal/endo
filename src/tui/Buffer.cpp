@@ -3,6 +3,7 @@
 
 #include <tui/TerminalOutput.hpp>
 
+#include <ranges>
 #include <stdexcept>
 
 #include "Unicode.hpp"
@@ -52,9 +53,9 @@ void Buffer::resize(int rows, int cols)
     int copyRows = std::min(_rows, rows);
     int copyCols = std::min(_cols, cols);
 
-    for (int r = 0; r < copyRows; ++r)
+    for (auto const r: std::views::iota(0, copyRows))
     {
-        for (int c = 0; c < copyCols; ++c)
+        for (auto const c: std::views::iota(0, copyCols))
         {
             size_t oldIdx = static_cast<size_t>(r) * static_cast<size_t>(_cols) + static_cast<size_t>(c);
             size_t newIdx = static_cast<size_t>(r) * static_cast<size_t>(cols) + static_cast<size_t>(c);
@@ -119,9 +120,9 @@ void Buffer::clearRect(Rect area, Style const& style)
     int endRow = std::min(_rows, area.bottom());
     int endCol = std::min(_cols, area.right());
 
-    for (int row = startRow; row < endRow; ++row)
+    for (auto const row: std::views::iota(startRow, endRow))
     {
-        for (int col = startCol; col < endCol; ++col)
+        for (auto const col: std::views::iota(startCol, endCol))
         {
             _cells[index(row, col)].reset(style);
         }
@@ -195,9 +196,9 @@ void Buffer::fill(Rect area, char ch, Style const& style)
 
     std::string grapheme(1, ch);
 
-    for (int row = startRow; row < endRow; ++row)
+    for (auto const row: std::views::iota(startRow, endRow))
     {
-        for (int col = startCol; col < endCol; ++col)
+        for (auto const col: std::views::iota(startCol, endCol))
         {
             Cell& cell = _cells[index(row, col)];
             cell.grapheme = grapheme;
@@ -235,7 +236,7 @@ void Buffer::clearImages() noexcept
 
 void Buffer::writeTo(TerminalOutput& out) const
 {
-    for (auto row = 0; row < _rows; ++row)
+    for (auto const row: std::views::iota(0, _rows))
     {
         out.carriageReturn();
         for (auto col = 0; col < _cols;)

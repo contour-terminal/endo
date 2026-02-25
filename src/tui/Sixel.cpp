@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <format>
 #include <limits>
+#include <ranges>
 #include <span>
 #include <string>
 #include <utility>
@@ -90,7 +91,7 @@ namespace
             // Find the bucket with the most pixels
             auto largestIdx = std::size_t { 0 };
             auto largestSize = std::size_t { 0 };
-            for (auto i = std::size_t { 0 }; i < buckets.size(); ++i)
+            for (auto const i: std::views::iota(0uz, buckets.size()))
             {
                 if (buckets[i].pixels.size() > largestSize)
                 {
@@ -139,7 +140,7 @@ namespace
     {
         auto bestIdx = std::size_t { 0 };
         auto bestDist = std::numeric_limits<int>::max();
-        for (auto i = std::size_t { 0 }; i < palette.size(); ++i)
+        for (auto const i: std::views::iota(0uz, palette.size()))
         {
             auto const& c = palette[i];
             auto const dr = static_cast<int>(pixel.r) - static_cast<int>(c.r);
@@ -196,7 +197,7 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
     opaquePixels.reserve(pixelCount);
     auto indexed = std::vector<int>(pixelCount, -1);
 
-    for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
+    for (auto const i: std::views::iota(0uz, pixelCount))
     {
         auto const alpha = image.pixels[(i * 4) + 3];
         if (alpha < 128)
@@ -228,7 +229,7 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
     };
 
     // Map each opaque pixel to a palette index (with cache)
-    for (auto i = std::size_t { 0 }; i < pixelCount; ++i)
+    for (auto const i: std::views::iota(0uz, pixelCount))
     {
         if (indexed[i] < 0)
             continue; // Transparent
@@ -247,7 +248,7 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
     result += std::format("\"1;1;{};{}", image.width, image.height);
 
     // Define palette: #idx;2;r%;g%;b% (percentage 0-100)
-    for (auto i = 0; i < paletteSize; ++i)
+    for (auto const i: std::views::iota(0, paletteSize))
     {
         auto const& c = palette[static_cast<std::size_t>(i)];
         result += std::format("#{};2;{};{};{}", i, c.r * 100 / 255, c.g * 100 / 255, c.b * 100 / 255);
@@ -264,16 +265,16 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
     auto activeColors = std::vector<int> {};
     activeColors.reserve(static_cast<std::size_t>(paletteSize));
 
-    for (auto bandY = 0; bandY < height; bandY += 6)
+    for (auto const bandY: std::views::iota(0, height) | std::views::stride(6))
     {
         // Pass 1: Accumulate sixel bits per color (single pass over pixels)
         auto const bandHeight = std::min(6, height - bandY);
-        for (auto bit = 0; bit < bandHeight; ++bit)
+        for (auto const bit: std::views::iota(0, bandHeight))
         {
             auto const y = bandY + bit;
             auto const rowOffset = static_cast<std::size_t>(y) * widthU;
             auto const bitMask = static_cast<std::uint8_t>(1 << bit);
-            for (auto x = std::size_t { 0 }; x < widthU; ++x)
+            for (auto const x: std::views::iota(0uz, widthU))
             {
                 auto const colorIdx = indexed[rowOffset + x];
                 if (colorIdx >= 0)
@@ -283,11 +284,11 @@ auto encodeSixel(ImageData const& image, int maxColors) -> Result<std::string>
 
         // Collect active colors for this band
         activeColors.clear();
-        for (auto colorIdx = 0; colorIdx < paletteSize; ++colorIdx)
+        for (auto const colorIdx: std::views::iota(0, paletteSize))
         {
             auto const& row = colorRows[static_cast<std::size_t>(colorIdx)];
             auto isActive = false;
-            for (auto x = std::size_t { 0 }; x < widthU; ++x)
+            for (auto const x: std::views::iota(0uz, widthU))
             {
                 if (row[x] != 0)
                 {

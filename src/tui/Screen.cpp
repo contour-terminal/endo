@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <ranges>
 #include <unordered_map>
 
 namespace tui
@@ -99,10 +100,10 @@ void Screen::draw()
     {
         _previousMainContentHeight = _mainContentHeight;
         _mainContentHeight = 0;
-        for (int row = _current.rows() - 1; row >= 0; --row)
+        for (auto const row: std::views::iota(0, _current.rows()) | std::views::reverse)
         {
             bool hasContent = false;
-            for (int col = 0; col < _current.cols(); ++col)
+            for (auto const col: std::views::iota(0, _current.cols()))
             {
                 Cell const& cell = _current.at(row, col);
                 if (!cell.grapheme.empty() && cell.grapheme != " ")
@@ -539,7 +540,7 @@ void Screen::flushFullscreen()
     // Hide cursor during update
     out.hideCursor();
 
-    for (int row = 0; row < _current.rows(); ++row)
+    for (auto const row: std::views::iota(0, _current.rows()))
     {
         for (int col = 0; col < _current.cols();)
         {
@@ -587,10 +588,10 @@ void Screen::flushInline()
 
     // Calculate content height (find last non-empty row)
     int contentHeight = 0;
-    for (int row = _current.rows() - 1; row >= 0; --row)
+    for (auto const row: std::views::iota(0, _current.rows()) | std::views::reverse)
     {
         bool hasContent = false;
-        for (int col = 0; col < _current.cols(); ++col)
+        for (auto const col: std::views::iota(0, _current.cols()))
         {
             Cell const& cell = _current.at(row, col);
             if (!cell.grapheme.empty() && cell.grapheme != " ")
@@ -649,7 +650,7 @@ void Screen::flushInline()
                 {
                     // Room exists but insufficient — emit additional LFs for the extra rows.
                     auto const newLines = contentHeight - reservedRoom;
-                    for (int i = 0; i < newLines; ++i)
+                    for ([[maybe_unused]] auto _: std::views::iota(0, newLines))
                         out.linefeed();
                     if (newLines > 0)
                         out.moveUp(newLines);
@@ -669,7 +670,7 @@ void Screen::flushInline()
 
                 // Emit contentHeight-1 newlines (enough to ensure room without overshooting).
                 auto const newLines = std::max(0, contentHeight - 1);
-                for (int i = 0; i < newLines; ++i)
+                for ([[maybe_unused]] auto _: std::views::iota(0, newLines))
                     out.linefeed();
                 if (newLines > 0)
                     out.moveUp(newLines);
@@ -688,7 +689,7 @@ void Screen::flushInline()
             auto const growth = contentHeight - _peakContentHeight;
             auto const scrollsNeeded = std::max(0, _inlineContentStartRow + contentHeight - _terminal.rows());
 
-            for (int i = 0; i < growth; ++i)
+            for ([[maybe_unused]] auto _: std::views::iota(0, growth))
                 out.linefeed();
             if (growth > 0)
                 out.moveUp(growth);
@@ -729,7 +730,7 @@ void Screen::flushInline()
             previousImageAtRow[img.cellArea.y] = &img;
     }
 
-    for (int row = 0; row < contentHeight; ++row)
+    for (auto row = 0; row < contentHeight; ++row)
     {
         out.carriageReturn(); // Move to start of line
 
@@ -817,7 +818,7 @@ void Screen::flushInline()
     if (rowsToClear > 0)
     {
         // We're currently at row contentHeight-1, need to clear rows below
-        for (int i = 0; i < rowsToClear; ++i)
+        for ([[maybe_unused]] auto _: std::views::iota(0, rowsToClear))
         {
             out.linefeed();
             out.carriageReturn();

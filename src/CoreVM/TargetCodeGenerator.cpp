@@ -9,6 +9,7 @@
 #include <memory>
 #include <optional>
 #include <print>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 
@@ -22,7 +23,7 @@ std::vector<T> convert(const std::vector<Constant*>& source)
 {
     std::vector<T> target(source.size());
 
-    for (size_t i = 0, e = source.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, source.size()))
         target[i] = static_cast<S*>(source[i])->get();
 
     return target;
@@ -208,7 +209,7 @@ void TargetCodeGenerator::generate(IRFunction* function)
         const auto& cases = matchInstr->cases();
         MatchDef& def = _cp.getMatchDef(matchId);
 
-        for (size_t i = 0, e = cases.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, cases.size()))
         {
             def.cases[i].pc = basicBlockEntryPoints[cases[i].second];
         }
@@ -287,7 +288,7 @@ StackPointer TargetCodeGenerator::getStackPointer(const Value* value)
         return it->second;
 
     // Otherwise search in the current stack
-    for (size_t i = 0, e = _stack.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, _stack.size()))
         if (_stack[i] == value)
             return i;
 
@@ -308,7 +309,7 @@ void TargetCodeGenerator::pop(size_t count)
 {
     COREVM_ASSERT(count <= _stack.size(), "CoreVM: BUG: stack smaller than amount of elements to pop.");
 
-    for (size_t i = 0; i != count; i++)
+    for ([[maybe_unused]] auto _: std::views::iota(0uz, count))
     {
         _stack.pop_back();
     }
@@ -347,7 +348,7 @@ void TargetCodeGenerator::visit(AllocaInstr& allocaInstr)
 
 std::optional<size_t> TargetCodeGenerator::findGlobal(const Value* variable) const
 {
-    for (size_t i = 0, e = _globals.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, _globals.size()))
         if (_globals[i] == variable)
             return i;
 
@@ -401,7 +402,7 @@ void TargetCodeGenerator::visit(LoadInstr& loadInstr)
 void TargetCodeGenerator::visit(CallInstr& callInstr)
 {
     const int argc = static_cast<int>(callInstr.operands().size()) - 1;
-    for (int i = 1; i <= argc; ++i)
+    for (auto const i: std::views::iota(1, argc + 1))
         emitLoad(callInstr.operand(i));
 
     const bool returnsValue = callInstr.callee()->signature().returnType() != LiteralType::Void;
@@ -430,7 +431,7 @@ void TargetCodeGenerator::visit(FunctionCallInstr& instr)
 {
     // Push all arguments onto the stack
     auto const argc = static_cast<Operand>(instr.argc());
-    for (size_t i = 0; i < instr.argc(); ++i)
+    for (auto const i: std::views::iota(0uz, instr.argc()))
         emitLoad(instr.operand(i));
 
     // Emit UCALL function_id, argc
@@ -462,7 +463,7 @@ void TargetCodeGenerator::visit(TailCallInstr& instr)
 {
     // Push all arguments onto the stack
     auto const argc = static_cast<Operand>(instr.argc());
-    for (size_t i = 0; i < instr.argc(); ++i)
+    for (auto const i: std::views::iota(0uz, instr.argc()))
         emitLoad(instr.operand(i));
 
     // Emit UTCALL function_id, argc
@@ -608,7 +609,7 @@ void TargetCodeGenerator::dumpCurrentStack()
 {
     std::print("Dump stack state ({} elements):\n", _stack.size());
 
-    for (size_t i = 0, e = _stack.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, _stack.size()))
     {
         std::print("stack[{}]: {}\n", i, _stack[i]->to_string());
     }

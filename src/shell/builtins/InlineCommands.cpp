@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <format>
 #include <iostream>
+#include <ranges>
 #include <span>
 #include <thread>
 
@@ -206,7 +207,7 @@ int Shell::renderMarkdownHelp(NativeHandle outputFd, std::string_view markdownCo
 int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
     std::vector<std::string> echoArgs;
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
         echoArgs.push_back(args.at(i));
 
     // Check for --help before flag parsing
@@ -251,7 +252,7 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
     size_t argStart = 0;
 
     // Parse flags
-    for (size_t i = 0; i < echoArgs.size(); ++i)
+    for (auto const i: std::views::iota(0uz, echoArgs.size()))
     {
         std::string_view arg = echoArgs[i];
 
@@ -264,7 +265,7 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
         if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
         {
             bool validFlag = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 if (arg[j] == 'n')
                     suppressNewline = true;
@@ -290,7 +291,7 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
 
     // Build output string
     std::string output;
-    for (size_t i = argStart; i < echoArgs.size(); ++i)
+    for (auto const i: std::views::iota(argStart, echoArgs.size()))
     {
         if (i > argStart)
             output += ' ';
@@ -312,7 +313,7 @@ int Shell::executeInlineEcho(CoreVM::CoreStringArray const& args, NativeHandle o
 int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle outputFd, NativeHandle stdinFd)
 {
     std::vector<std::string> catArgs;
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
         catArgs.push_back(args.at(i));
 
     // Parse flags
@@ -336,7 +337,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 
         if (arg == "--")
         {
-            for (size_t j = i + 1; j < catArgs.size(); ++j)
+            for (auto const j: std::views::iota(i + 1, catArgs.size()))
                 files.push_back(catArgs[j]);
             break;
         }
@@ -465,7 +466,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         if (arg.starts_with("-") && arg.size() > 1 && arg[1] != '-')
         {
             bool validFlag = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 switch (arg[j])
                 {
@@ -621,7 +622,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
         int physicalLineNumber = 0;
 
         std::string line;
-        for (size_t i = 0; i < content.size(); ++i)
+        for (auto const i: std::views::iota(0uz, content.size()))
         {
             char c = content[i];
             if (c == '\n')
@@ -879,7 +880,7 @@ int Shell::executeInlineCat(CoreVM::CoreStringArray const& args, NativeHandle ou
 int Shell::executeInlineSleep(CoreVM::CoreStringArray const& args, NativeHandle outputFd)
 {
     std::vector<std::string> sleepArgs;
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
         sleepArgs.push_back(args.at(i));
 
     // Check for help
@@ -998,7 +999,7 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
     bool endOfOptions = false;
     std::vector<std::string> paths;
 
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
     {
         std::string_view const arg = args.at(i);
 
@@ -1057,7 +1058,7 @@ int Shell::executeInlineRm(CoreVM::CoreStringArray const& args, NativeHandle out
         if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
         {
             bool validFlags = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 switch (arg[j])
                 {
@@ -1250,7 +1251,7 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
     bool endOfOptions = false;
     std::vector<std::string> paths;
 
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
     {
         std::string_view const arg = args.at(i);
 
@@ -1295,7 +1296,7 @@ int Shell::executeInlineMkdir(CoreVM::CoreStringArray const& args, NativeHandle 
         if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
         {
             bool validFlags = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 switch (arg[j])
                 {
@@ -1374,7 +1375,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
     bool endOfOptions = false;
     std::vector<std::string> paths;
 
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
     {
         std::string_view const arg = args.at(i);
 
@@ -1433,7 +1434,7 @@ int Shell::executeInlineCp(CoreVM::CoreStringArray const& args, NativeHandle out
         if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
         {
             bool validFlags = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 switch (arg[j])
                 {
@@ -1602,7 +1603,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
     bool endOfOptions = false;
     std::vector<std::string> paths;
 
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
     {
         std::string_view const arg = args.at(i);
 
@@ -1664,7 +1665,7 @@ int Shell::executeInlineMv(CoreVM::CoreStringArray const& args, NativeHandle out
         if (!endOfOptions && arg.size() > 1 && arg[0] == '-' && arg[1] != '-')
         {
             bool validFlags = true;
-            for (size_t j = 1; j < arg.size(); ++j)
+            for (auto const j: std::views::iota(1uz, arg.size()))
             {
                 switch (arg[j])
                 {
@@ -1805,7 +1806,7 @@ void Shell::finalizePipelineBuiltin(bool lastInChain,
 
     // Track command for job table
     std::string cmdString(programName);
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
     {
         cmdString += ' ';
         cmdString += args.at(i);
@@ -1841,7 +1842,7 @@ int Shell::executeInlineFind(CoreVM::CoreStringArray const& args, NativeHandle o
 
     // Parse arguments (skip args[0] which is "find")
     std::vector<std::string> findArgs;
-    for (size_t i = 1; i < args.size(); ++i)
+    for (auto const i: std::views::iota(1uz, args.size()))
         findArgs.push_back(args.at(i));
 
     // Check for --help before parsing

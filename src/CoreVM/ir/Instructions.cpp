@@ -5,6 +5,7 @@
 
 #include <cassert>
 #include <format>
+#include <ranges>
 #include <utility> // make_pair
 
 namespace CoreVM
@@ -224,7 +225,7 @@ std::vector<std::pair<Constant*, BasicBlock*>> MatchInstr::cases() const
 
     size_t caseCount = (operands().size() - 2) / 2;
 
-    for (size_t i = 0; i < caseCount; ++i)
+    for (auto const i: std::views::iota(0uz, caseCount))
     {
         auto* label = static_cast<Constant*>(operand(2 + 2 * i + 0));
         auto* code = static_cast<BasicBlock*>(operand(2 + 2 * i + 1));

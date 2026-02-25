@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <ranges>
 #include <string>
 
 #include <nlohmann/json.hpp>
@@ -101,16 +102,16 @@ namespace
         while (padded.size() % 64 != 56)
             padded.push_back(0);
 
-        for (int i = 7; i >= 0; --i)
+        for (auto const i: std::views::iota(0, 8) | std::views::reverse)
             padded.push_back(static_cast<uint8_t>(bitLen >> (i * 8)));
 
         // Process each 64-byte block.
-        for (size_t offset = 0; offset < padded.size(); offset += 64)
+        for (auto const offset: std::views::iota(0uz, padded.size()) | std::views::stride(64))
         {
             std::array<uint32_t, 64> w {};
 
             // Copy block into first 16 words (big-endian).
-            for (int i = 0; i < 16; ++i)
+            for (auto const i: std::views::iota(0, 16))
             {
                 auto const base = offset + static_cast<size_t>(i) * 4;
                 w[i] = (static_cast<uint32_t>(padded[base]) << 24)
@@ -120,7 +121,7 @@ namespace
             }
 
             // Extend to 64 words.
-            for (int i = 16; i < 64; ++i)
+            for (auto const i: std::views::iota(16, 64))
             {
                 auto const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >> 3);
                 auto const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >> 10);
@@ -132,7 +133,7 @@ namespace
             auto e = h4, f = h5, g = h6, h = h7;
 
             // Compression.
-            for (int i = 0; i < 64; ++i)
+            for (auto const i: std::views::iota(0, 64))
             {
                 auto const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
                 auto const ch = (e & f) ^ (~e & g);
@@ -190,7 +191,7 @@ namespace
         auto result = std::string {};
         result.reserve((length * 4 + 2) / 3);
 
-        for (size_t i = 0; i < length; i += 3)
+        for (auto const i: std::views::iota(0uz, length) | std::views::stride(3))
         {
             auto const b0 = data[i];
             auto const b1 = (i + 1 < length) ? data[i + 1] : uint8_t(0);

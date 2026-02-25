@@ -10,6 +10,7 @@
 
 #include <format>
 #include <print>
+#include <ranges>
 
 #include <platform/Process.hpp>
 #include <platform/Types.hpp>
@@ -116,7 +117,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
         auto savedPositionalParams = _positionalParameters;
         _positionalParameters.clear();
         _positionalParameters.push_back(program);
-        for (size_t i = 1; i < args.size(); ++i)
+        for (auto const i: std::views::iota(1uz, args.size()))
             _positionalParameters.push_back(args.at(i));
 
         auto runner = CoreVM::Runner(fn,
@@ -167,7 +168,7 @@ void Shell::builtinCallProcess(CoreVM::Params& context)
 
     // Build command string for job table
     std::string command;
-    for (size_t i = 0; i < args.size(); ++i)
+    for (auto const i: std::views::iota(0uz, args.size()))
     {
         if (i > 0)
             command += ' ';
@@ -323,7 +324,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 
     // Track command string for job table display
     std::string cmdString;
-    for (size_t i = 0; i < args.size(); ++i)
+    for (auto const i: std::views::iota(0uz, args.size()))
     {
         if (i > 0)
             cmdString += ' ';
@@ -336,7 +337,7 @@ void Shell::builtinCallProcessShellPiped(CoreVM::Params& context)
 #if !defined(_WIN32)
         // Build command string for job table from _pipelineCommands
         std::string command;
-        for (size_t i = 0; i < _pipelineCommands.size(); ++i)
+        for (auto const i: std::views::iota(0uz, _pipelineCommands.size()))
         {
             if (i > 0)
                 command += " | ";

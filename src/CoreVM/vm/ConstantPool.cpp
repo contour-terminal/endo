@@ -6,6 +6,7 @@
 #include <format>
 #include <iomanip>
 #include <iostream>
+#include <ranges>
 #include <sstream>
 #include <vector>
 
@@ -30,7 +31,7 @@ inline bool equals(const std::vector<T>& a, const std::vector<U>& b)
     if (a.size() != b.size())
         return false;
 
-    for (size_t i = 0, e = a.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, a.size()))
         if (a[i] != b[i])
             return false;
 
@@ -40,7 +41,7 @@ inline bool equals(const std::vector<T>& a, const std::vector<U>& b)
 template <typename T, typename U>
 inline size_t ensureValue(std::vector<std::vector<T>>& vv, const U& array)
 {
-    for (size_t i = 0, e = vv.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, vv.size()))
     {
         const auto& test = vv[i];
 
@@ -60,7 +61,7 @@ inline size_t ensureValue(std::vector<std::vector<T>>& vv, const U& array)
     vv.push_back(std::vector<T>(array.size()));
     auto& target = vv.back();
 
-    for (size_t i = 0, e = array.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, array.size()))
         target[i] = array[i];
 
     return vv.size() - 1;
@@ -69,7 +70,7 @@ inline size_t ensureValue(std::vector<std::vector<T>>& vv, const U& array)
 template <typename T, typename U>
 inline size_t ensureValue(std::vector<T>& table, const U& literal)
 {
-    for (size_t i = 0, e = table.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, table.size()))
         if (table[i] == literal)
             return i;
 
@@ -116,7 +117,7 @@ size_t ConstantPool::makeIntegerArray(const std::vector<CoreNumber>& elements)
 
 size_t ConstantPool::makeStringArray(const std::vector<std::string>& elements)
 {
-    for (size_t i = 0, e = _stringArrays.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, _stringArrays.size()))
     {
         const auto& array = _stringArrays[i];
 
@@ -191,11 +192,11 @@ void dumpArrays(std::ostream& out, const std::vector<std::vector<T>>& vv, const 
         return;
 
     out << "\n; Constant " << name << " Arrays\n";
-    for (size_t i = 0, e = vv.size(); i != e; ++i)
+    for (auto const i: std::views::iota(0uz, vv.size()))
     {
         const auto& array = vv[i];
         out << ".const array<" << name << "> " << std::setw(3) << i << " = [";
-        for (size_t k = 0, m = array.size(); k != m; ++k)
+        for (auto const k: std::views::iota(0uz, array.size()))
         {
             if (k)
                 out << ", ";
@@ -221,7 +222,7 @@ std::string ConstantPool::dumpToString() const
     if (!_modules.empty())
     {
         sstr << "\n; Modules\n";
-        for (size_t i = 0, e = _modules.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _modules.size()))
         {
             if (_modules[i].second.empty())
                 sstr << std::format(".module '{}'\n", _modules[i].first);
@@ -233,7 +234,7 @@ std::string ConstantPool::dumpToString() const
     if (!_nativeFunctionSignatures.empty())
     {
         sstr << "\n; External Functions\n";
-        for (size_t i = 0, e = _nativeFunctionSignatures.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _nativeFunctionSignatures.size()))
         {
             sstr << std::format(".extern function {:3} = {:<20}\n", i, _nativeFunctionSignatures[i]);
         }
@@ -242,7 +243,7 @@ std::string ConstantPool::dumpToString() const
     if (!_numbers.empty())
     {
         sstr << "\n; Integer Constants\n";
-        for (size_t i = 0, e = _numbers.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _numbers.size()))
         {
             sstr << std::format(".const integer {:5} = {}\n", i, static_cast<CoreNumber>(_numbers[i]));
         }
@@ -251,7 +252,7 @@ std::string ConstantPool::dumpToString() const
     if (!_floats.empty())
     {
         sstr << "\n; Float Constants\n";
-        for (size_t i = 0, e = _floats.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _floats.size()))
         {
             sstr << std::format(".const float {:7} = {:g}\n", i, _floats[i]);
         }
@@ -260,7 +261,7 @@ std::string ConstantPool::dumpToString() const
     if (!_strings.empty())
     {
         sstr << "\n; String Constants\n";
-        for (size_t i = 0, e = _strings.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _strings.size()))
         {
             sstr << std::format(".const string {:6} = '{}'\n", i, _strings[i]);
         }
@@ -269,7 +270,7 @@ std::string ConstantPool::dumpToString() const
     if (!_ipaddrs.empty())
     {
         sstr << "\n; IP Constants\n";
-        for (size_t i = 0, e = _ipaddrs.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _ipaddrs.size()))
         {
             sstr << std::format(".const ipaddr {:6} = {}\n", i, _ipaddrs[i].str());
         }
@@ -278,7 +279,7 @@ std::string ConstantPool::dumpToString() const
     if (!_cidrs.empty())
     {
         sstr << "\n; CIDR Constants\n";
-        for (size_t i = 0, e = _cidrs.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _cidrs.size()))
         {
             sstr << std::format(".const cidr {:8} = {}\n", i, _cidrs[i].str());
         }
@@ -287,7 +288,7 @@ std::string ConstantPool::dumpToString() const
     if (!_regularExpressions.empty())
     {
         sstr << "\n; Regular Expression Constants\n";
-        for (size_t i = 0, e = _regularExpressions.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _regularExpressions.size()))
         {
             sstr << std::format(".const regex {:7} = /{}/\n", i, _regularExpressions[i].c_str());
         }
@@ -296,11 +297,11 @@ std::string ConstantPool::dumpToString() const
     if (!_stringArrays.empty())
     {
         sstr << "\n; Constant String Arrays\n";
-        for (size_t i = 0, e = _stringArrays.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _stringArrays.size()))
         {
             const std::vector<std::string>& array = _stringArrays[i];
             sstr << ".const array<string> " << std::setw(3) << i << " = [";
-            for (size_t k = 0, m = array.size(); k != m; ++k)
+            for (auto const k: std::views::iota(0uz, array.size()))
             {
                 if (k)
                     sstr << ", ";
@@ -317,7 +318,7 @@ std::string ConstantPool::dumpToString() const
     if (!_matchDefs.empty())
     {
         sstr << "\n; Match Table\n";
-        for (size_t i = 0, e = _matchDefs.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, _matchDefs.size()))
         {
             const MatchDef& def = _matchDefs[i];
             sstr << std::format(".const match {:7} = function {}, op {}, elsePC {} ; {}\n",
@@ -327,7 +328,7 @@ std::string ConstantPool::dumpToString() const
                                 def.elsePC,
                                 _functions[def.functionId].first);
 
-            for (size_t k = 0, m = def.cases.size(); k != m; ++k)
+            for (auto const k: std::views::iota(0uz, def.cases.size()))
             {
                 const MatchCaseDef& one = def.cases[k];
 

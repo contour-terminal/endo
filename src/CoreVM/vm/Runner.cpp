@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <ranges>
 #include <utility>
 #include <vector>
 // XXX Visual Studio doesn't support computed goto statements
@@ -248,7 +249,7 @@ TypedObject* Runner::allocObject(uint16_t typeId)
     obj->tag = 0;
 
     // Zero-initialize slots
-    for (uint16_t i = 0; i < type->slotCount; ++i)
+    for (auto const i: std::views::iota(uint16_t { 0 }, type->slotCount))
     {
         obj->setSlot(i, 0);
     }
@@ -568,7 +569,7 @@ Runner::RunResult Runner::loopWithResult()
         code.resize(source.size() * 2);
 
         uint64_t* pc = code.data();
-        for (size_t i = 0, e = source.size(); i != e; ++i)
+        for (auto const i: std::views::iota(0uz, source.size()))
         {
             Instruction instr = source[i];
 
@@ -596,7 +597,7 @@ Runner::RunResult Runner::loopWithResult()
 
     instr(ALLOCA)
     {
-        for (int i = 0; i < A; ++i)
+        for ([[maybe_unused]] auto _: std::views::iota(0, static_cast<int>(A)))
             _stack.push(0);
         next;
     }
@@ -1134,7 +1135,7 @@ Runner::RunResult Runner::loopWithResult()
             _ip = get_pc();
 
             Params args(this, argc);
-            for (int i = 1; i <= argc; i++)
+            for (auto const i: std::views::iota(1, argc + 1))
                 args.setArg(i, SP(-(argc + 1) + i));
 
             const Signature& signature = _function->program()->nativeFunction(id)->signature();
@@ -1588,7 +1589,7 @@ Runner::RunResult Runner::loopWithResult()
 
             // Copy new args to frame base (overwriting old args/locals)
             auto newArgsStart = _stack.size() - argc;
-            for (size_t i = 0; i < static_cast<size_t>(argc); ++i)
+            for (auto const i: std::views::iota(0uz, static_cast<size_t>(argc)))
                 _stack[_fp + i] = _stack[newArgsStart + i];
 
             // Discard everything above the new args
