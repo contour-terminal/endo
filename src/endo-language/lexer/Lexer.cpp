@@ -413,7 +413,7 @@ void Lexer::consumeWhitespace()
                 nextChar();
                 while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
                 {
-                    text += static_cast<char>(_currentChar);
+                    text += unicode::to_utf8(_currentChar);
                     nextChar();
                 }
                 auto const endLoc = _source->currentSourceLocation();
@@ -448,7 +448,7 @@ void Lexer::consumeWhitespace()
                 nextChar();
                 while (!eof() && _currentChar != U'\n' && _currentChar != U'\r')
                 {
-                    text += static_cast<char>(_currentChar);
+                    text += unicode::to_utf8(_currentChar);
                     nextChar();
                 }
                 auto const endLoc = _source->currentSourceLocation();
@@ -502,7 +502,7 @@ void Lexer::consumeWhitespace()
                     }
                     else
                     {
-                        text += static_cast<char>(_currentChar);
+                        text += unicode::to_utf8(_currentChar);
                         nextChar();
                     }
                 }
@@ -1282,11 +1282,13 @@ Token Lexer::confirmToken(Token token)
     _nextToken.location.end = { .line = a, .column = std::max(0, b - 1) };
     _currentToken = _nextToken;
 
-    // Track end line for trailing comment detection (skip LineFeed/Semicolon tokens
-    // because their end position is on the next line, which would incorrectly mark
-    // standalone comments on the following line as "trailing")
+    // Track the line of the last meaningful token for trailing comment detection.
+    // Uses begin.line (set in consumeWhitespace before token content) rather than
+    // end.line, because readChar() advances the line counter when reading '\n',
+    // making end.line point to the next line for tokens at line boundaries.
+    // Skip LineFeed/Semicolon since they are not "meaningful" tokens.
     if (token != Token::LineFeed && token != Token::Semicolon)
-        _lastTokenEndLine = _currentToken.location.end.line;
+        _lastTokenEndLine = _currentToken.location.begin.line;
 
     _nextToken.literal = {};
     _nextToken.location.name = _source->currentSourceLocation().name;
