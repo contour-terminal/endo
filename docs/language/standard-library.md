@@ -176,44 +176,44 @@ print (toUpper "hello")   # => HELLO
 
 #### `contains`
 
-**Signature:** `contains haystack needle : bool`
+**Signature:** `contains substr text : bool`
 
-Returns `true` if `haystack` contains the substring `needle`.
+Returns `true` if `text` contains the substring `substr`.
 
 ```endo
-print (contains "hello world" "world")   # => true
+print (contains "world" "hello world")   # => true
 ```
 
 ```endo
-print (contains "hello" "xyz")   # => false
+print (contains "xyz" "hello")   # => false
 ```
 
 #### `startsWith`
 
-**Signature:** `startsWith str prefix : bool`
+**Signature:** `startsWith prefix text : bool`
 
-Returns `true` if the string starts with the given prefix.
+Returns `true` if `text` starts with the given `prefix`.
 
 ```endo
-print (startsWith "hello" "hel")   # => true
+print (startsWith "hel" "hello")   # => true
 ```
 
 ```endo
-print (startsWith "hello" "xyz")   # => false
+print (startsWith "xyz" "hello")   # => false
 ```
 
 #### `endsWith`
 
-**Signature:** `endsWith str suffix : bool`
+**Signature:** `endsWith suffix text : bool`
 
-Returns `true` if the string ends with the given suffix.
+Returns `true` if `text` ends with the given `suffix`.
 
 ```endo
-print (endsWith "hello" "llo")   # => true
+print (endsWith "llo" "hello")   # => true
 ```
 
 ```endo
-print (endsWith "hello" "xyz")   # => false
+print (endsWith "xyz" "hello")   # => false
 ```
 
 #### `replace`

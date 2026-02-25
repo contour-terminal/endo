@@ -3,4 +3,4 @@
 # description: String endsWith false
 # expect: false
 
-print (endsWith "hello" "xyz")
+print (endsWith "xyz" "hello")

@@ -3899,8 +3899,10 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
             reportTypeError("{} builtin not found", sigName);
             return true;
         }
+        // Data-last convention: contains substr text, startsWith prefix text, endsWith suffix text
+        // Native expects (text, pattern), so pass arg2 (text) first, arg1 (substr/prefix/suffix) second
         _result =
-            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg1, arg2 }, sigName);
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { arg2, arg1 }, sigName);
         return true;
     }
 

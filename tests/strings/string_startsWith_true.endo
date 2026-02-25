@@ -3,4 +3,4 @@
 # description: String startsWith true
 # expect: true
 
-print (startsWith "hello" "hel")
+print (startsWith "hel" "hello")

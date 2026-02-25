@@ -41,13 +41,14 @@ static constexpr ParamDescriptor stringRepeatParams[] = { { "str", LT::String },
 static constexpr ParamDescriptor stringReplaceParams[] = { { "old_str", LT::String }, { "new_str", LT::String }, { "text", LT::String } };
 static constexpr ParamDescriptor stringSplitParams[] = { { "delimiter", LT::String }, { "text", LT::String } };
 static constexpr ParamDescriptor stringJoinParams[] = { { "separator", LT::String }, { "list", LT::Number } };
-static constexpr ParamDescriptor stringContainsParams[] = { { "haystack", LT::String }, { "needle", LT::String } };
-static constexpr ParamDescriptor stringStartsWithParams[] = { { "text", LT::String }, { "prefix", LT::String } };
-static constexpr ParamDescriptor stringEndsWithParams[] = { { "text", LT::String }, { "suffix", LT::String } };
+static constexpr ParamDescriptor stringContainsParams[] = { { "substr", LT::String }, { "text", LT::String } };
+static constexpr ParamDescriptor stringStartsWithParams[] = { { "prefix", LT::String }, { "text", LT::String } };
+static constexpr ParamDescriptor stringEndsWithParams[] = { { "suffix", LT::String }, { "text", LT::String } };
 static constexpr ParamDescriptor formatNumberTwoParams[] = { { "separator", LT::String }, { "number", LT::Number } };
 static constexpr ParamDescriptor formatNumberOneParams[] = { { "number", LT::Number } };
 static constexpr ParamDescriptor randRangeParams[] = { { "min", LT::Number }, { "max", LT::Number } };
 static constexpr ParamDescriptor fetchTwoParams[] = { { "url", LT::String }, { "headers", LT::Number } };
+static constexpr ParamDescriptor jsonQueryParams[] = { { "path", LT::String }, { "json", LT::String } };
 
 // ---------------------------------------------------------------------------
 // Unified descriptor table

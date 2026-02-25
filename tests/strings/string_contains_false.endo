@@ -3,4 +3,4 @@
 # description: String contains false
 # expect: false
 
-print (contains "hello" "xyz")
+print (contains "xyz" "hello")
