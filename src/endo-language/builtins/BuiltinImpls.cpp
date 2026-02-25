@@ -1285,6 +1285,18 @@ void markdownContent(CoreVM::Params& args)
 }
 
 // ---------------------------------------------------------------------------
+// Timing
+// ---------------------------------------------------------------------------
+
+void monotonicMs(CoreVM::Params& args)
+{
+    auto const now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::steady_clock::now().time_since_epoch())
+                         .count();
+    args.setResult(static_cast<CoreVM::CoreNumber>(now));
+}
+
+// ---------------------------------------------------------------------------
 // Random number generation
 // ---------------------------------------------------------------------------
 

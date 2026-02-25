@@ -321,6 +321,41 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
             }
+            else if (_lexer.currentLiteral() == "time")
+            {
+                // F# style time builtin - parse as F# expression with optional |> pipeline
+                _lexer.enterFSharpExpr();
+                auto expr = parseFSharpApplication();
+                _lexer.leaveFSharpExpr();
+                if (!expr)
+                    return nullptr;
+                // Support trailing |> pipeline: time { body } |> formatTimeSpan
+                if (_lexer.currentToken() == Token::ForwardPipe)
+                {
+                    _lexer.enterFSharpExpr();
+                    _lexer.nextToken(); // consume first |>
+                    auto step = parseFSharpComposition();
+                    if (!step)
+                    {
+                        _lexer.leaveFSharpExpr();
+                        return nullptr;
+                    }
+                    expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    {
+                        _lexer.nextToken(); // consume |>
+                        step = parseFSharpComposition();
+                        if (!step)
+                        {
+                            _lexer.leaveFSharpExpr();
+                            return nullptr;
+                        }
+                        expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
+                    }
+                    _lexer.leaveFSharpExpr();
+                }
+                return std::make_unique<ast::ExprStmt>(std::move(expr), /*displayResult=*/_autoDisplay);
+            }
             else if (_lexer.currentLiteral() == "exec")
             {
                 // F# style exec — dynamic command execution with optional | piping
@@ -4274,6 +4309,13 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpApplication()
         auto arg = parseFSharpPostfix();
         if (!arg)
             break;
+
+        // Computation expression: wrap block arguments as zero-arg thunks
+        // f { body } → f (fun () -> { body })
+        if (dynamic_cast<ast::BlockExpr*>(arg.get()) != nullptr)
+            arg = std::make_unique<ast::LambdaExpr>(
+                std::vector<ast::TypedParameter> { ast::TypedParameter::unitParam() }, std::move(arg));
+
         func = std::make_unique<ast::ApplicationExpr>(std::move(func), std::move(arg));
     }
 

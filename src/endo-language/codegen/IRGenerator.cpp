@@ -4396,6 +4396,54 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
         return true;
     }
 
+    if (name == "time")
+    {
+        if (argExprs.size() != 1)
+        {
+            reportTypeError("time requires exactly 1 argument (a computation expression), got {}",
+                            argExprs.size());
+            return true;
+        }
+
+        // Call __monotonic_ms() → start time
+        if (!tryGenerateNativeCall("__monotonic_ms", {}))
+        {
+            reportTypeError("__monotonic_ms builtin not available");
+            return true;
+        }
+        auto* startAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "time.start.alloca");
+        _builder.createStore(startAlloca, _result, "time.start.store");
+
+        // Execute the body inline
+        // If wrapped as a thunk (LambdaExpr), extract and codegen the body directly
+        // Otherwise codegen the expression as-is
+        if (auto const* lambda = dynamic_cast<ast::LambdaExpr const*>(argExprs[0]))
+            codegen(lambda->body.get());
+        else
+            codegen(argExprs[0]);
+
+        // Call __monotonic_ms() → end time
+        if (!tryGenerateNativeCall("__monotonic_ms", {}))
+        {
+            reportTypeError("__monotonic_ms builtin not available");
+            return true;
+        }
+        auto* endTime = _result;
+        auto* startTime = _builder.createLoad(startAlloca, "time.start.load");
+
+        // elapsed = end - start
+        auto* elapsed = _builder.createSub(endTime, startTime, "time.elapsed");
+
+        // Create TimeSpan from elapsed milliseconds
+        if (!tryGenerateNativeCall("timespan_from_ms", { elapsed }))
+        {
+            reportTypeError("timespan_from_ms builtin not available");
+            return true;
+        }
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::TimeSpan);
+        return true;
+    }
+
     return false;
 }
 

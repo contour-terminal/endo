@@ -1,0 +1,18 @@
+# Computation Expressions
+# Block arguments { ... } are automatically passed as thunks to functions.
+
+# The `time` builtin measures execution time
+let elapsed = time {
+    let data = [1; 2; 3; 4; 5]
+    map (fun x -> x * 2) data
+}
+println (formatTimeSpan elapsed)
+
+# time with let binding and field access
+let t = time { let x = 10; x * 2 }
+println t.milliseconds
+
+# User-defined functions accepting computation expressions
+let run (f: unit -> int) = f ()
+let result = run { let x = 10; x * 2 }
+println result

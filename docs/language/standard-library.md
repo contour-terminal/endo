@@ -25,6 +25,7 @@ by category. Each example is executable and verified by the documentation test s
 - [15.18 File Permission Helpers](#1518-file-permission-helpers) -- `formatMode`, `isReadable`, `isWritable`, `isExecutable`
 - [15.19 Display Formatting](#1519-display-formatting) -- `toText`, `string`
 - [15.20 HTTP](#1520-http) -- `fetch`
+- [15.21 Timing](#1521-timing) -- `time`
 
 ---
 
@@ -1369,6 +1370,27 @@ Fetches content from a URL. Returns `Ok body` on success, `Error message` on fai
 match fetch "https://example.com" with
 | Ok body  -> println body
 | Error e  -> println $"Failed: {e}"
+```
+
+---
+
+## 15.21 Timing
+
+#### `time`
+
+**Signature:** `time { body } -> TimeSpan`
+
+Measures the wall-clock execution time of a computation expression.
+Returns a `TimeSpan` that can be inspected, formatted, or piped.
+
+```endo
+let t = time { [1; 2; 3] |> map (_ * 2) }
+print (formatTimeSpan t)
+```
+
+<!-- endo-no-check -->
+```endo
+time { sleep (TimeSpan.fromMilliseconds 100) }
 ```
 
 ---

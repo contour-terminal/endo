@@ -272,5 +272,41 @@ print (p.magnitude)                   # 7
 print p.x                             # 3 (field access, not function call)
 ```
 
+### 5.8 Computation Expressions
+
+A block expression `{ ... }` passed as a function argument is automatically
+wrapped as a thunk (zero-argument function). This enables patterns where
+functions control when and how often the block executes.
+
+#### The `time` Builtin
+
+`time` measures the wall-clock execution time of a block:
+
+<!-- endo-no-check -->
+```endo
+time { sleep (TimeSpan.fromSeconds 1) }
+# Auto-displays: 1s 0ms
+
+let elapsed = time {
+    let data = [1; 2; 3; 4; 5]
+    map (fun x -> x * 2) data
+}
+print elapsed.milliseconds
+```
+
+#### User-Defined Functions with Computation Expressions
+
+Any function accepting a `unit -> 'a` parameter can receive a block argument:
+
+<!-- endo-no-check -->
+```endo
+let measure (label: str) (f: unit -> unit) =
+    print $"{label}: "
+    let t = time { f () }
+    println (formatTimeSpan t)
+
+measure "sort" { sort [5; 3; 1; 4; 2] }
+```
+
 ---
 **See also:** [Variables & Bindings](variables-and-bindings.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Pattern Matching](pattern-matching.md)

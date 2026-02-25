@@ -288,6 +288,9 @@ void markdownContent(CoreVM::Params& args);
 // Random number generation
 // ---------------------------------------------------------------------------
 
+/// __monotonic_ms() -> int: Returns current monotonic clock time in milliseconds.
+void monotonicMs(CoreVM::Params& args);
+
 /// rand() -> int: Returns a random positive integer > 0.
 void randNoArgs(CoreVM::Params& args);
 

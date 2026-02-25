@@ -103,6 +103,7 @@ if(ENDO_TESTING)
         parser/Diagnostics_test.cpp
         types/Type_test.cpp
         types/TypeInferencer_test.cpp
+        codegen/ComputationExpressions_test.cpp
 
         ide/CompletionCandidates_test.cpp
         ide/CompletionContext_test.cpp

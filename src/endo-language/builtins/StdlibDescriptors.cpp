@@ -310,6 +310,14 @@ static const std::array descriptors = {
     StdlibDescriptor { "", "size_from_gb", LT::Number, nNumberParam, &builtins::sizeFromGB, "", "" },
     StdlibDescriptor { "", "size_from_tb", LT::Number, nNumberParam, &builtins::sizeFromTB, "", "" },
 
+    // Timing
+    StdlibDescriptor { "", "__monotonic_ms", LT::Number, {}, &builtins::monotonicMs, "", "" },
+    StdlibDescriptor { "time", "", LT::Void, {}, nullptr,
+        "time { body } -> TimeSpan",
+        "**time** `{ body } -> TimeSpan`\n\n"
+        "Measures the execution time of a computation expression and returns a TimeSpan.\n\n"
+        "```endo\ntime { sleep (TimeSpan.fromSeconds 1) }\n```" },
+
     // DateTime operations
     StdlibDescriptor { "", "datetime_now", LT::Number, {}, &builtins::dateTimeNow, "", "" },
     StdlibDescriptor { "", "datetime_from_epoch", LT::Number, epochNumberParam, &builtins::dateTimeFromEpoch, "", "" },

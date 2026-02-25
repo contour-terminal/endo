@@ -26,6 +26,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Tuple destructuring in let: `let (x, y) = tuple`
 - [x] Record destructuring in let: `let { name; age } = person`
 - [x] Block scopes: `{ let inner = 20; inner + outer }`
+- [x] Computation expressions: `f { body }` auto-wraps block as thunk
+- [x] `time` builtin: `time { body }` measures execution time, returns TimeSpan
 
 ## Types
 
