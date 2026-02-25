@@ -156,14 +156,14 @@ struct SourceLocation
 {
     int line = 0;          // 0-based index
     int column = 0;        // 0-based index
-    std::string_view name; // e.g. stdin, or a filename
+    std::string name; // e.g. stdin, or a filename
 };
 
 struct SourceLocationRange
 {
     LineColumn begin;
     LineColumn end;
-    std::string_view name; // e.g. stdin, or a filename
+    std::string name; // e.g. stdin, or a filename
 };
 
 struct TokenInfo
