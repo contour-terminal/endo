@@ -578,6 +578,7 @@ class IRGenerator final: public ast::Visitor
 
     /// Collects free variables referenced in @p body that are not in @p boundNames
     /// and are currently accessible in the F# variable scope chain.
+    /// Delegates AST analysis to collectFreeVariableNames() and maps names to storage.
     [[nodiscard]] std::unordered_map<std::string, CoreVM::Value*> collectFreeVariables(
         ast::Expr const* body, std::vector<std::string> const& boundNames) const;
 
