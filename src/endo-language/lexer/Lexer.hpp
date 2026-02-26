@@ -332,6 +332,12 @@ class Lexer
     /// Check if currently in F# expression mode
     [[nodiscard]] bool inFSharpMode() const noexcept { return _fsharpDepth > 0; }
 
+    /// Returns the current F# nesting depth (for save/restore around shell contexts)
+    [[nodiscard]] int fsharpDepth() const noexcept { return _fsharpDepth; }
+
+    /// Sets the F# nesting depth directly (for save/restore around shell contexts)
+    void setFSharpDepth(int depth) noexcept { _fsharpDepth = depth; }
+
     /// Returns true if there was whitespace (space, tab, or comment) before the current token.
     [[nodiscard]] bool hasPrecedingSpace() const noexcept { return _precedingSpace; }
 

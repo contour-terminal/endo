@@ -4492,6 +4492,7 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
             break;
         }
 
+        auto const handlerPipeColumn = currentTokenColumn();
         _lexer.nextToken(); // consume '|'
 
         // Parse pattern
@@ -4519,10 +4520,14 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
                                                _lexer.currentLiteral());
             return nullptr;
         }
-        _lexer.nextToken(); // consume '->'
+        auto const handlerArrowLine = _lexer.currentRange().begin.line;
+        _lexer.nextToken();                    // consume '->'
+        consumeUntilNotOneOf(Token::LineFeed); // allow handler body on next line
 
-        // Parse handler body
-        auto handlerBody = parseFSharpExpr();
+        // Parse handler body — use sequence parsing for multi-line bodies
+        auto const handlerBodyOnNewLine = _lexer.currentRange().begin.line > handlerArrowLine;
+        auto handlerBody =
+            handlerBodyOnNewLine ? parseFSharpExprSequence(handlerPipeColumn) : parseFSharpExpr();
         if (!handlerBody)
             return nullptr;
 
@@ -5992,15 +5997,18 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
         case Token::DollarRndOpen: {
             // Command substitution in F# expression context: $(whoami)
-            // We must leave F# mode for the shell command inside $(...), then
-            // re-enter F# mode BEFORE consuming ')' so that the token after ')'
+            // We must fully exit F# mode for the shell command inside $(...), then
+            // restore F# depth BEFORE consuming ')' so that the token after ')'
             // is lexed in F# mode (e.g., '+' as Token::Plus, not a shell word).
-            _lexer.leaveFSharpExpr();
+            // Save/restore depth instead of single leave/enter to handle nested F# contexts
+            // (e.g., match arm body → parseLet → parseFSharpExpr → $(...)).
+            auto const savedFSharpDepth = _lexer.fsharpDepth();
+            _lexer.setFSharpDepth(0);
             _lexer.nextToken(); // consume $(, lex next token in shell mode
             auto command = parseLogicalExpr();
             if (!command)
                 return nullptr;
-            _lexer.enterFSharpExpr(); // switch back to F# mode before consuming ')'
+            _lexer.setFSharpDepth(savedFSharpDepth); // restore F# mode before consuming ')'
             if (_lexer.currentToken() != Token::RndClose)
             {
                 _report.syntaxErrorWithSuggestions(currentLocation(),
@@ -6952,6 +6960,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
             break;
         }
 
+        auto const pipeColumn = currentTokenColumn();
         _lexer.nextToken(); // consume '|'
 
         // Lambda: parse a pattern element that may be a bare tuple (comma-separated).
@@ -7035,11 +7044,13 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
                                                _lexer.currentLiteral());
             return nullptr;
         }
+        auto const arrowLine = _lexer.currentRange().begin.line;
         _lexer.nextToken();                    // consume '->'
         consumeUntilNotOneOf(Token::LineFeed); // allow arm body on next line
 
-        // Parse body expression
-        auto body = parseFSharpExpr();
+        // Parse body expression — use sequence parsing for multi-line bodies
+        auto const bodyOnNewLine = _lexer.currentRange().begin.line > arrowLine;
+        auto body = bodyOnNewLine ? parseFSharpExprSequence(pipeColumn) : parseFSharpExpr();
         if (!body)
         {
             _report.syntaxErrorWithSuggestions(
