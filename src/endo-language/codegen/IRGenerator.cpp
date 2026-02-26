@@ -431,39 +431,14 @@ IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& r
 // F# scope management implementation
 void IRGenerator::pushFSharpScope()
 {
-    auto newScope = std::make_unique<FSharpScope>();
-    newScope->parent = _currentFSharpScope;
-    if (!_rootFSharpScope)
-    {
-        _rootFSharpScope = std::move(newScope);
-        _currentFSharpScope = _rootFSharpScope.get();
-    }
-    else
-    {
-        _currentFSharpScope = newScope.release();
-    }
+    _scopeManager.pushScope();
 }
 
 void IRGenerator::popFSharpScope()
 {
-    if (_currentFSharpScope)
-    {
-        // Release all object variables in this scope before exiting.
-        // We pass the storage (alloca) directly to ObjReleaseInstr, which allows
-        // the TargetCodeGenerator to emit LOAD from the alloca's fixed index.
-        // This avoids cross-block value tracking issues.
-        for (CoreVM::AllocaInstr* storage: _currentFSharpScope->objectVariables)
-        {
-            _builder.createObjRelease(storage, "scope.exit.release");
-        }
-
-        FSharpScope* parent = _currentFSharpScope->parent;
-        if (_currentFSharpScope != _rootFSharpScope.get())
-        {
-            delete _currentFSharpScope;
-        }
-        _currentFSharpScope = parent;
-    }
+    // ScopeManager returns the list of object variable allocas that need ORELEASE.
+    for (auto* storage: _scopeManager.popScope())
+        _builder.createObjRelease(storage, "scope.exit.release");
 }
 
 void IRGenerator::bindFSharpVariable(std::string const& name,
@@ -471,21 +446,14 @@ void IRGenerator::bindFSharpVariable(std::string const& name,
                                      bool isMutable,
                                      bool isExported)
 {
-    if (_currentFSharpScope)
-        _currentFSharpScope->bindings[name] = BindingInfo { value, isMutable, isExported };
+    _scopeManager.bindVariable(name, value, isMutable, isExported);
 }
 
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
                                            CoreVM::AllocaInstr* storage,
                                            bool isMutable)
 {
-    if (_currentFSharpScope)
-    {
-        // Track the storage for ORELEASE at scope exit
-        _currentFSharpScope->objectVariables.push_back(storage);
-        // Also bind as a regular variable
-        _currentFSharpScope->bindings[name] = BindingInfo { storage, isMutable };
-    }
+    _scopeManager.bindObjectVariable(name, storage, isMutable);
 }
 
 void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
@@ -499,24 +467,12 @@ void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& 
 
 CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
 {
-    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
-    {
-        auto it = scope->bindings.find(name);
-        if (it != scope->bindings.end())
-            return it->second.value;
-    }
-    return nullptr;
+    return _scopeManager.lookupVariable(name);
 }
 
-IRGenerator::BindingInfo const* IRGenerator::lookupFSharpBinding(std::string const& name) const
+BindingInfo const* IRGenerator::lookupFSharpBinding(std::string const& name) const
 {
-    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
-    {
-        auto it = scope->bindings.find(name);
-        if (it != scope->bindings.end())
-            return &it->second;
-    }
-    return nullptr;
+    return _scopeManager.lookupBinding(name);
 }
 
 // F# function management implementation
@@ -535,12 +491,7 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
 
 std::optional<std::string> IRGenerator::lookupFSharpFunctionRef(std::string const& name) const
 {
-    for (FSharpScope const* scope = _currentFSharpScope; scope != nullptr; scope = scope->parent)
-    {
-        if (auto it = scope->functionRefs.find(name); it != scope->functionRefs.end())
-            return it->second;
-    }
-    return std::nullopt;
+    return _scopeManager.lookupFunctionRef(name);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr const& type)
@@ -6416,7 +6367,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         // Re-establish function references from captured function refs (HOF support)
         for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-            _currentFSharpScope->functionRefs[varName] = targetFunc;
+            _scopeManager.bindFunctionRef(varName, targetFunc);
 
         CoreVM::BasicBlock* returnBlock = nullptr;
         CoreVM::AllocaInstr* returnStorage = nullptr;
@@ -6450,7 +6401,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
             {
                 if (lookupFSharpFunction(constStr->get()))
-                    _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+                    _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
             }
         }
 
@@ -6614,7 +6565,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _currentFSharpScope->functionRefs[varName] = targetFunc;
+        _scopeManager.bindFunctionRef(varName, targetFunc);
 
     // Only set up return infrastructure for functions that return Result/Option
     CoreVM::BasicBlock* returnBlock = nullptr;
@@ -6640,7 +6591,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
     {
         if (lookupFSharpFunction(constStr->get()))
-            _currentFSharpScope->functionRefs[func->parameters[0]] = constStr->get();
+            _scopeManager.bindFunctionRef(func->parameters[0], constStr->get());
     }
 
     // Inline the function body
@@ -7402,7 +7353,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _currentFSharpScope->functionRefs[varName] = targetFunc;
+        _scopeManager.bindFunctionRef(varName, targetFunc);
 
     // Only set up return infrastructure for functions that return Result/Option
     // This is needed for the ? operator to propagate errors
@@ -7440,7 +7391,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
         {
             if (lookupFSharpFunction(constStr->get()))
-                _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+                _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
         }
     }
 
@@ -9698,7 +9649,7 @@ void IRGenerator::visit(ast::BlockExpr const& node)
     // Emitting ORELEASE would free them prematurely, causing use-after-free.
     // Semantically equivalent to LetInExpr, which does not track objects for ORELEASE.
     // Objects remain in Runner's _objectPool and are freed when it destructs.
-    _currentFSharpScope->objectVariables.clear();
+    _scopeManager.clearObjectVariables();
 
     popFSharpScope();
 }
@@ -10507,7 +10458,7 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     for (auto const& [capName, capStorage]: func->capturedBindings)
         bindFSharpVariable(capName, capStorage);
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _currentFSharpScope->functionRefs[varName] = targetFunc;
+        _scopeManager.bindFunctionRef(varName, targetFunc);
 
     // Bind explicit arguments to parameter names
     for (size_t i = 0; i < func->parameters.size(); ++i)
@@ -10524,7 +10475,7 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         {
             auto const& refName = constStr->get();
             if (lookupFSharpFunction(refName) || refName == "print" || refName == "println")
-                _currentFSharpScope->functionRefs[func->parameters[i]] = constStr->get();
+                _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
         }
     }
 

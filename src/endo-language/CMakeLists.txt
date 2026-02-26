@@ -41,6 +41,8 @@ add_library(endo STATIC
     sema/BuiltinDescriptors.cpp
     sema/FreeVariableCollector.hpp
     sema/FreeVariableCollector.cpp
+    sema/ScopeManager.hpp
+    sema/ScopeManager.cpp
 
     # IR Generation
     codegen/IRGenerator.hpp

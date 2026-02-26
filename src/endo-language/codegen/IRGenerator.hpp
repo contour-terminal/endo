@@ -6,6 +6,7 @@
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/sema/BuiltinDescriptors.hpp>
+#include <endo-language/sema/ScopeManager.hpp>
 #include <endo-language/sema/TypeRegistry.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
 
@@ -336,24 +337,7 @@ class IRGenerator final: public ast::Visitor
     // Helper for dynamic type comparison
     [[nodiscard]] bool needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) const;
 
-    // F# variable scope management
-    struct BindingInfo
-    {
-        CoreVM::Value* value;
-        bool isMutable;
-        bool isExported = false;
-    };
-
-    struct FSharpScope
-    {
-        std::unordered_map<std::string, BindingInfo> bindings;
-        std::vector<CoreVM::AllocaInstr*>
-            objectVariables; ///< Variables holding objects (for ORELEASE at scope exit)
-        /// Maps variable names to function names they reference (HOF support).
-        std::unordered_map<std::string, std::string> functionRefs;
-        FSharpScope* parent = nullptr;
-    };
-
+    // F# variable scope management (delegated to ScopeManager)
     void pushFSharpScope();
     void popFSharpScope();
     void bindFSharpVariable(std::string const& name,
@@ -668,9 +652,8 @@ class IRGenerator final: public ast::Visitor
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;
 
-    // F# scope chain (owned via raw pointer chain, root scope is unique_ptr)
-    std::unique_ptr<FSharpScope> _rootFSharpScope;
-    FSharpScope* _currentFSharpScope = nullptr;
+    /// Manages the F# variable scope chain.
+    ScopeManager _scopeManager;
 
     // F# function table (name -> function metadata)
     std::unordered_map<std::string, FSharpFunction> _fsharpFunctions;
