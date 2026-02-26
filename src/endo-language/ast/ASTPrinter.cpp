@@ -719,6 +719,25 @@ void ASTPrinter::visit(BinaryExpr const& node)
     _result += ')';
 }
 
+void ASTPrinter::visit(CompositionExpr const& node)
+{
+    _result += '(';
+    if (node.left)
+        node.left->accept(*this);
+    _result += (node.op == CompositionOp::Forward) ? " >> " : " << ";
+    if (node.right)
+        node.right->accept(*this);
+    _result += ')';
+}
+
+void ASTPrinter::visit(PlaceholderLambdaExpr const& node)
+{
+    // Print as the equivalent desugared lambda for debug output
+    _result += "fun __x -> ";
+    if (node.body)
+        node.body->accept(*this);
+}
+
 void ASTPrinter::visit(UnaryExpr const& node)
 {
     switch (node.op)

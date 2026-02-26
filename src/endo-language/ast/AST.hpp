@@ -1117,6 +1117,49 @@ struct BinaryExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Composition direction: forward (`>>`) or backward (`<<`).
+enum class CompositionOp
+{
+    Forward,  ///< `f >> g` — apply f first, then g
+    Backward, ///< `g << f` — apply f first, then g
+};
+
+/// Composition expression: `f >> g` or `g << f`
+///
+/// Represents function composition without desugaring to a lambda in the AST,
+/// preserving the original syntax for formatting round-trips.
+struct CompositionExpr final: public Expr
+{
+    CompositionOp op;
+    std::unique_ptr<Expr> left;
+    std::unique_ptr<Expr> right;
+
+    CompositionExpr(CompositionOp op, std::unique_ptr<Expr> l, std::unique_ptr<Expr> r):
+        op(op), left(std::move(l)), right(std::move(r))
+    {
+        setSpanFromChildren(*left, *right);
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// Placeholder lambda expression: `(_ > 2)` or `_.field`
+///
+/// Preserves the placeholder `_` syntax for formatting round-trips instead of
+/// desugaring to `fun __x -> __x > 2` in the parser.
+struct PlaceholderLambdaExpr final: public Expr
+{
+    std::unique_ptr<Expr> body; ///< Body uses IdentifierExpr("__x") for placeholder
+    bool parenthesized = false; ///< Was it written as `(_ > 2)` vs `_ > 2`
+
+    PlaceholderLambdaExpr(std::unique_ptr<Expr> body, bool parens = false):
+        body(std::move(body)), parenthesized(parens)
+    {
+    }
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Unary expression: `op operand`
 ///
 /// Used for negation and logical not.

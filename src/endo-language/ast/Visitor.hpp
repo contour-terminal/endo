@@ -46,6 +46,8 @@ struct VariableExpr;
 struct WhileStmt;
 
 // F# style expressions and statements
+struct CompositionExpr;
+struct PlaceholderLambdaExpr;
 struct IfExpr;
 struct TupleExpr;
 struct MutAssignStmt;
@@ -140,6 +142,8 @@ struct Visitor
     virtual void visit(VariableExpr const&) = 0;
 
     // F# style expressions and statements
+    virtual void visit(CompositionExpr const&) = 0;
+    virtual void visit(PlaceholderLambdaExpr const&) = 0;
     virtual void visit(IfExpr const&) = 0;
     virtual void visit(TupleExpr const&) = 0;
     virtual void visit(MutAssignStmt const&) = 0;

@@ -208,6 +208,8 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::ContinueStmt const& node) override;
 
     // F# style expressions and statements
+    void visit(ast::CompositionExpr const& node) override;
+    void visit(ast::PlaceholderLambdaExpr const& node) override;
     void visit(ast::IfExpr const& node) override;
     void visit(ast::TupleExpr const& node) override;
     void visit(ast::MutAssignStmt const& node) override;
@@ -794,6 +796,10 @@ class IRGenerator final: public ast::Visitor
 
     /// Semantic analysis facade (type registry, builtin descriptors, scope manager).
     SemanticAnalyzer& _sema;
+
+    /// Retains synthetic AST nodes created during desugaring (CompositionExpr, PlaceholderLambdaExpr).
+    /// Keeps body pointers valid until the end of IR generation.
+    std::vector<std::unique_ptr<ast::Expr>> _syntheticAST;
 };
 
 } // namespace endo

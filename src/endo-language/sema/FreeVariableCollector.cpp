@@ -210,6 +210,22 @@ std::unordered_set<std::string> collectFreeVariableNames(ast::Expr const* body,
                 return;
             }
 
+            if (auto const* compose = dynamic_cast<ast::CompositionExpr const*>(expr))
+            {
+                walk(compose->left.get(), bound);
+                walk(compose->right.get(), bound);
+                return;
+            }
+
+            if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(expr))
+            {
+                // __x is the placeholder parameter — bound within the body
+                auto innerBound = bound;
+                innerBound.emplace_back("__x");
+                walk(placeholder->body.get(), innerBound);
+                return;
+            }
+
             // Literal types (IntLiteralExpr, FloatLiteralExpr, BoolLiteralExpr) have no free variables.
             // ShellCommandExpr has no F# free variables.
         };

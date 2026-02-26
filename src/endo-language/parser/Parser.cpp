@@ -3970,37 +3970,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
         if (!right)
             return nullptr;
 
-        // Desugar: f >> g  →  fun __compose_x -> g (f __compose_x)
-        //          g << f  →  fun __compose_x -> g (f __compose_x)
-        auto const paramName = std::string("__compose_x");
-
-        // Build: inner_func(__compose_x)
-        auto* innerFunc = isForward ? left.get() : right.get();
-        auto* outerFunc = isForward ? right.get() : left.get();
-        (void) innerFunc;
-        (void) outerFunc;
-
-        // Clone-free approach: move left and right into the correct positions
-        auto param = std::make_unique<ast::IdentifierExpr>(paramName);
-        std::unique_ptr<ast::Expr> innerApp;
-        std::unique_ptr<ast::Expr> outerApp;
-
-        if (isForward)
-        {
-            // f >> g  →  fun x -> g (f x)
-            innerApp = std::make_unique<ast::ApplicationExpr>(std::move(left), std::move(param));
-            outerApp = std::make_unique<ast::ApplicationExpr>(std::move(right), std::move(innerApp));
-        }
-        else
-        {
-            // g << f  →  fun x -> g (f x)
-            innerApp = std::make_unique<ast::ApplicationExpr>(std::move(right), std::move(param));
-            outerApp = std::make_unique<ast::ApplicationExpr>(std::move(left), std::move(innerApp));
-        }
-
-        std::vector<ast::TypedParameter> params;
-        params.emplace_back(paramName);
-        left = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(outerApp));
+        left = std::make_unique<ast::CompositionExpr>(isForward ? ast::CompositionOp::Forward
+                                                                : ast::CompositionOp::Backward,
+                                                      std::move(left),
+                                                      std::move(right));
     }
 
     // Unparenthesized placeholder lambda wrapping: _ + 1 → fun __x -> __x + 1
@@ -4012,9 +3985,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpComposition()
         if (!ident || ident->name != "__x")
         {
             _placeholderCount = savedPlaceholderCount;
-            std::vector<ast::TypedParameter> params;
-            params.emplace_back("__x");
-            left = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(left));
+            left = std::make_unique<ast::PlaceholderLambdaExpr>(std::move(left), false);
         }
     }
 
@@ -4430,9 +4401,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
     if (newPlaceholders > 0 && hasPostfixOps && !_placeholderScopeActive && !isBinaryOperatorToken())
     {
         _placeholderCount = savedPlaceholderCount;
-        std::vector<ast::TypedParameter> params;
-        params.emplace_back("__x");
-        return std::make_unique<ast::LambdaExpr>(std::move(params), std::move(expr));
+        return std::make_unique<ast::PlaceholderLambdaExpr>(std::move(expr), false);
     }
 
     return expr;
@@ -4447,15 +4416,21 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
     auto const tryLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'try'
 
+    consumeNewlines(); // allow body on next line
+
     // Parse the body expression
     auto body = parseFSharpExpr();
     if (!body)
         return nullptr;
 
+    consumeNewlines();
+
     // Branch on 'with' vs 'finally'
     if (_lexer.currentToken() == Token::Finally)
     {
         _lexer.nextToken(); // consume 'finally'
+
+        consumeNewlines(); // allow cleanup expression on next line
 
         auto cleanup = parseFSharpExpr();
         if (!cleanup)
@@ -5018,6 +4993,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
     ast::DataSourceExpr::Kind kind {};
     std::unique_ptr<ast::Expr> filePath;
     std::unique_ptr<ast::Statement> pipeSource;
+    std::optional<SourceLocationRange> cmdLoc; // Source location for formatter comment ordering
 
     auto const isDataSourceName = [](std::string_view name) {
         return name == "open-json" || name == "open-csv" || name == "from-json" || name == "from-csv";

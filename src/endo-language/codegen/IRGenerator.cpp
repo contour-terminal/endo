@@ -866,6 +866,10 @@ bool IRGenerator::containsTryExpr(ast::Expr const* body) const
     // Do NOT recurse into lambda bodies (they are separate functions)
     if (dynamic_cast<ast::LambdaExpr const*>(body))
         return false;
+    if (dynamic_cast<ast::CompositionExpr const*>(body))
+        return false;
+    if (dynamic_cast<ast::PlaceholderLambdaExpr const*>(body))
+        return false;
 
     if (auto* paren = dynamic_cast<ast::ParenExpr const*>(body))
         return containsTryExpr(paren->inner.get());
@@ -4629,6 +4633,99 @@ bool IRGenerator::needsDynamicCompare(CoreVM::Value* lhs, CoreVM::Value* rhs) co
 // ============================================================================
 // F# Phase 2 expressions: if-then-else, tuples, mutable assignment
 
+void IRGenerator::visit(ast::CompositionExpr const& node)
+{
+    // Desugar: f >> g  →  fun __compose_x -> g (f __compose_x)
+    //          g << f  →  fun __compose_x -> g (f __compose_x)
+    // Build synthetic ApplicationExpr nodes and a LambdaExpr, then visit the lambda.
+    // Synthetic nodes are stored in _syntheticAST to keep body pointers valid.
+
+    auto const paramName = std::string("__compose_x");
+
+    // Determine inner/outer function based on composition direction
+    ast::Expr const* innerFn = (node.op == ast::CompositionOp::Forward) ? node.left.get() : node.right.get();
+    ast::Expr const* outerFn = (node.op == ast::CompositionOp::Forward) ? node.right.get() : node.left.get();
+
+    // Get function names — for identifiers, use the name directly;
+    // for complex expressions (e.g., chained compositions), visit them to register as functions
+    // and capture the resulting function name.
+    std::string innerName;
+    std::string outerName;
+
+    if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(innerFn))
+        innerName = ident->name;
+    else
+    {
+        innerFn->accept(*this);
+        if (!_result)
+            return;
+        if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
+            innerName = cs->get();
+        else
+        {
+            reportTypeError("Composition operand did not produce a function name");
+            return;
+        }
+    }
+
+    if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(outerFn))
+        outerName = ident->name;
+    else
+    {
+        outerFn->accept(*this);
+        if (!_result)
+            return;
+        if (auto const* cs = dynamic_cast<CoreVM::ConstantString*>(_result))
+            outerName = cs->get();
+        else
+        {
+            reportTypeError("Composition operand did not produce a function name");
+            return;
+        }
+    }
+
+    // Build: fun __compose_x -> outer(inner(__compose_x))
+    auto innerCall = std::make_unique<ast::ApplicationExpr>(
+        std::make_unique<ast::IdentifierExpr>(innerName),
+        std::make_unique<ast::IdentifierExpr>(paramName));
+    auto outerCall = std::make_unique<ast::ApplicationExpr>(
+        std::make_unique<ast::IdentifierExpr>(outerName), std::move(innerCall));
+
+    std::vector<ast::TypedParameter> lambdaParams;
+    lambdaParams.emplace_back(paramName);
+    auto lambda = std::make_unique<ast::LambdaExpr>(std::move(lambdaParams), std::move(outerCall));
+
+    // Visit the synthetic lambda (registers as FSharpFunction)
+    lambda->accept(*this);
+
+    // Keep synthetic AST alive for the duration of IR generation
+    _syntheticAST.push_back(std::move(lambda));
+}
+
+void IRGenerator::visit(ast::PlaceholderLambdaExpr const& node)
+{
+    // Desugar: PlaceholderLambdaExpr(body) → equivalent of LambdaExpr(params=[__x], body)
+    // The body already uses IdentifierExpr("__x") for the placeholder.
+    // Register directly as a FSharpFunction since body is owned by the PlaceholderLambdaExpr node.
+
+    auto const lambdaName = generateLambdaName();
+    FSharpFunction func;
+    func.parameters = { "__x" };
+    func.parameterTypes = { std::nullopt };
+    func.body = node.body.get();
+    func.returnKind = determineReturnKind(func.body);
+    func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+
+    for (auto const& [capName, _]: func.capturedBindings)
+    {
+        if (auto ref = lookupFSharpFunctionRef(capName))
+            func.capturedFunctionRefs[capName] = *ref;
+    }
+
+    registerFSharpFunction(lambdaName, std::move(func));
+    _result = _builder.get(lambdaName);
+}
+
 void IRGenerator::visit(ast::IfExpr const& node)
 {
     TRACE_SCOPE("visit(IfExpr)");
@@ -6097,6 +6194,24 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
         lambdaFunc.body = lambda->body.get();
         lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
         lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        registerFSharpFunction(funcName, std::move(lambdaFunc));
+        func = lookupFSharpFunction(funcName);
+    }
+    else if (auto const* placeholder = dynamic_cast<ast::PlaceholderLambdaExpr const*>(funcExpr))
+    {
+        // Placeholder lambda: (_ + 1) → equivalent to fun __x -> __x + 1
+        funcName = generateLambdaName();
+        FSharpFunction lambdaFunc;
+        lambdaFunc.parameters = { "__x" };
+        lambdaFunc.parameterTypes = { std::nullopt };
+        lambdaFunc.body = placeholder->body.get();
+        lambdaFunc.returnKind = determineReturnKind(lambdaFunc.body);
+        lambdaFunc.capturedBindings = collectFreeVariables(lambdaFunc.body, lambdaFunc.parameters);
+        for (auto const& [capName, _]: lambdaFunc.capturedBindings)
+        {
+            if (auto ref = lookupFSharpFunctionRef(capName))
+                lambdaFunc.capturedFunctionRefs[capName] = *ref;
+        }
         registerFSharpFunction(funcName, std::move(lambdaFunc));
         func = lookupFSharpFunction(funcName);
     }
