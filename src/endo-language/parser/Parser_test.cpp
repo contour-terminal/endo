@@ -2071,7 +2071,7 @@ TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_return_type_tuple")
 
     REQUIRE(lambda->parameters.size() == 2);
     REQUIRE(lambda->returnType.has_value());
-    CHECK(endo::toString(*lambda->returnType) == "(int, str)");
+    CHECK(endo::toString(*lambda->returnType) == "(int, string)");
 }
 
 TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.lambda_return_int")
@@ -2110,7 +2110,7 @@ TEST_CASE("Parser.FSharp.TypeAnnotation.let_tuple_type")
 
     CHECK(letStmt->name == "p");
     REQUIRE(letStmt->returnType.has_value());
-    CHECK(endo::toString(*letStmt->returnType) == "(int, str)");
+    CHECK(endo::toString(*letStmt->returnType) == "(int, string)");
 }
 
 // Note: option<list<int>> is not testable in parser tests because ">>" is lexed
@@ -2123,7 +2123,7 @@ TEST_CASE("Parser.FSharp.TypeAnnotation.let_tuple_type")
 TEST_CASE("Parser.FSharp.record_type_definition")
 {
     CHECK(parseAndPrintAST("type Person = { name: str; age: int }")
-          == "type Person = { name: str; age: int }");
+          == "type Person = { name: string; age: int }");
 }
 
 TEST_CASE("Parser.FSharp.union_type_definition")

@@ -309,7 +309,7 @@ std::string toString(PrimitiveType prim)
     {
         case PrimitiveType::Int: return "int";
         case PrimitiveType::Float: return "float";
-        case PrimitiveType::Str: return "str";
+        case PrimitiveType::Str: return "string";
         case PrimitiveType::Bool: return "bool";
         case PrimitiveType::Unit: return "unit";
     }
@@ -343,7 +343,8 @@ std::string toString(Type const& type)
     }
     else if (auto* lst = type.asList())
     {
-        return "list<" + toString(*lst->elementType) + ">";
+        auto inner = toString(*lst->elementType);
+        return "list<" + inner + (inner.back() == '>' ? " >" : ">");
     }
     else if (auto* tup = type.asTuple())
     {
@@ -360,11 +361,13 @@ std::string toString(Type const& type)
     }
     else if (auto* opt = type.asOption())
     {
-        return "option<" + toString(*opt->innerType) + ">";
+        auto inner = toString(*opt->innerType);
+        return "option<" + inner + (inner.back() == '>' ? " >" : ">");
     }
     else if (auto* res = type.asResult())
     {
-        return "result<" + toString(*res->okType) + ", " + toString(*res->errorType) + ">";
+        auto errStr = toString(*res->errorType);
+        return "result<" + toString(*res->okType) + ", " + errStr + (errStr.back() == '>' ? " >" : ">");
     }
     else if (auto* rec = type.asRecord())
     {

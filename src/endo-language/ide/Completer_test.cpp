@@ -233,7 +233,7 @@ TEST_CASE("Completer.collectRecordInfo.extracts_record_fields", "[completion][co
     auto const& fields = info.recordFields.at("Person");
     REQUIRE(fields.size() == 2);
     CHECK(fields[0].name == "name");
-    CHECK(fields[0].typeName == "str");
+    CHECK(fields[0].typeName == "string");
     CHECK(fields[1].name == "age");
     CHECK(fields[1].typeName == "int");
 }

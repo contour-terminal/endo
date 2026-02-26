@@ -170,7 +170,7 @@ TEST_CASE("Type.toString.primitives")
 {
     CHECK(toString(types::intType()) == "int");
     CHECK(toString(types::floatType()) == "float");
-    CHECK(toString(types::strType()) == "str");
+    CHECK(toString(types::strType()) == "string");
     CHECK(toString(types::boolType()) == "bool");
     CHECK(toString(types::unitType()) == "unit");
 }
@@ -187,10 +187,10 @@ TEST_CASE("Type.toString.type_variable")
 TEST_CASE("Type.toString.function")
 {
     auto fn = types::function(types::intType(), types::strType());
-    CHECK(toString(fn) == "int -> str");
+    CHECK(toString(fn) == "int -> string");
 
     auto curried = types::function({ types::intType(), types::strType() }, types::boolType());
-    CHECK(toString(curried) == "int -> str -> bool");
+    CHECK(toString(curried) == "int -> string -> bool");
 }
 
 TEST_CASE("Type.toString.list")
@@ -201,7 +201,7 @@ TEST_CASE("Type.toString.list")
 TEST_CASE("Type.toString.tuple")
 {
     auto pair = types::tuple({ types::intType(), types::strType() });
-    CHECK(toString(pair) == "(int, str)");
+    CHECK(toString(pair) == "(int, string)");
 }
 
 TEST_CASE("Type.toString.option")
@@ -211,7 +211,7 @@ TEST_CASE("Type.toString.option")
 
 TEST_CASE("Type.toString.result")
 {
-    CHECK(toString(types::result(types::intType(), types::strType())) == "result<int, str>");
+    CHECK(toString(types::result(types::intType(), types::strType())) == "result<int, string>");
 }
 
 // ============================================================================
