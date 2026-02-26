@@ -277,7 +277,6 @@ static const std::array descriptors = {
     StdlibDescriptor { "", "list_group_pairs", LT::Number, pairsNumberParam, &builtins::listGroupPairs, "", "" },
     StdlibDescriptor { "", "list_char_range", LT::Number, listCharRangeParams, &builtins::listCharRange, "", "" },
     StdlibDescriptor { "", "list_range", LT::Number, listRangeParams, &builtins::listRange, "", "" },
-    StdlibDescriptor { "", "list_replicate", LT::Number, listReplicateParams, &builtins::listReplicate, "", "" },
 
     // Internal string operations
     StdlibDescriptor { "", "string_repeat", LT::String, stringRepeatParams, &builtins::stringRepeat, "", "" },
