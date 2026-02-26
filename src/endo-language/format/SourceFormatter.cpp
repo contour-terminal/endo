@@ -1431,10 +1431,14 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         emit(" =");
         if (node.value)
         {
-            // Check if the body is complex enough to warrant multi-line
+            // List/Tuple expressions are self-wrapping (emitWrappedWith handles [, indent,
+            // bin-pack, dedent, ]) — keep opening delimiter on the = line.
             auto const bodyWidth = estimateWidth(*node.value);
-            if (wouldFormatMultiline(*node.value)
-                || (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty()))
+            auto const isWrappableContainer = dynamic_cast<ast::ListExpr const*>(node.value.get())
+                                              || dynamic_cast<ast::TupleExpr const*>(node.value.get());
+            if (!isWrappableContainer
+                && (wouldFormatMultiline(*node.value)
+                    || (bodyWidth > _config.maxLineWidth / 2 && !node.parameters.empty())))
             {
                 emitNewline();
                 indent();
@@ -1461,8 +1465,11 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         if (ab.value)
         {
             auto const bodyWidth = estimateWidth(*ab.value);
-            if (wouldFormatMultiline(*ab.value)
-                || (!ab.parameters.empty() && bodyWidth > _config.maxLineWidth / 2))
+            auto const isWrappableContainer = dynamic_cast<ast::ListExpr const*>(ab.value.get())
+                                              || dynamic_cast<ast::TupleExpr const*>(ab.value.get());
+            if (!isWrappableContainer
+                && (wouldFormatMultiline(*ab.value)
+                    || (!ab.parameters.empty() && bodyWidth > _config.maxLineWidth / 2)))
             {
                 emitNewline();
                 indent();

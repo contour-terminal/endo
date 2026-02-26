@@ -956,9 +956,9 @@ TEST_CASE("SourceFormatter.list_long_wraps", "[format]")
     config.maxLineWidth = 40;
     auto const result = SourceFormatter::format("let data = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10; 11; 12]", config);
     INFO("Result: [" << result << "]");
-    // Should wrap: opening bracket, elements bin-packed, closing bracket on own line
-    CHECK(result.find("[\n") != std::string::npos);
-    CHECK(result.find("\n]") != std::string::npos);
+    // Opening bracket stays on the = line, closing bracket aligns with let
+    CHECK(result.find("= [\n") != std::string::npos);
+    CHECK(result.find("\n]\n") != std::string::npos);
     // No line should exceed maxLineWidth
     std::istringstream stream(result);
     std::string line;
@@ -976,6 +976,20 @@ TEST_CASE("SourceFormatter.list_wrapping_idempotency", "[format]")
     INFO("First: [" << first << "]");
     INFO("Second: [" << second << "]");
     CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.list_long_wraps_bracket_on_eq_line", "[format]")
+{
+    auto config = FormatConfig {};
+    config.maxLineWidth = 40;
+    auto const result = SourceFormatter::format(
+        "let opts = [\"aa\"; \"bb\"; \"cc\"; \"dd\"; \"ee\"; \"ff\"; \"gg\"]", config);
+    INFO("Result: [" << result << "]");
+    // Opening bracket on same line as =, closing bracket aligned with let
+    CHECK(result.starts_with("let opts = [\n"));
+    CHECK(result.find("\n]\n") != std::string::npos);
+    // Must NOT have the old pattern: break after = with indented [
+    CHECK(result.find("=\n") == std::string::npos);
 }
 
 // ============================================================================
