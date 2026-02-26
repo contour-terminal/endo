@@ -410,6 +410,9 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
         return;
     }
 
+    bool const headIsWildcard = dynamic_cast<pattern::WildcardPattern const*>(pat.head.get()) != nullptr;
+    bool const tailIsWildcard = dynamic_cast<pattern::WildcardPattern const*>(pat.tail.get()) != nullptr;
+
     // Check tag == 1 (Cons)
     auto* tag = _builder.createObjGetTag(_scrutinee, "cons.pat.tag");
     auto* isCons = _builder.createNCmpEQ(tag, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.isCons");
@@ -418,6 +421,40 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
     _builder.createCondBr(isCons, consBlock, _failureBlock);
     _builder.setInsertPoint(consBlock);
 
+    auto* savedScrutinee = _scrutinee;
+    auto* savedStorage = _scrutineeStorage;
+    auto* finalSuccess = _successBlock;
+
+    if (headIsWildcard && tailIsWildcard)
+    {
+        // Both head and tail are wildcards — no extraction needed, just branch to success.
+        _builder.createBr(finalSuccess);
+        _scrutinee = savedScrutinee;
+        _scrutineeStorage = savedStorage;
+        _successBlock = finalSuccess;
+        return;
+    }
+
+    if (headIsWildcard)
+    {
+        // Head is wildcard — skip head extraction to avoid dead ObjGetSlot on stack.
+        // Only extract and process the tail.
+        auto* scrutineeReloaded2 = _builder.createLoad(savedStorage, "cons.scrutinee.reload");
+        auto* tailVal = _builder.createObjGetSlot(
+            scrutineeReloaded2, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.tail");
+
+        _scrutineeStorage = savedStorage;
+        _successBlock = finalSuccess;
+        _builder.createStore(savedStorage, tailVal, "cons.tail.store");
+        _scrutinee = _builder.createLoad(savedStorage, "cons.tail.reload");
+        pat.tail->accept(*this);
+
+        _scrutinee = savedScrutinee;
+        _scrutineeStorage = savedStorage;
+        _successBlock = finalSuccess;
+        return;
+    }
+
     // Reload scrutinee and extract head (slot 0)
     auto* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "cons.scrutinee.reload");
     auto* headVal =
@@ -425,12 +462,8 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
 
     // Create block for tail matching (after head pattern succeeds)
     auto* tailBlock = _builder.createBlock("cons.pat.tail");
-    auto* finalSuccess = _successBlock;
 
     // Match head sub-pattern
-    auto* savedScrutinee = _scrutinee;
-    auto* savedStorage = _scrutineeStorage;
-
     _scrutinee = headVal;
     _scrutineeStorage = nullptr;
     _successBlock = tailBlock;
@@ -438,6 +471,17 @@ void PatternIRGenerator::visit(pattern::ConsPattern const& pat)
 
     // In tail block: reload scrutinee, extract tail (slot 1), match tail pattern
     _builder.setInsertPoint(tailBlock);
+
+    if (tailIsWildcard)
+    {
+        // Tail is wildcard — skip tail extraction to avoid dead ObjGetSlot and load on stack.
+        _builder.createBr(finalSuccess);
+        _scrutinee = savedScrutinee;
+        _scrutineeStorage = savedStorage;
+        _successBlock = finalSuccess;
+        return;
+    }
+
     auto* scrutineeReloaded2 = _builder.createLoad(savedStorage, "cons.scrutinee.reload2");
     auto* tailVal =
         _builder.createObjGetSlot(scrutineeReloaded2, _builder.get(CoreVM::CoreNumber(1)), "cons.pat.tail");
