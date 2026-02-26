@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Wildcard binding suppresses unused warning
+# mode: ir-only
+# unused-detection: true
+
+let _ = 42

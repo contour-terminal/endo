@@ -134,14 +134,15 @@ TestResult TestExecutor::run(TestFile const& testFile)
                     if (expectedError.empty())
                     {
                         // Wildcard: just check that IR generation fails
-                        if (generatesIRSuccessfully(testFile.source))
+                        if (generatesIRSuccessfully(testFile.source, testFile.unusedValueDetection))
                         {
                             allFound = false;
                             result.failureMessage = "Expected IR generation failure but it succeeded";
                             break;
                         }
                     }
-                    else if (!generatesIRWithError(testFile.source, expectedError))
+                    else if (!generatesIRWithError(
+                                 testFile.source, expectedError, testFile.unusedValueDetection))
                     {
                         allFound = false;
                         result.failureMessage =
@@ -155,7 +156,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
             }
             else
             {
-                auto success = generatesIRSuccessfully(testFile.source);
+                auto success = generatesIRSuccessfully(testFile.source, testFile.unusedValueDetection);
                 auto const endTime = std::chrono::steady_clock::now();
                 result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
                 result.outcome = success ? TestOutcome::Pass : TestOutcome::Fail;
@@ -236,14 +237,15 @@ TestResult TestExecutor::run(TestFile const& testFile)
                     if (expectedError.empty())
                     {
                         // Wildcard: just check that IR generation fails
-                        if (generatesIRSuccessfully(testFile.source))
+                        if (generatesIRSuccessfully(testFile.source, testFile.unusedValueDetection))
                         {
                             allFound = false;
                             result.failureMessage = "Expected IR generation failure but it succeeded";
                             break;
                         }
                     }
-                    else if (!generatesIRWithError(testFile.source, expectedError))
+                    else if (!generatesIRWithError(
+                                 testFile.source, expectedError, testFile.unusedValueDetection))
                     {
                         allFound = false;
                         result.failureMessage =
@@ -262,7 +264,7 @@ TestResult TestExecutor::run(TestFile const& testFile)
             if (testFile.isSessionTest && !testFile.sessionPrompts.empty())
                 execResult = executeSession(testFile.sessionPrompts);
             else
-                execResult = executeSource(testFile.source);
+                execResult = executeSource(testFile.source, testFile.unusedValueDetection);
 
             auto const endTime = std::chrono::steady_clock::now();
             result.duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);

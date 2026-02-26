@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unit function at statement level is fine
+# unused-detection: true
+# expect: hello
+
+print "hello"

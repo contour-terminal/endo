@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Exported binding is not flagged as unused
+# mode: ir-only
+# unused-detection: true
+
+let export PATH = "/usr/bin"

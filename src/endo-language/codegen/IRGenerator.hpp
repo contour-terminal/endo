@@ -138,14 +138,16 @@ class IRGenerator final: public ast::Visitor
     static std::unique_ptr<CoreVM::IRProgram> generate(ast::Statement const& rootNode,
                                                        CoreVM::diagnostics::Report& report,
                                                        CoreVM::Runtime& runtime,
-                                                       FSharpPersistentState* persistentState = nullptr);
+                                                       FSharpPersistentState* persistentState = nullptr,
+                                                       bool unusedValueDetection = false);
 
     /// Overload that accepts a pre-constructed SemanticAnalyzer for reuse.
     static std::unique_ptr<CoreVM::IRProgram> generate(ast::Statement const& rootNode,
                                                        CoreVM::diagnostics::Report& report,
                                                        CoreVM::Runtime& runtime,
                                                        SemanticAnalyzer& sema,
-                                                       FSharpPersistentState* persistentState = nullptr);
+                                                       FSharpPersistentState* persistentState = nullptr,
+                                                       bool unusedValueDetection = false);
 
   private:
     explicit IRGenerator(CoreVM::diagnostics::Report& report,
@@ -351,10 +353,12 @@ class IRGenerator final: public ast::Visitor
     void bindFSharpVariable(std::string const& name,
                             CoreVM::Value* value,
                             bool isMutable = false,
-                            bool isExported = false);
+                            bool isExported = false,
+                            std::optional<SourceLocationRange> location = std::nullopt);
     void bindFSharpObjectVariable(std::string const& name,
                                   CoreVM::AllocaInstr* storage,
-                                  bool isMutable = false);
+                                  bool isMutable = false,
+                                  std::optional<SourceLocationRange> location = std::nullopt);
     [[nodiscard]] CoreVM::Value* lookupFSharpVariable(std::string const& name) const;
     [[nodiscard]] BindingInfo const* lookupFSharpBinding(std::string const& name) const;
 
@@ -406,6 +410,8 @@ class IRGenerator final: public ast::Visitor
         std::string builtinHOF;
         /// Whether this function produces a displayable result or unit (side-effect only).
         ResultKind resultKind = ResultKind::Value;
+        /// Source location of the function definition (for unused parameter diagnostics).
+        std::optional<SourceLocationRange> definitionLocation;
 
         size_t arity() const { return parameters.size(); }
     };
@@ -550,6 +556,10 @@ class IRGenerator final: public ast::Visitor
 
     /// Returns true if the expression produces a unit (void) result that should not be auto-displayed.
     [[nodiscard]] bool isUnitProducingExpr(ast::Expr const* expr) const;
+
+    /// Returns true if the expression is a F# function call that produces a non-unit return value.
+    /// Used for discarded return value detection.
+    [[nodiscard]] bool isFSharpExprWithReturnValue(ast::Expr const* expr) const;
 
     /// Implementation helper for isUnitProducingExpr with cycle detection for recursive functions.
     [[nodiscard]] bool isUnitProducingExprImpl(ast::Expr const* expr,
@@ -738,6 +748,10 @@ class IRGenerator final: public ast::Visitor
 
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;
+
+    /// When true, report errors for unused let bindings, unused function parameters,
+    /// and discarded return values. Disabled in REPL mode.
+    bool _unusedValueDetection = false;
 
     /// Type inference results from the pre-pass TypeInferencer.
     /// Maps function names to their inferred parameter and return types.

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: All function parameters used compiles successfully
+# unused-detection: true
+# expect: 3
+
+let f (x: int) (y: int) = x + y; print (f 1 2)

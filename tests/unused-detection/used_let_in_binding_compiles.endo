@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Used let-in binding inside function compiles successfully
+# unused-detection: true
+# expect: 6
+
+let f (x: int) : int = let y = 5 in (x + y); print (f 1)

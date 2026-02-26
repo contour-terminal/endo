@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <endo-language/lexer/Lexer.hpp>
+
 #include <memory>
 #include <optional>
 #include <string>
@@ -22,6 +24,8 @@ struct BindingInfo
     CoreVM::Value* value;
     bool isMutable;
     bool isExported = false;
+    bool isUsed = false;                                ///< Whether the binding has been referenced
+    std::optional<SourceLocationRange> bindingLocation; ///< Source location of the binding definition
 };
 
 /// Manages the F# variable scope chain for name resolution during IR generation.
@@ -50,10 +54,21 @@ class ScopeManager
     void bindVariable(std::string const& name,
                       CoreVM::Value* value,
                       bool isMutable = false,
-                      bool isExported = false);
+                      bool isExported = false,
+                      std::optional<SourceLocationRange> location = std::nullopt);
 
     /// Binds an object variable in the current scope, tracking it for ORELEASE at scope exit.
-    void bindObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage, bool isMutable = false);
+    void bindObjectVariable(std::string const& name,
+                            CoreVM::AllocaInstr* storage,
+                            bool isMutable = false,
+                            std::optional<SourceLocationRange> location = std::nullopt);
+
+    /// Marks a variable as used by walking the scope chain.
+    void markUsed(std::string const& name);
+
+    /// Returns unused bindings in the current scope (name + location).
+    /// Skips bindings named "_" and bindings without a location.
+    [[nodiscard]] std::vector<std::pair<std::string, SourceLocationRange>> getUnusedBindings() const;
 
     /// Looks up a variable by name, walking the scope chain from innermost to outermost.
     /// @return The variable's storage value, or nullptr if not found.

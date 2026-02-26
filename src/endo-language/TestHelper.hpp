@@ -120,14 +120,16 @@ std::unique_ptr<ast::Statement> parse(std::string const& source);
 
 /// Parses source code and generates IR.
 /// Returns nullptr if parsing or IR generation fails.
-std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source);
+std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source, bool unusedValueDetection = false);
 
 /// Returns true if IR generation succeeds for the given source code.
-bool generatesIRSuccessfully(std::string const& source);
+bool generatesIRSuccessfully(std::string const& source, bool unusedValueDetection = false);
 
 /// Attempts IR generation and checks that it fails with an error containing the expected substring.
 /// Returns true if IR generation fails AND at least one error message contains expectedErrorSubstring.
-bool generatesIRWithError(std::string const& source, std::string_view expectedErrorSubstring);
+bool generatesIRWithError(std::string const& source,
+                          std::string_view expectedErrorSubstring,
+                          bool unusedValueDetection = false);
 
 /// Helper to get the first statement from a compound statement.
 /// Returns nullptr if the statement is not a compound statement or is empty.
@@ -153,7 +155,7 @@ std::string parseAndPrintAST(std::string const& source);
 
 /// Generates IR from source code, compiles to bytecode, and executes it.
 /// Returns the execution result (exit code and captured output) or an error.
-ExecutionResult executeSource(std::string const& source);
+ExecutionResult executeSource(std::string const& source, bool unusedValueDetection = false);
 
 /// Executes source code and returns the captured output.
 /// Throws ExecutionError if execution fails.

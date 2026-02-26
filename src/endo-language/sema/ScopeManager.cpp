@@ -46,19 +46,54 @@ std::vector<CoreVM::AllocaInstr*> ScopeManager::popScope()
     return objectVars;
 }
 
-void ScopeManager::bindVariable(std::string const& name, CoreVM::Value* value, bool isMutable, bool isExported)
+void ScopeManager::bindVariable(std::string const& name,
+                                CoreVM::Value* value,
+                                bool isMutable,
+                                bool isExported,
+                                std::optional<SourceLocationRange> location)
 {
     if (_currentScope)
-        _currentScope->bindings[name] = BindingInfo { value, isMutable, isExported };
+        _currentScope->bindings[name] =
+            BindingInfo { value, isMutable, isExported, /*isUsed=*/false, std::move(location) };
 }
 
-void ScopeManager::bindObjectVariable(std::string const& name, CoreVM::AllocaInstr* storage, bool isMutable)
+void ScopeManager::bindObjectVariable(std::string const& name,
+                                      CoreVM::AllocaInstr* storage,
+                                      bool isMutable,
+                                      std::optional<SourceLocationRange> location)
 {
     if (_currentScope)
     {
         _currentScope->objectVariables.push_back(storage);
-        _currentScope->bindings[name] = BindingInfo { storage, isMutable };
+        _currentScope->bindings[name] =
+            BindingInfo { storage, isMutable, /*isExported=*/false, /*isUsed=*/false, std::move(location) };
     }
+}
+
+void ScopeManager::markUsed(std::string const& name)
+{
+    for (auto* scope = _currentScope; scope != nullptr; scope = scope->parent)
+    {
+        if (auto it = scope->bindings.find(name); it != scope->bindings.end())
+        {
+            it->second.isUsed = true;
+            return;
+        }
+    }
+}
+
+std::vector<std::pair<std::string, SourceLocationRange>> ScopeManager::getUnusedBindings() const
+{
+    std::vector<std::pair<std::string, SourceLocationRange>> result;
+    if (!_currentScope)
+        return result;
+
+    for (auto const& [name, info]: _currentScope->bindings)
+    {
+        if (!info.isUsed && name != "_" && !info.isExported && info.bindingLocation.has_value())
+            result.emplace_back(name, *info.bindingLocation);
+    }
+    return result;
 }
 
 CoreVM::Value* ScopeManager::lookupVariable(std::string const& name) const

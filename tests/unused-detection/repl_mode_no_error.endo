@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unused binding in REPL mode (session) is not an error
+# session-separator: ---
+# expect: 42
+
+let x = 42
+# ---
+print x

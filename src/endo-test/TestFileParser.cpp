@@ -150,6 +150,11 @@ std::optional<TestFile> TestFileParser::parse(std::filesystem::path const& fileP
                 result.expectNonEmptyOutput = true;
                 continue;
             }
+            if (parseDirective(line, "unused-detection"))
+            {
+                result.unusedValueDetection = true;
+                continue;
+            }
 
             // Unknown directive or plain comment — skip
             continue;

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Variable captured by closure is considered used
+# unused-detection: true
+# expect: 43
+
+let x = 42; let f (y: int) : int = x + y; print (f 1)

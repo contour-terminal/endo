@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Underscore-prefixed name does not suppress unused error
+# mode: ir-only
+# unused-detection: true
+# expect-error: is defined but never used
+
+let _foo = 42

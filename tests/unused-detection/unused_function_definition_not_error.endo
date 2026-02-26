@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unused function definition is not an error
+# mode: ir-only
+# unused-detection: true
+
+let f (x: int) : int = x + 1

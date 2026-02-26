@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Pipeline to unit function is fine
+# unused-detection: true
+# expect: 123
+
+[1; 2; 3] |> each print

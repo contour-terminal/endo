@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Unused let-in binding inside function produces an error
+# mode: ir-only
+# unused-detection: true
+# expect-error: is defined but never used
+
+let f (x: int) : int = let y = 5 in x; print (f 1)

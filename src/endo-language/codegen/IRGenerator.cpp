@@ -194,20 +194,23 @@ namespace
 std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& rootNode,
                                                          CoreVM::diagnostics::Report& report,
                                                          CoreVM::Runtime& runtime,
-                                                         FSharpPersistentState* persistentState)
+                                                         FSharpPersistentState* persistentState,
+                                                         bool unusedValueDetection)
 {
     SemanticAnalyzer sema;
-    return generate(rootNode, report, runtime, sema, persistentState);
+    return generate(rootNode, report, runtime, sema, persistentState, unusedValueDetection);
 }
 
 std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& rootNode,
                                                          CoreVM::diagnostics::Report& report,
                                                          CoreVM::Runtime& runtime,
                                                          SemanticAnalyzer& sema,
-                                                         FSharpPersistentState* persistentState)
+                                                         FSharpPersistentState* persistentState,
+                                                         bool unusedValueDetection)
 {
     IRGenerator generator(report, runtime, sema);
     generator._persistentState = persistentState;
+    generator._unusedValueDetection = unusedValueDetection;
 
     generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
     generator._builder.setFunction(generator._builder.getFunction(GLOBAL_SCOPE_INIT_NAME));
@@ -446,6 +449,18 @@ void IRGenerator::pushFSharpScope()
 
 void IRGenerator::popFSharpScope()
 {
+    if (_unusedValueDetection && !_hasErrors)
+    {
+        for (auto const& [name, loc]: _sema.scopes().getUnusedBindings())
+        {
+            _report.typeError(toCoreLoc(loc),
+                              "Value '{}' is defined but never used. "
+                              "Use 'let _ = ...' to explicitly discard.",
+                              name);
+            _hasErrors = true;
+        }
+    }
+
     // ScopeManager returns the list of object variable allocas that need ORELEASE.
     for (auto* storage: _sema.scopes().popScope())
         _builder.createObjRelease(storage, "scope.exit.release");
@@ -454,16 +469,18 @@ void IRGenerator::popFSharpScope()
 void IRGenerator::bindFSharpVariable(std::string const& name,
                                      CoreVM::Value* value,
                                      bool isMutable,
-                                     bool isExported)
+                                     bool isExported,
+                                     std::optional<SourceLocationRange> location)
 {
-    _sema.scopes().bindVariable(name, value, isMutable, isExported);
+    _sema.scopes().bindVariable(name, value, isMutable, isExported, std::move(location));
 }
 
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
                                            CoreVM::AllocaInstr* storage,
-                                           bool isMutable)
+                                           bool isMutable,
+                                           std::optional<SourceLocationRange> location)
 {
-    _sema.scopes().bindObjectVariable(name, storage, isMutable);
+    _sema.scopes().bindObjectVariable(name, storage, isMutable, std::move(location));
 }
 
 void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
@@ -699,6 +716,33 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
             visited.erase(name);
             return result;
         }
+    }
+
+    return false;
+}
+
+bool IRGenerator::isFSharpExprWithReturnValue(ast::Expr const* expr) const
+{
+    if (!expr)
+        return false;
+
+    // Unwrap parentheses
+    if (auto const* paren = dynamic_cast<ast::ParenExpr const*>(expr))
+        return isFSharpExprWithReturnValue(paren->inner.get());
+
+    // Function application: f x y
+    if (dynamic_cast<ast::ApplicationExpr const*>(expr))
+        return !isUnitProducingExpr(expr);
+
+    // Pipeline: expr |> f
+    if (dynamic_cast<ast::PipelineExpr const*>(expr))
+        return !isUnitProducingExpr(expr);
+
+    // Bare identifier that resolves to a value-returning function
+    if (auto const* ident = dynamic_cast<ast::IdentifierExpr const*>(expr))
+    {
+        if (lookupFSharpFunction(ident->name))
+            return !isUnitProducingExpr(expr);
     }
 
     return false;
@@ -4963,7 +5007,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
 
         for (auto const& name: bindingNames)
         {
-            bindFSharpVariable(name, bindingStorage[name], node.isMutable);
+            bindFSharpVariable(
+                name, bindingStorage[name], node.isMutable, /*isExported=*/false, node.location);
 
             // Annotate record field bindings with their field types
             if (recTypeInfo)
@@ -5034,6 +5079,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.body = node.value.get();
             func.returnKind = determineReturnKind(func.body);
             func.isRecursive = node.isRecursive;
+            func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
 
@@ -5041,6 +5087,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+
+            // Mark captured variables as used in the enclosing scope
+            for (auto const& [capName, capVal]: func.capturedBindings)
+                _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(node.name, std::move(func));
 
@@ -5061,6 +5111,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             func.body = ab.value.get();
             func.returnKind = determineReturnKind(func.body);
             func.isRecursive = true;
+            func.definitionLocation = node.location;
             if (isMutual)
                 func.mutualGroup = allRecNames;
 
@@ -5068,6 +5119,10 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
             for (auto const& rn: allRecNames)
                 allBound.push_back(rn);
             func.capturedBindings = collectFreeVariables(func.body, allBound);
+
+            // Mark captured variables as used in the enclosing scope
+            for (auto const& [capName, capVal]: func.capturedBindings)
+                _sema.scopes().markUsed(capName);
 
             registerFSharpFunction(ab.name, std::move(func));
         }
@@ -5103,7 +5158,13 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         func.returnType = lambda->returnType;
         func.body = lambda->body.get();
         func.returnKind = determineReturnKind(func.body);
+        func.definitionLocation = node.location;
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
+
+        // Mark captured variables as used in the enclosing scope
+        for (auto const& [capName, capVal]: func.capturedBindings)
+            _sema.scopes().markUsed(capName);
+
         registerFSharpFunction(node.name, std::move(func));
 
         // Compile lambda-as-variable as separate IRFunction (with captures as extra params)
@@ -5185,11 +5246,11 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
-        bindFSharpObjectVariable(node.name, storage, node.isMutable);
+        bindFSharpObjectVariable(node.name, storage, node.isMutable, node.location);
     }
     else
     {
-        bindFSharpVariable(node.name, storage, node.isMutable, node.isExported);
+        bindFSharpVariable(node.name, storage, node.isMutable, node.isExported, node.location);
     }
 
     // Export the binding as an environment variable if requested
@@ -5283,7 +5344,8 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         _builder.setInsertPoint(successBlock);
         for (auto const& name: bindingNames)
         {
-            bindFSharpVariable(name, bindingStorage[name]);
+            bindFSharpVariable(
+                name, bindingStorage[name], /*isMutable=*/false, /*isExported=*/false, node.location);
 
             // Annotate record field bindings with their field types
             if (recTypeInfo)
@@ -5308,12 +5370,17 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         func.body = node.value.get();
         func.returnKind = determineReturnKind(func.body);
         func.isRecursive = node.isRecursive;
+        func.definitionLocation = node.location;
 
         // Include function name as bound for recursive functions (prevents self-capture)
         auto allBound = func.parameters;
         if (node.isRecursive)
             allBound.push_back(node.name);
         func.capturedBindings = collectFreeVariables(func.body, allBound);
+
+        // Mark captured variables as used in the enclosing scope
+        for (auto const& [capName, capVal]: func.capturedBindings)
+            _sema.scopes().markUsed(capName);
 
         registerFSharpFunction(node.name, std::move(func));
 
@@ -5345,7 +5412,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         // Propagate all type annotations through the binding
         propagateAllAnnotations(value, storage);
 
-        bindFSharpVariable(node.name, storage);
+        bindFSharpVariable(node.name, storage, /*isMutable=*/false, /*isExported=*/false, node.location);
     }
 
     // Evaluate the body expression with the binding in scope
@@ -5398,6 +5465,16 @@ void IRGenerator::visit(ast::ExprStmt const& node)
                                         { _builder.get(CoreVM::CoreNumber(exitCode)) },
                                         "setExitStatus");
         }
+    }
+
+    // Detect discarded return values in F# mode
+    if (_unusedValueDetection && !node.displayResult && value && !_hasErrors
+        && isFSharpExprWithReturnValue(node.expr.get()))
+    {
+        auto const loc = node.location.value_or(SourceLocationRange {});
+        _report.typeError(toCoreLoc(loc),
+                          "Return value is discarded. Use 'let _ = ...' to explicitly discard.");
+        _hasErrors = true;
     }
 
     if (node.displayResult && value && !isUnitProducingExpr(node.expr.get()))
@@ -7499,7 +7576,11 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
                 paramType = *mapped;
         }
         auto* storage = createAllocaInEntryBlock(paramType, func.parameters[i]);
-        bindFSharpVariable(func.parameters[i], storage);
+        bindFSharpVariable(func.parameters[i],
+                           storage,
+                           /*isMutable=*/false,
+                           /*isExported=*/false,
+                           func.definitionLocation);
 
         // Annotate parameter allocas based on type annotations
         if (i < func.parameterTypes.size() && func.parameterTypes[i].has_value())
@@ -7569,7 +7650,18 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         }
     }
 
+    // Collect unused parameter/binding info before popping scope (data is destroyed by pop).
+    // These must survive the compilation error recovery below.
+    auto unusedParams = _unusedValueDetection && !_hasErrors
+                            ? _sema.scopes().getUnusedBindings()
+                            : decltype(_sema.scopes().getUnusedBindings()) {};
+
+    // Temporarily disable unused detection for this popFSharpScope call
+    // (we handle unused parameters manually after error recovery)
+    auto const savedDetection = _unusedValueDetection;
+    _unusedValueDetection = false;
     popFSharpScope();
+    _unusedValueDetection = savedDetection;
 
     // Helper to revert compilation state when falling back to AST inlining
     auto const revertToInlining = [&] {
@@ -7586,7 +7678,27 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
     if (_hasErrors && !savedHasErrors)
     {
         revertToInlining();
+
+        // Report unused parameters even after revert (they're semantic errors, not compilation failures)
+        for (auto const& [unusedName, unusedLoc]: unusedParams)
+        {
+            _report.typeError(toCoreLoc(unusedLoc),
+                              "Value '{}' is defined but never used. "
+                              "Use 'let _ = ...' to explicitly discard.",
+                              unusedName);
+            _hasErrors = true;
+        }
         return;
+    }
+
+    // Report unused parameters for successfully compiled functions
+    for (auto const& [unusedName, unusedLoc]: unusedParams)
+    {
+        _report.typeError(toCoreLoc(unusedLoc),
+                          "Value '{}' is defined but never used. "
+                          "Use 'let _ = ...' to explicitly discard.",
+                          unusedName);
+        _hasErrors = true;
     }
 
     // If bodyResult is null and no errors, all code paths end with tail calls (valid).
@@ -7618,6 +7730,9 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
 void IRGenerator::visit(ast::IdentifierExpr const& node)
 {
     TRACE_SCOPE("visit(IdentifierExpr)");
+
+    // Mark variable as used for unused value detection
+    _sema.scopes().markUsed(node.name);
 
     // Check if identifier is a user-defined property (getter invocation)
     if (auto it = _fsharpProperties.find(node.name); it != _fsharpProperties.end())

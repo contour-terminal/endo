@@ -38,6 +38,7 @@ struct TestFile
     std::vector<std::pair<std::string, std::string>> mockWhichPaths; ///< Mock which paths
     std::vector<std::pair<std::string, std::string>> expectedEnv;    ///< Expected env vars after execution
     bool expectNonEmptyOutput = false; ///< Assert output is non-empty (no exact match)
+    bool unusedValueDetection = false; ///< Enable unused value detection during IR generation
 };
 
 /// Parses an .endo test file into its metadata directives and source code.

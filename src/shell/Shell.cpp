@@ -1118,7 +1118,7 @@ int Shell::execute(std::string const& lineBuffer,
 
         debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState);
+        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState, !_interactive);
 
         // Check for IR generation errors
         if (report.containsFailures())

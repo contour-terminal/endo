@@ -598,7 +598,7 @@ std::unique_ptr<ast::Statement> parse(std::string const& source)
     return result;
 }
 
-std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source)
+std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source, bool unusedValueDetection)
 {
     auto& testRuntime = TestRuntime::instance();
     testRuntime.clearErrors();
@@ -611,7 +611,8 @@ std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source)
         return nullptr;
     }
 
-    auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime);
+    auto ir =
+        IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime, nullptr, unusedValueDetection);
 
     if (!ir || testRuntime.hasErrors())
     {
@@ -621,15 +622,17 @@ std::unique_ptr<CoreVM::IRProgram> generateIR(std::string const& source)
     return ir;
 }
 
-bool generatesIRSuccessfully(std::string const& source)
+bool generatesIRSuccessfully(std::string const& source, bool unusedValueDetection)
 {
-    auto ir = generateIR(source);
+    auto ir = generateIR(source, unusedValueDetection);
     return ir != nullptr;
 }
 
-bool generatesIRWithError(std::string const& source, std::string_view expectedErrorSubstring)
+bool generatesIRWithError(std::string const& source,
+                          std::string_view expectedErrorSubstring,
+                          bool unusedValueDetection)
 {
-    auto ir = generateIR(source);
+    auto ir = generateIR(source, unusedValueDetection);
     if (ir)
         return false; // Expected failure but IR generation succeeded
 
@@ -663,14 +666,14 @@ std::string parseAndPrintAST(std::string const& source)
     return ast::ASTPrinter::print(*ast);
 }
 
-ExecutionResult executeSource(std::string const& source)
+ExecutionResult executeSource(std::string const& source, bool unusedValueDetection)
 {
     auto& testRuntime = TestRuntime::instance();
     testRuntime.clearErrors();
     testRuntime.clearOutput();
 
     // Generate IR
-    auto ir = generateIR(source);
+    auto ir = generateIR(source, unusedValueDetection);
     if (!ir)
         return std::unexpected(TestError::IRGenerationFailed);
 

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Wildcard in destructuring suppresses unused error
+# unused-detection: true
+# expect: 1
+
+let (x, _) = (1, 2); print x

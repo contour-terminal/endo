@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Discarded function return value produces an error
+# mode: ir-only
+# unused-detection: true
+# expect-error: Return value is discarded
+
+let f (x: int) : int = x + 1; f 5
