@@ -56,6 +56,9 @@ namespace
             case Finally:
                 return "`finally` \u2014 Code that always executes after try\n\n```\ntry expression finally "
                        "cleanup\n```";
+            case Lazy:
+                return "`lazy` \u2014 Defers evaluation until `force` is called\n\n```\nlet x = lazy (1 + 2)\n"
+                       "println (force x)\n```";
             default: return std::nullopt;
         }
     }

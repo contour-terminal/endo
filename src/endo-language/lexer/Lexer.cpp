@@ -59,6 +59,10 @@ namespace
         if (literal == "finally")
             return Token::Finally;
 
+        // Lazy evaluation
+        if (literal == "lazy")
+            return Token::Lazy;
+
         // Boolean literals
         if (literal == "true")
             return Token::True;

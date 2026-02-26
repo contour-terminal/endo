@@ -5970,6 +5970,13 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             return;
         }
 
+        // force: evaluate a lazy value in pipeline
+        if (funcIdent->name == "force")
+        {
+            _result = _builder.createLazyForce(value, "force");
+            return;
+        }
+
         // Check other builtins
         // Build a temporary argument expression list pointing to a synthetic node.
         // Since builtins codegen their args, and we already have the value, we use
@@ -6861,6 +6868,21 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
             _shellCommandCaptureMode = true;
             generatePrintCall(argExprs[0], funcIdent->name == "println");
             _shellCommandCaptureMode = savedCapture;
+            return;
+        }
+
+        // force: evaluate a lazy value
+        if (funcIdent->name == "force")
+        {
+            if (argExprs.size() != 1)
+            {
+                reportTypeError("force requires exactly one argument");
+                return;
+            }
+            auto* lazyObj = codegen(argExprs[0]);
+            if (!lazyObj)
+                return;
+            _result = _builder.createLazyForce(lazyObj, "force");
             return;
         }
 
@@ -9011,6 +9033,94 @@ void IRGenerator::visit(ast::ResultExpr const& node)
         if (auto objTypeId = getObjectTypeId(payloadValue))
             annotateInnerObjectTypeId(_result, *objTypeId);
     }
+}
+
+void IRGenerator::visit(ast::LazyExpr const& node)
+{
+    TRACE_SCOPE("visit(LazyExpr)");
+
+    // 1. Collect free variables from the lazy body
+    auto freeVars = collectFreeVariables(node.body.get(), {});
+
+    // Compute deterministic capture ordering (sorted alphabetically)
+    std::vector<std::string> captureOrder;
+    for (auto const& [name, _]: freeVars)
+        captureOrder.push_back(name);
+    std::ranges::sort(captureOrder);
+
+    auto const captureCount = static_cast<uint16_t>(captureOrder.size());
+
+    // 2. Compile the body as a zero-arg IRFunction (captures become parameters)
+    auto lazyName = std::format("__lazy_{}", _lazyCounter++);
+
+    auto* savedFunction = _builder.function();
+    auto* savedInsertPoint = _builder.getInsertPoint();
+
+    auto* irFunction = _builder.program()->createFunction(lazyName);
+    irFunction->setParameterCount(captureCount);
+
+    _builder.setFunction(irFunction);
+    auto* entryBlock = _builder.createBlock("entry");
+    _builder.setInsertPoint(entryBlock);
+
+    pushFSharpScope();
+
+    // Create capture parameter allocas
+    for (auto const& capName: captureOrder)
+    {
+        auto* sourceStorage = freeVars.at(capName);
+        auto* storage = createAllocaInEntryBlock(sourceStorage->type(), "cap." + capName);
+        bindFSharpVariable(capName, storage);
+    }
+
+    // Codegen the body
+    auto* bodyResult = codegen(node.body.get());
+    if (bodyResult)
+        _builder.createFunctionRet(bodyResult, "ret");
+
+    popFSharpScope();
+
+    // Restore builder state
+    _builder.setFunction(savedFunction);
+    _builder.setInsertPoint(savedInsertPoint);
+
+    // Get the function reference (resolved to a runtime function ID by TargetCodeGenerator)
+    auto* funcRef = _builder.createFunctionRef(irFunction, "lazy.funcRef");
+
+    // 3. Register a custom sum type for this lazy expression's capture layout
+    auto lazyTypeId = _builder.program()->allocateCustomTypeId();
+    auto const slotCount = static_cast<uint16_t>(captureCount + 2);
+
+    CoreVM::IRProgram::CustomSumType customType;
+    customType.name = std::format("Lazy_{}", _lazyCounter - 1);
+    customType.assignedId = lazyTypeId;
+    customType.variants = {
+        { "Unevaluated", static_cast<uint8_t>(slotCount) },
+        { "Evaluated", 1 },
+    };
+    _builder.program()->addCustomSumType(std::move(customType));
+
+    // 4. Emit object creation: OALLOC, OSETTAG 0, OSETSLOT 0 (funcRef), OSETSLOT 2..N+1 (captures)
+    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, "lazy");
+    obj = _builder.createObjSetTag(obj, tag0, "lazy.tag");
+    obj = _builder.createObjSetSlot(obj, slot0, funcRef, "lazy.funcId");
+
+    // Store captures into slots 2..N+1
+    for (auto i = 0u; i < captureCount; ++i)
+    {
+        auto const& capName = captureOrder[i];
+        auto* capStorage = freeVars.at(capName);
+        auto* capValue = _builder.createLoad(capStorage, "cap." + capName + ".load");
+        auto* slotIdx = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(2 + i)));
+        obj = _builder.createObjSetSlot(obj, slotIdx, capValue, "lazy.cap." + capName);
+    }
+
+    _result = obj;
+    annotateObjectTypeId(_result, lazyTypeId);
 }
 
 void IRGenerator::visit(ast::TryExpr const& node)

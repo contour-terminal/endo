@@ -2139,6 +2139,15 @@ void SourceFormatter::visit(ast::TryFinallyExpr const& node)
     emitTrailingComment(node);
 }
 
+void SourceFormatter::visit(ast::LazyExpr const& node)
+{
+    emitLeadingComments(node);
+    emit("lazy ");
+    if (node.body)
+        node.body->accept(*this);
+    emitTrailingComment(node);
+}
+
 void SourceFormatter::visit(ast::FStringExpr const& node)
 {
     emit("$\"");

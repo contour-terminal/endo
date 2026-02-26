@@ -80,6 +80,7 @@ struct TryExpr;
 struct OptionDefaultExpr;
 struct TryWithExpr;
 struct TryFinallyExpr;
+struct LazyExpr;
 struct UnitExpr;
 struct BlockExpr;
 struct RecordTypeDefStmt;
@@ -178,6 +179,7 @@ struct Visitor
     virtual void visit(OptionDefaultExpr const&) = 0;
     virtual void visit(TryWithExpr const&) = 0;
     virtual void visit(TryFinallyExpr const&) = 0;
+    virtual void visit(LazyExpr const&) = 0;
     virtual void visit(FStringExpr const&) = 0;
     virtual void visit(UnitExpr const&) = 0;
     virtual void visit(BlockExpr const&) = 0;

@@ -1611,6 +1611,19 @@ struct TryFinallyExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
+/// Lazy expression: `lazy expr` or `lazy (expr)`
+///
+/// Defers evaluation of the body until `force` is called. The result is cached
+/// (memoized) so subsequent `force` calls return the cached value without re-evaluation.
+struct LazyExpr final: public Expr
+{
+    std::unique_ptr<Expr> body; ///< The deferred expression
+
+    explicit LazyExpr(std::unique_ptr<Expr> b): body(std::move(b)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
 /// Unit expression: `()`
 ///
 /// Represents the unit value (void/nothing). Used as a placeholder when no

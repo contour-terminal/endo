@@ -2941,6 +2941,7 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::ResultOk:      // Ok expr
         case Token::ResultError:   // Error expr
         case Token::Try:           // try expr with ...
+        case Token::Lazy:          // lazy expr
         case Token::FStringStart:  // F# interpolated string: $"..."
             return true;
         case Token::Identifier: {
@@ -6163,6 +6164,23 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
         case Token::Try: {
             // try expr with | pattern -> handler | ...
             return parseTryWith();
+        }
+
+        case Token::Lazy: {
+            // lazy expr — deferred computation
+            auto const lazyLoc = _lexer.currentRange();
+            _lexer.nextToken(); // consume 'lazy'
+            auto body = parseFSharpPrimary();
+            if (!body)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected expression after 'lazy'.");
+                return nullptr;
+            }
+            auto const endLoc = body->location;
+            auto node = std::make_unique<ast::LazyExpr>(std::move(body));
+            node->location = SourceLocationRange { lazyLoc.begin, endLoc ? endLoc->end : lazyLoc.end };
+            return node;
         }
 
         case Token::String: {

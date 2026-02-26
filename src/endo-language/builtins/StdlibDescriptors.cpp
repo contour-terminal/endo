@@ -82,6 +82,9 @@ static const std::array descriptors = {
     StdlibDescriptor { "not", "", LT::Void, {}, nullptr,
         "not b -> bool",
         "**not** `b -> bool`\n\nLogical negation of boolean **b**." },
+    StdlibDescriptor { "force", "", LT::Void, {}, nullptr,
+        "force lazy<'T> -> 'T",
+        "**force** `lazy<'T> -> 'T`\n\nForces evaluation of a lazy value. First call evaluates and caches the result; subsequent calls return the cached value." },
 
     // -----------------------------------------------------------------------
     // String Operations

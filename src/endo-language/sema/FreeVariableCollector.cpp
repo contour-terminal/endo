@@ -115,6 +115,12 @@ std::unordered_set<std::string> collectFreeVariableNames(ast::Expr const* body,
                 return;
             }
 
+            if (auto const* lazyExpr = dynamic_cast<ast::LazyExpr const*>(expr))
+            {
+                walk(lazyExpr->body.get(), bound);
+                return;
+            }
+
             if (auto const* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(expr))
             {
                 walk(optDefault->option.get(), bound);

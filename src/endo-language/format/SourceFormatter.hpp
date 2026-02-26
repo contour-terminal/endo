@@ -126,6 +126,7 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void visit(ast::OptionDefaultExpr const& node) override;
     void visit(ast::TryWithExpr const& node) override;
     void visit(ast::TryFinallyExpr const& node) override;
+    void visit(ast::LazyExpr const& node) override;
     void visit(ast::FStringExpr const& node) override;
     void visit(ast::RecordTypeDefStmt const& node) override;
     void visit(ast::RecordExpr const& node) override;

@@ -1041,6 +1041,13 @@ void ASTPrinter::visit(TryFinallyExpr const& node)
         node.finallyExpr->accept(*this);
 }
 
+void ASTPrinter::visit(LazyExpr const& node)
+{
+    _result += "lazy ";
+    if (node.body)
+        node.body->accept(*this);
+}
+
 void ASTPrinter::visit(UnitExpr const& /*node*/)
 {
     _result += "()";

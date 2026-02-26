@@ -244,6 +244,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::OptionDefaultExpr const& node) override;
     void visit(ast::TryWithExpr const& node) override;
     void visit(ast::TryFinallyExpr const& node) override;
+    void visit(ast::LazyExpr const& node) override;
     void visit(ast::FStringExpr const& node) override;
     void visit(ast::UnitExpr const& node) override;
     void visit(ast::BlockExpr const& node) override;
@@ -690,6 +691,8 @@ class IRGenerator final: public ast::Visitor
     // Lambda counter for generating unique anonymous function names
     size_t _lambdaCounter = 0;
     [[nodiscard]] std::string generateLambdaName();
+
+    size_t _lazyCounter = 0;
 
     // F# function context stack for error propagation
     std::vector<FSharpFunctionContext> _fsharpFunctionContextStack;

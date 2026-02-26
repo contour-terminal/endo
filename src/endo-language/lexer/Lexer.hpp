@@ -99,6 +99,9 @@ enum class Token
     Try,     // 'try' (try-with/try-finally expression)
     Finally, // 'finally' (try-finally expression)
 
+    // F# style keyword for lazy evaluation
+    Lazy, // 'lazy' (deferred computation)
+
     // F# style operators
     Arrow,       // '->'
     LeftArrow,   // '<-' (mutation)
@@ -490,6 +493,7 @@ inline std::string_view tos(Token token)
         case ResultError: return "Error";
         case Try: return "try";
         case Finally: return "finally";
+        case Lazy: return "lazy";
         case Arrow: return "->";
         case LeftArrow: return "<-";
         case ForwardPipe: return "|>";

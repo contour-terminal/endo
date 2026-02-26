@@ -86,6 +86,8 @@ std::vector<CompletionCandidate> keywordCandidates()
             "**try** -- keyword\n\n```\ntry risky_op () with\n| Error e -> handle e\n```", CompletionKind::Keyword },
         { "finally", "finally", "Finally clause",
             "**finally** -- keyword\n\nCode that runs after try/with regardless of outcome.", CompletionKind::Keyword },
+        { "lazy", "lazy", "Lazy evaluation wrapper",
+            "**lazy** -- keyword\n\nDefers evaluation until `force` is called.\n\n```\nlet x = lazy (1 + 2)\nprintln (force x)\n```", CompletionKind::Keyword },
         { "true", "true", "Boolean literal",
             "**true** -- keyword\n\nBoolean true value.", CompletionKind::Keyword },
         { "false", "false", "Boolean literal",

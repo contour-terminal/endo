@@ -13,7 +13,7 @@ namespace endo
 {
 
 /// @brief Returns F# keyword completion candidates.
-/// Keywords: let, rec, mut, fun, match, with, when, if, then, else, type, of, try, finally, true, false.
+/// Keywords: let, rec, mut, fun, match, with, when, if, then, else, type, of, try, finally, lazy, true, false.
 [[nodiscard]] std::vector<CompletionCandidate> keywordCandidates();
 
 /// @brief Returns shell builtin completion candidates.

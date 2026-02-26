@@ -79,8 +79,8 @@ std::vector<CompletionCandidate> constructorCandidatesFromRegistry(CoreVM::TypeR
         if (type->kind != CoreVM::TypeKind::Sum)
             continue;
 
-        // Skip List — internal type, not user-constructible via variant names
-        if (type->name == "List")
+        // Skip internal types — not user-constructible via variant names
+        if (type->name == "List" || type->name == "Lazy")
             continue;
 
         for (auto const& variant: type->variants)
