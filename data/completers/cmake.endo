@@ -16,7 +16,10 @@ let cmake_complete args prefix =
             |> filter (fun s -> s != "")
     match args with
     | [] when startsWith "-" prefix -> options
-    | ["--build"; "--preset"] -> parse_presets $(cmake --list-presets=build)
+    | ["--build"; "--preset"] ->
+        let available = parse_presets $(cmake --list-presets=configure)
+        parse_presets $(cmake --list-presets=build)
+            |> filter (fun bp -> exists (fun cp -> cp == bp) available)
     | ["--preset"] | [_; "--preset"] -> parse_presets $(cmake --list-presets=configure)
     | ["-G"] -> generators
     | ["--config"] | [_; "--config"] -> configs

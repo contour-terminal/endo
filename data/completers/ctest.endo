@@ -14,7 +14,10 @@ let ctest_complete args prefix =
                 | _ -> "")
             |> filter (fun s -> s != "")
     match args with
-    | ["--preset"] | [_; "--preset"] -> parse_presets $(ctest --list-presets)
+    | ["--preset"] | [_; "--preset"] ->
+        let available = parse_presets $(cmake --list-presets=configure)
+        parse_presets $(ctest --list-presets)
+            |> filter (fun tp -> exists (fun cp -> cp == tp) available)
     | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> configs
     | _ when startsWith "-" prefix -> options
     | _ -> []
