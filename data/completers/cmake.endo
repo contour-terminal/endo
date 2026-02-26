@@ -6,16 +6,19 @@ let cmake_complete args prefix =
     ]
     let generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
-    let presets_from json =
-        Json.query ".configurePresets[].name" json
-            @ Json.query ".buildPresets[].name" json
-            @ Json.query ".testPresets[].name" json
+    let parse_presets raw =
+        raw
+            |> split "\n"
+            |> filter (fun line -> contains "\"" line)
+            |> map (fun line ->
+                match split "\"" (trim line) with
+                | _ :: name :: _ -> name
+                | _ -> "")
+            |> filter (fun s -> s != "")
     match args with
     | [] when startsWith "-" prefix -> options
-    | ["--preset"] | [_; "--preset"] ->
-        let json1 = $(cat CMakePresets.json) in
-            let json2 = $(cat CMakeUserPresets.json) in presets_from json1
-                @ presets_from json2
+    | ["--build"; "--preset"] -> parse_presets $(cmake --list-presets=build)
+    | ["--preset"] | [_; "--preset"] -> parse_presets $(cmake --list-presets=configure)
     | ["-G"] -> generators
     | ["--config"] | [_; "--config"] -> configs
     | _ when startsWith "-" prefix -> options

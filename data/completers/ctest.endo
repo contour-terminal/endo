@@ -5,12 +5,15 @@ let ctest_complete args prefix =
         "--timeout"; "--repeat"; "--rerun-failed"
     ]
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
-    let presets_from json = Json.query ".testPresets[].name" json
+    let parse_presets raw =
+        raw |> split "\n"
+            |> filter (fun line -> contains "\"" line)
+            |> map (fun line -> match split "\"" (trim line) with
+                | _ :: name :: _ -> name
+                | _ -> "")
+            |> filter (fun s -> s != "")
     match args with
-    | ["--preset"] | [_; "--preset"] ->
-        let json1 = $(cat CMakePresets.json) in
-            let json2 = $(cat CMakeUserPresets.json) in presets_from json1
-                @ presets_from json2
+    | ["--preset"] | [_; "--preset"] -> parse_presets $(ctest --list-presets)
     | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> configs
     | _ when startsWith "-" prefix -> options
     | _ -> []

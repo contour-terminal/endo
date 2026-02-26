@@ -145,19 +145,75 @@ TEST_CASE("Completer.cmake.configs_list", "[completer][cmake]")
     )") == "4");
 }
 
-TEST_CASE("Completer.cmake.presets_from_json_query_multiline_concat", "[completer][cmake]")
+TEST_CASE("Completer.cmake.parse_presets_from_cmake_output", "[completer][cmake]")
 {
-    // Tests the cmake_presets_from function with multi-line @ concat
+    // Tests the parse_presets pipeline with mock cmake --list-presets output
     CHECK(executeSourceAndGetOutput(R"(
-        let cmake_presets_from json =
-          Json.query ".configurePresets[].name" json
-          @ Json.query ".buildPresets[].name" json
-          @ Json.query ".testPresets[].name" json
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
 
-        let json = "{\"configurePresets\":[{\"name\":\"dev\"}],\"buildPresets\":[{\"name\":\"build-dev\"}],\"testPresets\":[{\"name\":\"test-dev\"}]}"
-        let r = cmake_presets_from json
+        let output = "Available configure presets:\n\n  \"clang-debug\"  - Clang Debug\n  \"clang-release\" - Clang Release\n  \"gcc-debug\"    - GCC Debug\n"
+        let r = parse_presets output
         print (toText (length r))
     )") == "3");
+}
+
+TEST_CASE("Completer.cmake.parse_presets_extracts_names", "[completer][cmake]")
+{
+    // Verify that parse_presets extracts the correct preset names
+    CHECK(executeSourceAndGetOutput(R"(
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
+
+        let output = "Available configure presets:\n\n  \"clang-debug\"  - Clang Debug\n  \"gcc-release\"  - GCC Release\n"
+        let r = parse_presets output
+        each println r
+    )") == "clang-debug\ngcc-release\n");
+}
+
+TEST_CASE("Completer.cmake.parse_presets_empty_output", "[completer][cmake]")
+{
+    // Empty cmake output should produce an empty list
+    CHECK(executeSourceAndGetOutput(R"(
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
+
+        let r = parse_presets ""
+        print (toText (length r))
+    )") == "0");
+}
+
+TEST_CASE("Completer.cmake.parse_presets_no_quoted_lines", "[completer][cmake]")
+{
+    // Output with no quoted preset names (e.g., just headers) should produce empty list
+    CHECK(executeSourceAndGetOutput(R"(
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
+
+        let output = "Available configure presets:\n\nNo presets found.\n"
+        let r = parse_presets output
+        print (toText (length r))
+    )") == "0");
 }
 
 TEST_CASE("Completer.cmake.simple_function_call", "[completer][cmake]")
@@ -178,16 +234,40 @@ TEST_CASE("Completer.cmake.simple_function_call", "[completer][cmake]")
 // ctest completer logic tests
 // =============================================================================
 
-TEST_CASE("Completer.ctest.presets_from_json_query", "[completer][ctest]")
+TEST_CASE("Completer.ctest.parse_presets_from_ctest_output", "[completer][ctest]")
 {
+    // Tests the parse_presets pipeline with mock ctest --list-presets output
     CHECK(executeSourceAndGetOutput(R"(
-        let ctest_presets_from json =
-          Json.query ".testPresets[].name" json
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
 
-        let json = "{\"testPresets\":[{\"name\":\"test-clang\"},{\"name\":\"test-gcc\"}]}"
-        let r = ctest_presets_from json
+        let output = "Available test presets:\n\n  \"clang-debug\" - Clang Debug\n  \"clang-release\" - Clang Release\n"
+        let r = parse_presets output
         print (toText (length r))
     )") == "2");
+}
+
+TEST_CASE("Completer.ctest.parse_presets_extracts_names", "[completer][ctest]")
+{
+    // Verify ctest parse_presets extracts the correct preset names
+    CHECK(executeSourceAndGetOutput(R"(
+        let parse_presets raw =
+            raw |> split "\n"
+                |> filter (fun line -> contains "\"" line)
+                |> map (fun line -> match split "\"" (trim line) with
+                    | _ :: name :: _ -> name
+                    | _ -> "")
+                |> filter (fun s -> s != "")
+
+        let output = "Available test presets:\n\n  \"test-clang\"  - Clang Tests\n  \"test-gcc\"    - GCC Tests\n"
+        let r = parse_presets output
+        each println r
+    )") == "test-clang\ntest-gcc\n");
 }
 
 TEST_CASE("Completer.ctest.options_list_length", "[completer][ctest]")
