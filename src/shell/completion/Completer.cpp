@@ -139,8 +139,8 @@ std::vector<CompletionItem> Completer::gatherCompletions(CompletionContext const
                 allResults.push_back(std::move(item));
         }
 
-        // If this provider claims exclusivity and returned results, stop querying others
-        if (!results.empty() && provider->isExclusiveFor(ctx))
+        // If this provider claims exclusivity, stop querying others
+        if (provider->isExclusiveFor(ctx))
             break;
     }
 
