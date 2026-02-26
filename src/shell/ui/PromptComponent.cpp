@@ -923,6 +923,8 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             resetHistoryCycling();
             return Action::AgentMode;
         case tui::InputFieldAction::CycleAgentMode:
+        case tui::InputFieldAction::CycleThinkingMode:
+        case tui::InputFieldAction::CycleModel:
             // Not applicable in shell prompt context; ignore.
             break;
         case tui::InputFieldAction::Changed:
