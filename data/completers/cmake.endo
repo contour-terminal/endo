@@ -1,8 +1,8 @@
 let cmake_complete args prefix =
     let cmake_options = [
-            "--preset"; "--list-presets"; "--build"; "--install"; "-S"; "-B"; "-G"; "-D";
-            "--parallel"; "-j"; "--target"; "-t"; "--config"; "--clean-first"; "--verbose"; "-v";
-            "--version"; "--help"
+        "--preset"; "--list-presets"; "--build"; "--install"; "-S"; "-B"; "-G"; "-D";
+        "--parallel"; "-j"; "--target"; "-t"; "--config"; "--clean-first"; "--verbose"; "-v";
+        "--version"; "--help"
     ]
     let cmake_generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
     let cmake_configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
