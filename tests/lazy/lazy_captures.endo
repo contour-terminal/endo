@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lazy expression captures variables from enclosing scope
+# expect: 30
+# expect:
+
+let a = 10
+
+let b = 20
+
+let x = lazy (a + b)
+
+println (force x)

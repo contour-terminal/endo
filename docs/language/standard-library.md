@@ -27,6 +27,7 @@ by category. Each example is executable and verified by the documentation test s
 - [15.20 HTTP](#1520-http) -- `fetch`
 - [15.21 Timing](#1521-timing) -- `time`
 - [15.22 JSON](#1522-json) -- `Json.query`
+- [15.23 Lazy Evaluation](#1523-lazy-evaluation) -- `force`
 
 ---
 
@@ -1469,5 +1470,24 @@ let r = Json.query ".presets[].name" json1 @ Json.query ".presets[].name" json2
 r |> each println
 ```
 
+## 15.23 Lazy Evaluation
+
+#### `force`
+
+**Signature:** `force lazy<'T> : 'T`
+
+Forces evaluation of a lazy value. On first call, evaluates the deferred
+expression and caches the result. Subsequent calls return the cached value.
+
+```endo
+let x = lazy (1 + 2)
+println (force x)
+```
+
+```endo
+let x = lazy 42
+x |> force |> println
+```
+
 ---
-**See also:** [Lists & Collections](lists-and-collections.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Error Handling](error-handling.md)
+**See also:** [Lists & Collections](lists-and-collections.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Error Handling](error-handling.md) | [Lazy Evaluation](lazy-evaluation.md)

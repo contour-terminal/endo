@@ -28,6 +28,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Block scopes: `{ let inner = 20; inner + outer }`
 - [x] Computation expressions: `f { body }` auto-wraps block as thunk
 - [x] `time` builtin: `time { body }` measures execution time, returns TimeSpan
+- [x] Lazy evaluation: `lazy expr` defers computation, `force` evaluates and caches
 
 ## Types
 

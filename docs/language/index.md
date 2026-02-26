@@ -41,6 +41,7 @@ Endo combines both, letting you choose the right style for each task.
 - [Control Flow](control-flow.md)
 - [Command Execution](command-execution.md)
 - [Error Handling](error-handling.md)
+- [Lazy Evaluation](lazy-evaluation.md)
 - [Modules & Imports](modules-and-imports.md)
 - [Interoperability: F# Style vs Bash Style](interoperability.md)
 - [Standard Library Reference](standard-library.md)

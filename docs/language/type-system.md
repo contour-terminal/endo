@@ -31,6 +31,10 @@ option<str>         # Some "value" or None
 # Result (represents success or failure)
 result<int, str>    # Ok 42 or Error "failed"
 result<str, Error>  # Ok "data" or Error { code = 1; message = "..." }
+
+# Lazy (deferred computation with memoization)
+lazy<int>           # lazy 42
+lazy<str>           # lazy (computeString data)
 ```
 
 ### 3.3 Type Inference Examples

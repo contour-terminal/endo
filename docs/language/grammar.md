@@ -123,9 +123,12 @@ primary         = literal
                 | "(" expression "," expression { "," expression } ")"
                 | list_expression
                 | record_expression
+                | lazy_expression
                 | command_substitution
                 | variable_expansion
                 ;
+
+lazy_expression = "lazy" primary ;
 
 literal         = integer_literal
                 | float_literal
@@ -301,6 +304,11 @@ comment         = "#" { any_char } newline
 |   Ok value, Error e             Result constructors                  |
 |   Some x, None                  Option constructors                  |
 |   try block with | e -> ...     Try-with                             |
++----------------------------------------------------------------------+
+| LAZY EVALUATION                                                      |
+|   lazy expr                     Deferred computation                 |
+|   force lazyVal                 Evaluate and cache result            |
+|   lazyVal |> force              Pipeline force                       |
 +----------------------------------------------------------------------+
 | HTTP                                                                 |
 |   fetch url                       Download to file -> result<str,str>|

@@ -230,5 +230,18 @@ let processConfig =
     CONFIG_CACHE
 ```
 
+### 4.6 Lazy Bindings
+
+Use `lazy` to defer evaluation of an expression until its value is needed:
+
+```endo
+let x = lazy (1 + 2)
+println (force x)
+```
+
+The expression `(1 + 2)` is not evaluated when `x` is bound. It is only computed when `force x` is called, and the result is cached for subsequent `force` calls.
+
+See [Lazy Evaluation](lazy-evaluation.md) for full details.
+
 ---
-**See also:** [Type System](type-system.md) | [Functions](functions.md) | [Pattern Matching](pattern-matching.md)
+**See also:** [Type System](type-system.md) | [Functions](functions.md) | [Pattern Matching](pattern-matching.md) | [Lazy Evaluation](lazy-evaluation.md)

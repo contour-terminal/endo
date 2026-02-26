@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Force twice returns cached result (memoization)
+# expect: 3
+# expect: 3
+# expect:
+
+let x = lazy (1 + 2)
+
+println (force x)
+
+println (force x)

@@ -1292,3 +1292,25 @@ TEST_CASE("SourceFormatter.brace_delimited_block_keeps_braces", "[format]")
     CHECK(result.find("{ ") != std::string::npos);
     CHECK(result.find(" }") != std::string::npos);
 }
+
+// ============================================================================
+// Lazy expression formatting
+// ============================================================================
+
+TEST_CASE("SourceFormatter.lazy_int", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = lazy 42");
+    CHECK(result == "let x = lazy 42\n");
+}
+
+TEST_CASE("SourceFormatter.lazy_paren_expr", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = lazy (1 + 2)");
+    CHECK(result == "let x = lazy (1 + 2)\n");
+}
+
+TEST_CASE("SourceFormatter.lazy_with_force", "[format]")
+{
+    auto const result = SourceFormatter::format("let x = lazy 42; print (force x)");
+    CHECK(result == "let x = lazy 42\n\nprint (force x)\n");
+}

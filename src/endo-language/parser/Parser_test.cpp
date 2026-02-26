@@ -2296,3 +2296,64 @@ TEST_CASE("Parser.FSharp.exec_in_parens")
     CHECK(parseAndPrintAST(R"(let r = (exec "/bin/echo" "hello" | exec "/bin/cat"))")
           == R"(let r = (exec "/bin/echo" "hello" | exec "/bin/cat"))");
 }
+
+// =============================================================================
+// Lazy Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.FSharp.lazy_int_literal")
+{
+    auto ast = parse("let x = lazy 42");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lazyExpr = dynamic_cast<endo::ast::LazyExpr*>(letStmt->value.get());
+    REQUIRE(lazyExpr != nullptr);
+    CHECK(dynamic_cast<endo::ast::IntLiteralExpr*>(lazyExpr->body.get()) != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.lazy_paren_expr")
+{
+    auto ast = parse("let x = lazy (1 + 2)");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lazyExpr = dynamic_cast<endo::ast::LazyExpr*>(letStmt->value.get());
+    REQUIRE(lazyExpr != nullptr);
+    CHECK(dynamic_cast<endo::ast::ParenExpr*>(lazyExpr->body.get()) != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.lazy_identifier")
+{
+    auto ast = parse("let x = lazy someVar");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lazyExpr = dynamic_cast<endo::ast::LazyExpr*>(letStmt->value.get());
+    REQUIRE(lazyExpr != nullptr);
+    CHECK(dynamic_cast<endo::ast::IdentifierExpr*>(lazyExpr->body.get()) != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.lazy_int")
+{
+    CHECK(parseAndPrintAST("let x = lazy 42") == "let x = lazy 42");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.lazy_paren")
+{
+    CHECK(parseAndPrintAST("let x = lazy (1 + 2)") == "let x = lazy ((1 + 2))");
+}
+
+TEST_CASE("Parser.FSharp.ASTPrinter.lazy_force")
+{
+    CHECK(parseAndPrintAST("let x = lazy 42; print (force x)") == "let x = lazy 42; (print ((force x)))");
+}

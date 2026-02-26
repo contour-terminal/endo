@@ -8,7 +8,7 @@ when      if        then      else      elif      end
 for       in        do        while     try       finally
 return    break     continue  export    true      false
 Ok        Error     Some      None      rec       and
-of        as        global
+of        as        global    lazy
 ```
 
 ### 2.2 Reserved Operators

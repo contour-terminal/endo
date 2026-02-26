@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Force via pipeline operator
+# expect: 42
+# expect:
+
+let x = lazy 42
+
+x |> force
+    |> println
