@@ -1591,10 +1591,17 @@ void SourceFormatter::visit(ast::PipelineExpr const& node)
     // Multi-pipe or exceeds width: wrap with |> at start of continuation lines
     if (chain[0])
         chain[0]->accept(*this);
+
+    auto const firstExprWidth = chain[0] ? estimateWidth(*chain[0]) : 0uz;
+    auto const keepFirstInline = firstExprWidth <= _config.indentWidth;
+
     indent();
     for (auto const i: std::views::iota(1uz, chain.size()))
     {
-        emitNewline();
+        if (i == 1 && keepFirstInline)
+            emit(" ");
+        else
+            emitNewline();
         emit("|> ");
         if (chain[i])
             chain[i]->accept(*this);
@@ -1767,10 +1774,17 @@ void SourceFormatter::visit(ast::ConcatListExpr const& node)
     // Multi-concat or exceeds width: wrap with @ at start of continuation lines
     if (chain[0])
         chain[0]->accept(*this);
+
+    auto const firstExprWidth = chain[0] ? estimateWidth(*chain[0]) : 0uz;
+    auto const keepFirstInline = firstExprWidth <= _config.indentWidth;
+
     indent();
     for (auto const i: std::views::iota(1uz, chain.size()))
     {
-        emitNewline();
+        if (i == 1 && keepFirstInline)
+            emit(" ");
+        else
+            emitNewline();
         emit("@ ");
         if (chain[i])
             chain[i]->accept(*this);

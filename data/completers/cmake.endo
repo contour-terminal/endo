@@ -7,8 +7,7 @@ let cmake_complete args prefix =
     let generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
     let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
     let parse_presets raw =
-        raw
-            |> split "\n"
+        raw |> split "\n"
             |> filter (fun line -> contains "\"" line)
             |> map (fun line ->
                 match split "\"" (trim line) with

@@ -8,7 +8,8 @@ let ctest_complete args prefix =
     let parse_presets raw =
         raw |> split "\n"
             |> filter (fun line -> contains "\"" line)
-            |> map (fun line -> match split "\"" (trim line) with
+            |> map (fun line ->
+                match split "\"" (trim line) with
                 | _ :: name :: _ -> name
                 | _ -> "")
             |> filter (fun s -> s != "")

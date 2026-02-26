@@ -1082,6 +1082,44 @@ TEST_CASE("SourceFormatter.pipeline_single_long_wrapping_idempotency", "[format]
     CHECK(first == second);
 }
 
+TEST_CASE("SourceFormatter.pipeline_short_source_keeps_first_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let f raw = raw |> split x |> filter g |> sum");
+    INFO("Result: [" << result << "]");
+    // "raw" (3 chars) <= indentWidth (4), so first |> stays on same line
+    CHECK(result.find("raw |> split x\n") != std::string::npos);
+    CHECK(result.find("|> filter g\n") != std::string::npos);
+    CHECK(result.find("|> sum\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.pipeline_short_source_keeps_first_inline_idempotency", "[format]")
+{
+    auto const source = "let f raw = raw |> split x |> filter g |> sum";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.pipeline_long_source_wraps_normally", "[format]")
+{
+    auto const result = SourceFormatter::format("let f items = items |> split x |> filter g |> sum");
+    INFO("Result: [" << result << "]");
+    // "items" (5 chars) > indentWidth (4), so first |> gets its own line
+    CHECK(result.find("items\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.pipeline_long_source_wraps_normally_idempotency", "[format]")
+{
+    auto const source = "let f items = items |> split x |> filter g |> sum";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
 // ============================================================================
 // Concat wrapping
 // ============================================================================
@@ -1105,6 +1143,25 @@ TEST_CASE("SourceFormatter.concat_chain_wraps", "[format]")
 TEST_CASE("SourceFormatter.concat_chain_wrapping_idempotency", "[format]")
 {
     auto const source = "let x = list1 @ list2 @ list3";
+    auto const first = SourceFormatter::format(source);
+    auto const second = SourceFormatter::format(first);
+    INFO("First: [" << first << "]");
+    INFO("Second: [" << second << "]");
+    CHECK(first == second);
+}
+
+TEST_CASE("SourceFormatter.concat_short_source_keeps_first_inline", "[format]")
+{
+    auto const result = SourceFormatter::format("let f xs = xs @ list2 @ list3");
+    INFO("Result: [" << result << "]");
+    // "xs" (2 chars) <= indentWidth (4), so first @ stays on same line
+    CHECK(result.find("xs @ list2\n") != std::string::npos);
+    CHECK(result.find("@ list3\n") != std::string::npos);
+}
+
+TEST_CASE("SourceFormatter.concat_short_source_keeps_first_inline_idempotency", "[format]")
+{
+    auto const source = "let f xs = xs @ list2 @ list3";
     auto const first = SourceFormatter::format(source);
     auto const second = SourceFormatter::format(first);
     INFO("First: [" << first << "]");
