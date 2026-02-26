@@ -3,4 +3,6 @@
 # description: Annotated 1-param function called with 2 args must fail
 # expect-error: expects 1 argument, got 2
 
-let f (x: int): int = x + 1; f 3 4
+let f (x: int): int = x + 1
+
+f 3 4

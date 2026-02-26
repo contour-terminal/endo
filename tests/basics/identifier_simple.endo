@@ -3,4 +3,6 @@
 # description: Reference a previously bound identifier
 # mode: ir-only
 
-let x = 42; let y = x
+let x = 42
+
+let y = x

@@ -3,9 +3,6 @@
 # description: List multiline join
 # expect: a,b,c
 
-let r = [
-  "a";
-  "b";
-  "c"
-] |> join ","
+let r = ["a"; "b"; "c"] |> join ","
+
 print r

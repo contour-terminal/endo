@@ -3,4 +3,6 @@
 # description: Annotated 2-param function called with 3 args must fail
 # expect-error: expects 2 arguments, got 3
 
-let f (x: int) (y: int): int = x + y; f 1 2 3
+let f (x: int) (y: int): int = x + y
+
+f 1 2 3

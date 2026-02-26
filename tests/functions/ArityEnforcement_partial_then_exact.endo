@@ -3,4 +3,8 @@
 # description: Partial application followed by exact application must succeed
 # expect: 7
 
-let add x y = x + y; let f = add 3; print (f 4)
+let add x y = x + y
+
+let f = add 3
+
+print (f 4)

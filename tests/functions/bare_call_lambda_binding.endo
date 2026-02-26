@@ -4,4 +4,5 @@
 # expect: 99
 
 let f = fun x -> print x
+
 f 99

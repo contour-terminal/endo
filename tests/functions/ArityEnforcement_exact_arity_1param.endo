@@ -3,4 +3,6 @@
 # description: 1-param function called with exactly 1 arg must succeed
 # expect: 4
 
-let f x = x + 1; print (f 3)
+let f x = x + 1
+
+print (f 3)

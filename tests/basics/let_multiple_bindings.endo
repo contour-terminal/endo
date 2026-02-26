@@ -3,4 +3,8 @@
 # description: Multiple let bindings in sequence
 # mode: ir-only
 
-let x = 1; let y = 2; let z = 3
+let x = 1
+
+let y = 2
+
+let z = 3

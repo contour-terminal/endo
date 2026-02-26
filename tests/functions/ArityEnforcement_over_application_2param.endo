@@ -3,4 +3,6 @@
 # description: 2-param function called with 3 args must fail
 # expect-error: expects 2 arguments, got 3
 
-let add x y = x + y; add 1 2 3
+let add x y = x + y
+
+add 1 2 3

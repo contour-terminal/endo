@@ -3,4 +3,8 @@
 # description: Chain of references
 # mode: ir-only
 
-let a = 1; let b = a; let c = b
+let a = 1
+
+let b = a
+
+let c = b

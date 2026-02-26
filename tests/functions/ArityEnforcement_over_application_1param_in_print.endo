@@ -3,4 +3,6 @@
 # description: Over-application inside print wrapper must fail
 # expect-error: expects 1 argument, got 2
 
-let f (x: int): int = x + 1; print (f 3 4)
+let f (x: int): int = x + 1
+
+print (f 3 4)
