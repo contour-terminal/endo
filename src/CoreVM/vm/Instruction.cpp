@@ -189,6 +189,9 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(UCALL, II, 0, Void),  // stack change handled dynamically (pops argc, pushes 1 return value)
     IIDEF(URET, V, 0, Void),    // stack change handled dynamically (returns to caller frame)
     IIDEF(UTCALL, II, 0, Void), // stack change handled dynamically (tail call, reuses frame)
+
+    // lazy evaluation
+    IIDEF(LFORCE, V, 0, Void), // consumes lazy obj, pushes result (net 0)
 };
 
 // }}}

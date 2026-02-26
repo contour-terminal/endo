@@ -154,6 +154,9 @@ enum Opcode : uint16_t
     UCALL,  // UCALL function_id, argc  ; call user function with argc args on stack
     URET,   // URET                    ; return from user function (top of stack = return value)
     UTCALL, // UTCALL function_id, argc ; tail-call user function (reuse current frame)
+
+    // lazy evaluation
+    LFORCE, // LFORCE                  ; force lazy value at top of stack
 };
 
 enum class MatchClass

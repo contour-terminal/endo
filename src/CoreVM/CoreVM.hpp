@@ -84,6 +84,10 @@ class FunctionCallInstr;
 class FunctionRetInstr;
 class TailCallInstr;
 
+// Lazy evaluation
+class FunctionRefInstr;
+class LazyForceInstr;
+
 // Object operations (for composite types)
 class ObjAllocInstr;
 class ObjRetainInstr;
@@ -258,6 +262,10 @@ class InstructionVisitor
     virtual void visit(VCmpLEInstr& instr) = 0;
     virtual void visit(VCmpGTInstr& instr) = 0;
     virtual void visit(VCmpGEInstr& instr) = 0;
+
+    // lazy evaluation
+    virtual void visit(FunctionRefInstr& instr) = 0;
+    virtual void visit(LazyForceInstr& instr) = 0;
 };
 
 // {{{ array types
@@ -634,6 +642,7 @@ class Runner
         const Function* function; //!< Caller's function
         size_t fp;                //!< Caller's frame pointer
         size_t argsBase;          //!< Stack position where callee's args start (for cleanup on return)
+        TypedObject* lazyObj = nullptr; //!< Non-null when forcing a lazy value (for caching result in URET)
     };
 
     /// Call stack for UCALL/URET (user-defined function call frames).
@@ -1766,6 +1775,49 @@ class TailCallInstr: public Instr
     IRFunction* _callee;
 };
 
+/// Produces the runtime function ID of a given IRFunction as a Number value.
+/// Used to store function references in objects (e.g., lazy thunks).
+class FunctionRefInstr: public Instr
+{
+  public:
+    /// @param function The IRFunction whose runtime ID is needed.
+    /// @param name Optional IR name for the result.
+    FunctionRefInstr(IRFunction* function, const std::string& name):
+        Instr(LiteralType::Number, {}, name), _function(function)
+    {
+    }
+
+    /// The referenced function.
+    [[nodiscard]] IRFunction* function() const { return _function; }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+
+  private:
+    IRFunction* _function;
+};
+
+/// Forces evaluation of a lazy value. Reads the thunk function ID from the
+/// lazy object at runtime and invokes it via the LFORCE opcode.
+class LazyForceInstr: public Instr
+{
+  public:
+    /// @param lazyObj The lazy object value to force.
+    /// @param name Optional IR name for the result.
+    LazyForceInstr(Value* lazyObj, const std::string& name):
+        Instr(LiteralType::Void, { lazyObj }, name)
+    {
+    }
+
+    /// The lazy object operand.
+    [[nodiscard]] Value* lazyObj() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
 class CastInstr: public Instr
 {
   public:
@@ -2320,6 +2372,10 @@ class IsSameInstruction: public InstructionVisitor
     void visit(FCmpGEInstr& instr) override;
     void visit(FCmpLTInstr& instr) override;
     void visit(FCmpGTInstr& instr) override;
+
+    // lazy evaluation
+    void visit(FunctionRefInstr& instr) override;
+    void visit(LazyForceInstr& instr) override;
 };
 
 class IRFunction: public Constant
@@ -2749,6 +2805,10 @@ class IRBuilder
     VCmpLEInstr* createVCmpLE(Value* lhs, Value* rhs, const std::string& name = "");
     VCmpGTInstr* createVCmpGT(Value* lhs, Value* rhs, const std::string& name = "");
     VCmpGEInstr* createVCmpGE(Value* lhs, Value* rhs, const std::string& name = "");
+
+    // Lazy evaluation
+    FunctionRefInstr* createFunctionRef(IRFunction* function, const std::string& name = "");
+    LazyForceInstr* createLazyForce(Value* lazyObj, const std::string& name = "");
 };
 
 /**
@@ -3487,6 +3547,10 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(FCmpGEInstr& instr) override;
     void visit(FCmpLTInstr& instr) override;
     void visit(FCmpGTInstr& instr) override;
+
+    // lazy evaluation
+    void visit(FunctionRefInstr& instr) override;
+    void visit(LazyForceInstr& instr) override;
 
   private:
     struct ConditionalJump

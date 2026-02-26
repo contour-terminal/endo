@@ -473,6 +473,22 @@ void TargetCodeGenerator::visit(TailCallInstr& instr)
     // UTCALL transfers control — no stack tracking adjustment needed
 }
 
+void TargetCodeGenerator::visit(FunctionRefInstr& instr)
+{
+    // Resolve the IRFunction to its runtime function ID and push it as a number
+    auto const functionId = static_cast<Operand>(_cp.makeFunction(instr.function()));
+    emitInstr(Opcode::ILOAD, functionId);
+    changeStack(0, &instr);
+}
+
+void TargetCodeGenerator::visit(LazyForceInstr& instr)
+{
+    emitLoad(instr.lazyObj());
+    emitInstr(Opcode::LFORCE);
+    // LFORCE: consumes lazy obj (1), pushes result (1) → net 0
+    changeStack(1, &instr);
+}
+
 Operand TargetCodeGenerator::getConstantInt(Value* value)
 {
     COREVM_ASSERT(dynamic_cast<ConstantInt*>(value) != nullptr, "Must be ConstantInt");

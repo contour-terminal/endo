@@ -1071,5 +1071,18 @@ VCmpGEInstr* IRBuilder::createVCmpGE(Value* lhs, Value* rhs, const std::string& 
 }
 
 // }}}
+// {{{ Lazy evaluation
+
+FunctionRefInstr* IRBuilder::createFunctionRef(IRFunction* function, const std::string& name)
+{
+    return insert<FunctionRefInstr>(function, makeName(name));
+}
+
+LazyForceInstr* IRBuilder::createLazyForce(Value* lazyObj, const std::string& name)
+{
+    return insert<LazyForceInstr>(lazyObj, makeName(name));
+}
+
+// }}}
 
 } // namespace CoreVM

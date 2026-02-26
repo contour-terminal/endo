@@ -220,6 +220,20 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(jsonType));
 
+    // Lazy<T>: Unevaluated (tag=0, N+2 slots: funcId + cached + captures) | Evaluated (tag=1, cached value)
+    // Note: slotCount is set to 2 as base (funcId + cached result); captures vary per lazy expression
+    // and use per-expression type descriptors created during IRGenerator codegen.
+    auto lazyType = std::make_unique<TypeDescriptor>();
+    lazyType->kind = TypeKind::Sum;
+    lazyType->id = BuiltinTypeId::Lazy;
+    lazyType->name = "Lazy";
+    lazyType->slotCount = 2; // base: slot 0 = funcId, slot 1 = cached result
+    lazyType->variants = {
+        { "Unevaluated", 2 }, // tag 0: thunk (funcId + cached placeholder)
+        { "Evaluated", 1 },   // tag 1: cached result in slot 1
+    };
+    addType(std::move(lazyType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

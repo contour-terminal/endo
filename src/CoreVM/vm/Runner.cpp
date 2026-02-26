@@ -557,6 +557,9 @@ Runner::RunResult Runner::loopWithResult()
         label(UCALL),
         label(URET),
         label(UTCALL),
+
+        // lazy evaluation
+        label(LFORCE),
     };
 #endif
 // }}}
@@ -1561,7 +1564,17 @@ Runner::RunResult Runner::loopWithResult()
             _function = frame.function;
             _fp = frame.fp;
             auto argsBase = frame.argsBase;
+            auto* lazyObj = frame.lazyObj;
             _callStack.pop_back();
+
+            // If this was a lazy force call, cache the result
+            if (lazyObj)
+            {
+                lazyObj->setSlot(1, retVal);
+                lazyObj->tag = 1; // Mark as forced/evaluated
+                if (releaseObject(lazyObj))
+                    freeObject(lazyObj);
+            }
 
             // Pop callee's entire frame (including args and locals)
             _stack.discard(_stack.size() - argsBase);
@@ -1600,6 +1613,82 @@ Runner::RunResult Runner::loopWithResult()
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "UTCALL not yet supported with direct-threaded VM");
+#else
+        {
+            codeBase = _function->code().data();
+            pc = codeBase;
+        }
+#endif
+        jump;
+    }
+    // }}}
+    // {{{ lazy evaluation
+    instr(LFORCE)
+    {
+        // Force a lazy value. Stack: [..., lazyObj] → [..., result]
+        {
+            auto* lazy = getObject(-1);
+            if (!lazy)
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("null object dereference in LFORCE"));
+            }
+
+            if (lazy->tag == 1)
+            {
+                // Already forced — return cached result
+                SP(-1) = lazy->getSlot(1);
+                next;
+            }
+
+            // Not yet forced — invoke the thunk function
+            retainObject(lazy);
+
+            // Read function ID from slot 0
+            auto funcId = static_cast<uint16_t>(lazy->getSlot(0));
+
+            // Calculate capture count: slotCount - 2 (slot 0 = funcId, slot 1 = cached result)
+            auto captureCount = lazy->type->slotCount - 2;
+
+            // Pop lazy object from stack
+            pop();
+
+            // Push captures onto stack (slots 2..N+1)
+            for (auto i = 0; i < captureCount; ++i)
+                push(lazy->getSlot(static_cast<uint8_t>(2 + i)));
+
+            auto argc = captureCount;
+
+            if (_callStack.size() >= MaxCallDepth)
+            {
+                if (releaseObject(lazy))
+                    freeObject(lazy);
+                _ip = get_pc();
+                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+            }
+
+            // Save caller state
+            incr_pc();
+            _ip = get_pc();
+
+            auto argsBase = _stack.size() - argc;
+
+            _callStack.push_back(CallFrame {
+                .ip = _ip,
+                .function = _function,
+                .fp = _fp,
+                .argsBase = argsBase,
+                .lazyObj = lazy,
+            });
+
+            // Set up callee frame
+            _fp = argsBase;
+
+            // Switch to the thunk function
+            _function = _program->function(funcId);
+        }
+#if defined(COREVM_DIRECT_THREADED_VM)
+        COREVM_ASSERT(false, "LFORCE not yet supported with direct-threaded VM");
 #else
         {
             codeBase = _function->code().data();

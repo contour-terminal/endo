@@ -134,6 +134,10 @@ IS_SAME_INSTR_IMPL(VCmpGEInstr)
 IS_SAME_INSTR_IMPL(FunctionCallInstr)
 IS_SAME_INSTR_IMPL(FunctionRetInstr)
 IS_SAME_INSTR_IMPL(TailCallInstr)
+
+// Lazy evaluation
+IS_SAME_INSTR_IMPL(FunctionRefInstr)
+IS_SAME_INSTR_IMPL(LazyForceInstr)
 // }}}
 
 } // namespace CoreVM

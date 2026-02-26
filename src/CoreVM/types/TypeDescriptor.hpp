@@ -148,8 +148,9 @@ namespace BuiltinTypeId
     constexpr uint16_t FileMode = 11;
     constexpr uint16_t Markdown = 12;
     constexpr uint16_t TimeSpan = 13;
+    constexpr uint16_t Lazy = 14;
     constexpr uint16_t LastBuiltin =
-        TimeSpan; ///< Highest sequential builtin type ID; update when adding new builtins.
+        Lazy; ///< Highest sequential builtin type ID; update when adding new builtins.
     constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 

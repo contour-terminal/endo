@@ -688,5 +688,39 @@ void TailCallInstr::accept(InstructionVisitor& v)
 }
 
 // }}}
+// {{{ FunctionRefInstr
+std::string FunctionRefInstr::to_string() const
+{
+    return std::format("funcref {}", _function->name());
+}
+
+std::unique_ptr<Instr> FunctionRefInstr::clone()
+{
+    return std::make_unique<FunctionRefInstr>(_function, name());
+}
+
+void FunctionRefInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
+// {{{ LazyForceInstr
+std::string LazyForceInstr::to_string() const
+{
+    return formatOne("lforce");
+}
+
+std::unique_ptr<Instr> LazyForceInstr::clone()
+{
+    return std::make_unique<LazyForceInstr>(lazyObj(), name());
+}
+
+void LazyForceInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
 
 } // namespace CoreVM
