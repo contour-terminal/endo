@@ -668,6 +668,12 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
             // Check user-defined F# functions
             if (auto const* func = lookupFSharpFunction(name))
             {
+                // Explicit `: unit` return type annotation
+                if (func->returnType)
+                    if (auto const* prim = (*func->returnType)->asPrimitive())
+                        if (prim->kind == PrimitiveType::Unit)
+                            return true;
+
                 // Builtin HOFs with no AST body: check the resultKind flag
                 if (!func->builtinHOF.empty())
                     return func->resultKind == ResultKind::Unit;
@@ -709,6 +715,12 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
                 return true;
         if (auto const* func = lookupFSharpFunction(name))
         {
+            // Explicit `: unit` return type annotation
+            if (func->returnType)
+                if (auto const* prim = (*func->returnType)->asPrimitive())
+                    if (prim->kind == PrimitiveType::Unit)
+                        return true;
+
             if (!func->builtinHOF.empty())
                 return func->resultKind == ResultKind::Unit;
             visited.insert(name);

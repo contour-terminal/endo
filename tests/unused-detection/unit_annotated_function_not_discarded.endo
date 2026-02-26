@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function annotated with : unit is not flagged as discarded return
+# unused-detection: true
+# expect: done
+
+let f () : unit = print "done"
+f()
