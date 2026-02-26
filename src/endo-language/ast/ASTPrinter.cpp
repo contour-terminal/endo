@@ -821,6 +821,8 @@ void ASTPrinter::visit(LambdaExpr const& node)
         else
             _result += param.name;
     }
+    if (node.returnType)
+        _result += " : " + endo::toString(*node.returnType);
     _result += " -> ";
     if (node.body)
         node.body->accept(*this);

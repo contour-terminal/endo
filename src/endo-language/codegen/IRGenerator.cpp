@@ -5100,6 +5100,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         FSharpFunction func;
         extractTypedParameters(lambda->parameters, func);
         applyInferredTypes(node.name, func);
+        func.returnType = lambda->returnType;
         func.body = lambda->body.get();
         func.returnKind = determineReturnKind(func.body);
         func.capturedBindings = collectFreeVariables(func.body, func.parameters);
@@ -7736,6 +7737,7 @@ void IRGenerator::visit(ast::LambdaExpr const& node)
 
     FSharpFunction func;
     extractTypedParameters(node.parameters, func);
+    func.returnType = node.returnType;
     func.body = node.body.get();
     func.returnKind = determineReturnKind(func.body);
     func.capturedBindings = collectFreeVariables(func.body, func.parameters);

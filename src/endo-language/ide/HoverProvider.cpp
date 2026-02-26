@@ -571,7 +571,14 @@ namespace
         {
             std::string result = "fun";
             for (auto const& param: e->parameters)
-                result += " " + param.name;
+            {
+                if (param.typeAnnotation)
+                    result += " (" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")";
+                else
+                    result += " " + param.name;
+            }
+            if (e->returnType)
+                result += " : " + endo::toString(*e->returnType);
             result += " -> ...";
             return result;
         }

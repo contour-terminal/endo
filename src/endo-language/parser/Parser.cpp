@@ -4579,6 +4579,16 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
         return nullptr;
     }
 
+    // Parse optional return type annotation: fun (x: int) : int -> body
+    std::optional<TypePtr> returnType;
+    if (_lexer.currentToken() == Token::Colon)
+    {
+        _lexer.nextToken(); // consume ':'
+        returnType = parseBaseType();
+        if (!returnType)
+            return nullptr;
+    }
+
     // Expect '->'
     if (_lexer.currentToken() != Token::Arrow)
     {
@@ -4598,7 +4608,8 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
         return nullptr;
 
     auto const endLoc = body->location;
-    auto node = std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body));
+    auto node =
+        std::make_unique<ast::LambdaExpr>(std::move(parameters), std::move(body), std::move(returnType));
     node->location = endLoc ? SourceLocationRange { funLoc.begin, endLoc->end } : funLoc;
     return node;
 }
@@ -5195,7 +5206,8 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
             return nullptr;
         }
         _lexer.nextToken(); // consume '}'
-        return std::make_unique<ast::BlockExpr>(std::move(statements), std::make_unique<ast::UnitExpr>(), true);
+        return std::make_unique<ast::BlockExpr>(
+            std::move(statements), std::make_unique<ast::UnitExpr>(), true);
     }
 
     // Check for record literal: Identifier followed by '='

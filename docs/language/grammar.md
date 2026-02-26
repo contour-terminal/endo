@@ -86,7 +86,7 @@ let_in_expression = "let" pattern "=" expression "in" expression
                   | lambda_expression
                   ;
 
-lambda_expression = "fun" { pattern } "->" expression
+lambda_expression = "fun" { pattern } [ ":" base_type ] "->" expression
                   | if_expression
                   ;
 

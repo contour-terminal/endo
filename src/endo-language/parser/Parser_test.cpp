@@ -2004,6 +2004,118 @@ TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.mixed_params")
     CHECK(parseAndPrintAST("let f (x: int) y = x + y") == "let f (x: int) y = (x + y)");
 }
 
+TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_return_type")
+{
+    auto ast = parse("let f = fun (x: int) : int -> x + 1");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 1);
+    CHECK(lambda->parameters[0].name == "x");
+    REQUIRE(lambda->parameters[0].typeAnnotation.has_value());
+    CHECK(endo::toString(*lambda->parameters[0].typeAnnotation) == "int");
+
+    REQUIRE(lambda->returnType.has_value());
+    CHECK(endo::toString(*lambda->returnType) == "int");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_return_type_bool")
+{
+    auto ast = parse("let f = fun (x: int) : bool -> x > 0");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->returnType.has_value());
+    CHECK(endo::toString(*lambda->returnType) == "bool");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_return_type_option")
+{
+    auto ast = parse("let f = fun (x: int) : option<int> -> Some x");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->returnType.has_value());
+    CHECK(endo::toString(*lambda->returnType) == "option<int>");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.lambda_return_type_tuple")
+{
+    auto ast = parse("let f = fun (x: int) (y: str) : (int, str) -> (x, y)");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    auto* lambda = dynamic_cast<endo::ast::LambdaExpr*>(letStmt->value.get());
+    REQUIRE(lambda != nullptr);
+
+    REQUIRE(lambda->parameters.size() == 2);
+    REQUIRE(lambda->returnType.has_value());
+    CHECK(endo::toString(*lambda->returnType) == "(int, str)");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.lambda_return_int")
+{
+    CHECK(parseAndPrintAST("let f = fun (x: int) : int -> x + 1") == "let f = fun (x: int) : int -> (x + 1)");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.ASTPrinter.lambda_return_no_type")
+{
+    // Backward compatibility: lambda without return type annotation
+    CHECK(parseAndPrintAST("let f = fun x -> x + 1") == "let f = fun x -> (x + 1)");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.let_list_int")
+{
+    auto ast = parse("let xs: list<int> = [1; 2; 3]");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "xs");
+    REQUIRE(letStmt->returnType.has_value());
+    CHECK(endo::toString(*letStmt->returnType) == "list<int>");
+}
+
+TEST_CASE("Parser.FSharp.TypeAnnotation.let_tuple_type")
+{
+    auto ast = parse("let p: (int, str) = (42, \"hi\")");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(firstStmt);
+    REQUIRE(letStmt != nullptr);
+
+    CHECK(letStmt->name == "p");
+    REQUIRE(letStmt->returnType.has_value());
+    CHECK(endo::toString(*letStmt->returnType) == "(int, str)");
+}
+
+// Note: option<list<int>> is not testable in parser tests because ">>" is lexed
+// as a single token. This is covered by the ir-only .endo test instead.
+
 // =============================================================================
 // Record Types
 // =============================================================================

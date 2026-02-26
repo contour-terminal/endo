@@ -1687,6 +1687,8 @@ void SourceFormatter::visit(ast::LambdaExpr const& node)
         else
             emit(param.name);
     }
+    if (node.returnType)
+        emit(" : " + endo::toString(*node.returnType));
     if (node.body && wouldFormatMultiline(*node.body))
     {
         emit(" ->");
