@@ -119,7 +119,9 @@ std::vector<History::FuzzySearchResult> InMemoryHistory::searchFuzzy(std::string
         {
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(*it, prefix);
             size_t textLen = tui::FuzzyMatch::countGraphemes(*it);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         if (!isPrefixMatch && !isFuzzyMatch)

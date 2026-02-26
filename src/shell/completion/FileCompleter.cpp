@@ -253,7 +253,9 @@ std::vector<CompletionItem> FileCompleter::listDirectory(std::filesystem::path c
             // Try fuzzy matching only if not a prefix match
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(filename, prefix);
             size_t textLen = tui::FuzzyMatch::countGraphemes(filename);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         // Skip if neither prefix nor fuzzy match

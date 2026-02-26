@@ -40,7 +40,9 @@ class TestProvider: public CompletionProvider
             {
                 fuzzyResult = FuzzyMatch::matchSmartCase(item.text, prefix);
                 size_t textLen = FuzzyMatch::countGraphemes(item.text);
-                isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+                isFuzzyMatch =
+                    fuzzyResult.matches
+                    && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
             }
 
             if (!isPrefixMatch && !isFuzzyMatch)

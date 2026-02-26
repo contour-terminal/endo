@@ -88,6 +88,11 @@ double FuzzyMatchResult::quality(size_t textGraphemeCount) const noexcept
     return static_cast<double>(matchedChars) / static_cast<double>(textGraphemeCount);
 }
 
+bool FuzzyMatchResult::isContiguousSubstring() const noexcept
+{
+    return matches && matchedChars > 0 && longestRun == matchedChars;
+}
+
 bool FuzzyMatch::isWordBoundary(char c) noexcept
 {
     // Simple ASCII word boundaries.

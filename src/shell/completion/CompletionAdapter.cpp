@@ -29,7 +29,9 @@ std::vector<tui::CompletionItem> applyFuzzyScoring(std::vector<CompletionCandida
         {
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
             auto const textLen = tui::FuzzyMatch::countGraphemes(name);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         // Empty prefix matches everything

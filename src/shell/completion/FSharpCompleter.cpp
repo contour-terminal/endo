@@ -74,7 +74,9 @@ std::vector<CompletionItem> FSharpCompleter::completeDotAccess(std::string const
         {
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(memberName, memberPrefix);
             auto const textLen = tui::FuzzyMatch::countGraphemes(memberName);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         if (!memberPrefix.empty() && !isPrefixMatch && !isFuzzyMatch)

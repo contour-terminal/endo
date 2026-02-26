@@ -325,6 +325,41 @@ TEST_CASE("FuzzyMatchResult.quality_empty_text")
 }
 
 // ============================================================================
+// Contiguous substring detection tests
+// ============================================================================
+
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_true")
+{
+    // "yazi" is a contiguous substring of "io.github.sxyazi.yazi"
+    auto result = FuzzyMatch::matchSmartCase("io.github.sxyazi.yazi", "yazi");
+    CHECK(result.matches);
+    CHECK(result.isContiguousSubstring());
+    // Quality is below threshold (4/21 ≈ 0.19 < 0.2) but substring match should still be accepted
+    CHECK(result.quality(FuzzyMatch::countGraphemes("io.github.sxyazi.yazi")) < 0.2);
+}
+
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_false_scattered")
+{
+    // "dws" in "Downloads" — d, w, s are scattered (not consecutive)
+    auto result = FuzzyMatch::matchSmartCase("Downloads", "dws");
+    CHECK(result.matches);
+    CHECK_FALSE(result.isContiguousSubstring());
+}
+
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_false_no_match")
+{
+    auto result = FuzzyMatch::matchSmartCase("hello", "xyz");
+    CHECK_FALSE(result.isContiguousSubstring());
+}
+
+TEST_CASE("FuzzyMatchResult.isContiguousSubstring_false_empty_pattern")
+{
+    auto result = FuzzyMatch::matchSmartCase("hello", "");
+    CHECK(result.matches);
+    CHECK_FALSE(result.isContiguousSubstring()); // matchedChars == 0
+}
+
+// ============================================================================
 // Grapheme/Unicode tests
 // ============================================================================
 

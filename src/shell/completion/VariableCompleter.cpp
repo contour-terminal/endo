@@ -43,7 +43,9 @@ std::vector<CompletionItem> VariableCompleter::complete(CompletionContext const&
         {
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(name, prefix);
             size_t textLen = tui::FuzzyMatch::countGraphemes(name);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         if (!isPrefixMatch && !isFuzzyMatch)

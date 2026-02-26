@@ -45,7 +45,11 @@ auto createMockCallback() -> endo::CompleterExecutionCallback
             if (args.empty())
                 return { { "run", "install", "uninstall", "update", "list", "info", "search" }, {} };
             if (args.size() == 1 && args[0] == "run")
-                return { { "com.visualstudio.code", "org.mozilla.firefox", "org.gnome.Calculator" }, {} };
+                return { { "com.visualstudio.code",
+                           "org.mozilla.firefox",
+                           "org.gnome.Calculator",
+                           "io.github.sxyazi.yazi" },
+                         {} };
             if (args.size() == 1 && args[0] == "--")
                 return { { "--user", "--system", "--verbose", "-v" }, {} };
         }
@@ -97,6 +101,21 @@ TEST_CASE("ScriptedCompleter.fuzzy_filtering")
     CHECK_FALSE(results.empty());
     CHECK(hasCompletion(results, "com.visualstudio.code"));
     // Non-matching entries should be filtered out or scored very low
+}
+
+TEST_CASE("ScriptedCompleter.substring_match_in_long_app_id")
+{
+    endo::CompleterFunctionRegistry registry;
+    registry.registerFunction("flatpak", "flatpak_complete");
+    endo::ScriptedCompleter completer(registry, createMockCallback());
+
+    // "yazi" is a contiguous substring of "io.github.sxyazi.yazi" but quality (4/21)
+    // is below the 0.2 threshold. The substring bypass should still accept this match.
+    auto ctx = makeContext("flatpak run yazi", "yazi");
+    auto results = completer.complete(ctx);
+
+    CHECK_FALSE(results.empty());
+    CHECK(hasCompletion(results, "io.github.sxyazi.yazi"));
 }
 
 TEST_CASE("ScriptedCompleter.unknown_command")

@@ -278,7 +278,9 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
         {
             fuzzyResult = tui::FuzzyMatch::matchSmartCase(it->command, prefix);
             auto const textLen = tui::FuzzyMatch::countGraphemes(it->command);
-            isFuzzyMatch = fuzzyResult.matches && fuzzyResult.quality(textLen) >= minThreshold;
+            isFuzzyMatch =
+                fuzzyResult.matches
+                && (fuzzyResult.quality(textLen) >= minThreshold || fuzzyResult.isContiguousSubstring());
         }
 
         if (!isPrefixMatch && !isFuzzyMatch)

@@ -33,6 +33,10 @@ struct FuzzyMatchResult
     /// @brief Match quality as ratio (0.0 - 1.0).
     /// @param textGraphemeCount Total grapheme count in the text.
     [[nodiscard]] double quality(size_t textGraphemeCount) const noexcept;
+
+    /// @brief True when all matched characters were found consecutively (substring match).
+    /// A contiguous substring match is always considered valid regardless of text length.
+    [[nodiscard]] bool isContiguousSubstring() const noexcept;
 };
 
 /// @brief Fuzzy string matching with grapheme cluster awareness.
