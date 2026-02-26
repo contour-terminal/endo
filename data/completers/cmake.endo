@@ -1,24 +1,24 @@
 let cmake_complete args prefix =
-    let cmake_options = [
-        "--preset"; "--list-presets"; "--build"; "--install"; "-S"; "-B"; "-G"; "-D";
-        "--parallel"; "-j"; "--target"; "-t"; "--config"; "--clean-first"; "--verbose"; "-v";
-        "--version"; "--help"
+    let options = [
+        "--preset"; "--list-presets"; "--build"; "--install"; "-S"; "-B"; "-G"; "-D"; "--parallel";
+        "-j"; "--target"; "-t"; "--config"; "--clean-first"; "--verbose"; "-v"; "--version";
+        "--help"
     ]
-    let cmake_generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
-    let cmake_configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
-    let cmake_presets_from json =
+    let generators = ["Ninja"; "Ninja Multi-Config"; "Unix Makefiles"; "Watcom WMake"]
+    let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
+    let presets_from json =
         Json.query ".configurePresets[].name" json
             @ Json.query ".buildPresets[].name" json
             @ Json.query ".testPresets[].name" json
     match args with
-    | [] when startsWith "-" prefix -> cmake_options
+    | [] when startsWith "-" prefix -> options
     | ["--preset"] | [_; "--preset"] ->
         let json1 = $(cat CMakePresets.json) in
-            let json2 = $(cat CMakeUserPresets.json) in cmake_presets_from json1
-                @ cmake_presets_from json2
-    | ["-G"] -> cmake_generators
-    | ["--config"] | [_; "--config"] -> cmake_configs
-    | _ when startsWith "-" prefix -> cmake_options
+            let json2 = $(cat CMakeUserPresets.json) in presets_from json1
+                @ presets_from json2
+    | ["-G"] -> generators
+    | ["--config"] | [_; "--config"] -> configs
+    | _ when startsWith "-" prefix -> options
     | _ -> []
 
 register_completer "cmake" cmake_complete

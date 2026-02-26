@@ -1,18 +1,18 @@
 let ctest_complete args prefix =
-    let ctest_options = [
+    let options = [
         "--preset"; "--list-presets"; "--parallel"; "-j"; "--build-config"; "-C"; "--test-dir";
         "--output-on-failure"; "--stop-on-failure"; "-R"; "-E"; "-L"; "--verbose"; "-V";
         "--timeout"; "--repeat"; "--rerun-failed"
     ]
-    let ctest_configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
-    let ctest_presets_from json = Json.query ".testPresets[].name" json
+    let configs = ["Debug"; "Release"; "RelWithDebInfo"; "MinSizeRel"]
+    let presets_from json = Json.query ".testPresets[].name" json
     match args with
     | ["--preset"] | [_; "--preset"] ->
         let json1 = $(cat CMakePresets.json) in
-            let json2 = $(cat CMakeUserPresets.json) in ctest_presets_from json1
-                @ ctest_presets_from json2
-    | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> ctest_configs
-    | _ when startsWith "-" prefix -> ctest_options
+            let json2 = $(cat CMakeUserPresets.json) in presets_from json1
+                @ presets_from json2
+    | ["-C"] | ["--build-config"] | [_; "-C"] | [_; "--build-config"] -> configs
+    | _ when startsWith "-" prefix -> options
     | _ -> []
 
 register_completer "ctest" ctest_complete
