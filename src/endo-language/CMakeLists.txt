@@ -51,6 +51,8 @@ add_library(endo STATIC
     codegen/AnnotationTracker.cpp
     codegen/IRGenerator.hpp
     codegen/IRGenerator.cpp
+    codegen/HOFCodegen.cpp
+    codegen/OptionCombinatorsCodegen.cpp
     codegen/PatternIRGenerator.hpp
     codegen/PatternIRGenerator.cpp
 

@@ -395,8 +395,8 @@ class IRGenerator final: public ast::Visitor
         CoreVM::IRFunction* compiledFunction = nullptr;
         /// IR return type of the compiled function body (valid when compiledFunction != nullptr).
         CoreVM::LiteralType compiledReturnType = CoreVM::LiteralType::Void;
-        /// Type annotations from the compiled function's return value (valid when compiledFunction != nullptr).
-        /// These are propagated to the call result so that convertToString can dispatch correctly.
+        /// Type annotations from the compiled function's return value (valid when compiledFunction !=
+        /// nullptr). These are propagated to the call result so that convertToString can dispatch correctly.
         std::optional<CoreVM::LiteralType> compiledReturnInnerType;
         std::optional<uint32_t> compiledReturnObjectTypeId;
         std::optional<uint32_t> compiledReturnListElementTypeId;
@@ -765,6 +765,10 @@ class IRGenerator final: public ast::Visitor
     /// Derives and applies semantic type annotations (objectTypeId, listElementLiteralType, etc.)
     /// from a type-system TypePtr to an IR value. Used for compiled function parameters.
     void annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type);
+
+    /// Resolves the object type ID for a value, first checking annotations then tracing the IR chain.
+    /// Needed because emitTuple2/emitTuple3 don't annotate their results.
+    [[nodiscard]] std::optional<uint16_t> resolveObjectTypeId(CoreVM::Value* val) const;
 
     /// Determines the common literal type of a collection of values.
     /// Returns the shared type if all values have the same non-Void type, std::nullopt otherwise.
