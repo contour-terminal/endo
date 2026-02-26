@@ -196,7 +196,17 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
                                                          CoreVM::Runtime& runtime,
                                                          FSharpPersistentState* persistentState)
 {
-    IRGenerator generator(report, runtime);
+    SemanticAnalyzer sema;
+    return generate(rootNode, report, runtime, sema, persistentState);
+}
+
+std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& rootNode,
+                                                         CoreVM::diagnostics::Report& report,
+                                                         CoreVM::Runtime& runtime,
+                                                         SemanticAnalyzer& sema,
+                                                         FSharpPersistentState* persistentState)
+{
+    IRGenerator generator(report, runtime, sema);
     generator._persistentState = persistentState;
 
     generator._builder.setProgram(std::make_unique<CoreVM::IRProgram>());
@@ -331,9 +341,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         }
     }
 
-    // Pre-register well-known structured command record types so that
-    // field access (.pid, .command) and pattern matching work without user declarations.
-    generator._typeRegistry.registerBuiltins();
+    // Builtin types (ProcessInfo, DateTime, etc.) are registered by SemanticAnalyzer's constructor.
 
     // Pre-register output definition record types from persistent state.
     if (persistentState)
@@ -346,7 +354,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             info.fields = defType.fields;
             for (auto const& f: info.fields)
                 info.fieldTypes[f.name] = f.type;
-            generator._typeRegistry.registerRecord(typeName, std::move(info));
+            generator._sema.types().registerRecord(typeName, std::move(info));
 
             CoreVM::IRProgram::CustomProductType customType;
             customType.name = typeName;
@@ -421,8 +429,10 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     return generator._builder.takeProgram();
 }
 
-IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& runtime):
-    _report { report }, _runtime { runtime }
+IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report,
+                         CoreVM::Runtime& runtime,
+                         SemanticAnalyzer& sema):
+    _report { report }, _runtime { runtime }, _sema { sema }
 {
     _processCallSignature.setReturnType(CoreVM::LiteralType::Number);
     _processCallSignature.setName("ProcessCall");
@@ -431,13 +441,13 @@ IRGenerator::IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& r
 // F# scope management implementation
 void IRGenerator::pushFSharpScope()
 {
-    _scopeManager.pushScope();
+    _sema.scopes().pushScope();
 }
 
 void IRGenerator::popFSharpScope()
 {
     // ScopeManager returns the list of object variable allocas that need ORELEASE.
-    for (auto* storage: _scopeManager.popScope())
+    for (auto* storage: _sema.scopes().popScope())
         _builder.createObjRelease(storage, "scope.exit.release");
 }
 
@@ -446,14 +456,14 @@ void IRGenerator::bindFSharpVariable(std::string const& name,
                                      bool isMutable,
                                      bool isExported)
 {
-    _scopeManager.bindVariable(name, value, isMutable, isExported);
+    _sema.scopes().bindVariable(name, value, isMutable, isExported);
 }
 
 void IRGenerator::bindFSharpObjectVariable(std::string const& name,
                                            CoreVM::AllocaInstr* storage,
                                            bool isMutable)
 {
-    _scopeManager.bindObjectVariable(name, storage, isMutable);
+    _sema.scopes().bindObjectVariable(name, storage, isMutable);
 }
 
 void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& name)
@@ -467,12 +477,12 @@ void IRGenerator::emitExportVariable(CoreVM::Value* storage, std::string const& 
 
 CoreVM::Value* IRGenerator::lookupFSharpVariable(std::string const& name) const
 {
-    return _scopeManager.lookupVariable(name);
+    return _sema.scopes().lookupVariable(name);
 }
 
 BindingInfo const* IRGenerator::lookupFSharpBinding(std::string const& name) const
 {
-    return _scopeManager.lookupBinding(name);
+    return _sema.scopes().lookupBinding(name);
 }
 
 // F# function management implementation
@@ -491,7 +501,7 @@ IRGenerator::FSharpFunction const* IRGenerator::lookupFSharpFunction(std::string
 
 std::optional<std::string> IRGenerator::lookupFSharpFunctionRef(std::string const& name) const
 {
-    return _scopeManager.lookupFunctionRef(name);
+    return _sema.scopes().lookupFunctionRef(name);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr const& type)
@@ -2336,7 +2346,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
     if (!node.typeName.empty())
     {
         // Named type reference — look up in type registry
-        auto const* recInfo = _typeRegistry.lookupRecord(node.typeName);
+        auto const* recInfo = _sema.types().lookupRecord(node.typeName);
         if (!recInfo)
         {
             reportTypeError("Unknown type '{}' in data source 'as' annotation", node.typeName);
@@ -2412,7 +2422,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
         info.name = anonymousTypeName;
         info.fields = fields;
         info.fieldTypes = std::move(fieldTypes);
-        _typeRegistry.registerRecord(anonymousTypeName, std::move(info));
+        _sema.types().registerRecord(anonymousTypeName, std::move(info));
 
         // Register as a custom product type
         CoreVM::IRProgram::CustomProductType customType;
@@ -2631,7 +2641,7 @@ void IRGenerator::visit(ast::ForInStmt const& node)
     // Set record field offsets if the head is a known record type
     if (auto objTypeId = getObjectTypeId(head))
     {
-        for (auto const& [typeName, recInfo]: _typeRegistry.records())
+        for (auto const& [typeName, recInfo]: _sema.types().records())
         {
             if (recInfo.typeId == *objTypeId)
             {
@@ -3086,7 +3096,7 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
         // Check for record types
         if (objTypeId)
         {
-            for (auto const& [name, info]: _typeRegistry.records())
+            for (auto const& [name, info]: _sema.types().records())
             {
                 if (info.typeId == *objTypeId)
                 {
@@ -3174,7 +3184,7 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
     // Look up descriptor for arity validation (only for builtins not overridden by user functions)
-    auto const* desc = _builtinDescriptors.lookupCall(name);
+    auto const* desc = _sema.builtins().lookupCall(name);
 
     // --- IR instruction builtins (no native callback needed) ---
 
@@ -4903,7 +4913,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // Set record field offsets if the value is a known record type
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _typeRegistry.records())
+            for (auto const& [typeName, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -4932,7 +4942,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         RecordTypeInfo const* recTypeInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _typeRegistry.records())
+            for (auto const& [typeName, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -5180,7 +5190,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     std::string objectTypeName;
     if (auto objTypeId = getObjectTypeId(value))
     {
-        for (auto const& [rtName, rtInfo]: _typeRegistry.records())
+        for (auto const& [rtName, rtInfo]: _sema.types().records())
             if (rtInfo.typeId == *objTypeId)
             {
                 objectTypeName = rtName;
@@ -5238,7 +5248,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         RecordTypeInfo const* recTypeInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _typeRegistry.records())
+            for (auto const& [typeName, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -6340,7 +6350,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
         // Re-establish function references from captured function refs (HOF support)
         for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-            _scopeManager.bindFunctionRef(varName, targetFunc);
+            _sema.scopes().bindFunctionRef(varName, targetFunc);
 
         CoreVM::BasicBlock* returnBlock = nullptr;
         CoreVM::AllocaInstr* returnStorage = nullptr;
@@ -6374,7 +6384,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
             if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(allArgs[i]))
             {
                 if (lookupFSharpFunction(constStr->get()))
-                    _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
+                    _sema.scopes().bindFunctionRef(func->parameters[i], constStr->get());
             }
         }
 
@@ -6538,7 +6548,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _scopeManager.bindFunctionRef(varName, targetFunc);
+        _sema.scopes().bindFunctionRef(varName, targetFunc);
 
     // Only set up return infrastructure for functions that return Result/Option
     CoreVM::BasicBlock* returnBlock = nullptr;
@@ -6564,7 +6574,7 @@ void IRGenerator::visit(ast::PipelineExpr const& node)
     if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(value))
     {
         if (lookupFSharpFunction(constStr->get()))
-            _scopeManager.bindFunctionRef(func->parameters[0], constStr->get());
+            _sema.scopes().bindFunctionRef(func->parameters[0], constStr->get());
     }
 
     // Inline the function body
@@ -7326,7 +7336,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
 
     // Re-establish function references from captured function refs (HOF support)
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _scopeManager.bindFunctionRef(varName, targetFunc);
+        _sema.scopes().bindFunctionRef(varName, targetFunc);
 
     // Only set up return infrastructure for functions that return Result/Option
     // This is needed for the ? operator to propagate errors
@@ -7364,7 +7374,7 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
         {
             if (lookupFSharpFunction(constStr->get()))
-                _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
+                _sema.scopes().bindFunctionRef(func->parameters[i], constStr->get());
         }
     }
 
@@ -7847,7 +7857,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Set record field offsets if the scrutinee is a known record type
         if (auto objTypeId = getObjectTypeId(scrutinee))
         {
-            for (auto const& [typeName, recInfo]: _typeRegistry.records())
+            for (auto const& [typeName, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -7861,10 +7871,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         }
 
         // Set constructor lookup for user-defined discriminated union patterns
-        if (!_typeRegistry.constructors().empty())
+        if (!_sema.types().constructors().empty())
         {
             std::unordered_map<std::string, PatternIRGenerator::ConstructorMeta> ctorLookup;
-            for (auto const& [ctorName, ctorInfo]: _typeRegistry.constructors())
+            for (auto const& [ctorName, ctorInfo]: _sema.types().constructors())
                 ctorLookup[ctorName] = { ctorInfo.typeId, ctorInfo.tag, ctorInfo.payloadSlots };
             patternIRGenerator.setConstructorLookup(std::move(ctorLookup));
         }
@@ -7891,7 +7901,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         bool isUserDefinedCtorWithMultiSlot = false;
         if (auto const* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
         {
-            if (auto const* ctorInfo = _typeRegistry.lookupConstructor(ctorPat->name))
+            if (auto const* ctorInfo = _sema.types().lookupConstructor(ctorPat->name))
                 isUserDefinedCtorWithMultiSlot = ctorInfo->payloadSlots > 1;
         }
 
@@ -7905,7 +7915,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             {
                 if (auto objTypeId = getObjectTypeId(scrutinee))
                 {
-                    for (auto const& [typeName, recInfo]: _typeRegistry.records())
+                    for (auto const& [typeName, recInfo]: _sema.types().records())
                     {
                         if (recInfo.typeId == *objTypeId)
                         {
@@ -9622,14 +9632,14 @@ void IRGenerator::visit(ast::BlockExpr const& node)
     // Emitting ORELEASE would free them prematurely, causing use-after-free.
     // Semantically equivalent to LetInExpr, which does not track objects for ORELEASE.
     // Objects remain in Runner's _objectPool and are freed when it destructs.
-    _scopeManager.clearObjectVariables();
+    _sema.scopes().clearObjectVariables();
 
     popFSharpScope();
 }
 
 // --- Record type support ---
 
-// lookupRecordType and resolveRecordTypeByFields are now delegated to _typeRegistry
+// lookupRecordType and resolveRecordTypeByFields are delegated to _sema.types()
 
 void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
 {
@@ -9665,7 +9675,7 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
     info.name = node.name;
     info.fields = fields;
     info.fieldTypes = std::move(fieldTypes);
-    _typeRegistry.registerRecord(node.name, std::move(info));
+    _sema.types().registerRecord(node.name, std::move(info));
 
     // Persist record field info for completion support in the REPL
     if (_persistentState)
@@ -9692,7 +9702,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
     // Resolve the record type — by explicit name or by matching field names
     RecordTypeInfo const* typeInfo = nullptr;
     if (!node.typeName.empty())
-        typeInfo = _typeRegistry.lookupRecord(node.typeName);
+        typeInfo = _sema.types().lookupRecord(node.typeName);
 
     if (!typeInfo)
     {
@@ -9700,7 +9710,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
         std::vector<std::string> fieldNames;
         for (auto const& field: node.fields)
             fieldNames.push_back(field.name);
-        typeInfo = _typeRegistry.resolveRecordByFields(fieldNames);
+        typeInfo = _sema.types().resolveRecordByFields(fieldNames);
     }
 
     if (!typeInfo)
@@ -9772,7 +9782,7 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
     RecordTypeInfo const* typeInfo = nullptr;
     if (auto objTypeId = getObjectTypeId(baseObj))
     {
-        for (auto const& [name, info]: _typeRegistry.records())
+        for (auto const& [name, info]: _sema.types().records())
         {
             if (info.typeId == *objTypeId)
             {
@@ -9952,7 +9962,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     RecordTypeInfo const* typeInfo = nullptr;
     if (auto objTypeId = getObjectTypeId(obj))
     {
-        for (auto const& [name, info]: _typeRegistry.records())
+        for (auto const& [name, info]: _sema.types().records())
         {
             if (info.typeId == *objTypeId)
             {
@@ -9967,7 +9977,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         // Try to resolve via IR chain analysis
         if (auto info = tryGetObjectInfo(obj))
         {
-            for (auto const& [name, recInfo]: _typeRegistry.records())
+            for (auto const& [name, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == info->typeId)
                 {
@@ -9984,7 +9994,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         UnionTypeInfo const* unionInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(obj))
         {
-            for (auto const& [name, uInfo]: _typeRegistry.unions())
+            for (auto const& [name, uInfo]: _sema.types().unions())
             {
                 if (uInfo.typeId == *objTypeId)
                 {
@@ -9998,7 +10008,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             // Try to resolve via IR chain analysis
             if (auto info = tryGetObjectInfo(obj))
             {
-                for (auto const& [name, uInfo]: _typeRegistry.unions())
+                for (auto const& [name, uInfo]: _sema.types().unions())
                 {
                     if (uInfo.typeId == info->typeId)
                     {
@@ -10157,7 +10167,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     // Strategy 1: Inner object type ID propagated from OptionExpr (e.g., Some { name = "Alice" })
     if (auto innerObjTypeId = getInnerObjectTypeId(obj))
     {
-        for (auto const& [name, info]: _typeRegistry.records())
+        for (auto const& [name, info]: _sema.types().records())
         {
             if (info.typeId == *innerObjTypeId)
             {
@@ -10172,7 +10182,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     {
         if (auto innerTypeId = getObjectTypeId(innerVal))
         {
-            for (auto const& [name, info]: _typeRegistry.records())
+            for (auto const& [name, info]: _sema.types().records())
             {
                 if (info.typeId == *innerTypeId)
                 {
@@ -10188,7 +10198,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     {
         if (auto info = tryGetObjectInfo(innerVal))
         {
-            for (auto const& [name, recInfo]: _typeRegistry.records())
+            for (auto const& [name, recInfo]: _sema.types().records())
             {
                 if (recInfo.typeId == info->typeId)
                 {
@@ -10203,7 +10213,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     // and no type annotation propagates, e.g., `let x = None; x?.name`)
     if (!typeInfo)
     {
-        for (auto const& [name, info]: _typeRegistry.records())
+        for (auto const& [name, info]: _sema.types().records())
         {
             for (auto const& field: info.fields)
             {
@@ -10272,7 +10282,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
 // Discriminated Unions (ADTs)
 // ============================================================================
 
-// lookupConstructor is now delegated to _typeRegistry
+// lookupConstructor is delegated to _sema.types()
 
 void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
 {
@@ -10313,7 +10323,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
         ctorInfo.tag = static_cast<int>(i);
         ctorInfo.payloadSlots = static_cast<uint8_t>(variant.payloadTypes.size());
         ctorInfo.fieldNames = variant.fieldNames;
-        _typeRegistry.registerConstructor(variant.name, ctorInfo);
+        _sema.types().registerConstructor(variant.name, ctorInfo);
     }
 
     // Store in the type registry
@@ -10322,7 +10332,7 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
     info.name = node.name;
     info.variants = variants;
     info.fieldLookup = std::move(fieldLookup);
-    _typeRegistry.registerUnion(node.name, std::move(info));
+    _sema.types().registerUnion(node.name, std::move(info));
 
     // Register as a custom sum type on the IR program so TargetCodeGenerator
     // can register it in the ConstantPool's TypeRegistry before execution.
@@ -10337,7 +10347,7 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
 {
     TRACE_SCOPE("visit(UnionConstructorExpr)");
 
-    auto const* ctorInfo = _typeRegistry.lookupConstructor(node.constructorName);
+    auto const* ctorInfo = _sema.types().lookupConstructor(node.constructorName);
     if (!ctorInfo)
     {
         reportTypeError("Unknown union constructor '{}'", std::string_view(node.constructorName));
@@ -10431,7 +10441,7 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     for (auto const& [capName, capStorage]: func->capturedBindings)
         bindFSharpVariable(capName, capStorage);
     for (auto const& [varName, targetFunc]: func->capturedFunctionRefs)
-        _scopeManager.bindFunctionRef(varName, targetFunc);
+        _sema.scopes().bindFunctionRef(varName, targetFunc);
 
     // Bind explicit arguments to parameter names
     for (size_t i = 0; i < func->parameters.size(); ++i)
@@ -10448,7 +10458,7 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
         {
             auto const& refName = constStr->get();
             if (lookupFSharpFunction(refName) || refName == "print" || refName == "println")
-                _scopeManager.bindFunctionRef(func->parameters[i], constStr->get());
+                _sema.scopes().bindFunctionRef(func->parameters[i], constStr->get());
         }
     }
 

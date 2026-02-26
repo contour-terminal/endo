@@ -6,9 +6,7 @@
 #include <endo-language/codegen/AnnotationTracker.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
-#include <endo-language/sema/BuiltinDescriptors.hpp>
-#include <endo-language/sema/ScopeManager.hpp>
-#include <endo-language/sema/TypeRegistry.hpp>
+#include <endo-language/sema/SemanticAnalyzer.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -142,8 +140,17 @@ class IRGenerator final: public ast::Visitor
                                                        CoreVM::Runtime& runtime,
                                                        FSharpPersistentState* persistentState = nullptr);
 
+    /// Overload that accepts a pre-constructed SemanticAnalyzer for reuse.
+    static std::unique_ptr<CoreVM::IRProgram> generate(ast::Statement const& rootNode,
+                                                       CoreVM::diagnostics::Report& report,
+                                                       CoreVM::Runtime& runtime,
+                                                       SemanticAnalyzer& sema,
+                                                       FSharpPersistentState* persistentState = nullptr);
+
   private:
-    explicit IRGenerator(CoreVM::diagnostics::Report& report, CoreVM::Runtime& runtime);
+    explicit IRGenerator(CoreVM::diagnostics::Report& report,
+                         CoreVM::Runtime& runtime,
+                         SemanticAnalyzer& sema);
 
     /// Finds a builtin function by its signature string.
     [[nodiscard]] CoreVM::NativeCallback* findCallback(std::string const& signature) const;
@@ -653,8 +660,7 @@ class IRGenerator final: public ast::Visitor
     std::vector<LoopContext> _loopStack;
     int _functionDepth = 0;
 
-    /// Manages the F# variable scope chain.
-    ScopeManager _scopeManager;
+    // F# scope management is delegated to _sema.scopes()
 
     // F# function table (name -> function metadata)
     std::unordered_map<std::string, FSharpFunction> _fsharpFunctions;
@@ -768,11 +774,8 @@ class IRGenerator final: public ast::Visitor
     /// Tracks semantic type annotations through IR values.
     AnnotationTracker _annotations;
 
-    /// Registry for record types, union types, and constructors.
-    TypeDefinitionRegistry _typeRegistry;
-
-    /// Registry for builtin function and property descriptor metadata.
-    BuiltinDescriptorRegistry _builtinDescriptors;
+    /// Semantic analysis facade (type registry, builtin descriptors, scope manager).
+    SemanticAnalyzer& _sema;
 };
 
 } // namespace endo

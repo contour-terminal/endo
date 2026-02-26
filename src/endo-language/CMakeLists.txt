@@ -43,6 +43,8 @@ add_library(endo STATIC
     sema/FreeVariableCollector.cpp
     sema/ScopeManager.hpp
     sema/ScopeManager.cpp
+    sema/SemanticAnalyzer.hpp
+    sema/SemanticAnalyzer.cpp
 
     # IR Generation
     codegen/AnnotationTracker.hpp
