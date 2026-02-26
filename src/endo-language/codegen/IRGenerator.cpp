@@ -923,82 +923,66 @@ std::string IRGenerator::generateLambdaName()
     return std::format("__lambda_{}", _lambdaCounter++);
 }
 
+// --- Annotation wrappers (delegated to AnnotationTracker) ---
+
 void IRGenerator::annotateInnerType(CoreVM::Value* val, CoreVM::LiteralType type)
 {
-    _innerTypeAnnotations[val] = type;
+    _annotations.annotateInnerType(val, type);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::getInnerType(CoreVM::Value* val) const
 {
-    auto it = _innerTypeAnnotations.find(val);
-    if (it != _innerTypeAnnotations.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getInnerType(val);
 }
 
 void IRGenerator::annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId)
 {
-    _objectTypeIdAnnotations[val] = typeId;
+    _annotations.annotateObjectTypeId(val, typeId);
 }
 
 std::optional<uint16_t> IRGenerator::getObjectTypeId(CoreVM::Value* val) const
 {
-    auto it = _objectTypeIdAnnotations.find(val);
-    if (it != _objectTypeIdAnnotations.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getObjectTypeId(val);
 }
 
 void IRGenerator::annotateInnerObjectTypeId(CoreVM::Value* val, uint16_t typeId)
 {
-    _innerObjectTypeIdAnnotations[val] = typeId;
+    _annotations.annotateInnerObjectTypeId(val, typeId);
 }
 
 std::optional<uint16_t> IRGenerator::getInnerObjectTypeId(CoreVM::Value* val) const
 {
-    auto it = _innerObjectTypeIdAnnotations.find(val);
-    if (it != _innerObjectTypeIdAnnotations.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getInnerObjectTypeId(val);
 }
 
 void IRGenerator::annotateListElementTypeId(CoreVM::Value* val, uint16_t typeId)
 {
-    _listElementTypeAnnotations[val] = typeId;
+    _annotations.annotateListElementTypeId(val, typeId);
 }
 
 std::optional<uint16_t> IRGenerator::getListElementTypeId(CoreVM::Value* val) const
 {
-    auto it = _listElementTypeAnnotations.find(val);
-    if (it != _listElementTypeAnnotations.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getListElementTypeId(val);
 }
 
 void IRGenerator::annotateListElementLiteralType(CoreVM::Value* val, CoreVM::LiteralType type)
 {
-    _listElementLiteralTypes[val] = type;
+    _annotations.annotateListElementLiteralType(val, type);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::getListElementLiteralType(CoreVM::Value* val) const
 {
-    auto it = _listElementLiteralTypes.find(val);
-    if (it != _listElementLiteralTypes.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getListElementLiteralType(val);
 }
 
 void IRGenerator::annotateListElementInnerType(CoreVM::Value* val, CoreVM::LiteralType type)
 {
-    _listElementInnerTypes[val] = type;
+    _annotations.annotateListElementInnerType(val, type);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::getListElementInnerType(CoreVM::Value* val) const
 {
-    auto it = _listElementInnerTypes.find(val);
-    if (it != _listElementInnerTypes.end())
-        return it->second;
-    return std::nullopt;
+    return _annotations.getListElementInnerType(val);
 }
 
 void IRGenerator::annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type)
@@ -1043,18 +1027,7 @@ void IRGenerator::annotateParameterFromType(CoreVM::Value* storage, TypePtr cons
 
 void IRGenerator::propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest)
 {
-    if (auto v = getInnerType(source))
-        annotateInnerType(dest, *v);
-    if (auto v = getObjectTypeId(source))
-        annotateObjectTypeId(dest, *v);
-    if (auto v = getInnerObjectTypeId(source))
-        annotateInnerObjectTypeId(dest, *v);
-    if (auto v = getListElementTypeId(source))
-        annotateListElementTypeId(dest, *v);
-    if (auto v = getListElementLiteralType(source))
-        annotateListElementLiteralType(dest, *v);
-    if (auto v = getListElementInnerType(source))
-        annotateListElementInnerType(dest, *v);
+    _annotations.propagateAll(source, dest);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(

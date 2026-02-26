@@ -45,6 +45,8 @@ add_library(endo STATIC
     sema/ScopeManager.cpp
 
     # IR Generation
+    codegen/AnnotationTracker.hpp
+    codegen/AnnotationTracker.cpp
     codegen/IRGenerator.hpp
     codegen/IRGenerator.cpp
     codegen/PatternIRGenerator.hpp

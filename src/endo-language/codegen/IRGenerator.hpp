@@ -3,6 +3,7 @@
 
 #include <endo-language/ast/AST.hpp>
 #include <endo-language/ast/Visitor.hpp>
+#include <endo-language/codegen/AnnotationTracker.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/sema/BuiltinDescriptors.hpp>
@@ -739,87 +740,33 @@ class IRGenerator final: public ast::Visitor
     /// Applies inferred types from the TypeInferencer to a function's missing annotations.
     void applyInferredTypes(std::string const& name, FSharpFunction& func);
 
-    /// Tracks the "inner type" of Option/Result values for type propagation.
-    /// When an expression produces an Option<T> or Result<T,E>, the inner type T
-    /// is recorded here so that the ? operator can produce correctly-typed extractions.
-    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _innerTypeAnnotations;
-
-    /// Annotates a value with its known inner type (e.g., the T in Option<T>).
+    /// Tracks semantic type annotations through IR values (delegated to AnnotationTracker).
+    /// These thin wrappers preserve the existing call site API.
     void annotateInnerType(CoreVM::Value* val, CoreVM::LiteralType type);
-
-    /// Retrieves the inner type annotation for a value, if any.
     [[nodiscard]] std::optional<CoreVM::LiteralType> getInnerType(CoreVM::Value* val) const;
-
-    /// Tracks the builtin object type ID for values known to be typed objects.
-    /// Used for runtime dispatch (e.g., list printing via object_to_string).
-    std::unordered_map<CoreVM::Value*, uint16_t> _objectTypeIdAnnotations;
+    void annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId);
+    [[nodiscard]] std::optional<uint16_t> getObjectTypeId(CoreVM::Value* val) const;
+    void annotateInnerObjectTypeId(CoreVM::Value* val, uint16_t typeId);
+    [[nodiscard]] std::optional<uint16_t> getInnerObjectTypeId(CoreVM::Value* val) const;
+    void annotateListElementTypeId(CoreVM::Value* val, uint16_t typeId);
+    [[nodiscard]] std::optional<uint16_t> getListElementTypeId(CoreVM::Value* val) const;
+    void annotateListElementLiteralType(CoreVM::Value* val, CoreVM::LiteralType type);
+    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementLiteralType(CoreVM::Value* val) const;
+    void annotateListElementInnerType(CoreVM::Value* val, CoreVM::LiteralType type);
+    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementInnerType(CoreVM::Value* val) const;
+    void propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest);
 
     /// Derives and applies semantic type annotations (objectTypeId, listElementLiteralType, etc.)
     /// from a type-system TypePtr to an IR value. Used for compiled function parameters.
     void annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type);
 
-    /// Annotates a value with its known builtin object type ID.
-    void annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId);
-
-    /// Retrieves the object type ID annotation for a value, if any.
-    [[nodiscard]] std::optional<uint16_t> getObjectTypeId(CoreVM::Value* val) const;
-
-    /// Tracks the inner object type ID for Option/Result wrappers.
-    /// When a value like `Some [1;2;3]` wraps a typed object, this records
-    /// the inner object's type ID (e.g., List) so pattern extraction can recover it.
-    std::unordered_map<CoreVM::Value*, uint16_t> _innerObjectTypeIdAnnotations;
-
-    /// Annotates a value with the object type ID of its inner/wrapped value.
-    void annotateInnerObjectTypeId(CoreVM::Value* val, uint16_t typeId);
-
-    /// Retrieves the inner object type ID annotation for a value, if any.
-    [[nodiscard]] std::optional<uint16_t> getInnerObjectTypeId(CoreVM::Value* val) const;
-
-    /// Tracks the element type ID for list values.
-    /// When a list is known to contain elements of a specific record type (e.g., ProcessInfo),
-    /// this annotation propagates through let bindings and pipelines so that field access
-    /// on extracted elements resolves correctly.
-    std::unordered_map<CoreVM::Value*, uint16_t> _listElementTypeAnnotations;
-
-    /// Annotates a list value with the type ID of its elements.
-    void annotateListElementTypeId(CoreVM::Value* val, uint16_t typeId);
-
-    /// Retrieves the list element type ID annotation for a value, if any.
-    [[nodiscard]] std::optional<uint16_t> getListElementTypeId(CoreVM::Value* val) const;
-
-    /// Tracks the element literal type for list values.
-    /// When a list is known to contain elements of a specific primitive type (String, Number, Float),
-    /// this annotation propagates through let bindings and pipelines so that HOF element allocas
-    /// use the correct type instead of hardcoded Number.
-    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _listElementLiteralTypes;
-
-    /// Annotates a list value with the literal type of its elements.
-    void annotateListElementLiteralType(CoreVM::Value* val, CoreVM::LiteralType type);
-
-    /// Retrieves the list element literal type annotation for a value, if any.
-    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementLiteralType(CoreVM::Value* val) const;
-
-    /// Tracks the inner type of list elements when elements have a different runtime type
-    /// than their IR type (e.g., Number-typed values that are actually strings from compiled
-    /// function returns).
-    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _listElementInnerTypes;
-
-    /// Annotates a list value with the inner type of its elements.
-    void annotateListElementInnerType(CoreVM::Value* val, CoreVM::LiteralType type);
-
-    /// Retrieves the list element inner type annotation for a value, if any.
-    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementInnerType(CoreVM::Value* val) const;
-
-    /// Copies all annotation maps (inner type, object type ID, inner object type ID,
-    /// list element type ID, list element literal type) from source to dest.
-    /// Use this instead of manually propagating individual annotations to avoid
-    /// incomplete propagation bugs where some maps are missed.
-    void propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest);
-
     /// Determines the common literal type of a collection of values.
     /// Returns the shared type if all values have the same non-Void type, std::nullopt otherwise.
     [[nodiscard]] static std::optional<CoreVM::LiteralType> determineCommonLiteralType(
         std::span<CoreVM::Value* const> values);
+
+    /// Tracks semantic type annotations through IR values.
+    AnnotationTracker _annotations;
 
     /// Registry for record types, union types, and constructors.
     TypeDefinitionRegistry _typeRegistry;
