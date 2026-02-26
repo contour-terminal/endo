@@ -937,6 +937,21 @@ TEST_CASE("CompletionCandidates.dotAccess.nested_underscore_no_pipeline_type_fal
 }
 
 // =============================================================================
+// Shell builtin count stability test
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.builtinCandidates.shell_builtin_count_stability", "[completion][invariants]")
+{
+    auto builtins = builtinCandidates();
+    size_t nonPropertyCount = 0;
+    for (auto const& b: builtins)
+        if (b.kind == CompletionKind::Builtin)
+            ++nonPropertyCount;
+    // 24 shell builtins + 11 shell keywords = 35
+    CHECK(nonPropertyCount == 35);
+}
+
+// =============================================================================
 // detail field tests
 // =============================================================================
 

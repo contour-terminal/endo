@@ -107,6 +107,7 @@ if(ENDO_TESTING)
         codegen/CompleterScripts_test.cpp
         codegen/StringBuiltins_test.cpp
         builtins/JsonQuery_test.cpp
+        builtins/StdlibDescriptors_test.cpp
 
         ide/CompletionCandidates_test.cpp
         ide/CompletionContext_test.cpp

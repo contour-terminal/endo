@@ -28,6 +28,11 @@ struct ParamDescriptor
 };
 
 /// @brief Describes a standard library function for completion, VM registration, and callback resolution.
+///
+/// @invariant If @c userFacingName is non-empty, @c description and @c detail MUST be non-empty
+///            (enforced by StdlibDescriptors_test).
+/// @invariant If @c sharedImpl is non-null, @c vmName MUST be non-empty.
+/// @invariant Each (@c vmName, arity) pair must be unique across all descriptors.
 struct StdlibDescriptor
 {
     std::string_view userFacingName;         ///< User-facing name (e.g., "head"); empty if internal-only
