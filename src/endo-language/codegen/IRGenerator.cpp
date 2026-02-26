@@ -10002,6 +10002,13 @@ void IRGenerator::visit(ast::BlockExpr const& node)
     // Codegen the result expression (the block's value)
     _result = codegen(node.result.get());
 
+    // BlockExpr is an expression-level block whose result may reference one of the
+    // let-bound objects (e.g., a match arm returning a list from a let-binding).
+    // Emitting ORELEASE would free them prematurely, causing use-after-free.
+    // Semantically equivalent to LetInExpr, which does not track objects for ORELEASE.
+    // Objects remain in Runner's _objectPool and are freed when it destructs.
+    _currentFSharpScope->objectVariables.clear();
+
     popFSharpScope();
 }
 

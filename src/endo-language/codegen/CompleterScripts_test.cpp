@@ -723,6 +723,69 @@ TEST_CASE("Completer.flatpak.simple_function_with_match", "[completer][flatpak]"
 }
 
 // =============================================================================
+// BlockExpr scope cleanup regression tests (heap-use-after-free fix)
+// =============================================================================
+
+TEST_CASE("Completer.blockexpr.return_first_let_bound_list", "[completer][blockexpr]")
+{
+    // Function with let-bound lists in BlockExpr body returning the first list
+    CHECK(executeSourceAndGetOutput(R"(
+        let select x =
+            let a = [1; 2; 3]
+            let b = [4; 5]
+            match x with
+            | 1 -> a
+            | _ -> b
+
+        print (toText (length (select 1)))
+    )") == "3");
+}
+
+TEST_CASE("Completer.blockexpr.return_second_let_bound_list", "[completer][blockexpr]")
+{
+    // Function with let-bound lists in BlockExpr body returning the second list
+    CHECK(executeSourceAndGetOutput(R"(
+        let select x =
+            let a = [1; 2; 3]
+            let b = [4; 5]
+            match x with
+            | 1 -> a
+            | _ -> b
+
+        print (toText (length (select 0)))
+    )") == "2");
+}
+
+TEST_CASE("Completer.blockexpr.return_string_list_from_block", "[completer][blockexpr]")
+{
+    // Mirrors flatpak completer pattern: let-bound string list returned from match
+    CHECK(executeSourceAndGetOutput(R"(
+        let flatpak_complete args =
+            let subcommands = ["run"; "install"; "uninstall"; "update"]
+            let options = ["--user"; "--system"]
+            match args with
+            | [] -> subcommands
+            | _ -> options
+
+        print (toText (length (flatpak_complete [])))
+    )") == "4");
+}
+
+TEST_CASE("Completer.blockexpr.pipeline_each_after_block_return", "[completer][blockexpr]")
+{
+    // Full pipeline pattern: function returns let-bound list, piped to each println
+    CHECK(executeSourceAndGetOutput(R"(
+        let get_items args =
+            let subcommands = ["run"; "install"; "update"]
+            match args with
+            | [] -> subcommands
+            | _ -> []
+
+        get_items [] |> each println
+    )") == "run\ninstall\nupdate\n");
+}
+
+// =============================================================================
 // register_completer verification tests
 // =============================================================================
 
