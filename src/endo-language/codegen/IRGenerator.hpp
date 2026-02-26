@@ -5,6 +5,8 @@
 #include <endo-language/ast/Visitor.hpp>
 #include <endo-language/ide/CompletionItem.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
+#include <endo-language/sema/BuiltinDescriptors.hpp>
+#include <endo-language/sema/TypeRegistry.hpp>
 #include <endo-language/types/TypeInferencer.hpp>
 
 #include <CoreVM/CoreVM.hpp>
@@ -835,56 +837,11 @@ class IRGenerator final: public ast::Visitor
     [[nodiscard]] static std::optional<CoreVM::LiteralType> determineCommonLiteralType(
         std::span<CoreVM::Value* const> values);
 
-    /// Tracks registered record type definitions.
-    struct RecordTypeInfo
-    {
-        uint16_t typeId;                       ///< Assigned type ID
-        std::string name;                      ///< Type name
-        std::vector<CoreVM::FieldInfo> fields; ///< Field definitions (name + offset)
-        std::unordered_map<std::string, CoreVM::LiteralType> fieldTypes; ///< Field name → VM literal type
-        std::unordered_map<std::string, uint16_t>
-            fieldObjectTypeIds; ///< Object-typed field → nested record type ID
-    };
+    /// Registry for record types, union types, and constructors.
+    TypeDefinitionRegistry _typeRegistry;
 
-    /// Maps record type names to their metadata.
-    std::unordered_map<std::string, RecordTypeInfo> _recordTypes;
-
-    /// Looks up a record type by name, returning nullptr if not found.
-    [[nodiscard]] RecordTypeInfo const* lookupRecordType(std::string const& name) const;
-
-    /// Resolves a record type from a set of field names (for anonymous record literals).
-    [[nodiscard]] RecordTypeInfo const* resolveRecordTypeByFields(
-        std::vector<std::string> const& fieldNames) const;
-
-    /// Tracks registered discriminated union type definitions.
-    struct UnionTypeInfo
-    {
-        uint16_t typeId;                           ///< Assigned type ID
-        std::string name;                          ///< Type name (e.g., "Shape")
-        std::vector<CoreVM::VariantInfo> variants; ///< Variant definitions
-
-        /// Maps field name to (variant_tag, slot_offset) for field access on union values.
-        std::unordered_map<std::string, std::pair<int, uint8_t>> fieldLookup;
-    };
-
-    /// Information about a single constructor of a discriminated union.
-    struct ConstructorInfo
-    {
-        std::string typeName;                ///< Parent union type name
-        uint16_t typeId;                     ///< Assigned type ID of the parent union
-        int tag;                             ///< Tag value for this constructor variant
-        uint8_t payloadSlots;                ///< Number of payload slots (0 for unit constructors)
-        std::vector<std::string> fieldNames; ///< Named fields (parallel to payload slots, empty if unnamed)
-    };
-
-    /// Maps union type names to their metadata.
-    std::unordered_map<std::string, UnionTypeInfo> _unionTypes;
-
-    /// Maps constructor names to their metadata.
-    std::unordered_map<std::string, ConstructorInfo> _constructorRegistry;
-
-    /// Looks up a constructor by name, returning nullptr if not found.
-    [[nodiscard]] ConstructorInfo const* lookupConstructor(std::string const& name) const;
+    /// Registry for builtin function and property descriptor metadata.
+    BuiltinDescriptorRegistry _builtinDescriptors;
 };
 
 } // namespace endo

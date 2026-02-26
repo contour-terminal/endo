@@ -332,108 +332,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
 
     // Pre-register well-known structured command record types so that
     // field access (.pid, .command) and pattern matching work without user declarations.
-    {
-        RecordTypeInfo processInfoType;
-        processInfoType.typeId = CoreVM::BuiltinTypeId::ProcessInfo;
-        processInfoType.name = "ProcessInfo";
-        processInfoType.fields = {
-            { "pid", 0, CoreVM::LiteralType::Number },  { "ppid", 1, CoreVM::LiteralType::Number },
-            { "user", 2, CoreVM::LiteralType::String }, { "cpu", 3, CoreVM::LiteralType::Number },
-            { "mem", 4, CoreVM::LiteralType::Number },  { "command", 5, CoreVM::LiteralType::String },
-        };
-        for (auto const& f: processInfoType.fields)
-            processInfoType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["ProcessInfo"] = std::move(processInfoType);
-    }
-
-    // Pre-register DateTime record type.
-    {
-        RecordTypeInfo dateTimeType;
-        dateTimeType.typeId = CoreVM::BuiltinTypeId::DateTime;
-        dateTimeType.name = "DateTime";
-        dateTimeType.fields = {
-            { "year", 0, CoreVM::LiteralType::Number },   { "month", 1, CoreVM::LiteralType::Number },
-            { "day", 2, CoreVM::LiteralType::Number },    { "hour", 3, CoreVM::LiteralType::Number },
-            { "minute", 4, CoreVM::LiteralType::Number }, { "second", 5, CoreVM::LiteralType::Number },
-            { "epoch", 6, CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: dateTimeType.fields)
-            dateTimeType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["DateTime"] = std::move(dateTimeType);
-    }
-
-    // Pre-register Size record type.
-    {
-        RecordTypeInfo sizeType;
-        sizeType.typeId = CoreVM::BuiltinTypeId::Size;
-        sizeType.name = "Size";
-        sizeType.fields = {
-            { "bytes", 0, CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: sizeType.fields)
-            sizeType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["Size"] = std::move(sizeType);
-    }
-
-    // Pre-register TimeSpan record type.
-    {
-        RecordTypeInfo timeSpanType;
-        timeSpanType.typeId = CoreVM::BuiltinTypeId::TimeSpan;
-        timeSpanType.name = "TimeSpan";
-        timeSpanType.fields = {
-            { "milliseconds", 0, CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: timeSpanType.fields)
-            timeSpanType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["TimeSpan"] = std::move(timeSpanType);
-    }
-
-    // Pre-register FileMode record type.
-    {
-        RecordTypeInfo fileModeType;
-        fileModeType.typeId = CoreVM::BuiltinTypeId::FileMode;
-        fileModeType.name = "FileMode";
-        fileModeType.fields = {
-            { "bits", 0, CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: fileModeType.fields)
-            fileModeType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["FileMode"] = std::move(fileModeType);
-    }
-
-    // Pre-register FileInfo record type for the ls builtin.
-    {
-        RecordTypeInfo fileInfoType;
-        fileInfoType.typeId = CoreVM::BuiltinTypeId::FileInfo;
-        fileInfoType.name = "FileInfo";
-        fileInfoType.fields = {
-            { "name", 0, CoreVM::LiteralType::String },   { "size", 1, CoreVM::LiteralType::Object },
-            { "mode", 2, CoreVM::LiteralType::Object },   { "mtime", 3, CoreVM::LiteralType::Object },
-            { "isDir", 4, CoreVM::LiteralType::Boolean },
-        };
-        for (auto const& f: fileInfoType.fields)
-            fileInfoType.fieldTypes[f.name] = f.type;
-        fileInfoType.fieldObjectTypeIds["mode"] = CoreVM::BuiltinTypeId::FileMode;
-        fileInfoType.fieldObjectTypeIds["mtime"] = CoreVM::BuiltinTypeId::DateTime;
-        fileInfoType.fieldObjectTypeIds["size"] = CoreVM::BuiltinTypeId::Size;
-        generator._recordTypes["FileInfo"] = std::move(fileInfoType);
-    }
-
-    // Pre-register JobInfo record type for the jobs builtin.
-    {
-        RecordTypeInfo jobInfoType;
-        jobInfoType.typeId = CoreVM::BuiltinTypeId::JobInfo;
-        jobInfoType.name = "JobInfo";
-        jobInfoType.fields = {
-            { "id", 0, CoreVM::LiteralType::Number },
-            { "state", 1, CoreVM::LiteralType::String },
-            { "command", 2, CoreVM::LiteralType::String },
-            { "pid", 3, CoreVM::LiteralType::Number },
-        };
-        for (auto const& f: jobInfoType.fields)
-            jobInfoType.fieldTypes[f.name] = f.type;
-        generator._recordTypes["JobInfo"] = std::move(jobInfoType);
-    }
+    generator._typeRegistry.registerBuiltins();
 
     // Pre-register output definition record types from persistent state.
     if (persistentState)
@@ -446,7 +345,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
             info.fields = defType.fields;
             for (auto const& f: info.fields)
                 info.fieldTypes[f.name] = f.type;
-            generator._recordTypes[typeName] = std::move(info);
+            generator._typeRegistry.registerRecord(typeName, std::move(info));
 
             CoreVM::IRProgram::CustomProductType customType;
             customType.name = typeName;
@@ -2700,8 +2599,8 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
 
     if (!node.typeName.empty())
     {
-        // Named type reference — look up in _recordTypes
-        auto const* recInfo = lookupRecordType(node.typeName);
+        // Named type reference — look up in type registry
+        auto const* recInfo = _typeRegistry.lookupRecord(node.typeName);
         if (!recInfo)
         {
             reportTypeError("Unknown type '{}' in data source 'as' annotation", node.typeName);
@@ -2777,7 +2676,7 @@ void IRGenerator::visit(ast::DataSourceExpr const& node)
         info.name = anonymousTypeName;
         info.fields = fields;
         info.fieldTypes = std::move(fieldTypes);
-        _recordTypes[anonymousTypeName] = std::move(info);
+        _typeRegistry.registerRecord(anonymousTypeName, std::move(info));
 
         // Register as a custom product type
         CoreVM::IRProgram::CustomProductType customType;
@@ -2996,7 +2895,7 @@ void IRGenerator::visit(ast::ForInStmt const& node)
     // Set record field offsets if the head is a known record type
     if (auto objTypeId = getObjectTypeId(head))
     {
-        for (auto const& [typeName, recInfo]: _recordTypes)
+        for (auto const& [typeName, recInfo]: _typeRegistry.records())
         {
             if (recInfo.typeId == *objTypeId)
             {
@@ -3451,7 +3350,7 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
         // Check for record types
         if (objTypeId)
         {
-            for (auto const& [name, info]: _recordTypes)
+            for (auto const& [name, info]: _typeRegistry.records())
             {
                 if (info.typeId == *objTypeId)
                 {
@@ -3538,13 +3437,13 @@ void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewlin
 bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
                                          std::vector<ast::Expr const*> const& argExprs)
 {
+    // Look up descriptor for arity validation (only for builtins not overridden by user functions)
+    auto const* desc = _builtinDescriptors.lookupCall(name);
+
+    // --- IR instruction builtins (no native callback needed) ---
+
     if (name == "string_length")
     {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("string_length requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
@@ -3562,11 +3461,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 
     if (name == "int_of_string")
     {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("int_of_string requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
@@ -3579,11 +3473,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 
     if (name == "string_of_int")
     {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("string_of_int requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
@@ -3596,11 +3485,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 
     if (name == "string")
     {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("string requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
@@ -3618,11 +3502,6 @@ bool IRGenerator::tryGenerateBuiltinCall(std::string const& name,
 
     if (name == "not")
     {
-        if (argExprs.size() != 1)
-        {
-            reportTypeError("not requires exactly 1 argument, got {}", argExprs.size());
-            return true;
-        }
         auto* argVal = codegen(argExprs[0]);
         if (!argVal)
         {
@@ -5288,7 +5167,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         // Set record field offsets if the value is a known record type
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _recordTypes)
+            for (auto const& [typeName, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -5317,7 +5196,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
         RecordTypeInfo const* recTypeInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _recordTypes)
+            for (auto const& [typeName, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -5565,7 +5444,7 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     std::string objectTypeName;
     if (auto objTypeId = getObjectTypeId(value))
     {
-        for (auto const& [rtName, rtInfo]: _recordTypes)
+        for (auto const& [rtName, rtInfo]: _typeRegistry.records())
             if (rtInfo.typeId == *objTypeId)
             {
                 objectTypeName = rtName;
@@ -5623,7 +5502,7 @@ void IRGenerator::visit(ast::LetInExpr const& node)
         RecordTypeInfo const* recTypeInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(value))
         {
-            for (auto const& [typeName, recInfo]: _recordTypes)
+            for (auto const& [typeName, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -8232,7 +8111,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Set record field offsets if the scrutinee is a known record type
         if (auto objTypeId = getObjectTypeId(scrutinee))
         {
-            for (auto const& [typeName, recInfo]: _recordTypes)
+            for (auto const& [typeName, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == *objTypeId)
                 {
@@ -8246,10 +8125,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         }
 
         // Set constructor lookup for user-defined discriminated union patterns
-        if (!_constructorRegistry.empty())
+        if (!_typeRegistry.constructors().empty())
         {
             std::unordered_map<std::string, PatternIRGenerator::ConstructorMeta> ctorLookup;
-            for (auto const& [ctorName, ctorInfo]: _constructorRegistry)
+            for (auto const& [ctorName, ctorInfo]: _typeRegistry.constructors())
                 ctorLookup[ctorName] = { ctorInfo.typeId, ctorInfo.tag, ctorInfo.payloadSlots };
             patternIRGenerator.setConstructorLookup(std::move(ctorLookup));
         }
@@ -8276,7 +8155,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         bool isUserDefinedCtorWithMultiSlot = false;
         if (auto const* ctorPat = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get()))
         {
-            if (auto const* ctorInfo = lookupConstructor(ctorPat->name))
+            if (auto const* ctorInfo = _typeRegistry.lookupConstructor(ctorPat->name))
                 isUserDefinedCtorWithMultiSlot = ctorInfo->payloadSlots > 1;
         }
 
@@ -8290,7 +8169,7 @@ void IRGenerator::visit(ast::MatchExpr const& node)
             {
                 if (auto objTypeId = getObjectTypeId(scrutinee))
                 {
-                    for (auto const& [typeName, recInfo]: _recordTypes)
+                    for (auto const& [typeName, recInfo]: _typeRegistry.records())
                     {
                         if (recInfo.typeId == *objTypeId)
                         {
@@ -10014,34 +9893,7 @@ void IRGenerator::visit(ast::BlockExpr const& node)
 
 // --- Record type support ---
 
-IRGenerator::RecordTypeInfo const* IRGenerator::lookupRecordType(std::string const& name) const
-{
-    if (auto it = _recordTypes.find(name); it != _recordTypes.end())
-        return &it->second;
-    return nullptr;
-}
-
-IRGenerator::RecordTypeInfo const* IRGenerator::resolveRecordTypeByFields(
-    std::vector<std::string> const& fieldNames) const
-{
-    for (auto const& [name, info]: _recordTypes)
-    {
-        if (info.fields.size() != fieldNames.size())
-            continue;
-        bool match = true;
-        for (size_t i = 0; i < fieldNames.size(); ++i)
-        {
-            if (info.fields[i].name != fieldNames[i])
-            {
-                match = false;
-                break;
-            }
-        }
-        if (match)
-            return &info;
-    }
-    return nullptr;
-}
+// lookupRecordType and resolveRecordTypeByFields are now delegated to _typeRegistry
 
 void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
 {
@@ -10071,13 +9923,13 @@ void IRGenerator::visit(ast::RecordTypeDefStmt const& node)
         fieldTypes[node.fields[i].name] = vmType;
     }
 
-    // Store in the IR generator's record type table
+    // Store in the type registry
     RecordTypeInfo info;
     info.typeId = typeId;
     info.name = node.name;
     info.fields = fields;
     info.fieldTypes = std::move(fieldTypes);
-    _recordTypes[node.name] = std::move(info);
+    _typeRegistry.registerRecord(node.name, std::move(info));
 
     // Persist record field info for completion support in the REPL
     if (_persistentState)
@@ -10104,7 +9956,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
     // Resolve the record type — by explicit name or by matching field names
     RecordTypeInfo const* typeInfo = nullptr;
     if (!node.typeName.empty())
-        typeInfo = lookupRecordType(node.typeName);
+        typeInfo = _typeRegistry.lookupRecord(node.typeName);
 
     if (!typeInfo)
     {
@@ -10112,7 +9964,7 @@ void IRGenerator::visit(ast::RecordExpr const& node)
         std::vector<std::string> fieldNames;
         for (auto const& field: node.fields)
             fieldNames.push_back(field.name);
-        typeInfo = resolveRecordTypeByFields(fieldNames);
+        typeInfo = _typeRegistry.resolveRecordByFields(fieldNames);
     }
 
     if (!typeInfo)
@@ -10184,7 +10036,7 @@ void IRGenerator::visit(ast::RecordUpdateExpr const& node)
     RecordTypeInfo const* typeInfo = nullptr;
     if (auto objTypeId = getObjectTypeId(baseObj))
     {
-        for (auto const& [name, info]: _recordTypes)
+        for (auto const& [name, info]: _typeRegistry.records())
         {
             if (info.typeId == *objTypeId)
             {
@@ -10364,7 +10216,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
     RecordTypeInfo const* typeInfo = nullptr;
     if (auto objTypeId = getObjectTypeId(obj))
     {
-        for (auto const& [name, info]: _recordTypes)
+        for (auto const& [name, info]: _typeRegistry.records())
         {
             if (info.typeId == *objTypeId)
             {
@@ -10379,7 +10231,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         // Try to resolve via IR chain analysis
         if (auto info = tryGetObjectInfo(obj))
         {
-            for (auto const& [name, recInfo]: _recordTypes)
+            for (auto const& [name, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == info->typeId)
                 {
@@ -10396,7 +10248,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
         UnionTypeInfo const* unionInfo = nullptr;
         if (auto objTypeId = getObjectTypeId(obj))
         {
-            for (auto const& [name, uInfo]: _unionTypes)
+            for (auto const& [name, uInfo]: _typeRegistry.unions())
             {
                 if (uInfo.typeId == *objTypeId)
                 {
@@ -10410,7 +10262,7 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
             // Try to resolve via IR chain analysis
             if (auto info = tryGetObjectInfo(obj))
             {
-                for (auto const& [name, uInfo]: _unionTypes)
+                for (auto const& [name, uInfo]: _typeRegistry.unions())
                 {
                     if (uInfo.typeId == info->typeId)
                     {
@@ -10569,7 +10421,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     // Strategy 1: Inner object type ID propagated from OptionExpr (e.g., Some { name = "Alice" })
     if (auto innerObjTypeId = getInnerObjectTypeId(obj))
     {
-        for (auto const& [name, info]: _recordTypes)
+        for (auto const& [name, info]: _typeRegistry.records())
         {
             if (info.typeId == *innerObjTypeId)
             {
@@ -10584,7 +10436,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     {
         if (auto innerTypeId = getObjectTypeId(innerVal))
         {
-            for (auto const& [name, info]: _recordTypes)
+            for (auto const& [name, info]: _typeRegistry.records())
             {
                 if (info.typeId == *innerTypeId)
                 {
@@ -10600,7 +10452,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     {
         if (auto info = tryGetObjectInfo(innerVal))
         {
-            for (auto const& [name, recInfo]: _recordTypes)
+            for (auto const& [name, recInfo]: _typeRegistry.records())
             {
                 if (recInfo.typeId == info->typeId)
                 {
@@ -10615,7 +10467,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
     // and no type annotation propagates, e.g., `let x = None; x?.name`)
     if (!typeInfo)
     {
-        for (auto const& [name, info]: _recordTypes)
+        for (auto const& [name, info]: _typeRegistry.records())
         {
             for (auto const& field: info.fields)
             {
@@ -10684,12 +10536,7 @@ void IRGenerator::visit(ast::OptionalChainExpr const& node)
 // Discriminated Unions (ADTs)
 // ============================================================================
 
-IRGenerator::ConstructorInfo const* IRGenerator::lookupConstructor(std::string const& name) const
-{
-    if (auto it = _constructorRegistry.find(name); it != _constructorRegistry.end())
-        return &it->second;
-    return nullptr;
-}
+// lookupConstructor is now delegated to _typeRegistry
 
 void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
 {
@@ -10730,16 +10577,16 @@ void IRGenerator::visit(ast::UnionTypeDefStmt const& node)
         ctorInfo.tag = static_cast<int>(i);
         ctorInfo.payloadSlots = static_cast<uint8_t>(variant.payloadTypes.size());
         ctorInfo.fieldNames = variant.fieldNames;
-        _constructorRegistry[variant.name] = ctorInfo;
+        _typeRegistry.registerConstructor(variant.name, ctorInfo);
     }
 
-    // Store in the IR generator's union type table
+    // Store in the type registry
     UnionTypeInfo info;
     info.typeId = typeId;
     info.name = node.name;
     info.variants = variants;
     info.fieldLookup = std::move(fieldLookup);
-    _unionTypes[node.name] = std::move(info);
+    _typeRegistry.registerUnion(node.name, std::move(info));
 
     // Register as a custom sum type on the IR program so TargetCodeGenerator
     // can register it in the ConstantPool's TypeRegistry before execution.
@@ -10754,7 +10601,7 @@ void IRGenerator::visit(ast::UnionConstructorExpr const& node)
 {
     TRACE_SCOPE("visit(UnionConstructorExpr)");
 
-    auto const* ctorInfo = lookupConstructor(node.constructorName);
+    auto const* ctorInfo = _typeRegistry.lookupConstructor(node.constructorName);
     if (!ctorInfo)
     {
         reportTypeError("Unknown union constructor '{}'", std::string_view(node.constructorName));

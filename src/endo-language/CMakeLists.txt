@@ -34,6 +34,12 @@ add_library(endo STATIC
     types/Unification.hpp
     types/Unification.cpp
 
+    # Semantic Analysis
+    sema/TypeRegistry.hpp
+    sema/TypeRegistry.cpp
+    sema/BuiltinDescriptors.hpp
+    sema/BuiltinDescriptors.cpp
+
     # IR Generation
     codegen/IRGenerator.hpp
     codegen/IRGenerator.cpp
