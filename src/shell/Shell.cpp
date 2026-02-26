@@ -522,6 +522,7 @@ void Shell::setAgentTracePath(std::string path)
 void Shell::setInteractive(bool interactive)
 {
     _interactive = interactive;
+    _unusedValueDetection = !interactive;
 }
 
 void Shell::setPositionalParameters(std::vector<std::string> params)
@@ -614,11 +615,14 @@ void Shell::loadInitScript()
                 auto ifs = std::ifstream(initPath);
                 auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
                 // init.endo is a configuration script, not interactive user input —
-                // suppress auto-display to avoid printing return values like "0".
+                // suppress auto-display and unused-value detection.
                 auto const savedInteractive = _interactive;
+                auto const savedUnusedDetection = _unusedValueDetection;
                 _interactive = false;
-                auto const initResult = execute(content);
+                _unusedValueDetection = false;
+                auto const initResult = execute(content, initPath.string());
                 _interactive = savedInteractive;
+                _unusedValueDetection = savedUnusedDetection;
                 if (initResult != 0)
                     std::println(std::cerr, "endo: warning: init.endo exited with code {}", initResult);
             }
@@ -659,9 +663,12 @@ void Shell::loadCompleters()
                 auto ifs = std::ifstream(path);
                 auto content = std::string(std::istreambuf_iterator<char>(ifs), {});
                 auto const savedInteractive = _interactive;
+                auto const savedUnusedDetection = _unusedValueDetection;
                 _interactive = false;
+                _unusedValueDetection = false;
                 (void) execute(content, path.string());
                 _interactive = savedInteractive;
+                _unusedValueDetection = savedUnusedDetection;
             }
             catch (std::exception const& e)
             {
@@ -742,9 +749,12 @@ CompleterExecutionResult Shell::executeCompleterFunction(std::string_view funcNa
     bufferingReport.setSourceText(expr);
 
     auto const savedInteractive = _interactive;
+    auto const savedUnusedDetection = _unusedValueDetection;
     _interactive = false;
+    _unusedValueDetection = false;
     (void) execute(expr, bufferingReport);
     _interactive = savedInteractive;
+    _unusedValueDetection = savedUnusedDetection;
 
     _currentPipelineBuilder.defaultStdoutFd = savedStdout;
     pipe->closeWriter();
@@ -1118,7 +1128,8 @@ int Shell::execute(std::string const& lineBuffer,
 
         debugLog()()("Parsed & printed: {}", endo::ast::ASTPrinter::print(*rootNode));
 
-        auto irProgram = IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState, !_interactive);
+        auto irProgram =
+            IRGenerator::generate(*rootNode, report, _runtime, &_fsharpState, _unusedValueDetection);
 
         // Check for IR generation errors
         if (report.containsFailures())

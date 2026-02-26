@@ -5471,7 +5471,9 @@ void IRGenerator::visit(ast::ExprStmt const& node)
     if (_unusedValueDetection && !node.displayResult && value && !_hasErrors
         && isFSharpExprWithReturnValue(node.expr.get()))
     {
-        auto const loc = node.location.value_or(SourceLocationRange {});
+        // Prefer the inner expression's location (the actual call site) over ExprStmt's location
+        auto const& exprLoc = node.expr->location;
+        auto const loc = exprLoc.value_or(node.location.value_or(SourceLocationRange {}));
         _report.typeError(toCoreLoc(loc),
                           "Return value is discarded. Use 'let _ = ...' to explicitly discard.");
         _hasErrors = true;
