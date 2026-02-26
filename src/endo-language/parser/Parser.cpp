@@ -1888,16 +1888,9 @@ std::unique_ptr<ast::Expr> Parser::parseFStringExpression()
 
     _lexer.nextToken(); // consume FStringEnd
 
-    // Optimize: single literal → return directly
-    if (parts.size() == 1)
-    {
-        if (dynamic_cast<ast::LiteralExpr*>(parts[0].get()))
-            return std::move(parts[0]);
-    }
-
     // Empty string
     if (parts.empty())
-        return std::make_unique<ast::LiteralExpr>("");
+        return std::make_unique<ast::FStringExpr>(std::move(parts));
 
     return std::make_unique<ast::FStringExpr>(std::move(parts));
 }
@@ -5102,6 +5095,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
             return nullptr;
 
         kind = nameToKind(call->program);
+        cmdLoc = call->programLocation;
 
         // For open-*: extract file path from first argument
         if (kind == ast::DataSourceExpr::Kind::OpenJson || kind == ast::DataSourceExpr::Kind::OpenCsv)
@@ -5121,6 +5115,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
             return nullptr;
 
         kind = nameToKind(lastCall->program);
+        cmdLoc = pipeline->calls.front()->programLocation;
 
         // Build pipe source from all calls except the last
         if (pipeline->calls.size() == 1)
@@ -5157,6 +5152,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
 
     // Parse type specification
     auto result = std::make_unique<ast::DataSourceExpr>();
+    result->location = cmdLoc;
     result->kind = kind;
     result->filePath = std::move(filePath);
     result->pipeSource = std::move(pipeSource);
@@ -5705,7 +5701,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
 
         case Token::Number: {
             // Parse as integer or float
-            auto const& lit = _lexer.currentLiteral();
+            auto const lit = std::string(_lexer.currentLiteral());
             auto const loc = _lexer.currentRange();
 
             // Detect base prefix (skip optional leading '-')
@@ -5722,9 +5718,10 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 && (lit.find('.') != std::string::npos || lit.find('e') != std::string::npos
                     || lit.find('E') != std::string::npos))
             {
+                auto originalText = std::string(lit);
                 auto const value = std::stod(lit);
                 _lexer.nextToken();
-                auto node = std::make_unique<ast::FloatLiteralExpr>(value);
+                auto node = std::make_unique<ast::FloatLiteralExpr>(value, std::move(originalText));
                 node->location = loc;
                 return node;
             }
@@ -5776,7 +5773,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 }
             }
 
-            auto node = std::make_unique<ast::IntLiteralExpr>(value);
+            auto node = std::make_unique<ast::IntLiteralExpr>(
+                value, hasBasePrefix ? std::string(lit) : std::string {});
             node->location = loc;
             return node;
         }
@@ -6016,11 +6014,9 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 auto const spanLoc = SourceLocationRange { openLoc.begin, closeLoc.end };
                 if (localPlaceholders > 0)
                 {
-                    // Wrap tuple in lambda: (_.a, _.b) → fun __x -> (__x.a, __x.b)
-                    std::vector<ast::TypedParameter> params;
-                    params.emplace_back("__x");
-                    auto node = std::make_unique<ast::LambdaExpr>(
-                        std::move(params), std::make_unique<ast::TupleExpr>(std::move(elements)));
+                    // Wrap tuple in placeholder lambda: (_.a, _.b)
+                    auto node = std::make_unique<ast::PlaceholderLambdaExpr>(
+                        std::make_unique<ast::TupleExpr>(std::move(elements)), true);
                     node->location = spanLoc;
                     return node;
                 }
@@ -6048,10 +6044,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             auto const spanLoc = SourceLocationRange { openLoc.begin, closeLoc.end };
             if (localPlaceholders > 0)
             {
-                // Wrap expression in lambda: (_ + 1) → fun __x -> __x + 1
-                std::vector<ast::TypedParameter> params;
-                params.emplace_back("__x");
-                auto node = std::make_unique<ast::LambdaExpr>(std::move(params), std::move(first));
+                // Wrap expression in placeholder lambda: (_ + 1)
+                auto node = std::make_unique<ast::PlaceholderLambdaExpr>(std::move(first), true);
                 node->location = spanLoc;
                 return node;
             }
@@ -6175,7 +6169,8 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             // Single-quoted string literal: 'hello'
             auto const loc = _lexer.currentRange();
             std::string value = consumeLiteral();
-            auto node = std::make_unique<ast::LiteralExpr>(std::move(value), ast::LiteralQuoting::Quoted);
+            auto node =
+                std::make_unique<ast::LiteralExpr>(std::move(value), ast::LiteralQuoting::SingleQuoted);
             node->location = loc;
             return node;
         }
@@ -6441,12 +6436,19 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
         return firstElem;
     }
 
-    // Regular list: [elem; elem; ...]
+    // Regular list: [elem; elem; ...] or [elem, elem, ...]
     std::vector<std::unique_ptr<ast::Expr>> elements;
     elements.push_back(std::move(firstElem));
 
+    auto useComma = false;
+    auto firstSeparator = true;
     while (_lexer.currentToken() == Token::Semicolon || _lexer.currentToken() == Token::Comma)
     {
+        if (firstSeparator)
+        {
+            useComma = _lexer.currentToken() == Token::Comma;
+            firstSeparator = false;
+        }
         _lexer.nextToken(); // consume separator
         consumeNewlines();  // allow newline after separator
 
@@ -6474,7 +6476,7 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
     auto const closeLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume ']'
 
-    auto node = std::make_unique<ast::ListExpr>(std::move(elements));
+    auto node = std::make_unique<ast::ListExpr>(std::move(elements), useComma);
     node->location = SourceLocationRange { openLoc.begin, closeLoc.end };
     return node;
 }

@@ -88,6 +88,8 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     // ========================================================================
     // ast::Visitor overrides — F# expressions and statements
     // ========================================================================
+    void visit(ast::CompositionExpr const& node) override;
+    void visit(ast::PlaceholderLambdaExpr const& node) override;
     void visit(ast::IfExpr const& node) override;
     void visit(ast::TupleExpr const& node) override;
     void visit(ast::UnitExpr const& node) override;
@@ -181,6 +183,10 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     void emitTrailingComment(ast::Node const& node);
     void emitRemainingComments();
 
+    /// Emits inline comments that appear on the given line before the given column.
+    /// Used for mid-line block comments like `let x = (* inline *) 42`.
+    void emitInlineComments(int line, int beforeColumn);
+
     /// Emits non-trailing comments that fall between the last body statement
     /// and a block's closing keyword (e.g., `end`).
     void emitDanglingBodyComments(ast::Node const& blockParent);
@@ -260,6 +266,7 @@ class SourceFormatter: public ast::Visitor, public pattern::PatternVisitor
     std::string _result;
     int _indentLevel = 0;
     bool _atLineStart = true;
+    bool _inPlaceholderLambda = false; ///< When true, emit `_` for `__x` identifiers
     std::vector<CommentTrivia> const& _comments;
     size_t _nextCommentIndex = 0; ///< Index of next un-emitted comment
     std::set<int> _blankLines;    ///< 0-based line numbers of blank lines in original source

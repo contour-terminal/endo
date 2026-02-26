@@ -218,6 +218,17 @@ std::optional<int> SourceFormatter::findFirstLine(ast::Node const& node)
             return pc->programLocation->begin.line;
     }
 
+    // DataSourceExpr: check filePath or pipeSource
+    if (auto const* ds = dynamic_cast<ast::DataSourceExpr const*>(&node))
+    {
+        if (ds->filePath)
+            if (auto line = findFirstLine(*ds->filePath))
+                return line;
+        if (ds->pipeSource)
+            if (auto line = findFirstLine(*ds->pipeSource))
+                return line;
+    }
+
     // CallPipeline: check first call
     if (auto const* cp = dynamic_cast<ast::CallPipeline const*>(&node))
     {
@@ -239,6 +250,14 @@ std::optional<int> SourceFormatter::findFirstLine(ast::Node const& node)
     {
         if (ws->condition)
             if (auto line = findFirstLine(*ws->condition))
+                return line;
+    }
+
+    // ShellCommandExpr: check wrapped command
+    if (auto const* sc = dynamic_cast<ast::ShellCommandExpr const*>(&node))
+    {
+        if (sc->command)
+            if (auto line = findFirstLine(*sc->command))
                 return line;
     }
 
@@ -344,6 +363,22 @@ std::optional<int> SourceFormatter::findLastLine(ast::Node const& node)
     return std::nullopt;
 }
 
+void SourceFormatter::emitInlineComments(int line, int beforeColumn)
+{
+    while (_nextCommentIndex < _comments.size())
+    {
+        auto const& comment = _comments[_nextCommentIndex];
+        if (comment.location.begin.line != line)
+            break;
+        if (comment.location.begin.column >= beforeColumn)
+            break;
+        // This is an inline comment on the same line, before the value expression
+        emit(comment.text);
+        emit(" ");
+        ++_nextCommentIndex;
+    }
+}
+
 void SourceFormatter::emitTrailingComment(ast::Node const& node)
 {
     auto const lineOpt = findLastLine(node);
@@ -423,10 +458,16 @@ void SourceFormatter::emitParameters(std::vector<ast::TypedParameter> const& par
     for (auto const& param: params)
     {
         emit(" ");
-        if (param.typeAnnotation)
+        if (param.isUnit)
+            emit("()");
+        else if (param.typeAnnotation)
             emit("(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")");
         else
+        {
+            if (param.isVariadic)
+                emit("...");
             emit(param.name);
+        }
     }
 }
 
@@ -995,7 +1036,9 @@ void SourceFormatter::visit(ast::BuiltinWhichStmt const& node)
 
 void SourceFormatter::visit(ast::LiteralExpr const& node)
 {
-    if (node.quoting == ast::LiteralQuoting::Quoted)
+    if (node.quoting == ast::LiteralQuoting::SingleQuoted)
+        emit(std::format("'{}'", escapeString(node.value)));
+    else if (node.quoting == ast::LiteralQuoting::Quoted)
         emit(std::format("\"{}\"", escapeString(node.value)));
     else
         emit(node.value);
@@ -1185,14 +1228,19 @@ void SourceFormatter::visit(ast::CommandFileSubst const& node)
 
 void SourceFormatter::visit(ast::StructuredPipelineSourceExpr const& node)
 {
-    emit("$(");
     if (node.command)
         node.command->accept(*this);
-    emit(" |>)");
 }
 
 void SourceFormatter::visit(ast::DataSourceExpr const& node)
 {
+    if (node.pipeSource)
+    {
+        // Pipe chain: echo hello | from-json as ...
+        node.pipeSource->accept(*this);
+        emit(" | ");
+    }
+
     switch (node.kind)
     {
         case ast::DataSourceExpr::Kind::OpenJson: emit("open-json"); break;
@@ -1205,17 +1253,6 @@ void SourceFormatter::visit(ast::DataSourceExpr const& node)
     {
         emit(" ");
         node.filePath->accept(*this);
-    }
-    if (node.pipeSource)
-    {
-        node.pipeSource->accept(*this);
-        emit(" | ");
-        switch (node.kind)
-        {
-            case ast::DataSourceExpr::Kind::FromJson: emit("from-json"); break;
-            case ast::DataSourceExpr::Kind::FromCsv: emit("from-csv"); break;
-            default: break;
-        }
     }
 
     emit(" as ");
@@ -1244,6 +1281,49 @@ void SourceFormatter::visit(ast::DataSourceExpr const& node)
 // ============================================================================
 // F# expression and statement visitors
 // ============================================================================
+
+void SourceFormatter::visit(ast::CompositionExpr const& node)
+{
+    node.left->accept(*this);
+    emit(node.op == ast::CompositionOp::Forward ? " >> " : " << ");
+    node.right->accept(*this);
+}
+
+void SourceFormatter::visit(ast::PlaceholderLambdaExpr const& node)
+{
+    // Reconstruct the placeholder syntax by formatting body and replacing __x with _
+    if (node.parenthesized)
+        emit("(");
+
+    // Format body with empty comments to avoid re-emitting file-level comments
+    std::vector<CommentTrivia> const noComments;
+    auto bodyStr = format(*node.body, noComments, _config);
+    // Trim trailing newline from format()
+    while (!bodyStr.empty() && bodyStr.back() == '\n')
+        bodyStr.pop_back();
+
+    // Replace all __x occurrences with _
+    std::string const placeholder = "__x";
+    std::string const replacement = "_";
+    size_t pos = 0;
+    while ((pos = bodyStr.find(placeholder, pos)) != std::string::npos)
+    {
+        // Don't replace if it's part of a longer identifier
+        auto const after = pos + placeholder.size();
+        if (after < bodyStr.size() && (std::isalnum(bodyStr[after]) || bodyStr[after] == '_'))
+        {
+            pos = after;
+            continue;
+        }
+        bodyStr.replace(pos, placeholder.size(), replacement);
+        pos += replacement.size();
+    }
+
+    emit(bodyStr);
+
+    if (node.parenthesized)
+        emit(")");
+}
 
 void SourceFormatter::visit(ast::IfExpr const& node)
 {
@@ -1416,14 +1496,36 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         if (node.getter)
         {
             emit("get () = ");
-            node.getter->body->accept(*this);
+            if (wouldFormatMultiline(*node.getter->body))
+            {
+                emitNewline();
+                indent();
+                node.getter->body->accept(*this);
+                dedent();
+            }
+            else
+                node.getter->body->accept(*this);
         }
         if (node.getter && node.setter)
-            emit(" and ");
+        {
+            if (wouldFormatMultiline(*node.getter->body))
+                emitNewline();
+            else
+                emit(" ");
+            emit("and ");
+        }
         if (node.setter)
         {
             emit("set (" + node.setter->paramName + ") = ");
-            node.setter->body->accept(*this);
+            if (wouldFormatMultiline(*node.setter->body))
+            {
+                emitNewline();
+                indent();
+                node.setter->body->accept(*this);
+                dedent();
+            }
+            else
+                node.setter->body->accept(*this);
         }
     }
     else
@@ -1448,6 +1550,9 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
             else
             {
                 emit(" ");
+                // Emit inline comments between '=' and value (e.g., `let x = (* inline *) 42`)
+                if (node.value->location)
+                    emitInlineComments(node.value->location->begin.line, node.value->location->begin.column);
                 node.value->accept(*this);
             }
         }
@@ -1573,6 +1678,21 @@ void SourceFormatter::visit(ast::PipelineExpr const& node)
 {
     auto const chain = collectPipelineChain(node);
 
+    // Structured pipelines (shell command source) must stay on one line
+    // because shell commands terminate at newlines and multi-line breaks parsing
+    auto const isShellSource = chain[0] && dynamic_cast<ast::StructuredPipelineSourceExpr const*>(chain[0]);
+    if (isShellSource)
+    {
+        for (auto const i: std::views::iota(0uz, chain.size()))
+        {
+            if (i > 0)
+                emit(" |> ");
+            if (chain[i])
+                chain[i]->accept(*this);
+        }
+        return;
+    }
+
     // Single pipe that fits inline: keep on one line
     if (chain.size() <= 2)
     {
@@ -1620,17 +1740,28 @@ void SourceFormatter::visit(ast::ApplicationExpr const& node)
 
 void SourceFormatter::visit(ast::IdentifierExpr const& node)
 {
-    emit(node.name);
+    if (_inPlaceholderLambda && node.name == "__x")
+        emit("_");
+    else
+        emit(node.name);
 }
 
 void SourceFormatter::visit(ast::IntLiteralExpr const& node)
 {
-    emit(std::to_string(node.value));
+    emit(node.originalText.empty() ? std::to_string(node.value) : node.originalText);
 }
 
 void SourceFormatter::visit(ast::FloatLiteralExpr const& node)
 {
-    emit(std::format("{}", node.value));
+    if (!node.originalText.empty())
+    {
+        emit(node.originalText);
+        return;
+    }
+    auto s = std::format("{}", node.value);
+    if (s.find('.') == std::string::npos && s.find('e') == std::string::npos)
+        s += ".0";
+    emit(s);
 }
 
 void SourceFormatter::visit(ast::BoolLiteralExpr const& node)
@@ -1676,13 +1807,14 @@ void SourceFormatter::visit(ast::ParenExpr const& node)
 
 void SourceFormatter::visit(ast::LambdaExpr const& node)
 {
-    emit("fun ");
+    emit("fun");
     for (auto const i: std::views::iota(0uz, node.parameters.size()))
     {
-        if (i > 0)
-            emit(" ");
+        emit(" ");
         auto const& param = node.parameters[i];
-        if (param.typeAnnotation)
+        if (param.isUnit)
+            emit("()");
+        else if (param.typeAnnotation)
             emit("(" + param.name + ": " + endo::toString(*param.typeAnnotation) + ")");
         else
             emit(param.name);
@@ -1742,7 +1874,7 @@ void SourceFormatter::visit(ast::MatchExpr const& node)
 
 void SourceFormatter::visit(ast::ListExpr const& node)
 {
-    emitWrappedElements(node.elements, "; ", "[", "]");
+    emitWrappedElements(node.elements, node.useComma ? ", " : "; ", "[", "]");
 }
 
 void SourceFormatter::visit(ast::ConsExpr const& node)
@@ -1842,6 +1974,7 @@ void SourceFormatter::printComprehensionGenerator(ast::ListComprehensionExpr con
 
 void SourceFormatter::visit(ast::ShellCommandExpr const& node)
 {
+    emitLeadingComments(node);
     emit("& ");
     if (node.command)
         node.command->accept(*this);
@@ -2013,7 +2146,20 @@ void SourceFormatter::visit(ast::FStringExpr const& node)
     {
         if (auto const* lit = dynamic_cast<ast::LiteralExpr const*>(part.get()))
         {
-            emit(escapeString(lit->value));
+            // Escape braces in f-string literal parts: { → {{, } → }}
+            auto escaped = escapeString(lit->value);
+            std::string result;
+            result.reserve(escaped.size());
+            for (auto const ch: escaped)
+            {
+                if (ch == '{')
+                    result += "{{";
+                else if (ch == '}')
+                    result += "}}";
+                else
+                    result += ch;
+            }
+            emit(result);
         }
         else
         {
@@ -2130,6 +2276,7 @@ void SourceFormatter::visit(ast::UnionTypeDefStmt const& node)
 {
     emitLeadingComments(node);
     emit(std::format("type {} =", node.name));
+    indent();
     for (auto const& variant: node.variants)
     {
         emitNewline();
@@ -2142,20 +2289,40 @@ void SourceFormatter::visit(ast::UnionTypeDefStmt const& node)
             {
                 if (i > 0)
                     emit(" * ");
+                if (i < variant.fieldNames.size() && !variant.fieldNames[i].empty())
+                {
+                    emit(variant.fieldNames[i]);
+                    emit(": ");
+                }
                 emit(endo::toString(variant.payloadTypes[i]));
             }
         }
     }
+    dedent();
     emitTrailingComment(node);
 }
 
 void SourceFormatter::visit(ast::UnionConstructorExpr const& node)
 {
     emit(node.constructorName);
-    for (auto const& arg: node.arguments)
+    if (node.arguments.size() > 1)
     {
-        emit(" ");
-        arg->accept(*this);
+        emit(" (");
+        for (auto const i: std::views::iota(0uz, node.arguments.size()))
+        {
+            if (i > 0)
+                emit(", ");
+            node.arguments[i]->accept(*this);
+        }
+        emit(")");
+    }
+    else
+    {
+        for (auto const& arg: node.arguments)
+        {
+            emit(" ");
+            arg->accept(*this);
+        }
     }
 }
 

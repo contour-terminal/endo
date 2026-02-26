@@ -209,7 +209,9 @@ void ASTPrinter::visit(LogicalOrStmt const& node)
 
 void ASTPrinter::visit(LiteralExpr const& node)
 {
-    if (node.quoting == LiteralQuoting::Quoted)
+    if (node.quoting == LiteralQuoting::SingleQuoted)
+        _result += std::format("'{}'", node.value);
+    else if (node.quoting == LiteralQuoting::Quoted)
         _result += std::format("\"{}\"", node.value);
     else
         _result += std::format("{}", node.value);

@@ -82,8 +82,9 @@ struct InputRedirect final: public Node
 /// Quoting style for literal expressions (for round-trip AST printing).
 enum class LiteralQuoting : uint8_t
 {
-    Unquoted, ///< Bare word (shell context)
-    Quoted,   ///< Quoted string literal (e.g., 'hello' or "hello")
+    Unquoted,     ///< Bare word (shell context)
+    Quoted,       ///< Double-quoted string literal ("hello")
+    SingleQuoted, ///< Single-quoted character/string literal ('a')
 };
 
 struct LiteralExpr final: Expr
@@ -1226,8 +1227,9 @@ struct IdentifierExpr final: public Expr
 struct IntLiteralExpr final: public Expr
 {
     int64_t value;
+    std::string originalText; ///< Original source text (e.g., "0b1010", "0xFF") for round-trip formatting
 
-    explicit IntLiteralExpr(int64_t v): value(v) {}
+    explicit IntLiteralExpr(int64_t v, std::string text = {}): value(v), originalText(std::move(text)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1236,8 +1238,9 @@ struct IntLiteralExpr final: public Expr
 struct FloatLiteralExpr final: public Expr
 {
     double value;
+    std::string originalText; ///< Original source text (e.g., "1e10", "2.5e2") for round-trip formatting
 
-    explicit FloatLiteralExpr(double v): value(v) {}
+    explicit FloatLiteralExpr(double v, std::string text = {}): value(v), originalText(std::move(text)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1354,15 +1357,19 @@ struct MatchExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-/// List literal expression: `[1; 2; 3]`
+/// List literal expression: `[1; 2; 3]` or `[1, 2, 3]`
 ///
-/// Homogeneous list with semicolon-separated elements.
+/// Homogeneous list with semicolon- or comma-separated elements.
 /// An empty list `[]` is represented with an empty elements vector.
 struct ListExpr final: public Expr
 {
     std::vector<std::unique_ptr<Expr>> elements; ///< List elements
+    bool useComma = false;                       ///< True if list used comma separators in source
 
-    explicit ListExpr(std::vector<std::unique_ptr<Expr>> elems): elements(std::move(elems)) {}
+    explicit ListExpr(std::vector<std::unique_ptr<Expr>> elems, bool comma = false):
+        elements(std::move(elems)), useComma(comma)
+    {
+    }
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
