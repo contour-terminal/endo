@@ -315,9 +315,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return nullptr;
                     }
                     expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    // Continue chaining |> left-associatively
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    // Continue chaining |> left-associatively (allow newlines before |>)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken(); // consume |>
                         step = parseFSharpComposition();
                         if (!step)
@@ -351,8 +358,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return nullptr;
                     }
                     expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken(); // consume |>
                         step = parseFSharpComposition();
                         if (!step)
@@ -386,8 +400,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return nullptr;
                     }
                     expr = std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken(); // consume |>
                         step = parseFSharpComposition();
                         if (!step)
@@ -475,7 +496,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return nullptr;
                 }
 
-                // Common pipeline handling for both paths
+                // Common pipeline handling for both paths (allow newlines before |>)
+                {
+                    auto const skippedNL = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe && skippedNL)
+                        _lexer.pushBackToken(Token::LineFeed, "\n");
+                }
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
@@ -488,8 +514,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     }
                     std::unique_ptr<ast::Expr> pipeline =
                         std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken();
                         auto right = parseFSharpComposition();
                         if (!right)
@@ -536,8 +569,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     }
                     std::unique_ptr<ast::Expr> pipeline =
                         std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken();
                         auto right = parseFSharpComposition();
                         if (!right)
@@ -582,8 +622,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return nullptr;
                     }
                     auto pipeline = std::make_unique<ast::PipelineExpr>(std::move(result), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken();
                         auto right = parseFSharpComposition();
                         if (!right)
@@ -642,8 +689,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     }
                     std::unique_ptr<ast::Expr> pipeline =
                         std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken();
                         auto right = parseFSharpComposition();
                         if (!right)
@@ -709,6 +763,11 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         // Check for |> pipeline continuation
                         // DataSourceExpr already produces a typed list value — use it directly
                         // as the pipeline source (no StructuredPipelineSourceExpr wrapper needed).
+                        {
+                            auto const skippedNL = consumeUntilNotOneOf(Token::LineFeed);
+                            if (_lexer.currentToken() != Token::ForwardPipe && skippedNL)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                        }
                         if (_lexer.currentToken() == Token::ForwardPipe)
                         {
                             _lexer.enterFSharpExpr();
@@ -724,8 +783,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                             std::unique_ptr<ast::Expr> pipeline =
                                 std::make_unique<ast::PipelineExpr>(std::move(dataSource), std::move(step));
 
-                            while (_lexer.currentToken() == Token::ForwardPipe)
+                            while (true)
                             {
+                                auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                                if (_lexer.currentToken() != Token::ForwardPipe)
+                                {
+                                    if (skippedNewlines)
+                                        _lexer.pushBackToken(Token::LineFeed, "\n");
+                                    break;
+                                }
                                 _lexer.nextToken();
                                 auto right = parseFSharpComposition();
                                 if (!right)
@@ -767,9 +833,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                     std::unique_ptr<ast::Expr> pipeline =
                         std::make_unique<ast::PipelineExpr>(std::move(source), std::move(step));
 
-                    // Parse remaining |> steps left-associatively
-                    while (_lexer.currentToken() == Token::ForwardPipe)
+                    // Parse remaining |> steps left-associatively (allow newlines before |>)
+                    while (true)
                     {
+                        auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                        if (_lexer.currentToken() != Token::ForwardPipe)
+                        {
+                            if (skippedNewlines)
+                                _lexer.pushBackToken(Token::LineFeed, "\n");
+                            break;
+                        }
                         _lexer.nextToken(); // consume |>
                         auto right = parseFSharpComposition();
                         if (!right)
@@ -816,8 +889,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 std::unique_ptr<ast::Expr> pipeline =
                     std::make_unique<ast::PipelineExpr>(std::move(expr), std::move(step));
-                while (_lexer.currentToken() == Token::ForwardPipe)
+                while (true)
                 {
+                    auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe)
+                    {
+                        if (skippedNewlines)
+                            _lexer.pushBackToken(Token::LineFeed, "\n");
+                        break;
+                    }
                     _lexer.nextToken();
                     auto right = parseFSharpComposition();
                     if (!right)
@@ -862,8 +942,15 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 std::unique_ptr<ast::Expr> pipeline =
                     std::make_unique<ast::PipelineExpr>(std::move(source), std::move(step));
 
-                while (_lexer.currentToken() == Token::ForwardPipe)
+                while (true)
                 {
+                    auto const skippedNewlines = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe)
+                    {
+                        if (skippedNewlines)
+                            _lexer.pushBackToken(Token::LineFeed, "\n");
+                        break;
+                    }
                     _lexer.nextToken(); // consume |>
                     auto right = parseFSharpComposition();
                     if (!right)
