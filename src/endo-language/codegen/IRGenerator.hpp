@@ -401,6 +401,12 @@ class IRGenerator final: public ast::Visitor
         CoreVM::IRFunction* compiledFunction = nullptr;
         /// IR return type of the compiled function body (valid when compiledFunction != nullptr).
         CoreVM::LiteralType compiledReturnType = CoreVM::LiteralType::Void;
+        /// Type annotations from the compiled function's return value (valid when compiledFunction != nullptr).
+        /// These are propagated to the call result so that convertToString can dispatch correctly.
+        std::optional<CoreVM::LiteralType> compiledReturnInnerType;
+        std::optional<uint32_t> compiledReturnObjectTypeId;
+        std::optional<uint32_t> compiledReturnListElementTypeId;
+        std::optional<CoreVM::LiteralType> compiledReturnListElementLiteralType;
         /// Builtin higher-order function marker. Empty = normal function,
         /// otherwise "map"/"filter"/"fold"/"reduce"/"reverse".
         std::string builtinHOF;
@@ -762,6 +768,10 @@ class IRGenerator final: public ast::Visitor
     /// Used for runtime dispatch (e.g., list printing via object_to_string).
     std::unordered_map<CoreVM::Value*, uint16_t> _objectTypeIdAnnotations;
 
+    /// Derives and applies semantic type annotations (objectTypeId, listElementLiteralType, etc.)
+    /// from a type-system TypePtr to an IR value. Used for compiled function parameters.
+    void annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type);
+
     /// Annotates a value with its known builtin object type ID.
     void annotateObjectTypeId(CoreVM::Value* val, uint16_t typeId);
 
@@ -802,6 +812,17 @@ class IRGenerator final: public ast::Visitor
 
     /// Retrieves the list element literal type annotation for a value, if any.
     [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementLiteralType(CoreVM::Value* val) const;
+
+    /// Tracks the inner type of list elements when elements have a different runtime type
+    /// than their IR type (e.g., Number-typed values that are actually strings from compiled
+    /// function returns).
+    std::unordered_map<CoreVM::Value*, CoreVM::LiteralType> _listElementInnerTypes;
+
+    /// Annotates a list value with the inner type of its elements.
+    void annotateListElementInnerType(CoreVM::Value* val, CoreVM::LiteralType type);
+
+    /// Retrieves the list element inner type annotation for a value, if any.
+    [[nodiscard]] std::optional<CoreVM::LiteralType> getListElementInnerType(CoreVM::Value* val) const;
 
     /// Copies all annotation maps (inner type, object type ID, inner object type ID,
     /// list element type ID, list element literal type) from source to dest.

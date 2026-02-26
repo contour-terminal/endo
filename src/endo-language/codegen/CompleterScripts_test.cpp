@@ -219,6 +219,445 @@ TEST_CASE("Completer.ssh.options_list_not_empty", "[completer][ssh]")
     )") == "19");
 }
 
+TEST_CASE("Completer.ssh.split_pipeline_basic", "[completer][ssh]")
+{
+    // Minimal: split a string and iterate with each println
+    CHECK(executeSourceAndGetOutput(R"(
+        let lines = split "\n" "Host darkleon\nHost bravo"
+        each println lines
+    )") == "Host darkleon\nHost bravo\n");
+}
+
+TEST_CASE("Completer.ssh.split_pipeline_with_pipe_op", "[completer][ssh]")
+{
+    // Use |> to pipe into split
+    CHECK(executeSourceAndGetOutput(R"(
+        let lines = "Host darkleon\nHost bravo" |> split "\n"
+        each println lines
+    )") == "Host darkleon\nHost bravo\n");
+}
+
+TEST_CASE("Completer.ssh.split_pipeline_with_filter", "[completer][ssh]")
+{
+    // Split + filter empty strings
+    CHECK(executeSourceAndGetOutput(R"(
+        let lines = "Host darkleon\nHost bravo" |> split "\n" |> filter (fun s -> s != "")
+        each println lines
+    )") == "Host darkleon\nHost bravo\n");
+}
+
+TEST_CASE("Completer.ssh.map_with_match_split", "[completer][ssh]")
+{
+    // Simplest: map with match split inside lambda
+    CHECK(executeSourceAndGetOutput(R"(
+        let extract line =
+            match split " " line with
+            | _ :: host :: _ -> host
+            | _ -> ""
+
+        print (extract "Host darkleon")
+    )") == "darkleon");
+}
+
+TEST_CASE("Completer.ssh.map_identity_on_string_list", "[completer][ssh]")
+{
+    // Map identity over a list of strings
+    CHECK(executeSourceAndGetOutput(R"(
+        let id x = x
+        let hosts = map id ["darkleon"; "bravo"]
+        each println hosts
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.map_with_split_no_match", "[completer][ssh]")
+{
+    // Map a function that calls split (without match) over a list
+    CHECK(executeSourceAndGetOutput(R"(
+        let extract line = split " " line
+        let result = map extract ["Host darkleon"]
+        print (toText (length result))
+    )") == "1");
+}
+
+TEST_CASE("Completer.ssh.match_cons_number", "[completer][ssh]")
+{
+    // Match on a number list — verify extraction works at all
+    CHECK(executeSourceAndGetOutput(R"(
+        let second xs =
+            match xs with
+            | _ :: y :: _ -> y
+            | _ -> 0
+
+        print (toText (second [10; 20; 30]))
+    )") == "20");
+}
+
+TEST_CASE("Completer.ssh.match_cons_string_direct", "[completer][ssh]")
+{
+    // Direct match on a string list (not through a function)
+    CHECK(executeSourceAndGetOutput(R"(
+        let xs = ["a"; "b"; "c"]
+        let r = match xs with
+            | _ :: y :: _ -> y
+            | _ -> ""
+        print r
+    )") == "b");
+}
+
+TEST_CASE("Completer.ssh.match_cons_string_let_result", "[completer][ssh]")
+{
+    // Match on a string list through a function call, bind result to let
+    CHECK(executeSourceAndGetOutput(R"(
+        let second xs =
+            match xs with
+            | _ :: y :: _ -> y
+            | _ -> ""
+
+        let r = second ["a"; "b"; "c"]
+        print r
+    )") == "b");
+}
+
+TEST_CASE("Completer.ssh.match_cons_string_function", "[completer][ssh]")
+{
+    // Match on a string list through a function call, print directly
+    CHECK(executeSourceAndGetOutput(R"(
+        let second xs =
+            match xs with
+            | _ :: y :: _ -> y
+            | _ -> ""
+
+        print (second ["a"; "b"; "c"])
+    )") == "b");
+}
+
+TEST_CASE("Completer.ssh.match_head_string_function", "[completer][ssh]")
+{
+    // Single-level cons match (simpler)
+    CHECK(executeSourceAndGetOutput(R"(
+        let hd xs =
+            match xs with
+            | x :: _ -> x
+            | _ -> ""
+
+        print (hd ["hello"; "world"])
+    )") == "hello");
+}
+
+TEST_CASE("Completer.ssh.match_head_number_function", "[completer][ssh]")
+{
+    // Match on number list through function
+    CHECK(executeSourceAndGetOutput(R"(
+        let hd xs =
+            match xs with
+            | x :: _ -> x
+            | _ -> 0
+
+        print (toText (hd [42; 99]))
+    )") == "42");
+}
+
+TEST_CASE("Completer.ssh.function_return_string_direct", "[completer][ssh]")
+{
+    // Function that returns a literal string — should work fine
+    CHECK(executeSourceAndGetOutput(R"(
+        let f _ = "hello"
+        print (f 0)
+    )") == "hello");
+}
+
+TEST_CASE("Completer.ssh.function_match_string_literal", "[completer][ssh]")
+{
+    // Function with match that returns string literals (no list extraction)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f x =
+            match x with
+            | 1 -> "one"
+            | _ -> "other"
+        print (f 1)
+    )") == "one");
+}
+
+TEST_CASE("Completer.ssh.function_match_returns_string_from_param", "[completer][ssh]")
+{
+    // Function with match on number, returning the string parameter
+    CHECK(executeSourceAndGetOutput(R"(
+        let f s =
+            match 1 with
+            | 1 -> s
+            | _ -> ""
+        print (f "hello")
+    )") == "hello");
+}
+
+TEST_CASE("Completer.ssh.map_with_match_cons_over_list", "[completer][ssh]")
+{
+    // Map second over list of lists
+    CHECK(executeSourceAndGetOutput(R"(
+        let second xs =
+            match xs with
+            | _ :: y :: _ -> y
+            | _ -> ""
+
+        let extract line =
+            second (split " " line)
+
+        print (extract "Host darkleon")
+    )") == "darkleon");
+}
+
+TEST_CASE("Completer.ssh.map_extract_over_list", "[completer][ssh]")
+{
+    // Map extract (using second + split) over a list of strings
+    CHECK(executeSourceAndGetOutput(R"(
+        let second xs =
+            match xs with
+            | _ :: y :: _ -> y
+            | _ -> ""
+
+        let extract line =
+            second (split " " line)
+
+        let hosts = map extract ["Host darkleon"; "Host bravo"]
+        each println hosts
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.map_with_match_split_list", "[completer][ssh]")
+{
+    // Map extract over a list
+    CHECK(executeSourceAndGetOutput(R"(
+        let extract line =
+            match split " " line with
+            | _ :: host :: _ -> host
+            | _ -> ""
+
+        let hosts = map extract ["Host darkleon"; "Host bravo"]
+        each println hosts
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.map_with_match_split_length", "[completer][ssh]")
+{
+    // Test map without printing elements
+    CHECK(executeSourceAndGetOutput(R"(
+        let extract line =
+            match split " " line with
+            | _ :: host :: _ -> host
+            | _ -> ""
+
+        let hosts = map extract ["Host darkleon"; "Host bravo"]
+        println (length hosts)
+    )") == "2\n");
+}
+
+TEST_CASE("Completer.ssh.map_identity_compiled_length", "[completer][ssh]")
+{
+    // Simplest compiled map: identity function on string list
+    CHECK(executeSourceAndGetOutput(R"(
+        let id (s : string) = s
+        let hosts = map id ["a"; "b"; "c"]
+        println (length hosts)
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_compiled_split_length", "[completer][ssh]")
+{
+    // Map with compiled function calling split
+    CHECK(executeSourceAndGetOutput(R"(
+        let f (line : string) = split " " line
+        let hosts = map f ["Host darkleon"; "Host bravo"]
+        println (length hosts)
+    )") == "2\n");
+}
+
+TEST_CASE("Completer.ssh.map_compiled_match_number_length", "[completer][ssh]")
+{
+    // Map with match on numbers (no split, no list pattern)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f (x : int) = match x with | 1 -> 10 | _ -> 0
+        let hosts = map f [1; 2; 3]
+        println (length hosts)
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_compiled_match_split_length", "[completer][ssh]")
+{
+    // Map with match on split result (the exact failing pattern)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f line =
+            match split " " line with
+            | _ :: h :: _ -> h
+            | _ -> ""
+        let hosts = map f ["Host darkleon"; "Host bravo"; "Host charlie"]
+        println (length hosts)
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_match_simple_cons_length", "[completer][ssh]")
+{
+    // Match on a pre-existing list (no split) inside map
+    CHECK(executeSourceAndGetOutput(R"(
+        let f xs =
+            match xs with
+            | a :: _ -> a
+            | _ -> 0
+        println (length (map f [[1;2]; [3;4]; [5;6]]))
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_match_wildcard_number", "[completer][ssh]")
+{
+    // Simple match with wildcard (no cons pattern)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f x =
+            match x with
+            | 1 -> "one"
+            | 2 -> "two"
+            | _ -> "other"
+        let r = map f [1; 2; 3]
+        println (length r)
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_match_split_head_length", "[completer][ssh]")
+{
+    // Match on split with SINGLE cons (not double)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f line =
+            match split " " line with
+            | h :: _ -> h
+            | _ -> ""
+        let r = map f ["Host darkleon"; "Host bravo"; "Host charlie"]
+        println (length r)
+    )") == "3\n");
+}
+
+TEST_CASE("Completer.ssh.map_match_split_length_only", "[completer][ssh]")
+{
+    // Match on split result with length check (no cons)
+    CHECK(executeSourceAndGetOutput(R"(
+        let f line =
+            match split " " line with
+            | _ -> "found"
+        let r = map f ["Host darkleon"; "Host bravo"]
+        println (length r)
+    )") == "2\n");
+}
+
+TEST_CASE("Completer.ssh.cons_a_wildcard", "[completer][ssh]")
+{
+    // Match on a :: _ pattern (head extraction, tail wildcard)
+    CHECK(executeSourceAndGetOutput(R"(
+        let hosts = ["darkleon"; "bravo"]
+        match hosts with
+        | a :: _ -> println a
+        | _ -> println "fail"
+    )") == "darkleon\n");
+}
+
+TEST_CASE("Completer.ssh.cons_a_b_wildcard_multiline", "[completer][ssh]")
+{
+    // Match on a :: b :: _ with multi-line arm body
+    CHECK(executeSourceAndGetOutput(R"(
+        let hosts = ["darkleon"; "bravo"; "charlie"]
+        match hosts with
+        | a :: b :: _ ->
+            println a
+            println b
+        | _ -> println "fail"
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.map_with_match_split_direct_print", "[completer][ssh]")
+{
+    // Test: print each element individually without `each`
+    CHECK(executeSourceAndGetOutput(R"(
+        let extract line =
+            match split " " line with
+            | _ :: host :: _ -> host
+            | _ -> ""
+
+        let hosts = map extract ["Host darkleon"; "Host bravo"]
+        match hosts with
+        | a :: b :: _ ->
+            println a
+            println b
+        | _ -> println "fail"
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.split_pipeline_with_map", "[completer][ssh]")
+{
+    // Split + filter + map to extract host names
+    CHECK(executeSourceAndGetOutput(R"(
+        let hosts = "Host darkleon\nHost bravo" |> split "\n" |> filter (fun s -> s != "") |> map (fun line ->
+            match split " " line with
+            | _ :: host :: _ -> host
+            | _ -> "")
+        each println hosts
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.hosts_extraction_end_to_end", "[completer][ssh]")
+{
+    // Test the full ssh_complete expression path that executeCompleterFunction builds.
+    // Uses a hardcoded string instead of $(grep ...) to avoid shell dependency in tests.
+    CHECK(executeSourceAndGetOutput(R"(
+        let ssh_hosts _ =
+            "Host darkleon\nHost bravo" |> split "\n" |> filter (fun s -> s != "") |> map (fun line ->
+                match split " " line with
+                | _ :: host :: _ -> host
+                | _ -> "") |> filter (fun s -> s != "") |> filter (fun s -> not (contains "*" s))
+
+        let ssh_options = ["-p"; "-i"]
+
+        let ssh_complete args prefix =
+            match args with
+            | _ when startsWith "-" prefix -> ssh_options
+            | _ -> ssh_hosts ()
+
+        ssh_complete [] "" |> each println
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.hosts_with_wildcard_filtering", "[completer][ssh]")
+{
+    // Ensure wildcard Host entries are filtered out
+    CHECK(executeSourceAndGetOutput(R"(
+        let ssh_hosts _ =
+            "Host darkleon\nHost *\nHost bravo" |> split "\n" |> filter (fun s -> s != "") |> map (fun line ->
+                match split " " line with
+                | _ :: host :: _ -> host
+                | _ -> "") |> filter (fun s -> s != "") |> filter (fun s -> not (contains "*" s))
+
+        let ssh_options = ["-p"; "-i"]
+
+        let ssh_complete args prefix =
+            match args with
+            | _ when startsWith "-" prefix -> ssh_options
+            | _ -> ssh_hosts ()
+
+        ssh_complete [] "" |> each println
+    )") == "darkleon\nbravo\n");
+}
+
+TEST_CASE("Completer.ssh.option_completion", "[completer][ssh]")
+{
+    // When prefix starts with '-', return ssh_options
+    CHECK(executeSourceAndGetOutput(R"(
+        let ssh_hosts _ = ["darkleon"; "bravo"]
+        let ssh_options = ["-p"; "-i"]
+
+        let ssh_complete args prefix =
+            match args with
+            | _ when startsWith "-" prefix -> ssh_options
+            | _ -> ssh_hosts ()
+
+        ssh_complete [] "-" |> each println
+    )") == "-p\n-i\n");
+}
+
 TEST_CASE("Completer.scp.options_count", "[completer][scp]")
 {
     CHECK(executeSourceAndGetOutput(R"(

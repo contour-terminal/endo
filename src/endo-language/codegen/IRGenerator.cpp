@@ -1137,6 +1137,59 @@ std::optional<CoreVM::LiteralType> IRGenerator::getListElementLiteralType(CoreVM
     return std::nullopt;
 }
 
+void IRGenerator::annotateListElementInnerType(CoreVM::Value* val, CoreVM::LiteralType type)
+{
+    _listElementInnerTypes[val] = type;
+}
+
+std::optional<CoreVM::LiteralType> IRGenerator::getListElementInnerType(CoreVM::Value* val) const
+{
+    auto it = _listElementInnerTypes.find(val);
+    if (it != _listElementInnerTypes.end())
+        return it->second;
+    return std::nullopt;
+}
+
+void IRGenerator::annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type)
+{
+    if (type->isList())
+    {
+        annotateObjectTypeId(storage, CoreVM::BuiltinTypeId::List);
+        if (auto const* listType = type->asList())
+        {
+            if (auto elemLit = mapTypeToLiteralType(listType->elementType))
+                annotateListElementLiteralType(storage, *elemLit);
+        }
+    }
+    else if (type->isOption())
+    {
+        annotateObjectTypeId(storage, CoreVM::BuiltinTypeId::Option);
+        if (auto const* optType = type->asOption())
+        {
+            if (auto innerLit = mapTypeToLiteralType(optType->innerType))
+                annotateInnerType(storage, *innerLit);
+        }
+    }
+    else if (type->isResult())
+    {
+        annotateObjectTypeId(storage, CoreVM::BuiltinTypeId::Result);
+        if (auto const* resType = type->asResult())
+        {
+            if (auto innerLit = mapTypeToLiteralType(resType->okType))
+                annotateInnerType(storage, *innerLit);
+        }
+    }
+    else if (type->isTuple())
+    {
+        if (auto const* tupleType = type->asTuple())
+        {
+            auto const tupleTypeId = tupleType->elementTypes.size() == 2 ? CoreVM::BuiltinTypeId::Tuple2
+                                                                         : CoreVM::BuiltinTypeId::Tuple3;
+            annotateObjectTypeId(storage, tupleTypeId);
+        }
+    }
+}
+
 void IRGenerator::propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest)
 {
     if (auto v = getInnerType(source))
@@ -1149,6 +1202,8 @@ void IRGenerator::propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* 
         annotateListElementTypeId(dest, *v);
     if (auto v = getListElementLiteralType(source))
         annotateListElementLiteralType(dest, *v);
+    if (auto v = getListElementInnerType(source))
+        annotateListElementInnerType(dest, *v);
 }
 
 std::optional<CoreVM::LiteralType> IRGenerator::determineCommonLiteralType(
@@ -3236,6 +3291,20 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                     return _builder.createCallFunction(
                         _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".obj2s");
             }
+        }
+        // For Number-typed values with inner type annotation (e.g., compiled function returning
+        // a string extracted from a list via cons pattern), dispatch by inner type.
+        if (auto innerType = getInnerType(value))
+        {
+            if (*innerType == CoreVM::LiteralType::String)
+            {
+                auto* storage =
+                    createAllocaInEntryBlock(CoreVM::LiteralType::String, std::string(label) + ".n2s.tmp");
+                _builder.createStore(storage, value);
+                return _builder.createLoad(storage, std::string(label) + ".n2s.cast");
+            }
+            if (*innerType == CoreVM::LiteralType::Float)
+                return _builder.createF2S(value, std::string(label) + ".f2s");
         }
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
@@ -7609,6 +7678,18 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
         {
             _result = _builder.createFunctionCall(
                 func->compiledFunction, fullArgs, funcName + ".call", func->compiledReturnType);
+
+            // Propagate return value annotations from the compiled function body to the call result.
+            // Annotations are an IRGenerator-level concept that don't cross the UCALL boundary,
+            // so we must restore them here for convertToString to dispatch correctly.
+            if (func->compiledReturnInnerType)
+                annotateInnerType(_result, *func->compiledReturnInnerType);
+            if (func->compiledReturnObjectTypeId)
+                annotateObjectTypeId(_result, *func->compiledReturnObjectTypeId);
+            if (func->compiledReturnListElementTypeId)
+                annotateListElementTypeId(_result, *func->compiledReturnListElementTypeId);
+            if (func->compiledReturnListElementLiteralType)
+                annotateListElementLiteralType(_result, *func->compiledReturnListElementLiteralType);
         }
         return;
     }
@@ -7770,7 +7851,10 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         bindFSharpVariable(capName, storage);
     }
 
-    // Create explicit parameter allocas, using type annotations
+    // Create explicit parameter allocas, using type annotations.
+    // Also propagate semantic type annotations (objectTypeId, listElementLiteralType, etc.)
+    // from the type system to the IR so that downstream codegen (e.g., match arms with
+    // cons patterns) can determine element types correctly.
     for (size_t i = 0; i < func.parameters.size(); ++i)
     {
         auto paramType = CoreVM::LiteralType::Void;
@@ -7781,6 +7865,10 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         }
         auto* storage = createAllocaInEntryBlock(paramType, func.parameters[i]);
         bindFSharpVariable(func.parameters[i], storage);
+
+        // Annotate parameter allocas based on type annotations
+        if (i < func.parameterTypes.size() && func.parameterTypes[i].has_value())
+            annotateParameterFromType(storage, *func.parameterTypes[i]);
     }
 
     // Set up return infrastructure for ? operator (only if function returns Result/Option)
@@ -7874,9 +7962,18 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         return;
     }
 
-    // Store the return type (if known from a non-tail-call path)
+    // Store the return type and annotations (if known from a non-tail-call path).
+    // These annotations are propagated to the call result at call sites so that
+    // convertToString can dispatch correctly (e.g., innerType=String for cons pattern
+    // extraction from string lists).
     if (bodyResult)
+    {
         func.compiledReturnType = bodyResult->type();
+        func.compiledReturnInnerType = getInnerType(bodyResult);
+        func.compiledReturnObjectTypeId = getObjectTypeId(bodyResult);
+        func.compiledReturnListElementTypeId = getListElementTypeId(bodyResult);
+        func.compiledReturnListElementLiteralType = getListElementLiteralType(bodyResult);
+    }
 
     // Restore builder state
     _builder.setFunction(savedFunction);
@@ -8217,12 +8314,16 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
                 // For cons/list patterns on typed lists, annotate head element bindings
                 // with the list's element literal type so convertToString dispatches correctly.
-                // Also propagate list-level annotations for tail bindings (which are sublists).
+                // Prefer listElementInnerType (actual runtime type, e.g., String for compiled
+                // functions returning strings as Number) over listElementLiteralType (IR type).
                 if (isConsPattern || isListPattern)
                 {
-                    if (auto elemLitType = getListElementLiteralType(scrutineeStorage))
+                    if (auto elemInnerType = getListElementInnerType(scrutineeStorage))
+                        annotateInnerType(storage, *elemInnerType);
+                    else if (auto elemLitType = getListElementLiteralType(scrutineeStorage))
                         annotateInnerType(storage, *elemLitType);
-                    propagateAllAnnotations(scrutineeStorage, storage);
+                    if (auto elemTypeId = getListElementTypeId(scrutineeStorage))
+                        annotateObjectTypeId(storage, *elemTypeId);
                 }
             }
         }
@@ -10764,16 +10865,11 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     // Resolve actual function and list arguments from scope
     auto const& hofName = func->builtinHOF;
 
-    // Helper: load a list parameter and propagate list element type annotations
+    // Helper: load a list parameter and propagate all type annotations
     auto loadListParam = [&](std::string_view paramName, std::string_view label) -> CoreVM::Value* {
         auto* storage = lookupFSharpVariable(std::string(paramName));
         auto* loaded = _builder.createLoad(storage, std::string(label));
-        if (auto elemTypeId = getListElementTypeId(storage))
-            annotateListElementTypeId(loaded, *elemTypeId);
-        if (auto elt = getListElementLiteralType(storage))
-            annotateListElementLiteralType(loaded, *elt);
-        if (auto objTypeId = getObjectTypeId(storage))
-            annotateObjectTypeId(loaded, *objTypeId);
+        propagateAllAnnotations(storage, loaded);
         return loaded;
     };
 
@@ -10951,6 +11047,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     // getObjectTypeId checks annotations; tryGetObjectInfo traces the IR chain (ObjSetSlot → ObjAlloc)
     // as a fallback — needed because emitTuple2/emitTuple3 don't annotate their results.
     auto const mappedLiteralType = mapped->type();
+    auto const mappedInnerType = getInnerType(mapped);
     auto mappedObjTypeId = getObjectTypeId(mapped);
     if (!mappedObjTypeId)
     {
@@ -11017,6 +11114,8 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     if (mappedObjTypeId)
         annotateListElementTypeId(_result, *mappedObjTypeId);
     annotateListElementLiteralType(_result, mappedLiteralType);
+    if (mappedInnerType)
+        annotateListElementInnerType(_result, *mappedInnerType);
 }
 
 void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Value* listValue)
@@ -11056,6 +11155,11 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     }
     if (auto elt = getListElementLiteralType(listValue))
         annotateListElementLiteralType(srcStorage, *elt);
+    if (auto innerType = getListElementInnerType(listValue))
+    {
+        annotateInnerType(elemAlloca, *innerType);
+        annotateListElementInnerType(srcStorage, *innerType);
+    }
 
     // Create blocks
     auto* condBlock = _builder.createBlock("filter.cond");
@@ -11161,6 +11265,8 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
         annotateListElementTypeId(_result, *elemTypeId);
     if (auto elt = getListElementLiteralType(listValue))
         annotateListElementLiteralType(_result, *elt);
+    if (auto innerType = getListElementInnerType(listValue))
+        annotateListElementInnerType(_result, *innerType);
 }
 
 void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
@@ -11736,6 +11842,11 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     auto* elemLoad = _builder.createLoad(elemAlloca, "each.elem.load");
     if (auto elemTypeId = getObjectTypeId(elemAlloca))
         annotateObjectTypeId(elemLoad, *elemTypeId);
+    // Propagate element inner type (e.g., String for Number-typed values from compiled functions)
+    if (auto elemInnerType = getListElementInnerType(listValue))
+    {
+        annotateInnerType(elemLoad, *elemInnerType);
+    }
 
     if (isPrintBuiltin)
     {
