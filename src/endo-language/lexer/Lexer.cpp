@@ -1301,4 +1301,16 @@ Token Lexer::confirmToken(Token token)
     return token;
 }
 
+std::string Lexer::currentTokenText() const
+{
+    if (!_currentToken.literal.empty())
+        return _currentToken.literal;
+    switch (_currentToken.token)
+    {
+        case Token::EndOfInput: return "end of input";
+        case Token::LineFeed: return "end of line";
+        default: return std::string(tos(_currentToken.token));
+    }
+}
+
 } // namespace endo

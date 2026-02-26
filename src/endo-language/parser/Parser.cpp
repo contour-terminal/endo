@@ -884,7 +884,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                                {},
                                                currentContextSnippet(),
                                                "Unexpected token '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
     }
 
@@ -952,7 +952,7 @@ std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& fo
                                            { "Provide a pattern for the for-in loop" },
                                            currentContextSnippet(),
                                            "Expected pattern after 'for', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -964,7 +964,7 @@ std::unique_ptr<ast::ForInStmt> Parser::parseForIn(SourceLocationRange const& fo
                                            { "Use 'in' to specify the list to iterate over" },
                                            currentContextSnippet(),
                                            "Expected 'in' after pattern, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume 'in'
@@ -1140,7 +1140,7 @@ bool Parser::parseRedirect(std::vector<std::unique_ptr<ast::InputRedirect>>& inp
                                                    { "Provide a delimiter for the here-document" },
                                                    currentContextSnippet(),
                                                    "Expected here-document delimiter, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return false;
             }
             std::string delimiter = consumeLiteral();
@@ -1172,7 +1172,7 @@ bool Parser::parseRedirect(std::vector<std::unique_ptr<ast::InputRedirect>>& inp
                                                    currentContextSnippet(),
                                                    "Expected redirect operator after '{}', got '{}'",
                                                    fdValue,
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return false;
             }
             return false;
@@ -1291,7 +1291,7 @@ std::unique_ptr<ast::ProgramCall> Parser::parseCall(bool piped)
                                 { "Provide a delimiter for the here-document" },
                                 currentContextSnippet(),
                                 "Expected here-document delimiter, got '{}'",
-                                _lexer.currentLiteral());
+                                _lexer.currentTokenText());
                             break;
                         }
                         std::string delimiter = consumeLiteral();
@@ -1412,7 +1412,7 @@ std::unique_ptr<ast::SubstitutionExpr> Parser::parseCommandSubstitution()
                                            { "Add a closing ')' after the command" },
                                            currentContextSnippet(),
                                            "Expected ')' after command substitution, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume )
@@ -1434,7 +1434,7 @@ std::unique_ptr<ast::SubstitutionExpr> Parser::parseBacktickSubstitution()
                                            { "Add a closing backtick" },
                                            currentContextSnippet(),
                                            "Expected closing backtick, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume closing `
@@ -1454,7 +1454,7 @@ std::unique_ptr<ast::CommandFileSubst> Parser::parseProcessSubstitution(ast::Pro
                                            { "Add a closing ')' after the command" },
                                            currentContextSnippet(),
                                            "Expected ')' after process substitution, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume )
@@ -1709,7 +1709,7 @@ std::unique_ptr<ast::Expr> Parser::parseInterpolatedString()
                                                    {},
                                                    currentContextSnippet(),
                                                    "Unexpected token '{}' in interpolated string",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
         }
     }
@@ -1772,7 +1772,7 @@ std::unique_ptr<ast::Expr> Parser::parseFStringExpression()
                         { "Add a closing '}'" },
                         currentContextSnippet(),
                         "Expected '}}' after expression in interpolated string, got '{}'",
-                        _lexer.currentLiteral());
+                        _lexer.currentTokenText());
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume }
@@ -1785,7 +1785,7 @@ std::unique_ptr<ast::Expr> Parser::parseFStringExpression()
                                                    {},
                                                    currentContextSnippet(),
                                                    "Unexpected token '{}' in F# interpolated string",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
         }
     }
@@ -2313,7 +2313,7 @@ std::unique_ptr<ast::Expr> Parser::parseParameter()
                                                {},
                                                currentContextSnippet(),
                                                "Expected parameter, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
     }
 }
@@ -2612,7 +2612,7 @@ void Parser::consumeDirective(const std::string& directive)
                                            currentContextSnippet(),
                                            "Expected '{}' but got '{}'",
                                            directive,
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
 }
 
 bool Parser::containsGlobChars(std::string_view s)
@@ -2965,7 +2965,7 @@ TypePtr Parser::parseBaseType()
                                                    { "Add ')' to close tuple type" },
                                                    currentContextSnippet(),
                                                    "Expected ')' in tuple type, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             _lexer.nextToken(); // consume ')'
@@ -2978,7 +2978,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add ')' to close parenthesized type" },
                                                currentContextSnippet(),
                                                "Expected ')' in type expression, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume ')'
@@ -2991,7 +2991,7 @@ TypePtr Parser::parseBaseType()
                                            { "Provide a type name like 'int', 'str', 'bool', etc." },
                                            currentContextSnippet(),
                                            "Expected type name, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -3034,7 +3034,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add type parameter: 'list<int>'" },
                                                currentContextSnippet(),
                                                "Expected '<' after 'list', got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '<'
@@ -3047,7 +3047,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add '>' to close type parameter" },
                                                currentContextSnippet(),
                                                "Expected '>' after list element type, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '>'
@@ -3063,7 +3063,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add type parameter: 'option<int>'" },
                                                currentContextSnippet(),
                                                "Expected '<' after 'option', got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '<'
@@ -3076,7 +3076,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add '>' to close type parameter" },
                                                currentContextSnippet(),
                                                "Expected '>' after option inner type, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '>'
@@ -3092,7 +3092,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add type parameters: 'result<int, str>'" },
                                                currentContextSnippet(),
                                                "Expected '<' after 'result', got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '<'
@@ -3105,7 +3105,7 @@ TypePtr Parser::parseBaseType()
                                                { "Provide error type: 'result<int, str>'" },
                                                currentContextSnippet(),
                                                "Expected ',' in result type, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume ','
@@ -3118,7 +3118,7 @@ TypePtr Parser::parseBaseType()
                                                { "Add '>' to close type parameters" },
                                                currentContextSnippet(),
                                                "Expected '>' after result error type, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '>'
@@ -3207,7 +3207,7 @@ std::optional<ast::TypedParameter> Parser::parseTypedParameter()
                                                { "Add ')' to close annotated parameter" },
                                                currentContextSnippet(),
                                                "Expected ')' after parameter type annotation, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return std::nullopt;
         }
         _lexer.nextToken(); // consume ')'
@@ -3284,7 +3284,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                                { "Add '=' followed by an expression" },
                                                currentContextSnippet(),
                                                "Expected '=' in destructuring let binding, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             _lexer.leaveFSharpExpr();
             return nullptr;
         }
@@ -3313,7 +3313,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                            { "Provide a name for the let binding" },
                                            currentContextSnippet(),
                                            "Expected identifier after 'let', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         _lexer.leaveFSharpExpr();
         return nullptr;
     }
@@ -3376,7 +3376,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                            { "Add '=' followed by an expression" },
                                            currentContextSnippet(),
                                            "Expected '=' in let binding, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         _lexer.leaveFSharpExpr();
         return nullptr;
     }
@@ -3421,7 +3421,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                                { "Provide a name for the 'and' binding" },
                                                currentContextSnippet(),
                                                "Expected identifier after 'and', got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             _lexer.leaveFSharpExpr();
             return nullptr;
         }
@@ -3467,7 +3467,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                                { "Add '=' followed by function body" },
                                                currentContextSnippet(),
                                                "Expected '=' in 'and' binding, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             _lexer.leaveFSharpExpr();
             return nullptr;
         }
@@ -3550,7 +3550,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                                            { "Use 'get' or 'set' after 'with'" },
                                            currentContextSnippet(),
                                            "Expected 'get' or 'set' after 'with', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         _lexer.leaveFSharpExpr();
         return nullptr;
     }
@@ -3567,7 +3567,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                 currentContextSnippet(),
                 "Expected '(' after '{}', got '{}'",
                 isSetter ? "set" : "get",
-                _lexer.currentLiteral());
+                _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '('
@@ -3583,7 +3583,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                                                    { "Provide a parameter name: 'set (value) = ...'" },
                                                    currentContextSnippet(),
                                                    "Expected parameter name in setter, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             accessor->paramName = consumeLiteral();
@@ -3606,7 +3606,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                                                currentContextSnippet(),
                                                "Expected ')' in {} accessor, got '{}'",
                                                isSetter ? "set" : "get",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume ')'
@@ -3628,7 +3628,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                                                currentContextSnippet(),
                                                "Expected '=' in {} accessor, got '{}'",
                                                isSetter ? "set" : "get",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         auto const eqLine = _lexer.currentRange().begin.line;
@@ -3680,7 +3680,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parsePropertyAccessors(
                                                currentContextSnippet(),
                                                "Expected '{}' after 'and', got '{}'",
                                                expectSecond,
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             _lexer.leaveFSharpExpr();
             return nullptr;
         }
@@ -3737,7 +3737,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                                { "Add '=' followed by an expression" },
                                                currentContextSnippet(),
                                                "Expected '=' in destructuring let-in binding, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '='
@@ -3755,7 +3755,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                                { "Add 'in' followed by body expression" },
                                                currentContextSnippet(),
                                                "Expected 'in' after destructuring value, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume 'in'
@@ -3778,7 +3778,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                            { "Provide a name for the let binding" },
                                            currentContextSnippet(),
                                            "Expected identifier after 'let', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -3825,7 +3825,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                            { "Add '=' followed by an expression" },
                                            currentContextSnippet(),
                                            "Expected '=' in let-in binding, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '='
@@ -3848,7 +3848,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                            { "Add 'in' followed by body expression" },
                                            currentContextSnippet(),
                                            "Expected 'in' after let binding value, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume 'in'
@@ -4379,7 +4379,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
                                                    { "Provide a field name or numeric index after '.'" },
                                                    currentContextSnippet(),
                                                    "Expected field name or index after '.', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto fieldName = std::string(_lexer.currentLiteral());
@@ -4399,7 +4399,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPostfix()
                                                    { "Provide a field name after '?.'" },
                                                    currentContextSnippet(),
                                                    "Expected field name after '?.', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto fieldName = _lexer.currentLiteral();
@@ -4474,7 +4474,7 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
                                            { "Add 'with' or 'finally' after try body" },
                                            currentContextSnippet(),
                                            "Expected 'with' or 'finally' after try body, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume 'with'
@@ -4517,7 +4517,7 @@ std::unique_ptr<ast::Expr> Parser::parseTryWith()
                                                { "Use '->' to separate pattern from handler body" },
                                                currentContextSnippet(),
                                                "Expected '->' in try-with handler, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         auto const handlerArrowLine = _lexer.currentRange().begin.line;
@@ -4575,7 +4575,7 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
                                            { "Provide at least one parameter for the lambda" },
                                            currentContextSnippet(),
                                            "Expected parameter after 'fun', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -4596,7 +4596,7 @@ std::unique_ptr<ast::LambdaExpr> Parser::parseLambda()
                                            { "Use '->' to separate parameters from body" },
                                            currentContextSnippet(),
                                            "Expected '->' in lambda expression, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '->'
@@ -4717,7 +4717,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                            { "Provide a type name" },
                                            currentContextSnippet(),
                                            "Expected type name after 'type', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     auto typeName = _lexer.currentLiteral();
@@ -4730,7 +4730,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                            currentContextSnippet(),
                                            "Expected '=' after type name '{}', got '{}'",
                                            typeName,
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.enterFSharpExpr();
@@ -4753,7 +4753,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                                    { "Provide a constructor name" },
                                                    currentContextSnippet(),
                                                    "Expected constructor name after '|', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto ctorName = _lexer.currentLiteral();
@@ -4875,7 +4875,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                            { "Add '{' for record or '|' for union" },
                                            currentContextSnippet(),
                                            "Expected '{{' or '|' after '=', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '{'
@@ -4892,7 +4892,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                                { "Provide a field name" },
                                                currentContextSnippet(),
                                                "Expected field name, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         auto fieldName = _lexer.currentLiteral();
@@ -4906,7 +4906,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                                currentContextSnippet(),
                                                "Expected ':' after field name '{}', got '{}'",
                                                fieldName,
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume ':'
@@ -4933,7 +4933,7 @@ std::unique_ptr<ast::Statement> Parser::parseTypeDefinition()
                                            { "Add a closing '}'" },
                                            currentContextSnippet(),
                                            "Expected '}}' at end of record type definition, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '}'
@@ -4962,7 +4962,7 @@ std::vector<ast::DataSourceFieldDef> Parser::parseDataSourceFieldDefs()
                                                { "Provide a field name" },
                                                currentContextSnippet(),
                                                "Expected field name in data source type annotation, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return {};
         }
         auto fieldName = _lexer.currentLiteral();
@@ -4975,7 +4975,7 @@ std::vector<ast::DataSourceFieldDef> Parser::parseDataSourceFieldDefs()
                                                currentContextSnippet(),
                                                "Expected ':' after field name '{}', got '{}'",
                                                fieldName,
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return {};
         }
         _lexer.nextToken(); // consume ':'
@@ -5118,7 +5118,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
                                                { "Add a closing '}'" },
                                                currentContextSnippet(),
                                                "Expected '}}' at end of type annotation, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '}'
@@ -5136,7 +5136,7 @@ std::unique_ptr<ast::Expr> Parser::tryParseDataSource(std::unique_ptr<ast::State
                                            { "Provide a type: '{ ... }' or a type name" },
                                            currentContextSnippet(),
                                            "Expected type annotation after 'as', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -5202,7 +5202,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                                { "Add a closing '}'" },
                                                currentContextSnippet(),
                                                "Expected '}}' at end of block expression, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         _lexer.nextToken(); // consume '}'
@@ -5242,7 +5242,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                                        { "Provide a field name" },
                                                        currentContextSnippet(),
                                                        "Expected field name in record literal, got '{}'",
-                                                       _lexer.currentLiteral());
+                                                       _lexer.currentTokenText());
                     return nullptr;
                 }
                 auto fieldName = _lexer.currentLiteral();
@@ -5256,7 +5256,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                         currentContextSnippet(),
                         "Expected '=' after field name '{}' in record literal, got '{}'",
                         fieldName,
-                        _lexer.currentLiteral());
+                        _lexer.currentTokenText());
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume '='
@@ -5278,7 +5278,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                                    { "Add a closing '}'" },
                                                    currentContextSnippet(),
                                                    "Expected '}}' at end of record literal, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             _lexer.nextToken(); // consume '}'
@@ -5320,7 +5320,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                                        { "Provide a field name" },
                                                        currentContextSnippet(),
                                                        "Expected field name in record update, got '{}'",
-                                                       _lexer.currentLiteral());
+                                                       _lexer.currentTokenText());
                     return nullptr;
                 }
                 auto fieldName = _lexer.currentLiteral();
@@ -5334,7 +5334,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                         currentContextSnippet(),
                         "Expected '=' after field name '{}' in record update, got '{}'",
                         fieldName,
-                        _lexer.currentLiteral());
+                        _lexer.currentTokenText());
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume '='
@@ -5356,7 +5356,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                                    { "Add a closing '}'" },
                                                    currentContextSnippet(),
                                                    "Expected '}}' at end of record update, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             _lexer.nextToken(); // consume '}'
@@ -5406,7 +5406,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExprOrRecord()
                                            { "Add a closing '}'" },
                                            currentContextSnippet(),
                                            "Expected '}}' at end of block expression, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '}'
@@ -5462,7 +5462,7 @@ std::unique_ptr<ast::Expr> Parser::parseBlockExpr()
                                            { "Add a closing '}'" },
                                            currentContextSnippet(),
                                            "Expected '}}' at end of block expression, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -5777,7 +5777,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                        { "Add 'then' after the condition" },
                                                        currentContextSnippet(),
                                                        "Expected 'then' in if-expression, got '{}'",
-                                                       _lexer.currentLiteral());
+                                                       _lexer.currentTokenText());
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume 'then'
@@ -5940,7 +5940,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                        { "Add a closing ')'" },
                                                        currentContextSnippet(),
                                                        "Expected ')' after tuple, got '{}'",
-                                                       _lexer.currentLiteral());
+                                                       _lexer.currentTokenText());
                     return nullptr;
                 }
                 auto const closeLoc = _lexer.currentRange();
@@ -5972,7 +5972,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    { "Add a closing ')'" },
                                                    currentContextSnippet(),
                                                    "Expected ')' after expression, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto const closeLoc = _lexer.currentRange();
@@ -6027,7 +6027,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    { "Add a closing ')' after the command" },
                                                    currentContextSnippet(),
                                                    "Expected ')' after command substitution, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             _lexer.nextToken(); // consume ), lex next token in F# mode
@@ -6045,7 +6045,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    { "Provide a value after 'Some'" },
                                                    currentContextSnippet(),
                                                    "Expected expression after 'Some', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto const endLoc = value->location;
@@ -6074,7 +6074,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    { "Provide a value after 'Ok'" },
                                                    currentContextSnippet(),
                                                    "Expected expression after 'Ok', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto const endLoc = value->location;
@@ -6094,7 +6094,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                    { "Provide a value after 'Error'" },
                                                    currentContextSnippet(),
                                                    "Expected expression after 'Error', got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
             auto const endLoc = value->location;
@@ -6133,7 +6133,7 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                                                {},
                                                currentContextSnippet(),
                                                "Expected expression, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
     }
 }
@@ -6334,7 +6334,7 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteral()
                                            { "Add closing ']'" },
                                            currentContextSnippet(),
                                            "Unexpected token in list literal: '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 }
@@ -6405,7 +6405,7 @@ std::unique_ptr<ast::Expr> Parser::parseListLiteralTokenized()
                                            { "Add closing ']'" },
                                            currentContextSnippet(),
                                            "Expected ']' or ';' in list literal, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     auto const closeLoc = _lexer.currentRange();
@@ -6432,7 +6432,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehensionTokenized()
                                            { "Add closing ']'" },
                                            currentContextSnippet(),
                                            "Expected ']' after list comprehension, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume ']'
@@ -6460,7 +6460,7 @@ std::unique_ptr<ast::Expr> Parser::parseComprehensionGenerator()
                                            {},
                                            currentContextSnippet(),
                                            "Expected variable name after 'for', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     std::string varName = consumeLiteral();
@@ -6525,7 +6525,7 @@ std::unique_ptr<ast::Expr> Parser::parseComprehensionGenerator()
                                            {},
                                            currentContextSnippet(),
                                            "Expected '->' in list comprehension, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '->'
@@ -6750,7 +6750,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                            { "Provide a variable name: [for x in ...]" },
                                            currentContextSnippet(),
                                            "Expected variable name after 'for', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     std::string variable = _lexer.currentLiteral();
@@ -6763,7 +6763,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                            { "Add 'in' keyword: [for x in ...]" },
                                            currentContextSnippet(),
                                            "Expected 'in' after variable name, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume 'in'
@@ -6792,7 +6792,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                            {},
                                            currentContextSnippet(),
                                            "Expected source expression after 'in', got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
 
@@ -6819,7 +6819,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                                {},
                                                currentContextSnippet(),
                                                "Expected value after '..' in range, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
 
@@ -6846,7 +6846,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                                    {},
                                                    currentContextSnippet(),
                                                    "Expected end value after '..' in range, got '{}'",
-                                                   _lexer.currentLiteral());
+                                                   _lexer.currentTokenText());
                 return nullptr;
             }
 
@@ -6887,7 +6887,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                            { "Add '->' before the body expression" },
                                            currentContextSnippet(),
                                            "Expected '->' in list comprehension, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '->'
@@ -6910,7 +6910,7 @@ std::unique_ptr<ast::Expr> Parser::parseListComprehension()
                                            { "Add closing ']'" },
                                            currentContextSnippet(),
                                            "Expected ']' after list comprehension, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume ']'
@@ -6951,7 +6951,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
                                            { "Add 'with' keyword" },
                                            currentContextSnippet(),
                                            "Expected 'with' after match expression, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume 'with'
@@ -7053,7 +7053,7 @@ std::unique_ptr<ast::MatchExpr> Parser::parseMatch()
                                                { "Add '->' after pattern" },
                                                currentContextSnippet(),
                                                "Expected '->' after pattern, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
         auto const arrowLine = _lexer.currentRange().begin.line;
@@ -7381,7 +7381,7 @@ std::unique_ptr<pattern::Pattern> Parser::parsePrimaryPattern()
                                                {},
                                                currentContextSnippet(),
                                                "Expected pattern, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
     }
 }
@@ -7536,7 +7536,7 @@ std::unique_ptr<pattern::Pattern> Parser::parseTuplePattern()
                                            { "Add closing ')'" },
                                            currentContextSnippet(),
                                            "Expected ')' or ',' in tuple pattern, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume ')'
@@ -7633,7 +7633,7 @@ std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
                                                { "Provide a field name or '_'" },
                                                currentContextSnippet(),
                                                "Expected field name in record pattern, got '{}'",
-                                               _lexer.currentLiteral());
+                                               _lexer.currentTokenText());
             return nullptr;
         }
 
@@ -7649,7 +7649,7 @@ std::unique_ptr<pattern::Pattern> Parser::parseRecordPattern()
                                            { "Add a closing '}'" },
                                            currentContextSnippet(),
                                            "Expected '}}' at end of record pattern, got '{}'",
-                                           _lexer.currentLiteral());
+                                           _lexer.currentTokenText());
         return nullptr;
     }
     _lexer.nextToken(); // consume '}'

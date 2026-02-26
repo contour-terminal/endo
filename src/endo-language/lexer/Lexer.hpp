@@ -310,6 +310,11 @@ class Lexer
 
     [[nodiscard]] std::string const& currentLiteral() const noexcept { return _currentToken.literal; }
 
+    /// Returns a human-readable description of the current token for error messages.
+    /// Prefers the literal text (for identifiers, numbers, strings), falling back
+    /// to the token's symbolic name for punctuation, operators, and keywords.
+    [[nodiscard]] std::string currentTokenText() const;
+
     [[nodiscard]] SourceLocationRange currentRange() const noexcept { return _currentToken.location; }
 
     [[nodiscard]] bool isDirective(std::string_view name) const noexcept
