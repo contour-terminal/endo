@@ -2,6 +2,7 @@
 #pragma once
 
 #include <shell/completion/CompletionProvider.hpp>
+#include <shell/history/History.hpp>
 
 #include <string>
 #include <utility>
@@ -16,9 +17,10 @@ namespace endo
 class CommandCompleter: public CompletionProvider
 {
   public:
-    /// @brief Constructs a command completer with access to environment for PATH.
+    /// @brief Constructs a command completer with access to environment for PATH and history for recency.
     /// @param env The environment to query for PATH.
-    explicit CommandCompleter(EnvironmentProvider const& env);
+    /// @param history The command history for recency-based scoring.
+    CommandCompleter(EnvironmentProvider const& env, History const& history);
 
     [[nodiscard]] std::vector<CompletionItem> complete(CompletionContext const& context) override;
     [[nodiscard]] bool canHandle(CompletionContextType type) const override;
@@ -30,6 +32,7 @@ class CommandCompleter: public CompletionProvider
 
   private:
     EnvironmentProvider const& _env;
+    History const& _history;
 
     // Cached PATH scan results: (command name, full path)
     mutable std::vector<std::pair<std::string, std::string>> _cachedCommands;

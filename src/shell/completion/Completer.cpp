@@ -17,7 +17,7 @@ Completer::Completer(EnvironmentProvider const& env,
 {
     // Register default providers in priority order
     _providers.push_back(std::make_unique<BuiltinArgumentCompleter>());
-    _providers.push_back(std::make_unique<CommandCompleter>(env));
+    _providers.push_back(std::make_unique<CommandCompleter>(env, history));
     _providers.push_back(std::make_unique<FSharpCompleter>(fsharpState));
 
     // Git command spec completer (cmake/ssh/scp/ctest moved to scripted completers)

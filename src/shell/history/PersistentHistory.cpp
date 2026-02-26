@@ -266,8 +266,10 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
     auto const minThreshold = fuzzyConfig.minMatchThreshold;
 
     // Collect all matches from newest to oldest
-    auto recencyBonus = static_cast<int>(_richEntries.size());
-    for (auto it = _richEntries.rbegin(); it != _richEntries.rend(); ++it, --recencyBonus)
+    constexpr auto maxRecencyBonus = 200;
+    auto const total = static_cast<int>(_richEntries.size());
+    auto position = 0;
+    for (auto it = _richEntries.rbegin(); it != _richEntries.rend(); ++it, ++position)
     {
         // Check prefix match first
         auto const isPrefixMatch = tui::SmartCaseMatch::matchesPrefix(it->command, prefix);
@@ -286,9 +288,12 @@ std::vector<History::FuzzySearchResult> PersistentHistory::searchFuzzy(std::stri
         if (!isPrefixMatch && !isFuzzyMatch)
             continue;
 
-        // Frequency bonus: min(executionCount * 5, 200)
+        // Recency bonus: scaled to fixed range [0, maxRecencyBonus], newest gets highest
+        auto const recencyBonus = total > 0 ? maxRecencyBonus * (total - position) / total : 0;
+
+        // Frequency bonus: small tiebreaker, recency dominates
         auto const frequencyBonus =
-            static_cast<int>(std::min(static_cast<uint32_t>(it->executionCount * 5), uint32_t { 200 }));
+            static_cast<int>(std::min(static_cast<uint32_t>(it->executionCount * 2), uint32_t { 50 }));
 
         auto score = 0;
         auto matchPositions = std::vector<size_t> {};

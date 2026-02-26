@@ -206,7 +206,7 @@ TEST_CASE("PersistentHistory.load_save_roundtrip", "[history]")
     }
 }
 
-TEST_CASE("PersistentHistory.frequency_aware_scoring", "[history]")
+TEST_CASE("PersistentHistory.recency_over_frequency", "[history]")
 {
     auto dir = TempDir {};
     auto history = endo::PersistentHistory {};
@@ -221,12 +221,48 @@ TEST_CASE("PersistentHistory.frequency_aware_scoring", "[history]")
         history.markLastResult(0);
     }
 
+    // "git log" added last (most recent)
     history.add("git log");
     history.markLastResult(0);
 
     auto const results = history.searchFuzzy("git", 10);
     REQUIRE(results.size() == 2);
-    // "git status" should score higher due to frequency despite being older
+    // "git log" should score higher due to recency despite lower frequency
+    CHECK(results[0].entry == "git log");
+}
+
+TEST_CASE("PersistentHistory.frequency_tiebreaker", "[history]")
+{
+    auto dir = TempDir {};
+    auto history = endo::PersistentHistory {};
+    history.setFilePath(dir.path / "history.yml");
+
+    // Build up frequency for "git status" (executionCount = 20)
+    for (auto i = 0; i < 20; ++i)
+    {
+        history.add("git status");
+        history.markLastResult(0);
+    }
+
+    // Add many filler entries to dilute recency bonus between adjacent positions
+    for (auto i = 0; i < 100; ++i)
+    {
+        history.add("filler" + std::to_string(i));
+        history.markLastResult(0);
+    }
+
+    // Add "git log" once (low frequency), then "git status" again so both are at the end
+    history.add("git log");
+    history.markLastResult(0);
+    history.add("git status");
+    history.markLastResult(0);
+
+    // Now both "git" entries are the two most recent in a 102-entry list.
+    // Recency difference between adjacent entries: ~200/102 ≈ 2
+    // Frequency: git status=min(21*2,50)=42, git log=min(1*2,50)=2 → difference=40 >> 2
+    // So frequency acts as tiebreaker when recency is nearly equal.
+    auto const results = history.searchFuzzy("git", 10);
+    REQUIRE(results.size() == 2);
     CHECK(results[0].entry == "git status");
 }
 

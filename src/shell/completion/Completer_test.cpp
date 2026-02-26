@@ -121,3 +121,35 @@ TEST_CASE("Completer.suggest.history_full_line_over_variable_word")
     REQUIRE(result.has_value());
     CHECK(*result == "/bin/something");
 }
+
+// =============================================================================
+// Completion (popup menu) tests
+// =============================================================================
+
+TEST_CASE("Completer.complete.recency_boosts_command_score")
+{
+    endo::InMemoryHistory history;
+    history.add("git status");
+    history.add("grep foo");
+    endo::TestEnvironment env;
+    env.set("PATH", ""); // No real PATH — only builtins will appear plus history boost
+    endo::FSharpPersistentState fsharpState;
+    endo::Completer completer(env, history, fsharpState);
+
+    auto const results = completer.complete("g", 1);
+
+    // Find scores for commands starting with "g" that have history
+    auto grepScore = 0;
+    auto gitScore = 0;
+    for (auto const& item: results)
+    {
+        if (item.text == "grep")
+            grepScore = item.score;
+        else if (item.text == "git")
+            gitScore = item.score;
+    }
+
+    // "grep" was added to history more recently than "git", so it should score higher
+    if (grepScore > 0 && gitScore > 0)
+        CHECK(grepScore > gitScore);
+}

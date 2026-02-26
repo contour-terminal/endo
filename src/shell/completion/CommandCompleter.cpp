@@ -13,11 +13,13 @@
 #include <filesystem>
 #include <map>
 #include <set>
+#include <unordered_map>
 
 namespace endo
 {
 
-CommandCompleter::CommandCompleter(EnvironmentProvider const& env): _env(env)
+CommandCompleter::CommandCompleter(EnvironmentProvider const& env, History const& history):
+    _env(env), _history(history)
 {
 }
 
@@ -66,6 +68,29 @@ std::vector<CompletionItem> CommandCompleter::complete(CompletionContext const& 
         }
         if (!isDuplicate)
             results.push_back(std::move(item));
+    }
+
+    // Apply recency bonus from history: recently-used commands rank higher
+    auto const& historyEntries = _history.entries(); // oldest first
+    auto const total = static_cast<int>(historyEntries.size());
+    if (total > 0)
+    {
+        constexpr auto maxBonus = 200;
+        auto recencyMap = std::unordered_map<std::string, int> {};
+        for (auto i = total - 1; i >= 0; --i)
+        {
+            auto const& entry = historyEntries[static_cast<size_t>(i)];
+            // Extract first word (the command name)
+            auto const spacePos = entry.find(' ');
+            auto const cmd = entry.substr(0, spacePos);
+            if (!cmd.empty())
+                recencyMap.try_emplace(cmd, maxBonus * (i + 1) / total);
+        }
+        for (auto& item: results)
+        {
+            if (auto const it = recencyMap.find(item.text); it != recencyMap.end())
+                item.score += it->second;
+        }
     }
 
     // Sort by score (descending), then alphabetically
