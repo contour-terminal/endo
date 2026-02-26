@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Mutable binding with type annotation
+# expect: 42
+
+let mut x: int = 0
+x <- 42
+print x

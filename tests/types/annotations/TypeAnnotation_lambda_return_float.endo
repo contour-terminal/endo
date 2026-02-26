@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda return type annotation with float
+# expect: 3.14
+
+let f = fun (x: float) : float -> x
+print (f 3.14)

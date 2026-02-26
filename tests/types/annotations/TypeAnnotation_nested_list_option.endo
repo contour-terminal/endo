@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Nested list of option type annotation (uses space to separate >>)
+# mode: ir-only
+
+let xs: list<option<int> > = [Some 1; None]
+print xs

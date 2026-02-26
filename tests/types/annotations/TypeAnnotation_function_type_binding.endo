@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function type as binding annotation
+# expect: 6
+
+let f: int -> int = fun x -> x + 1
+print (f 5)

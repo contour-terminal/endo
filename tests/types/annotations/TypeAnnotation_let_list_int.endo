@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: List type annotation on let binding
+# mode: ir-only
+
+let xs: list<int> = [1; 2; 3]
+print xs

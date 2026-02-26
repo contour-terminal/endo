@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda return type mismatch should fail
+# expect-error:
+
+let f = fun (x: int) : str -> x + 1
+f 1

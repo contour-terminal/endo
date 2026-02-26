@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function type annotation with two arguments
+# expect: 7
+
+let f: int -> int -> int = fun x y -> x + y
+print (f 3 4)

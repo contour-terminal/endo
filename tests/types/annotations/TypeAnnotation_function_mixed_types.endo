@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function with mixed parameter types
+# expect: hello
+
+let f (x: int) (s: str): str = s
+print (f 1 "hello")

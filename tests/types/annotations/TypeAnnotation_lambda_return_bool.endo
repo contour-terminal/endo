@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda return type annotation with bool
+# expect: true
+
+let f = fun (x: int) : bool -> x > 0
+print (f 5)

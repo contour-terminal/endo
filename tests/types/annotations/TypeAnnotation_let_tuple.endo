@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Tuple type annotation on let binding
+# mode: ir-only
+
+let p: (int, int) = (1, 2)
+print p

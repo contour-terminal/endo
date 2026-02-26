@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda return type annotation with str
+# expect: hello
+
+let f = fun (x: str) : str -> x
+print (f "hello")

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Lambda return type annotation with int
+# expect: 6
+
+let f = fun (x: int) : int -> x + 1
+print (f 5)

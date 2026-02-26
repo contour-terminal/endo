@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Function with bool parameter
+# expect: false
+
+let f (b: bool) = !b
+print (f true)
