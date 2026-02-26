@@ -50,7 +50,8 @@ This document tracks the implementation status of F# language features as define
 ### Type Annotations
 - [x] Variable annotations: `let count: int = 42`
 - [x] Function parameter annotations: `let add (x: int) (y: int): int = x + y`
-- [x] Lambda annotations: `fun (x: int) -> x + 1`
+- [x] Lambda parameter annotations: `fun (x: int) -> x + 1`
+- [x] Lambda return type annotations: `fun (x: int) : int -> x + 1`
 
 ### Type Inference
 - [x] Hindley-Milner type inference (Algorithm W) as separate pre-pass before IR generation
