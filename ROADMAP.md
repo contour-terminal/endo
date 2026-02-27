@@ -1360,6 +1360,22 @@ to perform syntax/semantic validation without executing code.
 - Currently 73 of 144 blocks fail (illustrative fragments, unimplemented features) — fixing these is tracked separately
 - ctest runs with `--allow-failures` to report without blocking the build
 
+### Phase 5.0b: .endo Test Runner (ctest integration)
+
+**Status: ✅ Complete**
+
+**Tasks:**
+- [x] Create `scripts/run-endo-tests.py` — Python test runner for `.endo` files with directive-based validation
+- [x] Parse comment directives: `# expect:`, `# expect-error:`, `# expect-exit:`, `# expect-nonempty`, `# mode:`, `# mock-env:`, `# session-separator:`, `# mock-which:`, `# unused-detection:`
+- [x] Register as ctest targets: `check-examples` (examples/ only, 60s timeout) and `check-endo-tests` (full suite, 300s timeout)
+- [x] Skip handling: network-dependent files, `mode: structured`, `session-separator:`, `mock-which:`, `unused-detection:`, `tests/completers/`
+
+**Implementation Notes:**
+- Follows `check-doc-snippets.py` patterns (find_project_root, find_endo_binary, subprocess)
+- Supports `--endo-path`, `--dir`, `--examples-only`, `-v/--verbose` CLI options
+- Strips trailing empty `# expect:` lines (REPL blank line convention vs script mode)
+- Examples: 17/20 pass (2 pre-existing crashes in conditional-expressions.endo and validation.endo)
+
 ### Phase 5.1: Debug Adapter Protocol (DAP) Server
 
 **Dependency:** Milestone 1 (complete language), Phase 1.6 (functions)

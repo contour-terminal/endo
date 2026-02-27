@@ -261,6 +261,33 @@ if(Python3_FOUND)
         TIMEOUT 120
         LABELS "docs"
     )
+
+    # Run examples/ .endo files (fast smoke test)
+    add_test(
+        NAME check-examples
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/scripts/run-endo-tests.py
+            --endo-path $<TARGET_FILE:endo-bin>
+            --examples-only
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(check-examples PROPERTIES
+        TIMEOUT 60
+        LABELS "examples"
+    )
+
+    # Run full tests/ + examples/ .endo suite
+    add_test(
+        NAME check-endo-tests
+        COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/scripts/run-endo-tests.py
+            --endo-path $<TARGET_FILE:endo-bin>
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(check-endo-tests PROPERTIES
+        TIMEOUT 300
+        LABELS "integration"
+    )
 endif()
 
 # Installation
