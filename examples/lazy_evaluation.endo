@@ -1,0 +1,53 @@
+// Lazy Evaluation
+// Defer expensive computations until their results are actually needed.
+// Once forced, the result is cached — subsequent forces return instantly.
+
+// --- Basic lazy values ---
+
+let x = lazy 42
+
+print "Basic: "
+println (force x)
+
+// --- Conditional computation ---
+// Only compute what's actually needed based on a runtime condition.
+
+let rec fibonacci n =
+    if n <= 1 then n
+    else fibonacci (n - 1) + fibonacci (n - 2)
+
+let smallAnswer = lazy (fibonacci 10)
+
+let largeAnswer = lazy (fibonacci 25)
+
+// Only the selected branch is ever computed.
+let needsLarge = true
+
+let result =
+    if needsLarge then force largeAnswer
+    else force smallAnswer
+
+print "Selected fibonacci: "
+println result
+
+// --- Memoization ---
+// The expensive computation runs only once, even if forced many times.
+
+let cached = lazy (fibonacci 20)
+
+let first = force cached
+
+let second = force cached
+
+print "First force:  "
+println first
+print "Second force: "
+println second
+print "Same result:  "
+println (first == second)
+
+// --- Lazy in pipelines ---
+
+let answer = lazy 42
+
+answer |> force |> println
