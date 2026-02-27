@@ -90,6 +90,70 @@ let result =
     else force data
 ```
 
+## 12.7 Lazy Sequences
+
+Lazy sequences (`seq`) build on lazy evaluation to create sequences whose elements are computed on demand. Each `yield` produces an element, and `yield!` splices in another sequence.
+
+### Creating Sequences
+
+```endo
+# Basic sequence
+let s = seq { yield 1; yield 2; yield 3 }
+
+# Multi-line sequence
+let s = seq {
+    yield 10
+    yield 20
+    yield 30
+}
+
+# Empty sequence
+let empty = seq {}
+```
+
+### yield! (Splice)
+
+Use `yield!` to splice another sequence at the current position:
+
+```endo
+let rest = seq { yield 3; yield 4 }
+let all = seq { yield 1; yield 2; yield! rest }
+# all evaluates to: 1, 2, 3, 4
+```
+
+### Converting to Lists
+
+Lazy sequences are not eagerly evaluated. Use `toList` to force evaluation into a list:
+
+```endo
+let s = seq { yield 1; yield 2; yield 3 }
+s |> toList |> println       # => [1; 2; 3]
+```
+
+### Seq-Aware Operations
+
+The following operations work directly on sequences:
+
+| Operation | Description |
+|-----------|-------------|
+| `take n seq` | Takes the first N elements, returns a list |
+| `each f seq` | Applies f to each element for side effects |
+| `toList seq` | Forces the entire sequence into a list |
+| `for x in seq do ... done` | Iterates over sequence elements |
+
+```endo
+let s = seq { yield 1; yield 2; yield 3; yield 4; yield 5 }
+
+# Take first 3 elements
+s |> take 3 |> println              # => [1; 2; 3]
+
+# Iterate with each
+s |> each println                   # prints 1, 2, 3, 4, 5
+
+# Convert to list, then use list operations
+s |> toList |> map (fun x -> x * 2) |> println   # => [2; 4; 6; 8; 10]
+```
+
 ---
 
 **See also:** [Variables & Bindings](variables-and-bindings.md) | [Functions](functions.md) | [Error Handling](error-handling.md)

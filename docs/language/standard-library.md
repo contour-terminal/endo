@@ -28,6 +28,9 @@ by category. Each example is executable and verified by the documentation test s
 - [15.21 Timing](#1521-timing) -- `time`
 - [15.22 JSON](#1522-json) -- `Json.query`
 - [15.23 Lazy Evaluation](#1523-lazy-evaluation) -- `force`
+- [15.24 Lazy Sequences](#1524-lazy-sequences) -- `seq`, `yield`, `yield!`, `toList`
+- [15.25 File I/O](#1525-file-io) -- `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll`, `File.size`, `File.exists`, `File.delete`
+- [15.26 Resource Management](#1526-resource-management) -- `let use`, `let manual`
 
 ---
 
@@ -1488,6 +1491,115 @@ println (force x)
 let x = lazy 42
 x |> force |> println
 ```
+
+## 15.24 Lazy Sequences
+
+Lazy sequences build on lazy evaluation to create sequences whose elements are computed on demand.
+
+#### `seq { yield ...; yield! ... }`
+
+**Syntax:** `seq { yield expr; yield! seq_expr }`
+
+Creates a lazy sequence. `yield` produces a single element; `yield!` splices another sequence.
+
+```endo
+let s = seq { yield 1; yield 2; yield 3 }
+s |> toList |> println
+```
+
+#### `toList`
+
+**Signature:** `toList seq<'a> : list<'a>`
+
+Forces a lazy sequence into an eagerly-evaluated list.
+
+```endo
+let s = seq { yield 1; yield 2; yield 3 }
+s |> toList |> println
+```
+
+## 15.25 File I/O
+
+The `File` module provides file operations. Functions that can fail return `result<T, str>`.
+
+#### `File.open`
+
+**Signature:** `File.open path mode : result<FileHandle, str>`
+
+Opens a file. Mode can be `"r"` (read), `"w"` (write/truncate), `"a"` (append), or `"rw"` (read/write).
+
+#### `File.close`
+
+**Signature:** `File.close fd : unit`
+
+Closes a file handle.
+
+#### `File.readLine`
+
+**Signature:** `File.readLine fd : option<str>`
+
+Reads one line from the file. Returns `None` at end of file.
+
+#### `File.readAll`
+
+**Signature:** `File.readAll path : result<str, str>`
+
+Reads the entire file as a string.
+
+#### `File.writeAll`
+
+**Signature:** `File.writeAll path content : result<unit, str>`
+
+Writes a string to a file, creating or truncating it.
+
+#### `File.appendAll`
+
+**Signature:** `File.appendAll path content : result<unit, str>`
+
+Appends a string to a file.
+
+#### `File.size`
+
+**Signature:** `File.size path : result<int, str>`
+
+Returns the file size in bytes.
+
+#### `File.exists`
+
+**Signature:** `File.exists path : bool`
+
+Returns `true` if the file exists.
+
+```endo
+println (File.exists "/etc/hostname")
+```
+
+#### `File.delete`
+
+**Signature:** `File.delete path : result<unit, str>`
+
+Deletes a file.
+
+## 15.26 Resource Management
+
+#### `let use`
+
+**Syntax:** `let use name = expr`
+
+Binds a disposable resource and automatically calls its dispose function at scope exit (LIFO order).
+Types with a registered dispose function (such as `FileHandle`) require either `use` or `manual`.
+
+```endo
+let use fd = File.open "data.txt" "r"
+# fd is automatically closed when the scope exits
+```
+
+#### `let manual`
+
+**Syntax:** `let manual name = expr`
+
+Binds a disposable resource without automatic cleanup. The user is responsible for calling the
+dispose function manually. Use when the resource lifetime extends beyond the current scope.
 
 ---
 **See also:** [Lists & Collections](lists-and-collections.md) | [Operators & Pipelines](operators-and-pipelines.md) | [Error Handling](error-handling.md) | [Lazy Evaluation](lazy-evaluation.md)

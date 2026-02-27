@@ -82,7 +82,7 @@ type_annotation = ":" type ;
 
 expression      = let_in_expression ;
 
-let_in_expression = "let" pattern "=" expression "in" expression
+let_in_expression = "let" [ "use" | "manual" ] pattern "=" expression "in" expression
                   | lambda_expression
                   ;
 
@@ -124,11 +124,15 @@ primary         = literal
                 | list_expression
                 | record_expression
                 | lazy_expression
+                | seq_expression
                 | command_substitution
                 | variable_expansion
                 ;
 
 lazy_expression = "lazy" primary ;
+
+seq_expression  = "seq" "{" { seq_yield } "}" ;
+seq_yield       = "yield" [ "!" ] expression ;
 
 literal         = integer_literal
                 | float_literal

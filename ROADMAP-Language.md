@@ -29,6 +29,8 @@ This document tracks the implementation status of F# language features as define
 - [x] Computation expressions: `f { body }` auto-wraps block as thunk
 - [x] `time` builtin: `time { body }` measures execution time, returns TimeSpan
 - [x] Lazy evaluation: `lazy expr` defers computation, `force` evaluates and caches
+- [x] Lazy sequences: `seq { yield 1; yield 2; yield! rest }` with `toList`, `take`, `each`
+- [x] Scoped resource management: `let use fd = File.open "f" "r"` auto-disposes at scope exit
 
 ## Types
 
@@ -216,7 +218,8 @@ This document tracks the implementation status of F# language features as define
 - [x] `rand` — random integer generation (`rand` → random positive int; `rand A B` → random int in [A, B])
 - [x] `formatNumber` — insert thousand separators (`formatNumber "," 1234567` → `"1,234,567"`; 1-arg locale-aware overload; pipelines supported)
 - [x] Standard library reference documentation with validated code examples (`docs/language/standard-library.md`)
-- [ ] `File.read`, `File.write`, `File.list` — file operations
+- [x] `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll` — file I/O operations
+- [x] `File.size`, `File.exists`, `File.delete` — file metadata and management
 - [ ] `Path.join`, `Path.extension`, `Path.basename` — path operations
 
 ## Shell Integration
@@ -397,9 +400,11 @@ Consult this section to determine what to work on next.
 - [x] LSP, completions, hover info, diagnostics updated for new property names
 - [x] `shell_is_interactive` read-only builtin property (true for REPL, false for scripts and `-c`)
 
-### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns)
+### Phase 7 — String and File Standard Library (depends on Phase 2 for list returns) ✅
 - [x] String: `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace`
-- [ ] File: `File.read`, `File.write`, `File.list` returning Result types
+- [x] File I/O: `File.open`, `File.close`, `File.readLine`, `File.readAll`, `File.writeAll`, `File.appendAll`, `File.size`, `File.exists`, `File.delete`
+- [x] Lazy sequences: `seq { yield ...; yield! ... }` with `toList` conversion
+- [x] Scoped resource management: `let use` / `let manual` with type-registered dispose
 - [ ] Path: `Path.join`, `Path.extension`, `Path.basename`
 
 ### Phase 8 — Module System
