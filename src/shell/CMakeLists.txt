@@ -262,21 +262,7 @@ if(Python3_FOUND)
         LABELS "docs"
     )
 
-    # Run examples/ .endo files (fast smoke test)
-    add_test(
-        NAME check-examples
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/scripts/run-endo-tests.py
-            --endo-path $<TARGET_FILE:endo-bin>
-            --examples-only
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-    set_tests_properties(check-examples PROPERTIES
-        TIMEOUT 60
-        LABELS "examples"
-    )
-
-    # Run full tests/ + examples/ .endo suite
+    # Run examples/ and tests/ .endo files with directive-based validation
     add_test(
         NAME check-endo-tests
         COMMAND ${Python3_EXECUTABLE}
