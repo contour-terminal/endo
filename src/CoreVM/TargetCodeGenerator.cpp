@@ -43,7 +43,8 @@ std::unique_ptr<Program> TargetCodeGenerator::generate(IRProgram* programIR)
         type->id = customType.assignedId;
         type->name = customType.name;
         type->fields = customType.fields;
-        type->slotCount = static_cast<uint16_t>(customType.fields.size());
+        type->slotCount =
+            customType.slotCount > 0 ? customType.slotCount : static_cast<uint16_t>(customType.fields.size());
         _cp.typeRegistry().registerProductType(std::move(type));
     }
 

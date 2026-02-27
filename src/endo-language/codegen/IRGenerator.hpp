@@ -657,20 +657,24 @@ class IRGenerator final: public ast::Visitor
                                    std::string_view label);
 
     /// Emits IR for a Tuple2 with packed type tags in slot 2.
+    /// When customTypeId is non-zero, uses it for ObjAlloc instead of BuiltinTypeId::Tuple2.
     CoreVM::Value* emitTuple2(CoreVM::Value* fst,
                               CoreVM::Value* snd,
                               CoreVM::LiteralType fstType,
                               CoreVM::LiteralType sndType,
-                              std::string_view label);
+                              std::string_view label,
+                              uint16_t customTypeId = 0);
 
     /// Emits IR for a Tuple3 with packed type tags in slot 3.
+    /// When customTypeId is non-zero, uses it for ObjAlloc instead of BuiltinTypeId::Tuple3.
     CoreVM::Value* emitTuple3(CoreVM::Value* e0,
                               CoreVM::Value* e1,
                               CoreVM::Value* e2,
                               CoreVM::LiteralType t0,
                               CoreVM::LiteralType t1,
                               CoreVM::LiteralType t2,
-                              std::string_view label);
+                              std::string_view label,
+                              uint16_t customTypeId = 0);
 
     /// Creates an alloca in the entry block of the current function.
     /// This ensures allocas are always at the beginning, which is required

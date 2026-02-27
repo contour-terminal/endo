@@ -318,7 +318,9 @@ TypeDescriptor* TypeRegistry::registerProductType(std::unique_ptr<TypeDescriptor
     assert(type->kind == TypeKind::Product);
     for (uint8_t i = 0; i < type->fields.size(); ++i)
         type->fields[i].offset = i;
-    type->slotCount = static_cast<uint16_t>(type->fields.size());
+    // Preserve slotCount if already set (e.g., named tuples need extra slots for type tags)
+    if (type->slotCount == 0)
+        type->slotCount = static_cast<uint16_t>(type->fields.size());
 
     // Update _nextId to stay ahead of the assigned ID
     if (type->id >= _nextId)

@@ -177,10 +177,29 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     if (records.empty())
         return "[]\n";
 
-    // Get field metadata from the first record's type
-    auto const& fields = records[0]->type->fields;
+    // Get field metadata from the first record's type.
+    // For Tuple2/Tuple3, the TypeDescriptor fields have empty names and default Number type.
+    // Override by reading the packed type tags from the extra slot and assign ordinal column names.
+    auto const recordTypeId = records[0]->type->id;
+    auto const isTuple2 = (recordTypeId == CoreVM::BuiltinTypeId::Tuple2);
+    auto const isTuple3 = (recordTypeId == CoreVM::BuiltinTypeId::Tuple3);
+
+    std::vector<CoreVM::FieldInfo> resolvedFields;
+    if (isTuple2 || isTuple3)
+    {
+        auto const numElems = isTuple2 ? size_t { 2 } : size_t { 3 };
+        auto const tagSlot = isTuple2 ? uint8_t { 2 } : uint8_t { 3 };
+        auto const packedTags = records[0]->getSlot(tagSlot);
+        for (size_t i = 0; i < numElems; ++i)
+        {
+            auto const elemType = CoreVM::unpackTypeTag(packedTags, static_cast<uint8_t>(i));
+            resolvedFields.push_back({ std::to_string(i + 1), static_cast<uint8_t>(i), elemType });
+        }
+    }
+
+    auto const& fields = resolvedFields.empty() ? records[0]->type->fields : resolvedFields;
     auto const numCols = fields.size();
-    bool const isFileInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::FileInfo);
+    bool const isFileInfo = (recordTypeId == CoreVM::BuiltinTypeId::FileInfo);
     bool const decorateFiles = isFileInfo && config.useColor;
 
     // Determine per-column alignment and FileMode columns from the first record's runtime types

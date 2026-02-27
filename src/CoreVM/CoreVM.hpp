@@ -2534,7 +2534,8 @@ class IRProgram
     {
         std::string name;
         std::vector<FieldInfo> fields;
-        uint16_t assignedId; ///< Pre-assigned type ID used in OALLOC instructions
+        uint16_t assignedId;    ///< Pre-assigned type ID used in OALLOC instructions
+        uint16_t slotCount = 0; ///< Total slot count (0 = derive from fields.size())
     };
 
     /// Registers a custom product type definition to be carried through to the ConstantPool's TypeRegistry.

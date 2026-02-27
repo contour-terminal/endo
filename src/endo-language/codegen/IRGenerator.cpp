@@ -1294,9 +1294,11 @@ CoreVM::Value* IRGenerator::emitTuple2(CoreVM::Value* fst,
                                        CoreVM::Value* snd,
                                        CoreVM::LiteralType fstType,
                                        CoreVM::LiteralType sndType,
-                                       std::string_view label)
+                                       std::string_view label,
+                                       uint16_t customTypeId)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple2));
+    auto const allocTypeId = customTypeId > 0 ? customTypeId : CoreVM::BuiltinTypeId::Tuple2;
+    auto* typeId = _builder.get(CoreVM::CoreNumber(allocTypeId));
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
     auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
@@ -1318,9 +1320,11 @@ CoreVM::Value* IRGenerator::emitTuple3(CoreVM::Value* e0,
                                        CoreVM::LiteralType t0,
                                        CoreVM::LiteralType t1,
                                        CoreVM::LiteralType t2,
-                                       std::string_view label)
+                                       std::string_view label,
+                                       uint16_t customTypeId)
 {
-    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Tuple3));
+    auto const allocTypeId = customTypeId > 0 ? customTypeId : CoreVM::BuiltinTypeId::Tuple3;
+    auto* typeId = _builder.get(CoreVM::CoreNumber(allocTypeId));
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1));
     auto* slot2 = _builder.get(CoreVM::CoreNumber(2));
@@ -4861,13 +4865,72 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         return getInnerType(a).value_or(a->type());
     };
 
+    // Detect if all elements are field accesses — if so, create a named tuple type
+    // with proper field names and types for table rendering.
+    uint16_t namedTupleTypeId = 0;
+    {
+        auto const numElems = node.elements.size();
+        bool allFieldAccess = true;
+        std::vector<std::string> fieldNames;
+        fieldNames.reserve(numElems);
+        for (auto const& elem: node.elements)
+        {
+            if (auto const* fa = dynamic_cast<ast::FieldAccessExpr const*>(elem.get()))
+                fieldNames.push_back(fa->fieldName);
+            else
+            {
+                allFieldAccess = false;
+                break;
+            }
+        }
+        if (allFieldAccess)
+        {
+            // Build field info with resolved types
+            std::vector<CoreVM::FieldInfo> fields;
+            fields.reserve(numElems);
+            std::string typeName = "(";
+            for (size_t i = 0; i < numElems; ++i)
+            {
+                if (i > 0)
+                    typeName += ", ";
+                typeName += fieldNames[i];
+                fields.push_back({ fieldNames[i], static_cast<uint8_t>(i), resolveType(elemAllocas[i]) });
+            }
+            typeName += ')';
+
+            // Deduplicate: check if a matching custom type already exists
+            for (auto const& existing: _builder.program()->customProductTypes())
+            {
+                if (existing.name == typeName)
+                {
+                    namedTupleTypeId = existing.assignedId;
+                    break;
+                }
+            }
+
+            if (namedTupleTypeId == 0)
+            {
+                namedTupleTypeId = _builder.program()->allocateCustomTypeId();
+                CoreVM::IRProgram::CustomProductType customType;
+                customType.name = typeName;
+                customType.fields = fields;
+                customType.assignedId = namedTupleTypeId;
+                // Extra slot for packed type tag (matching Tuple2/Tuple3 layout)
+                customType.slotCount = static_cast<uint16_t>(numElems + 1);
+                _builder.program()->addCustomProductType(std::move(customType));
+            }
+        }
+    }
+
     // Reload each element from its alloca and emit the tuple
     if (node.elements.size() == 2)
     {
         auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
         auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
-        _result = emitTuple2(e0, e1, resolveType(elemAllocas[0]), resolveType(elemAllocas[1]), "tuple");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple2);
+        _result = emitTuple2(
+            e0, e1, resolveType(elemAllocas[0]), resolveType(elemAllocas[1]), "tuple", namedTupleTypeId);
+        annotateObjectTypeId(_result,
+                             namedTupleTypeId > 0 ? namedTupleTypeId : CoreVM::BuiltinTypeId::Tuple2);
     }
     else
     {
@@ -4880,8 +4943,10 @@ void IRGenerator::visit(ast::TupleExpr const& node)
                              resolveType(elemAllocas[0]),
                              resolveType(elemAllocas[1]),
                              resolveType(elemAllocas[2]),
-                             "tuple");
-        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple3);
+                             "tuple",
+                             namedTupleTypeId);
+        annotateObjectTypeId(_result,
+                             namedTupleTypeId > 0 ? namedTupleTypeId : CoreVM::BuiltinTypeId::Tuple3);
     }
 }
 
