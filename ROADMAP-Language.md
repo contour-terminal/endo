@@ -373,6 +373,14 @@ Consult this section to determine what to work on next.
 - [x] `valueToString` reads type tag slots for all container types (fixes `println ['a', 'b', 'c']` printing raw pointers)
 - [x] Fix `convertToString` Object branch: check typed objects before `getInnerType()` (innerType describes payload, not container)
 
+### Phase 6.3c — Type-Safe Formatter Registry
+- [x] `TypeFormatFn` function pointer on `TypeDescriptor` for per-type custom formatting
+- [x] `registerBuiltinFormatters()` sets formatters on all 16 builtin types with `static_assert` guard
+- [x] `valueToString()` simplified to `formatFn` dispatch with generic Product/Sum fallbacks
+- [x] Fix TupleExpr type tag computation: use `getInnerType()` annotations instead of IR `LiteralType`
+- [x] Fix Sum type payload formatting: use `VariantInfo::fields[i].type` instead of hardcoded `Number`
+- [x] Output definition record types get generic `formatProduct` formatter at registration
+
 ### Phase 6.4 — Bare Expression Evaluation & Table Display
 - [x] Bare expression evaluation at shell prompt: `42`, `Some 42`, `(1, 2)`, `Ok 5`, `[1; 2; 3]`, etc.
 - [x] `display_result` builtin for runtime value display dispatch

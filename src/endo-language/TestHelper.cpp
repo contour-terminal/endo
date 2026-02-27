@@ -5,6 +5,7 @@
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/builtins/TypeFormatters.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
@@ -52,7 +53,8 @@ namespace
             record->setSlot(1, static_cast<uint64_t>(p.ppid));
             record->setSlot(2, reinterpret_cast<uintptr_t>(runner->newString(p.user)));
             record->setSlot(3, std::bit_cast<uint64_t>(p.cpu));
-            record->setSlot(4, static_cast<uint64_t>(p.mem));
+            auto* memSize = builtins::makeSizeFromBytes(runner, p.mem * 1024);
+            record->setSlot(4, reinterpret_cast<uintptr_t>(memSize));
             record->setSlot(5, reinterpret_cast<uintptr_t>(runner->newString(p.command)));
             list =
                 runner->makeConsCell(reinterpret_cast<uintptr_t>(record), list, CoreVM::LiteralType::Object);
@@ -683,6 +685,9 @@ ExecutionResult executeSource(std::string const& source, bool unusedValueDetecti
     if (!targetProgram)
         return std::unexpected(TestError::CodeGenerationFailed);
 
+    // Register type formatters for human-readable display
+    builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+
     // Link the program to the runtime (required for native function calls like print/println)
     if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
         return std::unexpected(TestError::LinkFailed);
@@ -946,6 +951,15 @@ ExecutionResult executeSourceWithStructuredState(std::string const& source)
     auto targetProgram = codegen.generate(ir.get());
     if (!targetProgram)
         return std::unexpected(TestError::CodeGenerationFailed);
+
+    // Register type formatters for human-readable display
+    builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+    // Set generic product formatter for output definition types
+    for (auto const& [name, defType]: state.outputDefinitionTypes)
+    {
+        if (auto* td = targetProgram->constants().typeRegistry().getMutable(defType.typeId))
+            td->formatFn = builtins::formatProduct;
+    }
 
     if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
         return std::unexpected(TestError::LinkFailed);

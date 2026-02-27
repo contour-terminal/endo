@@ -4852,15 +4852,21 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         }
         auto* alloca = createAllocaInEntryBlock(val->type(), "tuple.elem." + std::to_string(i));
         _builder.createStore(alloca, val);
+        propagateAllAnnotations(val, alloca);
         elemAllocas.push_back(alloca);
     }
+
+    // Resolve semantic type from annotations, falling back to IR type
+    auto resolveType = [this](CoreVM::AllocaInstr* a) {
+        return getInnerType(a).value_or(a->type());
+    };
 
     // Reload each element from its alloca and emit the tuple
     if (node.elements.size() == 2)
     {
         auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
         auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
-        _result = emitTuple2(e0, e1, elemAllocas[0]->type(), elemAllocas[1]->type(), "tuple");
+        _result = emitTuple2(e0, e1, resolveType(elemAllocas[0]), resolveType(elemAllocas[1]), "tuple");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple2);
     }
     else
@@ -4868,8 +4874,13 @@ void IRGenerator::visit(ast::TupleExpr const& node)
         auto* e0 = _builder.createLoad(elemAllocas[0], "tuple.elem.reload.0");
         auto* e1 = _builder.createLoad(elemAllocas[1], "tuple.elem.reload.1");
         auto* e2 = _builder.createLoad(elemAllocas[2], "tuple.elem.reload.2");
-        _result = emitTuple3(
-            e0, e1, e2, elemAllocas[0]->type(), elemAllocas[1]->type(), elemAllocas[2]->type(), "tuple");
+        _result = emitTuple3(e0,
+                             e1,
+                             e2,
+                             resolveType(elemAllocas[0]),
+                             resolveType(elemAllocas[1]),
+                             resolveType(elemAllocas[2]),
+                             "tuple");
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Tuple3);
     }
 }

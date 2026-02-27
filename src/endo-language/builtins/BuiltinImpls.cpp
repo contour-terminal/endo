@@ -2,6 +2,7 @@
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/FileManager.hpp>
 #include <endo-language/builtins/StdlibDescriptors.hpp>
+#include <endo-language/builtins/TypeFormatters.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
 #include <CoreVM/types/TypedObject.hpp>
@@ -58,9 +59,10 @@ std::string slotValueToString(uint64_t rawVal,
             }
             return s;
         }
+        case CoreVM::LiteralType::Number: return std::to_string(static_cast<int64_t>(rawVal));
         default: break;
     }
-    // Void/Object/Number — delegate to valueToString for recursive container handling
+    // Void/Object — delegate to valueToString for recursive container handling
     return valueToString(rawVal, runner);
 }
 
@@ -77,162 +79,15 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
     if (runner && runner->isKnownObject(rawVal))
     {
         auto* obj = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(rawVal));
-        auto const typeId = obj->type->id;
-        if (typeId == CoreVM::BuiltinTypeId::List)
-        {
-            // Read element type from type tag slot 2
-            auto const elemType = static_cast<CoreVM::LiteralType>(obj->getSlot(2));
-            std::string result = "[";
-            bool first = true;
-            while (obj && obj->type->id == CoreVM::BuiltinTypeId::List && obj->tag == 1)
-            {
-                if (!first)
-                    result += "; ";
-                first = false;
-                result += slotValueToString(obj->getSlot(0), elemType, runner);
-                obj = reinterpret_cast<CoreVM::TypedObject*>(obj->getSlot(1));
-            }
-            result += "]";
-            return result;
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Tuple2)
-        {
-            // Read packed type tags from slot 2
-            auto const packed = obj->getSlot(2);
-            auto const t0 = CoreVM::unpackTypeTag(packed, 0);
-            auto const t1 = CoreVM::unpackTypeTag(packed, 1);
-            return "(" + slotValueToString(obj->getSlot(0), t0, runner) + ", "
-                   + slotValueToString(obj->getSlot(1), t1, runner) + ")";
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Tuple3)
-        {
-            // Read packed type tags from slot 3
-            auto const packed = obj->getSlot(3);
-            auto const t0 = CoreVM::unpackTypeTag(packed, 0);
-            auto const t1 = CoreVM::unpackTypeTag(packed, 1);
-            auto const t2 = CoreVM::unpackTypeTag(packed, 2);
-            return "(" + slotValueToString(obj->getSlot(0), t0, runner) + ", "
-                   + slotValueToString(obj->getSlot(1), t1, runner) + ", "
-                   + slotValueToString(obj->getSlot(2), t2, runner) + ")";
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Option)
-        {
-            if (obj->tag == 0)
-                return "None";
-            auto const innerType = static_cast<CoreVM::LiteralType>(obj->getSlot(1));
-            return "Some " + slotValueToString(obj->getSlot(0), innerType, runner);
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Result)
-        {
-            auto const innerType = static_cast<CoreVM::LiteralType>(obj->getSlot(1));
-            if (obj->tag == 0)
-                return "Error " + slotValueToString(obj->getSlot(0), innerType, runner);
-            return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Seq)
-        {
-            if (obj->tag == 0)
-                return "seq {}";
-            // Don't force the lazy tail to avoid infinite evaluation
-            return "seq { ... }";
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Lazy)
-            return "lazy <unevaluated>";
-        if (typeId == CoreVM::BuiltinTypeId::FileHandle)
-        {
-            auto const handle = static_cast<int64_t>(obj->getSlot(0));
-            return std::format("FileHandle({})", handle);
-        }
-        if (typeId == CoreVM::BuiltinTypeId::Size)
-            return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
-        if (typeId == CoreVM::BuiltinTypeId::TimeSpan)
-            return formatTimeSpanToString(static_cast<int64_t>(obj->getSlot(0)));
-        if (typeId == CoreVM::BuiltinTypeId::FileMode)
-            return formatFileModeToString(static_cast<int64_t>(obj->getSlot(0)));
-        if (typeId == CoreVM::BuiltinTypeId::Markdown)
-        {
-            auto const* content =
-                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(obj->getSlot(0)));
-            return content ? std::string(*content) : "";
-        }
-        if (typeId == CoreVM::BuiltinTypeId::DateTime)
-        {
-            // Render DateTime as "YYYY-MM-DD HH:MM:SS"
-            auto const year = static_cast<int>(obj->getSlot(0));
-            auto const month = static_cast<int>(obj->getSlot(1));
-            auto const day = static_cast<int>(obj->getSlot(2));
-            auto const hour = static_cast<int>(obj->getSlot(3));
-            auto const minute = static_cast<int>(obj->getSlot(4));
-            auto const second = static_cast<int>(obj->getSlot(5));
-            return std::format(
-                "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}", year, month, day, hour, minute, second);
-        }
+        // Use registered formatter if available
+        if (obj->type->formatFn)
+            return obj->type->formatFn(*obj, runner);
+        // Fallback for types without custom formatter (user-defined types)
         if (obj->type->kind == CoreVM::TypeKind::Product)
-        {
-            // Check if this is a ProcessInfo record (has "cpu" float field)
-            bool const isProcessInfo = obj->type->id == CoreVM::BuiltinTypeId::ProcessInfo;
-
-            std::string result = "{ ";
-            for (size_t i = 0; i < obj->type->fields.size(); ++i)
-            {
-                if (i > 0)
-                    result += "; ";
-                result += obj->type->fields[i].name;
-                result += " = ";
-                auto slotVal = obj->getSlot(static_cast<uint8_t>(i));
-
-                // ProcessInfo "cpu" field stores a double as bit_cast<uint64_t>
-                if (isProcessInfo && obj->type->fields[i].name == "cpu")
-                {
-                    auto const cpuVal = std::bit_cast<double>(slotVal);
-                    result += std::format("{:.1f}", cpuVal);
-                }
-                else if (obj->type->fields[i].type == CoreVM::LiteralType::Object)
-                {
-                    // Nested object field — recursively render
-                    result += valueToString(slotVal, runner);
-                }
-                else
-                {
-                    switch (obj->type->fields[i].type)
-                    {
-                        case CoreVM::LiteralType::String: {
-                            auto const* str =
-                                reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
-                            result += str ? *str : "(null)";
-                            break;
-                        }
-                        case CoreVM::LiteralType::Boolean: result += slotVal ? "true" : "false"; break;
-                        default: result += std::to_string(static_cast<int64_t>(slotVal)); break;
-                    }
-                }
-            }
-            result += " }";
-            return result;
-        }
+            return formatProduct(*obj, runner);
         if (obj->type->kind == CoreVM::TypeKind::Sum)
-        {
-            auto const* variantInfo = obj->type->getVariant(obj->tag);
-            std::string result = variantInfo ? variantInfo->name : "?";
-            if (variantInfo && variantInfo->payloadSlots > 0)
-            {
-                auto const hasNamedFields = !variantInfo->fields.empty();
-                result += hasNamedFields ? "(" : " ";
-                for (uint8_t i = 0; i < variantInfo->payloadSlots; ++i)
-                {
-                    if (i > 0)
-                        result += ", ";
-                    if (hasNamedFields && i < variantInfo->fields.size())
-                        result += variantInfo->fields[i].name + ": ";
-                    result += slotValueToString(obj->getSlot(i), CoreVM::LiteralType::Number, runner, false);
-                }
-                if (hasNamedFields)
-                    result += ")";
-            }
-            return result;
-        }
-        // Unknown object type — fallback
-        return std::to_string(static_cast<int64_t>(rawVal));
+            return formatSum(*obj, runner);
+        return std::format("<{}@{:#x}>", obj->type->name, rawVal);
     }
     return std::to_string(static_cast<int64_t>(rawVal));
 }

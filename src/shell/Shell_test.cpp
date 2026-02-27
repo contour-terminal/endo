@@ -3183,6 +3183,23 @@ TEST_CASE("shell.fsharp.pipeline_map_take_each_println")
     CHECK(escape(shell.output()) == escape("(1, 2)\n(2, 4)\n"));
 }
 
+TEST_CASE("shell.fsharp.structured_pipeline_map_tuple_fields")
+{
+    // Verify that ps |> map (_.cpu, _.command) formats float fields correctly
+    // (not as raw bit patterns of double-to-uint64 casts).
+    TestShell shell;
+    shell("ps |> map (_.cpu, _.command) |> take 1 |> each println");
+    auto const output = shell.output();
+    // Output should be a tuple like "(0.007292, /usr/lib/systemd/systemd)\n"
+    // Verify it starts with '(' and contains a decimal point (float formatting).
+    REQUIRE(!output.empty());
+    CHECK(output.front() == '(');
+    CHECK(output.find('.') != std::string::npos);
+    // Ensure we don't see huge raw int64 values (>= 10 digits) that indicate
+    // a bit_cast<uint64_t>(double) was printed as an integer.
+    CHECK(output.find("46381") == std::string::npos); // common prefix of bit_cast garbage
+}
+
 // ============================================================================
 // LetBindingCompleter Tests
 // ============================================================================

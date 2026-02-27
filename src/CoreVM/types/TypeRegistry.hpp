@@ -67,6 +67,10 @@ class TypeRegistry
     /// @return Pointer to the type descriptor, or nullptr if not found
     [[nodiscard]] const TypeDescriptor* get(uint16_t id) const;
 
+    /// Looks up a type by its unique ID (mutable access).
+    /// @return Pointer to the type descriptor, or nullptr if not found
+    [[nodiscard]] TypeDescriptor* getMutable(uint16_t id);
+
     /// Looks up a type by name.
     /// @return Pointer to the type descriptor, or nullptr if not found
     [[nodiscard]] const TypeDescriptor* getByName(std::string_view name) const;

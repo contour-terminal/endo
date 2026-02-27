@@ -13,11 +13,12 @@ void TypeDefinitionRegistry::registerBuiltins()
         processInfoType.name = "ProcessInfo";
         processInfoType.fields = {
             { "pid", 0, CoreVM::LiteralType::Number },  { "ppid", 1, CoreVM::LiteralType::Number },
-            { "user", 2, CoreVM::LiteralType::String }, { "cpu", 3, CoreVM::LiteralType::Number },
-            { "mem", 4, CoreVM::LiteralType::Number },  { "command", 5, CoreVM::LiteralType::String },
+            { "user", 2, CoreVM::LiteralType::String }, { "cpu", 3, CoreVM::LiteralType::Float },
+            { "mem", 4, CoreVM::LiteralType::Object },  { "command", 5, CoreVM::LiteralType::String },
         };
         for (auto const& f: processInfoType.fields)
             processInfoType.fieldTypes[f.name] = f.type;
+        processInfoType.fieldObjectTypeIds["mem"] = CoreVM::BuiltinTypeId::Size;
         _recordTypes["ProcessInfo"] = std::move(processInfoType);
     }
 

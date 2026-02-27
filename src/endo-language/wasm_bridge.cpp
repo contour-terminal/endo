@@ -3,6 +3,7 @@
 #include <endo-language/ast/ASTPrinter.hpp>
 #include <endo-language/builtins/BuiltinImpls.hpp>
 #include <endo-language/builtins/BuiltinSignatures.hpp>
+#include <endo-language/builtins/TypeFormatters.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/lexer/Lexer.hpp>
 #include <endo-language/parser/Parser.hpp>
@@ -330,6 +331,9 @@ extern "C"
             resultBuffer = R"({"status":"error","errors":["Code generation failed"]})";
             return resultBuffer.c_str();
         }
+
+        // Register type formatters for human-readable display
+        endo::builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
 
         // Link
         if (!targetProgram->link(&pg.runtime, &pg.report))

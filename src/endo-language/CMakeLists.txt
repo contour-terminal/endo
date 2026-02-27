@@ -83,6 +83,8 @@ add_library(endo STATIC
     builtins/StdlibDescriptors.cpp
     builtins/FileManager.hpp
     builtins/FileManager.cpp
+    builtins/TypeFormatters.hpp
+    builtins/TypeFormatters.cpp
     builtins/StubRuntime.hpp
 
     # Source Code Formatter

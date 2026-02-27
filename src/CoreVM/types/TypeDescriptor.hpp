@@ -11,6 +11,13 @@
 namespace CoreVM
 {
 
+struct TypedObject; // forward declaration
+class Runner;       // forward declaration
+
+/// Optional custom formatter for human-readable display of typed objects.
+/// When set, valueToString() calls this instead of the generic Product/Sum formatter.
+using TypeFormatFn = std::string (*)(TypedObject const& obj, Runner* runner);
+
 /// The kind of composite type.
 enum class TypeKind : uint8_t
 {
@@ -79,6 +86,10 @@ struct TypeDescriptor
     /// When set, the type is considered disposable and `let use` bindings will
     /// automatically call this callback at scope exit.
     std::optional<std::string> disposeCallbackName;
+
+    /// Custom formatter for human-readable display. When nullptr, generic
+    /// Product/Sum formatting based on TypeKind is used.
+    TypeFormatFn formatFn = nullptr;
 
     /// Returns the variant info for a given tag, or nullptr if invalid.
     [[nodiscard]] const VariantInfo* getVariant(uint8_t tag) const

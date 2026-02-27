@@ -89,7 +89,7 @@ void TypeRegistry::registerBuiltins()
     processInfoType->fields = {
         { "pid", 0, LiteralType::Number },  { "ppid", 1, LiteralType::Number },
         { "user", 2, LiteralType::String }, { "cpu", 3, LiteralType::Float },
-        { "mem", 4, LiteralType::Float },   { "command", 5, LiteralType::String },
+        { "mem", 4, LiteralType::Object },  { "command", 5, LiteralType::String },
     };
     processInfoType->producingCommand = "ps";
     addType(std::move(processInfoType));
@@ -362,6 +362,16 @@ const TypeDescriptor* TypeRegistry::get(uint16_t id) const
     // But we may have sparse IDs, so search linearly for now
     // TODO: Optimize with direct indexing if IDs are always sequential
     for (const auto& type: _types)
+    {
+        if (type->id == id)
+            return type.get();
+    }
+    return nullptr;
+}
+
+TypeDescriptor* TypeRegistry::getMutable(uint16_t id)
+{
+    for (auto& type: _types)
     {
         if (type->id == id)
             return type.get();

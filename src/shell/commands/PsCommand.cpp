@@ -3,6 +3,7 @@
 
 #include <CoreVM/CoreVM.hpp>
 #include <CoreVM/types/TypeDescriptor.hpp>
+#include <endo-language/builtins/BuiltinImpls.hpp>
 
 #include <bit>
 
@@ -37,7 +38,8 @@ CoreVM::TypedObject* PsCommand::execute(CoreVM::Runner& runner) const
         record->setSlot(1, static_cast<uint64_t>(proc.ppid));
         record->setSlot(2, reinterpret_cast<uintptr_t>(runner.newString(proc.user)));
         record->setSlot(3, std::bit_cast<uint64_t>(proc.cpuPercent));
-        record->setSlot(4, static_cast<uint64_t>(proc.memKb));
+        auto* memSize = builtins::makeSizeFromBytes(&runner, proc.memKb * 1024);
+        record->setSlot(4, reinterpret_cast<uintptr_t>(memSize));
         record->setSlot(5, reinterpret_cast<uintptr_t>(runner.newString(proc.command)));
 
         // Cons this record onto the list

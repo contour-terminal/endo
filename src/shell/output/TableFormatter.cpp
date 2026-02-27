@@ -21,20 +21,14 @@ namespace endo
 namespace
 {
     /// Converts a single field value to a display string.
-    std::string fieldValueToString(uint64_t slotVal,
-                                   CoreVM::FieldInfo const& field,
-                                   CoreVM::Runner* runner,
-                                   bool isProcessInfo)
+    std::string fieldValueToString(uint64_t slotVal, CoreVM::FieldInfo const& field, CoreVM::Runner* runner)
     {
-        // ProcessInfo "cpu" field stores a double as bit_cast<uint64_t>
-        if (isProcessInfo && field.name == "cpu")
-        {
-            auto const cpuVal = std::bit_cast<double>(slotVal);
-            return std::format("{:.1f}", cpuVal);
-        }
-
         switch (field.type)
         {
+            case CoreVM::LiteralType::Float: {
+                auto const f = std::bit_cast<double>(slotVal);
+                return std::format("{:.1f}", f);
+            }
             case CoreVM::LiteralType::String: {
                 auto const* str =
                     reinterpret_cast<CoreVM::CoreString const*>(static_cast<uintptr_t>(slotVal));
@@ -113,7 +107,7 @@ namespace
                               CoreVM::TypedObject* firstRecord,
                               CoreVM::Runner* runner)
     {
-        if (field.type == CoreVM::LiteralType::Number)
+        if (field.type == CoreVM::LiteralType::Number || field.type == CoreVM::LiteralType::Float)
             return true;
         if (field.type == CoreVM::LiteralType::Object && runner)
         {
@@ -186,7 +180,6 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
     // Get field metadata from the first record's type
     auto const& fields = records[0]->type->fields;
     auto const numCols = fields.size();
-    bool const isProcessInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::ProcessInfo);
     bool const isFileInfo = (records[0]->type->id == CoreVM::BuiltinTypeId::FileInfo);
     bool const decorateFiles = isFileInfo && config.useColor;
 
@@ -258,7 +251,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         for (size_t col = 0; col < numCols; ++col)
         {
             auto slotVal = record->getSlot(static_cast<uint8_t>(col));
-            auto cell = fieldValueToString(slotVal, fields[col], runner, isProcessInfo);
+            auto cell = fieldValueToString(slotVal, fields[col], runner);
             if (config.showDirectorySlash && col == 0 && isDir)
                 cell += '/';
             cell = truncate(cell, config.maxColumnWidth);

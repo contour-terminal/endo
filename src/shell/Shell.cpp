@@ -9,6 +9,7 @@
 #include <endo-language/LogCategories.hpp>
 #include <endo-language/LogConfig.hpp>
 #include <endo-language/ast/ASTPrinter.hpp>
+#include <endo-language/builtins/TypeFormatters.hpp>
 #include <endo-language/codegen/IRGenerator.hpp>
 #include <endo-language/ide/TypeRegistryCompletionAdapter.hpp>
 #include <endo-language/lexer/Lexer.hpp>
@@ -1183,6 +1184,13 @@ int Shell::execute(std::string const& lineBuffer,
         {
             error("Failed to generate target code");
             return EXIT_FAILURE;
+        }
+        builtins::registerBuiltinFormatters(_currentProgram->constants().typeRegistry());
+        // Set generic product formatter for output definition types
+        for (auto const& [name, defType]: _fsharpState.outputDefinitionTypes)
+        {
+            if (auto* td = _currentProgram->constants().typeRegistry().getMutable(defType.typeId))
+                td->formatFn = builtins::formatProduct;
         }
         _currentProgram->link(&_runtime, &report);
         if (report.containsFailures())
