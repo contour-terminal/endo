@@ -50,6 +50,12 @@ static constexpr ParamDescriptor randRangeParams[] = { { "min", LT::Number }, { 
 static constexpr ParamDescriptor fetchTwoParams[] = { { "url", LT::String }, { "headers", LT::Number } };
 static constexpr ParamDescriptor jsonQueryParams[] = { { "path", LT::String }, { "json", LT::String } };
 
+// File I/O params
+static constexpr ParamDescriptor fileOpenParams[] = { { "path", LT::String }, { "mode", LT::String } };
+static constexpr ParamDescriptor fdNumberParam[] = { { "fd", LT::Number } };
+static constexpr ParamDescriptor pathStringParam[] = { { "path", LT::String } };
+static constexpr ParamDescriptor fileWriteParams[] = { { "path", LT::String }, { "content", LT::String } };
+
 // ---------------------------------------------------------------------------
 // Unified descriptor table
 // ---------------------------------------------------------------------------
@@ -202,6 +208,13 @@ static const std::array descriptors = {
         "**flatten** `lst -> list<'a>`\n\nFlattens a list of lists into a single list." },
 
     // -----------------------------------------------------------------------
+    // Seq Conversions
+    // -----------------------------------------------------------------------
+    StdlibDescriptor { "toList", "", LT::Void, {}, nullptr,
+        "toList seq -> list<'a>",
+        "**toList** `seq -> list<'a>`\n\nForces a lazy sequence into an eagerly-evaluated list." },
+
+    // -----------------------------------------------------------------------
     // Formatting Helpers
     // -----------------------------------------------------------------------
     StdlibDescriptor { "formatNumber", "format_number", LT::String, formatNumberTwoParams, &builtins::formatNumber,
@@ -341,6 +354,17 @@ static const std::array descriptors = {
         "Extracts values from a JSON string using a dotted path.\n\n"
         "Path syntax: `.key` accesses an object property, `[]` iterates array elements.\n"
         "Example: `Json.query \".presets[].name\" json_str`" },
+
+    // File I/O operations
+    StdlibDescriptor { "", "file_open", LT::Number, fileOpenParams, &builtins::fileOpen, "", "" },
+    StdlibDescriptor { "", "file_close", LT::Void, fdNumberParam, &builtins::fileClose, "", "" },
+    StdlibDescriptor { "", "file_read_line", LT::Number, fdNumberParam, &builtins::fileReadLine, "", "" },
+    StdlibDescriptor { "", "file_read_all", LT::Number, pathStringParam, &builtins::fileReadAll, "", "" },
+    StdlibDescriptor { "", "file_write_all", LT::Number, fileWriteParams, &builtins::fileWriteAll, "", "" },
+    StdlibDescriptor { "", "file_append_all", LT::Number, fileWriteParams, &builtins::fileAppendAll, "", "" },
+    StdlibDescriptor { "", "file_size", LT::Number, pathStringParam, &builtins::fileSize, "", "" },
+    StdlibDescriptor { "", "file_exists", LT::Boolean, pathStringParam, &builtins::fileExists, "", "" },
+    StdlibDescriptor { "", "file_delete", LT::Number, pathStringParam, &builtins::fileDelete, "", "" },
 };
 // clang-format on
 

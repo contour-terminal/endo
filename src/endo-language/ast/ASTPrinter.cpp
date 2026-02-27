@@ -600,6 +600,10 @@ void ASTPrinter::visit(LetBindingStmt const& node)
         _result += "export ";
     if (node.isMutable)
         _result += "mut ";
+    if (node.resourceMode == ResourceMode::Use)
+        _result += "use ";
+    else if (node.resourceMode == ResourceMode::Manual)
+        _result += "manual ";
     if (node.isRecursive)
         _result += "rec ";
     if (node.destructurePattern)
@@ -662,6 +666,10 @@ void ASTPrinter::visit(LetBindingStmt const& node)
 void ASTPrinter::visit(LetInExpr const& node)
 {
     _result += "let ";
+    if (node.resourceMode == ResourceMode::Use)
+        _result += "use ";
+    else if (node.resourceMode == ResourceMode::Manual)
+        _result += "manual ";
     if (node.isRecursive)
         _result += "rec ";
     if (node.destructurePattern)
@@ -1046,6 +1054,20 @@ void ASTPrinter::visit(LazyExpr const& node)
     _result += "lazy ";
     if (node.body)
         node.body->accept(*this);
+}
+
+void ASTPrinter::visit(SeqExpr const& node)
+{
+    _result += "seq { ";
+    for (auto i = 0u; i < node.yields.size(); ++i)
+    {
+        if (i > 0)
+            _result += "; ";
+        _result += node.yields[i].isSplice ? "yield! " : "yield ";
+        if (node.yields[i].value)
+            node.yields[i].value->accept(*this);
+    }
+    _result += " }";
 }
 
 void ASTPrinter::visit(UnitExpr const& /*node*/)

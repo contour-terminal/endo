@@ -4,6 +4,7 @@
 #include <CoreVM/enums.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -73,6 +74,11 @@ struct TypeDescriptor
 
     /// For Function types: number of captured variables.
     uint16_t captureCount = 0;
+
+    /// Optional dispose callback name for scoped resource management (`let use`).
+    /// When set, the type is considered disposable and `let use` bindings will
+    /// automatically call this callback at scope exit.
+    std::optional<std::string> disposeCallbackName;
 
     /// Returns the variant info for a given tag, or nullptr if invalid.
     [[nodiscard]] const VariantInfo* getVariant(uint8_t tag) const
@@ -149,8 +155,10 @@ namespace BuiltinTypeId
     constexpr uint16_t Markdown = 12;
     constexpr uint16_t TimeSpan = 13;
     constexpr uint16_t Lazy = 14;
+    constexpr uint16_t Seq = 15;
+    constexpr uint16_t FileHandle = 16;
     constexpr uint16_t LastBuiltin =
-        Lazy; ///< Highest sequential builtin type ID; update when adding new builtins.
+        FileHandle; ///< Highest sequential builtin type ID; update when adding new builtins.
     constexpr uint16_t OutputDefBase = 100; ///< Base ID for output definition record types (100, 101, ...)
 } // namespace BuiltinTypeId
 

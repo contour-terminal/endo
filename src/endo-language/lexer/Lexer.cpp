@@ -63,6 +63,18 @@ namespace
         if (literal == "lazy")
             return Token::Lazy;
 
+        // Lazy sequences
+        if (literal == "seq")
+            return Token::Seq;
+        if (literal == "yield")
+            return Token::Yield;
+
+        // Resource management
+        if (literal == "use")
+            return Token::Use;
+        if (literal == "manual")
+            return Token::Manual;
+
         // Boolean literals
         if (literal == "true")
             return Token::True;

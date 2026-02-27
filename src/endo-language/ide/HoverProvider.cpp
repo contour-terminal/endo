@@ -57,8 +57,15 @@ namespace
                 return "`finally` \u2014 Code that always executes after try\n\n```\ntry expression finally "
                        "cleanup\n```";
             case Lazy:
-                return "`lazy` \u2014 Defers evaluation until `force` is called\n\n```\nlet x = lazy (1 + 2)\n"
+                return "`lazy` \u2014 Defers evaluation until `force` is called\n\n```\nlet x = lazy (1 + "
+                       "2)\n"
                        "println (force x)\n```";
+            case Seq:
+                return "`seq` \u2014 Lazy sequence builder\n\n```\nlet fibs = seq { yield 0; yield 1; yield! "
+                       "rest }\nfibs |> take 10 |> toList |> each println\n```";
+            case Yield:
+                return "`yield` \u2014 Produces a value in a seq expression\n\n```\nseq { yield 1; yield 2; "
+                       "yield! rest }\n```\n\nUse `yield!` (yield-bang) to splice another sequence.";
             default: return std::nullopt;
         }
     }

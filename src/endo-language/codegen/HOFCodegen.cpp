@@ -100,13 +100,19 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     else if (hofName == "each")
     {
         auto* listVal = loadListParam("__xs", "each.xs");
-        generateEachIR("__f", listVal);
+        if (getObjectTypeId(listVal) == CoreVM::BuiltinTypeId::Seq)
+            generateSeqEachIR("__f", listVal);
+        else
+            generateEachIR("__f", listVal);
     }
     else if (hofName == "take")
     {
         auto* countVal = _builder.createLoad(lookupFSharpVariable("__n"), "take.n");
         auto* listVal = loadListParam("__xs", "take.xs");
-        generateTakeIR(countVal, listVal);
+        if (getObjectTypeId(listVal) == CoreVM::BuiltinTypeId::Seq)
+            generateSeqTakeIR(countVal, listVal);
+        else
+            generateTakeIR(countVal, listVal);
     }
     else if (hofName == "drop")
     {
@@ -144,6 +150,11 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     {
         auto* listVal = loadListParam("__xs", "distinct.xs");
         generateDistinctIR(listVal);
+    }
+    else if (hofName == "toList")
+    {
+        auto* seqVal = loadListParam("__xs", "toList.xs");
+        generateToListIR(seqVal);
     }
     else
     {
@@ -1767,6 +1778,302 @@ void IRGenerator::generateGroupByIR(std::string const& funcParamName, CoreVM::Va
     auto* accFinal = _builder.createLoad(accStorage, "groupBy.acc.final");
     _result =
         _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { accFinal }, "groupBy.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+// =============================================================================
+// Seq-aware HOF generators
+// =============================================================================
+
+void IRGenerator::generateSeqEachIR(std::string const& funcParamName, CoreVM::Value* seqValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
+
+    // Resolve function
+    auto funcName = funcParamName;
+    if (auto ref = lookupFSharpFunctionRef(funcParamName))
+        funcName = *ref;
+
+    bool const isPrintBuiltin = (funcName == "print" || funcName == "println");
+    FSharpFunction const* func = nullptr;
+    if (!isPrintBuiltin)
+    {
+        func = lookupFSharpFunction(funcName);
+        if (!func)
+        {
+            reportTypeError("each: function argument '{}' not found", std::string_view(funcParamName));
+            return;
+        }
+    }
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.each.src");
+    _builder.createStore(srcStorage, seqValue);
+    auto* elemAlloca = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "seq.each.elem");
+
+    // Create blocks
+    auto* condBlock = _builder.createBlock("seq.each.cond");
+    auto* bodyBlock = _builder.createBlock("seq.each.body");
+    auto* endBlock = _builder.createBlock("seq.each.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if current seq node is Cons (tag == 1)
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "seq.each.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "seq.each.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "seq.each.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, endBlock);
+
+    // Body: extract head, apply function, force lazy tail, loop
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "seq.each.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "seq.each.head");
+    _builder.createStore(elemAlloca, head);
+
+    // Force lazy tail to get next seq node
+    auto* srcForTail = _builder.createLoad(srcStorage, "seq.each.src.for_tail");
+    auto* lazyTail = _builder.createObjGetSlot(srcForTail, slot1, "seq.each.lazy_tail");
+    auto* nextSeq = _builder.createLazyForce(lazyTail, "seq.each.next");
+    _builder.createStore(srcStorage, nextSeq);
+
+    // Apply function to element
+    auto* elemLoad = _builder.createLoad(elemAlloca, "seq.each.elem.load");
+    if (isPrintBuiltin)
+    {
+        auto* strVal = convertToString(elemLoad, "seq.each.elem");
+        auto const* sig = funcName == "println" ? "println(S)V" : "print(S)V";
+        auto* callback = findCallback(sig);
+        if (callback)
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { strVal }, funcName);
+    }
+    else
+    {
+        generateFSharpCall(func, funcName, { elemLoad });
+        if (!_result)
+        {
+            reportTypeError("each: failed to apply function to seq element");
+            return;
+        }
+    }
+    _builder.createBr(condBlock);
+
+    // End: return unit
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.get(CoreVM::CoreNumber(0));
+}
+
+void IRGenerator::generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* seqValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
+    auto* one = _builder.get(CoreVM::CoreNumber(1));
+    auto* zero = _builder.get(CoreVM::CoreNumber(0));
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.src");
+    _builder.createStore(srcStorage, seqValue);
+
+    auto* counterStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Number, "seq.take.counter");
+    _builder.createStore(counterStorage, countValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.acc");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "seq.take.nil");
+    _builder.createStore(accStorage, nil);
+
+    // Phase 1 blocks: accumulate in reverse
+    auto* condBlock = _builder.createBlock("seq.take.cond");
+    auto* bodyBlock = _builder.createBlock("seq.take.body");
+    auto* revInitBlock = _builder.createBlock("seq.take.rev.init");
+    auto* revCondBlock = _builder.createBlock("seq.take.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("seq.take.rev.body");
+    auto* endBlock = _builder.createBlock("seq.take.end");
+
+    _builder.createBr(condBlock);
+
+    // Phase 1: Check counter > 0 AND seq is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* counterLoad = _builder.createLoad(counterStorage, "seq.take.counter.load");
+    auto* counterGtZero = _builder.createNCmpGT(counterLoad, zero, "seq.take.counter_gt_zero");
+    auto* checkSeqBlock = _builder.createBlock("seq.take.check_seq");
+    _builder.createCondBr(counterGtZero, checkSeqBlock, revInitBlock);
+
+    _builder.setInsertPoint(checkSeqBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "seq.take.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "seq.take.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "seq.take.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, revInitBlock);
+
+    // Body: extract head, force lazy tail, cons head onto accumulator, decrement counter
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "seq.take.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "seq.take.head");
+
+    // Force lazy tail to get next seq node
+    auto* srcForTail = _builder.createLoad(srcStorage, "seq.take.src.for_tail");
+    auto* lazyTail = _builder.createObjGetSlot(srcForTail, slot1, "seq.take.lazy_tail");
+    auto* nextSeq = _builder.createLazyForce(lazyTail, "seq.take.next");
+    _builder.createStore(srcStorage, nextSeq);
+
+    // Store head and acc in temp allocas to survive ObjAlloc
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "seq.take.elem.tmp");
+    _builder.createStore(elemTmp, head);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "seq.take.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    auto* elemReload = _builder.createLoad(elemTmp, "seq.take.elem.reload");
+    auto* accReload = _builder.createLoad(accTmp, "seq.take.acc.reload");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "seq.take.cons");
+    _builder.createStore(accStorage, cons);
+
+    // Decrement counter
+    auto* counterLoad2 = _builder.createLoad(counterStorage, "seq.take.counter.load2");
+    auto* counterDec = _builder.createSub(counterLoad2, one, "seq.take.counter.dec");
+    _builder.createStore(counterStorage, counterDec);
+
+    _builder.createBr(condBlock);
+
+    // Phase 2: Reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "seq.take.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "seq.take.rev.nil");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "seq.take.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "seq.take.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "seq.take.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "seq.take.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "seq.take.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "seq.take.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "seq.take.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "seq.take.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "seq.take.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "seq.take.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    auto* revElemReload = _builder.createLoad(revElemTmp, "seq.take.rev.elem.reload");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "seq.take.rev.acc.reload");
+    auto* revCons =
+        emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "seq.take.rev.cons");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "seq.take.result");
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+}
+
+void IRGenerator::generateToListIR(CoreVM::Value* seqValue)
+{
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail
+
+    // Allocas
+    auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.src");
+    _builder.createStore(srcStorage, seqValue);
+
+    auto* accStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.acc");
+    auto* nil = emitNilList(CoreVM::LiteralType::Void, "toList.nil");
+    _builder.createStore(accStorage, nil);
+
+    // Phase 1: accumulate elements in reverse order
+    auto* condBlock = _builder.createBlock("toList.cond");
+    auto* bodyBlock = _builder.createBlock("toList.body");
+    auto* revInitBlock = _builder.createBlock("toList.rev.init");
+    auto* revCondBlock = _builder.createBlock("toList.rev.cond");
+    auto* revBodyBlock = _builder.createBlock("toList.rev.body");
+    auto* endBlock = _builder.createBlock("toList.end");
+
+    _builder.createBr(condBlock);
+
+    // Condition: check if seq is Cons
+    _builder.setInsertPoint(condBlock);
+    auto* srcLoad = _builder.createLoad(srcStorage, "toList.src.load");
+    auto* srcTag = _builder.createObjGetTag(srcLoad, "toList.src.tag");
+    auto* isCons = _builder.createNCmpEQ(srcTag, tag1, "toList.is_cons");
+    _builder.createCondBr(isCons, bodyBlock, revInitBlock);
+
+    // Body: extract head, force lazy tail, cons head onto reversed accumulator
+    _builder.setInsertPoint(bodyBlock);
+    auto* srcForHead = _builder.createLoad(srcStorage, "toList.src.for_head");
+    auto* head = _builder.createObjGetSlot(srcForHead, slot0, "toList.head");
+
+    auto* srcForTail = _builder.createLoad(srcStorage, "toList.src.for_tail");
+    auto* lazyTail = _builder.createObjGetSlot(srcForTail, slot1, "toList.lazy_tail");
+    auto* nextSeq = _builder.createLazyForce(lazyTail, "toList.next");
+    _builder.createStore(srcStorage, nextSeq);
+
+    auto* elemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "toList.elem.tmp");
+    _builder.createStore(elemTmp, head);
+    auto* accTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.acc.tmp");
+    auto* accForCons = _builder.createLoad(accStorage, "toList.acc.for_cons");
+    _builder.createStore(accTmp, accForCons);
+
+    auto* elemReload = _builder.createLoad(elemTmp, "toList.elem.reload");
+    auto* accReload = _builder.createLoad(accTmp, "toList.acc.reload");
+    auto* cons = emitListCons(elemReload, accReload, CoreVM::LiteralType::Void, "toList.cons");
+    _builder.createStore(accStorage, cons);
+
+    _builder.createBr(condBlock);
+
+    // Phase 2: reverse the accumulated list
+    auto* revSrcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.rev.src");
+    auto* revAccStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.rev.acc");
+
+    _builder.setInsertPoint(revInitBlock);
+    auto* revSrcInit = _builder.createLoad(accStorage, "toList.rev.src.init");
+    _builder.createStore(revSrcStorage, revSrcInit);
+    auto* revNil = emitNilList(CoreVM::LiteralType::Void, "toList.rev.nil");
+    _builder.createStore(revAccStorage, revNil);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(revCondBlock);
+    auto* revSrcLoad = _builder.createLoad(revSrcStorage, "toList.rev.src.load");
+    auto* revSrcTag = _builder.createObjGetTag(revSrcLoad, "toList.rev.src.tag");
+    auto* revIsCons = _builder.createNCmpEQ(revSrcTag, tag1, "toList.rev.is_cons");
+    _builder.createCondBr(revIsCons, revBodyBlock, endBlock);
+
+    _builder.setInsertPoint(revBodyBlock);
+    auto* revSrcForHead = _builder.createLoad(revSrcStorage, "toList.rev.src.for_head");
+    auto* revHead = _builder.createObjGetSlot(revSrcForHead, slot0, "toList.rev.head");
+    auto* revSrcForTail = _builder.createLoad(revSrcStorage, "toList.rev.src.for_tail");
+    auto* revTail = _builder.createObjGetSlot(revSrcForTail, slot1, "toList.rev.tail");
+    _builder.createStore(revSrcStorage, revTail);
+
+    auto* revElemTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Void, "toList.rev.elem.tmp");
+    _builder.createStore(revElemTmp, revHead);
+    auto* revAccTmp = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "toList.rev.acc.tmp");
+    auto* revAccForCons = _builder.createLoad(revAccStorage, "toList.rev.acc.for_cons");
+    _builder.createStore(revAccTmp, revAccForCons);
+
+    auto* revElemReload = _builder.createLoad(revElemTmp, "toList.rev.elem.reload");
+    auto* revAccReload = _builder.createLoad(revAccTmp, "toList.rev.acc.reload");
+    auto* revCons =
+        emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "toList.rev.cons");
+
+    _builder.createStore(revAccStorage, revCons);
+    _builder.createBr(revCondBlock);
+
+    _builder.setInsertPoint(endBlock);
+    _result = _builder.createLoad(revAccStorage, "toList.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
 }
 

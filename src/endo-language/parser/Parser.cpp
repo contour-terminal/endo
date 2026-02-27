@@ -2953,6 +2953,7 @@ bool Parser::isFSharpPrimary() const noexcept
         case Token::ResultError:   // Error expr
         case Token::Try:           // try expr with ...
         case Token::Lazy:          // lazy expr
+        case Token::Seq:           // seq { ... }
         case Token::FStringStart:  // F# interpolated string: $"..."
             return true;
         case Token::Identifier: {
@@ -2961,7 +2962,7 @@ bool Parser::isFSharpPrimary() const noexcept
                 return false;
             // Contextual keywords that should not be treated as primary expressions
             if (lit == "in" || lit == "then" || lit == "else" || lit == "elif" || lit == "do"
-                || lit == "break" || lit == "continue" || lit == "exec")
+                || lit == "break" || lit == "continue" || lit == "exec" || lit == "yield")
                 return false;
             // Variable identifiers start with alphanumeric or underscore
             // Operators like +, -, *, /, |>, etc. start with symbols
@@ -3359,6 +3360,19 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
         _lexer.nextToken(); // consume 'rec'
     }
 
+    // Check for 'use' or 'manual' resource management modifier
+    auto resourceMode = ast::ResourceMode::None;
+    if (_lexer.currentToken() == Token::Use)
+    {
+        resourceMode = ast::ResourceMode::Use;
+        _lexer.nextToken(); // consume 'use'
+    }
+    else if (_lexer.currentToken() == Token::Manual)
+    {
+        resourceMode = ast::ResourceMode::Manual;
+        _lexer.nextToken(); // consume 'manual'
+    }
+
     // Check for destructuring pattern: let (x, y) = expr  or  let { x; y } = expr
     if (_lexer.currentToken() == Token::RndOpen || _lexer.currentToken() == Token::BraceOpen)
     {
@@ -3392,6 +3406,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
 
         _lexer.leaveFSharpExpr();
         auto result = std::make_unique<ast::LetBindingStmt>(isMutable, std::move(pat), std::move(value));
+        result->resourceMode = resourceMode;
         result->location = result->value && result->value->location
                                ? SourceLocationRange { letLoc.begin, result->value->location->end }
                                : letLoc;
@@ -3494,6 +3509,7 @@ std::unique_ptr<ast::LetBindingStmt> Parser::parseLet()
                                                         std::move(parameters),
                                                         std::move(returnType),
                                                         std::move(value));
+    result->resourceMode = resourceMode;
 
     // Parse 'and' bindings for mutual recursion: let rec f ... and g ...
     while (isRecursive)
@@ -3810,6 +3826,19 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
     auto const letLoc = _lexer.currentRange();
     _lexer.nextToken(); // consume 'let'
 
+    // Check for 'use' or 'manual' resource management modifier
+    auto resourceMode = ast::ResourceMode::None;
+    if (_lexer.currentToken() == Token::Use)
+    {
+        resourceMode = ast::ResourceMode::Use;
+        _lexer.nextToken(); // consume 'use'
+    }
+    else if (_lexer.currentToken() == Token::Manual)
+    {
+        resourceMode = ast::ResourceMode::Manual;
+        _lexer.nextToken(); // consume 'manual'
+    }
+
     // Check for 'rec' modifier
     auto const isRecursive = _lexer.currentToken() == Token::Rec;
     if (isRecursive)
@@ -3859,6 +3888,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
 
         auto const endLoc = body->location;
         auto node = std::make_unique<ast::LetInExpr>(std::move(pat), std::move(value), std::move(body));
+        node->resourceMode = resourceMode;
         node->location = endLoc ? SourceLocationRange { letLoc.begin, endLoc->end } : letLoc;
         return node;
     }
@@ -3958,6 +3988,7 @@ std::unique_ptr<ast::LetInExpr> Parser::parseLetInExpr()
                                                  std::move(returnType),
                                                  std::move(value),
                                                  std::move(body));
+    node->resourceMode = resourceMode;
     node->location = endLoc ? SourceLocationRange { letLoc.begin, endLoc->end } : letLoc;
     return node;
 }
@@ -5566,15 +5597,21 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
             if (!body)
                 return nullptr;
             if (let->destructurePattern)
+            {
                 lastExpr = std::make_unique<ast::LetInExpr>(
                     std::move(let->destructurePattern), std::move(let->value), std::move(body));
+                static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
+            }
             else
+            {
                 lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
                                                             std::move(let->name),
                                                             std::move(let->parameters),
                                                             std::move(let->returnType),
                                                             std::move(let->value),
                                                             std::move(body));
+                static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
+            }
         }
         else
         {
@@ -5656,15 +5693,21 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpExprSequence(size_t referenceColum
                 if (!body)
                     return nullptr;
                 if (let->destructurePattern)
+                {
                     lastExpr = std::make_unique<ast::LetInExpr>(
                         std::move(let->destructurePattern), std::move(let->value), std::move(body));
+                    static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
+                }
                 else
+                {
                     lastExpr = std::make_unique<ast::LetInExpr>(let->isRecursive,
                                                                 std::move(let->name),
                                                                 std::move(let->parameters),
                                                                 std::move(let->returnType),
                                                                 std::move(let->value),
                                                                 std::move(body));
+                    static_cast<ast::LetInExpr*>(lastExpr.get())->resourceMode = let->resourceMode;
+                }
             }
             else
             {
@@ -6191,6 +6234,79 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             auto const endLoc = body->location;
             auto node = std::make_unique<ast::LazyExpr>(std::move(body));
             node->location = SourceLocationRange { lazyLoc.begin, endLoc ? endLoc->end : lazyLoc.end };
+            return node;
+        }
+
+        case Token::Seq: {
+            // seq { yield e1; yield! e2; ... }
+            auto const seqLoc = _lexer.currentRange();
+            _lexer.nextToken(); // consume 'seq'
+            if (_lexer.currentToken() != Token::BraceOpen)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected '{{' after 'seq'.");
+                return nullptr;
+            }
+            _lexer.nextToken(); // consume '{'
+            consumeNewlines();
+
+            std::vector<ast::SeqYield> yields;
+            while (_lexer.currentToken() != Token::BraceClose
+                   && _lexer.currentToken() != Token::EndOfInput)
+            {
+                // Each element: yield expr | yield! expr
+                if (_lexer.currentToken() != Token::Yield)
+                {
+                    _report.syntaxErrorWithSuggestions(
+                        currentLocation(),
+                        {},
+                        currentContextSnippet(),
+                        "Expected 'yield' or 'yield!' inside seq block.");
+                    return nullptr;
+                }
+                _lexer.nextToken(); // consume 'yield'
+
+                // Check for yield! (splice)
+                auto isSplice = false;
+                if (_lexer.currentToken() == Token::Not)
+                {
+                    isSplice = true;
+                    _lexer.nextToken(); // consume '!'
+                }
+
+                auto value = parseFSharpExpr();
+                if (!value)
+                {
+                    if (isSplice)
+                        _report.syntaxErrorWithSuggestions(
+                            currentLocation(), {}, currentContextSnippet(),
+                            "Expected expression after 'yield!'.");
+                    else
+                        _report.syntaxErrorWithSuggestions(
+                            currentLocation(), {}, currentContextSnippet(),
+                            "Expected expression after 'yield'.");
+                    return nullptr;
+                }
+
+                yields.push_back(ast::SeqYield { .isSplice = isSplice, .value = std::move(value) });
+
+                // Consume separators (semicolons or newlines)
+                if (_lexer.currentToken() == Token::Semicolon)
+                    _lexer.nextToken();
+                consumeNewlines();
+            }
+
+            if (_lexer.currentToken() != Token::BraceClose)
+            {
+                _report.syntaxErrorWithSuggestions(
+                    currentLocation(), {}, currentContextSnippet(), "Expected '}}' to close seq block.");
+                return nullptr;
+            }
+            auto const endLoc = _lexer.currentRange();
+            _lexer.nextToken(); // consume '}'
+
+            auto node = std::make_unique<ast::SeqExpr>(std::move(yields));
+            node->location = SourceLocationRange { seqLoc.begin, endLoc.end };
             return node;
         }
 

@@ -80,7 +80,7 @@ std::vector<CompletionCandidate> constructorCandidatesFromRegistry(CoreVM::TypeR
             continue;
 
         // Skip internal types — not user-constructible via variant names
-        if (type->name == "List" || type->name == "Lazy")
+        if (type->name == "List" || type->name == "Lazy" || type->name == "Seq")
             continue;
 
         for (auto const& variant: type->variants)

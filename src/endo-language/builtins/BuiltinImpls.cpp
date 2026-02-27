@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <endo-language/builtins/BuiltinImpls.hpp>
+#include <endo-language/builtins/FileManager.hpp>
 #include <endo-language/builtins/StdlibDescriptors.hpp>
 
 #include <CoreVM/types/TypeDescriptor.hpp>
@@ -8,7 +9,9 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <locale>
 #include <random>
 #include <string>
@@ -125,6 +128,20 @@ std::string valueToString(uint64_t rawVal, CoreVM::Runner* runner)
             if (obj->tag == 0)
                 return "Error " + slotValueToString(obj->getSlot(0), innerType, runner);
             return "Ok " + slotValueToString(obj->getSlot(0), innerType, runner);
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Seq)
+        {
+            if (obj->tag == 0)
+                return "seq {}";
+            // Don't force the lazy tail to avoid infinite evaluation
+            return "seq { ... }";
+        }
+        if (typeId == CoreVM::BuiltinTypeId::Lazy)
+            return "lazy <unevaluated>";
+        if (typeId == CoreVM::BuiltinTypeId::FileHandle)
+        {
+            auto const handle = static_cast<int64_t>(obj->getSlot(0));
+            return std::format("FileHandle({})", handle);
         }
         if (typeId == CoreVM::BuiltinTypeId::Size)
             return formatSizeToString(static_cast<int64_t>(obj->getSlot(0)));
@@ -1431,6 +1448,176 @@ void randRange(CoreVM::Params& args)
     auto const maxVal = args.getInt(2);
     std::uniform_int_distribution<int64_t> dist(minVal, maxVal);
     args.setResult(static_cast<CoreVM::CoreNumber>(dist(rng)));
+}
+
+// ---------------------------------------------------------------------------
+// File I/O operations
+// ---------------------------------------------------------------------------
+
+namespace
+{
+    /// Global file manager instance for the File I/O module.
+    endo::FileManager& globalFileManager()
+    {
+        static endo::FileManager instance;
+        return instance;
+    }
+} // namespace
+
+void fileOpen(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    auto const& mode = args.getString(2);
+    auto& mgr = globalFileManager();
+
+    if (auto handle = mgr.open(path, mode))
+    {
+        auto* obj = args.caller()->allocObject(CoreVM::BuiltinTypeId::FileHandle);
+        obj->setSlot(0, static_cast<uint64_t>(*handle));
+        auto* result =
+            args.caller()->makeOkResult(reinterpret_cast<uintptr_t>(obj), CoreVM::LiteralType::Object);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+    }
+    else
+    {
+        auto const errMsg = std::format("Failed to open file '{}' with mode '{}'", path, mode);
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+    }
+}
+
+void fileClose(CoreVM::Params& args)
+{
+    auto* handleObj = args.getObject(1);
+    auto const handle = static_cast<int64_t>(handleObj->getSlot(0));
+    globalFileManager().close(handle);
+    args.setResult(CoreVM::CoreNumber(0));
+}
+
+void fileReadLine(CoreVM::Params& args)
+{
+    auto* handleObj = args.getObject(1);
+    auto const handle = static_cast<int64_t>(handleObj->getSlot(0));
+
+    if (auto line = globalFileManager().readLine(handle))
+    {
+        auto* str = args.caller()->newString(*line);
+        auto* some =
+            args.caller()->makeSomeOption(reinterpret_cast<uintptr_t>(str), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(some)));
+    }
+    else
+    {
+        auto* none = args.caller()->makeNoneOption();
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(none)));
+    }
+}
+
+void fileReadAll(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    std::ifstream file(path, std::ios::in | std::ios::binary);
+    if (!file.is_open())
+    {
+        auto const errMsg = std::format("Failed to open file '{}'", path);
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+
+    std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+    auto* str = args.caller()->newString(content);
+    auto* result = args.caller()->makeOkResult(reinterpret_cast<uintptr_t>(str), CoreVM::LiteralType::String);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+void fileWriteAll(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    auto const& content = args.getString(2);
+    std::ofstream file(path, std::ios::out | std::ios::trunc | std::ios::binary);
+    if (!file.is_open())
+    {
+        auto const errMsg = std::format("Failed to open file '{}' for writing", path);
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+
+    file.write(content.data(), static_cast<std::streamsize>(content.size()));
+    auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+void fileAppendAll(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    auto const& content = args.getString(2);
+    std::ofstream file(path, std::ios::out | std::ios::app | std::ios::binary);
+    if (!file.is_open())
+    {
+        auto const errMsg = std::format("Failed to open file '{}' for appending", path);
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+
+    file.write(content.data(), static_cast<std::streamsize>(content.size()));
+    auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+void fileSize(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    std::error_code ec;
+    auto const size = std::filesystem::file_size(path, ec);
+    if (ec)
+    {
+        auto const errMsg = std::format("Failed to get size of '{}': {}", path, ec.message());
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+
+    auto* result = args.caller()->makeOkResult(static_cast<uint64_t>(size), CoreVM::LiteralType::Number);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+}
+
+void fileExists(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    auto const exists = std::filesystem::exists(path);
+    args.setResult(CoreVM::CoreNumber(exists ? 1 : 0));
+}
+
+void fileDelete(CoreVM::Params& args)
+{
+    auto const& path = args.getString(1);
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    if (ec)
+    {
+        auto const errMsg = std::format("Failed to delete '{}': {}", path, ec.message());
+        auto* errStr = args.caller()->newString(errMsg);
+        auto* result =
+            args.caller()->makeErrorResult(reinterpret_cast<uintptr_t>(errStr), CoreVM::LiteralType::String);
+        args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
+        return;
+    }
+
+    auto* result = args.caller()->makeOkResult(0, CoreVM::LiteralType::Void);
+    args.setResult(static_cast<CoreVM::CoreNumber>(reinterpret_cast<uintptr_t>(result)));
 }
 
 // ---------------------------------------------------------------------------

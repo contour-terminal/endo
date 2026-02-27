@@ -100,7 +100,13 @@ enum class Token
     Finally, // 'finally' (try-finally expression)
 
     // F# style keyword for lazy evaluation
-    Lazy, // 'lazy' (deferred computation)
+    Lazy,  // 'lazy' (deferred computation)
+    Seq,   // 'seq' (lazy sequence builder)
+    Yield, // 'yield' (yield element in seq block)
+
+    // F# style keywords for resource management
+    Use,    // 'use' (scoped resource binding)
+    Manual, // 'manual' (manual resource management)
 
     // F# style operators
     Arrow,       // '->'
@@ -494,6 +500,10 @@ inline std::string_view tos(Token token)
         case Try: return "try";
         case Finally: return "finally";
         case Lazy: return "lazy";
+        case Seq: return "seq";
+        case Yield: return "yield";
+        case Use: return "use";
+        case Manual: return "manual";
         case Arrow: return "->";
         case LeftArrow: return "<-";
         case ForwardPipe: return "|>";

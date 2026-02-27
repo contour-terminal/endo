@@ -1479,6 +1479,10 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
         emit("export ");
     if (node.isMutable)
         emit("mut ");
+    if (node.resourceMode == ast::ResourceMode::Use)
+        emit("use ");
+    else if (node.resourceMode == ast::ResourceMode::Manual)
+        emit("manual ");
     if (node.isRecursive)
         emit("rec ");
     if (node.destructurePattern)
@@ -1595,6 +1599,10 @@ void SourceFormatter::visit(ast::LetBindingStmt const& node)
 void SourceFormatter::visit(ast::LetInExpr const& node)
 {
     emit("let ");
+    if (node.resourceMode == ast::ResourceMode::Use)
+        emit("use ");
+    else if (node.resourceMode == ast::ResourceMode::Manual)
+        emit("manual ");
     if (node.isRecursive)
         emit("rec ");
     if (node.destructurePattern)
@@ -2145,6 +2153,50 @@ void SourceFormatter::visit(ast::LazyExpr const& node)
     emit("lazy ");
     if (node.body)
         node.body->accept(*this);
+    emitTrailingComment(node);
+}
+
+void SourceFormatter::visit(ast::SeqExpr const& node)
+{
+    emitLeadingComments(node);
+    if (node.yields.empty())
+    {
+        emit("seq {}");
+        emitTrailingComment(node);
+        return;
+    }
+
+    // Use multi-line when there are more than 2 yields
+    auto const useMultiLine = node.yields.size() > 2;
+
+    if (useMultiLine)
+    {
+        emit("seq {");
+        ++_indentLevel;
+        for (auto const& yield: node.yields)
+        {
+            emitNewline();
+            emit(yield.isSplice ? "yield! " : "yield ");
+            if (yield.value)
+                yield.value->accept(*this);
+        }
+        --_indentLevel;
+        emitNewline();
+        emit("}");
+    }
+    else
+    {
+        emit("seq { ");
+        for (auto i = 0u; i < node.yields.size(); ++i)
+        {
+            if (i > 0)
+                emit("; ");
+            emit(node.yields[i].isSplice ? "yield! " : "yield ");
+            if (node.yields[i].value)
+                node.yields[i].value->accept(*this);
+        }
+        emit(" }");
+    }
     emitTrailingComment(node);
 }
 

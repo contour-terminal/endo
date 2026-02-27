@@ -245,6 +245,7 @@ class IRGenerator final: public ast::Visitor
     void visit(ast::TryWithExpr const& node) override;
     void visit(ast::TryFinallyExpr const& node) override;
     void visit(ast::LazyExpr const& node) override;
+    void visit(ast::SeqExpr const& node) override;
     void visit(ast::FStringExpr const& node) override;
     void visit(ast::UnitExpr const& node) override;
     void visit(ast::BlockExpr const& node) override;
@@ -501,6 +502,17 @@ class IRGenerator final: public ast::Visitor
     /// Generates IR for `distinct xs` — removes duplicate elements from list.
     void generateDistinctIR(CoreVM::Value* listValue);
 
+    // Seq-aware HOF variants
+
+    /// Generates IR for `take n seq` — returns first n elements as a list (forces lazy tails).
+    void generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* seqValue);
+
+    /// Generates IR for `each f seq` — applies function to each element for side effects (forces lazy tails).
+    void generateSeqEachIR(std::string const& funcParamName, CoreVM::Value* seqValue);
+
+    /// Generates IR for `toList seq` — forces entire lazy sequence into a list.
+    void generateToListIR(CoreVM::Value* seqValue);
+
     // Option combinators: Option.map, Option.bind, Option.defaultValue
 
     /// Resolves a function argument expression (identifier or lambda) to a function reference.
@@ -613,6 +625,12 @@ class IRGenerator final: public ast::Visitor
                                 CoreVM::BasicBlock* doneBlock,
                                 int level = 0);
 
+    /// Emits IR for an empty sequence (tag=0).
+    CoreVM::Value* emitSeqEmpty(std::string_view label);
+
+    /// Emits IR for a Seq Cons cell (head + lazyTail) with tag=1.
+    CoreVM::Value* emitSeqCons(CoreVM::Value* head, CoreVM::Value* lazyTail, std::string_view label);
+
     /// Emits IR for an empty (Nil) list with the given element type tag.
     CoreVM::Value* emitNilList(CoreVM::LiteralType elemType, std::string_view label);
 
@@ -693,6 +711,10 @@ class IRGenerator final: public ast::Visitor
     [[nodiscard]] std::string generateLambdaName();
 
     size_t _lazyCounter = 0;
+    size_t _seqCounter = 0;
+
+    /// Maps type IDs to dispose callback signatures for `let use` resource management.
+    std::unordered_map<uint16_t, std::string> _disposeCallbacks;
 
     // F# function context stack for error propagation
     std::vector<FSharpFunctionContext> _fsharpFunctionContextStack;

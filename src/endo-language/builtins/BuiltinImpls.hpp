@@ -307,6 +307,37 @@ void randRange(CoreVM::Params& args);
 void jsonQuery(CoreVM::Params& args);
 
 // ---------------------------------------------------------------------------
+// File I/O operations
+// ---------------------------------------------------------------------------
+
+/// file_open(path, mode) -> result<FileHandle, str>: Opens a file with the given mode.
+void fileOpen(CoreVM::Params& args);
+
+/// file_close(fd) -> unit: Closes a file handle.
+void fileClose(CoreVM::Params& args);
+
+/// file_read_line(fd) -> option<str>: Reads one line from the file (None at EOF).
+void fileReadLine(CoreVM::Params& args);
+
+/// file_read_all(path) -> result<str, str>: Reads the entire file as a string.
+void fileReadAll(CoreVM::Params& args);
+
+/// file_write_all(path, content) -> result<unit, str>: Writes a string to a file.
+void fileWriteAll(CoreVM::Params& args);
+
+/// file_append_all(path, content) -> result<unit, str>: Appends a string to a file.
+void fileAppendAll(CoreVM::Params& args);
+
+/// file_size(path) -> result<int, str>: Returns file size in bytes.
+void fileSize(CoreVM::Params& args);
+
+/// file_exists(path) -> bool: Checks if a file exists.
+void fileExists(CoreVM::Params& args);
+
+/// file_delete(path) -> result<unit, str>: Deletes a file.
+void fileDelete(CoreVM::Params& args);
+
+// ---------------------------------------------------------------------------
 // Shared implementation resolver
 // ---------------------------------------------------------------------------
 

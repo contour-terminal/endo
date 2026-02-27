@@ -234,6 +234,42 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(lazyType));
 
+    // Seq<T>: Empty (tag=0, 0 payload slots) | Cons (tag=1, 2 slots: head + lazyTail)
+    auto seqType = std::make_unique<TypeDescriptor>();
+    seqType->kind = TypeKind::Sum;
+    seqType->id = BuiltinTypeId::Seq;
+    seqType->name = "Seq";
+    seqType->slotCount = 2; // head (slot 0) + lazy tail (slot 1)
+    seqType->variants = {
+        { "Empty", 0 }, // tag 0: empty sequence
+        { "Cons", 2 },  // tag 1: head (slot 0) + lazy tail (slot 1)
+    };
+    addType(std::move(seqType));
+
+    // FileHandle: Product type with 1 field for the handle index
+    auto fileHandleType = std::make_unique<TypeDescriptor>();
+    fileHandleType->kind = TypeKind::Product;
+    fileHandleType->id = BuiltinTypeId::FileHandle;
+    fileHandleType->name = "FileHandle";
+    fileHandleType->slotCount = 1;
+    fileHandleType->fields = {
+        { "handle", 0, LiteralType::Number },
+    };
+    fileHandleType->disposeCallbackName = "file_close";
+    fileHandleType->moduleFunctions = {
+        { "open", "File.open path mode -> result<FileHandle, str>" },
+        { "close", "File.close fd -> unit" },
+        { "readLine", "File.readLine fd -> option<str>" },
+        { "readAll", "File.readAll path -> result<str, str>" },
+        { "writeAll", "File.writeAll path content -> result<unit, str>" },
+        { "appendAll", "File.appendAll path content -> result<unit, str>" },
+        { "size", "File.size path -> result<int, str>" },
+        { "exists", "File.exists path -> bool" },
+        { "delete", "File.delete path -> result<unit, str>" },
+        { "lines", "File.lines fd -> seq<str>" },
+    };
+    addType(std::move(fileHandleType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }

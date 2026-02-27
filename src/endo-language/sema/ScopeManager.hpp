@@ -28,6 +28,14 @@ struct BindingInfo
     std::optional<SourceLocationRange> bindingLocation; ///< Source location of the binding definition
 };
 
+/// Entry for a disposable resource bound with `let use`.
+/// Tracks the alloca and the native callback signature to call at scope exit.
+struct DisposeEntry
+{
+    CoreVM::AllocaInstr* storage;      ///< Alloca holding the disposable resource
+    std::string callbackSignature;     ///< Native callback signature (e.g., "file_close(I)V")
+};
+
 /// Manages the F# variable scope chain for name resolution during IR generation.
 ///
 /// Provides push/pop scope management, variable binding, and function-reference tracking.
@@ -89,11 +97,19 @@ class ScopeManager
     /// Used by BlockExpr to prevent premature ORELEASE of let-bound objects.
     void clearObjectVariables();
 
+    /// Registers a disposable resource for automatic cleanup at scope exit.
+    /// Called when processing `let use` bindings.
+    void registerDispose(CoreVM::AllocaInstr* storage, std::string callbackSignature);
+
+    /// Returns the dispose entries for the current scope in LIFO order (reverse of registration).
+    [[nodiscard]] std::vector<DisposeEntry> const& currentDisposeEntries() const;
+
   private:
     struct Scope
     {
         std::unordered_map<std::string, BindingInfo> bindings;
         std::vector<CoreVM::AllocaInstr*> objectVariables; ///< For ORELEASE at scope exit
+        std::vector<DisposeEntry> disposeEntries;          ///< For dispose at scope exit (let use)
         std::unordered_map<std::string, std::string> functionRefs;
         Scope* parent = nullptr;
     };

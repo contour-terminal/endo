@@ -121,6 +121,13 @@ std::unordered_set<std::string> collectFreeVariableNames(ast::Expr const* body,
                 return;
             }
 
+            if (auto const* seqExpr = dynamic_cast<ast::SeqExpr const*>(expr))
+            {
+                for (auto const& yield: seqExpr->yields)
+                    walk(yield.value.get(), bound);
+                return;
+            }
+
             if (auto const* optDefault = dynamic_cast<ast::OptionDefaultExpr const*>(expr))
             {
                 walk(optDefault->option.get(), bound);

@@ -890,11 +890,20 @@ struct PropertyAccessor
     std::unique_ptr<Expr> body;        ///< Accessor body expression
 };
 
+/// Resource management mode for let bindings.
+enum class ResourceMode : uint8_t
+{
+    None,   ///< Regular binding, no automatic cleanup
+    Use,    ///< `let use` — automatic dispose at scope exit
+    Manual, ///< `let manual` — explicit manual resource management
+};
+
 struct LetBindingStmt final: public Statement
 {
     bool isExported;                        ///< True for `let export`
     bool isMutable;                         ///< True for `let mut`
     bool isRecursive;                       ///< True for `let rec`
+    ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
     std::string name;                       ///< Binding/function name
     std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
     std::optional<TypePtr> returnType;      ///< Return type (functions) or binding type (simple bindings)
@@ -970,6 +979,7 @@ struct ExprStmt final: public Statement
 struct LetInExpr final: public Expr
 {
     bool isRecursive;                       ///< True for `let rec`
+    ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
     std::string name;                       ///< Binding/function name
     std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
     std::optional<TypePtr> returnType;      ///< Optional return type annotation
@@ -1620,6 +1630,26 @@ struct LazyExpr final: public Expr
     std::unique_ptr<Expr> body; ///< The deferred expression
 
     explicit LazyExpr(std::unique_ptr<Expr> b): body(std::move(b)) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// A single yield in a seq expression.
+struct SeqYield
+{
+    bool isSplice;                 ///< yield (false) vs yield! (true)
+    std::unique_ptr<Expr> value;   ///< The yielded expression
+};
+
+/// Seq expression: `seq { yield e1; yield! e2 }`
+///
+/// Builds a lazy sequence. `yield` produces a single element, while `yield!` splices
+/// another sequence. The tail of each element is lazily evaluated, enabling infinite sequences.
+struct SeqExpr final: public Expr
+{
+    std::vector<SeqYield> yields; ///< Sequence of yield/yield! expressions
+
+    explicit SeqExpr(std::vector<SeqYield> y): yields(std::move(y)) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };

@@ -138,4 +138,17 @@ void ScopeManager::clearObjectVariables()
         _currentScope->objectVariables.clear();
 }
 
+void ScopeManager::registerDispose(CoreVM::AllocaInstr* storage, std::string callbackSignature)
+{
+    if (_currentScope)
+        _currentScope->disposeEntries.push_back(
+            DisposeEntry { .storage = storage, .callbackSignature = std::move(callbackSignature) });
+}
+
+std::vector<DisposeEntry> const& ScopeManager::currentDisposeEntries() const
+{
+    static std::vector<DisposeEntry> const empty;
+    return _currentScope ? _currentScope->disposeEntries : empty;
+}
+
 } // namespace endo

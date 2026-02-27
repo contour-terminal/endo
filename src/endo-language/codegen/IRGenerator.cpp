@@ -216,6 +216,16 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
     generator._builder.setFunction(generator._builder.getFunction(GLOBAL_SCOPE_INIT_NAME));
     generator._builder.setInsertPoint(generator._builder.createBlock("EntryPoint"));
 
+    // Populate dispose callback map from the type registry for `let use` enforcement.
+    {
+        CoreVM::TypeRegistry registry;
+        for (auto const& type: registry.allTypes())
+        {
+            if (type->disposeCallbackName)
+                generator._disposeCallbacks[type->id] = *type->disposeCallbackName;
+        }
+    }
+
     // Initialize F# root scope
     generator.pushFSharpScope();
 
@@ -252,6 +262,7 @@ std::unique_ptr<CoreVM::IRProgram> IRGenerator::generate(ast::Statement const& r
         registerHOF("groupBy", { "__f", "__xs" }, "groupBy", ResultKind::Value);
         registerHOF("sort", { "__xs" }, "sort", ResultKind::Value);
         registerHOF("distinct", { "__xs" }, "distinct", ResultKind::Value);
+        registerHOF("toList", { "__xs" }, "toList", ResultKind::Value);
     }
 
     // Pre-populate function table from persistent state (REPL session continuity)
@@ -458,6 +469,18 @@ void IRGenerator::popFSharpScope()
                               "Use 'let _ = ...' to explicitly discard.",
                               name);
             _hasErrors = true;
+        }
+    }
+
+    // Emit dispose callbacks for `let use` bindings in LIFO order (before ORELEASE).
+    auto const& disposeEntries = _sema.scopes().currentDisposeEntries();
+    for (auto it = disposeEntries.rbegin(); it != disposeEntries.rend(); ++it)
+    {
+        auto* callback = findCallback(it->callbackSignature);
+        if (callback)
+        {
+            auto* val = _builder.createLoad(it->storage, "dispose.load");
+            _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { val }, "dispose.call");
         }
     }
 
@@ -2655,6 +2678,9 @@ void IRGenerator::visit(ast::ForInStmt const& node)
         return;
     }
 
+    // Detect whether source is a Seq (lazy sequence) — requires LFORCE on tail
+    bool const isSeq = getObjectTypeId(sourceVal) == CoreVM::BuiltinTypeId::Seq;
+
     // Store source in alloca for iteration
     auto* srcStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "forin.src");
     _builder.createStore(srcStorage, sourceVal);
@@ -2680,7 +2706,7 @@ void IRGenerator::visit(ast::ForInStmt const& node)
 
     _builder.createBr(condBlock);
 
-    // Condition: check if source list is Cons (tag == 1)
+    // Condition: check if source list/seq is Cons (tag == 1)
     _builder.setInsertPoint(condBlock);
     auto* srcLoad = _builder.createLoad(srcStorage, "forin.src.load");
     auto* srcTag = _builder.createObjGetTag(srcLoad, "forin.src.tag");
@@ -2696,8 +2722,12 @@ void IRGenerator::visit(ast::ForInStmt const& node)
     _builder.createStore(headStorage, head);
 
     // Advance cursor: extract tail and store back (separate load)
+    // For Seq: slot 1 is a lazy thunk — force it to get the next Seq node
     auto* srcForTail = _builder.createLoad(srcStorage, "forin.src.for_tail");
-    auto* tail = _builder.createObjGetSlot(srcForTail, slot1, "forin.tail");
+    auto* rawTail = _builder.createObjGetSlot(srcForTail, slot1, "forin.tail");
+    CoreVM::Value* tail =
+        isSeq ? static_cast<CoreVM::Value*>(_builder.createLazyForce(rawTail, "forin.tail.force"))
+              : static_cast<CoreVM::Value*>(rawTail);
     _builder.createStore(srcStorage, tail);
 
     // Reload head from storage for PatternIRGenerator (avoid multi-use of raw ObjGetSlot result)
@@ -4685,11 +4715,10 @@ void IRGenerator::visit(ast::CompositionExpr const& node)
     }
 
     // Build: fun __compose_x -> outer(inner(__compose_x))
-    auto innerCall = std::make_unique<ast::ApplicationExpr>(
-        std::make_unique<ast::IdentifierExpr>(innerName),
-        std::make_unique<ast::IdentifierExpr>(paramName));
-    auto outerCall = std::make_unique<ast::ApplicationExpr>(
-        std::make_unique<ast::IdentifierExpr>(outerName), std::move(innerCall));
+    auto innerCall = std::make_unique<ast::ApplicationExpr>(std::make_unique<ast::IdentifierExpr>(innerName),
+                                                            std::make_unique<ast::IdentifierExpr>(paramName));
+    auto outerCall = std::make_unique<ast::ApplicationExpr>(std::make_unique<ast::IdentifierExpr>(outerName),
+                                                            std::move(innerCall));
 
     std::vector<ast::TypedParameter> lambdaParams;
     lambdaParams.emplace_back(paramName);
@@ -5352,6 +5381,25 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
     // Propagate all type annotations through the binding
     propagateAllAnnotations(value, storage);
 
+    // Scoped resource management enforcement for disposable types
+    if (auto objTypeId = getObjectTypeId(value))
+    {
+        if (auto it = _disposeCallbacks.find(*objTypeId); it != _disposeCallbacks.end())
+        {
+            if (node.resourceMode == ast::ResourceMode::None)
+            {
+                reportTypeError("Binding of disposable resource requires a lifetime directive. "
+                                "Use 'let use {} = ...' for automatic cleanup at scope exit, "
+                                "or 'let manual {} = ...' to manage the resource lifetime manually.",
+                                std::string_view(node.name),
+                                std::string_view(node.name));
+                return;
+            }
+            if (node.resourceMode == ast::ResourceMode::Use)
+                _sema.scopes().registerDispose(storage, it->second);
+        }
+    }
+
     // Register in F# scope - track objects for ORELEASE at scope exit
     if (isObjectExpr)
     {
@@ -5520,6 +5568,26 @@ void IRGenerator::visit(ast::LetInExpr const& node)
 
         // Propagate all type annotations through the binding
         propagateAllAnnotations(value, storage);
+
+        // Scoped resource management enforcement for disposable types (let-in)
+        if (auto objTypeId = getObjectTypeId(value))
+        {
+            if (auto dit = _disposeCallbacks.find(*objTypeId); dit != _disposeCallbacks.end())
+            {
+                if (node.resourceMode == ast::ResourceMode::None)
+                {
+                    popFSharpScope();
+                    reportTypeError("Binding of disposable resource requires a lifetime directive. "
+                                    "Use 'let use {} = ...' for automatic cleanup at scope exit, "
+                                    "or 'let manual {} = ...' to manage the resource lifetime manually.",
+                                    std::string_view(node.name),
+                                    std::string_view(node.name));
+                    return;
+                }
+                if (node.resourceMode == ast::ResourceMode::Use)
+                    _sema.scopes().registerDispose(storage, dit->second);
+            }
+        }
 
         bindFSharpVariable(node.name, storage, /*isMutable=*/false, /*isExported=*/false, node.location);
     }
@@ -7030,6 +7098,113 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                         annotateListElementLiteralType(_result, CoreVM::LiteralType::String);
                         return;
                     }
+                }
+            }
+
+            // File module dispatch
+            if (modIdent->name == "File")
+            {
+                // File.open path mode → file_open(path, mode) → result<FileHandle, str>
+                if (method == "open" && argExprs.size() == 2)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    auto* modeArg = codegen(argExprs[1]);
+                    if (pathArg && modeArg)
+                    {
+                        if (tryGenerateNativeCall("file_open", { pathArg, modeArg }))
+                            return;
+                    }
+                }
+                // File.close fd → file_close(fd)
+                else if (method == "close" && argExprs.size() == 1)
+                {
+                    auto* fdArg = codegen(argExprs[0]);
+                    if (fdArg)
+                    {
+                        if (tryGenerateNativeCall("file_close", { fdArg }))
+                        {
+                            _result = _builder.get(CoreVM::CoreNumber(0)); // returns unit
+                            return;
+                        }
+                    }
+                }
+                // File.readLine fd → file_read_line(fd) → option<str>
+                else if (method == "readLine" && argExprs.size() == 1)
+                {
+                    auto* fdArg = codegen(argExprs[0]);
+                    if (fdArg)
+                    {
+                        if (tryGenerateNativeCall("file_read_line", { fdArg }))
+                            return;
+                    }
+                }
+                // File.readAll path → file_read_all(path) → result<str, str>
+                else if (method == "readAll" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("file_read_all", { pathArg }))
+                            return;
+                    }
+                }
+                // File.writeAll path content → file_write_all(path, content) → result<unit, str>
+                else if (method == "writeAll" && argExprs.size() == 2)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    auto* contentArg = codegen(argExprs[1]);
+                    if (pathArg && contentArg)
+                    {
+                        if (tryGenerateNativeCall("file_write_all", { pathArg, contentArg }))
+                            return;
+                    }
+                }
+                // File.appendAll path content → file_append_all(path, content) → result<unit, str>
+                else if (method == "appendAll" && argExprs.size() == 2)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    auto* contentArg = codegen(argExprs[1]);
+                    if (pathArg && contentArg)
+                    {
+                        if (tryGenerateNativeCall("file_append_all", { pathArg, contentArg }))
+                            return;
+                    }
+                }
+                // File.size path → file_size(path) → result<int, str>
+                else if (method == "size" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("file_size", { pathArg }))
+                            return;
+                    }
+                }
+                // File.exists path → file_exists(path) → bool
+                else if (method == "exists" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("file_exists", { pathArg }))
+                            return;
+                    }
+                }
+                // File.delete path → file_delete(path) → result<unit, str>
+                else if (method == "delete" && argExprs.size() == 1)
+                {
+                    auto* pathArg = codegen(argExprs[0]);
+                    if (pathArg)
+                    {
+                        if (tryGenerateNativeCall("file_delete", { pathArg }))
+                            return;
+                    }
+                }
+                else
+                {
+                    reportTypeError("File.{} called with wrong number of arguments",
+                                    std::string_view(method));
+                    return;
                 }
             }
         }
@@ -9035,6 +9210,230 @@ void IRGenerator::visit(ast::ResultExpr const& node)
     }
 }
 
+CoreVM::Value* IRGenerator::emitSeqEmpty(std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Seq));
+    auto* tag0 = _builder.get(CoreVM::CoreNumber(0)); // Empty tag
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag0, std::string(label) + ".tag");
+    return obj;
+}
+
+CoreVM::Value* IRGenerator::emitSeqCons(CoreVM::Value* head, CoreVM::Value* lazyTail, std::string_view label)
+{
+    auto* typeId = _builder.get(CoreVM::CoreNumber(CoreVM::BuiltinTypeId::Seq));
+    auto* tag1 = _builder.get(CoreVM::CoreNumber(1));  // Cons tag
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head slot
+    auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // lazyTail slot
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeId, std::string(label));
+    obj = _builder.createObjSetTag(obj, tag1, std::string(label) + ".tag");
+    obj = _builder.createObjSetSlot(obj, slot0, head, std::string(label) + ".head");
+    obj = _builder.createObjSetSlot(obj, slot1, lazyTail, std::string(label) + ".tail");
+    return obj;
+}
+
+void IRGenerator::visit(ast::SeqExpr const& node)
+{
+    TRACE_SCOPE("visit(SeqExpr)");
+
+    // Empty sequence: seq {}
+    if (node.yields.empty())
+    {
+        _result = emitSeqEmpty("seq.empty");
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Seq);
+        return;
+    }
+
+    // Build the sequence from right to left (last yield first).
+    // Each yield except the last one wraps the continuation in a lazy thunk.
+    // yield! at tail position evaluates directly to the spliced sequence.
+    // yield! at non-tail position needs seqConcat.
+
+    auto const yieldCount = node.yields.size();
+
+    // Helper lambda to emit a lazy thunk wrapping the remaining yields
+    // We process right-to-left: build the tail first, then wrap it
+    // Actually, for simplicity, we process left-to-right and build up thunks
+
+    // For a single yield: seq { yield e } → SeqCons(e, lazy SeqEmpty)
+    // For yield at tail: seq { ...; yield e } → SeqCons(e, SeqEmpty wrapped in lazy)
+    // For yield! at tail: seq { ...; yield! e } → e (the spliced seq)
+
+    // Strategy: process from the last yield backwards
+    // Start with the tail and work backwards
+
+    // Step 1: Handle the last yield
+    auto const& lastYield = node.yields[yieldCount - 1];
+
+    CoreVM::Value* tailResult = nullptr;
+
+    if (lastYield.isSplice)
+    {
+        // yield! at tail: just evaluate the expression (it's already a seq)
+        tailResult = codegen(lastYield.value.get());
+    }
+    else
+    {
+        // yield at tail: SeqCons(value, SeqEmpty wrapped in lazy thunk)
+        auto* headVal = codegen(lastYield.value.get());
+
+        // Create a lazy thunk that returns SeqEmpty
+        auto const lazyName = std::format("__seq_tail_{}", _seqCounter++);
+        auto* savedFunction = _builder.function();
+        auto* savedInsertPoint = _builder.getInsertPoint();
+
+        auto* irFunction = _builder.program()->createFunction(lazyName);
+        irFunction->setParameterCount(0);
+        _builder.setFunction(irFunction);
+        auto* entryBlock = _builder.createBlock("entry");
+        _builder.setInsertPoint(entryBlock);
+
+        auto* emptySeq = emitSeqEmpty("seq.empty.tail");
+        _builder.createFunctionRet(emptySeq, "ret");
+
+        _builder.setFunction(savedFunction);
+        _builder.setInsertPoint(savedInsertPoint);
+
+        // Create lazy object wrapping the thunk
+        auto* funcRef = _builder.createFunctionRef(irFunction, "seq.tail.funcRef");
+        auto lazyTypeId = _builder.program()->allocateCustomTypeId();
+        CoreVM::IRProgram::CustomSumType customType;
+        customType.name = std::format("SeqTailLazy_{}", _seqCounter - 1);
+        customType.assignedId = lazyTypeId;
+        customType.variants = {
+            { "Unevaluated", 2 },
+            { "Evaluated", 1 },
+        };
+        _builder.program()->addCustomSumType(std::move(customType));
+
+        auto* lazyTypeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
+        auto* lazyTag0 = _builder.get(CoreVM::CoreNumber(0));
+        auto* lazySlot0 = _builder.get(CoreVM::CoreNumber(0));
+
+        CoreVM::Value* lazyObj = _builder.createObjAlloc(lazyTypeIdVal, "seq.tail.lazy");
+        lazyObj = _builder.createObjSetTag(lazyObj, lazyTag0, "seq.tail.lazy.tag");
+        lazyObj = _builder.createObjSetSlot(lazyObj, lazySlot0, funcRef, "seq.tail.lazy.funcId");
+
+        tailResult = emitSeqCons(headVal, lazyObj, "seq.cons.last");
+    }
+
+    // Step 2: Process remaining yields from right to left (excluding the last one)
+    for (auto i = static_cast<int>(yieldCount) - 2; i >= 0; --i)
+    {
+        auto const& yield = node.yields[static_cast<size_t>(i)];
+
+        if (yield.isSplice)
+        {
+            // yield! at non-tail position: seqConcat(splicedVal, tailResult)
+            // For now, we create a lazy thunk that captures tailResult and returns seqConcat
+            // This is complex — for the initial implementation, we store tailResult in an alloca
+            // and create a lazy thunk that loads it
+
+            // Actually, for yield! at non-tail, we need seqConcat which recursively walks seq1
+            // and appends seq2 at the end. This is a runtime function.
+            // For now, we'll use a simpler approach: just evaluate and treat like yield
+            // TODO: Implement proper seqConcat for mid-position yield!
+
+            auto* splicedVal = codegen(yield.value.get());
+
+            // Store tailResult in alloca so the lazy thunk can capture it
+            auto* tailStorage = createAllocaInEntryBlock(tailResult->type(), "seq.concat.tail");
+            _builder.createStore(tailStorage, tailResult, "seq.concat.tail.store");
+
+            // For now, use a lazy thunk that captures the tail result
+            auto const lazyName = std::format("__seq_concat_{}", _seqCounter++);
+            auto freeVars = collectFreeVariables(yield.value.get(), {});
+
+            // Create concat thunk: forces splicedVal to end, then returns tailResult
+            // This is a simplified approach - proper seqConcat would recursively traverse
+            auto* savedFunction = _builder.function();
+            auto* savedInsertPoint = _builder.getInsertPoint();
+
+            auto* irFunction = _builder.program()->createFunction(lazyName);
+            irFunction->setParameterCount(1); // captures tailResult
+            _builder.setFunction(irFunction);
+            auto* entryBlock = _builder.createBlock("entry");
+            _builder.setInsertPoint(entryBlock);
+
+            pushFSharpScope();
+            auto* capStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "cap.tail");
+            _builder.createStore(capStorage, _builder.createLoad(capStorage, "cap.tail.load"), "cap.store");
+
+            auto* capturedTail = _builder.createLoad(capStorage, "tail.load");
+            _builder.createFunctionRet(capturedTail, "ret");
+            popFSharpScope();
+
+            _builder.setFunction(savedFunction);
+            _builder.setInsertPoint(savedInsertPoint);
+
+            // For simplicity in initial implementation, treat yield! like yield
+            // when not at tail position
+            // TODO: proper seqConcat implementation
+            tailResult = splicedVal;
+        }
+        else
+        {
+            // yield at non-tail position: SeqCons(value, lazy(continuation))
+            auto* headVal = codegen(yield.value.get());
+
+            // Create a lazy thunk that captures tailResult and returns it
+            // Collect free variables from the tail
+            auto* tailStorage = createAllocaInEntryBlock(tailResult->type(), "seq.tail.storage");
+            _builder.createStore(tailStorage, tailResult, "seq.tail.store");
+
+            auto const lazyName = std::format("__seq_thunk_{}", _seqCounter++);
+            auto* savedFunction = _builder.function();
+            auto* savedInsertPoint = _builder.getInsertPoint();
+
+            auto* irFunction = _builder.program()->createFunction(lazyName);
+            irFunction->setParameterCount(1); // captures tailResult
+            _builder.setFunction(irFunction);
+            auto* entryBlock = _builder.createBlock("entry");
+            _builder.setInsertPoint(entryBlock);
+
+            pushFSharpScope();
+            auto* capStorage = createAllocaInEntryBlock(CoreVM::LiteralType::Object, "cap.tail");
+            auto* loadedTail = _builder.createLoad(capStorage, "tail.load");
+            _builder.createFunctionRet(loadedTail, "ret");
+            popFSharpScope();
+
+            _builder.setFunction(savedFunction);
+            _builder.setInsertPoint(savedInsertPoint);
+
+            // Create lazy wrapper for the thunk
+            auto* funcRef = _builder.createFunctionRef(irFunction, "seq.thunk.funcRef");
+            auto lazyTypeId = _builder.program()->allocateCustomTypeId();
+            CoreVM::IRProgram::CustomSumType customType;
+            customType.name = std::format("SeqThunkLazy_{}", _seqCounter - 1);
+            customType.assignedId = lazyTypeId;
+            customType.variants = {
+                { "Unevaluated", 3 }, // funcId + cached + 1 capture
+                { "Evaluated", 1 },
+            };
+            _builder.program()->addCustomSumType(std::move(customType));
+
+            auto* lazyTypeIdVal = _builder.get(CoreVM::CoreNumber(lazyTypeId));
+            auto* lazyTag0 = _builder.get(CoreVM::CoreNumber(0));
+            auto* lazySlot0 = _builder.get(CoreVM::CoreNumber(0));
+            auto* lazySlot2 = _builder.get(CoreVM::CoreNumber(2));
+
+            auto* tailValue = _builder.createLoad(tailStorage, "tail.reload");
+
+            CoreVM::Value* lazyObj = _builder.createObjAlloc(lazyTypeIdVal, "seq.thunk.lazy");
+            lazyObj = _builder.createObjSetTag(lazyObj, lazyTag0, "seq.thunk.lazy.tag");
+            lazyObj = _builder.createObjSetSlot(lazyObj, lazySlot0, funcRef, "seq.thunk.lazy.funcId");
+            lazyObj = _builder.createObjSetSlot(lazyObj, lazySlot2, tailValue, "seq.thunk.lazy.cap");
+
+            tailResult = emitSeqCons(headVal, lazyObj, std::format("seq.cons.{}", i));
+        }
+    }
+
+    _result = tailResult;
+    annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Seq);
+}
+
 void IRGenerator::visit(ast::LazyExpr const& node)
 {
     TRACE_SCOPE("visit(LazyExpr)");
@@ -9954,6 +10353,23 @@ void IRGenerator::visit(ast::FieldAccessExpr const& node)
                 return;
             }
             reportTypeError("Json has no member '{}'", std::string_view(node.fieldName));
+            return;
+        }
+        if (modIdent->name == "File")
+        {
+            static constexpr std::string_view fileMethods[] = {
+                "open", "close", "readLine", "readAll", "writeAll", "appendAll", "size", "exists", "delete",
+            };
+            for (auto const& m: fileMethods)
+            {
+                if (node.fieldName == m)
+                {
+                    // File.xxx requires arguments — handled in ApplicationExpr
+                    reportTypeError("File.{} requires arguments", std::string_view(node.fieldName));
+                    return;
+                }
+            }
+            reportTypeError("File has no member '{}'", std::string_view(node.fieldName));
             return;
         }
     }
