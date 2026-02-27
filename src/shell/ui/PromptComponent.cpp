@@ -1015,14 +1015,30 @@ void PromptComponent::triggerCompletion(bool forceShowPopup)
         return;
     }
 
-    if (completions.size() == 1 && !forceShowPopup)
+    // Prefix matches have empty matchPositions; fuzzy matches have non-empty matchPositions.
+    auto const isPrefixMatch = [](auto const& item) { return item.matchPositions.empty(); };
+
+    if (!forceShowPopup)
     {
-        // Single match: insert directly without showing popup
-        // (unless force-show was requested via double-Tab or Ctrl+Space)
-        insertCompletion(completions[0].text);
-        dismissPopup();
-        updateGhostText(); // Clear/update ghost text after completion
-        return;
+        if (completions.size() == 1)
+        {
+            // Single match (prefix or fuzzy): insert directly without showing popup
+            insertCompletion(completions[0].text);
+            dismissPopup();
+            updateGhostText();
+            return;
+        }
+
+        // If exactly one prefix match exists among multiple candidates, auto-insert it.
+        // Fuzzy-only matches should not block an unambiguous prefix completion.
+        if (std::ranges::count_if(completions, isPrefixMatch) == 1)
+        {
+            auto const it = std::ranges::find_if(completions, isPrefixMatch);
+            insertCompletion(it->text);
+            dismissPopup();
+            updateGhostText();
+            return;
+        }
     }
 
     // Multiple matches (or force-show): populate and show popup
