@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Take from seq then toList
+# expect: 1
+# expect: 2
+# expect: 3
+# expect:
+
+let s = seq {
+    yield 1
+    yield 2
+    yield 3
+    yield 4
+    yield 5
+}
+
+s |> take 3
+    |> toList
+    |> each println

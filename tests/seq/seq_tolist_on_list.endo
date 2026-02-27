@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: toList on an already-constructed list (identity)
+# expect: [1; 2; 3]
+# expect:
+
+let xs = [1; 2; 3]
+
+xs |> toList
+    |> println

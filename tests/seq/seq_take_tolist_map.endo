@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Take from seq then toList then map
+# expect: [2; 4; 6]
+# expect:
+
+let s = seq {
+    yield 1
+    yield 2
+    yield 3
+    yield 4
+    yield 5
+}
+
+s |> take 3
+    |> toList
+    |> map (fun x -> x * 2)
+    |> println

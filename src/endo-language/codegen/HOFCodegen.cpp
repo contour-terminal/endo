@@ -154,7 +154,10 @@ void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
     else if (hofName == "toList")
     {
         auto* seqVal = loadListParam("__xs", "toList.xs");
-        generateToListIR(seqVal);
+        if (getObjectTypeId(seqVal) == CoreVM::BuiltinTypeId::List)
+            _result = seqVal; // Already a List — identity, annotations preserved by loadListParam
+        else
+            generateToListIR(seqVal);
     }
     else
     {
@@ -1978,6 +1981,13 @@ void IRGenerator::generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* se
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "seq.take.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    // Propagate list element type through take (same element type as input seq)
+    if (auto elt = getListElementLiteralType(seqValue))
+        annotateListElementLiteralType(_result, *elt);
+    if (auto elemTypeId = getListElementTypeId(seqValue))
+        annotateListElementTypeId(_result, *elemTypeId);
+    if (auto innerType = getListElementInnerType(seqValue))
+        annotateListElementInnerType(_result, *innerType);
 }
 
 void IRGenerator::generateToListIR(CoreVM::Value* seqValue)
@@ -2075,6 +2085,13 @@ void IRGenerator::generateToListIR(CoreVM::Value* seqValue)
     _builder.setInsertPoint(endBlock);
     _result = _builder.createLoad(revAccStorage, "toList.result");
     annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::List);
+    // Propagate list element type through toList (same element type as input seq)
+    if (auto elt = getListElementLiteralType(seqValue))
+        annotateListElementLiteralType(_result, *elt);
+    if (auto elemTypeId = getListElementTypeId(seqValue))
+        annotateListElementTypeId(_result, *elemTypeId);
+    if (auto innerType = getListElementInnerType(seqValue))
+        annotateListElementInnerType(_result, *innerType);
 }
 
 } // namespace endo
