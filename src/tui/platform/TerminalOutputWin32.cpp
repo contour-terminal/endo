@@ -498,6 +498,11 @@ void TerminalOutput::updateDimensions()
     }
 }
 
+void TerminalOutput::detectCapabilities()
+{
+    _unscrollSupported = detectUnscrollSupport();
+}
+
 void TerminalOutput::appendSgr(Style const& style)
 {
     auto const effectiveUnderline = style.underlineStyle != UnderlineStyle::None

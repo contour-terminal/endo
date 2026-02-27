@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/MockTerminalOutput.hpp>
 #include <tui/Terminal.hpp>
 
 #if defined(_WIN32)
@@ -18,6 +19,11 @@ namespace
 } // namespace
 
 Terminal::Terminal(): _output(std::make_unique<TerminalOutput>())
+{
+}
+
+Terminal::Terminal(std::unique_ptr<TerminalOutput> output):
+    _output(std::move(output)), _mockMode(dynamic_cast<MockTerminalOutput*>(_output.get()) != nullptr)
 {
 }
 
@@ -221,6 +227,37 @@ void Terminal::handleColorSchemeReport(ColorScheme scheme)
     _colorScheme = scheme;
     for (auto const& cb: _colorSchemeCallbacks)
         cb(scheme);
+}
+
+auto Terminal::isFocused() const noexcept -> bool
+{
+    return _focused;
+}
+
+void Terminal::onFocusChanged(std::function<void(bool)> callback)
+{
+    _focusCallbacks.push_back(std::move(callback));
+}
+
+void Terminal::handleFocusEvent(bool focused)
+{
+    if (focused == _focused)
+        return;
+
+    _focused = focused;
+    for (auto const& cb: _focusCallbacks)
+        cb(focused);
+}
+
+auto Terminal::hudSupported() const noexcept -> bool
+{
+    return _hudSupported;
+}
+
+auto Terminal::queryDecMode(int /*mode*/) -> bool
+{
+    // Not yet implemented on Windows
+    return false;
 }
 
 } // namespace tui
