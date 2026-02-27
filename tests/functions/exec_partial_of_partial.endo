@@ -3,4 +3,10 @@
 # description: Function alias of a partially applied function
 # expect: 3
 
-let add x y = x + y; let f = add 1; let g = f; print (g 2)
+let add x y = x + y
+
+let f = add 1
+
+let g = f
+
+print (g 2)

@@ -3,4 +3,8 @@
 # description: Multiple top-level ? operators in sequence
 # expect: 30
 
-let a = (Some 10)?; let b = (Some 20)?; print (a + b)
+let a = (Some 10)?
+
+let b = (Some 20)?
+
+print (a + b)

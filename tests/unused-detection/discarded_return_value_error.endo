@@ -5,4 +5,6 @@
 # unused-detection: true
 # expect-error: Return value is discarded
 
-let f (x: int) : int = x + 1; f 5
+let f (x: int): int = x + 1
+
+f 5

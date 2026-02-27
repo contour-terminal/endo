@@ -3,4 +3,4 @@
 # description: List zip basic
 # expect: [(1, 4); (2, 5); (3, 6)]
 
-print (zip [1;2;3] [4;5;6])
+print (zip [1; 2; 3] [4; 5; 6])

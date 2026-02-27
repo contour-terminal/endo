@@ -3,4 +3,4 @@
 # description: List comprehension filter and transform
 # expect: [30; 40; 50]
 
-print [for x in [1;2;3;4;5] when x > 2 -> x * 10]
+print [for x in [1; 2; 3; 4; 5] when x > 2 -> x * 10]

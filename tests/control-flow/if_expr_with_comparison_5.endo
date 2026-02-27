@@ -3,4 +3,8 @@
 # description: If expr with comparison
 # expect: 7
 
-let abs x = if x < 0 then 0 - x else x; print (abs (0 - 7))
+let abs x =
+    if x < 0 then 0 - x
+    else x
+
+print (abs (0 - 7))

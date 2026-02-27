@@ -3,4 +3,6 @@
 # description: Access bytes field on Size from let binding
 # expect: 10485760
 
-let s = 10_MB; print s.bytes
+let s = 10_MB
+
+print s.bytes

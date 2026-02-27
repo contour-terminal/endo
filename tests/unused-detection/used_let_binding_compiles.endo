@@ -4,4 +4,6 @@
 # unused-detection: true
 # expect: 42
 
-let x = 42; print x
+let x = 42
+
+print x

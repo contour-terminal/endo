@@ -3,4 +3,4 @@
 # description: List tail basic
 # expect: [2; 3]
 
-print (tail [1;2;3])
+print (tail [1; 2; 3])

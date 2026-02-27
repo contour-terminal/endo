@@ -6,10 +6,8 @@
 # expect: hello
 # expect: 
 
-
-match which "echo", which "cat" with
-| Some f, Some l -> exec f "hello"
-| Some f, None -> exec f "hello"
-| None, Some l -> exec l
-| None, None -> println "none"
-
+match (which "echo", which "cat") with
+| (Some f, Some l) -> exec f "hello"
+| (Some f, None) -> exec f "hello"
+| (None, Some l) -> exec l
+| (None, None) -> println "none"

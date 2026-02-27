@@ -3,4 +3,4 @@
 # description: List length basic
 # expect: 3
 
-print (length [1;2;3])
+print (length [1; 2; 3])

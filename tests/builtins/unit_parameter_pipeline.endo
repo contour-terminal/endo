@@ -3,4 +3,6 @@
 # description: Unit parameter pipeline
 # expect: 42
 
-let f () = 42; f () |> print
+let f () = 42
+
+f () |> print

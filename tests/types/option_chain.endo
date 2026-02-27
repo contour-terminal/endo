@@ -3,4 +3,8 @@
 # description: Multiple option bindings
 # mode: ir-only
 
-let a = Some 1; let b = Some 2; let c = None
+let a = Some 1
+
+let b = Some 2
+
+let c = None

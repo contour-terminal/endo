@@ -3,4 +3,12 @@
 # description: Match expression with multiple guards
 # expect: 2
 
-let getErr x = Error x; let r = match getErr 5 with | Error e when e > 10 -> 1 | Error e when e > 3 -> 2 | _ -> 0; print r
+let getErr x = Error x
+
+let r =
+    match getErr 5 with
+    | Error e when e > 10 -> 1
+    | Error e when e > 3 -> 2
+    | _ -> 0
+
+print r

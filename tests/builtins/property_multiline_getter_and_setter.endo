@@ -4,11 +4,11 @@
 # expect: 99
 
 let mut _val = 0
-let Val with
-    get () =
-        let r = _val
-        r
-    and set (v) =
-        _val <- v
+
+let Val with get () = 
+    let r = _val
+    r
+and set (v) = _val <- v
+
 Val <- 99
 print Val

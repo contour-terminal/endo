@@ -3,4 +3,5 @@
 # description: Shell is interactive conditional
 # mode: ir-only
 
-if shell_is_interactive then print "yes" else print "no"
+if shell_is_interactive then print "yes"
+else print "no"

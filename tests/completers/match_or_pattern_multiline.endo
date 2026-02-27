@@ -4,8 +4,10 @@
 # expect: yes
 
 let x = 2
-let r = match x with
-  | 1
-  | 2 -> "yes"
-  | _ -> "no"
+
+let r =
+    match x with
+    | 1 | 2 -> "yes"
+    | _ -> "no"
+
 print r

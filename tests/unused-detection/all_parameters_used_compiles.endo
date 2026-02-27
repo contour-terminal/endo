@@ -4,4 +4,6 @@
 # unused-detection: true
 # expect: 3
 
-let f (x: int) (y: int) = x + y; print (f 1 2)
+let f (x: int) (y: int) = x + y
+
+print (f 1 2)

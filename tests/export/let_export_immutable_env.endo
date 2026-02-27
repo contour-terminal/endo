@@ -4,4 +4,6 @@
 # expect: 99
 # expect-env: W=99
 
-let export W = 99; print W
+let export W = 99
+
+print W

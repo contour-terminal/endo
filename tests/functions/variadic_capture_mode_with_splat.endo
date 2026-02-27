@@ -3,4 +3,6 @@
 # description: let binding = expression context → capture mode, with splat to trigger dynamic cmd path
 # expect: test a
 
-let run ...args = & echo test ...args; print (run "a")
+let run ...args = & echo test ...args
+
+print (run "a")

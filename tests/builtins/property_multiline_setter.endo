@@ -4,12 +4,13 @@
 # expect: 421
 
 let mut _x = 0
+
 let mut _log = 0
-let X with
-    get () = _x
-    and set (v) =
-        _log <- _log + 1
-        _x <- v
+
+let X with get () = _x and set (v) = 
+    _log <- _log + 1
+    _x <- v
+
 X <- 42
 print X
 print _log

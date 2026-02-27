@@ -3,7 +3,9 @@
 # description: List nth empty
 # expect: -1
 
-let r = match nth 0 [] with
+let r =
+    match nth 0 [] with
     | Some v -> v
     | None -> -1
+
 print r

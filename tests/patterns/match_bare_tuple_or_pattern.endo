@@ -3,4 +3,9 @@
 # description: Match bare tuple or pattern
 # expect: miss
 
-let r = match None, Some 5 with | None, _ | _, None -> "miss" | Some a, Some b -> "hit"; print r
+let r =
+    match (None, Some 5) with
+    | (None, _) | (_, None) -> "miss"
+    | (Some a, Some b) -> "hit"
+
+print r

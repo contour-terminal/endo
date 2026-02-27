@@ -3,4 +3,9 @@
 # description: Tail-recursive factorial with accumulator
 # expect: 120
 
-let rec factorial n acc = match n with | 0 -> acc | _ -> factorial (n - 1) (n * acc); print (factorial 5 1)
+let rec factorial n acc =
+    match n with
+    | 0 -> acc
+    | _ -> factorial (n - 1) (n * acc)
+
+print (factorial 5 1)

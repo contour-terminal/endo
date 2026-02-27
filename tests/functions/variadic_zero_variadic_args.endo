@@ -3,4 +3,6 @@
 # description: Zero variadic args should produce an empty list
 # mode: ir-only
 
-let f ...xs = xs; f
+let f ...xs = xs
+
+f

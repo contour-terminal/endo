@@ -7,8 +7,12 @@ type Color =
     | Red
     | Green
     | Blue
+
 let c = Blue
-let r = match c with
+
+let r =
+    match c with
     | Red -> 1
     | _ -> 0
+
 print r

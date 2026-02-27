@@ -3,4 +3,10 @@
 # description: Block scope isolation
 # expect: 991
 
-let x = 1; let r = { let x = 99; x }; print r; print x
+let x = 1
+
+let r =
+    { let x = 99; x }
+
+print r
+print x

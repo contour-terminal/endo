@@ -4,5 +4,7 @@
 # expect: { x = 3; y = 4 }
 
 type Point = { x: int; y: int }
+
 let p = { x = 3; y = 4 }
+
 print p

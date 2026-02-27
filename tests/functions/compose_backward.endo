@@ -3,4 +3,10 @@
 # description: Compose backward
 # expect: 11
 
-let double x = x * 2; let inc x = x + 1; let f = inc << double; print (f 5)
+let double x = x * 2
+
+let inc x = x + 1
+
+let f = inc << double
+
+print (f 5)

@@ -5,7 +5,9 @@
 # session-separator: ---
 
 let offset = 10
+
 # ---
 let addOffset (x: int): int = x + offset
+
 # ---
 print (addOffset 5)

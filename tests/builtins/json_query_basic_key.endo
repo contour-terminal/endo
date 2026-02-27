@@ -5,5 +5,7 @@
 # expect:
 
 let json = "{\"name\": \"hello\"}"
+
 let r = Json.query ".name" json
+
 r |> each println

@@ -3,4 +3,8 @@
 # description: Unit parameter closure
 # expect: 10
 
-let x = 10; let f () = x; print (f ())
+let x = 10
+
+let f () = x
+
+print (f ())

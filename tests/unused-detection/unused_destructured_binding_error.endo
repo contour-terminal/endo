@@ -5,4 +5,6 @@
 # unused-detection: true
 # expect-error: is defined but never used
 
-let (x, y) = (1, 2); print x
+let (x, y) = (1, 2)
+
+print x

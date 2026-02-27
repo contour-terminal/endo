@@ -3,4 +3,6 @@
 # description: Function binding in let-in
 # expect: 10
 
-let r = let double x = x * 2 in double 5; print r
+let r = let double x = x * 2 in double 5
+
+print r

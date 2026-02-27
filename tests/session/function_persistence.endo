@@ -6,5 +6,6 @@
 # expect:
 
 let double x = x * 2
+
 # ---
 println (double 5)

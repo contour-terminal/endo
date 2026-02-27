@@ -4,5 +4,7 @@
 # expect: [11; 21]
 
 let f x = x + 1
+
 let r = [f 10; f 20]
+
 print r

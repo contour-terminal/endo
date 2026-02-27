@@ -3,4 +3,4 @@
 # description: List flatten empty inner
 # expect: [1; 2]
 
-print (flatten [[]; [1;2]; []])
+print (flatten [[]; [1; 2]; []])

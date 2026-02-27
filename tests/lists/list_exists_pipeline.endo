@@ -3,4 +3,4 @@
 # description: List exists pipeline
 # expect: true
 
-print ([1;2;3;4;5] |> exists (fun x -> x > 3))
+print ([1; 2; 3; 4; 5] |> exists (fun x -> x > 3))

@@ -3,4 +3,4 @@
 # description: List drop more
 # expect: []
 
-print (drop 10 [1;2;3])
+print (drop 10 [1; 2; 3])

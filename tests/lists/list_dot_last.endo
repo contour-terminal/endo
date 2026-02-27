@@ -4,6 +4,7 @@
 # expect: 30
 
 let xs = [10; 20; 30]
+
 match xs.last with
 | Some v -> print v
 | None -> print 0

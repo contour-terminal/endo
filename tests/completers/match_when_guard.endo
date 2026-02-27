@@ -4,7 +4,10 @@
 # expect: big
 
 let x = 42
-let r = match x with
-  | n when n > 10 -> "big"
-  | _ -> "small"
+
+let r =
+    match x with
+    | n when n > 10 -> "big"
+    | _ -> "small"
+
 print r

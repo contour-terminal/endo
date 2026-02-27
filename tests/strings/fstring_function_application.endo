@@ -3,4 +3,6 @@
 # description: Fstring function application
 # expect: result: 10
 
-let f x = x * 2; print $"result: {f 5}"
+let f x = x * 2
+
+print $"result: {f 5}"

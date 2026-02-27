@@ -5,8 +5,10 @@
 # session-separator: ---
 
 let mut x = 1
+
 # ---
 let mut y = 2
+
 # ---
 x <- 10
 # ---

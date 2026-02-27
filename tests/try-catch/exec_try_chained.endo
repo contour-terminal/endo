@@ -2,4 +2,8 @@
 #
 # description: Chained ? operators for nested Option
 
-let nested = Some (Some 5); let unwrap2 opt = opt??; let r = unwrap2 nested
+let nested = Some (Some 5)
+
+let unwrap2 opt = opt??
+
+let r = unwrap2 nested

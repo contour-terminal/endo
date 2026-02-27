@@ -3,4 +3,6 @@
 # description: Define and call two-arg function
 # mode: ir-only
 
-let add x y = x + y; let result = add 3 4
+let add x y = x + y
+
+let result = add 3 4

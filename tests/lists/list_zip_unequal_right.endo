@@ -3,4 +3,4 @@
 # description: List zip unequal right
 # expect: [(1, 4); (2, 5)]
 
-print (zip [1;2;3] [4;5])
+print (zip [1; 2; 3] [4; 5])

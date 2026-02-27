@@ -3,4 +3,6 @@
 # description: (_ + _) desugars to fun __x -> __x + __x — same parameter used twice
 # expect: 14
 
-let f = (_ + _); print (f 7)
+let f = (_ + _)
+
+print (f 7)

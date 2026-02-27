@@ -5,6 +5,7 @@
 # expect: 42
 
 let f (n: int) =
-  println "start"
-  print n
+    println "start"
+    print n
+
 f 42

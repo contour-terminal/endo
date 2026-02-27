@@ -3,4 +3,9 @@
 # description: Match with multiple integer literals
 # mode: ir-only
 
-let r = match 1 with | 0 -> 0 | 1 -> 10 | 2 -> 20 | _ -> 99
+let r =
+    match 1 with
+    | 0 -> 0
+    | 1 -> 10
+    | 2 -> 20
+    | _ -> 99

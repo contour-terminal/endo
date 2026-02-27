@@ -3,4 +3,8 @@
 # description: Lambda captures outer variable
 # expect: 15
 
-let n = 10; let f = fun x -> x + n; print (f 5)
+let n = 10
+
+let f = fun x -> x + n
+
+print (f 5)

@@ -5,18 +5,16 @@
 # expect:
 
 let test x y =
-    if x == y then
-        "equals"
-    else
-        "is not equal to"
+    if x == y then "equals"
+    else "is not equal to"
 
 let test2 x y =
-    if x == y then "equals"
-    else if x < y then "is less than"
+    if x == y then
+        "equals"
+    elif x < y then "is less than"
     else "is greater than"
 
-let testAndPrint x y =
-    println $"{x} {test x y} {y}."
+let testAndPrint x y = println $"{x} {test x y} {y}."
 
 testAndPrint 5 10
 testAndPrint 10 5

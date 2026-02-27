@@ -3,4 +3,9 @@
 # description: Simple 1-parameter recursive function with list pattern matching
 # expect: 0
 
-let rec f xs = match xs with | [] -> 0 | h :: t -> f t; print (f [1; 2])
+let rec f xs =
+    match xs with
+    | [] -> 0
+    | h :: t -> f t
+
+print (f [1; 2])

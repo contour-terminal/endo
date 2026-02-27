@@ -3,4 +3,6 @@
 # description: Should fail IR generation
 # expect-error:
 
-let x = if true then 3.14 else "oops"
+let x =
+    if true then 3.14
+    else "oops"

@@ -4,4 +4,5 @@
 # mode: ir-only
 
 type Record = { user: string; pid: int }
+
 open-csv "data.csv" as Record

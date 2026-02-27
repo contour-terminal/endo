@@ -3,4 +3,8 @@
 # description: List inside Some/None
 # expect: [1; 2; 3]
 
-let x = Some [1; 2; 3]; match x with | Some xs -> print xs | None -> print 0
+let x = Some [1; 2; 3]
+
+match x with
+| Some xs -> print xs
+| None -> print 0

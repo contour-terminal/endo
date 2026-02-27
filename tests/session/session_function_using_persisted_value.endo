@@ -5,7 +5,9 @@
 # session-separator: ---
 
 let x = 10
+
 # ---
 let f y = y + x
+
 # ---
 print (f 5)

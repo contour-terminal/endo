@@ -4,4 +4,5 @@
 # expect: 120
 
 let r = each (fun x -> print x) [1; 2]
+
 print r

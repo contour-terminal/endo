@@ -4,6 +4,9 @@
 # expect: 5
 
 let f (n: int) =
-  let rec count (i: int) = if i >= n then i else count (i + 1)
-  print (count 0)
+    let rec count (i: int) =
+        if i >= n then i
+        else count (i + 1)
+    print (count 0)
+
 f 5

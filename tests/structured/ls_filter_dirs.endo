@@ -4,4 +4,5 @@
 # expect: 1
 
 let dirs = ls |> filter (fun f -> f.isDir == true)
+
 print (length dirs)

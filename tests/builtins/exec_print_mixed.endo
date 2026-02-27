@@ -4,4 +4,5 @@
 # expect: hello world
 # expect: 
 
-print "hello "; println "world"
+print "hello "
+println "world"

@@ -3,4 +3,12 @@
 # description: Compose chain
 # expect: 9
 
-let a x = x + 1; let b x = x * 2; let c x = x - 3; let f = a >> b >> c; print (f 5)
+let a x = x + 1
+
+let b x = x * 2
+
+let c x = x - 3
+
+let f = a >> b >> c
+
+print (f 5)

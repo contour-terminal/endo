@@ -4,6 +4,8 @@
 # expect: 14
 # expect:
 
-let r = match 7 with
+let r =
+    match 7 with
     | n -> n * 2
+
 println r

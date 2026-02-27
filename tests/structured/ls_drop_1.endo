@@ -3,4 +3,5 @@
 # description: drop first file, map to names
 # expect: [hello.txt; script.sh]
 
-print (ls |> drop 1 |> map (fun f -> f.name))
+print (ls |> drop 1
+    |> map (fun f -> f.name))

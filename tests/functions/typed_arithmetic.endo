@@ -6,6 +6,8 @@
 # expect:
 
 let add (x: int) (y: int) = x + y
+
 let sq (x: int) = x * x
+
 println (add 3 4)
 println (sq 5)

@@ -3,4 +3,6 @@
 # description: Exec print variable
 # expect: world
 
-let msg = "world"; print msg
+let msg = "world"
+
+print msg

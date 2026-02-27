@@ -4,4 +4,6 @@
 # expect: -la
 # expect: 
 
-let say ...xs = & echo ...xs; say -la
+let say ...xs = & echo ...xs
+
+say -la

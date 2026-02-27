@@ -3,4 +3,10 @@
 # description: As pattern: bind the entire value while also matching
 # expect: 42
 
-let x = 42; let r = match x with | n as val -> val; print r
+let x = 42
+
+let r =
+    match x with
+    | n as val -> val
+
+print r

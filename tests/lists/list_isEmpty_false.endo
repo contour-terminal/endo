@@ -3,4 +3,4 @@
 # description: List isEmpty false
 # expect: false
 
-print (isEmpty [1;2])
+print (isEmpty [1; 2])

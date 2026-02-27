@@ -1,43 +1,59 @@
 // Records: named product types with field access, update, and pattern matching
 
 // Define a record type
-type Person = { name: str; age: int }
 
 // Create record values
+
+type Person = { name: string; age: int }
+
 let alice = { name = "Alice"; age = 30 }
+
 let bob = { name = "Bob"; age = 25 }
 
 // Field access
-print "alice.name = "; println alice.name
-print "alice.age = "; println alice.age
-print "bob.name = "; println bob.name
+print "alice.name = "
+println alice.name
+print "alice.age = "
+println alice.age
+print "bob.name = "
+println bob.name
 
 // Field access in expressions
-print "age sum = "; println (alice.age + bob.age)
+print "age sum = "
+println (alice.age + bob.age)
 
 // Record update (creates a new record, original unchanged)
 let older_alice = { alice with age = 31 }
-print "older_alice.age = "; println older_alice.age
-print "alice.age still = "; println alice.age
+
+print "older_alice.age = "
+println older_alice.age
+print "alice.age still = "
+println alice.age
 
 // Update with expression
 let next_birthday = { bob with age = bob.age + 1 }
-print "bob next birthday age = "; println next_birthday.age
+
+print "bob next birthday age = "
+println next_birthday.age
 
 // Records passed to functions
 let greet p = $"Hello, {p.name}!"
+
 println (greet alice)
 println (greet bob)
 
 let is_adult p = p.age >= 18
-print "alice is adult: "; println (is_adult alice)
+
+print "alice is adult: "
+println (is_adult alice)
 
 // Record pattern matching
 let get_name p =
     match p with
     | { name; age } -> name
 
-print "get_name alice = "; println (get_name alice)
+print "get_name alice = "
+println (get_name alice)
 
 // Pattern matching with guards
 let describe p =
@@ -50,13 +66,20 @@ println (describe bob)
 
 // Record destructuring in let bindings
 let { name; age } = alice
-print "destructured name = "; println name
-print "destructured age = "; println age
+
+print "destructured name = "
+println name
+print "destructured age = "
+println age
 
 // Records in pipelines
 let get_age p = p.age
-print "alice age via pipeline = "; println (alice |> get_age)
+
+print "alice age via pipeline = "
+println (alice |> get_age)
 
 // Print whole records
-print "alice = "; println alice
-print "bob = "; println bob
+print "alice = "
+println alice
+print "bob = "
+println bob

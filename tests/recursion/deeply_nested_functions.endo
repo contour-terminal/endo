@@ -4,8 +4,9 @@
 # expect: 111
 
 let a (x: int) =
-  let b (y: int) =
-    let c (z: int) = z + y + x
-    c 1
-  print (b 10)
+    let b (y: int) =
+        let c (z: int) = z + y + x
+        c 1
+    print (b 10)
+
 a 100

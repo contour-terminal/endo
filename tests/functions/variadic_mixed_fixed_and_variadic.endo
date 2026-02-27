@@ -3,4 +3,6 @@
 # description: Fixed param + variadic collects remaining into list
 # mode: ir-only
 
-let f x ...rest = x; f 1 2 3
+let f x ...rest = x
+
+f 1 2 3

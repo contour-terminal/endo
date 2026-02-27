@@ -2,4 +2,6 @@
 #
 # description: Homogeneous list of options should still work
 
-let r = [(env "HOME"); (env "PATH")]; print r
+let r = [(env "HOME"); (env "PATH")]
+
+print r

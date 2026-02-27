@@ -3,4 +3,6 @@
 # description: Exec print multiple
 # expect: abc
 
-print "a"; print "b"; print "c"
+print "a"
+print "b"
+print "c"

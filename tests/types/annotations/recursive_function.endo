@@ -4,7 +4,8 @@
 # expect: 120
 
 let rec fact (n: int) (acc: int): int =
-  match n with
-  | 0 -> acc
-  | _ -> fact (n - 1) (acc * n)
+    match n with
+    | 0 -> acc
+    | _ -> fact (n - 1) (acc * n)
+
 print (fact 5 1)

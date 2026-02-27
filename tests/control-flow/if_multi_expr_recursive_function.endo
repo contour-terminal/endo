@@ -9,4 +9,5 @@ let rec go (n: int) =
         result
     else
         go (n - 1)
+
 print (go 3)

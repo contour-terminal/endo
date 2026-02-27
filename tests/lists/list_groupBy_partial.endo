@@ -4,4 +4,5 @@
 # expect: [(1, [1; 3]); (0, [2])]
 
 let byParity = groupBy (fun x -> x % 2)
+
 print (byParity [1; 2; 3])

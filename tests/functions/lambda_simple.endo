@@ -5,4 +5,5 @@
 # expect:
 
 let inc = fun x -> x + 1
+
 println (inc 41)

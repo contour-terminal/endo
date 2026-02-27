@@ -3,4 +3,8 @@
 # description: Partial application of a 2-arg function
 # expect: 15
 
-let add x y = x + y; let add5 = add 5; print (add5 10)
+let add x y = x + y
+
+let add5 = add 5
+
+print (add5 10)

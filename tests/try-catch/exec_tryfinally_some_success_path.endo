@@ -3,4 +3,15 @@
 # description: ? inside try-finally on Some value: unwraps successfully, finally still runs
 # expect: done7
 
-let inner x = Some 7; let outer x = try (inner x)? finally print "done"; let r = match (outer 0) with | Some n -> n | None -> 0; print r
+let inner x = Some 7
+
+let outer x =
+    try (inner x)?
+    finally print "done"
+
+let r =
+    match (outer 0) with
+    | Some n -> n
+    | None -> 0
+
+print r

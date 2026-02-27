@@ -4,4 +4,5 @@
 # expect: 7
 
 let add (x: int) (y: int): int = x + y
+
 print (add 3 4)

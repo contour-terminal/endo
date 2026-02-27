@@ -3,4 +3,5 @@
 # description: If expr float true
 # expect: 3.14
 
-print (if true then 3.14 else 2.81)
+print (if true then 3.14
+else 2.81)

@@ -3,4 +3,11 @@
 # description: Match cons head
 # expect: 1
 
-let x = [1; 2; 3]; let r = match x with | h :: t -> h | _ -> 0; print r
+let x = [1; 2; 3]
+
+let r =
+    match x with
+    | h :: t -> h
+    | _ -> 0
+
+print r

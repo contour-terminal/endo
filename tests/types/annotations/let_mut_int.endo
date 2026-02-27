@@ -4,5 +4,6 @@
 # expect: 42
 
 let mut x: int = 0
+
 x <- 42
 print x

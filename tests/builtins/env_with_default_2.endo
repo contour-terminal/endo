@@ -4,4 +4,9 @@
 # mock-env: KEY=val
 # expect: 1
 
-let r = match env "KEY" with | Some v -> 1 | None -> 0; print r
+let r =
+    match env "KEY" with
+    | Some v -> 1
+    | None -> 0
+
+print r

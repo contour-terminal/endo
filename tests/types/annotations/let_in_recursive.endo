@@ -3,5 +3,7 @@
 # description: Let-in with recursive typed function
 # expect: 120
 
-let result = let rec fact (n: int): int = if n <= 1 then 1 else n * fact (n - 1) in fact 5
+let result = let rec fact (n: int): int = if n <= 1 then 1
+else n * fact (n - 1) in fact 5
+
 print result

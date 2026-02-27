@@ -3,4 +3,8 @@
 # description: Boolean parameter with type annotation
 # expect: yes
 
-let show (b: bool) = if b then "yes" else "no"; print (show true)
+let show (b: bool) =
+    if b then "yes"
+    else "no"
+
+print (show true)

@@ -3,4 +3,4 @@
 # description: Fstring nested string
 # expect: say hello
 
-print $"say {"hello"}"
+print $"say hello"

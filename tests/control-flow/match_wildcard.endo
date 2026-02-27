@@ -4,6 +4,8 @@
 # expect: 100
 # expect:
 
-let r = match 42 with
+let r =
+    match 42 with
     | _ -> 100
+
 println r

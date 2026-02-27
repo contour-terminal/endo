@@ -3,7 +3,9 @@
 # description: List last single
 # expect: 42
 
-let r = match last [42] with
+let r =
+    match last [42] with
     | Some v -> v
     | None -> -1
+
 print r

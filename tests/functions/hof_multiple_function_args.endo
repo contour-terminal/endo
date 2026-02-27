@@ -4,6 +4,9 @@
 # expect: 7
 
 let double x = x * 2
+
 let add1 x = x + 1
+
 let apply2 f g x = g (f x)
+
 print (apply2 double add1 3)

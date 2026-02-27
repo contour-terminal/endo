@@ -2,4 +2,6 @@
 #
 # description: ? operator unwraps Some value - function returns unwrapped value
 
-let unwrap opt = opt?; let r = unwrap (Some 42)
+let unwrap opt = opt?
+
+let r = unwrap (Some 42)

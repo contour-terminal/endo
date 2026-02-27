@@ -4,4 +4,6 @@
 # expect: hello world
 # expect: 
 
-let say ...xs = & echo ...xs; say hello world
+let say ...xs = & echo ...xs
+
+say hello world

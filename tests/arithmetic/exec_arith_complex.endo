@@ -3,4 +3,6 @@
 # description: Precedence: 2 + 3 * 4 = 14
 # expect: 14
 
-let x = 2 + 3 * 4; print x
+let x = 2 + 3 * 4
+
+print x

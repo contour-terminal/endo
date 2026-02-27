@@ -3,4 +3,6 @@
 # description: String concat number left
 # expect: 42 items
 
-let s = 42 + " items"; print s
+let s = 42 + " items"
+
+print s

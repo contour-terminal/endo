@@ -3,4 +3,4 @@
 # description: List comprehension all filtered
 # expect: []
 
-print [for x in [1;2;3] when x > 10 -> x]
+print [for x in [1; 2; 3] when x > 10 -> x]

@@ -3,4 +3,6 @@
 # description: Unit parameter lambda
 # expect: 42
 
-let f = fun () -> 42; print (f ())
+let f = fun () -> 42
+
+print (f ())

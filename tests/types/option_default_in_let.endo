@@ -3,4 +3,6 @@
 # description: ?| in a let binding
 # expect: 7
 
-let x = Some 7 ?| 0; print x
+let x = Some 7 ?| 0
+
+print x

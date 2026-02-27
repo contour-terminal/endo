@@ -3,4 +3,4 @@
 # description: List comprehension nested empty outer
 # expect: []
 
-print [for x in [] -> for y in [1;2] -> x + y]
+print [for x in [] -> for y in [1; 2] -> x + y]

@@ -4,4 +4,5 @@
 # expect: true
 
 let x = Error 1
+
 print x.isError

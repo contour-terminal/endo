@@ -3,4 +3,6 @@
 # description: Multiple calls to the same function
 # expect: 3
 
-let inc (x: int) = x + 1; print (inc (inc (inc 0)))
+let inc (x: int) = x + 1
+
+print (inc (inc (inc 0)))

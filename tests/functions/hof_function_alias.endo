@@ -4,6 +4,9 @@
 # expect: 10
 
 let double x = x * 2
+
 let id f = f
+
 let g = id double
+
 print (g 5)

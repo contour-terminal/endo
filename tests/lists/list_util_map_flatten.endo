@@ -3,4 +3,4 @@
 # description: List util map flatten
 # expect: [1; 10; 2; 20; 3; 30]
 
-print (flatten (map (fun x -> [x; x * 10]) [1;2;3]))
+print (flatten (map (fun x -> [x; x * 10]) [1; 2; 3]))

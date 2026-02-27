@@ -4,4 +4,5 @@
 # expect: [1; 2; 3]
 
 let first3 = take 3
-print (first3 [1;2;3;4;5])
+
+print (first3 [1; 2; 3; 4; 5])

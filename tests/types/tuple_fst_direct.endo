@@ -3,4 +3,8 @@
 # description: Tuple fst direct
 # expect: 1
 
-let fst t = match t with | (a, _) -> a; print (fst (1, 2))
+let fst t =
+    match t with
+    | (a, _) -> a
+
+print (fst (1, 2))

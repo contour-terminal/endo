@@ -4,4 +4,5 @@
 # expect: [/sbin/init; firefox; vim]
 
 let cmds = ps |> map (fun p -> p.command)
+
 print cmds

@@ -4,5 +4,10 @@
 # expect: [docs; script.sh]
 
 let files = ls
-let bigFiles = files |> filter (fun f -> f.size > 100) |> map (fun f -> f.name)
+
+let bigFiles =
+    files
+        |> filter (fun f -> f.size > 100)
+        |> map (fun f -> f.name)
+
 print bigFiles

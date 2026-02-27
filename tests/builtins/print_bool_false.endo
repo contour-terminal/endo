@@ -3,4 +3,6 @@
 # description: Print bool false
 # expect: false
 
-let x = false; print x
+let x = false
+
+print x

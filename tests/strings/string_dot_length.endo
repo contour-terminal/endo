@@ -4,4 +4,5 @@
 # expect: 5
 
 let s = "hello"
+
 print s.length

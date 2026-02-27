@@ -5,4 +5,5 @@
 # expect:
 
 let md = "# Hello" |> markdown
+
 (Markdown.toText md) |> println

@@ -3,4 +3,7 @@
 # description: Block scope basic
 # expect: 15
 
-let r = { let x = 10; x + 5 }; print r
+let r =
+    { let x = 10; x + 5 }
+
+print r

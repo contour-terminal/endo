@@ -4,4 +4,5 @@
 # expect: [22; 22; 22]
 
 let hours = ls |> map (fun f -> f.mtime.hour)
+
 print hours

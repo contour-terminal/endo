@@ -1,35 +1,53 @@
 // Temperature conversion and classification
 
 let celsius_to_fahrenheit c = c * 9 / 5 + 32
+
 let fahrenheit_to_celsius f = (f - 32) * 5 / 9
 
-print "0C = "; print (celsius_to_fahrenheit 0); println "F"
-print "100C = "; print (celsius_to_fahrenheit 100); println "F"
-print "32F = "; print (fahrenheit_to_celsius 32); println "C"
-print "212F = "; print (fahrenheit_to_celsius 212); println "C"
+print "0C = "
+print (celsius_to_fahrenheit 0)
+println "F"
+print "100C = "
+print (celsius_to_fahrenheit 100)
+println "F"
+print "32F = "
+print (fahrenheit_to_celsius 32)
+println "C"
+print "212F = "
+print (fahrenheit_to_celsius 212)
+println "C"
 
 // Pipeline: pass value through conversion
-print "37C = "; print (37 |> celsius_to_fahrenheit); println "F"
+print "37C = "
+print (37 |> celsius_to_fahrenheit)
+println "F"
 
 // Classify temperature into human-readable categories
 let classify_temp c =
-    if c < 0 then "freezing"
-    else if c < 15 then "cold"
-    else if c < 25 then "comfortable"
-    else if c < 35 then "warm"
+    if c < 0 then
+        "freezing"
+    elif c < 15 then
+        "cold"
+    elif c < 25 then
+        "comfortable"
+    elif c < 35 then "warm"
     else "hot"
 
-print "Classify -5C: "; println (classify_temp (0 - 5))
-print "Classify 10C: "; println (classify_temp 10)
-print "Classify 22C: "; println (classify_temp 22)
-print "Classify 30C: "; println (classify_temp 30)
-print "Classify 40C: "; println (classify_temp 40)
+print "Classify -5C: "
+println (classify_temp (0 - 5))
+print "Classify 10C: "
+println (classify_temp 10)
+print "Classify 22C: "
+println (classify_temp 22)
+print "Classify 30C: "
+println (classify_temp 30)
+print "Classify 40C: "
+println (classify_temp 40)
 
 // Compose conversion + classification into a description
 let describe_temp c =
     let f = celsius_to_fahrenheit c in
-    let cat = classify_temp c in
-    string_of_int c + "C (" + string_of_int f + "F) is " + cat
+        let cat = classify_temp c in string_of_int c + "C (" + string_of_int f + "F) is " + cat
 
 println (describe_temp 20)
 println (describe_temp (0 - 10))

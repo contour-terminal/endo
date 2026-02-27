@@ -4,5 +4,6 @@
 # unused-detection: true
 # expect: done
 
-let f () : unit = print "done"
-f()
+let f (): unit = print "done"
+
+f ()

@@ -3,4 +3,8 @@
 # description: Tuple snd direct
 # expect: 2
 
-let snd t = match t with | (_, b) -> b; print (snd (1, 2))
+let snd t =
+    match t with
+    | (_, b) -> b
+
+print (snd (1, 2))

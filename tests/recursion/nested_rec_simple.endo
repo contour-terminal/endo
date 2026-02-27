@@ -4,6 +4,9 @@
 # expect: 0
 
 let f (n: int) =
-  let rec g (i: int) = if i <= 0 then 0 else g (i - 1)
-  print (g n)
+    let rec g (i: int) =
+        if i <= 0 then 0
+        else g (i - 1)
+    print (g n)
+
 f 3

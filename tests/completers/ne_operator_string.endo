@@ -4,5 +4,9 @@
 # expect: not-empty
 
 let s = "hello"
-let r = if s <> "" then "not-empty" else "empty"
+
+let r =
+    if s != "" then "not-empty"
+    else "empty"
+
 print r

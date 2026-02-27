@@ -3,7 +3,13 @@
 # description: Verify left-to-right execution order: 5 |> f |> g |> h
 # expect: start-f-g-h
 
-let f (s: str) = s + "-f"
-let g (s: str) = s + "-g"
-let h (s: str) = s + "-h"
-print ("start" |> f |> g |> h)
+let f (s: string) = s + "-f"
+
+let g (s: string) = s + "-g"
+
+let h (s: string) = s + "-h"
+
+print ("start"
+    |> f
+    |> g
+    |> h)

@@ -3,4 +3,6 @@
 # description: _ > 0 (no parens) desugars to fun __x -> __x > 0
 # expect: true
 
-let isPositive = _ > 0; print (isPositive 5)
+let isPositive = _ > 0
+
+print (isPositive 5)

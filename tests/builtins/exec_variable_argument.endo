@@ -4,4 +4,6 @@
 # expect: hello
 # expect: 
 
-let arg = "hello"; exec "/bin/echo" arg
+let arg = "hello"
+
+exec "/bin/echo" arg

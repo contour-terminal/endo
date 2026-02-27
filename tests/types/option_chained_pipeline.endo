@@ -3,4 +3,7 @@
 # description: Chaining multiple Option.map calls in pipeline with Option.defaultValue
 # expect: 11
 
-print (Some 5 |> Option.map (fun x -> x * 2) |> Option.map (fun x -> x + 1) |> Option.defaultValue 0)
+print (Some 5
+    |> Option.map (fun x -> x * 2)
+    |> Option.map (fun x -> x + 1)
+    |> Option.defaultValue 0)

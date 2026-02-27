@@ -3,4 +3,7 @@
 # description: fetch result can be pattern matched as Ok/Error
 # mode: ir-only
 
-let r = match fetch "https://example.com" with | Ok body -> body | Error msg -> msg
+let r =
+    match fetch "https://example.com" with
+    | Ok body -> body
+    | Error msg -> msg

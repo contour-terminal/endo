@@ -4,4 +4,5 @@
 # expect: [1234; 5678; 9012]
 
 let pids = jobs |> map (fun j -> j.pid)
+
 print pids

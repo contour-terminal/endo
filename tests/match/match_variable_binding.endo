@@ -3,4 +3,6 @@
 # description: Variable pattern binds and uses the matched value
 # mode: ir-only
 
-let r = match 5 with | n -> n * 2
+let r =
+    match 5 with
+    | n -> n * 2

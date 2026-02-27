@@ -4,4 +4,7 @@
 # expect: 100
 # expect-env: X=100
 
-let export mut X = 10; X <- 100; print X
+let export mut X = 10
+
+X <- 100
+print X

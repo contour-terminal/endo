@@ -3,4 +3,8 @@
 # description: List concat bound variables
 # expect: [1; 2; 3; 4]
 
-let a = [1; 2]; let b = [3; 4]; print (a @ b)
+let a = [1; 2]
+
+let b = [3; 4]
+
+print (a @ b)

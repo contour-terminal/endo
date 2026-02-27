@@ -3,4 +3,10 @@
 # description: Combined arithmetic and comparison
 # mode: ir-only
 
-let a = 5; let b = 3; let c = a + b; let result = c > 7
+let a = 5
+
+let b = 3
+
+let c = a + b
+
+let result = c > 7

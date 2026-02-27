@@ -3,4 +3,6 @@
 # description: Float let binding
 # expect: 3.14
 
-let pi = 3.14; print pi
+let pi = 3.14
+
+print pi

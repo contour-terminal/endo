@@ -3,4 +3,4 @@
 # description: List take pipeline
 # expect: [1; 2; 3]
 
-print ([1;2;3;4;5] |> take 3)
+print ([1; 2; 3; 4; 5] |> take 3)

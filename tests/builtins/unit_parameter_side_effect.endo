@@ -3,4 +3,6 @@
 # description: Unit parameter side effect
 # expect: hello
 
-let greet () = print "hello"; greet ()
+let greet () = print "hello"
+
+greet ()

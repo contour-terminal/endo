@@ -3,4 +3,5 @@
 # description: Command substitution in if condition
 # expect: ok
 
-if $(echo "yes") == "yes" then print "ok" else print "no"
+if $(echo "yes") == "yes" then print "ok"
+else print "no"

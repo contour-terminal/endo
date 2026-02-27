@@ -3,4 +3,5 @@
 # description: take first 2 processes, map to pids
 # expect: [1; 42]
 
-print (ps |> take 2 |> map (fun p -> p.pid))
+print (ps |> take 2
+    |> map (fun p -> p.pid))

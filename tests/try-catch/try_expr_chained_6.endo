@@ -3,4 +3,8 @@
 # description: Test step by step
 # mode: ir-only
 
-let nested = Some (Some 5); let f x = x; let r = f nested
+let nested = Some (Some 5)
+
+let f x = x
+
+let r = f nested

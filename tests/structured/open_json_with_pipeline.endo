@@ -3,4 +3,6 @@
 # description: Data source followed by pipeline
 # mode: ir-only
 
-open-json "test.json" as { name: string; age: int } |> length |> print
+open-json "test.json" as { name: string; age: int }
+    |> length
+    |> print

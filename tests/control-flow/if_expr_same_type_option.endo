@@ -3,4 +3,6 @@
 # description: If expr same type option
 # mode: ir-only
 
-let x = if true then Some 1 else None
+let x =
+    if true then Some 1
+    else None

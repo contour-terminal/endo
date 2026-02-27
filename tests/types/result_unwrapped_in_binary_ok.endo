@@ -3,4 +3,6 @@
 # description: Using unwrapped Result with ? should compile without type errors
 # mode: ir-only
 
-let r = (Ok 42)? + 1; print r
+let r = (Ok 42)? + 1
+
+print r

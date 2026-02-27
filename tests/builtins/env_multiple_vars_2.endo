@@ -5,4 +5,9 @@
 # mock-env: B=beta
 # expect: b_found
 
-let r = match env "B" with | Some v -> "b_found" | None -> "?"; print r
+let r =
+    match env "B" with
+    | Some v -> "b_found"
+    | None -> "?"
+
+print r

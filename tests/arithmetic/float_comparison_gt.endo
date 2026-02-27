@@ -3,4 +3,8 @@
 # description: Float comparison gt
 # expect: 1
 
-let r = if 3.0 > 2.5 then 1 else 0; print r
+let r =
+    if 3.0 > 2.5 then 1
+    else 0
+
+print r

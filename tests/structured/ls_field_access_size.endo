@@ -4,4 +4,5 @@
 # expect: [4 KB; 42 B; 256 B]
 
 let sizes = ls |> map (fun f -> f.size)
+
 print sizes

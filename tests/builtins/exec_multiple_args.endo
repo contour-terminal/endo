@@ -1,7 +1,6 @@
+exec "/bin/echo" "hello" "world"
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: exec with multiple arguments
 # expect: hello world
 # expect: 
-
-exec "/bin/echo" "hello" "world"

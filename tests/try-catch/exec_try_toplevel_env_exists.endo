@@ -4,4 +4,6 @@
 # mock-env: USER=testuser
 # expect: testuser
 
-let name = (env "USER")?; print name
+let name = (env "USER")?
+
+print name

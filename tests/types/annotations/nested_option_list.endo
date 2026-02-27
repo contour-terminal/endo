@@ -4,4 +4,5 @@
 # mode: ir-only
 
 let x: option<list<int> > = Some [1; 2; 3]
+
 print x

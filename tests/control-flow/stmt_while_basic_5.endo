@@ -3,4 +3,5 @@
 # description: Stmt while basic
 # mode: ir-only
 
-while true do break
+while true do
+    break

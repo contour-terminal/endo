@@ -5,7 +5,10 @@
 # expect:
 
 let r = Ok 42
-let x = match r with
+
+let x =
+    match r with
     | Ok n -> n
     | Error e -> 0
+
 println x

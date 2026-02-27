@@ -91,6 +91,12 @@ jobs:
       # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
       run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
 
+    - name: Check endo formatting
+      run: |
+        find . -name '*.endo' -not -path './tmp/*' -not -path './build/*' \
+          | xargs ${{ steps.strings.outputs.build-output-dir }}/src/shell/endo format --check
+      timeout-minutes: 2
+
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       # Execute tests defined by the CMake configuration.

@@ -3,4 +3,5 @@
 # description: Stmt if then else
 # expect: 1
 
-if true then print 1 else print 0
+if true then print 1
+else print 0

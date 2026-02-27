@@ -8,8 +8,7 @@ let category age =
         "child"
     elif age < 20 then
         "teenager"
-    elif age < 65 then
-        "adult"
-    else
-        "senior"
+    elif age < 65 then "adult"
+    else "senior"
+
 print (category 15)

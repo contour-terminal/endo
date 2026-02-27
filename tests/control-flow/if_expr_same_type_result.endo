@@ -3,4 +3,6 @@
 # description: If expr same type result
 # mode: ir-only
 
-let x = if true then Ok 1 else Error "fail"
+let x =
+    if true then Ok 1
+    else Error "fail"

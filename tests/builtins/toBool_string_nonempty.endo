@@ -3,4 +3,5 @@
 # description: non-empty string is falsy in shell semantics ("hello" != "")
 # expect: no
 
-if "hello" then print "yes" else print "no"
+if "hello" then print "yes"
+else print "no"

@@ -3,7 +3,10 @@
 # description: String field via let destructuring
 # expect: Bob
 
-type Person = { name: str; age: int }
+type Person = { name: string; age: int }
+
 let p = { name = "Bob"; age = 25 }
+
 let { name; age } = p
+
 print name

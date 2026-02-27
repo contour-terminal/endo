@@ -4,5 +4,7 @@
 # expect: 10
 
 let double x = x * 2
+
 let apply f x = f x
+
 print (apply double 5)

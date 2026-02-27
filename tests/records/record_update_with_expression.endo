@@ -4,6 +4,9 @@
 # expect: 11
 
 type Counter = { value: int }
+
 let c = { value = 10 }
+
 let c2 = { c with value = c.value + 1 }
+
 print c2.value

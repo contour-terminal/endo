@@ -4,4 +4,6 @@
 # unused-detection: true
 # expect: 1
 
-let (x, _) = (1, 2); print x
+let (x, _) = (1, 2)
+
+print x

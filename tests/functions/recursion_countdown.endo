@@ -4,5 +4,8 @@
 # expect: 0
 # expect:
 
-let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1)
+let rec countdown (n: int) =
+    if n <= 0 then 0
+    else countdown (n - 1)
+
 println (countdown 10)

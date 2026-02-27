@@ -3,7 +3,9 @@
 # description: ConsExpr in tail call arguments — previously a known limitation.
 # expect: [3; 2; 1]
 
-let rec revAcc acc xs = match xs with
-  | [] -> acc
-  | h :: t -> revAcc (h :: acc) t
+let rec revAcc acc xs =
+    match xs with
+    | [] -> acc
+    | h :: t -> revAcc (h :: acc) t
+
 print (revAcc [] [1; 2; 3])

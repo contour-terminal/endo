@@ -4,11 +4,11 @@
 # expect: 55
 
 let mut _x = 0
-let X
-    with get () =
-        let v = _x
-        v
-    and set (v) =
-        _x <- v
+
+let X with get () = 
+    let v = _x
+    v
+and set (v) = _x <- v
+
 X <- 55
 print X

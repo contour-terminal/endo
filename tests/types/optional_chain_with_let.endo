@@ -4,6 +4,9 @@
 # expect: 30
 
 type P = { age: int }
+
 let x = Some { age = 30 }
+
 let result = x?.age ?| 0
+
 print result

@@ -3,4 +3,6 @@
 # description: List find empty
 # expect: none
 
-match find (fun x -> x > 0) [] with | Some v -> print v | None -> print "none"
+match find (fun x -> x > 0) [] with
+| Some v -> print v
+| None -> print "none"

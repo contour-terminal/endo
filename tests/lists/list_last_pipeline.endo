@@ -3,7 +3,9 @@
 # description: List last pipeline
 # expect: 3
 
-let r = match [1;2;3] |> last with
+let r =
+    match [1; 2; 3] |> last with
     | Some v -> v
     | None -> -1
+
 print r

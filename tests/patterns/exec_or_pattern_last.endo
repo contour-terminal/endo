@@ -3,4 +3,11 @@
 # description: Or pattern: last alternative matches
 # expect: 10
 
-let x = 3; let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; print r
+let x = 3
+
+let r =
+    match x with
+    | 1 | 2 | 3 -> 10
+    | _ -> 0
+
+print r

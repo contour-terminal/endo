@@ -3,4 +3,8 @@
 # description: Simple try-with expression - IR generation
 # mode: ir-only
 
-let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0
+let getValue x = Ok x
+
+let r =
+    try getValue 42 with
+    | Error e -> 0

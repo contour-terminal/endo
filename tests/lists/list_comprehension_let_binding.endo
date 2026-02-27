@@ -3,5 +3,6 @@
 # description: List comprehension let binding
 # expect: [1; 4; 9; 16]
 
-let s = [for x in [1;2;3;4] -> x * x]
+let s = [for x in [1; 2; 3; 4] -> x * x]
+
 print s

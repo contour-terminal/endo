@@ -3,4 +3,7 @@
 # description: Stmt if in let
 # expect: 5
 
-let x = 5; if x > 3 then print x else print 0
+let x = 5
+
+if x > 3 then print x
+else print 0

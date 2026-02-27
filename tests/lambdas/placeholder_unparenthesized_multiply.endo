@@ -3,4 +3,6 @@
 # description: _ * 2 (no parens) desugars to fun __x -> __x * 2
 # expect: 10
 
-let double = _ * 2; print (double 5)
+let double = _ * 2
+
+print (double 5)

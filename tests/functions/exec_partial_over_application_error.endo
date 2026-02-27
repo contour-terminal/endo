@@ -3,4 +3,6 @@
 # description: Over-application should fail
 # expect-error: expects 2 arguments, got 3
 
-let add x y = x + y; let r = add 1 2 3
+let add x y = x + y
+
+let r = add 1 2 3

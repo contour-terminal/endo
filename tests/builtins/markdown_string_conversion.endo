@@ -4,4 +4,5 @@
 # expect: # Hello
 
 let md = markdown "# Hello"
+
 print (string md)

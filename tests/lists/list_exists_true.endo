@@ -3,4 +3,4 @@
 # description: List exists true
 # expect: true
 
-print (exists (fun x -> x > 3) [1;2;3;4;5])
+print (exists (fun x -> x > 3) [1; 2; 3; 4; 5])

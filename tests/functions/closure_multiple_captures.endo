@@ -5,6 +5,9 @@
 # expect:
 
 let a = 3
+
 let b = 7
+
 let f (x: int) = a + b + x
+
 println (f 10)

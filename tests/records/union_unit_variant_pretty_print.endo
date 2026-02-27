@@ -6,5 +6,7 @@
 type Shape =
     | Circle of int
     | Point
+
 let p = Point
+
 print p

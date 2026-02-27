@@ -6,8 +6,12 @@
 type Shape =
     | Rectangle of int * int
     | Point
+
 let s = Rectangle (10, 20)
-let r = match s with
+
+let r =
+    match s with
     | Rectangle (w, h) -> w + h
     | Point -> 0
+
 print r

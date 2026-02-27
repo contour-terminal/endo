@@ -3,5 +3,8 @@
 # description: (_.pid > 10) desugars to fun __x -> __x.pid > 10
 # expect: [42; 100]
 
-let pids = ps |> filter (_.pid > 10) |> map _.pid
+let pids =
+    ps |> filter (_.pid > 10)
+        |> map _.pid
+
 print pids

@@ -3,4 +3,8 @@
 # description: Untyped closure falls back to AST inlining but still works
 # expect: 15
 
-let x = 10; let addx y = x + y; print (addx 5)
+let x = 10
+
+let addx y = x + y
+
+print (addx 5)

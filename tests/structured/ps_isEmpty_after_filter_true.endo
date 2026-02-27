@@ -3,4 +3,5 @@
 # description: no process has pid > 1000
 # expect: true
 
-print (ps |> filter (fun p -> p.pid > 1000) |> isEmpty)
+print (ps |> filter (fun p -> p.pid > 1000)
+    |> isEmpty)

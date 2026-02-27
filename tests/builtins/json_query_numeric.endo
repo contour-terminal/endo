@@ -5,5 +5,7 @@
 # expect:
 
 let json = "{\"count\": 42}"
+
 let r = Json.query ".count" json
+
 r |> each println

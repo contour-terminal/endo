@@ -3,4 +3,8 @@
 # description: Zero-arg partial application (function aliasing): let f = add
 # expect: 7
 
-let add x y = x + y; let f = add; print (f 3 4)
+let add x y = x + y
+
+let f = add
+
+print (f 3 4)

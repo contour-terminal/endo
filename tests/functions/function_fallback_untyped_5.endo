@@ -3,4 +3,6 @@
 # description: Functions without type annotations fall back to AST inlining but still work
 # expect: hello world
 
-let greet name = "hello " + name; print (greet "world")
+let greet name = "hello " + name
+
+print (greet "world")

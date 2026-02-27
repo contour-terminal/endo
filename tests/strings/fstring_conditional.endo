@@ -3,4 +3,5 @@
 # description: Fstring conditional
 # expect: val: 1
 
-print $"val: {if true then 1 else 0}"
+print $"val: {if true then 1
+else 0}"

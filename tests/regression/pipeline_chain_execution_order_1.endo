@@ -4,6 +4,11 @@
 # expect: 60
 
 let f (x: int) = x * 2
+
 let g (x: int) = x + 10
+
 let h (x: int) = x * 3
-print (5 |> f |> g |> h)
+
+print (5 |> f
+    |> g
+    |> h)

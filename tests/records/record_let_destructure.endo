@@ -4,6 +4,9 @@
 # expect: 15
 
 type Point = { x: int; y: int }
+
 let p = { x = 7; y = 8 }
+
 let { x; y } = p
+
 print (x + y)

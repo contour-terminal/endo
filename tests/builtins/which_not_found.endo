@@ -3,4 +3,9 @@
 # description: Which not found
 # expect: none
 
-let r = match which "nonexistent" with | Some p -> "found" | None -> "none"; print r
+let r =
+    match which "nonexistent" with
+    | Some p -> "found"
+    | None -> "none"
+
+print r

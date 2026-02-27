@@ -3,4 +3,6 @@
 # description: if-then-else branches: both lists — should succeed
 # mode: ir-only
 
-let x = if true then [1; 2] else [3; 4]
+let x =
+    if true then [1; 2]
+    else [3; 4]

@@ -4,5 +4,7 @@
 # expect-exit: 0
 
 let json = "not valid json {{"
+
 let r = Json.query ".name" json
+
 r |> each println

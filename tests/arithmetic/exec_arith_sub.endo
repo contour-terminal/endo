@@ -3,4 +3,6 @@
 # description: Exec arith sub
 # expect: 7
 
-let x = 10 - 3; print x
+let x = 10 - 3
+
+print x

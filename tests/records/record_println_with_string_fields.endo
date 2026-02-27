@@ -3,6 +3,8 @@
 # description: Printing a record with string fields should show string values, not pointers
 # expect: { name = Alice; age = 30 }
 
-type Person = { name: str; age: int }
+type Person = { name: string; age: int }
+
 let p = { name = "Alice"; age = 30 }
+
 print p

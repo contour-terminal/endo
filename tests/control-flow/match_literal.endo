@@ -5,8 +5,11 @@
 # expect:
 
 let x = 10
-let r = match x with
+
+let r =
+    match x with
     | 0 -> "zero"
     | 10 -> "ten"
     | _ -> "other"
+
 println r

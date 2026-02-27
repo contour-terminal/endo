@@ -4,4 +4,9 @@
 # mock-which: git=/usr/bin/git
 # expect: /usr/bin/git
 
-let r = match which "git" with | Some p -> p | None -> "none"; print r
+let r =
+    match which "git" with
+    | Some p -> p
+    | None -> "none"
+
+print r

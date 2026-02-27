@@ -5,4 +5,5 @@
 # expect:
 
 let id (x: int) = x
+
 println (id 42)

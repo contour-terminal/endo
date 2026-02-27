@@ -3,8 +3,11 @@
 # description: Function application in a match merge block exercises non-entry-block codegen.
 # expect: 1
 
+let id x = x
 
-        let id x = x
-        let r = match Some 1 with | Some n -> n | None -> 0
-        print (id r)
-    
+let r =
+    match Some 1 with
+    | Some n -> n
+    | None -> 0
+
+print (id r)

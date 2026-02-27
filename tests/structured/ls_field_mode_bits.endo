@@ -4,4 +4,5 @@
 # expect: [493; 420; 493]
 
 let modes = ls |> map (fun f -> f.mode.bits)
+
 print modes

@@ -3,6 +3,6 @@
 # description: pipeline |> operator spanning multiple lines
 # expect: 3
 
-let result = [1; 2; 3]
-  |> length
+let result = [1; 2; 3] |> length
+
 print (toText result)

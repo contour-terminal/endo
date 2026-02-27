@@ -4,4 +4,5 @@
 # expect: false
 
 let f (b: bool) = !b
+
 print (f true)

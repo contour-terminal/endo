@@ -3,4 +3,12 @@
 # description: Match expression with constructor and literal payload - second pattern
 # expect: 20
 
-let getErr x = Error x; let r = match getErr 2 with | Error 1 -> 10 | Error 2 -> 20 | _ -> 0; print r
+let getErr x = Error x
+
+let r =
+    match getErr 2 with
+    | Error 1 -> 10
+    | Error 2 -> 20
+    | _ -> 0
+
+print r

@@ -3,7 +3,9 @@
 # description: List nth first
 # expect: 10
 
-let r = match nth 0 [10; 20; 30] with
+let r =
+    match nth 0 [10; 20; 30] with
     | Some v -> v
     | None -> -1
+
 print r

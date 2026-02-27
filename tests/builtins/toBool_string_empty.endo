@@ -3,4 +3,5 @@
 # description: empty string is truthy in shell semantics ("" == "")
 # expect: yes
 
-if "" then print "yes" else print "no"
+if "" then print "yes"
+else print "no"

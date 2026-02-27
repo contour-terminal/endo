@@ -5,5 +5,7 @@
 # expect:
 
 let json = "{\"a\": {\"b\": \"val\"}}"
+
 let r = Json.query ".a.b" json
+
 r |> each println

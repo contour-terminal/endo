@@ -3,4 +3,7 @@
 # description: Mutable assignment basic
 # expect: 42
 
-let mut x = 1; x <- 42; print x
+let mut x = 1
+
+x <- 42
+print x

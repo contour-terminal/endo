@@ -4,5 +4,7 @@
 # expect: hello!
 
 let shout s = s + "!"
+
 let apply f x = f x
+
 print (apply shout "hello")

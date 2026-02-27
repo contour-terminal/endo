@@ -3,4 +3,6 @@
 # description: Define and call single-arg function
 # mode: ir-only
 
-let double x = x * 2; let result = double 5
+let double x = x * 2
+
+let result = double 5

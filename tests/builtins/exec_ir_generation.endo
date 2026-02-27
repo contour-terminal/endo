@@ -1,6 +1,5 @@
+exec "/bin/echo" "hello"
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: IR generation succeeds for exec
 # mode: ir-only
-
-exec "/bin/echo" "hello"

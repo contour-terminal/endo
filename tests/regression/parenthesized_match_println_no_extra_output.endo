@@ -4,4 +4,6 @@
 # expect: found
 # expect: 
 
-(match Some 42 with | Some x -> println "found" | None -> println "none")
+(match Some 42 with
+| Some x -> println "found"
+| None -> println "none")

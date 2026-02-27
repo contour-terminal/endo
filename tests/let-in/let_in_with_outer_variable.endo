@@ -3,4 +3,8 @@
 # description: Let-in body can access outer scope
 # expect: 15
 
-let y = 10; let r = let x = 5 in x + y; print r
+let y = 10
+
+let r = let x = 5 in x + y
+
+print r

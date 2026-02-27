@@ -2,4 +2,6 @@
 #
 # description: ? operator on None from env: propagates None
 
-let unwrap opt = opt?; let r = unwrap (env "MISSING")
+let unwrap opt = opt?
+
+let r = unwrap (env "MISSING")

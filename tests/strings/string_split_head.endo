@@ -3,4 +3,6 @@
 # description: String split head
 # expect: a
 
-let parts = split "," "a,b,c"; print (head parts ?| "")
+let parts = split "," "a,b,c"
+
+print (head parts ?| "")

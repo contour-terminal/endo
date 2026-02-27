@@ -4,4 +4,5 @@
 # expect: 15
 
 let result = let x: int = 10 in x + 5
+
 print result

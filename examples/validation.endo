@@ -17,14 +17,18 @@ let safe_validate x =
     try validate_positive x with
     | Error e -> 0
 
-print "safe_validate 10 = "; println (safe_validate 10)
-print "safe_validate -5 = "; println (safe_validate (0 - 5))
+print "safe_validate 10 = "
+println (safe_validate 10)
+print "safe_validate -5 = "
+println (safe_validate (0 - 5))
 
 // The ? operator propagates errors early
 let process x = (validate_positive x)?
 
 let r1 = process 42
+
 let r2 = process (0 - 1)
+
 println (show_result r1)
 println (show_result r2)
 
@@ -37,9 +41,12 @@ let multi_check code =
     | Error 2 -> 20
     | Error _ -> 0
 
-print "Error 1 = "; println (multi_check 1)
-print "Error 2 = "; println (multi_check 2)
-print "Error 99 = "; println (multi_check 99)
+print "Error 1 = "
+println (multi_check 1)
+print "Error 2 = "
+println (multi_check 2)
+print "Error 99 = "
+println (multi_check 99)
 
 // Guards in try-with arms
 let guard_check code =
@@ -48,15 +55,28 @@ let guard_check code =
     | Error e when e > 10 -> 2
     | Error _ -> 3
 
-print "Error 500 (>100) = "; println (guard_check 500)
-print "Error 50 (>10) = "; println (guard_check 50)
-print "Error 5 (other) = "; println (guard_check 5)
+print "Error 500 (>100) = "
+println (guard_check 500)
+print "Error 50 (>10) = "
+println (guard_check 50)
+print "Error 5 (other) = "
+println (guard_check 5)
 
 // Option handling with try-with
 let getOpt x = Some x
-let r3 = try getOpt 42 with | None -> 0
-print "try Some 42 = "; println r3
+
+let r3 =
+    try getOpt 42 with
+    | None -> 0
+
+print "try Some 42 = "
+println r3
 
 let getNone x = None
-let r4 = try getNone 0 with | None -> 99
-print "try None = "; println r4
+
+let r4 =
+    try getNone 0 with
+    | None -> 99
+
+print "try None = "
+println r4

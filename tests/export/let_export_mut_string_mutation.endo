@@ -4,4 +4,7 @@
 # expect: world
 # expect-env: S=world
 
-let export mut S = "hello"; S <- "world"; print S
+let export mut S = "hello"
+
+S <- "world"
+print S

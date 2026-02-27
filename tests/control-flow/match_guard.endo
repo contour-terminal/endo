@@ -4,7 +4,9 @@
 # expect: 1
 # expect:
 
-let r = match 10 with
+let r =
+    match 10 with
     | n when n > 0 -> 1
     | _ -> 0
+
 println r

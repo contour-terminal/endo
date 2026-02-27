@@ -4,4 +4,8 @@
 # expect: 3
 # expect-env: Z=3
 
-let export mut Z = 1; Z <- 2; Z <- 3; print Z
+let export mut Z = 1
+
+Z <- 2
+Z <- 3
+print Z

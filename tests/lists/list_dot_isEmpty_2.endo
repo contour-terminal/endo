@@ -4,4 +4,5 @@
 # expect: true
 
 let xs: list<int> = []
+
 print xs.isEmpty

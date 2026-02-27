@@ -3,4 +3,6 @@
 # description: Fstring as value
 # expect: hello
 
-let s = $"hello"; print s
+let s = $"hello"
+
+print s

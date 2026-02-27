@@ -3,4 +3,6 @@
 # description: List util drop then fold
 # expect: 12
 
-print ([1;2;3;4;5] |> drop 2 |> fold 0 (fun a x -> a + x))
+print ([1; 2; 3; 4; 5]
+    |> drop 2
+    |> fold 0 (fun a x -> a + x))

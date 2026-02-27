@@ -4,4 +4,5 @@
 # expect: 10
 
 let t = (10, 20)
+
 print (t.fst)

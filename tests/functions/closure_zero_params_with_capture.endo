@@ -3,4 +3,8 @@
 # description: Thunk with capture — uses untyped parameter, falls back to AST inlining
 # expect: 42
 
-let x = 42; let f _dummy = x; print (f 0)
+let x = 42
+
+let f _dummy = x
+
+print (f 0)

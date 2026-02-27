@@ -5,7 +5,9 @@
 # session-separator: ---
 
 let x = 42
+
 # ---
 let x = 100
+
 # ---
 print x

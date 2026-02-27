@@ -3,4 +3,6 @@
 # description: Return a list from a function
 # expect: [99]
 
-let make x = x :: []; print (make 99)
+let make x = x :: []
+
+print (make 99)

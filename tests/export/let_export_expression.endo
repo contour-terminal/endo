@@ -3,4 +3,6 @@
 # description: Let export expression
 # expect: 3
 
-let export X = 1 + 2; print X
+let export X = 1 + 2
+
+print X

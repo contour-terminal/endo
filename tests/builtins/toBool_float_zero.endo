@@ -3,4 +3,5 @@
 # description: zero float is truthy in shell semantics (0.0 == 0.0)
 # expect: yes
 
-if 0.0 then print "yes" else print "no"
+if 0.0 then print "yes"
+else print "no"

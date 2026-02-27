@@ -2,4 +2,8 @@
 #
 # description: try-with with Ok value - should extract inner value
 
-let getValue x = Ok x; let r = try getValue 42 with | Error e -> 0
+let getValue x = Ok x
+
+let r =
+    try getValue 42 with
+    | Error e -> 0

@@ -3,4 +3,6 @@
 # description: _ + 1 (no parens) desugars to fun __x -> __x + 1
 # expect: 42
 
-let incr = _ + 1; print (incr 41)
+let incr = _ + 1
+
+print (incr 41)

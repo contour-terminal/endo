@@ -4,4 +4,5 @@
 # expect: 6
 
 let sum = fold 0 (fun acc x -> acc + x)
+
 print (sum [1; 2; 3])

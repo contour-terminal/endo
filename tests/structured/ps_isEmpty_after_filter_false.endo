@@ -3,4 +3,5 @@
 # description: all processes have pid > 0
 # expect: false
 
-print (ps |> filter (fun p -> p.pid > 0) |> isEmpty)
+print (ps |> filter (fun p -> p.pid > 0)
+    |> isEmpty)

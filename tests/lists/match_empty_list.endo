@@ -3,4 +3,11 @@
 # description: Match empty list
 # expect: empty
 
-let x = []; let r = match x with | [] -> "empty" | _ -> "not"; print r
+let x = []
+
+let r =
+    match x with
+    | [] -> "empty"
+    | _ -> "not"
+
+print r

@@ -3,4 +3,11 @@
 # description: Guard with >=
 # expect: 100
 
-let getErr x = Error x; let r = try getErr 5 with | Error e when e >= 5 -> 100 | Error _ -> 0; print r
+let getErr x = Error x
+
+let r =
+    try getErr 5 with
+    | Error e when e >= 5 -> 100
+    | Error _ -> 0
+
+print r

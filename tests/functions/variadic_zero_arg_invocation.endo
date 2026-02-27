@@ -3,4 +3,6 @@
 # description: Zero-arg variadic function at statement level runs the body
 # expect: hello
 
-let greet ...xs = print "hello"; greet
+let greet ...xs = print "hello"
+
+greet

@@ -3,4 +3,6 @@
 # description: Variadic function iterating flag args with each+print
 # expect: -la
 
-let say ...xs = each (fun x -> print x) xs; say -la
+let say ...xs = each (fun x -> print x) xs
+
+say -la

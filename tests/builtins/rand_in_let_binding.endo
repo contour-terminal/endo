@@ -2,4 +2,6 @@
 #
 # description: rand can be used in let bindings and arithmetic
 
-let x = rand 1 100; let y = x + 1
+let x = rand 1 100
+
+let y = x + 1

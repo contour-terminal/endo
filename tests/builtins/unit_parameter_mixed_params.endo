@@ -3,4 +3,6 @@
 # description: Unit parameter mixed params
 # expect: 6
 
-let f () (x: int) = x + 1; print (f () 5)
+let f () (x: int) = x + 1
+
+print (f () 5)

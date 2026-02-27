@@ -4,4 +4,5 @@
 # expect: 42
 
 let f x = print x
+
 f 42

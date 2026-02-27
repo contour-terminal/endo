@@ -3,4 +3,11 @@
 # description: Pattern match on ?-returning function with Error value (error propagation)
 # expect: 99
 
-let f x = x?; let r = match (f (Error 99)) with | Ok n -> n | Error e -> e; print r
+let f x = x?
+
+let r =
+    match (f (Error 99)) with
+    | Ok n -> n
+    | Error e -> e
+
+print r

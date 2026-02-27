@@ -3,4 +3,9 @@
 # description: Match with Error value
 # mode: ir-only
 
-let res = Error 404; let value = match res with | Ok n -> n | Error e -> e
+let res = Error 404
+
+let value =
+    match res with
+    | Ok n -> n
+    | Error e -> e

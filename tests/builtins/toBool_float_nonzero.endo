@@ -3,4 +3,5 @@
 # description: non-zero float is falsy in shell semantics (1.5 != 0.0)
 # expect: no
 
-if 1.5 then print "yes" else print "no"
+if 1.5 then print "yes"
+else print "no"

@@ -3,4 +3,10 @@
 # description: Closure captures multiple variables
 # expect: 20
 
-let a = 3; let b = 7; let f (x: int) = a + b + x; print (f 10)
+let a = 3
+
+let b = 7
+
+let f (x: int) = a + b + x
+
+print (f 10)

@@ -3,4 +3,6 @@
 # description: Cons with binding
 # expect: [1; 2; 3]
 
-let xs = [2; 3]; print (1 :: xs)
+let xs = [2; 3]
+
+print (1 :: xs)

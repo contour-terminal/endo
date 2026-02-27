@@ -3,4 +3,8 @@
 # description: Named function (let f x = ...) captures outer variable
 # expect: 105
 
-let offset = 100; let addOffset x = x + offset; print (addOffset 5)
+let offset = 100
+
+let addOffset x = x + offset
+
+print (addOffset 5)

@@ -3,11 +3,16 @@
 # description: Multiple try-with expressions with error handlers.
 # expect: 1 2
 
+let getErr x = Error x
 
-        let getErr x = Error x
-        let r1 = try getErr 1 with | Error e -> e
-        let r2 = try getErr 2 with | Error e -> e
-        print r1
-        print " "
-        print r2
-    
+let r1 =
+    try getErr 1 with
+    | Error e -> e
+
+let r2 =
+    try getErr 2 with
+    | Error e -> e
+
+print r1
+print " "
+print r2

@@ -3,4 +3,6 @@
 # description: Pipeline with expression on left side
 # mode: ir-only
 
-let double x = x * 2; let result = (3 + 2) |> double
+let double x = x * 2
+
+let result = (3 + 2) |> double

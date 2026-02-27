@@ -3,4 +3,6 @@
 # description: List print binding
 # expect: [10; 20; 30]
 
-let x = [10; 20; 30]; print x
+let x = [10; 20; 30]
+
+print x

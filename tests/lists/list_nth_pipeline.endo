@@ -3,7 +3,9 @@
 # description: List nth pipeline
 # expect: 2
 
-let r = match [1;2;3] |> nth 1 with
+let r =
+    match [1; 2; 3] |> nth 1 with
     | Some v -> v
     | None -> -1
+
 print r

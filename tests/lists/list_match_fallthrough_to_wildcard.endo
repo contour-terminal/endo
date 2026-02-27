@@ -4,5 +4,10 @@
 # expect: 42
 
 let x = [1; 2; 3]
-let r = match x with | [a] -> a | _ -> 42
+
+let r =
+    match x with
+    | [a] -> a
+    | _ -> 42
+
 print r

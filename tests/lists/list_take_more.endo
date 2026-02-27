@@ -3,4 +3,4 @@
 # description: List take more
 # expect: [1; 2; 3]
 
-print (take 10 [1;2;3])
+print (take 10 [1; 2; 3])

@@ -6,8 +6,12 @@
 type Shape =
     | Rect of w: int * h: int
     | Point
+
 let s = Rect (3, 4)
-let r = match s with
+
+let r =
+    match s with
     | Rect (w, h) -> w * h
     | Point -> 0
+
 print r

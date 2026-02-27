@@ -5,4 +5,5 @@
 # expect:
 
 let md = markdown "# Hello"
+
 md |> Markdown.render

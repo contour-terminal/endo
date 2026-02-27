@@ -3,4 +3,6 @@
 # description: Functions without type annotations fall back to AST inlining but still work
 # expect: [99]
 
-let make x = x :: []; print (make 99)
+let make x = x :: []
+
+print (make 99)

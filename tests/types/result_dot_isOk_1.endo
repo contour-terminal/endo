@@ -4,4 +4,5 @@
 # expect: true
 
 let x = Ok 42
+
 print x.isOk

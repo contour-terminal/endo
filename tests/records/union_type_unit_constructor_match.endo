@@ -6,8 +6,12 @@
 type Option2 =
     | Nothing
     | Just of int
+
 let x = Nothing
-let r = match x with
+
+let r =
+    match x with
     | Nothing -> 0
     | Just n -> n
+
 print r

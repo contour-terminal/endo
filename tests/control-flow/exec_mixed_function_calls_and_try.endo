@@ -3,12 +3,19 @@
 # description: Combination of match, function calls, and error handling.
 # expect: 42 99
 
+let id x = x
 
-        let id x = x
-        let getErr x = Error x
-        let r1 = match Some 42 with | Some n -> n | None -> 0
-        let r2 = try getErr 99 with | Error e -> e
-        print (id r1)
-        print " "
-        print (id r2)
+let getErr x = Error x
 
+let r1 =
+    match Some 42 with
+    | Some n -> n
+    | None -> 0
+
+let r2 =
+    try getErr 99 with
+    | Error e -> e
+
+print (id r1)
+print " "
+print (id r2)

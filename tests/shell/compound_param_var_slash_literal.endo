@@ -6,4 +6,4 @@
 # expect: /home/test/bin
 # expect: 
 
-echo $HOME/bin
+echo "$HOME/bin"

@@ -3,4 +3,11 @@
 # description: Try-with with multiple error handlers - verify pattern matching selects correct handler
 # expect: 10
 
-let getErr x = Error x; let r = try getErr 1 with | Error 1 -> 10 | Error _ -> 0; print r
+let getErr x = Error x
+
+let r =
+    try getErr 1 with
+    | Error 1 -> 10
+    | Error _ -> 0
+
+print r

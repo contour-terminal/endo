@@ -3,4 +3,4 @@
 # description: List length pipeline
 # expect: 3
 
-print ([1;2;3] |> length)
+print ([1; 2; 3] |> length)

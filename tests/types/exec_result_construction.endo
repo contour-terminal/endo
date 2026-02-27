@@ -2,4 +2,6 @@
 #
 # description: Verify Result construction executes without error
 
-let a = Ok 100; let b = Error 404
+let a = Ok 100
+
+let b = Error 404

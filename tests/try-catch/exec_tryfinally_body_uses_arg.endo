@@ -3,4 +3,8 @@
 # description: Body uses function argument, finally runs, argument-derived result preserved
 # expect: ok42
 
-let f x = try x + 10 finally print "ok"; print (f 32)
+let f x =
+    try x + 10
+    finally print "ok"
+
+print (f 32)

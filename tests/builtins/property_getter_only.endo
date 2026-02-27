@@ -4,4 +4,5 @@
 # expect: hello
 
 let Greeting with get () = "hello"
+
 print Greeting

@@ -4,4 +4,5 @@
 # expect: [11; 12; 13]
 
 let offset = 10
+
 print (map (fun x -> x + offset) [1; 2; 3])

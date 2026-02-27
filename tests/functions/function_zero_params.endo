@@ -3,4 +3,6 @@
 # description: Zero-parameter function compiles as function
 # expect: 42
 
-let answer = 42; print answer
+let answer = 42
+
+print answer

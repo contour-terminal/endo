@@ -3,4 +3,6 @@
 # description: Let export string
 # expect: hello
 
-let export X = "hello"; print X
+let export X = "hello"
+
+print X

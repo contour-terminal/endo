@@ -4,4 +4,5 @@
 # expect: 3.14
 
 let f: float = 3.14
+
 print f

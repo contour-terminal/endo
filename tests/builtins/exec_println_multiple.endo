@@ -5,4 +5,5 @@
 # expect: b
 # expect: 
 
-println "a"; println "b"
+println "a"
+println "b"

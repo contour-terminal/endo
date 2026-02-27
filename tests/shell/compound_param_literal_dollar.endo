@@ -6,4 +6,4 @@
 # expect: foo/home/test
 # expect: 
 
-echo foo$HOME
+echo "foo$HOME"

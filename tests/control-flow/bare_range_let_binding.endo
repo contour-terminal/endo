@@ -3,4 +3,4 @@
 # description: Bare range as let binding
 # mode: ir-only
 
-let xs = 1..5
+let xs = [1..5]

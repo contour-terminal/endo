@@ -3,8 +3,11 @@
 # description: Function application within a match arm body.
 # expect: 10
 
+let double x = x * 2
 
-        let double x = x * 2
-        let r = match Some 5 with | Some n -> double n | None -> 0
-        print r
-    
+let r =
+    match Some 5 with
+    | Some n -> double n
+    | None -> 0
+
+print r

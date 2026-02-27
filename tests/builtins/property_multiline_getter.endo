@@ -4,8 +4,9 @@
 # expect: 20
 
 let mut _x = 10
-let Double with
-    get () =
-        let v = _x
-        v * 2
+
+let Double with get () = 
+    let v = _x
+    v * 2
+
 print Double

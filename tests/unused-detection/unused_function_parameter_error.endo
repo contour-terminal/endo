@@ -5,4 +5,6 @@
 # unused-detection: true
 # expect-error: is defined but never used
 
-let f (x: int) (y: int) = x; print (f 1 2)
+let f (x: int) (y: int) = x
+
+print (f 1 2)

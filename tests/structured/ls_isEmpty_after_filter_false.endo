@@ -3,4 +3,5 @@
 # description: all files have size > 0
 # expect: false
 
-print (ls |> filter (fun f -> f.size > 0) |> isEmpty)
+print (ls |> filter (fun f -> f.size > 0)
+    |> isEmpty)

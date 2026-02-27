@@ -3,4 +3,6 @@
 # description: String concat with typed string param compiles as function
 # expect: hello world
 
-let greet (name: str) = "hello " + name; print (greet "world")
+let greet (name: string) = "hello " + name
+
+print (greet "world")

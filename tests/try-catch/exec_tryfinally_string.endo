@@ -3,4 +3,8 @@
 # description: try-finally: body returns string, finally runs, string result preserved
 # expect: donehello
 
-let f x = try "hello" finally print "done"; print (f 0)
+let f x =
+    try "hello"
+    finally print "done"
+
+print (f 0)

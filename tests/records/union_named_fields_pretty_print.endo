@@ -6,5 +6,7 @@
 type Shape =
     | Circle of radius: int
     | Point
+
 let c = Circle 42
+
 print c

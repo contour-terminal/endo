@@ -4,4 +4,5 @@
 # expect: 10
 
 let apply f x = f x
+
 print (apply (fun x -> x * 2) 5)

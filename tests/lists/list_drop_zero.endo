@@ -3,4 +3,4 @@
 # description: List drop zero
 # expect: [1; 2; 3]
 
-print (drop 0 [1;2;3])
+print (drop 0 [1; 2; 3])

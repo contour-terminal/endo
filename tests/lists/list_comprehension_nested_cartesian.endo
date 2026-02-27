@@ -3,4 +3,4 @@
 # description: List comprehension nested cartesian
 # expect: [13; 14; 23; 24]
 
-print [for x in [1;2] -> for y in [3;4] -> x * 10 + y]
+print [for x in [1; 2] -> for y in [3; 4] -> x * 10 + y]

@@ -3,4 +3,8 @@
 # description: Closure captures a float
 # expect: 10
 
-let scale = 2.5; let f (x: float) = x * scale; print (f 4.0)
+let scale = 2.5
+
+let f (x: float) = x * scale
+
+print (f 4.0)

@@ -4,4 +4,5 @@
 # expect: false
 
 let x = None
+
 print x.isSome

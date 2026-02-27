@@ -3,4 +3,6 @@
 # description: (_ + 1) desugars to fun __x -> __x + 1
 # expect: 6
 
-let inc = (_ + 1); print (inc 5)
+let inc = (_ + 1)
+
+print (inc 5)

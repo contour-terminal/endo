@@ -4,4 +4,6 @@
 # expect: hi there
 # expect: 
 
-let say ...args = & echo hi ...args; say "there"
+let say ...args = & echo hi ...args
+
+say "there"

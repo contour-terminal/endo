@@ -3,4 +3,6 @@
 # description: Error with identifier
 # mode: ir-only
 
-let code = 404; let x = Error code
+let code = 404
+
+let x = Error code

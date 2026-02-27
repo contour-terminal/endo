@@ -3,4 +3,6 @@
 # description: Self-delimiting: composes with + operator without parentheses
 # expect: hello world
 
-let r = $(echo hello) + " " + $(echo world); print r
+let r = $(echo hello) + " " + $(echo world)
+
+print r

@@ -3,4 +3,6 @@
 # description: If expr with comparison
 # expect: 7
 
-let id x = x; print (id (7))
+let id x = x
+
+print (id (7))

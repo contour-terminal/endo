@@ -4,4 +4,9 @@
 # mock-env: HOME=/home/user
 # expect: found
 
-let r = match env "HOME" with | Some v -> "found" | None -> "none"; print r
+let r =
+    match env "HOME" with
+    | Some v -> "found"
+    | None -> "none"
+
+print r

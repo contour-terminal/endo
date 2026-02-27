@@ -3,4 +3,6 @@
 # description: Ok with an expression
 # mode: ir-only
 
-let a = 10; let r = Ok (a * 2)
+let a = 10
+
+let r = Ok (a * 2)

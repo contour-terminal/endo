@@ -3,4 +3,10 @@
 # description: Recursive function that captures a variable
 # expect: 0
 
-let step = 2; let rec count (n: int) = if n <= 0 then 0 else count (n - step); print (count 10)
+let step = 2
+
+let rec count (n: int) =
+    if n <= 0 then 0
+    else count (n - step)
+
+print (count 10)

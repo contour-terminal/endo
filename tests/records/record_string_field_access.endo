@@ -3,6 +3,8 @@
 # description: String field access via dot notation
 # expect: Alice
 
-type Person = { name: str; age: int }
+type Person = { name: string; age: int }
+
 let p = { name = "Alice"; age = 30 }
+
 print p.name

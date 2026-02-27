@@ -3,4 +3,11 @@
 # description: Exec logical or
 # expect: 1
 
-let a = 5; let r = match 0 with | _ when a < 3 || a > 4 -> 1 | _ -> 0; print r
+let a = 5
+
+let r =
+    match 0 with
+    | _ when a < 3 || a > 4 -> 1
+    | _ -> 0
+
+print r

@@ -6,5 +6,6 @@
 # expect:
 
 let md = markdown "**Bold** text"
+
 println (Markdown.toText md)
 print (Markdown.toHtml md)

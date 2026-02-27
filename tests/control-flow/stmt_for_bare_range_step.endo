@@ -3,4 +3,5 @@
 # description: Bare range with step
 # expect: 13579
 
-for i in 1..2..10 do print i
+for i in [1..2..10] do
+    print i

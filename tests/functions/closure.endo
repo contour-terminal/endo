@@ -5,5 +5,7 @@
 # expect:
 
 let x = 10
+
 let addx (y: int) = x + y
+
 println (addx 5)

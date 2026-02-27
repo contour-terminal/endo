@@ -3,4 +3,11 @@
 # description: Or pattern: none match, falls through to wildcard
 # expect: 0
 
-let x = 99; let r = match x with | 1 | 2 | 3 -> 10 | _ -> 0; print r
+let x = 99
+
+let r =
+    match x with
+    | 1 | 2 | 3 -> 10
+    | _ -> 0
+
+print r

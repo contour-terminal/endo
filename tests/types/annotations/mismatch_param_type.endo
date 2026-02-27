@@ -4,4 +4,5 @@
 # expect-error:
 
 let add (x: int) (y: int) = x + y
+
 add "a" 1

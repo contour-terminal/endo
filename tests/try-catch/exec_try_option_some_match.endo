@@ -3,4 +3,11 @@
 # description: Pattern match on ?-returning function with Some value
 # expect: 42
 
-let f x = x?; let r = match (f (Some 42)) with | Some n -> n | None -> 0; print r
+let f x = x?
+
+let r =
+    match (f (Some 42)) with
+    | Some n -> n
+    | None -> 0
+
+print r

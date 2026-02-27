@@ -3,4 +3,10 @@
 # description: Wildcard in head position
 # expect: 30
 
-let rec last xs = match xs with | [x] -> x | _ :: t -> last t | [] -> 0; print (last [10; 20; 30])
+let rec last xs =
+    match xs with
+    | [x] -> x
+    | _ :: t -> last t
+    | [] -> 0
+
+print (last [10; 20; 30])

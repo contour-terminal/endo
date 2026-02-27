@@ -5,4 +5,6 @@
 # expect: testuser
 # expect: 
 
-let name = (env "USER")?; println name
+let name = (env "USER")?
+
+println name

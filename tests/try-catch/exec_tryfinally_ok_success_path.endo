@@ -3,4 +3,15 @@
 # description: ? inside try-finally on Ok value: unwraps successfully, finally still runs.
 # expect: fin42
 
-let inner x = Ok 42; let outer x = try (inner x)? finally print "fin"; let r = match (outer 0) with | Ok n -> n | Error e -> 0; print r
+let inner x = Ok 42
+
+let outer x =
+    try (inner x)?
+    finally print "fin"
+
+let r =
+    match (outer 0) with
+    | Ok n -> n
+    | Error e -> 0
+
+print r

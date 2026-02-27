@@ -5,7 +5,9 @@
 # session-separator: ---
 
 let double x = x * 2
+
 # ---
 let quadruple x = double (double x)
+
 # ---
 print (quadruple 3)

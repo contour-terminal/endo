@@ -3,4 +3,6 @@
 # description: Override precedence: (2 + 3) * 4 = 20
 # expect: 20
 
-let x = (2 + 3) * 4; print x
+let x = (2 + 3) * 4
+
+print x

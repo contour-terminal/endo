@@ -2,4 +2,8 @@
 #
 # description: try-with with Some value - should extract inner value
 
-let getOpt x = Some x; let r = try getOpt 42 with | None -> 0
+let getOpt x = Some x
+
+let r =
+    try getOpt 42 with
+    | None -> 0

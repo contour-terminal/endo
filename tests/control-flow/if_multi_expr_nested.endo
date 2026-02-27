@@ -6,10 +6,10 @@
 let r =
     if false then
         0
+    elif true then
+        let x = 42
+        x
     else
-        if true then
-            let x = 42
-            x
-        else
-            99
+        99
+
 print r

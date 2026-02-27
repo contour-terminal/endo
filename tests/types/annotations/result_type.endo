@@ -3,5 +3,6 @@
 # description: TypeAnnotation result type
 # mode: ir-only
 
-let x: result<int, str> = Ok 42
+let x: result<int, string> = Ok 42
+
 print x

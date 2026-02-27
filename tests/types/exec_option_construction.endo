@@ -2,4 +2,6 @@
 #
 # description: Verify Option construction executes without error
 
-let a = Some 42; let b = None
+let a = Some 42
+
+let b = None

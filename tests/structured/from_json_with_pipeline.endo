@@ -3,4 +3,6 @@
 # description: From json with pipeline
 # mode: ir-only
 
-from-json as { id: int; status: string } |> filter (_.id > 0) |> print
+from-json as { id: int; status: string }
+    |> filter (_.id > 0)
+    |> print

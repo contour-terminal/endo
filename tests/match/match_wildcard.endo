@@ -3,4 +3,6 @@
 # description: Wildcard pattern always matches
 # mode: ir-only
 
-let r = match 42 with | _ -> 100
+let r =
+    match 42 with
+    | _ -> 100

@@ -3,4 +3,8 @@
 # description: Finally with a body that does computation, cleanup just prints
 # expect: fin41
 
-let f x = try x * 2 + 1 finally print "fin"; print (f 20)
+let f x =
+    try x * 2 + 1
+    finally print "fin"
+
+print (f 20)

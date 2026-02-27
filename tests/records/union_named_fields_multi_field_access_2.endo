@@ -6,5 +6,7 @@
 type Shape =
     | Rect of w: int * h: int
     | Point
+
 let r = Rect (10, 20)
+
 print r.h

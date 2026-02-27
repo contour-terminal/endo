@@ -4,6 +4,9 @@
 # expect: 42
 
 type Person = { name: int; age: int }
+
 let p = { name = 42; age = 30 }
+
 let q = { p with age = 31 }
+
 print q.name

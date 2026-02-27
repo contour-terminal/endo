@@ -4,5 +4,7 @@
 # expect: [3; 5; 7]
 
 let double x = x * 2
+
 let add1 x = x + 1
+
 print (map add1 (map double [1; 2; 3]))

@@ -3,4 +3,9 @@
 # description: Match as part of let binding chain
 # mode: ir-only
 
-let x = 10; let r = match x with | 0 -> 0 | n -> n * n
+let x = 10
+
+let r =
+    match x with
+    | 0 -> 0
+    | n -> n * n

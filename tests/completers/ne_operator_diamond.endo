@@ -4,6 +4,11 @@
 # expect: different
 
 let a = 1
+
 let b = 2
-let r = if a <> b then "different" else "same"
+
+let r =
+    if a != b then "different"
+    else "same"
+
 print r

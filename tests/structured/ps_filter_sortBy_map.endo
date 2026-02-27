@@ -3,4 +3,6 @@
 # description: 3-stage pipeline: filter pid > 1, sortBy mem, map to command
 # expect: [vim; firefox]
 
-print (ps |> filter (fun p -> p.pid > 1) |> sortBy (fun p -> p.mem) |> map (fun p -> p.command))
+print (ps |> filter (fun p -> p.pid > 1)
+    |> sortBy (fun p -> p.mem)
+    |> map (fun p -> p.command))

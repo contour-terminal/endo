@@ -3,4 +3,6 @@
 # description: Simple let-in binding
 # expect: 15
 
-let r = let x = 5 in x + 10; print r
+let r = let x = 5 in x + 10
+
+print r

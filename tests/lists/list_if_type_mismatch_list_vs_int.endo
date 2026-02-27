@@ -3,4 +3,6 @@
 # description: if-then-else branches: list vs int
 # expect-error: Type mismatch in if-then-else
 
-let x = if true then [1; 2] else 42
+let x =
+    if true then [1; 2]
+    else 42

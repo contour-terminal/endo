@@ -4,4 +4,5 @@
 # expect: true
 
 let m = FileMode.fromBits 420
+
 print m.isReadable

@@ -3,4 +3,8 @@
 # description: Extract numeric second element via user-defined function
 # expect: 42
 
-let get_snd t = match t with | (_, b) -> b; print (get_snd (1, 42))
+let get_snd t =
+    match t with
+    | (_, b) -> b
+
+print (get_snd (1, 42))

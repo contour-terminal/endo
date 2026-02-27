@@ -3,10 +3,8 @@
 # description: IR generation for exec with tuple pattern-matched variables
 # mode: ir-only
 
-
 match (which "echo", which "cat") with
 | (Some f, Some l) -> exec f "tuple test" | exec l
 | (Some f, None) -> exec f "only first"
 | (None, Some l) -> exec "/bin/echo" "fallback" | exec l
 | (None, None) -> println "none found"
-

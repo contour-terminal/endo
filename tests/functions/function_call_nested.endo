@@ -3,4 +3,8 @@
 # description: Call function with result of another expression
 # mode: ir-only
 
-let double x = x * 2; let a = 5; let result = double a
+let double x = x * 2
+
+let a = 5
+
+let result = double a

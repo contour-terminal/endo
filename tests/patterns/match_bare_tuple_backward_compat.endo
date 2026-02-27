@@ -3,4 +3,8 @@
 # description: Parenthesized form still works
 # expect: 7
 
-let r = match (3, 4) with | (a, b) -> a + b; print r
+let r =
+    match (3, 4) with
+    | (a, b) -> a + b
+
+print r

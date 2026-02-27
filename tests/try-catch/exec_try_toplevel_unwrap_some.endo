@@ -3,4 +3,6 @@
 # description: Top-level ? unwraps Some value
 # expect: 42
 
-let x = (Some 42)?; print x
+let x = (Some 42)?
+
+print x

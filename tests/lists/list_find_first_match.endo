@@ -3,4 +3,6 @@
 # description: List find first match
 # expect: 2
 
-match find (fun x -> x % 2 == 0) [1;2;4;6] with | Some v -> print v | None -> print "none"
+match find (fun x -> x % 2 == 0) [1; 2; 4; 6] with
+| Some v -> print v
+| None -> print "none"

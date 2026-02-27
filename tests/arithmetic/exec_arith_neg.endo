@@ -3,4 +3,6 @@
 # description: Exec arith neg
 # expect: -10
 
-let x = 10; print (0 - x)
+let x = 10
+
+print (0 - x)

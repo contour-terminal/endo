@@ -4,4 +4,8 @@
 # mock-env: HOME=/home/test
 # expect: /home/test
 
-let opt = env "HOME"; let h = opt?; print h
+let opt = env "HOME"
+
+let h = opt?
+
+print h

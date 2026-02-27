@@ -3,5 +3,6 @@
 # description: Lambda return type annotation with str
 # expect: hello
 
-let f = fun (x: str) : str -> x
+let f = fun (x: string) : string -> x
+
 print (f "hello")

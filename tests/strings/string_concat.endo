@@ -5,5 +5,7 @@
 # expect:
 
 let a = "hello "
+
 let b = "world"
+
 println (a + b)

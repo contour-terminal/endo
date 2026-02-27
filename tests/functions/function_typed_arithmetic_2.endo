@@ -3,4 +3,6 @@
 # description: Integer arithmetic with typed params compiles as function
 # expect: 25
 
-let sq (x: int) = x * x; print (sq 5)
+let sq (x: int) = x * x
+
+print (sq 5)

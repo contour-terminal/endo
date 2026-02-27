@@ -3,7 +3,9 @@
 # description: head [1;2;3] → Some 1
 # expect: 1
 
-let r = match head [1;2;3] with
+let r =
+    match head [1; 2; 3] with
     | Some v -> v
     | None -> 0
+
 print r

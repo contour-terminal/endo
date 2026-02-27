@@ -3,4 +3,7 @@
 # description: Explicit 'in' syntax still works for recursive functions
 # expect: 0
 
-let r = let rec f (x: int) = if x <= 0 then 0 else f (x - 1) in f 5; print r
+let r = let rec f (x: int) = if x <= 0 then 0
+else f (x - 1) in f 5
+
+print r

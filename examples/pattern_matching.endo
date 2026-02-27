@@ -16,12 +16,14 @@ println (describe 42)
 let always_ten x =
     match x with
     | _ -> 10
+
 println (always_ten 999)
 
 // Binding the matched value
 let doubled x =
     match x with
     | n -> n * 2
+
 println (doubled 7)
 
 // Guards refine pattern matches with conditions
@@ -68,6 +70,7 @@ println (small_or_big 99)
 let echo x =
     match x with
     | n as val -> val
+
 println (echo 42)
 
 // Boolean patterns

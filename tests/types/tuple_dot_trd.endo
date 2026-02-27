@@ -4,4 +4,5 @@
 # expect: 30
 
 let t = (10, 20, 30)
+
 print (t.trd)

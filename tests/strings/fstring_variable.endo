@@ -3,4 +3,6 @@
 # description: Fstring variable
 # expect: Hello, User
 
-let name = "User"; print $"Hello, {name}"
+let name = "User"
+
+print $"Hello, {name}"

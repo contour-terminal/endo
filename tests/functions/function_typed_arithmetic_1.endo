@@ -3,4 +3,6 @@
 # description: Integer arithmetic with typed params compiles as function
 # expect: 7
 
-let add (x: int) (y: int) = x + y; print (add 3 4)
+let add (x: int) (y: int) = x + y
+
+print (add 3 4)

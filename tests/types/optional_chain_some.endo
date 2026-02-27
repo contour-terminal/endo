@@ -3,6 +3,8 @@
 # description: Optional chain some
 # expect: Alice
 
-type P = { name: str; age: int }
+type P = { name: string; age: int }
+
 let x = Some { name = "Alice"; age = 30 }
+
 print (x?.name ?| "none")

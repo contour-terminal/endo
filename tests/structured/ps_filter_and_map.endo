@@ -3,5 +3,8 @@
 # description: Pipeline composition: filter by pid then map to command
 # expect: [firefox; vim]
 
-let cmds = ps |> filter (fun p -> p.pid > 10) |> map (fun p -> p.command)
+let cmds =
+    ps |> filter (fun p -> p.pid > 10)
+        |> map (fun p -> p.command)
+
 print cmds

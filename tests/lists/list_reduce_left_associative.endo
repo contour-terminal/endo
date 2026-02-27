@@ -4,6 +4,7 @@
 # expect: 5
 
 let r = reduce (fun a b -> a - b) [10; 3; 2]
+
 match r with
-    | Some v -> print v
-    | None -> print "none"
+| Some v -> print v
+| None -> print "none"

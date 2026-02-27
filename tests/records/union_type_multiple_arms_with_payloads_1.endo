@@ -7,9 +7,13 @@ type Shape =
     | Circle of int
     | Rectangle of int * int
     | Point
+
 let s = Circle 5
-let r = match s with
+
+let r =
+    match s with
     | Circle r -> r * r
     | Rectangle (w, h) -> w * h
     | Point -> 0
+
 print r

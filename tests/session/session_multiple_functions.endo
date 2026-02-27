@@ -5,7 +5,9 @@
 # session-separator: ---
 
 let add x y = x + y
+
 # ---
 let mul x y = x * y
+
 # ---
 print (add (mul 3 4) 5)

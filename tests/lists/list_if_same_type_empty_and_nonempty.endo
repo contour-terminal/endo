@@ -3,4 +3,6 @@
 # description: if-then-else branches: empty list and non-empty list — should succeed (both List type)
 # mode: ir-only
 
-let x = if true then [] else [1; 2]
+let x =
+    if true then []
+    else [1; 2]

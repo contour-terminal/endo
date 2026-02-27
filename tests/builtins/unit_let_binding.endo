@@ -3,4 +3,6 @@
 # description: Unit let binding
 # expect: 0
 
-let x = (); print x
+let x = ()
+
+print x

@@ -3,4 +3,6 @@
 # description: Some with an expression
 # mode: ir-only
 
-let a = 5; let x = Some (a + 10)
+let a = 5
+
+let x = Some (a + 10)

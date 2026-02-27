@@ -3,4 +3,8 @@
 # description: Match result used with a function
 # mode: ir-only
 
-let double x = x * 2; let r = match 5 with | n -> double n
+let double x = x * 2
+
+let r =
+    match 5 with
+    | n -> double n

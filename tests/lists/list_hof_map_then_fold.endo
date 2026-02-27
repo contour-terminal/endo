@@ -3,4 +3,6 @@
 # description: List hof map then fold
 # expect: 14
 
-print ([1; 2; 3] |> map (fun x -> x * x) |> fold 0 (fun acc x -> acc + x))
+print ([1; 2; 3]
+    |> map (fun x -> x * x)
+    |> fold 0 (fun acc x -> acc + x))

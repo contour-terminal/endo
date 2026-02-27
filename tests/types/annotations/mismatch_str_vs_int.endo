@@ -3,4 +3,4 @@
 # description: Should fail IR generation
 # expect-error:
 
-let x: str = 42
+let x: string = 42

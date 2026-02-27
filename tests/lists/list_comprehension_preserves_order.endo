@@ -3,4 +3,4 @@
 # description: List comprehension preserves order
 # expect: [5; 4; 3; 2; 1]
 
-print [for x in [5;4;3;2;1] -> x]
+print [for x in [5; 4; 3; 2; 1] -> x]

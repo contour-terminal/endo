@@ -6,8 +6,10 @@ let rec factorial n acc =
     | 0 -> acc
     | _ -> factorial (n - 1) (n * acc)
 
-print "5! = "; println (factorial 5 1)
-print "10! = "; println (factorial 10 1)
+print "5! = "
+println (factorial 5 1)
+print "10! = "
+println (factorial 10 1)
 
 // Fibonacci with two accumulators
 let rec fib n a b =
@@ -15,8 +17,10 @@ let rec fib n a b =
     | 0 -> a
     | _ -> fib (n - 1) b (a + b)
 
-print "fib(10) = "; println (fib 10 0 1)
-print "fib(20) = "; println (fib 20 0 1)
+print "fib(10) = "
+println (fib 10 0 1)
+print "fib(20) = "
+println (fib 20 0 1)
 
 // Greatest common divisor (Euclidean algorithm)
 let rec gcd a b =
@@ -24,8 +28,10 @@ let rec gcd a b =
     | 0 -> a
     | _ -> gcd b (a % b)
 
-print "gcd(48, 18) = "; println (gcd 48 18)
-print "gcd(100, 75) = "; println (gcd 100 75)
+print "gcd(48, 18) = "
+println (gcd 48 18)
+print "gcd(100, 75) = "
+println (gcd 100 75)
 
 // Sum 1..n
 let rec sum n acc =
@@ -33,7 +39,8 @@ let rec sum n acc =
     | 0 -> acc
     | _ -> sum (n - 1) (acc + n)
 
-print "sum(1..100) = "; println (sum 100 0)
+print "sum(1..100) = "
+println (sum 100 0)
 
 // Countdown to zero (tests deep tail recursion)
 let rec countdown n =
@@ -41,7 +48,8 @@ let rec countdown n =
     | 0 -> 0
     | _ -> countdown (n - 1)
 
-print "countdown(1000) = "; println (countdown 1000)
+print "countdown(1000) = "
+println (countdown 1000)
 
 // Mutual recursion: `and` links two functions into a joint definition
 let rec isEven n =
@@ -53,17 +61,23 @@ and isOdd n =
     | 0 -> 0
     | _ -> isEven (n - 1)
 
-print "isEven(4) = "; println (isEven 4)
-print "isEven(7) = "; println (isEven 7)
-print "isOdd(5) = "; println (isOdd 5)
-print "isOdd(8) = "; println (isOdd 8)
+print "isEven(4) = "
+println (isEven 4)
+print "isEven(7) = "
+println (isEven 7)
+print "isOdd(5) = "
+println (isOdd 5)
+print "isOdd(8) = "
+println (isOdd 8)
 
 // Recursion with if-then-else instead of match
 let rec fact n acc =
     if n <= 1 then acc
     else fact (n - 1) (acc * n)
 
-print "fact(6) = "; println (fact 6 1)
+print "fact(6) = "
+println (fact 6 1)
 
 // Pipeline into a recursive function
-print "countdown via pipe = "; println (10 |> countdown)
+print "countdown via pipe = "
+println (10 |> countdown)

@@ -4,5 +4,10 @@
 # expect: 60
 
 let x = [10; 20; 30; 40; 50]
-let r = match x with | a :: b :: c :: _ -> a + b + c | _ -> 0
+
+let r =
+    match x with
+    | a :: b :: c :: _ -> a + b + c
+    | _ -> 0
+
 print r

@@ -3,4 +3,6 @@
 # description: ls with unquoted path piped into F# pipeline
 # expect: 3
 
-ls /tmp |> length |> print
+ls "/tmp"
+    |> length
+    |> print

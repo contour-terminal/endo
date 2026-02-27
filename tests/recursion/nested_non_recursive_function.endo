@@ -4,6 +4,7 @@
 # expect: 11
 
 let f (x: int) =
-  let g (y: int) = y + 1
-  print (g x)
+    let g (y: int) = y + 1
+    print (g x)
+
 f 10

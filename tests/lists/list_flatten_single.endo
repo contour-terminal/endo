@@ -3,4 +3,4 @@
 # description: List flatten single
 # expect: [1; 2; 3]
 
-print (flatten [[1;2;3]])
+print (flatten [[1; 2; 3]])

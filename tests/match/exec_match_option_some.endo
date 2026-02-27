@@ -2,4 +2,9 @@
 #
 # description: Exec match option some
 
-let opt = Some 42; let r = match opt with | Some x -> x | None -> 0
+let opt = Some 42
+
+let r =
+    match opt with
+    | Some x -> x
+    | None -> 0

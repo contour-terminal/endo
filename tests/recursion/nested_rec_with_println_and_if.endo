@@ -7,14 +7,11 @@
 # expect: done
 # expect: 
 
-
 let process (n: int) =
     let rec step (i: int) =
         println $"step {i}"
-        if i >= n then
-            println "done"
-        else
-            step (i + 1)
+        if i >= n then println "done"
+        else step (i + 1)
     step 1
-process 3
 
+process 3

@@ -3,4 +3,10 @@
 # description: Chained pipelines: value |> f |> g
 # mode: ir-only
 
-let double x = x * 2; let inc x = x + 1; let result = 5 |> double |> inc
+let double x = x * 2
+
+let inc x = x + 1
+
+let result =
+    5 |> double
+        |> inc

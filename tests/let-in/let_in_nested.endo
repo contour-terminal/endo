@@ -3,4 +3,8 @@
 # description: Nested let-in expressions
 # expect: 3
 
-let r = let a = 1 in let b = 2 in a + b; print r
+let r =
+    let a = 1 in
+        let b = 2 in a + b
+
+print r

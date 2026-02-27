@@ -3,4 +3,6 @@
 # description: Float function with type annotations compiles as function
 # expect: 7
 
-let double (x: float) = x * 2.0; print (double 3.5)
+let double (x: float) = x * 2.0
+
+print (double 3.5)

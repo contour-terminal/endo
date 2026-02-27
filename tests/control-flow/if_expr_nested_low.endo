@@ -3,4 +3,10 @@
 # description: If expr nested low
 # expect: 0
 
-let clamp x = if x < 0 then 0 else if x > 100 then 100 else x; print (clamp (0 - 5))
+let clamp x =
+    if x < 0 then
+        0
+    elif x > 100 then 100
+    else x
+
+print (clamp (0 - 5))

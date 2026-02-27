@@ -3,4 +3,6 @@
 # description: Let export bool
 # expect: true
 
-let export X = true; print X
+let export X = true
+
+print X

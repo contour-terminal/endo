@@ -3,4 +3,9 @@
 # description: Recursive function called multiple times
 # expect: 00
 
-let rec countdown (n: int) = if n <= 0 then 0 else countdown (n - 1); print (countdown 5); print (countdown 3)
+let rec countdown (n: int) =
+    if n <= 0 then 0
+    else countdown (n - 1)
+
+print (countdown 5)
+print (countdown 3)

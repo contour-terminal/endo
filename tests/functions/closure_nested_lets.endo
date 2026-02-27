@@ -3,4 +3,12 @@
 # description: Closure captures from nested let bindings
 # expect: 36
 
-let x = 5; let y = 10; let z = 20; let f (n: int) = x + y + z + n; print (f 1)
+let x = 5
+
+let y = 10
+
+let z = 20
+
+let f (n: int) = x + y + z + n
+
+print (f 1)

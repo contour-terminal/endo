@@ -3,4 +3,6 @@
 # description: String concat basic
 # expect: hello world
 
-let s = "hello" + " world"; print s
+let s = "hello" + " world"
+
+print s

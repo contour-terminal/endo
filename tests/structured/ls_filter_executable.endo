@@ -3,4 +3,5 @@
 # description: Filter files where mode is executable
 # expect: [docs; script.sh]
 
-print (ls |> filter (fun f -> isExecutable f.mode) |> map (fun f -> f.name))
+print (ls |> filter (fun f -> isExecutable f.mode)
+    |> map (fun f -> f.name))

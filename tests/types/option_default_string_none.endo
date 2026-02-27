@@ -3,4 +3,6 @@
 # description: Typed None with string default
 # expect: default
 
-let x: option<str> = None; print (x ?| "default")
+let x: option<string> = None
+
+print (x ?| "default")

@@ -3,7 +3,9 @@
 # description: List nth middle
 # expect: 20
 
-let r = match nth 1 [10; 20; 30] with
+let r =
+    match nth 1 [10; 20; 30] with
     | Some v -> v
     | None -> -1
+
 print r

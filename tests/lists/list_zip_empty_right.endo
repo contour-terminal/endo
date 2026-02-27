@@ -3,4 +3,4 @@
 # description: List zip empty right
 # expect: []
 
-print (zip [1;2;3] [])
+print (zip [1; 2; 3] [])

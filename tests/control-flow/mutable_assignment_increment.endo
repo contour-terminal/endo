@@ -3,4 +3,7 @@
 # description: Mutable assignment increment
 # expect: 1
 
-let mut counter = 0; counter <- counter + 1; print counter
+let mut counter = 0
+
+counter <- counter + 1
+print counter

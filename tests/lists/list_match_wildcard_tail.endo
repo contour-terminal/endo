@@ -3,4 +3,11 @@
 # description: Wildcard in tail position
 # expect: 1
 
-let x = [1; 2; 3]; let r = match x with | h :: _ -> h | [] -> 0; print r
+let x = [1; 2; 3]
+
+let r =
+    match x with
+    | h :: _ -> h
+    | [] -> 0
+
+print r

@@ -3,4 +3,7 @@
 # description: Match with when guard
 # mode: ir-only
 
-let r = match 10 with | n when n > 0 -> 1 | _ -> 0
+let r =
+    match 10 with
+    | n when n > 0 -> 1
+    | _ -> 0

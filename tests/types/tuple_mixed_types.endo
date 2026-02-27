@@ -3,4 +3,10 @@
 # description: Extract numeric element from mixed tuple via pattern matching
 # expect: 42
 
-let t = (42, "hello"); let r = match t with | (a, b) -> a; print r
+let t = (42, "hello")
+
+let r =
+    match t with
+    | (a, b) -> a
+
+print r

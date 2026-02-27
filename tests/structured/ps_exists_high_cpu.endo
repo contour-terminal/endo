@@ -4,4 +4,5 @@
 # expect: true
 
 let r = ps |> exists (fun p -> p.pid > 50)
+
 print r

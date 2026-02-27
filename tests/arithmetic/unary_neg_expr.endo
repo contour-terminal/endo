@@ -3,4 +3,6 @@
 # description: Unary neg expr
 # mode: ir-only
 
-let a = 5; let x = -a
+let a = 5
+
+let x = -a

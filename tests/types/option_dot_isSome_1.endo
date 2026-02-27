@@ -4,4 +4,5 @@
 # expect: true
 
 let x = Some 42
+
 print x.isSome

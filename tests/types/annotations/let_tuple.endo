@@ -4,4 +4,5 @@
 # mode: ir-only
 
 let p: (int, int) = (1, 2)
+
 print p

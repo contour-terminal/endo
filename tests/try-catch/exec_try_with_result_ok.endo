@@ -2,4 +2,6 @@
 #
 # description: ? operator unwraps Ok value
 
-let unwrap res = res?; let r = unwrap (Ok 100)
+let unwrap res = res?
+
+let r = unwrap (Ok 100)

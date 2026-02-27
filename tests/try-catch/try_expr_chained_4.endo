@@ -3,4 +3,6 @@
 # description: Test step by step
 # mode: ir-only
 
-let f x = x??; let r = f (Some 5)
+let f x = x??
+
+let r = f (Some 5)

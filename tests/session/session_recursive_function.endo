@@ -4,6 +4,10 @@
 # expect: 120
 # session-separator: ---
 
-let rec factorial n acc = match n with | 0 -> acc | _ -> factorial (n - 1) (n * acc)
+let rec factorial n acc =
+    match n with
+    | 0 -> acc
+    | _ -> factorial (n - 1) (n * acc)
+
 # ---
 print (factorial 5 1)

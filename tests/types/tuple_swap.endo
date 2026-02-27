@@ -3,4 +3,19 @@
 # description: Tuple swap
 # expect: 21
 
-let fst t = match t with | (a, _) -> a; let snd t = match t with | (_, b) -> b; let swap t = match t with | (a, b) -> (b, a); let s = swap (1, 2); print (fst s); print (snd s)
+let fst t =
+    match t with
+    | (a, _) -> a
+
+let snd t =
+    match t with
+    | (_, b) -> b
+
+let swap t =
+    match t with
+    | (a, b) -> (b, a)
+
+let s = swap (1, 2)
+
+print (fst s)
+print (snd s)

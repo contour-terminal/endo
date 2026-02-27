@@ -2,4 +2,8 @@
 #
 # description: Multiple ? operators in the same function, each on a function call
 
-let wrap x = Some x; let f x = (wrap (wrap x)?)?; let r = f 42
+let wrap x = Some x
+
+let f x = (wrap (wrap x)?)?
+
+let r = f 42

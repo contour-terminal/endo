@@ -3,4 +3,5 @@
 # description: Stmt if then else
 # expect: yes
 
-if 3 > 1 then print "yes" else print "no"
+if 3 > 1 then print "yes"
+else print "no"

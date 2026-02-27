@@ -3,4 +3,8 @@
 # description: Single-line if-then-else still works
 # expect: 1
 
-let x = if true then 1 else 2; print x
+let x =
+    if true then 1
+    else 2
+
+print x

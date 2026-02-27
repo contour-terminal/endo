@@ -3,4 +3,6 @@
 # description: If expr same type str
 # mode: ir-only
 
-let x = if true then "hello" else "world"
+let x =
+    if true then "hello"
+    else "world"

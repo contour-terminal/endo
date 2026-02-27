@@ -3,4 +3,6 @@
 # description: Let export list join
 # expect: /bin:/usr/bin
 
-let export X = ["/bin"; "/usr/bin"] |> join ":"; print X
+let export X = ["/bin"; "/usr/bin"] |> join ":"
+
+print X

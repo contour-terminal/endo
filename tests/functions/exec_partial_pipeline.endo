@@ -3,4 +3,6 @@
 # description: Partial application in pipeline: value |> func arg
 # expect: 15
 
-let add x y = x + y; print (10 |> add 5)
+let add x y = x + y
+
+print (10 |> add 5)

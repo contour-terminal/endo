@@ -3,4 +3,8 @@
 # description: Closure used in pipeline
 # expect: 15
 
-let n = 10; let add_n = fun x -> x + n; print (5 |> add_n)
+let n = 10
+
+let add_n = fun x -> x + n
+
+print (5 |> add_n)

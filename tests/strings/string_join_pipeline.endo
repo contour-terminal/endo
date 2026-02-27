@@ -3,4 +3,6 @@
 # description: String join pipeline
 # expect: a-b-c
 
-let r = ["a"; "b"; "c"] |> join "-"; print r
+let r = ["a"; "b"; "c"] |> join "-"
+
+print r

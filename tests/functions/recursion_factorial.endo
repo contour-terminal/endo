@@ -4,5 +4,8 @@
 # expect: 120
 # expect:
 
-let rec fact (n: int) (acc: int) = if n <= 1 then acc else fact (n - 1) (n * acc)
+let rec fact (n: int) (acc: int) =
+    if n <= 1 then acc
+    else fact (n - 1) (n * acc)
+
 println (fact 5 1)

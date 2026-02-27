@@ -3,4 +3,4 @@
 # description: List comprehension triple nested
 # expect: [111; 112; 121; 122; 211; 212; 221; 222]
 
-print [for x in [1;2] -> for y in [1;2] -> for z in [1;2] -> x * 100 + y * 10 + z]
+print [for x in [1; 2] -> for y in [1; 2] -> for z in [1; 2] -> x * 100 + y * 10 + z]

@@ -4,4 +4,9 @@
 # mock-env: EMPTY=
 # expect: exists
 
-let r = match env "EMPTY" with | Some v -> "exists" | None -> "none"; print r
+let r =
+    match env "EMPTY" with
+    | Some v -> "exists"
+    | None -> "none"
+
+print r

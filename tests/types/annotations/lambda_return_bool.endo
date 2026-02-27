@@ -4,4 +4,5 @@
 # expect: true
 
 let f = fun (x: int) : bool -> x > 0
+
 print (f 5)

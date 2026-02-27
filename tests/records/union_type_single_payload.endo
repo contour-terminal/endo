@@ -6,8 +6,12 @@
 type Shape =
     | Circle of int
     | Point
+
 let s = Circle 42
-let r = match s with
+
+let r =
+    match s with
     | Circle radius -> radius
     | Point -> 0
+
 print r

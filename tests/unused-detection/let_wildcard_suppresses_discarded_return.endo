@@ -4,4 +4,6 @@
 # mode: ir-only
 # unused-detection: true
 
-let f (x: int) : int = x + 1; let _ = f 5
+let f (x: int): int = x + 1
+
+let _ = f 5

@@ -4,7 +4,14 @@
 # expect: { x = 6; y = 8 }
 
 type Point = { x: int; y: int }
-let double n = match n with | 0 -> 0 | n -> n * 2
+
+let double n =
+    match n with
+    | 0 -> 0
+    | n -> n * 2
+
 let p1 = { x = 3; y = 4 }
+
 let p2 = { p1 with x = double (p1.x); y = double (p1.y) }
+
 print p2

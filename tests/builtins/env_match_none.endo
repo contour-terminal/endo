@@ -3,4 +3,9 @@
 # description: Env match none
 # expect: fallback
 
-let r = match env "MISSING" with | Some v -> "found" | None -> "fallback"; print r
+let r =
+    match env "MISSING" with
+    | Some v -> "found"
+    | None -> "fallback"
+
+print r

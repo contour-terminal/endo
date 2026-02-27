@@ -3,4 +3,10 @@
 # description: Tuple 3 elements
 # expect: 10
 
-let fst t = match t with | (a, _) -> a; let t = (10, 20, 30); print (fst t)
+let fst t =
+    match t with
+    | (a, _) -> a
+
+let t = (10, 20, 30)
+
+print (fst t)

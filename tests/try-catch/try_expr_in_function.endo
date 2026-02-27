@@ -3,4 +3,6 @@
 # description: Try expression inside a function (required for error propagation)
 # mode: ir-only
 
-let unwrap opt = opt?; let r = unwrap (Some 42)
+let unwrap opt = opt?
+
+let r = unwrap (Some 42)

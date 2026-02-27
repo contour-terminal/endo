@@ -3,4 +3,8 @@
 # description: try-finally at top level (no function context)
 # expect: cleanup42
 
-let r = try 42 finally print "cleanup"; print r
+let r =
+    try 42
+    finally print "cleanup"
+
+print r

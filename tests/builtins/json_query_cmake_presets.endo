@@ -6,5 +6,7 @@
 # expect:
 
 let json = "{\"configurePresets\":[{\"name\":\"clang-debug\"},{\"name\":\"clang-release\"}]}"
+
 let r = Json.query ".configurePresets[].name" json
+
 r |> each println

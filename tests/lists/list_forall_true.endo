@@ -3,4 +3,4 @@
 # description: List forall true
 # expect: true
 
-print (forall (fun x -> x > 0) [1;2;3])
+print (forall (fun x -> x > 0) [1; 2; 3])

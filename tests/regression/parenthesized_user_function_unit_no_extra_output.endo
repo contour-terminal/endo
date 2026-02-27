@@ -5,4 +5,5 @@
 # expect: 
 
 let greet name = println name
+
 (greet "hello")

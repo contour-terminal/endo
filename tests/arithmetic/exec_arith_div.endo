@@ -3,4 +3,6 @@
 # description: Exec arith div
 # expect: 5
 
-let x = 15 / 3; print x
+let x = 15 / 3
+
+print x

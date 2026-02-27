@@ -6,5 +6,7 @@
 # expect:
 
 let json = "{\"items\":[{\"name\":\"alpha\"},{\"name\":\"beta\"}]}"
+
 let r = Json.query ".items[].name" json
+
 r |> each println

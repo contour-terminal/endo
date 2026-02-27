@@ -3,4 +3,9 @@
 # description: Verify env IR generates successfully
 # mode: ir-only
 
-let x = env "HOME"; let r = match x with | Some v -> 1 | None -> 0
+let x = env "HOME"
+
+let r =
+    match x with
+    | Some v -> 1
+    | None -> 0

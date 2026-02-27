@@ -3,4 +3,6 @@
 # description: Variadic parameter collects extra args into a list
 # mode: ir-only
 
-let f ...xs = xs; f 1 2 3
+let f ...xs = xs
+
+f 1 2 3

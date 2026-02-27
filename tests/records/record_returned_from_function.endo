@@ -4,6 +4,9 @@
 # expect: 100
 
 type Point = { x: int; y: int }
+
 let make_point a b = { x = a; y = b }
+
 let p = make_point 100 200
+
 print p.x

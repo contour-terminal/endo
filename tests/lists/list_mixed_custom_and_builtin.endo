@@ -3,4 +3,8 @@
 # description: Mix of compiled function (string) + block-creating builtin (option<string>) is heterogeneous
 # expect-error: List elements must have the same type
 
-let f (x: string) : string = x; let r = [f "test"; env "HOME"]; print r
+let f (x: string): string = x
+
+let r = [f "test"; env "HOME"]
+
+print r

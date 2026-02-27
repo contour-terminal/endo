@@ -6,7 +6,10 @@
 type Shape =
     | Circle of int
     | Point
-let area s = match s with
+
+let area s =
+    match s with
     | Circle r -> r * r
     | Point -> 0
+
 print (area (Circle 5))

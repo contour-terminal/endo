@@ -4,4 +4,6 @@
 # expect: 42
 # expect-env: Y=42
 
-let export mut Y = 42; print Y
+let export mut Y = 42
+
+print Y

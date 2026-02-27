@@ -3,4 +3,9 @@
 # description: Simple recursive countdown to 0
 # expect: 0
 
-let rec countdown n = match n with | 0 -> 0 | _ -> countdown (n - 1); print (countdown 10)
+let rec countdown n =
+    match n with
+    | 0 -> 0
+    | _ -> countdown (n - 1)
+
+print (countdown 10)

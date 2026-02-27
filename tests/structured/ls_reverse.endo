@@ -3,4 +3,5 @@
 # description: reverse the list and map to names
 # expect: [script.sh; hello.txt; docs]
 
-print (ls |> reverse |> map (fun f -> f.name))
+print (ls |> reverse
+    |> map (fun f -> f.name))

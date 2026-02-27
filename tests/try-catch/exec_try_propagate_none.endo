@@ -2,4 +2,6 @@
 #
 # description: ? operator on None propagates the None - function early returns
 
-let unwrap opt = opt?; let r = unwrap None
+let unwrap opt = opt?
+
+let r = unwrap None

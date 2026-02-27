@@ -4,4 +4,5 @@
 # expect: 493
 
 let m = FileMode.fromBits 493
+
 print m.bits

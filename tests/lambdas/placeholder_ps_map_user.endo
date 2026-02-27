@@ -4,4 +4,5 @@
 # expect: [root; alice; bob]
 
 let users = ps |> map _.user
+
 print users

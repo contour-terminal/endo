@@ -3,4 +3,11 @@
 # description: Match fixed length list
 # expect: 30
 
-let x = [10; 20]; let r = match x with | [a; b] -> a + b | _ -> 0; print r
+let x = [10; 20]
+
+let r =
+    match x with
+    | [a; b] -> a + b
+    | _ -> 0
+
+print r

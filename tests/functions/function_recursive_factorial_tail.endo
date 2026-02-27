@@ -3,4 +3,8 @@
 # description: Tail-recursive factorial with accumulator
 # expect: 120
 
-let rec fact (n: int) (acc: int) = if n <= 1 then acc else fact (n - 1) (n * acc); print (fact 5 1)
+let rec fact (n: int) (acc: int) =
+    if n <= 1 then acc
+    else fact (n - 1) (n * acc)
+
+print (fact 5 1)

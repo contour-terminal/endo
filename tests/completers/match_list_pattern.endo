@@ -4,7 +4,10 @@
 # expect: yes
 
 let args = [1; 2]
-let r = match args with
-  | [1; _] -> "yes"
-  | _ -> "no"
+
+let r =
+    match args with
+    | [1; _] -> "yes"
+    | _ -> "no"
+
 print r

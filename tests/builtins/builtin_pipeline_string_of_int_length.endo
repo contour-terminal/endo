@@ -3,4 +3,8 @@
 # description: Builtin pipeline string of int length
 # expect: 2
 
-let r = 42 |> string_of_int |> string_length; print r
+let r =
+    42 |> string_of_int
+        |> string_length
+
+print r

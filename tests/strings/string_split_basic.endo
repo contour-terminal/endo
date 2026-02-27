@@ -3,4 +3,6 @@
 # description: String split basic
 # expect: 3
 
-let parts = split "," "a,b,c"; print (length parts)
+let parts = split "," "a,b,c"
+
+print (length parts)

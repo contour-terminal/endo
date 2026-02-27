@@ -3,4 +3,6 @@
 # description: Command substitution as pipeline source
 # expect: 2
 
-$(echo 42) |> string_length |> print
+$(echo 42)
+    |> string_length
+    |> print

@@ -3,5 +3,6 @@
 # description: TypeAnnotation let str
 # expect: hello
 
-let s: str = "hello"
+let s: string = "hello"
+
 print s

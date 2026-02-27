@@ -3,4 +3,6 @@
 # description: Exec print with let binding
 # expect: test
 
-let x = "test"; print x
+let x = "test"
+
+print x

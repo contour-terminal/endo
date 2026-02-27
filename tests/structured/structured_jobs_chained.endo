@@ -3,5 +3,8 @@
 # description: Structured jobs chained
 # expect: [sleep 100]
 
-let cmds = jobs |> filter (_.state == "Running") |> map _.command
+let cmds =
+    jobs |> filter (_.state == "Running")
+        |> map _.command
+
 print cmds

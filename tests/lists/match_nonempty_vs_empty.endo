@@ -3,4 +3,11 @@
 # description: Match nonempty vs empty
 # expect: 1
 
-let x = [1]; let r = match x with | [] -> 0 | h :: _ -> h; print r
+let x = [1]
+
+let r =
+    match x with
+    | [] -> 0
+    | h :: _ -> h
+
+print r

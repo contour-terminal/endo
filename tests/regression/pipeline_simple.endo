@@ -3,4 +3,6 @@
 # description: Simple pipeline: value |> function
 # mode: ir-only
 
-let double x = x * 2; let result = 5 |> double
+let double x = x * 2
+
+let result = 5 |> double

@@ -2,4 +2,6 @@
 #
 # description: ? operator on Error propagates the Error
 
-let unwrap res = res?; let r = unwrap (Error 404)
+let unwrap res = res?
+
+let r = unwrap (Error 404)

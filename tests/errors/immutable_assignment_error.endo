@@ -3,4 +3,6 @@
 # description: Assigning to an immutable variable should produce an error
 # expect-error: Cannot assign to immutable variable
 
-let x = 1; x <- 42
+let x = 1
+
+x <- 42

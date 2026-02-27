@@ -3,4 +3,6 @@
 # description: Exec arith pow
 # expect: 256
 
-let x = 2 ** 8; print x
+let x = 2 ** 8
+
+print x

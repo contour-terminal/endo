@@ -3,4 +3,10 @@
 # description: Extract second numeric element via pattern matching
 # expect: 99
 
-let t = ("world", 99); let r = match t with | (_, b) -> b; print r
+let t = ("world", 99)
+
+let r =
+    match t with
+    | (_, b) -> b
+
+print r

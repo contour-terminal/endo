@@ -3,4 +3,8 @@
 # description: Fstring concatenation
 # expect: ab
 
-let a = $"a"; let b = $"b"; print (a + b)
+let a = $"a"
+
+let b = $"b"
+
+print (a + b)

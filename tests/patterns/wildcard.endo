@@ -5,4 +5,4 @@
 # expect:
 
 match 99 with
-    | _ -> println "matched"
+| _ -> println "matched"

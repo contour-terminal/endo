@@ -3,4 +3,11 @@
 # description: Non-matching cons pattern falls through to empty pattern
 # expect: 99
 
-let x = []; let r = match x with | h :: t -> h | [] -> 99; print r
+let x = []
+
+let r =
+    match x with
+    | h :: t -> h
+    | [] -> 99
+
+print r

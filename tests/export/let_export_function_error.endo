@@ -3,4 +3,6 @@
 # description: let export with function parameters is disallowed
 # expect-error: 'let export' cannot be used with function definitions
 
-let export f x = x + 1; f 1
+let export f x = x + 1
+
+f 1

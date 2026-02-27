@@ -3,6 +3,7 @@
 # description: Boolean literal patterns in match
 # mode: ir-only
 
-let r = match true with
+let r =
+    match true with
     | true -> 1
     | false -> 0

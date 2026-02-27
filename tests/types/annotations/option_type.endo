@@ -4,4 +4,5 @@
 # mode: ir-only
 
 let x: option<int> = Some 42
+
 print x

@@ -4,4 +4,6 @@
 # expect: 1
 
 let x = rand 1 10
-print (if x >= 1 && x <= 10 then 1 else 0)
+
+print (if x >= 1 && x <= 10 then 1
+else 0)

@@ -3,5 +3,8 @@
 # description: Placeholder ps sortBy
 # expect: [1; 42; 100]
 
-let pids = ps |> sortBy _.pid |> map _.pid
+let pids =
+    ps |> sortBy _.pid
+        |> map _.pid
+
 print pids

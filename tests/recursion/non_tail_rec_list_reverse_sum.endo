@@ -3,4 +3,9 @@
 # description: Non-tail recursive list reversal-style sum: processes list in reverse order
 # expect: 15
 
-let rec rsum xs = match xs with | [] -> 0 | h :: t -> (rsum t) + h; print (rsum [1; 2; 3; 4; 5])
+let rec rsum xs =
+    match xs with
+    | [] -> 0
+    | h :: t -> (rsum t) + h
+
+print (rsum [1; 2; 3; 4; 5])

@@ -3,4 +3,8 @@
 # description: Pipeline with bound value
 # mode: ir-only
 
-let double x = x * 2; let a = 10; let result = a |> double
+let double x = x * 2
+
+let a = 10
+
+let result = a |> double

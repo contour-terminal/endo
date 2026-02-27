@@ -3,4 +3,8 @@
 # description: If expr recursive factorial
 # expect: 120
 
-let rec fact n acc = if n <= 1 then acc else fact (n - 1) (acc * n); print (fact 5 1)
+let rec fact n acc =
+    if n <= 1 then acc
+    else fact (n - 1) (acc * n)
+
+print (fact 5 1)

@@ -4,4 +4,6 @@
 # expect: world
 # expect: 
 
-let x = 'world' ; x |> println
+let x = 'world'
+
+x |> println

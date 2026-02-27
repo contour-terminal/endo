@@ -3,4 +3,6 @@
 # description: Top-level ? unwraps Ok value
 # expect: 100
 
-let x = (Ok 100)?; print x
+let x = (Ok 100)?
+
+print x

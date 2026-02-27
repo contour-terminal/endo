@@ -3,7 +3,9 @@
 # description: [42] |> head → Some 42
 # expect: 42
 
-let r = match [42] |> head with
+let r =
+    match [42] |> head with
     | Some v -> v
     | None -> 0
+
 print r

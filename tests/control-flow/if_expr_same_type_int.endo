@@ -3,4 +3,6 @@
 # description: If expr same type int
 # mode: ir-only
 
-let x = if true then 42 else 0
+let x =
+    if true then 42
+    else 0

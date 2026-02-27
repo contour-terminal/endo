@@ -1,6 +1,5 @@
+exec "/bin/echo" "hello" | exec "/bin/tr" "a-z" "A-Z" | exec "/bin/cat"
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: IR generation succeeds for three-stage pipeline
 # mode: ir-only
-
-exec "/bin/echo" "hello" | exec "/bin/tr" "a-z" "A-Z" | exec "/bin/cat"

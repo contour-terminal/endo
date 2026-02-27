@@ -4,5 +4,6 @@
 # expect: 42
 
 let mut x = 0
+
 if true then x <- 42
 print x

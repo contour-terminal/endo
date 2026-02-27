@@ -3,4 +3,15 @@
 # description: try-finally with ? error propagation: finally runs before error propagates
 # expect: cleanup99
 
-let inner x = Error 99; let outer x = try (inner x)? finally print "cleanup"; let r = match outer 0 with | Ok v -> v | Error e -> e; print r
+let inner x = Error 99
+
+let outer x =
+    try (inner x)?
+    finally print "cleanup"
+
+let r =
+    match outer 0 with
+    | Ok v -> v
+    | Error e -> e
+
+print r

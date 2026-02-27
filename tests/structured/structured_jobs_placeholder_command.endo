@@ -4,4 +4,5 @@
 # expect: [sleep 100; vim; make build]
 
 let cmds = jobs |> map _.command
+
 print cmds

@@ -3,4 +3,6 @@
 # description: Option variable should be tracked for scope-based release
 # mode: ir-only
 
-let x = Some 42; let y = x
+let x = Some 42
+
+let y = x

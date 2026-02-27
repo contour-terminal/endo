@@ -3,4 +3,6 @@
 # description: rand A B returns a value in [A, B]; test with a tight range
 # expect: 5
 
-let x = rand 5 5; print x
+let x = rand 5 5
+
+print x

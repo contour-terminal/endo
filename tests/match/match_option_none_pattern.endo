@@ -3,4 +3,9 @@
 # description: Match with None value
 # mode: ir-only
 
-let opt = None; let result = match opt with | Some x -> x | None -> -1
+let opt = None
+
+let result =
+    match opt with
+    | Some x -> x
+    | None -> -1

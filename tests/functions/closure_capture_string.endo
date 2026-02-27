@@ -3,4 +3,8 @@
 # description: Closure captures a string from enclosing scope (type annotation is `str` not `string`)
 # expect: hello world
 
-let prefix = "hello "; let greet (name: str) = prefix + name; print (greet "world")
+let prefix = "hello "
+
+let greet (name: string) = prefix + name
+
+print (greet "world")

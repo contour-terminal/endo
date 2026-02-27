@@ -4,4 +4,5 @@
 # expect: true
 
 let d = DateTime.now
+
 print (d.month >= 1 && d.month <= 12)

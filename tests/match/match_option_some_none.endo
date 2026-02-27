@@ -3,4 +3,9 @@
 # description: Match on Option with Some and None patterns
 # mode: ir-only
 
-let opt = Some 42; let result = match opt with | Some x -> x | None -> 0
+let opt = Some 42
+
+let result =
+    match opt with
+    | Some x -> x
+    | None -> 0

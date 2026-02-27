@@ -3,6 +3,8 @@
 # description: Optional chain none
 # expect: none
 
-type P = { name: str; age: int }
+type P = { name: string; age: int }
+
 let x = None
+
 print (x?.name ?| "none")

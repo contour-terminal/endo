@@ -6,9 +6,14 @@
 type Color =
     | Red
     | Green
+
 let c = Red
+
 let o = Some 42
-let r = match o with
+
+let r =
+    match o with
     | Some x -> x
     | None -> 0
+
 print r

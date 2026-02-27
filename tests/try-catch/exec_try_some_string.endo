@@ -3,4 +3,6 @@
 # description: Unwrapping Some with a string value should print the string, not a raw pointer
 # expect: hello
 
-let x = (Some "hello")?; print x
+let x = (Some "hello")?
+
+print x

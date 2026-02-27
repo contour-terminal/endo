@@ -4,5 +4,7 @@
 # expect-exit: 0
 
 let json = "{\"name\": \"hello\"}"
+
 let r = Json.query ".missing" json
+
 r |> each println

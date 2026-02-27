@@ -3,4 +3,6 @@
 # description: Exec arith mod
 # expect: 2
 
-let x = 17 % 5; print x
+let x = 17 % 5
+
+print x

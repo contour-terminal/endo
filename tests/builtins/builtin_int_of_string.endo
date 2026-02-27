@@ -3,4 +3,6 @@
 # description: Builtin int of string
 # expect: 10
 
-let n = int_of_string "7"; print (n + 3)
+let n = int_of_string "7"
+
+print (n + 3)

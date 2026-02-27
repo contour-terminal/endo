@@ -3,4 +3,6 @@
 # description: let export mut should work
 # expect: 10
 
-let export mut X = 10; print X
+let export mut X = 10
+
+print X

@@ -3,4 +3,5 @@
 # description: If expr string false
 # expect: World
 
-print (if false then "Hello" else "World")
+print (if false then "Hello"
+else "World")

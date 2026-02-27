@@ -3,4 +3,10 @@
 # description: elif keyword as sugar for else-if
 # expect: zero
 
-let sign x = if x > 0 then "pos" elif x == 0 then "zero" else "neg"; print (sign 0)
+let sign x =
+    if x > 0 then
+        "pos"
+    elif x == 0 then "zero"
+    else "neg"
+
+print (sign 0)

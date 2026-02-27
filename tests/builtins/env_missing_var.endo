@@ -3,4 +3,9 @@
 # description: env returns None when var is missing
 # expect: none
 
-let r = match env "NONEXISTENT" with | Some v -> "found" | None -> "none"; print r
+let r =
+    match env "NONEXISTENT" with
+    | Some v -> "found"
+    | None -> "none"
+
+print r

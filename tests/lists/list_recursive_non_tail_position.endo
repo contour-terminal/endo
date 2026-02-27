@@ -3,4 +3,9 @@
 # description: Non-tail recursive call (h + (sum t)) — works via UCALL function compilation.
 # expect: 3
 
-let rec sum xs = match xs with | [] -> 0 | h :: t -> h + (sum t); print (sum [1; 2])
+let rec sum xs =
+    match xs with
+    | [] -> 0
+    | h :: t -> h + (sum t)
+
+print (sum [1; 2])

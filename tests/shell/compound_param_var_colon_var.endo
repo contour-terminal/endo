@@ -7,4 +7,4 @@
 # expect: 35:127
 # expect: 
 
-echo $LINES:$COLUMNS
+echo "$LINES:$COLUMNS"

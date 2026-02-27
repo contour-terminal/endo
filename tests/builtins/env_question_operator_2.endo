@@ -3,4 +3,6 @@
 # description: ? operator on env result: unwraps Some
 # mode: ir-only
 
-let unwrap opt = opt?; let r = unwrap (env "HOME")
+let unwrap opt = opt?
+
+let r = unwrap (env "HOME")

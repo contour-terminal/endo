@@ -4,8 +4,8 @@
 # expect: 77
 
 let mut _x = 0
-let X
-    with get () = _x
-    and set (v) = _x <- v
+
+let X with get () = _x and set (v) = _x <- v
+
 X <- 77
 print X

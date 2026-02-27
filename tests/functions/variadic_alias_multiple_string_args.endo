@@ -4,4 +4,6 @@
 # expect: hello foo bar
 # expect: 
 
-let greet ...args = & echo hello ...args; greet "foo" "bar"
+let greet ...args = & echo hello ...args
+
+greet "foo" "bar"

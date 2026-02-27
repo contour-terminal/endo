@@ -3,4 +3,6 @@
 # description: Logical or true true
 # expect: true
 
-let x = true || true; print x
+let x = true || true
+
+print x

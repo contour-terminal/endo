@@ -3,4 +3,6 @@
 # description: Use bound variable in body expression
 # mode: ir-only
 
-let r = match 7 with | x -> x + x + x
+let r =
+    match 7 with
+    | x -> x + x + x

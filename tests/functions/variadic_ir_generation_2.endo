@@ -3,4 +3,6 @@
 # description: IR generation for various variadic + splat patterns
 # mode: ir-only
 
-let ll ...args = & echo -l ...args; ll "a" "b"
+let ll ...args = & echo -l ...args
+
+ll "a" "b"

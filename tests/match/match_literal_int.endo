@@ -3,4 +3,7 @@
 # description: Match with integer literal patterns
 # mode: ir-only
 
-let r = match 0 with | 0 -> 42 | _ -> 99
+let r =
+    match 0 with
+    | 0 -> 42
+    | _ -> 99

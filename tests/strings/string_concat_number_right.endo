@@ -3,4 +3,6 @@
 # description: String concat number right
 # expect: count: 42
 
-let s = "count: " + 42; print s
+let s = "count: " + 42
+
+print s

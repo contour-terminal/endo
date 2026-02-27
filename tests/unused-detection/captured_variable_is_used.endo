@@ -4,4 +4,8 @@
 # unused-detection: true
 # expect: 43
 
-let x = 42; let f (y: int) : int = x + y; print (f 1)
+let x = 42
+
+let f (y: int): int = x + y
+
+print (f 1)

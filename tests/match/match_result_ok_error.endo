@@ -3,4 +3,9 @@
 # description: Match on Result with Ok and Error patterns
 # mode: ir-only
 
-let res = Ok 100; let value = match res with | Ok n -> n | Error e -> 0
+let res = Ok 100
+
+let value =
+    match res with
+    | Ok n -> n
+    | Error e -> 0

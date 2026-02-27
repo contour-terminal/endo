@@ -3,4 +3,6 @@
 # description: Float in function
 # expect: 7
 
-let double x = x * 2.0; print (double 3.5)
+let double x = x * 2.0
+
+print (double 3.5)

@@ -3,4 +3,6 @@
 # description: Builtin not true
 # expect: false
 
-let x = not true; print x
+let x = not true
+
+print x

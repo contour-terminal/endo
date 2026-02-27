@@ -4,11 +4,13 @@
 # expect: 510
 
 let mut _a = 0
+
 let mut _b = 0
-let SetBoth with
-    set (v) =
-        _a <- v
-        _b <- v * 2
+
+let SetBoth with set (v) = 
+    _a <- v
+    _b <- v * 2
+
 SetBoth <- 5
 print _a
 print _b
