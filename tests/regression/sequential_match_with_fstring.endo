@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Two sequential match expressions followed by FString interpolation
+# expect: first
+# expect: second: 42
+# expect:
+
+match Ok 1 with
+| Ok _ -> println "first"
+| Error _ -> println "error"
+match Ok 42 with
+| Ok n -> println $"second: {n}"
+| Error _ -> println "error"

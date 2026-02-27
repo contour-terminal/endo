@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FString interpolation after match with wildcard payload
+# expect: first
+# expect: value: 42
+# expect:
+
+match Ok 1 with
+| Ok _ -> println "first"
+| Error _ -> println "error"
+
+let x = 42
+
+println $"value: {x}"

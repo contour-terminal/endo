@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FString interpolation with number extracted from Result pattern
+# expect: The answer is 42
+# expect:
+
+match Ok 42 with
+| Ok n -> println $"The answer is {n}"
+| Error e -> println e

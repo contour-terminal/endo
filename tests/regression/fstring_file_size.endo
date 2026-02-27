@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: FString with File.size result (number from Result pattern match)
+# mode: ir-only
+# expect: ok
+# expect: size: 5
+# expect:
+
+let path = "/tmp/endo_test_fstring_fsize.txt"
+
+match File.writeAll path "hello" with
+| Ok _ -> println "ok"
+| Error e -> println e
+match File.size path with
+| Ok n -> println $"size: {n}"
+| Error e -> println e
+
+let _ = File.delete path

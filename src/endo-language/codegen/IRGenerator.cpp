@@ -1779,15 +1779,10 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
     if (!result)
         return;
 
-    // Ensure result is a string
-    if (result->type() != CoreVM::LiteralType::String)
-    {
-        // Convert to string if needed
-        auto* callback = findCallback("expand.to_string(I)S");
-        if (callback)
-            result =
-                _builder.createCallFunction(_builder.getBuiltinFunction(*callback), { result }, "to_string");
-    }
+    // Use convertToString for robust type-aware conversion (handles Void/Object from pattern matching)
+    result = convertToString(result, "concat");
+    if (!result)
+        return;
 
     // Concatenate remaining parts
     for (size_t i = 1; i < node.parts.size(); ++i)
@@ -1796,14 +1791,9 @@ void IRGenerator::visit(ast::ConcatExpr const& node)
         if (!part)
             return;
 
-        // Ensure part is a string
-        if (part->type() != CoreVM::LiteralType::String)
-        {
-            auto* callback = findCallback("expand.to_string(I)S");
-            if (callback)
-                part = _builder.createCallFunction(
-                    _builder.getBuiltinFunction(*callback), { part }, "to_string");
-        }
+        part = convertToString(part, "concat");
+        if (!part)
+            return;
 
         result = _builder.createSAdd(result, part, "concat");
     }
@@ -3209,11 +3199,10 @@ CoreVM::Value* IRGenerator::convertToString(CoreVM::Value* value, std::string_vi
                 }
             }
         }
-        // Fallback: use runtime type dispatch to safely handle unknown Void-typed values
-        // (prevents raw pointer printing when a string pointer is mistyped as Number)
-        if (auto* callback = findCallback("object_to_string(I)S"))
-            return _builder.createCallFunction(
-                _builder.getBuiltinFunction(*callback), { value }, std::string(label) + ".v2s");
+        // Fallback for unannotated Void values: use N2S (number-to-string) which is safe
+        // for raw numbers extracted from ObjGetSlot. The previous object_to_string fallback
+        // would crash (SIGSEGV) when the Void value is actually a raw integer (e.g., file size
+        // extracted from a Result via pattern matching) rather than an object pointer.
         return _builder.createN2S(value, std::string(label) + ".n2s");
     }
     if (value->type() == CoreVM::LiteralType::String)
@@ -5627,7 +5616,16 @@ void IRGenerator::visit(ast::ExprStmt const& node)
 
     // Normal expression codegen (when not handled by variadic path above)
     if (!value)
+    {
+        // Set discard flag only when a match expression is directly at statement level,
+        // so the match merge block can skip the dead result load.
+        auto const isDirectMatch = dynamic_cast<ast::MatchExpr const*>(node.expr.get()) != nullptr;
+        if (isDirectMatch)
+            _discardResult = true;
         value = codegen(node.expr.get());
+        if (isDirectMatch)
+            _discardResult = false;
+    }
 
     _shellCommandCaptureMode = savedCaptureMode;
 
@@ -7112,7 +7110,12 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg && modeArg)
                     {
                         if (tryGenerateNativeCall("file_open", { pathArg, modeArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Number);
+                            annotateInnerObjectTypeId(_result, CoreVM::BuiltinTypeId::FileHandle);
                             return;
+                        }
                     }
                 }
                 // File.close fd → file_close(fd)
@@ -7135,7 +7138,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (fdArg)
                     {
                         if (tryGenerateNativeCall("file_read_line", { fdArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Option);
+                            annotateInnerType(_result, CoreVM::LiteralType::String);
                             return;
+                        }
                     }
                 }
                 // File.readAll path → file_read_all(path) → result<str, str>
@@ -7145,7 +7152,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg)
                     {
                         if (tryGenerateNativeCall("file_read_all", { pathArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::String);
                             return;
+                        }
                     }
                 }
                 // File.writeAll path content → file_write_all(path, content) → result<unit, str>
@@ -7156,7 +7167,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg && contentArg)
                     {
                         if (tryGenerateNativeCall("file_write_all", { pathArg, contentArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Number);
                             return;
+                        }
                     }
                 }
                 // File.appendAll path content → file_append_all(path, content) → result<unit, str>
@@ -7167,7 +7182,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg && contentArg)
                     {
                         if (tryGenerateNativeCall("file_append_all", { pathArg, contentArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Number);
                             return;
+                        }
                     }
                 }
                 // File.size path → file_size(path) → result<int, str>
@@ -7177,7 +7196,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg)
                     {
                         if (tryGenerateNativeCall("file_size", { pathArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Number);
                             return;
+                        }
                     }
                 }
                 // File.exists path → file_exists(path) → bool
@@ -7197,7 +7220,11 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                     if (pathArg)
                     {
                         if (tryGenerateNativeCall("file_delete", { pathArg }))
+                        {
+                            annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Result);
+                            annotateInnerType(_result, CoreVM::LiteralType::Number);
                             return;
+                        }
                     }
                 }
                 else
@@ -8202,6 +8229,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 {
     TRACE_SCOPE("visit(MatchExpr)");
 
+    // Save and reset discard flag — arm bodies always need their results
+    auto const discardResult = _discardResult;
+    _discardResult = false;
+
     // Evaluate the scrutinee (not in tail position)
     auto savedTailPos = _inTailPosition;
     _inTailPosition = false;
@@ -8409,8 +8440,10 @@ void IRGenerator::visit(ast::MatchExpr const& node)
         // Only load the scrutinee if there are actual bindings to store.
         // Dead loads leave values on the stack that accumulate in loops (e.g., let rec)
         // and corrupt stack state across basic blocks.
-        else if (auto* ctorPatCheck = dynamic_cast<pattern::ConstructorPattern const*>(arm.pattern.get());
-                 !preAllocatedBindings.empty() || (ctorPatCheck && ctorPatCheck->payload.has_value()))
+        // NB: Constructor patterns with wildcard payloads (Ok _, Error _) have
+        // preAllocatedBindings empty — do NOT enter this block for them, as the
+        // createLoad + createObjGetSlot would produce dead values on the stack.
+        else if (!preAllocatedBindings.empty())
         {
             CoreVM::Value* bindingSource = _builder.createLoad(scrutineeStorage, "scrutinee.reload");
 
@@ -8424,6 +8457,13 @@ void IRGenerator::visit(ast::MatchExpr const& node)
                     // Recover the inner object's type ID (e.g., List inside Some/Ok)
                     if (auto innerObjTypeId = getInnerObjectTypeId(scrutineeStorage))
                         annotateObjectTypeId(bindingSource, *innerObjTypeId);
+                    // Propagate inner type annotation from the scrutinee to the extracted payload.
+                    // For Ok/Some arms, this is the payload type (e.g., Number for File.size).
+                    // For Error arms, the payload is always a string.
+                    if (ctorPat->name == "Error")
+                        annotateInnerType(bindingSource, CoreVM::LiteralType::String);
+                    else if (auto innerType = getInnerType(scrutineeStorage))
+                        annotateInnerType(bindingSource, *innerType);
                 }
             }
 
@@ -8491,13 +8531,15 @@ void IRGenerator::visit(ast::MatchExpr const& node)
 
     // Set insert point to merge block and load the result
     _builder.setInsertPoint(mergeBlock);
-    if (resultStorage)
+    if (resultStorage && !discardResult)
     {
         _result = _builder.createLoad(resultStorage, "match.result.load");
 
         // Propagate all type annotations from storage to result
         propagateAllAnnotations(resultStorage, _result);
     }
+    else if (resultStorage)
+        _result = _builder.get(CoreVM::CoreNumber(0)); // Statement context — skip dead load
     else
         _result = nullptr; // All arms are tail calls — merge is unreachable
 }

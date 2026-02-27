@@ -14,7 +14,7 @@ match File.writeAll path "Hello from Endo!\nLine 2\nLine 3" with
 println (File.exists path)
 
 match File.size path with
-| Ok n -> println n
+| Ok n -> println $"The file size is {Size.fromBytes n}"
 | Error e -> println e
 
 # --- Read entire file ---

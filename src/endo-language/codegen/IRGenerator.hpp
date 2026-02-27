@@ -776,6 +776,10 @@ class IRGenerator final: public ast::Visitor
     /// Optional persistent state pointer for REPL sessions (not owned).
     FSharpPersistentState* _persistentState = nullptr;
 
+    /// When true, the current expression's result will be discarded (statement context).
+    /// Used by MatchExpr to skip emitting the dead result load in the merge block.
+    bool _discardResult = false;
+
     /// When true, report errors for unused let bindings, unused function parameters,
     /// and discarded return values. Disabled in REPL mode.
     bool _unusedValueDetection = false;

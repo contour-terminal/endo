@@ -710,18 +710,28 @@ void PatternIRGenerator::visit(pattern::ConstructorPattern const& pat)
         }
         else
         {
-            // Reload scrutinee from storage since we're in a new basic block.
-            CoreVM::Value* scrutineeReloaded = _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
+            // Wildcard payload (Ok _, Error _, Some _): skip extraction to avoid
+            // dead ObjGetSlot values on the stack that corrupt subsequent code.
+            if (dynamic_cast<pattern::WildcardPattern const*>(pat.payload->get()))
+            {
+                _builder.createBr(_successBlock);
+            }
+            else
+            {
+                // Reload scrutinee from storage since we're in a new basic block.
+                CoreVM::Value* scrutineeReloaded =
+                    _builder.createLoad(_scrutineeStorage, "scrutinee.reload");
 
-            // Extract payload from slot 0 using OGETSLOT
-            CoreVM::Value* payloadValue = _builder.createObjGetSlot(
-                scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
+                // Extract payload from slot 0 using OGETSLOT
+                CoreVM::Value* payloadValue = _builder.createObjGetSlot(
+                    scrutineeReloaded, _builder.get(CoreVM::CoreNumber(0)), "ctor.payload.value");
 
-            // Recursively match the payload pattern
-            CoreVM::Value* savedScrutinee = _scrutinee;
-            _scrutinee = payloadValue;
-            pat.payload->get()->accept(*this);
-            _scrutinee = savedScrutinee;
+                // Recursively match the payload pattern
+                CoreVM::Value* savedScrutinee = _scrutinee;
+                _scrutinee = payloadValue;
+                pat.payload->get()->accept(*this);
+                _scrutinee = savedScrutinee;
+            }
         }
     }
     else
