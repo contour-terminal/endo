@@ -124,7 +124,8 @@ TEST_CASE("agent.run.file_prompt")
         ofs << "Prompt from file";
     }
 
-    char const* args[] = { "--file", filePath.c_str() };
+    auto const filePathStr = filePath.string();
+    char const* args[] = { "--file", filePathStr.c_str() };
     auto result = parseAgentRunArgs(args);
     REQUIRE(result.has_value());
     CHECK(result->prompt == "Prompt from file");
@@ -142,7 +143,8 @@ TEST_CASE("agent.run.file_short_flag")
         ofs << "Short flag prompt";
     }
 
-    char const* args[] = { "-f", filePath.c_str() };
+    auto const filePathStr = filePath.string();
+    char const* args[] = { "-f", filePathStr.c_str() };
     auto result = parseAgentRunArgs(args);
     REQUIRE(result.has_value());
     CHECK(result->prompt == "Short flag prompt");
