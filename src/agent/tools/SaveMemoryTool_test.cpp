@@ -7,6 +7,7 @@
 #include <sstream>
 
 #include <agent/tools/SaveMemoryTool.hpp>
+#include <testing/EnvHelper.hpp>
 
 using namespace endo::agent;
 
@@ -23,13 +24,13 @@ class TempHome
         auto const* home = std::getenv("HOME");
         if (home)
             _previousHome = home;
-        setenv("HOME", _path.c_str(), 1);
+        endo::testing::setTestEnv("HOME", _path.string().c_str());
     }
 
     ~TempHome()
     {
         if (!_previousHome.empty())
-            setenv("HOME", _previousHome.c_str(), 1);
+            endo::testing::setTestEnv("HOME", _previousHome.c_str());
         std::filesystem::remove_all(_path);
     }
 

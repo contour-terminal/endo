@@ -7,8 +7,11 @@
 
 #include <agent/AgentConfig.hpp>
 #include <agent/providers/ProviderFactory.hpp>
+#include <testing/EnvHelper.hpp>
 
 using namespace endo::agent;
+using endo::testing::setTestEnv;
+using endo::testing::unsetTestEnv;
 
 // =============================================================================
 // ProviderFactory tests
@@ -17,9 +20,9 @@ using namespace endo::agent;
 TEST_CASE("agent.factory.no_keys_no_providers")
 {
     // Ensure no relevant API keys are set
-    ::unsetenv("ENDO_TEST_CLAUDE_KEY");
-    ::unsetenv("ENDO_TEST_OPENAI_KEY");
-    ::unsetenv("ENDO_TEST_GEMINI_KEY");
+    unsetTestEnv("ENDO_TEST_CLAUDE_KEY");
+    unsetTestEnv("ENDO_TEST_OPENAI_KEY");
+    unsetTestEnv("ENDO_TEST_GEMINI_KEY");
 
     auto config = AgentConfig {};
     config.claude.apiKeyEnv = "ENDO_TEST_CLAUDE_KEY";
@@ -38,7 +41,7 @@ TEST_CASE("agent.factory.no_keys_no_providers")
 
 TEST_CASE("agent.factory.single_provider")
 {
-    ::setenv("ENDO_TEST_FACTORY_KEY", "test-key-value", 1);
+    setTestEnv("ENDO_TEST_FACTORY_KEY", "test-key-value");
 
     auto config = AgentConfig {};
     config.activeProvider = "claude";
@@ -55,13 +58,13 @@ TEST_CASE("agent.factory.single_provider")
     CHECK(factory.activeProviderName() == "claude");
     CHECK(factory.authenticatedProviders().size() == 1);
 
-    ::unsetenv("ENDO_TEST_FACTORY_KEY");
+    unsetTestEnv("ENDO_TEST_FACTORY_KEY");
 }
 
 TEST_CASE("agent.factory.switch_provider")
 {
-    ::setenv("ENDO_TEST_SWITCH_CLAUDE", "key1", 1);
-    ::setenv("ENDO_TEST_SWITCH_GEMINI", "key2", 1);
+    setTestEnv("ENDO_TEST_SWITCH_CLAUDE", "key1");
+    setTestEnv("ENDO_TEST_SWITCH_GEMINI", "key2");
 
     auto config = AgentConfig {};
     config.activeProvider = "claude";
@@ -89,13 +92,13 @@ TEST_CASE("agent.factory.switch_provider")
     CHECK(factory.switchProvider("claude"));
     CHECK(factory.activeProviderName() == "claude");
 
-    ::unsetenv("ENDO_TEST_SWITCH_CLAUDE");
-    ::unsetenv("ENDO_TEST_SWITCH_GEMINI");
+    unsetTestEnv("ENDO_TEST_SWITCH_CLAUDE");
+    unsetTestEnv("ENDO_TEST_SWITCH_GEMINI");
 }
 
 TEST_CASE("agent.factory.fallback_when_active_not_available")
 {
-    ::setenv("ENDO_TEST_FALLBACK_KEY", "test-key", 1);
+    setTestEnv("ENDO_TEST_FALLBACK_KEY", "test-key");
 
     auto config = AgentConfig {};
     config.activeProvider = "claude"; // Claude key not available
@@ -113,12 +116,12 @@ TEST_CASE("agent.factory.fallback_when_active_not_available")
     CHECK(factory.activeProvider() != nullptr);
     CHECK(factory.activeProviderName() == "openai");
 
-    ::unsetenv("ENDO_TEST_FALLBACK_KEY");
+    unsetTestEnv("ENDO_TEST_FALLBACK_KEY");
 }
 
 TEST_CASE("agent.factory.openai_compat_no_key_required")
 {
-    ::unsetenv("ENDO_TEST_COMPAT_KEY");
+    unsetTestEnv("ENDO_TEST_COMPAT_KEY");
 
     auto config = AgentConfig {};
     config.activeProvider = "openai_compat";
