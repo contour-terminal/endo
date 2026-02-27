@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Single-element seq
+# expect: [42]
+# expect:
+
+let s = seq { yield 42 }
+
+s |> toList
+    |> println

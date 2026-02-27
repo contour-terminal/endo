@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: File.writeAll and File.readAll compile and dispatch correctly
+# mode: ir-only
+
+let path = "/tmp/endo_test_file_write_read.txt"
+
+let _ = File.writeAll path "Hello, World!"
+
+match File.readAll path with
+| Ok content -> println content
+| Error e -> println e
+
+let _ = File.delete path

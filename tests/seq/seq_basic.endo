@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Basic seq with yield
+# expect: [1; 2; 3]
+# expect:
+
+let s = seq {
+    yield 1
+    yield 2
+    yield 3
+}
+
+s |> toList
+    |> println

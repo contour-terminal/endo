@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: File.exists returns correct boolean
+# expect: true
+# expect: false
+# expect:
+
+let path = "/tmp/endo_test_file_exists.txt"
+
+let _ = File.writeAll path "test"
+
+println (File.exists path)
+
+let _ = File.delete path
+
+println (File.exists path)

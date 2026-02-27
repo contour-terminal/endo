@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Empty seq
+# expect: []
+# expect:
+
+let s = seq {}
+
+s |> toList
+    |> println

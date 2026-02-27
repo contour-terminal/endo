@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: File.size dispatches correctly
+# mode: ir-only
+
+let path = "/tmp/endo_test_file_size.txt"
+
+let _ = File.writeAll path "hello"
+
+match File.size path with
+| Ok n -> println n
+| Error e -> println e
+
+let _ = File.delete path

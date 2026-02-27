@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Lazy Sequences Example
+# Demonstrates the seq { yield ...; yield! ... } syntax for building lazy sequences.
+
+# --- Basic sequence ---
+let numbers = seq {
+    yield 1
+    yield 2
+    yield 3
+    yield 4
+    yield 5
+}
+
+println "First 3 numbers:"
+numbers
+    |> take 3
+    |> toList
+    |> each println
+
+# --- Infinite-style sequence with yield! ---
+# Build a longer sequence by splicing
+let more = seq {
+    yield 6
+    yield 7
+    yield 8
+}
+
+let all = seq {
+    yield 1
+    yield 2
+    yield 3
+    yield 4
+    yield 5
+    yield! more
+}
+
+println "All numbers:"
+all |> toList
+    |> each println
+
+# --- Pipeline operations on sequences ---
+println "Doubled and taken:"
+numbers
+    |> take 3
+    |> toList
+    |> map (fun x -> x * 2)
+    |> each println

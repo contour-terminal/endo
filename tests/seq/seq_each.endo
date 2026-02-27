@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Each over seq
+# expect: 10
+# expect: 20
+# expect: 30
+# expect:
+
+let s = seq {
+    yield 10
+    yield 20
+    yield 30
+}
+
+s |> each println

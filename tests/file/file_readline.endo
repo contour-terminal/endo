@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: File.open and File.readLine dispatch correctly
+# mode: ir-only
+
+let path = "/tmp/endo_test_file_readline.txt"
+
+let _ = File.writeAll path "line1\nline2\n"
+
+match File.open path "r" with
+| Ok fd ->
+    match File.readLine fd with
+    | Some line -> println line
+    | None -> println "unexpected EOF"
+    let _ = File.close fd
+| Error e -> println e
+
+let _ = File.delete path

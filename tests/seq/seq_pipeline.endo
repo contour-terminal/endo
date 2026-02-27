@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Seq with pipeline operations
+# expect: [2; 4; 6]
+# expect:
+
+let s = seq {
+    yield 1
+    yield 2
+    yield 3
+}
+
+s |> toList
+    |> map (fun x -> x * 2)
+    |> println

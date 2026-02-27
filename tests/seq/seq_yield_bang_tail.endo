@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: yield! at tail splices another seq
+# expect: [1; 2; 3; 4]
+# expect:
+
+let rest = seq { yield 3; yield 4 }
+
+let s = seq {
+    yield 1
+    yield 2
+    yield! rest
+}
+
+s |> toList
+    |> println

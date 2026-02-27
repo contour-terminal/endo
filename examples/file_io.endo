@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# File I/O Example
+# Demonstrates the File module for reading and writing files.
+
+let path = "/tmp/endo_example_file_io.txt"
+
+# --- Write a file ---
+match File.writeAll path "Hello from Endo!\nLine 2\nLine 3" with
+| Ok _ -> println "File written successfully"
+| Error e -> println e
+
+# --- Check existence and size ---
+println (File.exists path)
+
+match File.size path with
+| Ok n -> println n
+| Error e -> println e
+
+# --- Read entire file ---
+match File.readAll path with
+| Ok content -> println content
+| Error e -> println e
+
+# --- Read line by line ---
+match File.open path "r" with
+| Ok fd ->
+    let rec readLines () =
+        match File.readLine fd with
+        | Some line ->
+            println line
+            readLines ()
+        | None ->
+            let _ = File.close fd
+    readLines ()
+| Error e -> println e
+
+# --- Cleanup ---
+let _ = File.delete path
