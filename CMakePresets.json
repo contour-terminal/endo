@@ -17,18 +17,20 @@
             }
         },
         {
-            "name": "linux-base",
+            "name": "unix-base",
             "hidden": true,
             "inherits": "base",
             "condition": {
-                "type": "equals",
-                "lhs": "${hostSystemName}",
-                "rhs": "Linux"
+                "type": "anyOf",
+                "conditions": [
+                    { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" },
+                    { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+                ]
             }
         },
         {
             "name": "clang-debug",
-            "inherits": "linux-base",
+            "inherits": "unix-base",
             "displayName": "Clang Debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -41,7 +43,7 @@
         },
         {
             "name": "clang-release",
-            "inherits": "linux-base",
+            "inherits": "unix-base",
             "displayName": "Clang Release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
@@ -70,7 +72,7 @@
         },
         {
             "name": "clang-coverage",
-            "inherits": "linux-base",
+            "inherits": "unix-base",
             "displayName": "Clang Coverage",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -81,7 +83,7 @@
         },
         {
             "name": "clang-tsan",
-            "inherits": "linux-base",
+            "inherits": "unix-base",
             "displayName": "Clang ThreadSanitizer",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",
@@ -92,7 +94,7 @@
         },
         {
             "name": "gcc-debug",
-            "inherits": "linux-base",
+            "inherits": "unix-base",
             "displayName": "GCC Debug",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Debug",

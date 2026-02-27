@@ -171,8 +171,10 @@ find_package(Threads REQUIRED)
 if(WIN32)
     target_link_libraries(endo-shell PUBLIC endo vtparser tui psapi)
 else()
-    # util for pty.h on POSIX systems
-    target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads util)
+    target_link_libraries(endo-shell PUBLIC endo vtparser tui Threads::Threads)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_libraries(endo-shell PUBLIC util) # forkpty() on Linux
+    endif()
 endif()
 
 target_link_libraries(endo-shell PUBLIC endo-platform yaml-cpp::yaml-cpp nlohmann_json::nlohmann_json endo-http endo-agent)
