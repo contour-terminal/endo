@@ -94,7 +94,7 @@ namespace
         EditAction action;
     };
 
-    constexpr std::array<ActionNameMapping, 36> actionNameMappings = { {
+    constexpr std::array<ActionNameMapping, 37> actionNameMappings = { {
         // Movement
         { "move-forward-char", EditAction::MoveForwardChar },
         { "move-backward-char", EditAction::MoveBackwardChar },
@@ -139,6 +139,8 @@ namespace
         // History
         { "history-prev", EditAction::HistoryPrev },
         { "history-next", EditAction::HistoryNext },
+        // Command Palette
+        { "command-palette", EditAction::CommandPalette },
     } };
 } // namespace
 
@@ -378,6 +380,9 @@ KeyBindings KeyBindings::defaults()
     bindings.bind(K::fromKey(KeyCode::Tab, M::Shift), A::CycleAgentMode);
     bindings.bind(K::fromChar('/', M::Ctrl), A::CycleThinkingMode);
     bindings.bind(K::fromChar('.', M::Ctrl), A::CycleModel);
+
+    // === Command Palette ===
+    bindings.bind(K::fromChar('p', M::Ctrl | M::Shift), A::CommandPalette);
 
     // === Kill Ring ===
     // Note: Yank has no default binding (was Ctrl+Y, now Redo)

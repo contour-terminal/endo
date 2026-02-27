@@ -120,6 +120,11 @@ void MockTerminalOutput::requestCursorPosition()
     // No-op — mock does not respond to terminal queries.
 }
 
+void MockTerminalOutput::requestDecMode(int /*mode*/)
+{
+    // No-op — mock does not respond to terminal queries.
+}
+
 void MockTerminalOutput::clearLine()
 {
     // No-op on mock canvas — just semantic tracking.

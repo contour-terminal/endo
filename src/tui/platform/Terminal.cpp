@@ -75,6 +75,9 @@ auto Terminal::initialize() -> VoidResult
     _cellPixelWidth = cellWidth;
     _cellPixelHeight = cellHeight;
 
+    // Detect HUD overlay support (DEC mode 2035, Contour terminal)
+    _hudSupported = queryDecMode(2035);
+
     _initialized = true;
     return {};
 }
@@ -251,6 +254,57 @@ auto Terminal::queryCellSize() -> std::pair<int, int>
     }
 
     return { 0, 0 };
+}
+
+auto Terminal::queryDecMode(int mode) -> bool
+{
+    if (_mockMode)
+        return false;
+
+    // Send DECRQM: CSI ? mode $ p
+    // Response: CSI ? mode ; status $ y (DecModeReport)
+    // Status 1 = set, 2 = reset (both mean the mode is recognized/supported)
+    _output->requestDecMode(mode);
+    _output->flush();
+
+    auto constexpr totalTimeout = std::chrono::milliseconds(100);
+    auto const deadline = std::chrono::steady_clock::now() + totalTimeout;
+
+    while (true)
+    {
+        auto const now = std::chrono::steady_clock::now();
+        if (now >= deadline)
+            break;
+
+        auto const remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        auto events = _input.poll(static_cast<int>(remaining));
+
+        if (events.empty())
+            break;
+
+        for (auto const& event: events)
+        {
+            if (auto const* dmr = std::get_if<DecModeReport>(&event))
+            {
+                if (dmr->mode == mode)
+                    return dmr->status == 1 || dmr->status == 2;
+            }
+
+            // Handle ColorSchemeReport inline so it isn't dropped
+            if (auto const* cs = std::get_if<ColorSchemeReport>(&event))
+            {
+                auto const scheme = (cs->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
+                handleColorSchemeReport(scheme);
+            }
+        }
+    }
+
+    return false;
+}
+
+auto Terminal::hudSupported() const noexcept -> bool
+{
+    return _hudSupported;
 }
 
 auto Terminal::cellPixelWidth() const noexcept -> int

@@ -460,6 +460,7 @@ EventResult InputField::onEvent(InputEvent const& event)
         case InputFieldAction::CycleAgentMode:
         case InputFieldAction::CycleThinkingMode:
         case InputFieldAction::CycleModel:
+        case InputFieldAction::CommandPalette:
             // These need special handling by the parent
             return EventResult::Handled;
         case InputFieldAction::None: return EventResult::Ignored;
@@ -789,6 +790,8 @@ auto InputField::executeAction(EditAction action) -> InputFieldAction
         case EditAction::CycleThinkingMode: _lastWasKill = false; return InputFieldAction::CycleThinkingMode;
 
         case EditAction::CycleModel: _lastWasKill = false; return InputFieldAction::CycleModel;
+
+        case EditAction::CommandPalette: _lastWasKill = false; return InputFieldAction::CommandPalette;
 
         // History
         case EditAction::HistoryPrev:

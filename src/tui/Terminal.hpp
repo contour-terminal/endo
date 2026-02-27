@@ -114,6 +114,12 @@ class Terminal
     /// @brief Returns whether the terminal window currently has focus.
     [[nodiscard]] auto isFocused() const noexcept -> bool;
 
+    /// @brief Returns whether the terminal supports HUD overlay mode (DEC mode 2035).
+    ///
+    /// When supported, the command palette can render on a transparent HUD layer
+    /// above the primary screen content. When not supported, falls back to inline rendering.
+    [[nodiscard]] auto hudSupported() const noexcept -> bool;
+
     /// @brief Registers a callback for focus change notifications (DECSET 1004).
     ///
     /// The callback is invoked when the terminal reports focus gained or lost.
@@ -128,7 +134,8 @@ class Terminal
     bool _mockMode = false; ///< True when using a mock output (skip input/signal init).
     ColorScheme _colorScheme = ColorScheme::Unknown;
     std::vector<std::function<void(ColorScheme)>> _colorSchemeCallbacks;
-    bool _focused = true; ///< Whether the terminal window has focus (assume focused on startup).
+    bool _focused = true;          ///< Whether the terminal window has focus (assume focused on startup).
+    bool _hudSupported = false;    ///< Whether terminal supports HUD overlay (DEC mode 2035).
     std::vector<std::function<void(bool)>> _focusCallbacks;
     int _cellPixelWidth = 0;  ///< Cached cell width in pixels (0 if unknown).
     int _cellPixelHeight = 0; ///< Cached cell height in pixels (0 if unknown).
@@ -136,6 +143,11 @@ class Terminal
     /// @brief Called internally when a focus event is received.
     /// @param focused True if terminal gained focus, false if lost.
     void handleFocusEvent(bool focused);
+
+    /// @brief Queries a DEC private mode via DECRQM and waits for the response.
+    /// @param mode The DEC private mode number to query.
+    /// @return True if the mode is recognized (status 1 or 2), false otherwise.
+    [[nodiscard]] auto queryDecMode(int mode) -> bool;
 };
 
 } // namespace tui

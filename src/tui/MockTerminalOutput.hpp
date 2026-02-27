@@ -33,6 +33,7 @@ class MockTerminalOutput: public TerminalOutput
     void clearToEndOfDisplay() override;
     void requestCellSize() override;
     void requestCursorPosition() override;
+    void requestDecMode(int mode) override;
     void clearLine() override;
     void clearToEndOfLine() override;
     void clearToStartOfLine() override;

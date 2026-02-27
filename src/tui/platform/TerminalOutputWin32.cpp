@@ -329,6 +329,11 @@ void TerminalOutput::requestCursorPosition()
     _buffer += "\033[6n";
 }
 
+void TerminalOutput::requestDecMode(int mode)
+{
+    _buffer += std::format("\033[?{}$p", mode);
+}
+
 void TerminalOutput::clearLine()
 {
     _buffer += "\033[2K";

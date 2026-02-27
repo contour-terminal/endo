@@ -45,6 +45,7 @@ enum class InputFieldAction : std::uint8_t
     CycleAgentMode,    ///< User toggled agent sub-mode (Shift+Tab by default).
     CycleThinkingMode, ///< User toggled thinking mode (Ctrl+/ by default).
     CycleModel,        ///< User cycled through models (Ctrl+. by default).
+    CommandPalette,    ///< User triggered the command palette (Ctrl+Shift+P by default).
     None,              ///< Event not consumed by InputField.
 };
 

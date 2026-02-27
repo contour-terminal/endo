@@ -170,6 +170,12 @@ class TerminalOutput
     /// @brief Sends a request for cursor position (CSI 6 n).
     virtual void requestCursorPosition();
 
+    /// @brief Sends a DEC Private Mode request (DECRQM): CSI ? mode $ p.
+    ///
+    /// The terminal responds with CSI ? mode ; status $ y (DecModeReport).
+    /// @param mode The DEC private mode number to query.
+    virtual void requestDecMode(int mode);
+
     /// @brief Clears the entire current line.
     virtual void clearLine();
 

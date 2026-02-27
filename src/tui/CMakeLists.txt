@@ -3,6 +3,8 @@ add_library(tui
     Buffer.cpp
     Canvas.cpp
     Cell.cpp
+    CommandPalettePopup.cpp
+    CommandRegistry.cpp
     Component.cpp
     CompletionPopup.cpp
     Dialog.cpp
@@ -69,6 +71,8 @@ set_source_files_properties(StbImageImpl.cpp PROPERTIES COMPILE_OPTIONS "-fno-sa
 # Tests
 add_executable(test-tui
     test_main.cpp
+    CommandPalettePopup_test.cpp
+    CommandRegistry_test.cpp
     GenericSyntaxHighlighter_test.cpp
     InputField_test.cpp
     KeyBindings_test.cpp

@@ -71,6 +71,9 @@ enum class EditAction : std::uint8_t
     // === History ===
     HistoryPrev, ///< Navigate to previous history entry
     HistoryNext, ///< Navigate to next history entry
+
+    // === Command Palette ===
+    CommandPalette, ///< Open the command palette (Ctrl+Shift+P)
 };
 
 } // namespace tui
