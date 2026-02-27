@@ -160,23 +160,21 @@ else()
 endif()
 
 # ==============================================================================
-# nlohmann/json - JSON library for LSP protocol
+# nlohmann/json - JSON library (used by LSP protocol and endo builtins)
 # ==============================================================================
-if(NOT EMSCRIPTEN)
-    find_package(nlohmann_json 3.11.0 QUIET)
-    if(TARGET nlohmann_json::nlohmann_json)
-        set(THIRDPARTY_BUILTIN_nlohmann_json "system package")
-    else()
-        CPMAddPackage(
-            NAME nlohmann_json
-            VERSION 3.11.3
-            GITHUB_REPOSITORY nlohmann/json
-            OPTIONS
-                "JSON_BuildTests OFF"
-            EXCLUDE_FROM_ALL YES
-        )
-        set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
-    endif()
+find_package(nlohmann_json 3.11.0 QUIET)
+if(TARGET nlohmann_json::nlohmann_json)
+    set(THIRDPARTY_BUILTIN_nlohmann_json "system package")
+else()
+    CPMAddPackage(
+        NAME nlohmann_json
+        VERSION 3.11.3
+        GITHUB_REPOSITORY nlohmann/json
+        OPTIONS
+            "JSON_BuildTests OFF"
+        EXCLUDE_FROM_ALL YES
+    )
+    set(THIRDPARTY_BUILTIN_nlohmann_json "CPM (v3.11.3)")
 endif()
 
 # ==============================================================================
