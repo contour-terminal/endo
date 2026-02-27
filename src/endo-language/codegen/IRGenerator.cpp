@@ -5620,7 +5620,7 @@ void IRGenerator::visit(ast::ExprStmt const& node)
         // Set discard flag only when a match expression is directly at statement level,
         // so the match merge block can skip the dead result load.
         auto const isDirectMatch = dynamic_cast<ast::MatchExpr const*>(node.expr.get()) != nullptr;
-        if (isDirectMatch)
+        if (isDirectMatch && !node.displayResult)
             _discardResult = true;
         value = codegen(node.expr.get());
         if (isDirectMatch)
@@ -8458,11 +8458,8 @@ void IRGenerator::visit(ast::MatchExpr const& node)
                     if (auto innerObjTypeId = getInnerObjectTypeId(scrutineeStorage))
                         annotateObjectTypeId(bindingSource, *innerObjTypeId);
                     // Propagate inner type annotation from the scrutinee to the extracted payload.
-                    // For Ok/Some arms, this is the payload type (e.g., Number for File.size).
-                    // For Error arms, the payload is always a string.
-                    if (ctorPat->name == "Error")
-                        annotateInnerType(bindingSource, CoreVM::LiteralType::String);
-                    else if (auto innerType = getInnerType(scrutineeStorage))
+                    // Do not hardcode Error as String — Error payloads can be any type (e.g., Error 99).
+                    if (auto innerType = getInnerType(scrutineeStorage))
                         annotateInnerType(bindingSource, *innerType);
                 }
             }
