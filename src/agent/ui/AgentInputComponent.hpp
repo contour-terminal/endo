@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <tui/CommandPalettePopup.hpp>
+#include <tui/CommandRegistry.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
@@ -47,6 +49,7 @@ class AgentInputComponent: public tui::Component
         CycleThinkingMode, ///< User cycled thinking mode (off/normal/extended).
         CycleModel,        ///< User cycled through available models.
         ClearScreen,       ///< User requested screen clear (Ctrl+L).
+        CommandPalette,    ///< User pressed Ctrl+Shift+P to open the command palette.
     };
 
     AgentInputComponent();
@@ -139,6 +142,13 @@ class AgentInputComponent: public tui::Component
     /// @brief Returns the CompletionPopup for direct access.
     [[nodiscard]] tui::CompletionPopup& completionPopup() noexcept { return _completionPopup; }
 
+    /// @brief Returns the CommandPalettePopup for direct access.
+    [[nodiscard]] tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
+
+    /// @brief Sets the command registry used by the command palette.
+    /// @param registry Pointer to the registry (caller owns, must outlive this component).
+    void setCommandRegistry(tui::CommandRegistry* registry) { _commandRegistry = registry; }
+
     /// @brief Flushes deferred completion popup and ghost text updates.
     /// Call once per event batch, before drawing.
     void flushDeferredUpdates();
@@ -209,8 +219,10 @@ class AgentInputComponent: public tui::Component
 
   private:
     tui::InputField _inputField;
-    tui::CompletionPopup _completionPopup; ///< Popup widget for slash command completion.
-    tui::Completer _completer;             ///< Orchestrates completion providers.
+    tui::CompletionPopup _completionPopup;     ///< Popup widget for slash command completion.
+    tui::CommandPalettePopup _commandPalette;  ///< Command palette popup.
+    tui::CommandRegistry* _commandRegistry = nullptr; ///< External command registry.
+    tui::Completer _completer;                 ///< Orchestrates completion providers.
     bool _completionPopupDirty = false;    ///< Completion popup needs re-filtering.
 
     std::string _providerName;                      ///< Active provider name for header display.

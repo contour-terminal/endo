@@ -16,6 +16,7 @@
 #include <endo-language/parser/Parser.hpp>
 
 #include <tui/Canvas.hpp>
+#include <tui/CommandRegistry.hpp>
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/ImageLoader.hpp>
 #include <tui/MarkdownRenderer.hpp>
@@ -820,6 +821,28 @@ int Shell::run()
 
     loadInitScript();
     loadCompleters();
+
+    // Set up command palette registry for shell mode
+    auto shellCommandRegistry = tui::CommandRegistry {};
+    shellCommandRegistry.add({
+        .id = "shell.enter_agent_mode",
+        .label = "Enter Agent Mode",
+        .description = "Switch to the AI agent chat interface",
+        .category = "Mode",
+        .keybinding = "#",
+        .context = tui::CommandContext::Shell,
+        .action = [] {}, // Handled via Action::AgentMode
+    });
+    shellCommandRegistry.add({
+        .id = "shell.clear_screen",
+        .label = "Clear Screen",
+        .description = "Clear the terminal screen",
+        .category = "View",
+        .keybinding = "Ctrl+L",
+        .context = tui::CommandContext::Both,
+        .action = [] {}, // Handled via Action::ClearScreen
+    });
+    prompt.setCommandRegistry(&shellCommandRegistry);
 
     // Ensure terminal is initialized (raw mode, ECHO off) before sending
     // any terminal queries that produce response bytes.
@@ -3251,6 +3274,55 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     inputComponent.addCompletionProvider(std::move(filePathProvider));
     inputComponent.addCompletionProvider(std::move(historyProvider));
 
+    // Set up command palette registry for agent mode
+    auto agentCommandRegistry = tui::CommandRegistry {};
+    agentCommandRegistry.add({
+        .id = "agent.toggle_plan_mode",
+        .label = "Toggle Plan Mode",
+        .description = "Switch between plan and execute mode",
+        .category = "Mode",
+        .keybinding = "S-Tab",
+        .context = tui::CommandContext::Agent,
+        .action = [] {}, // Handled via Action::CycleMode
+    });
+    agentCommandRegistry.add({
+        .id = "agent.cycle_thinking",
+        .label = "Cycle Thinking Mode",
+        .description = "Cycle through off/normal/extended thinking",
+        .category = "Mode",
+        .keybinding = "Ctrl+/",
+        .context = tui::CommandContext::Agent,
+        .action = [] {}, // Handled via Action::CycleThinkingMode
+    });
+    agentCommandRegistry.add({
+        .id = "agent.cycle_model",
+        .label = "Switch Model",
+        .description = "Cycle through available AI models",
+        .category = "Provider",
+        .keybinding = "Ctrl+.",
+        .context = tui::CommandContext::Agent,
+        .action = [] {}, // Handled via Action::CycleModel
+    });
+    agentCommandRegistry.add({
+        .id = "agent.exit",
+        .label = "Exit Agent Mode",
+        .description = "Return to shell prompt",
+        .category = "Mode",
+        .keybinding = "Esc",
+        .context = tui::CommandContext::Agent,
+        .action = [] {}, // Handled via Action::Abort
+    });
+    agentCommandRegistry.add({
+        .id = "agent.clear_screen",
+        .label = "Clear Screen",
+        .description = "Clear the terminal screen",
+        .category = "View",
+        .keybinding = "Ctrl+L",
+        .context = tui::CommandContext::Both,
+        .action = [] {}, // Handled via Action::ClearScreen
+    });
+    inputComponent.setCommandRegistry(&agentCommandRegistry);
+
     for (auto const& entry: historyProviderPtr->entries())
         inputComponent.inputField().addHistory(entry);
 
@@ -4493,6 +4565,10 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                     needsRedraw = true;
                     break;
                 }
+                case agent::AgentInputComponent::Action::CommandPalette:
+                    // Palette is shown internally by AgentInputComponent; just redraw.
+                    needsRedraw = true;
+                    break;
                 case agent::AgentInputComponent::Action::Changed: needsRedraw = true; break;
                 case agent::AgentInputComponent::Action::None: break;
             }

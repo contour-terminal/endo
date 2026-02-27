@@ -9,6 +9,8 @@
 #include <endo-language/ide/HoverInfo.hpp>
 #include <endo-language/lexer/TokenClassification.hpp>
 
+#include <tui/CommandPalettePopup.hpp>
+#include <tui/CommandRegistry.hpp>
 #include <tui/CompletionPopup.hpp>
 #include <tui/Component.hpp>
 #include <tui/InputField.hpp>
@@ -199,6 +201,13 @@ class PromptComponent: public tui::Component
 
     [[nodiscard]] tui::CompletionPopup const& completionPopup() const noexcept { return _completionPopup; }
 
+    /// @brief Returns the CommandPalettePopup for direct access.
+    [[nodiscard]] tui::CommandPalettePopup& commandPalette() noexcept { return _commandPalette; }
+
+    /// @brief Sets the command registry used by the command palette.
+    /// @param registry Pointer to the registry (caller owns, must outlive PromptComponent).
+    void setCommandRegistry(tui::CommandRegistry* registry) { _commandRegistry = registry; }
+
     /// @brief Takes and clears any pending completion errors for display.
     /// @return Formatted error messages from the last completion attempt.
     [[nodiscard]] std::vector<std::string> takePendingCompletionErrors();
@@ -209,13 +218,14 @@ class PromptComponent: public tui::Component
     /// @brief Result of processing input.
     enum class Action
     {
-        None,        ///< No action needed.
-        Changed,     ///< Content changed, re-render needed.
-        Submit,      ///< User submitted input.
-        Abort,       ///< User aborted (Ctrl+C).
-        Eof,         ///< User pressed Ctrl+D on empty line.
-        ClearScreen, ///< User requested screen clear (Ctrl+L).
-        AgentMode,   ///< User pressed '#' on empty prompt to enter agent mode.
+        None,           ///< No action needed.
+        Changed,        ///< Content changed, re-render needed.
+        Submit,         ///< User submitted input.
+        Abort,          ///< User aborted (Ctrl+C).
+        Eof,            ///< User pressed Ctrl+D on empty line.
+        ClearScreen,    ///< User requested screen clear (Ctrl+L).
+        AgentMode,      ///< User pressed '#' on empty prompt to enter agent mode.
+        CommandPalette, ///< User pressed Ctrl+Shift+P to open the command palette.
     };
 
     /// @brief Processes an input event and returns the action.
@@ -224,6 +234,8 @@ class PromptComponent: public tui::Component
   private:
     tui::InputField _inputField;
     tui::CompletionPopup _completionPopup;
+    tui::CommandPalettePopup _commandPalette;
+    tui::CommandRegistry* _commandRegistry = nullptr;
     Completer* _completer = nullptr;
     bool _terminalFocused = true; ///< Terminal focus state for visual dimming.
     CommandResolver* _commandResolver = nullptr;

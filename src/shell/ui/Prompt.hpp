@@ -128,6 +128,10 @@ class Prompt
     /// @param history The history object (ownership not transferred).
     void setHistory(History const* history);
 
+    /// @brief Sets the command registry used by the command palette.
+    /// @param registry Pointer to the registry (caller owns, must outlive this prompt).
+    void setCommandRegistry(tui::CommandRegistry* registry);
+
     // ========================================================================
     // Keybindings
     // ========================================================================

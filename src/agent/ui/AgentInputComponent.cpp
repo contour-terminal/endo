@@ -184,6 +184,23 @@ void AgentInputComponent::render(tui::Canvas& canvas)
         }
     }
 
+    // Render command palette (centered, below input area)
+    if (_commandPalette.visible())
+    {
+        auto const palettePrefSize = _commandPalette.preferredSize();
+        auto const paletteWidth = std::min(palettePrefSize.width, area.width);
+        auto const paletteRow = rowOff + HeaderHeight + fieldHeight;
+        auto const paletteHeight = std::min(palettePrefSize.height, area.height - paletteRow);
+        if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
+        {
+            auto const paletteX = std::max(0, (area.width - paletteWidth) / 2);
+            auto const paletteRect = tui::Rect { paletteX, paletteRow, paletteWidth, paletteHeight };
+            _commandPalette.setArea(paletteRect);
+            auto paletteCanvas = canvas.subcanvas(paletteRect);
+            _commandPalette.render(paletteCanvas);
+        }
+    }
+
     // Render image preview area between input field and info line
     auto const previewHeight = imagePreviewHeight();
     auto previewRow = rowOff + HeaderHeight + fieldHeight;
@@ -247,11 +264,31 @@ tui::Size AgentInputComponent::preferredSize() const
         totalHeight += popupSize.height;
     }
 
+    // Add space for command palette if visible
+    if (_commandPalette.visible())
+    {
+        auto const paletteSize = _commandPalette.preferredSize();
+        totalHeight += paletteSize.height;
+    }
+
     return { fieldSize.width + LeftBarWidth + BarPadding, totalHeight };
 }
 
 AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent const& event)
 {
+    // Handle command palette events first (takes priority over everything)
+    if (_commandPalette.visible())
+    {
+        auto const paletteAction = _commandPalette.processEvent(event);
+        switch (paletteAction)
+        {
+            case tui::CommandPaletteAction::Changed: return Action::Changed;
+            case tui::CommandPaletteAction::Executed:
+            case tui::CommandPaletteAction::Dismissed: return Action::Changed;
+        }
+        return Action::Changed;
+    }
+
     // Track if popup was visible before processing (for dynamic filtering)
     auto const popupWasVisible = _completionPopup.visible();
     auto popupDismissedByTyping = false;
@@ -450,6 +487,12 @@ AgentInputComponent::Action AgentInputComponent::processInput(tui::InputEvent co
             // Dismiss popup if text no longer looks like a completable context
             else if (_completionPopup.visible())
                 dismissPopup();
+            return Action::Changed;
+        case tui::InputFieldAction::CommandPalette:
+            _inputField.clearGhostText();
+            dismissPopup();
+            if (_commandRegistry)
+                _commandPalette.show(*_commandRegistry, tui::CommandContext::Agent);
             return Action::Changed;
         case tui::InputFieldAction::AgentMode:
             _inputField.clearGhostText();

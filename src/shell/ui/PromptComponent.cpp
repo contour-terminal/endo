@@ -579,6 +579,23 @@ void PromptComponent::render(tui::Canvas& canvas)
         }
     }
 
+    // Render command palette (centered, below input area)
+    if (_commandPalette.visible())
+    {
+        auto const palettePrefSize = _commandPalette.preferredSize();
+        auto const paletteWidth = std::min(palettePrefSize.width, canvasWidth);
+        auto const paletteRow = inputStartRow + totalLines;
+        auto const paletteHeight = std::min(palettePrefSize.height, canvas.height() - paletteRow);
+        if (paletteHeight >= 4) // Minimum: border(2) + filter(1) + separator(1)
+        {
+            auto const paletteX = std::max(0, (canvasWidth - paletteWidth) / 2);
+            auto const paletteRect = tui::Rect { paletteX, paletteRow, paletteWidth, paletteHeight };
+            _commandPalette.setArea(paletteRect);
+            auto paletteCanvas = canvas.subcanvas(paletteRect);
+            _commandPalette.render(paletteCanvas);
+        }
+    }
+
     // Mark bottom padding rows for content height detection (NBSP at column 0)
     for (int i = 0; i < botPad; ++i)
         canvas.put(inputStartRow + totalLines + i, 0, "\xC2\xA0", {});
@@ -606,6 +623,14 @@ tui::Size PromptComponent::preferredSize() const
         auto popupSize = _completionPopup.preferredSize();
         totalHeight += popupSize.height;
         maxWidth = std::max(maxWidth, pw + popupSize.width);
+    }
+
+    // If command palette is visible, add space for it below the input
+    if (_commandPalette.visible())
+    {
+        auto const paletteSize = _commandPalette.preferredSize();
+        totalHeight += paletteSize.height;
+        maxWidth = std::max(maxWidth, paletteSize.width);
     }
 
     return { maxWidth, totalHeight };
@@ -718,6 +743,19 @@ tui::InputFieldAction PromptComponent::handleMouseEvent(tui::MouseEvent const& m
 
 PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& event)
 {
+    // Handle command palette events first (takes priority over everything)
+    if (_commandPalette.visible())
+    {
+        auto const paletteAction = _commandPalette.processEvent(event);
+        switch (paletteAction)
+        {
+            case tui::CommandPaletteAction::Changed: return Action::Changed;
+            case tui::CommandPaletteAction::Executed:
+            case tui::CommandPaletteAction::Dismissed: return Action::Changed;
+        }
+        return Action::Changed;
+    }
+
     // Track if popup was visible before processing (for dynamic filtering)
     bool const popupWasVisible = _completionPopup.visible();
     bool popupDismissedByTyping = false;
@@ -922,6 +960,13 @@ PromptComponent::Action PromptComponent::processInput(tui::InputEvent const& eve
             dismissPopup();
             resetHistoryCycling();
             return Action::AgentMode;
+        case tui::InputFieldAction::CommandPalette:
+            _inputField.clearGhostText();
+            dismissPopup();
+            resetHistoryCycling();
+            if (_commandRegistry)
+                _commandPalette.show(*_commandRegistry, tui::CommandContext::Shell);
+            return Action::Changed;
         case tui::InputFieldAction::CycleAgentMode:
         case tui::InputFieldAction::CycleThinkingMode:
         case tui::InputFieldAction::CycleModel:

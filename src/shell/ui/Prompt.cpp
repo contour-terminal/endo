@@ -261,6 +261,7 @@ std::string Prompt::read()
                     _lastAction = PromptComponent::Action::AgentMode;
                     return {};
                 }
+                case PromptComponent::Action::CommandPalette: needsRedraw = true; break;
                 case PromptComponent::Action::Changed: needsRedraw = true; break;
                 case PromptComponent::Action::ClearScreen: {
                     // Clear screen and move prompt to top
@@ -434,6 +435,15 @@ std::optional<std::string> Prompt::processInput()
                 _lastAction = PromptComponent::Action::AgentMode;
                 return std::string {};
             }
+            case PromptComponent::Action::CommandPalette:
+                // Palette is shown internally by PromptComponent; just redraw.
+                _promptComponent->flushDeferredUpdates();
+                {
+                    auto pSize = _promptComponent->preferredSize();
+                    _promptComponent->setArea(tui::Rect { 0, 0, _terminal.columns(), pSize.height });
+                }
+                _screen->draw();
+                break;
             case PromptComponent::Action::None: break;
         }
     }
@@ -542,6 +552,12 @@ void Prompt::setHistory(History const* history)
     _history = history;
     if (_promptComponent)
         _promptComponent->setHistory(history);
+}
+
+void Prompt::setCommandRegistry(tui::CommandRegistry* registry)
+{
+    if (_promptComponent)
+        _promptComponent->setCommandRegistry(registry);
 }
 
 void Prompt::setMultilineEnabled(bool enable)
