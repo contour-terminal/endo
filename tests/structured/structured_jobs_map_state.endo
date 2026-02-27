@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Structured jobs map state
+# mode: structured
 # expect: [Running; Stopped; Done]
 
 let states = jobs |> map (fun j -> j.state)

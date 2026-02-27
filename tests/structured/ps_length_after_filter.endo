@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: 2 processes with mem > 1024*1024 bytes (alice=4096KB, bob=2048KB)
+# mode: structured
 # expect: 2
 
 print (ps |> filter (fun p -> p.mem > 1048576)

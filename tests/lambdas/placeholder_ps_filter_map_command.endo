@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Placeholder ps filter map command
+# mode: structured
 # expect: [firefox; vim]
 
 let cmds =

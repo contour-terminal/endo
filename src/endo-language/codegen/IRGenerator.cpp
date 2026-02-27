@@ -1815,6 +1815,10 @@ void IRGenerator::visit(ast::FStringExpr const& node)
         return;
     }
 
+    // FString parts are intermediate sub-expressions, never in tail position.
+    auto const savedTailPos = _inTailPosition;
+    _inTailPosition = false;
+
     // Generate first part
     auto* result = codegen(node.parts[0].get());
     if (!result)
@@ -1823,6 +1827,16 @@ void IRGenerator::visit(ast::FStringExpr const& node)
     result = convertToString(result, "fstr");
     if (!result)
         return;
+
+    // When there are multiple parts, AST-inlined function calls with branches in later
+    // parts create new basic blocks. The intermediate concatenation result from earlier
+    // parts becomes unreachable across those blocks. Store it in an alloca so it survives.
+    CoreVM::AllocaInstr* resultStorage = nullptr;
+    if (node.parts.size() > 1)
+    {
+        resultStorage = createAllocaInEntryBlock(CoreVM::LiteralType::String, "fstr.acc");
+        _builder.createStore(resultStorage, result);
+    }
 
     // Concatenate remaining parts
     for (size_t i = 1; i < node.parts.size(); ++i)
@@ -1835,9 +1849,16 @@ void IRGenerator::visit(ast::FStringExpr const& node)
         if (!part)
             return;
 
-        result = _builder.createSAdd(result, part, "fstr.concat");
+        auto* accum = _builder.createLoad(resultStorage, "fstr.acc.load");
+        result = _builder.createSAdd(accum, part, "fstr.concat");
+        _builder.createStore(resultStorage, result);
     }
 
+    // Reload the final result from storage.
+    if (resultStorage)
+        result = _builder.createLoad(resultStorage, "fstr.result");
+
+    _inTailPosition = savedTailPos;
     _result = result;
 }
 
@@ -3236,6 +3257,10 @@ CoreVM::Value* IRGenerator::ensureString(CoreVM::Value* value, std::string_view 
 void IRGenerator::generatePrintCall(ast::Expr const* argument, bool appendNewline)
 {
     TRACE_SCOPE("generatePrintCall");
+
+    // The print argument is never in tail position — save and clear.
+    auto const savedTailPos = _inTailPosition;
+    _inTailPosition = false;
 
     // Evaluate the argument
     CoreVM::Value* argValue = codegen(argument);
@@ -10151,11 +10176,16 @@ void IRGenerator::visit(ast::BlockExpr const& node)
 
     pushFSharpScope();
 
+    // Statements are never in tail position — only the result expression inherits it.
+    auto const savedTailPos = _inTailPosition;
+    _inTailPosition = false;
+
     // Codegen all statements (let bindings, etc.)
     for (auto const& stmt: node.statements)
         codegen(stmt.get());
 
-    // Codegen the result expression (the block's value)
+    // Restore tail position for the result expression (the block's value)
+    _inTailPosition = savedTailPos;
     _result = codegen(node.result.get());
 
     // BlockExpr is an expression-level block whose result may reference one of the

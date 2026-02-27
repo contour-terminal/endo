@@ -22,5 +22,6 @@ if(ENDO_TESTING)
         ENDO_DEFINITIONS_DIR="${CMAKE_SOURCE_DIR}/data/definitions"
     )
     add_test(NAME endo-test COMMAND endo-test --dir "${CMAKE_SOURCE_DIR}/tests")
+    add_test(NAME endo-examples COMMAND endo-test --dir "${CMAKE_SOURCE_DIR}/examples")
     enable_sanitizers(endo-test)
 endif()

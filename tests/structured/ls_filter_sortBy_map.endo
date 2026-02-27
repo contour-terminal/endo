@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: 3-stage pipeline: filter size > 0, sortBy size, map to name
+# mode: structured
 # expect: [hello.txt; script.sh; docs]
 
 print (ls |> filter (fun f -> f.size > 0)

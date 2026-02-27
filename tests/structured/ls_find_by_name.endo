@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: find the file named "hello.txt", print its size
+# mode: structured
 # expect: 42 B
 
 match ls |> find (fun f -> f.name == "hello.txt") with

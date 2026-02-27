@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: filter ppid == 1 (alice, bob), reverse, map to user
+# mode: structured
 # expect: [bob; alice]
 
 print (ps |> filter (fun p -> p.ppid == 1)

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter files where mode is executable
+# mode: structured
 # expect: [docs; script.sh]
 
 print (ls |> filter (fun f -> isExecutable f.mode)

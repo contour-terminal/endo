@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: all sizes are > 0
+# mode: structured
 # expect: true
 
 print (ls |> forall (fun f -> f.size > 0))

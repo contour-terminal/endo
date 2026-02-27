@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: each println on a list of records should format each record, not print raw pointers
+# mode: structured
 # expect: { id = 1; state = Running; command = sleep 100; pid = 1234 }
 # expect: { id = 2; state = Stopped; command = vim; pid = 5678 }
 # expect: { id = 3; state = Done; command = make build; pid = 9012 }

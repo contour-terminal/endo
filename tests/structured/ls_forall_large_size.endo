@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: not all sizes are > 100 (hello.txt has 42)
+# mode: structured
 # expect: false
 
 print (ls |> forall (fun f -> f.size > 100))

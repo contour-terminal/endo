@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: check if any file has size > 1000
+# mode: structured
 # expect: true
 
 print (ls |> exists (fun f -> f.size > 1000))

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: head of filtered list (pid > 10) — first match is firefox (pid=42)
+# mode: structured
 # expect: firefox
 
 match ps |> filter (fun p -> p.pid > 10)

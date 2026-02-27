@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: ls with unquoted path piped into F# pipeline
+# mode: structured
 # expect: 3
 
 ls "/tmp"

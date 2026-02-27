@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: reverse the list and map to names
+# mode: structured
 # expect: [script.sh; hello.txt; docs]
 
 print (ls |> reverse

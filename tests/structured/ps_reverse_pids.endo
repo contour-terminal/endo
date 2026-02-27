@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: reverse the list and map to pids
+# mode: structured
 # expect: [100; 42; 1]
 
 print (ps |> reverse

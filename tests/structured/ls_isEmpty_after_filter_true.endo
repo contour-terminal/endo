@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: no file has size > 10000
+# mode: structured
 # expect: true
 
 print (ls |> filter (fun f -> f.size > 10000)

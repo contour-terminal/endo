@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Check if any process has cpu > 10
+# mode: structured
 # expect: true
 
 let r = ps |> exists (fun p -> p.pid > 50)

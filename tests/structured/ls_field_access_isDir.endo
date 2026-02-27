@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Extract isDir from first element (docs is a directory)
+# mode: structured
 # expect: true
 
 match head ls with

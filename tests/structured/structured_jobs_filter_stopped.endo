@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Structured jobs filter stopped
+# mode: structured
 # expect: [2]
 
 let ids =

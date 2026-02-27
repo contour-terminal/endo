@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Pipeline: filter by size > 100 then map to name
+# mode: structured
 # expect: [docs; script.sh]
 
 let names =

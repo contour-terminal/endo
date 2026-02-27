@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: head of filtered list (size < 300) — first match is hello.txt (size=42)
+# mode: structured
 # expect: hello.txt
 
 match ls |> filter (fun f -> f.size < 300)

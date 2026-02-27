@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Map to extract pids from all processes
+# mode: structured
 # expect: [1; 42; 100]
 
 let pids = ps |> map (fun p -> p.pid)

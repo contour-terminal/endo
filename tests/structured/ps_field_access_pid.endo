@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Extract pid from first element via head + match
+# mode: structured
 # expect: 1
 
 match head ps with

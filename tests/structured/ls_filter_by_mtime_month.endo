@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter files by mtime month and get names
+# mode: structured
 # expect: [docs; hello.txt; script.sh]
 
 let names =

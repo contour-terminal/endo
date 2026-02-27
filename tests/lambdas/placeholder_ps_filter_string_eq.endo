@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Placeholder ps filter string eq
+# mode: structured
 # expect: [firefox]
 
 let cmds =

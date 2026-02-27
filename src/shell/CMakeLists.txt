@@ -262,18 +262,6 @@ if(Python3_FOUND)
         LABELS "docs"
     )
 
-    # Run examples/ and tests/ .endo files with directive-based validation
-    add_test(
-        NAME check-endo-tests
-        COMMAND ${Python3_EXECUTABLE}
-            ${CMAKE_SOURCE_DIR}/scripts/run-endo-tests.py
-            --endo-path $<TARGET_FILE:endo-bin>
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    )
-    set_tests_properties(check-endo-tests PROPERTIES
-        TIMEOUT 300
-        LABELS "integration"
-    )
 endif()
 
 # Installation

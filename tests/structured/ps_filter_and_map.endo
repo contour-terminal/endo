@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Pipeline composition: filter by pid then map to command
+# mode: structured
 # expect: [firefox; vim]
 
 let cmds =

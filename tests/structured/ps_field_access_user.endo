@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Access user field from second element
+# mode: structured
 # expect: alice
 
 match head (tail ps) with

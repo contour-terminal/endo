@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Map to extract commands
+# mode: structured
 # expect: [/sbin/init; firefox; vim]
 
 let cmds = ps |> map (fun p -> p.command)

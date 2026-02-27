@@ -6,8 +6,8 @@ let validate_positive x =
 
 let show_result r =
     match r with
-    | Ok n -> "Ok(positive): " + n
-    | Error e -> "Error(not positive): " + e
+    | Ok n -> $"Ok(positive): {n}"
+    | Error e -> $"Error(not positive): {e}"
 
 println (show_result (validate_positive 5))
 println (show_result (validate_positive -3))

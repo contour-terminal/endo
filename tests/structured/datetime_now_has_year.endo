@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: DateTime.now returns a DateTime with a reasonable year
+# mode: structured
 # expect: true
 
 let d = DateTime.now

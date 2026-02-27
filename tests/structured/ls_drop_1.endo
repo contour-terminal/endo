@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: drop first file, map to names
+# mode: structured
 # expect: [hello.txt; script.sh]
 
 print (ls |> drop 1

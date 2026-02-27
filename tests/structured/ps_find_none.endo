@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: find a process with pid > 1000 — should be None
+# mode: structured
 # expect: none
 
 match ps |> find (fun p -> p.pid > 1000) with

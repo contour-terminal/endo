@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter to only files (not dirs) — should get 2
+# mode: structured
 # expect: 2
 
 let files = ls |> filter (fun f -> f.isDir == false)

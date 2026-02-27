@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: find a file with size > 10000 — should be None
+# mode: structured
 # expect: none
 
 match ls |> find (fun f -> f.size > 10000) with

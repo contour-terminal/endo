@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter processes with pid > 10 — should get 2 (pid=42, pid=100)
+# mode: structured
 # expect: 2
 
 let filtered = ps |> filter (fun p -> p.pid > 10)

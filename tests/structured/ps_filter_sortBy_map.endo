@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: 3-stage pipeline: filter pid > 1, sortBy mem, map to command
+# mode: structured
 # expect: [vim; firefox]
 
 print (ps |> filter (fun p -> p.pid > 1)

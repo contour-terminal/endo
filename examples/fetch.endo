@@ -1,3 +1,4 @@
+# skip: requires network access
 // Downloading files with fetch
 //
 // fetch downloads a URL to a file in the current working directory

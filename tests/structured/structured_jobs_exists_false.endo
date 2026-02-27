@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Structured jobs exists false
+# mode: structured
 # expect: false
 
 let r = jobs |> exists (fun j -> j.state == "Terminated")

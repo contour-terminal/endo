@@ -432,7 +432,7 @@ src/
     - [x] `compileFunctionBody` now compiles recursive functions (removed `!isRecursive` guard)
     - [x] `compiledFunction` pre-set before body codegen so recursive references emit UCALL/UTCALL
     - [x] Tail position tracking (`_inTailPosition`, `_compilingFunction`) for UCALL vs UTCALL decisions
-    - [x] Tail position propagation: IfExpr (condition=false, branches=inherit), BinaryExpr (operands=false), ApplicationExpr (args=false, call=inherit), MatchExpr (scrutinee=false, arms=inherit), LetInExpr (value=false, body=inherit)
+    - [x] Tail position propagation: IfExpr (condition=false, branches=inherit), BinaryExpr (operands=false), ApplicationExpr (args=false, call=inherit), MatchExpr (scrutinee=false, arms=inherit), LetInExpr (value=false, body=inherit), BlockExpr (statements=false, result=inherit), generatePrintCall (argument=false), FStringExpr (parts=false)
     - [x] Recursive capture loads use function scope (not outer scope) to avoid cross-function alloca references
     - [x] Null-result handling for tail calls in IfExpr, MatchExpr (check `_compilingFunction`)
     - [x] Old loop-based TCO and dispatch-loop remain as fallback for untyped recursive functions
@@ -1365,16 +1365,16 @@ to perform syntax/semantic validation without executing code.
 **Status: ✅ Complete**
 
 **Tasks:**
-- [x] Create `scripts/run-endo-tests.py` — Python test runner for `.endo` files with directive-based validation
-- [x] Parse comment directives: `# expect:`, `# expect-error:`, `# expect-exit:`, `# expect-nonempty`, `# mode:`, `# mock-env:`, `# session-separator:`, `# mock-which:`, `# unused-detection:`
-- [x] Register as ctest target: `check-endo-tests` (examples/ + tests/, 300s timeout, `integration` label)
-- [x] Skip handling: network-dependent files, `mode: structured`, `session-separator:`, `mock-which:`, `unused-detection:`, `tests/completers/`
+- [x] Create C++ `endo-test` runner — standalone test runner for `.endo` files with directive-based validation
+- [x] Parse comment directives: `# expect:`, `# expect-error:`, `# expect-exit:`, `# expect-nonempty`, `# mode:`, `# mock-env:`, `# session-separator:`, `# mock-which:`, `# unused-detection:`, `# skip:`
+- [x] Register as ctest targets: `endo-test` (tests/) and `endo-examples` (examples/)
+- [x] Skip handling: network-dependent files (`# skip:`), `mode: structured` (mock infrastructure), completers
+- [x] Replaced Python `scripts/run-endo-tests.py` with C++ `endo-test` — removed `check-endo-tests` ctest target
 
 **Implementation Notes:**
-- Follows `check-doc-snippets.py` patterns (find_project_root, find_endo_binary, subprocess)
-- Supports `--endo-path`, `--dir`, `--examples-only`, `-v/--verbose` CLI options
-- Strips trailing empty `# expect:` lines (REPL blank line convention vs script mode)
-- Examples: 17/20 pass (2 pre-existing crashes in conditional-expressions.endo and validation.endo)
+- C++ runner shares `TestHelper.cpp` with unit tests (no Catch2 dependency)
+- All 1452 tests pass including structured, completers, recursion, and examples
+- Examples: 17/20 pass, 2 skipped (fetch.endo: network, lazy_evaluation.endo: slow in debug)
 
 ### Phase 5.1: Debug Adapter Protocol (DAP) Server
 

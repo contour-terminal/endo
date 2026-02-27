@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
-# description: Test if/
-# expect:
+# description: Test if/else conditional expressions
+# expect: 5 is not equal to 10.
+# expect: 10 is not equal to 5.
+# expect: 5 equals 5.
 # expect:
 
 let test x y =

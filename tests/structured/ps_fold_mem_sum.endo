@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: fold to sum all memory values (Size auto-unwraps to bytes): 1024*1024 + 4096*1024 + 2048*1024 = 7340032
+# mode: structured
 # expect: 7340032
 
 print (ps |> fold 0 (fun acc p -> acc + p.mem))

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Extract command from first element
+# mode: structured
 # expect: /sbin/init
 
 match head ps with

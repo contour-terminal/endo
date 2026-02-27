@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter files by mtime year and count
+# mode: structured
 # expect: 3
 
 let count =

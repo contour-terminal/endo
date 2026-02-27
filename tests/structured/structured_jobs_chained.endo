@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Structured jobs chained
+# mode: structured
 # expect: [sleep 100]
 
 let cmds =

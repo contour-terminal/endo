@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Filter to only directories — should get 1 (docs)
+# mode: structured
 # expect: 1
 
 let dirs = ls |> filter (fun f -> f.isDir == true)

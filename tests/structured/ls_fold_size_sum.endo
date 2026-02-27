@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: fold to sum all sizes: 4096 + 42 + 256 = 4394
+# mode: structured
 # expect: 4394
 
 print (ls |> fold 0 (fun acc f -> acc + f.size))

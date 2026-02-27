@@ -1,3 +1,10 @@
+# expect: Basic: 42
+# expect: Selected fibonacci: 610
+# expect: First force:  55
+# expect: Second force: 55
+# expect: Same result:  true
+# expect: 42
+# expect:
 // Lazy Evaluation
 // Defer expensive computations until their results are actually needed.
 // Once forced, the result is cached — subsequent forces return instantly.
@@ -16,9 +23,9 @@ let rec fibonacci n =
     if n <= 1 then n
     else fibonacci (n - 1) + fibonacci (n - 2)
 
-let smallAnswer = lazy (fibonacci 10)
+let smallAnswer = lazy (fibonacci 5)
 
-let largeAnswer = lazy (fibonacci 25)
+let largeAnswer = lazy (fibonacci 15)
 
 // Only the selected branch is ever computed.
 let needsLarge = true
@@ -33,7 +40,7 @@ println result
 // --- Memoization ---
 // The expensive computation runs only once, even if forced many times.
 
-let cached = lazy (fibonacci 20)
+let cached = lazy (fibonacci 10)
 
 let first = force cached
 

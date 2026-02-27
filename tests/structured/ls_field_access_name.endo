@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Extract name from first element via head + match
+# mode: structured
 # expect: docs
 
 match head ls with

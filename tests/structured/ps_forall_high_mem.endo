@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: not all memory values are > 2048*1024 bytes (init has 1024*1024)
+# mode: structured
 # expect: false
 
 print (ps |> forall (fun p -> p.mem > 2097152))

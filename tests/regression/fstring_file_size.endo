@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: FString with File.size result (number from Result pattern match)
-# mode: ir-only
 # expect: ok
 # expect: size: 5
 # expect:

@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Placeholder ps sortBy
+# mode: structured
 # expect: [1; 42; 100]
 
 let pids =

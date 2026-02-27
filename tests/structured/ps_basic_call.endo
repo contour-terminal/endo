@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: ps returns a list — check length
+# mode: structured
 # expect: 3
 
 let procs = ps

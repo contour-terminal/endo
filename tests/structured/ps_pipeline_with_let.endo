@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: Store ps result, then pipeline
+# mode: structured
 # expect: [42; 100]
 
 let procs = ps

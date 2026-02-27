@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # description: all files have size > 0
+# mode: structured
 # expect: false
 
 print (ls |> filter (fun f -> f.size > 0)
