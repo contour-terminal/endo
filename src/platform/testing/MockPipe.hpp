@@ -1,10 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <cstdint>
+
 #include <platform/Pipe.hpp>
 
 namespace endo::platform::testing
 {
+
+/// @brief Creates a NativeHandle from an integer value (for test purposes only).
+/// @param value The integer value to convert.
+/// @return A NativeHandle representing the value.
+inline NativeHandle testHandle(uintptr_t value)
+{
+#ifdef _WIN32
+    return reinterpret_cast<HANDLE>(value);
+#else
+    return static_cast<int>(value);
+#endif
+}
 
 /// Mock Pipe for unit testing.
 ///
@@ -13,7 +27,7 @@ class MockPipe final: public Pipe
 {
   public:
     /// Creates a mock pipe with the given handle values.
-    explicit MockPipe(NativeHandle reader = 10, NativeHandle writer = 11):
+    explicit MockPipe(NativeHandle reader = testHandle(10), NativeHandle writer = testHandle(11)):
         _reader(reader), _writer(writer)
     {
     }

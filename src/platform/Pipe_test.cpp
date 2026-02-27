@@ -41,9 +41,9 @@ TEST_CASE("Pipe.releaseHandles", "[platform]")
 
 TEST_CASE("MockPipe.basic", "[platform][mock]")
 {
-    testing::MockPipe pipe(42, 43);
-    CHECK(pipe.reader() == 42);
-    CHECK(pipe.writer() == 43);
+    testing::MockPipe pipe(testing::testHandle(42), testing::testHandle(43));
+    CHECK(pipe.reader() == testing::testHandle(42));
+    CHECK(pipe.writer() == testing::testHandle(43));
     CHECK(pipe.good());
 
     pipe.closeReader();
