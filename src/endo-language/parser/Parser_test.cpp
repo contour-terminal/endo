@@ -2357,3 +2357,46 @@ TEST_CASE("Parser.FSharp.ASTPrinter.lazy_force")
 {
     CHECK(parseAndPrintAST("let x = lazy 42; print (force x)") == "let x = lazy 42; (print ((force x)))");
 }
+
+TEST_CASE("Parser.FSharp.multiline_pipeline_known_binding")
+{
+    // Known F# variable followed by |> on the next line
+    auto ast = parse("let x = 42\nx\n    |> println");
+    REQUIRE(ast != nullptr);
+
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    REQUIRE(compound->statements.size() == 2);
+
+    // First statement: let x = 42
+    auto* letStmt = dynamic_cast<endo::ast::LetBindingStmt*>(compound->statements[0].get());
+    REQUIRE(letStmt != nullptr);
+    CHECK(letStmt->name == "x");
+
+    // Second statement: x |> println (parsed as pipeline despite newline before |>)
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(compound->statements[1].get());
+    REQUIRE(exprStmt != nullptr);
+    auto* pipeline = dynamic_cast<endo::ast::PipelineExpr*>(exprStmt->expr.get());
+    REQUIRE(pipeline != nullptr);
+}
+
+TEST_CASE("Parser.FSharp.multiline_pipeline_known_binding_multistep")
+{
+    // Known F# variable with multi-step multi-line pipeline
+    auto ast = parse("let x = 42\nx\n    |> force\n    |> println");
+    REQUIRE(ast != nullptr);
+
+    auto* compound = dynamic_cast<endo::ast::CompoundStmt*>(ast.get());
+    REQUIRE(compound != nullptr);
+    REQUIRE(compound->statements.size() == 2);
+
+    // Second statement should be a nested pipeline: (x |> force) |> println
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(compound->statements[1].get());
+    REQUIRE(exprStmt != nullptr);
+    auto* outerPipeline = dynamic_cast<endo::ast::PipelineExpr*>(exprStmt->expr.get());
+    REQUIRE(outerPipeline != nullptr);
+
+    // The left side of the outer pipeline should itself be a pipeline (x |> force)
+    auto* innerPipeline = dynamic_cast<endo::ast::PipelineExpr*>(outerPipeline->value.get());
+    REQUIRE(innerPipeline != nullptr);
+}

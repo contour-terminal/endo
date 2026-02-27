@@ -50,4 +50,6 @@ println (first == second)
 
 let answer = lazy 42
 
-answer |> force |> println
+answer
+    |> force
+    |> println

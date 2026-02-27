@@ -676,7 +676,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                         return stmt;
                     }
                 }
-                // Check for trailing |> pipeline
+                // Check for trailing |> pipeline (allow newlines before |>)
+                {
+                    auto const skippedNL = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe && skippedNL)
+                        _lexer.pushBackToken(Token::LineFeed, "\n");
+                }
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     _lexer.enterFSharpExpr();
@@ -815,6 +820,12 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
 
                 // Shell command followed by |> → structured F# pipeline
                 // Build left-associative pipeline chain: source |> step1 |> step2 |> ...
+                // Allow newlines before |>
+                {
+                    auto const skippedNL = consumeUntilNotOneOf(Token::LineFeed);
+                    if (_lexer.currentToken() != Token::ForwardPipe && skippedNL)
+                        _lexer.pushBackToken(Token::LineFeed, "\n");
+                }
                 if (_lexer.currentToken() == Token::ForwardPipe)
                 {
                     auto source = std::make_unique<ast::StructuredPipelineSourceExpr>(std::move(stmt));
