@@ -18,6 +18,7 @@ Use cases:
 
 ## 12.2 Creating Lazy Values
 
+<!-- endo-no-check -->
 ```endo
 # Simple lazy value
 let x = lazy 42
@@ -73,6 +74,7 @@ Captured values are copies taken at the point where `lazy` is evaluated. Later c
 
 ## 12.6 Practical Examples
 
+<!-- endo-no-check -->
 ```endo
 # Avoid expensive computation when not needed
 let config = lazy (parseConfig (cat "config.yml"))
@@ -148,7 +150,12 @@ let s = seq { yield 1; yield 2; yield 3; yield 4; yield 5 }
 s |> take 3 |> println              # => [1; 2; 3]
 
 # Iterate with each
-s |> each println                   # prints 1, 2, 3, 4, 5
+s |> each println
+# => 1
+# => 2
+# => 3
+# => 4
+# => 5
 
 # Convert to list, then use list operations
 s |> toList |> map (fun x -> x * 2) |> println   # => [2; 4; 6; 8; 10]

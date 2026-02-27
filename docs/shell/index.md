@@ -47,7 +47,7 @@ cat access.log | grep 404 | wc -l
 You can even transition from shell to functional in a single pipeline:
 
 ```endo
-ps aux | lines |> filter (contains _ "nginx") |> length
+ps |> filter (contains _.command "nginx") |> length
 ```
 
 See the [FAQ](../FAQ.md) for a detailed comparison of `|` vs `|>`.
