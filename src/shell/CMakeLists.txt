@@ -261,6 +261,13 @@ if(Python3_FOUND)
     )
 endif()
 
+# Installation
+install(TARGETS endo-bin RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/definitions/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/definitions)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/data/completers/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/endo/completers)
+
 # Enable sanitizers for all targets
 enable_sanitizers(endo-shell)
 enable_sanitizers(endo-bin)

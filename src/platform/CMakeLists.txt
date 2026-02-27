@@ -17,6 +17,8 @@ add_library(endo-platform STATIC
     FileInfoProvider.hpp
     SignalHandler.hpp
     SignalHandler.cpp
+    InstallPaths.hpp
+    InstallPaths.cpp
     testing/TestEnvironmentProvider.hpp
     testing/MockProcessManager.hpp
     testing/MockPipe.hpp

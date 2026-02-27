@@ -86,6 +86,7 @@
 #include <agent/ui/AgentResponseRenderer.hpp>
 #include <agent/ui/ToolStatusComponent.hpp>
 #include <nlohmann/json.hpp>
+#include <platform/InstallPaths.hpp>
 #include <platform/Pipe.hpp>
 #include <platform/Process.hpp>
 #include <platform/SignalHandler.hpp>
@@ -394,9 +395,17 @@ Shell::Shell(TTY& tty, EnvironmentProvider& env):
     }
 
     // Load output definition files for structured pipelines
+
+    // 1. Installed location (relative to executable)
+    if (auto const dir = endo::platform::resolveDataDir("definitions"); !dir.empty())
+        _outputDefinitions.loadFromDirectory(dir);
+
+    // 2. Development fallback (source tree)
 #if defined(ENDO_DEFINITIONS_DIR)
     _outputDefinitions.loadFromDirectory(ENDO_DEFINITIONS_DIR);
 #endif
+
+    // 3. User overrides
 #if defined(_WIN32)
     if (auto const* appData = std::getenv("LOCALAPPDATA"))
         _outputDefinitions.loadFromDirectory(std::filesystem::path(appData) / "endo" / "definitions");
@@ -682,7 +691,11 @@ void Shell::loadCompleters()
     if (auto const* home = std::getenv("HOME"))
         loadDir(std::filesystem::path(home) / ".config" / "endo" / "completers");
 
-    // System/bundled completers
+    // Installed location (relative to executable)
+    if (auto const dir = endo::platform::resolveDataDir("completers"); !dir.empty())
+        loadDir(dir);
+
+    // Development fallback (source tree)
 #ifdef ENDO_COMPLETERS_DIR
     loadDir(ENDO_COMPLETERS_DIR);
 #endif
