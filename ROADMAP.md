@@ -610,6 +610,7 @@ The library includes:
 - [x] GFM-style pipe table rendering in `MarkdownRenderer` (streaming + batch) and `StyledText` (canvas-based) with rounded box-drawing borders, column alignment, inline markdown in cells, shared parsing via `MarkdownTable` utilities, `setMaxWidth()` for terminal-width-constrained rendering with word-wrapped multi-line cells
 - [x] Fix table column alignment with inline markdown: `stripInlineMarkdown()` and `inlineDisplayWidth()` ensure column widths and padding are computed from rendered text (after stripping `**`, `*`, `` ` ``, `[text](url)` markers), not raw markdown — fixes misaligned right-side vertical borders when cells contain bold/italic/code/link formatting
 - [x] Fix table overflow when column widths are constrained: replace proportional shrinking with waterfall algorithm that only shrinks the widest columns (preserving narrow columns at natural width), add character-level word breaking in `wrapText()` for extreme cases, and `truncateToDisplayWidth()` as last-resort guard in `renderCellLine()`
+- [x] Fix tuple table rendering: table formatter reads packed type tags from Tuple2/Tuple3 slot for correct Float/String rendering instead of raw int64. Named tuple types created from field-access projections (`(_.cpu, _.command)`) carry column names and types through to the table formatter.
 
 **Implementation Notes:**
 - Multiline editing uses Alt+Enter or Shift+Enter to insert newlines (Enter submits)
