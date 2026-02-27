@@ -84,6 +84,9 @@ class Shell final: public SignalCallback
     /// Set check-only mode (compile without executing).
     void setCheckOnly(bool checkOnly) noexcept { _checkOnly = checkOnly; }
 
+    /// Enable or disable unused-value detection for F# bindings.
+    void setUnusedValueDetection(bool enabled) noexcept { _unusedValueDetection = enabled; }
+
     /// @brief Sets the trace file path for agent tool I/O tracing.
     /// @param path File path for JSONL trace output. Empty triggers auto-generated path.
     void setAgentTracePath(std::string path);

@@ -533,7 +533,6 @@ void Shell::setAgentTracePath(std::string path)
 void Shell::setInteractive(bool interactive)
 {
     _interactive = interactive;
-    _unusedValueDetection = !interactive;
 }
 
 void Shell::setPositionalParameters(std::vector<std::string> params)

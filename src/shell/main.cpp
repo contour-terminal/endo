@@ -47,6 +47,7 @@ Options:
   -v, --version      Show version information and exit
   -c <COMMAND>       Execute COMMAND and exit
   --check            Compile without executing (syntax and semantic check)
+  --unused-detection Enable unused-value detection for F# bindings
   --lsp              Launch Language Server Protocol server over stdio
   --log=<PATTERNS>   Enable logging for categories matching PATTERNS
                      (comma-separated, supports wildcards)
@@ -126,6 +127,7 @@ struct ParsedArgs
     bool showLogList = false;
     bool launchLsp = false;
     bool checkOnly = false;
+    bool unusedDetection = false;
     std::string_view logPatterns;
     std::string_view command;
     std::vector<std::string_view> commandArgs; ///< Arguments after -c command ($1, $2, ...)
@@ -161,6 +163,10 @@ ParsedArgs parseArguments(std::span<char const* const> args)
         else if (arg == "--check")
         {
             result.checkOnly = true;
+        }
+        else if (arg == "--unused-detection")
+        {
+            result.unusedDetection = true;
         }
         else if (arg == "--agent-trace")
         {
@@ -367,6 +373,9 @@ int main(int argc, char const* argv[])
 
     if (parsed.checkOnly)
         shell.setCheckOnly(true);
+
+    if (parsed.unusedDetection)
+        shell.setUnusedValueDetection(true);
 
     // Handle -c command with optional arguments
     if (!parsed.command.empty())

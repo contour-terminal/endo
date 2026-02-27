@@ -21,7 +21,7 @@ Directives (parsed from file header comments):
     # session-separator: MARKER Skip (needs multi-prompt REPL)
     # mock-env: NAME=VALUE      Set environment variable before execution
     # mock-which: CMD=PATH      Skip (needs mock infrastructure)
-    # unused-detection: true    Skip (no CLI flag available)
+    # unused-detection: true    Run with --unused-detection flag
 """
 
 import argparse
@@ -146,9 +146,6 @@ def should_skip(rel_path: str, directives: dict) -> str | None:
     if directives["mock_whichs"]:
         return "mock-which (needs mock infrastructure)"
 
-    if directives["unused_detection"]:
-        return "unused-detection (no CLI flag)"
-
     return None
 
 
@@ -166,6 +163,9 @@ def run_test(filepath: Path, directives: dict, endo: Path) -> tuple[bool, str]:
 
     if mode == "ir-only":
         cmd.append("--check")
+
+    if directives["unused_detection"]:
+        cmd.append("--unused-detection")
 
     cmd.append(str(filepath))
 
