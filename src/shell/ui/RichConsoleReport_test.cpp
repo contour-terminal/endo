@@ -231,7 +231,7 @@ TEST_CASE("BufferingConsoleReport.multiple_messages", "[BufferingConsoleReport]"
 
 TEST_CASE("BufferingConsoleReport.fills_missing_context_snippet", "[BufferingConsoleReport]")
 {
-    auto report = BufferingConsoleReport();
+    auto report = BufferingConsoleReport(ColorMode::Disabled);
     report.setSourceText("let x = 42");
     report.push_back(Message(Type::SyntaxError, makeLoc("stdin", 1, 5, 6), "Error here"));
     CHECK(report.hasMessages());

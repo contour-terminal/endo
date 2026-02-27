@@ -9,6 +9,14 @@
 namespace endo
 {
 
+/// Controls whether ANSI color output is used.
+enum class ColorMode
+{
+    Auto,     ///< Detect via isatty() and NO_COLOR environment variable.
+    Enabled,  ///< Always use color.
+    Disabled, ///< Never use color.
+};
+
 /// Formats a diagnostic message in Rust-style output with optional ANSI color.
 ///
 /// @param message The diagnostic message to format.
@@ -54,6 +62,7 @@ class BufferingConsoleReport: public CoreVM::diagnostics::Report
 {
   public:
     BufferingConsoleReport();
+    explicit BufferingConsoleReport(ColorMode colorMode);
 
     /// Sets the source text for context snippet extraction.
     /// @param source The full source text being compiled.
