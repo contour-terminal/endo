@@ -568,9 +568,10 @@ TEST_CASE("CommandSpecCompleter.live_git_checkout_suggests_branches")
     auto ctx = makeGitContext("git checkout ");
     auto results = completer.complete(ctx);
 
-    // Running in a git repo, should have at least one branch
+    // Running in a git repo, should have at least one branch.
+    // Note: We don't check for a specific branch name like "master" because
+    // CI runners may only fetch the PR branch via shallow clone.
     CHECK_FALSE(results.empty());
-    CHECK(hasCompletion(results, "master"));
 }
 
 TEST_CASE("CommandSpecCompleter.live_git_subcommand_completion")

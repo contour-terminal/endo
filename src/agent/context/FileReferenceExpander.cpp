@@ -215,7 +215,7 @@ auto FileReferenceExpander::expand(std::string_view message, std::filesystem::pa
         auto const content = readFile(ref);
         if (content.has_value())
         {
-            result << "<file path=\"" << displayPath.string() << "\"";
+            result << "<file path=\"" << displayPath.generic_string() << "\"";
             if (ref.startLine.has_value())
             {
                 result << " lines=\"" << *ref.startLine;
@@ -228,7 +228,8 @@ auto FileReferenceExpander::expand(std::string_view message, std::filesystem::pa
         }
         else
         {
-            result << "<file path=\"" << displayPath.string() << "\" error=\"" << content.error() << "\"/>";
+            result << "<file path=\"" << displayPath.generic_string() << "\" error=\"" << content.error()
+                   << "\"/>";
         }
     }
 

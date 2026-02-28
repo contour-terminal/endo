@@ -74,6 +74,15 @@ constexpr auto standardError() -> NativeHandle { return STDERR_FILENO; }
 #endif
 
 #ifdef _WIN32
+/// Cross-platform close using Windows CloseHandle.
+///
+/// @param h The native handle to close.
+inline void platformClose(NativeHandle h) noexcept
+{
+    if (h != InvalidHandle)
+        CloseHandle(h);
+}
+
 /// Cross-platform write using Windows WriteFile.
 ///
 /// @param h The native handle to write to.
@@ -102,6 +111,15 @@ inline auto platformRead(NativeHandle h, void* data, size_t size) -> intptr_t
     return static_cast<intptr_t>(bytesRead);
 }
 #else
+/// Cross-platform close using POSIX close.
+///
+/// @param fd The file descriptor to close.
+inline void platformClose(NativeHandle fd) noexcept
+{
+    if (fd != InvalidHandle)
+        ::close(fd);
+}
+
 /// Cross-platform write using POSIX write.
 ///
 /// @param fd The file descriptor to write to.
@@ -133,6 +151,7 @@ namespace endo
 using endo::platform::InvalidHandle;
 using endo::platform::InvalidProcessId;
 using endo::platform::NativeHandle;
+using endo::platform::platformClose;
 using endo::platform::platformRead;
 using endo::platform::platformWrite;
 using endo::platform::ProcessId;

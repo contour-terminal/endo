@@ -93,7 +93,7 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
                 if (firstComponent == "build" || firstComponent == "node_modules")
                     continue;
 
-                files.push_back(relPath.string());
+                files.push_back(relPath.generic_string());
             }
         }
         catch (std::filesystem::filesystem_error const&)
@@ -108,7 +108,7 @@ auto ProjectFileTree::filePaths(std::filesystem::path const& rootPath) const -> 
     {
         auto p = std::filesystem::path(filePath);
         for (auto parent = p.parent_path(); !parent.empty(); parent = parent.parent_path())
-            dirs.insert(parent.string() + "/");
+            dirs.insert(parent.generic_string() + "/");
     }
 
     // Merge directories into the result
@@ -170,7 +170,7 @@ auto ProjectFileTree::buildTreeFromPaths(std::vector<std::string> const& paths) 
         auto parts = std::vector<std::string> {};
 
         for (auto const& part: p)
-            parts.push_back(part.string());
+            parts.push_back(part.generic_string());
 
         // Apply depth limit
         if (parts.size() > _config.maxDepth + 1) // +1 because the file itself counts
@@ -243,7 +243,7 @@ auto ProjectFileTree::scanDirectory(std::filesystem::path const& path) const -> 
             if (firstComponent == "build" || firstComponent == "node_modules")
                 continue;
 
-            paths.push_back(relPath.string());
+            paths.push_back(relPath.generic_string());
             ++entryCount;
         }
     }

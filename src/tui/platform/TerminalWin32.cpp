@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+#include <tui/MockTerminalOutput.hpp>
 #include <tui/Terminal.hpp>
 
 #if defined(_WIN32)
@@ -21,6 +22,11 @@ Terminal::Terminal(): _output(std::make_unique<TerminalOutput>())
 {
 }
 
+Terminal::Terminal(std::unique_ptr<TerminalOutput> output):
+    _output(std::move(output)), _mockMode(dynamic_cast<MockTerminalOutput*>(_output.get()) != nullptr)
+{
+}
+
 Terminal::~Terminal()
 {
     shutdown();
@@ -34,6 +40,13 @@ auto Terminal::initialize() -> VoidResult
     // Initialize output first (queries dimensions)
     if (auto result = _output->initialize(); !result)
         return result;
+
+    // In mock mode, skip input initialization and capability queries.
+    if (_mockMode)
+    {
+        _initialized = true;
+        return {};
+    }
 
     // Initialize input (raw mode, protocols)
     if (auto result = _input.initialize(); !result)
@@ -57,8 +70,11 @@ void Terminal::shutdown()
     if (!_initialized)
         return;
 
-    gActiveInput = nullptr;
-    _input.shutdown();
+    if (!_mockMode)
+    {
+        gActiveInput = nullptr;
+        _input.shutdown();
+    }
     _initialized = false;
 }
 
@@ -74,6 +90,9 @@ auto Terminal::output() noexcept -> TerminalOutput&
 
 auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
 {
+    if (_mockMode)
+        return {};
+
     auto events = _input.poll(timeoutMs);
 
     // Consume protocol-level response events internally — do not pass to application
@@ -82,6 +101,11 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
         {
             auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
             handleColorSchemeReport(scheme);
+            return true;
+        }
+        if (auto const* fe = std::get_if<FocusEvent>(&event))
+        {
+            handleFocusEvent(fe->focused);
             return true;
         }
         if (std::holds_alternative<CursorPositionReport>(event))
@@ -106,13 +130,13 @@ auto Terminal::rows() const noexcept -> int
 
 void Terminal::suspend()
 {
-    if (_initialized)
+    if (_initialized && !_mockMode)
         _input.suspend();
 }
 
 void Terminal::resume()
 {
-    if (_initialized)
+    if (_initialized && !_mockMode)
         _input.resume();
 }
 
@@ -123,6 +147,13 @@ auto Terminal::isSuspended() const noexcept -> bool
 
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
+    if (_mockMode)
+    {
+        if (auto* mock = dynamic_cast<MockTerminalOutput*>(_output.get()))
+            return { mock->cursorRow() + 1, mock->cursorCol() + 1 }; // Convert 0-based to 1-based
+        return { 0, 0 };
+    }
+
     _output->requestCursorPosition();
     _output->flush();
 
@@ -159,6 +190,9 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
 auto Terminal::queryCellSize() -> std::pair<int, int>
 {
+    if (_mockMode)
+        return { 0, 0 };
+
     _output->requestCellSize();
     _output->flush();
 
@@ -221,6 +255,37 @@ void Terminal::handleColorSchemeReport(ColorScheme scheme)
     _colorScheme = scheme;
     for (auto const& cb: _colorSchemeCallbacks)
         cb(scheme);
+}
+
+auto Terminal::isFocused() const noexcept -> bool
+{
+    return _focused;
+}
+
+void Terminal::onFocusChanged(std::function<void(bool)> callback)
+{
+    _focusCallbacks.push_back(std::move(callback));
+}
+
+void Terminal::handleFocusEvent(bool focused)
+{
+    if (focused == _focused)
+        return;
+
+    _focused = focused;
+    for (auto const& cb: _focusCallbacks)
+        cb(focused);
+}
+
+auto Terminal::hudSupported() const noexcept -> bool
+{
+    return _hudSupported;
+}
+
+auto Terminal::queryDecMode(int /*mode*/) -> bool
+{
+    // Not yet implemented on Windows
+    return false;
 }
 
 } // namespace tui

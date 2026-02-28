@@ -7,6 +7,7 @@
     #include <array>
     #include <string_view>
 
+    #include <platform/Wakeup.hpp>
     #include <windows.h>
 
 namespace tui
@@ -210,6 +211,11 @@ void TerminalInput::resume()
 auto TerminalInput::isSuspended() const noexcept -> bool
 {
     return _suspended;
+}
+
+void TerminalInput::setWakeup(endo::platform::Wakeup* wakeup)
+{
+    _wakeup = wakeup;
 }
 
 void TerminalInput::enableRawMode()

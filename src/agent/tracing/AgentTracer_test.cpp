@@ -36,6 +36,7 @@ TEST_CASE("AgentTracer.create_creates_file", "[agent]")
     REQUIRE(result.has_value());
     CHECK(std::filesystem::exists(tracePath));
 
+    result->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -59,6 +60,7 @@ TEST_CASE("AgentTracer.session_header_format", "[agent]")
     CHECK(doc.at("model") == "claude-sonnet-4-5-20250929");
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -95,6 +97,7 @@ TEST_CASE("AgentTracer.tool_call_entry_format", "[agent]")
     CHECK(doc.at("result").at("is_error") == false);
     CHECK(doc.at("duration_ms") == 42);
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -132,6 +135,7 @@ TEST_CASE("AgentTracer.multiple_entries_one_per_line", "[agent]")
     for (auto const& line: lines)
         CHECK_NOTHROW(nlohmann::json::parse(line));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -145,13 +149,19 @@ TEST_CASE("AgentTracer.create_creates_parent_directories", "[agent]")
     REQUIRE(result.has_value());
     CHECK(std::filesystem::exists(tracePath));
 
+    result->close();
     std::filesystem::remove_all(std::filesystem::temp_directory_path() / "endo-test-tracer-mkdir");
 }
 
 TEST_CASE("AgentTracer.create_returns_error_for_invalid_path", "[agent]")
 {
+#ifdef _WIN32
+    // Colons in path components are invalid on Windows
+    auto result = AgentTracer::create("C:\\invalid:path\\trace.jsonl");
+#else
     // /proc is read-only on Linux, so writing there should fail
     auto result = AgentTracer::create("/proc/nonexistent/dir/trace.jsonl");
+#endif
     CHECK_FALSE(result.has_value());
     CHECK_FALSE(result.error().empty());
 }
@@ -166,6 +176,7 @@ TEST_CASE("AgentTracer.path_returns_configured_path", "[agent]")
     REQUIRE(tracer.has_value());
     CHECK(tracer->path() == tracePath);
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -195,6 +206,7 @@ TEST_CASE("AgentTracer.error_result_entry", "[agent]")
     CHECK(doc.at("result").at("is_error") == true);
     CHECK(doc.at("result").at("content") == "Permission denied");
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -222,6 +234,7 @@ TEST_CASE("AgentTracer.user_message_format", "[agent]")
     CHECK(doc.at("content") == "explain this code");
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -246,6 +259,7 @@ TEST_CASE("AgentTracer.llm_request_format", "[agent]")
     CHECK(doc.at("token_estimate") == 3500);
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -303,6 +317,7 @@ TEST_CASE("AgentTracer.llm_response_format", "[agent]")
     CHECK(doc.at("usage").at("cache_read_tokens") == 100);
     CHECK(doc.at("usage").at("cache_creation_tokens") == 50);
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -328,6 +343,7 @@ TEST_CASE("AgentTracer.llm_response_without_usage", "[agent]")
     CHECK(doc.at("tool_calls").empty());
     CHECK_FALSE(doc.contains("usage"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -353,6 +369,7 @@ TEST_CASE("AgentTracer.compaction_format", "[agent]")
     CHECK(doc.at("after_tokens") == 4000);
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -376,6 +393,7 @@ TEST_CASE("AgentTracer.error_format", "[agent]")
     CHECK(doc.at("message") == "HTTP 429 rate limit");
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -406,6 +424,7 @@ TEST_CASE("AgentTracer.error_with_http_context", "[agent]")
     CHECK(doc.at("response_body") == R"({"error":{"message":"Internal error"}})");
     CHECK(doc.contains("timestamp"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -430,6 +449,7 @@ TEST_CASE("AgentTracer.error_without_http_context_omits_fields", "[agent]")
     CHECK_FALSE(doc.contains("request_body"));
     CHECK_FALSE(doc.contains("response_body"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -466,6 +486,7 @@ TEST_CASE("AgentTracer.llm_response_with_http_context", "[agent]")
     CHECK(doc.at("request_body") == R"({"model":"claude-sonnet-4-5-20250929"})");
     CHECK(doc.at("response_body") == R"({"id":"msg_123","content":[{"type":"text","text":"Hello"}]})");
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -498,6 +519,7 @@ TEST_CASE("AgentTracer.llm_response_without_response_body_omits_field", "[agent]
     CHECK(doc.at("type") == "llm_response");
     CHECK_FALSE(doc.contains("response_body"));
 
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 

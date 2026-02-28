@@ -13,6 +13,7 @@ add_library(endo-platform STATIC
     Pipe.hpp
     Pipe.cpp
     EnvironmentProvider.hpp
+    UserPaths.hpp
     ProcessProvider.hpp
     FileInfoProvider.hpp
     SignalHandler.hpp

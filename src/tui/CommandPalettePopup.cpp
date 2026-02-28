@@ -62,8 +62,7 @@ namespace
 
             auto const graphemeWidth = graphemeClusterWidth(cluster);
 
-            auto const isMatch =
-                std::ranges::find(matchPositions, graphemeIndex) != matchPositions.end();
+            auto const isMatch = std::ranges::find(matchPositions, graphemeIndex) != matchPositions.end();
             auto const& style = isMatch ? matchStyle : normalStyle;
 
             canvas.put(row, currentCol, grapheme, style);
@@ -85,8 +84,7 @@ void CommandPalettePopup::render(Canvas& canvas)
 
     auto const& theme = canvas.theme();
 
-    auto const visibleCount =
-        std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
+    auto const visibleCount = std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
     auto const paletteWidth = calculateWidth(canvas.width());
     // Height: 2 (borders) + 1 (filter) + 1 (separator) + visible items
     auto const paletteHeight = static_cast<int>(visibleCount) + 4;
@@ -153,9 +151,8 @@ void CommandPalettePopup::render(Canvas& canvas)
         // Label with fuzzy match highlighting
         if (!filteredItem.matchPositions.empty())
         {
-            col +=
-                putStringWithHighlights(canvas, row, col, entry->label, itemStyle, matchStyle,
-                                        filteredItem.matchPositions);
+            col += putStringWithHighlights(
+                canvas, row, col, entry->label, itemStyle, matchStyle, filteredItem.matchPositions);
         }
         else
         {
@@ -205,8 +202,7 @@ Size CommandPalettePopup::preferredSize() const
     if (!visible())
         return { 0, 0 };
 
-    auto const visibleCount =
-        std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
+    auto const visibleCount = std::min(static_cast<size_t>(MaxVisibleItems), _filteredItems.size());
     auto const height = static_cast<int>(visibleCount) + 4; // borders + filter + separator
     return { MaxWidth, height };
 }
@@ -307,16 +303,14 @@ CommandPaletteAction CommandPalettePopup::handleKey(KeyEvent const& key)
     }
 
     // Navigation: Up / Ctrl+K
-    if (key.key == KeyCode::Up
-        || (key.codepoint == 'k' && hasModifier(mods, Modifier::Ctrl)))
+    if (key.key == KeyCode::Up || (key.codepoint == 'k' && hasModifier(mods, Modifier::Ctrl)))
     {
         selectPrev();
         return CommandPaletteAction::Changed;
     }
 
     // Navigation: Down / Ctrl+J
-    if (key.key == KeyCode::Down
-        || (key.codepoint == 'j' && hasModifier(mods, Modifier::Ctrl)))
+    if (key.key == KeyCode::Down || (key.codepoint == 'j' && hasModifier(mods, Modifier::Ctrl)))
     {
         selectNext();
         return CommandPaletteAction::Changed;
@@ -380,10 +374,8 @@ void CommandPalettePopup::refilter()
             if (result.matches)
             {
                 auto const score = FuzzyMatch::calculateScore(100, item.label, filterText, result);
-                _filteredItems.push_back(
-                    FilteredItem { .entry = &item,
-                                   .matchPositions = std::move(result.positions),
-                                   .score = score });
+                _filteredItems.push_back(FilteredItem {
+                    .entry = &item, .matchPositions = std::move(result.positions), .score = score });
                 continue;
             }
 
@@ -394,18 +386,15 @@ void CommandPalettePopup::refilter()
             {
                 auto const score = FuzzyMatch::calculateScore(50, combined, filterText, result);
                 // Adjust positions to skip category prefix for label highlighting
-                auto const categoryLen =
-                    FuzzyMatch::countGraphemes(item.category) + 1; // +1 for space
+                auto const categoryLen = FuzzyMatch::countGraphemes(item.category) + 1; // +1 for space
                 auto labelPositions = std::vector<size_t> {};
                 for (auto pos: result.positions)
                 {
                     if (pos >= categoryLen)
                         labelPositions.push_back(pos - categoryLen);
                 }
-                _filteredItems.push_back(
-                    FilteredItem { .entry = &item,
-                                   .matchPositions = std::move(labelPositions),
-                                   .score = score });
+                _filteredItems.push_back(FilteredItem {
+                    .entry = &item, .matchPositions = std::move(labelPositions), .score = score });
                 continue;
             }
 
@@ -420,9 +409,7 @@ void CommandPalettePopup::refilter()
         }
 
         // Sort by score descending
-        std::ranges::sort(_filteredItems, [](auto const& a, auto const& b) {
-            return a.score > b.score;
-        });
+        std::ranges::sort(_filteredItems, [](auto const& a, auto const& b) { return a.score > b.score; });
     }
 
     // Reset selection
@@ -464,10 +451,11 @@ void CommandPalettePopup::executeSelected()
 {
     if (_selected < _filteredItems.size())
     {
-        auto const* entry = _filteredItems[_selected].entry;
+        // Copy the action before hide() destroys _allItems (which entry points into).
+        auto action = _filteredItems[_selected].entry->action;
         hide();
-        if (entry->action)
-            entry->action();
+        if (action)
+            action();
     }
 }
 
@@ -499,9 +487,7 @@ void CommandPalettePopup::pageUp()
 {
     if (_filteredItems.empty())
         return;
-    _selected = (_selected >= static_cast<size_t>(MaxVisibleItems))
-                    ? _selected - MaxVisibleItems
-                    : 0;
+    _selected = (_selected >= static_cast<size_t>(MaxVisibleItems)) ? _selected - MaxVisibleItems : 0;
     ensureSelectedVisible();
 }
 

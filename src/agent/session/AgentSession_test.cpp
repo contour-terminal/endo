@@ -498,6 +498,8 @@ TEST_CASE("AgentSession.tracer_records_tool_calls", "[agent]")
     }
     CHECK(toolCallFound);
 
+    ifs.close();
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 
@@ -531,6 +533,8 @@ TEST_CASE("AgentSession.tracer_records_user_message", "[agent]")
     }
     CHECK(userMsgFound);
 
+    ifs.close();
+    tracer->close();
     std::filesystem::remove_all(tmpDir);
 }
 

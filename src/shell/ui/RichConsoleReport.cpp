@@ -305,10 +305,22 @@ bool RichConsoleReport::containsFailures() const noexcept
 // BufferingConsoleReport
 // =================================================================================================
 
-BufferingConsoleReport::BufferingConsoleReport()
+BufferingConsoleReport::BufferingConsoleReport(): BufferingConsoleReport(ColorMode::Auto)
 {
-    auto const* noColor = std::getenv("NO_COLOR");
-    _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
+}
+
+BufferingConsoleReport::BufferingConsoleReport(ColorMode colorMode)
+{
+    switch (colorMode)
+    {
+        case ColorMode::Enabled: _useColor = true; break;
+        case ColorMode::Disabled: _useColor = false; break;
+        case ColorMode::Auto: {
+            auto const* noColor = std::getenv("NO_COLOR");
+            _useColor = isatty(STDERR_FD) && (noColor == nullptr || noColor[0] == '\0');
+            break;
+        }
+    }
 }
 
 void BufferingConsoleReport::setSourceText(std::string_view source)

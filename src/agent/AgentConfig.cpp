@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <fstream>
 
+#include <platform/UserPaths.hpp>
+
 namespace endo::agent
 {
 
@@ -184,11 +186,11 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
 
 auto loadAgentConfig() -> AgentConfig
 {
-    auto const home = std::getenv("HOME");
-    if (!home)
+    auto const configDir = platform::configHome();
+    if (!configDir)
         return AgentConfig {};
 
-    auto const path = std::filesystem::path(home) / ".config" / "endo" / "agent.yml";
+    auto const path = *configDir / "endo" / "agent.yml";
     if (!std::filesystem::exists(path))
         return AgentConfig {};
 
@@ -271,11 +273,11 @@ auto saveAgentConfig(AgentConfig const& config, std::filesystem::path const& pat
 
 auto saveAgentConfig(AgentConfig const& config) -> std::optional<std::string>
 {
-    auto const* home = std::getenv("HOME");
-    if (!home)
-        return std::string("HOME environment variable not set");
+    auto const configDir = platform::configHome();
+    if (!configDir)
+        return std::string("User config directory not available");
 
-    auto const path = std::filesystem::path(home) / ".config" / "endo" / "agent.yml";
+    auto const path = *configDir / "endo" / "agent.yml";
     return saveAgentConfig(config, path);
 }
 

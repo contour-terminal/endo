@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include <platform/PlatformError.hpp>
-
 #include <expected>
 #include <filesystem>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <platform/PlatformError.hpp>
 
 namespace endo::platform
 {
@@ -66,6 +66,37 @@ class EnvironmentProvider
 
     /// Returns the current working directory.
     [[nodiscard]] virtual std::string currentDirectory() const = 0;
+
+    /// @brief Returns the user's home directory path.
+    ///
+    /// Tries HOME (Unix), then USERPROFILE (Windows).
+    ///
+    /// @return The home directory path, or std::nullopt if neither variable is set.
+    [[nodiscard]] inline auto homeDirectory() const -> std::optional<std::filesystem::path>
+    {
+        if (auto home = get("HOME"))
+            return std::filesystem::path(std::string(*home));
+        if (auto home = get("USERPROFILE"))
+            return std::filesystem::path(std::string(*home));
+        return std::nullopt;
+    }
+
+    /// @brief Returns the user's configuration base directory.
+    ///
+    /// On Unix: XDG_CONFIG_HOME or ~/.config.
+    /// On Windows: APPDATA (typically ~/AppData/Roaming).
+    ///
+    /// @return The configuration directory path, or std::nullopt if it cannot be determined.
+    [[nodiscard]] inline auto configHome() const -> std::optional<std::filesystem::path>
+    {
+        if (auto xdg = get("XDG_CONFIG_HOME"); xdg && !xdg->empty())
+            return std::filesystem::path(std::string(*xdg));
+        if (auto appdata = get("APPDATA"); appdata && !appdata->empty())
+            return std::filesystem::path(std::string(*appdata));
+        if (auto home = homeDirectory())
+            return *home / ".config";
+        return std::nullopt;
+    }
 };
 
 } // namespace endo::platform

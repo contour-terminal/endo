@@ -208,7 +208,7 @@ void Shell::PipelineBuilder::closePipeFdsInParent()
 {
     if (lastReleasedReaderFd != InvalidHandle)
     {
-        ::close(lastReleasedReaderFd);
+        platformClose(lastReleasedReaderFd);
         lastReleasedReaderFd = InvalidHandle;
     }
     closeCurrentPipeWriter();
@@ -1700,14 +1700,22 @@ namespace
     [[nodiscard]] auto runCommandCapture(std::string const& cmd) -> std::string
     {
         auto result = std::string {};
+#if defined(_WIN32)
+        auto* fp = _popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
+#else
         auto* fp = popen(cmd.c_str(), "r"); // NOLINT(cert-env33-c)
+#endif
         if (!fp)
             return result;
 
         auto buf = std::array<char, 256> {};
         while (fgets(buf.data(), static_cast<int>(buf.size()), fp) != nullptr)
             result += buf.data();
+#if defined(_WIN32)
+        _pclose(fp); // NOLINT(cert-env33-c)
+#else
         pclose(fp); // NOLINT(cert-env33-c)
+#endif
 
         while (!result.empty() && (result.back() == '\n' || result.back() == '\r'))
             result.pop_back();
@@ -1865,6 +1873,7 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     // --- Tool registration (same tools as interactive mode) ---
     auto toolRegistry = agent::ToolRegistry {};
 
+#if !defined(_WIN32)
     auto const shellPath = [&]() -> std::string {
         if (access("/bin/bash", X_OK) == 0)
             return "/bin/bash";
@@ -2008,6 +2017,19 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
 
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
+#else
+    auto shellExecCb = [](std::string const& /*command*/,
+                          std::chrono::milliseconds /*timeout*/) -> agent::ShellExecResult {
+        return agent::ShellExecResult { .output = "Shell execution not supported on Windows",
+                                        .exitCode = -1 };
+    };
+
+    auto endoExecCb = [this](std::string const& source,
+                             std::chrono::milliseconds /*timeout*/) -> agent::EndoExecResult {
+        auto const exitCode = this->execute(source);
+        return agent::EndoExecResult { .output = {}, .exitCode = exitCode };
+    };
+#endif
 
     toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
     toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
@@ -2485,6 +2507,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
     // Set up tool registry with built-in tools
     auto toolRegistry = agent::ToolRegistry {};
 
+#if !defined(_WIN32)
     auto const shellPath = [&]() -> std::string {
         if (access("/bin/bash", X_OK) == 0)
             return "/bin/bash";
@@ -2628,6 +2651,19 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
 
         return agent::EndoExecResult { .output = std::move(output), .exitCode = exitCode };
     };
+#else
+    auto shellExecCb = [](std::string const& /*command*/,
+                          std::chrono::milliseconds /*timeout*/) -> agent::ShellExecResult {
+        return agent::ShellExecResult { .output = "Shell execution not supported on Windows",
+                                        .exitCode = -1 };
+    };
+
+    auto endoExecCb = [this](std::string const& source,
+                             std::chrono::milliseconds /*timeout*/) -> agent::EndoExecResult {
+        auto const exitCode = this->execute(source);
+        return agent::EndoExecResult { .output = {}, .exitCode = exitCode };
+    };
+#endif
 
     toolRegistry.registerTool(std::make_unique<agent::ReadFileTool>());
     toolRegistry.registerTool(std::make_unique<agent::WriteFileTool>());
@@ -3047,7 +3083,11 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                 auto const active = (meta.name == _activeSessionName) ? "\xe2\x97\x8f" : "";
                 auto const tt = std::chrono::system_clock::to_time_t(meta.updatedAt);
                 auto tm = std::tm {};
+#if defined(_WIN32)
+                localtime_s(&tm, &tt);
+#else
                 localtime_r(&tt, &tm);
+#endif
                 auto timeBuf = std::array<char, 32> {};
                 std::strftime(timeBuf.data(), timeBuf.size(), "%Y-%m-%d %H:%M", &tm);
                 md += std::format("| {} | {} | ~{}k | {} | {} |\n",

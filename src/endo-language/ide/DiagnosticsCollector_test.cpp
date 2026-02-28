@@ -64,8 +64,13 @@ TEST_CASE("DiagnosticsCollector.print_builtin_no_diagnostic", "[diagnostics][com
 
 TEST_CASE("DiagnosticsCollector.path_command_no_diagnostic", "[diagnostics][command-not-found]")
 {
+#if defined(_WIN32)
+    // cmd.exe is always in PATH on Windows
+    auto diagnostics = collectDiagnostics("cmd /c dir");
+#else
     // ls should be in PATH on any Linux system
     auto diagnostics = collectDiagnostics("ls -la");
+#endif
     CHECK(diagnostics.empty());
 }
 
