@@ -2,6 +2,7 @@
 #include "ModelsCommand.hpp"
 
 #include <agent/providers/local/ModelRegistry.hpp>
+#include <http/HttpClient.hpp>
 
 #include <algorithm>
 #include <cstdlib>
@@ -138,6 +139,28 @@ namespace
         return EXIT_SUCCESS;
     }
 
+    /// Renders a terminal progress bar.
+    void renderProgress(Colors const& c,
+                        std::string_view label,
+                        size_t totalBytes,
+                        size_t downloadedBytes)
+    {
+        constexpr int barWidth = 30;
+        auto const fraction =
+            (totalBytes > 0) ? static_cast<double>(downloadedBytes) / static_cast<double>(totalBytes) : 0.0;
+        auto const filled = static_cast<int>(fraction * barWidth);
+
+        std::print("\r  {}[", c.cyan);
+        for (int i = 0; i < barWidth; ++i)
+            std::print("{}", (i < filled) ? "█" : "░");
+        std::print("]{} {:3.0f}%  {} / {}   ",
+                   c.reset,
+                   fraction * 100.0,
+                   formatBytes(downloadedBytes),
+                   (totalBytes > 0) ? formatBytes(totalBytes) : "?");
+        std::fflush(stdout);
+    }
+
     /// Runs `endo agent models download <name> [--quant <quant>]`.
     auto runDownload(std::span<char const* const> args) -> int
     {
@@ -211,11 +234,43 @@ namespace
         std::print("{}URL: {}{}\n", c.dim, variant->url, c.reset);
         std::print("{}Destination: {}{}\n\n", c.dim, destPath.string(), c.reset);
 
-        // Note: Actual download requires HttpClient which is constructed at a higher level.
-        // For now, print instructions for manual download.
-        std::print("{}Download with:{}\n", c.yellow, c.reset);
-        std::print("  curl -L -o '{}' '{}'\n\n", destPath.string(), variant->url);
-        std::print("{}To use this model, add to ~/.config/endo/init.endo:{}\n", c.dim, c.reset);
+        // Download using HttpClient.
+        auto httpClient = http::HttpClient {};
+        auto request = http::HttpRequest {
+            .url = variant->url,
+            .method = http::HttpMethod::Get,
+            .timeout = std::nullopt, // No timeout for large downloads.
+            .maxResponseSize = 0,    // Ignored by download().
+            .progressCallback =
+                [&c](size_t total, size_t now) -> bool {
+                    renderProgress(c, "Downloading", total, now);
+                    return true; // Continue downloading.
+                },
+            .followRedirects = true,
+        };
+
+        auto const result = httpClient.download(request, destPath);
+
+        if (!result.has_value())
+        {
+            std::print("\n{}Download failed:{} {}\n", c.red, c.reset, result.error().message);
+            // Clean up partial file.
+            std::error_code ec;
+            std::filesystem::remove(destPath, ec);
+            return EXIT_FAILURE;
+        }
+
+        if (result->statusCode != 200)
+        {
+            std::print(
+                "\n{}Download failed:{} HTTP {}\n", c.red, c.reset, result->statusCode);
+            std::error_code ec;
+            std::filesystem::remove(destPath, ec);
+            return EXIT_FAILURE;
+        }
+
+        std::print("\n\n{}Downloaded:{} {}\n\n", c.green, c.reset, destPath.string());
+        std::print("To use this model, add to ~/.config/endo/init.endo:\n");
         std::print("  agent_local_model_path <- \"{}\"\n", destPath.string());
         std::print("  agent_provider <- \"local\"\n\n");
 
