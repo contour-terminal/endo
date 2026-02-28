@@ -44,7 +44,7 @@ TEST_CASE("agent.local.model_registry.curated_models_non_empty", "[agent][local]
 {
     auto const models = curatedModels();
     REQUIRE_FALSE(models.empty());
-    CHECK(models.size() == 4);
+    CHECK(models.size() == 5);
 }
 
 TEST_CASE("agent.local.model_registry.curated_models_have_variants", "[agent][local]")
@@ -89,6 +89,15 @@ TEST_CASE("agent.local.model_registry.find_case_insensitive", "[agent][local]")
     auto const* model = findCuratedModel("QWEN2.5-CODER-7B");
     REQUIRE(model != nullptr);
     CHECK(model->name == "qwen2.5-coder-7b");
+}
+
+TEST_CASE("agent.local.model_registry.find_deepseek_model", "[agent][local]")
+{
+    auto const* model = findCuratedModel("deepseek-coder");
+    REQUIRE(model != nullptr);
+    CHECK(model->name == "deepseek-coder-v2-lite");
+    CHECK(model->architecture == "deepseek2");
+    CHECK(model->parameterCount == 16'000'000'000);
 }
 
 TEST_CASE("agent.local.model_registry.find_no_match", "[agent][local]")

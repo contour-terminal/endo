@@ -14,7 +14,7 @@ namespace
 {
 
     // clang-format off
-    auto static const CuratedModelCatalog = std::array<CuratedModel, 4> {{
+    auto static const CuratedModelCatalog = std::array<CuratedModel, 5> {{
         {
             .name = "qwen2.5-coder-7b",
             .displayName = "Qwen 2.5 Coder 7B",
@@ -28,6 +28,24 @@ namespace
                     .fileSizeBytes = 4'700'000'000,
                     .ramRequired = 8'000'000'000,
                     .filename = "qwen2.5-coder-7b-instruct-q4_k_m.gguf",
+                },
+            }},
+            .supportsToolUse = true,
+            .supportsVision = false,
+        },
+        {
+            .name = "deepseek-coder-v2-lite",
+            .displayName = "DeepSeek Coder V2 Lite 16B",
+            .description = "MoE coding model (2.4B active), 12 GB RAM",
+            .architecture = "deepseek2",
+            .parameterCount = 16'000'000'000,
+            .variants = {{
+                {
+                    .quantization = "Q4_K_M",
+                    .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Lite-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf",
+                    .fileSizeBytes = 10'360'000'000,
+                    .ramRequired = 12'000'000'000,
+                    .filename = "DeepSeek-Coder-V2-Lite-Instruct-Q4_K_M.gguf",
                 },
             }},
             .supportsToolUse = true,
