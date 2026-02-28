@@ -69,7 +69,7 @@ Available Models:
   qwen2.5-coder-7b       4.4 GB    7.5 GB    downloaded      Fast coding model, 8 GB RAM
   qwen3-coder-30b        18.6 GB   24.0 GB   not installed   Balanced coding agent, 24 GB RAM
   llama3.3-70b           37.3 GB   44.7 GB   not installed   Strong general + coding, 48 GB RAM
-  qwen3-235b-moe         44.7 GB   48.4 GB   not installed   Best coding (MoE, needs GPU), 52 GB RAM
+  qwen3-235b-moe         132.4 GB  145.0 GB  not installed   Best coding (MoE, needs GPU), 145 GB RAM
 ```
 
 Any GGUF files manually placed in the models directory also appear as "custom model"
@@ -131,7 +131,7 @@ These models are tested and recommended for use with Endo's agent mode:
 | `deepseek-coder-v2-lite` | 16B (MoE, 2.4B active) | ~10.4 GB | 12 GB | Efficient MoE coding model, 128k context |
 | `qwen3-coder-30b` | 30B | ~18.6 GB | 24 GB | Balanced coding agent |
 | `llama3.3-70b` | 70B | ~37.3 GB | 48 GB | Strong general-purpose + coding |
-| `qwen3-235b-moe` | 235B (MoE) | ~44.7 GB | 52 GB | Best coding quality, requires dedicated GPU |
+| `qwen3-235b-moe` | 235B (MoE) | ~132.4 GB (3 parts) | 145 GB | Best coding quality, requires dedicated GPU |
 | `deepseek-coder-v2-instruct` | 236B (MoE) | ~142.5 GB (4 parts) | 96 GB | Strongest MoE coding model, split download |
 
 All curated models support tool use (file reading, editing, shell commands, etc.). The

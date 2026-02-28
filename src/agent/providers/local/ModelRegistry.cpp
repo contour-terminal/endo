@@ -91,16 +91,33 @@ namespace
         {
             .name = "qwen3-235b-moe",
             .displayName = "Qwen 3 235B MoE",
-            .description = "Best coding (MoE, needs GPU), 52 GB RAM",
+            .description = "Best coding (MoE, needs GPU), 145 GB RAM",
             .architecture = "qwen2_moe",
             .parameterCount = 235'000'000'000,
             .variants = {{
                 {
                     .quantization = "Q4_K_M",
-                    .url = "https://huggingface.co/unsloth/Qwen3-235B-A22B-GGUF/resolve/main/Qwen3-235B-A22B-Q4_K_M.gguf",
-                    .fileSizeBytes = 48'000'000'000,
-                    .ramRequired = 52'000'000'000,
-                    .filename = "qwen3-235b-a22b-q4_k_m.gguf",
+                    .url = "https://huggingface.co/unsloth/Qwen3-235B-A22B-GGUF/resolve/main/Q4_K_M/Qwen3-235B-A22B-Q4_K_M-00001-of-00003.gguf",
+                    .fileSizeBytes = 142'154'000'000,
+                    .ramRequired = 145'000'000'000,
+                    .filename = "Qwen3-235B-A22B-Q4_K_M-00001-of-00003.gguf",
+                    .parts = {{
+                        {
+                            .url = "https://huggingface.co/unsloth/Qwen3-235B-A22B-GGUF/resolve/main/Q4_K_M/Qwen3-235B-A22B-Q4_K_M-00001-of-00003.gguf",
+                            .filename = "Qwen3-235B-A22B-Q4_K_M-00001-of-00003.gguf",
+                            .fileSizeBytes = 49'945'000'000,
+                        },
+                        {
+                            .url = "https://huggingface.co/unsloth/Qwen3-235B-A22B-GGUF/resolve/main/Q4_K_M/Qwen3-235B-A22B-Q4_K_M-00002-of-00003.gguf",
+                            .filename = "Qwen3-235B-A22B-Q4_K_M-00002-of-00003.gguf",
+                            .fileSizeBytes = 49'930'000'000,
+                        },
+                        {
+                            .url = "https://huggingface.co/unsloth/Qwen3-235B-A22B-GGUF/resolve/main/Q4_K_M/Qwen3-235B-A22B-Q4_K_M-00003-of-00003.gguf",
+                            .filename = "Qwen3-235B-A22B-Q4_K_M-00003-of-00003.gguf",
+                            .fileSizeBytes = 42'279'000'000,
+                        },
+                    }},
                 },
             }},
             .supportsToolUse = true,
