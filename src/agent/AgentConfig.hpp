@@ -105,9 +105,9 @@ struct SessionConfig
 /// @brief Default action for error recovery on failed shell commands.
 enum class ErrorRecoveryAction : std::uint8_t
 {
-    Ask,     ///< Ask the user via QuestionComponent (default).
+    Ask,     ///< Ask the user via QuestionComponent.
     Analyze, ///< Automatically analyze without asking.
-    Ignore,  ///< Do nothing on command failure.
+    Ignore,  ///< Do nothing on command failure (default).
 };
 
 /// @brief Converts an ErrorRecoveryAction to its string representation.
@@ -121,25 +121,25 @@ enum class ErrorRecoveryAction : std::uint8_t
         case ErrorRecoveryAction::Analyze: return "analyze";
         case ErrorRecoveryAction::Ignore: return "ignore";
     }
-    return "ask";
+    return "ignore";
 }
 
 /// @brief Parses an ErrorRecoveryAction from a string.
 /// @param str The string to parse ("ask", "analyze", or "ignore").
-/// @return The corresponding action (defaults to Ask for unknown strings).
+/// @return The corresponding action (defaults to Ignore for unknown strings).
 [[nodiscard]] constexpr auto errorRecoveryActionFromString(std::string_view str) -> ErrorRecoveryAction
 {
     if (str == "analyze")
         return ErrorRecoveryAction::Analyze;
     if (str == "ignore")
         return ErrorRecoveryAction::Ignore;
-    return ErrorRecoveryAction::Ask;
+    return ErrorRecoveryAction::Ignore;
 }
 
 /// @brief Configuration for error recovery suggestions on failed shell commands.
 struct ErrorRecoveryConfig
 {
-    ErrorRecoveryAction action = ErrorRecoveryAction::Ask; ///< Default action on command failure.
+    ErrorRecoveryAction action = ErrorRecoveryAction::Ignore; ///< Default action on command failure.
     std::string model; ///< Model to use for error analysis (empty = use active agent model).
 };
 

@@ -158,22 +158,26 @@ agent_blocked_pattern <- ["rm -rf /"; ":(){ :|:& };:"]
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `agent_error_recovery_action` | string | Action when a shell command fails: `"ask"` (default), `"analyze"`, `"ignore"` |
+| `agent_error_recovery_action` | string | Action when a shell command fails: `"ask"`, `"analyze"`, `"ignore"` (default) |
 | `agent_error_recovery_model` | string | Model for error analysis (empty = use active agent model) |
 
 ```endo
-# Automatically analyze failed commands without asking
-agent_error_recovery_action <- "analyze"
+# Enable interactive error recovery prompt on command failure
+agent_error_recovery_action <- "ask"
+
+# Or automatically analyze failed commands without asking
+# agent_error_recovery_action <- "analyze"
 
 # Use a faster/cheaper model for error analysis
 agent_error_recovery_model <- "claude-haiku-4-5-20251001"
 ```
 
-When set to `"ask"` (default), a prompt appears after each failed command offering to analyze
-the error. Options include "Analyze (always)" and "Ignore (always)" to set session-level
-overrides. Error analysis uses the Contour terminal's Semantic Block Query extension (DEC
-Mode 2034) to capture the failed command's output. Non-Contour terminals gracefully skip
-error recovery (no prompts appear).
+By default, error recovery is disabled (`"ignore"`). Set to `"ask"` to show a prompt after each
+failed command offering to analyze the error, or `"analyze"` to automatically analyze without
+asking. When using `"ask"`, options include "Analyze (always)" and "Ignore (always)" to set
+session-level overrides. Error analysis uses the Contour terminal's Semantic Block Query
+extension (DEC Mode 2034) to capture the failed command's output. Non-Contour terminals
+gracefully skip error recovery (no prompts appear).
 
 ### Tracing
 

@@ -422,8 +422,9 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
-            else if (_lexer.currentLiteral() == "ls"
-                     || ((_lexer.currentLiteral() == "ps" || _lexer.currentLiteral() == "jobs") && [this]() {
+            else if ((_lexer.currentLiteral() == "ls" || _lexer.currentLiteral() == "ps"
+                      || _lexer.currentLiteral() == "jobs")
+                     && [this]() {
                             // Peek at next token to decide F# vs shell routing.
                             // Only route to F# when followed by end-of-stmt, pipeline, string,
                             // paren, or unquoted path arg (identifier not starting with '-')
@@ -458,7 +459,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                                    || nextTok == Token::EndOfInput || nextTok == Token::ForwardPipe
                                    || nextTok == Token::String || nextTok == Token::DblQuoteStart
                                    || nextTok == Token::RndOpen;
-                        }()))
+                        }())
             {
                 // Structured commands: route as F# expressions with display for table rendering
                 std::unique_ptr<ast::Expr> expr;
