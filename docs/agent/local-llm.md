@@ -132,6 +132,7 @@ These models are tested and recommended for use with Endo's agent mode:
 | `qwen3-coder-30b` | 30B | ~15.8 GB | 24 GB | Balanced coding agent |
 | `llama3.3-70b` | 70B | ~37.3 GB | 48 GB | Strong general-purpose + coding |
 | `qwen3-235b-moe` | 235B (MoE) | ~44.7 GB | 52 GB | Best coding quality, requires dedicated GPU |
+| `deepseek-coder-v2-instruct` | 236B (MoE) | ~142.5 GB (4 parts) | 96 GB | Strongest MoE coding model, split download |
 
 All curated models support tool use (file reading, editing, shell commands, etc.). The
 Qwen 2.5 Coder 7B model is a good starting point for machines with 8+ GB of RAM.
@@ -139,6 +140,12 @@ Qwen 2.5 Coder 7B model is a good starting point for machines with 8+ GB of RAM.
 The DeepSeek Coder V2 Lite is a Mixture-of-Experts (MoE) model with 16B total parameters
 but only 2.4B active per token, offering strong coding performance with lower compute
 requirements and a large 128k token context window.
+
+The DeepSeek Coder V2 Instruct (236B) is distributed as 4 split GGUF files (~142.5 GB
+total). The download command handles split files automatically -- downloading each part
+sequentially with aggregate progress. If a download is interrupted, re-running the command
+resumes from the last incomplete part. llama.cpp loads split GGUF files natively when given
+the path to the first part.
 
 !!! tip
     You are not limited to curated models. Any GGUF model can be used -- simply set

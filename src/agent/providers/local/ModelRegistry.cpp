@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <format>
+#include <map>
 
 #include <agent/providers/local/ModelRegistry.hpp>
 
@@ -14,7 +15,7 @@ namespace
 {
 
     // clang-format off
-    auto static const CuratedModelCatalog = std::array<CuratedModel, 5> {{
+    auto static const CuratedModelCatalog = std::array<CuratedModel, 6> {{
         {
             .name = "qwen2.5-coder-7b",
             .displayName = "Qwen 2.5 Coder 7B",
@@ -105,6 +106,46 @@ namespace
             .supportsToolUse = true,
             .supportsVision = false,
         },
+        {
+            .name = "deepseek-coder-v2-instruct",
+            .displayName = "DeepSeek Coder V2 Instruct 236B",
+            .description = "MoE 236B coding model (split download), 96 GB RAM",
+            .architecture = "deepseek2",
+            .parameterCount = 236'000'000'000,
+            .variants = {{
+                {
+                    .quantization = "Q4_K_M",
+                    .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf/DeepSeek-Coder-V2-Instruct-Q4_K_M-00001-of-00004.gguf",
+                    .fileSizeBytes = 142'500'000'000,
+                    .ramRequired = 96'000'000'000,
+                    .filename = "DeepSeek-Coder-V2-Instruct-Q4_K_M-00001-of-00004.gguf",
+                    .parts = {{
+                        {
+                            .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf/DeepSeek-Coder-V2-Instruct-Q4_K_M-00001-of-00004.gguf",
+                            .filename = "DeepSeek-Coder-V2-Instruct-Q4_K_M-00001-of-00004.gguf",
+                            .fileSizeBytes = 39'800'000'000,
+                        },
+                        {
+                            .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf/DeepSeek-Coder-V2-Instruct-Q4_K_M-00002-of-00004.gguf",
+                            .filename = "DeepSeek-Coder-V2-Instruct-Q4_K_M-00002-of-00004.gguf",
+                            .fileSizeBytes = 40'000'000'000,
+                        },
+                        {
+                            .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf/DeepSeek-Coder-V2-Instruct-Q4_K_M-00003-of-00004.gguf",
+                            .filename = "DeepSeek-Coder-V2-Instruct-Q4_K_M-00003-of-00004.gguf",
+                            .fileSizeBytes = 39'700'000'000,
+                        },
+                        {
+                            .url = "https://huggingface.co/bartowski/DeepSeek-Coder-V2-Instruct-GGUF/resolve/main/DeepSeek-Coder-V2-Instruct-Q4_K_M.gguf/DeepSeek-Coder-V2-Instruct-Q4_K_M-00004-of-00004.gguf",
+                            .filename = "DeepSeek-Coder-V2-Instruct-Q4_K_M-00004-of-00004.gguf",
+                            .fileSizeBytes = 23'000'000'000,
+                        },
+                    }},
+                },
+            }},
+            .supportsToolUse = true,
+            .supportsVision = false,
+        },
     }};
     // clang-format on
 
@@ -125,6 +166,18 @@ namespace
     }
 
 } // namespace
+
+auto allFilenames(ModelVariant const& variant) -> std::vector<std::string>
+{
+    if (variant.parts.empty())
+        return { variant.filename };
+
+    auto filenames = std::vector<std::string> {};
+    filenames.reserve(variant.parts.size());
+    for (auto const& part: variant.parts)
+        filenames.push_back(part.filename);
+    return filenames;
+}
 
 auto curatedModels() -> std::span<CuratedModel const>
 {
@@ -163,6 +216,49 @@ auto modelStorageDir() -> std::filesystem::path
 #endif
 }
 
+namespace
+{
+    /// Extracts the split-file group key from a filename, or empty if not a split file.
+    /// Pattern: `*-NNNNN-of-NNNNN.gguf` → key is everything before `-NNNNN-of-NNNNN.gguf`.
+    [[nodiscard]] auto splitGroupKey(std::string_view filename) -> std::string
+    {
+        // Must end with ".gguf"
+        constexpr auto suffix = std::string_view { ".gguf" };
+        if (filename.size() < suffix.size() || filename.substr(filename.size() - suffix.size()) != suffix)
+            return {};
+
+        // Strip ".gguf" to get stem
+        auto const stem = filename.substr(0, filename.size() - suffix.size());
+
+        // Look for "-NNNNN-of-NNNNN" at the end of stem
+        // Minimum: "-N-of-N" = 7 chars, but we expect 5-digit parts: "-00001-of-00004" = 15 chars
+        auto const ofPos = stem.rfind("-of-");
+        if (ofPos == std::string_view::npos || ofPos == 0)
+            return {};
+
+        // Check that everything after "-of-" is digits
+        auto const afterOf = stem.substr(ofPos + 4);
+        if (afterOf.empty() || !std::ranges::all_of(afterOf, [](char ch) {
+                return std::isdigit(static_cast<unsigned char>(ch));
+            }))
+            return {};
+
+        // Find the dash before the part number
+        auto const dashPos = stem.rfind('-', ofPos - 1);
+        if (dashPos == std::string_view::npos || dashPos == 0)
+            return {};
+
+        // Check that between dashPos+1 and ofPos are all digits (the part number)
+        auto const partNum = stem.substr(dashPos + 1, ofPos - dashPos - 1);
+        if (partNum.empty() || !std::ranges::all_of(partNum, [](char ch) {
+                return std::isdigit(static_cast<unsigned char>(ch));
+            }))
+            return {};
+
+        return std::string(stem.substr(0, dashPos));
+    }
+} // namespace
+
 auto discoverLocalModels(std::filesystem::path const& dir) -> std::vector<LocalModelInfo>
 {
     auto models = std::vector<LocalModelInfo> {};
@@ -170,6 +266,9 @@ auto discoverLocalModels(std::filesystem::path const& dir) -> std::vector<LocalM
     auto ec = std::error_code {};
     if (!std::filesystem::is_directory(dir, ec))
         return models;
+
+    // Collect all GGUF files, grouping split files by their base name.
+    auto splitGroups = std::map<std::string, std::vector<std::pair<std::filesystem::path, size_t>>> {};
 
     for (auto const& entry: std::filesystem::directory_iterator(dir, ec))
     {
@@ -179,10 +278,45 @@ auto discoverLocalModels(std::filesystem::path const& dir) -> std::vector<LocalM
         if (entry.path().extension() != ".gguf")
             continue;
 
+        auto const fname = entry.path().filename().string();
+        auto const fileSize = static_cast<size_t>(entry.file_size(ec));
+        auto const key = splitGroupKey(fname);
+
+        if (!key.empty())
+        {
+            splitGroups[key].emplace_back(entry.path(), fileSize);
+        }
+        else
+        {
+            models.push_back(LocalModelInfo {
+                .path = entry.path(),
+                .filename = fname,
+                .fileSizeBytes = fileSize,
+            });
+        }
+    }
+
+    // Convert split groups into LocalModelInfo entries.
+    for (auto& [key, parts]: splitGroups)
+    {
+        std::ranges::sort(parts, [](auto const& a, auto const& b) {
+            return a.first.filename().string() < b.first.filename().string();
+        });
+
+        auto totalSize = size_t { 0 };
+        auto splitPaths = std::vector<std::filesystem::path> {};
+        splitPaths.reserve(parts.size());
+        for (auto const& [path, size]: parts)
+        {
+            totalSize += size;
+            splitPaths.push_back(path);
+        }
+
         models.push_back(LocalModelInfo {
-            .path = entry.path(),
-            .filename = entry.path().filename().string(),
-            .fileSizeBytes = static_cast<size_t>(entry.file_size(ec)),
+            .path = parts.front().first,
+            .filename = parts.front().first.filename().string(),
+            .fileSizeBytes = totalSize,
+            .splitPaths = std::move(splitPaths),
         });
     }
 

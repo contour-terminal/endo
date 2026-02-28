@@ -12,15 +12,28 @@
 namespace endo::agent::local
 {
 
+/// A single downloadable part of a split GGUF model.
+struct DownloadPart
+{
+    std::string url;          ///< Direct download URL for this part.
+    std::string filename;     ///< Local filename for this part.
+    size_t fileSizeBytes = 0; ///< Expected file size in bytes.
+};
+
 /// A downloadable quantization variant of a curated model.
 struct ModelVariant
 {
     std::string quantization; ///< Quantization method (e.g. "Q4_K_M", "Q5_K_M").
-    std::string url;          ///< Direct download URL (HuggingFace).
-    size_t fileSizeBytes = 0; ///< Expected file size in bytes.
+    std::string url;          ///< Direct download URL (HuggingFace). Primary/first part for split models.
+    size_t fileSizeBytes = 0; ///< Total expected file size in bytes (sum for split models).
     size_t ramRequired = 0;   ///< Minimum RAM/VRAM in bytes.
-    std::string filename;     ///< Local filename for the downloaded model.
+    std::string filename;     ///< Local filename (first part for split models).
+    std::vector<DownloadPart> parts; ///< Split-file parts. Empty for single-file models.
 };
+
+/// Returns all filenames for a variant (single or split).
+/// For single-file models, returns {variant.filename}. For split models, returns the part filenames.
+[[nodiscard]] auto allFilenames(ModelVariant const& variant) -> std::vector<std::string>;
 
 /// A curated model in the registry.
 struct CuratedModel
@@ -35,12 +48,14 @@ struct CuratedModel
     bool supportsVision = false;        ///< Whether the model supports image input.
 };
 
-/// Information about a locally available GGUF model file.
+/// Information about a locally available GGUF model file (or group of split files).
 struct LocalModelInfo
 {
-    std::filesystem::path path; ///< Full path to the .gguf file.
-    std::string filename;       ///< Filename without directory.
-    size_t fileSizeBytes = 0;   ///< File size in bytes.
+    std::filesystem::path path; ///< Full path to the .gguf file (first part for split models).
+    std::string filename;       ///< Filename without directory (first part for split models).
+    size_t fileSizeBytes = 0;   ///< Total file size in bytes (sum for split models).
+    std::vector<std::filesystem::path>
+        splitPaths; ///< Paths to all split parts. Empty for single-file models.
 };
 
 /// Progress callback for model downloads.

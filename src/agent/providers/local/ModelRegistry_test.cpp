@@ -44,7 +44,7 @@ TEST_CASE("agent.local.model_registry.curated_models_non_empty", "[agent][local]
 {
     auto const models = curatedModels();
     REQUIRE_FALSE(models.empty());
-    CHECK(models.size() == 5);
+    CHECK(models.size() == 6);
 }
 
 TEST_CASE("agent.local.model_registry.curated_models_have_variants", "[agent][local]")
@@ -154,4 +154,95 @@ TEST_CASE("agent.local.model_registry.format_bytes_values", "[agent][local]")
     CHECK(formatBytes(1572864) == "1.5 MB");
     CHECK(formatBytes(1073741824) == "1.0 GB");
     CHECK(formatBytes(4'700'000'000) == "4.4 GB");
+}
+
+TEST_CASE("agent.local.model_registry.find_deepseek_v2_instruct", "[agent][local]")
+{
+    auto const* model = findCuratedModel("deepseek-coder-v2-instruct");
+    REQUIRE(model != nullptr);
+    CHECK(model->name == "deepseek-coder-v2-instruct");
+    CHECK(model->architecture == "deepseek2");
+    CHECK(model->parameterCount == 236'000'000'000);
+    REQUIRE_FALSE(model->variants.empty());
+    CHECK_FALSE(model->variants.front().parts.empty());
+    CHECK(model->variants.front().parts.size() == 4);
+}
+
+TEST_CASE("agent.local.model_registry.allFilenames_single_file", "[agent][local]")
+{
+    auto const variant = ModelVariant {
+        .quantization = "Q4_K_M",
+        .url = "https://example.com/model.gguf",
+        .fileSizeBytes = 1000,
+        .ramRequired = 2000,
+        .filename = "model.gguf",
+    };
+    auto const filenames = allFilenames(variant);
+    REQUIRE(filenames.size() == 1);
+    CHECK(filenames[0] == "model.gguf");
+}
+
+TEST_CASE("agent.local.model_registry.allFilenames_split_model", "[agent][local]")
+{
+    auto const variant = ModelVariant {
+        .quantization = "Q4_K_M",
+        .url = "https://example.com/model-00001-of-00003.gguf",
+        .fileSizeBytes = 3000,
+        .ramRequired = 4000,
+        .filename = "model-00001-of-00003.gguf",
+        .parts = { {
+            { .url = "https://example.com/model-00001-of-00003.gguf",
+              .filename = "model-00001-of-00003.gguf",
+              .fileSizeBytes = 1000 },
+            { .url = "https://example.com/model-00002-of-00003.gguf",
+              .filename = "model-00002-of-00003.gguf",
+              .fileSizeBytes = 1000 },
+            { .url = "https://example.com/model-00003-of-00003.gguf",
+              .filename = "model-00003-of-00003.gguf",
+              .fileSizeBytes = 1000 },
+        } },
+    };
+    auto const filenames = allFilenames(variant);
+    REQUIRE(filenames.size() == 3);
+    CHECK(filenames[0] == "model-00001-of-00003.gguf");
+    CHECK(filenames[1] == "model-00002-of-00003.gguf");
+    CHECK(filenames[2] == "model-00003-of-00003.gguf");
+}
+
+TEST_CASE("agent.local.model_registry.discover_split_files_grouped", "[agent][local]")
+{
+    auto const dir = TempDir {};
+    dir.createFile("BigModel-Q4-00001-of-00003.gguf", 100);
+    dir.createFile("BigModel-Q4-00002-of-00003.gguf", 200);
+    dir.createFile("BigModel-Q4-00003-of-00003.gguf", 150);
+
+    auto const models = discoverLocalModels(dir.path());
+    REQUIRE(models.size() == 1);
+
+    CHECK(models[0].filename == "BigModel-Q4-00001-of-00003.gguf");
+    CHECK(models[0].fileSizeBytes == 450);
+    REQUIRE(models[0].splitPaths.size() == 3);
+    CHECK(models[0].splitPaths[0].filename().string() == "BigModel-Q4-00001-of-00003.gguf");
+    CHECK(models[0].splitPaths[1].filename().string() == "BigModel-Q4-00002-of-00003.gguf");
+    CHECK(models[0].splitPaths[2].filename().string() == "BigModel-Q4-00003-of-00003.gguf");
+}
+
+TEST_CASE("agent.local.model_registry.discover_mixed_single_and_split", "[agent][local]")
+{
+    auto const dir = TempDir {};
+    dir.createFile("single-model.gguf", 500);
+    dir.createFile("split-model-00001-of-00002.gguf", 100);
+    dir.createFile("split-model-00002-of-00002.gguf", 200);
+
+    auto const models = discoverLocalModels(dir.path());
+    REQUIRE(models.size() == 2);
+
+    // Sorted by filename.
+    CHECK(models[0].filename == "single-model.gguf");
+    CHECK(models[0].fileSizeBytes == 500);
+    CHECK(models[0].splitPaths.empty());
+
+    CHECK(models[1].filename == "split-model-00001-of-00002.gguf");
+    CHECK(models[1].fileSizeBytes == 300);
+    REQUIRE(models[1].splitPaths.size() == 2);
 }

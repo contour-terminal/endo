@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ModelsCommand.hpp"
 
-#include <agent/providers/local/ModelRegistry.hpp>
 #include <http/HttpClient.hpp>
 
 #include <algorithm>
@@ -11,6 +10,8 @@
 #include <print>
 #include <string>
 #include <string_view>
+
+#include <agent/providers/local/ModelRegistry.hpp>
 
 #if defined(_WIN32)
     #include <io.h>
@@ -63,10 +64,16 @@ namespace
     }
 
     /// Checks if a curated model variant is downloaded locally.
+    /// For split models, all parts must be present.
     [[nodiscard]] auto isModelDownloaded(ModelVariant const& variant) -> bool
     {
         auto const dir = modelStorageDir();
-        return std::filesystem::exists(dir / variant.filename);
+        if (variant.parts.empty())
+            return std::filesystem::exists(dir / variant.filename);
+
+        return std::ranges::all_of(variant.parts, [&dir](DownloadPart const& part) {
+            return std::filesystem::exists(dir / part.filename);
+        });
     }
 
     /// Runs `endo agent models list`.
@@ -85,14 +92,7 @@ namespace
                    "Status",
                    "Description",
                    c.reset);
-        std::print("  {}{:─<24}{:─<10}{:─<10}{:─<16}{:─<30}{}\n",
-                   c.dim,
-                   "",
-                   "",
-                   "",
-                   "",
-                   "",
-                   c.reset);
+        std::print("  {}{:─<24}{:─<10}{:─<10}{:─<16}{:─<30}{}\n", c.dim, "", "", "", "", "", c.reset);
 
         for (auto const& model: models)
         {
@@ -104,9 +104,14 @@ namespace
             auto const statusColor = downloaded ? c.green : c.dim;
             auto const statusText = downloaded ? "downloaded"sv : "not installed"sv;
 
+            auto const sizeStr =
+                variant.parts.empty()
+                    ? formatBytes(variant.fileSizeBytes)
+                    : std::format("{} ({}p)", formatBytes(variant.fileSizeBytes), variant.parts.size());
+
             std::print("  {:<24}{:<10}{:<10}{}{:<16}{}{}\n",
                        model.name,
-                       formatBytes(variant.fileSizeBytes),
+                       sizeStr,
                        formatBytes(variant.ramRequired),
                        statusColor,
                        statusText,
@@ -118,14 +123,18 @@ namespace
         for (auto const& local: localModels)
         {
             auto const isCurated = std::ranges::any_of(models, [&](auto const& m) {
-                return std::ranges::any_of(
-                    m.variants, [&](auto const& v) { return v.filename == local.filename; });
+                return std::ranges::any_of(m.variants,
+                                           [&](auto const& v) { return v.filename == local.filename; });
             });
             if (!isCurated)
             {
+                auto const sizeStr =
+                    local.splitPaths.empty()
+                        ? formatBytes(local.fileSizeBytes)
+                        : std::format("{} ({}p)", formatBytes(local.fileSizeBytes), local.splitPaths.size());
                 std::print("  {:<24}{:<10}{:<10}{}{:<16}{}{}\n",
                            local.filename,
-                           formatBytes(local.fileSizeBytes),
+                           sizeStr,
                            "",
                            c.green,
                            "downloaded",
@@ -134,16 +143,12 @@ namespace
             }
         }
 
-        std::print(
-            "\n{}Use: endo agent models download <name> [--quant Q4_K_M]{}\n\n", c.dim, c.reset);
+        std::print("\n{}Use: endo agent models download <name> [--quant Q4_K_M]{}\n\n", c.dim, c.reset);
         return EXIT_SUCCESS;
     }
 
     /// Renders a terminal progress bar.
-    void renderProgress(Colors const& c,
-                        std::string_view label,
-                        size_t totalBytes,
-                        size_t downloadedBytes)
+    void renderProgress(Colors const& c, std::string_view label, size_t totalBytes, size_t downloadedBytes)
     {
         constexpr int barWidth = 30;
         auto const fraction =
@@ -212,21 +217,130 @@ namespace
             variant = &model->variants.front();
         }
 
-        // Check if already downloaded.
         auto const dir = modelStorageDir();
-        auto const destPath = dir / variant->filename;
-        if (std::filesystem::exists(destPath))
+        auto const c = getColors();
+
+        // Split-file download path.
+        if (!variant->parts.empty())
         {
-            auto const c = getColors();
-            std::print(
-                "{}Model already downloaded:{} {}\n", c.green, c.reset, destPath.string());
+            // Check if all parts already downloaded.
+            if (isModelDownloaded(*variant))
+            {
+                auto const destPath = dir / variant->filename;
+                std::print("{}Model already downloaded:{} {}\n", c.green, c.reset, destPath.string());
+                return EXIT_SUCCESS;
+            }
+
+            std::filesystem::create_directories(dir);
+
+            std::print("Downloading {} ({}, {}, {} parts)...\n",
+                       model->displayName,
+                       variant->quantization,
+                       formatBytes(variant->fileSizeBytes),
+                       variant->parts.size());
+            std::print("{}Destination: {}{}\n\n", c.dim, dir.string(), c.reset);
+
+            auto const totalBytes = variant->fileSizeBytes;
+            auto priorCompleted = size_t { 0 };
+
+            for (size_t partIdx = 0; partIdx < variant->parts.size(); ++partIdx)
+            {
+                auto const& part = variant->parts[partIdx];
+                auto const partPath = dir / part.filename;
+
+                // Skip already-completed parts (resume support).
+                auto partEc = std::error_code {};
+                if (std::filesystem::exists(partPath, partEc))
+                {
+                    auto const existingSize =
+                        static_cast<size_t>(std::filesystem::file_size(partPath, partEc));
+                    if (existingSize >= part.fileSizeBytes)
+                    {
+                        std::print("  Part {}/{} already complete: {}\n",
+                                   partIdx + 1,
+                                   variant->parts.size(),
+                                   part.filename);
+                        priorCompleted += part.fileSizeBytes;
+                        continue;
+                    }
+                }
+
+                std::print("  {}Part {}/{}: {}{}\n",
+                           c.dim,
+                           partIdx + 1,
+                           variant->parts.size(),
+                           part.filename,
+                           c.reset);
+
+                auto const partPrior = priorCompleted;
+                auto httpClient = http::HttpClient {};
+                auto request = http::HttpRequest {
+                    .url = part.url,
+                    .method = http::HttpMethod::Get,
+                    .timeout = std::nullopt,
+                    .maxResponseSize = 0,
+                    .progressCallback = [&c, totalBytes, partPrior](size_t /*partTotal*/,
+                                                                    size_t now) -> bool {
+                        renderProgress(c, "Downloading", totalBytes, partPrior + now);
+                        return true;
+                    },
+                    .followRedirects = true,
+                };
+
+                auto const result = httpClient.download(request, partPath);
+
+                if (!result.has_value())
+                {
+                    std::print("\n{}Download failed (part {}):{} {}\n",
+                               c.red,
+                               partIdx + 1,
+                               c.reset,
+                               result.error().message);
+                    std::error_code ec;
+                    std::filesystem::remove(partPath, ec);
+                    std::print("Re-run the download command to resume from part {}.\n", partIdx + 1);
+                    return EXIT_FAILURE;
+                }
+
+                if (result->statusCode != 200)
+                {
+                    std::print("\n{}Download failed (part {}):{} HTTP {}\n",
+                               c.red,
+                               partIdx + 1,
+                               c.reset,
+                               result->statusCode);
+                    std::error_code ec;
+                    std::filesystem::remove(partPath, ec);
+                    std::print("Re-run the download command to resume from part {}.\n", partIdx + 1);
+                    return EXIT_FAILURE;
+                }
+
+                priorCompleted += part.fileSizeBytes;
+            }
+
+            auto const firstPartPath = dir / variant->filename;
+            std::print("\n\n{}Downloaded:{} {} ({} parts)\n\n",
+                       c.green,
+                       c.reset,
+                       firstPartPath.string(),
+                       variant->parts.size());
+            std::print("To use this model, add to ~/.config/endo/init.endo:\n");
+            std::print("  agent_local_model_path <- \"{}\"\n", firstPartPath.string());
+            std::print("  agent_provider <- \"local\"\n\n");
+
             return EXIT_SUCCESS;
         }
 
-        // Create model directory.
+        // Single-file download path.
+        auto const destPath = dir / variant->filename;
+        if (std::filesystem::exists(destPath))
+        {
+            std::print("{}Model already downloaded:{} {}\n", c.green, c.reset, destPath.string());
+            return EXIT_SUCCESS;
+        }
+
         std::filesystem::create_directories(dir);
 
-        auto const c = getColors();
         std::print("Downloading {} ({}, {})...\n",
                    model->displayName,
                    variant->quantization,
@@ -234,18 +348,16 @@ namespace
         std::print("{}URL: {}{}\n", c.dim, variant->url, c.reset);
         std::print("{}Destination: {}{}\n\n", c.dim, destPath.string(), c.reset);
 
-        // Download using HttpClient.
         auto httpClient = http::HttpClient {};
         auto request = http::HttpRequest {
             .url = variant->url,
             .method = http::HttpMethod::Get,
-            .timeout = std::nullopt, // No timeout for large downloads.
-            .maxResponseSize = 0,    // Ignored by download().
-            .progressCallback =
-                [&c](size_t total, size_t now) -> bool {
-                    renderProgress(c, "Downloading", total, now);
-                    return true; // Continue downloading.
-                },
+            .timeout = std::nullopt,
+            .maxResponseSize = 0,
+            .progressCallback = [&c](size_t total, size_t now) -> bool {
+                renderProgress(c, "Downloading", total, now);
+                return true;
+            },
             .followRedirects = true,
         };
 
@@ -254,7 +366,6 @@ namespace
         if (!result.has_value())
         {
             std::print("\n{}Download failed:{} {}\n", c.red, c.reset, result.error().message);
-            // Clean up partial file.
             std::error_code ec;
             std::filesystem::remove(destPath, ec);
             return EXIT_FAILURE;
@@ -262,8 +373,7 @@ namespace
 
         if (result->statusCode != 200)
         {
-            std::print(
-                "\n{}Download failed:{} HTTP {}\n", c.red, c.reset, result->statusCode);
+            std::print("\n{}Download failed:{} HTTP {}\n", c.red, c.reset, result->statusCode);
             std::error_code ec;
             std::filesystem::remove(destPath, ec);
             return EXIT_FAILURE;
@@ -295,6 +405,29 @@ namespace
         {
             if (local.filename.find(name) != std::string::npos)
             {
+                auto const c = getColors();
+
+                // Handle split models: remove all parts.
+                if (!local.splitPaths.empty())
+                {
+                    auto removedCount = size_t { 0 };
+                    for (auto const& splitPath: local.splitPaths)
+                    {
+                        std::error_code ec;
+                        std::filesystem::remove(splitPath, ec);
+                        if (ec)
+                        {
+                            std::print(stderr, "Failed to remove {}: {}\n", splitPath.string(), ec.message());
+                            return EXIT_FAILURE;
+                        }
+                        ++removedCount;
+                    }
+                    std::print(
+                        "{}Removed:{} {} ({} parts)\n", c.green, c.reset, local.path.string(), removedCount);
+                    return EXIT_SUCCESS;
+                }
+
+                // Single file.
                 std::error_code ec;
                 std::filesystem::remove(local.path, ec);
                 if (ec)
@@ -302,7 +435,6 @@ namespace
                     std::print(stderr, "Failed to remove {}: {}\n", local.path.string(), ec.message());
                     return EXIT_FAILURE;
                 }
-                auto const c = getColors();
                 std::print("{}Removed:{} {}\n", c.green, c.reset, local.path.string());
                 return EXIT_SUCCESS;
             }
@@ -332,15 +464,9 @@ namespace
         auto const c = getColors();
         std::print("\n{}{}{}\n\n", c.bold, model->displayName, c.reset);
         std::print("  {:<18}{}\n", "Architecture:", model->architecture);
-        std::print("  {:<18}{}B\n",
-                   "Parameters:",
-                   model->parameterCount / 1'000'000'000);
-        std::print("  {:<18}{}\n",
-                   "Tool Use:",
-                   model->supportsToolUse ? "Yes" : "No");
-        std::print("  {:<18}{}\n",
-                   "Vision:",
-                   model->supportsVision ? "Yes" : "No");
+        std::print("  {:<18}{}B\n", "Parameters:", model->parameterCount / 1'000'000'000);
+        std::print("  {:<18}{}\n", "Tool Use:", model->supportsToolUse ? "Yes" : "No");
+        std::print("  {:<18}{}\n", "Vision:", model->supportsVision ? "Yes" : "No");
 
         if (!model->variants.empty())
         {
@@ -349,11 +475,14 @@ namespace
             {
                 auto const downloaded = isModelDownloaded(v);
                 auto const marker = downloaded ? std::format("{}(downloaded){}", c.green, c.reset) : "";
-                std::print("    {:<10}{:<10}{:<12}{}\n",
+                auto const partsNote =
+                    v.parts.empty() ? std::string {} : std::format(" ({} parts)", v.parts.size());
+                std::print("    {:<10}{:<10}{:<12}{}{}\n",
                            v.quantization,
                            formatBytes(v.fileSizeBytes),
                            std::format("{} RAM", formatBytes(v.ramRequired)),
-                           marker);
+                           marker,
+                           partsNote);
             }
         }
 
