@@ -91,6 +91,11 @@ class AgentTracer
                     std::string_view requestBody = {},
                     std::string_view responseBody = {});
 
+    /// @brief Closes the underlying trace file stream.
+    ///
+    /// This is useful on platforms where open file handles prevent directory cleanup.
+    void close();
+
     /// @brief Returns the trace file path.
     [[nodiscard]] auto path() const noexcept -> std::filesystem::path const&;
 

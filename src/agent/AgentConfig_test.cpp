@@ -296,8 +296,8 @@ TEST_CASE("agent.config.resolve_api_key_missing")
 
 TEST_CASE("agent.config.resolve_api_key_present")
 {
-    // HOME is almost always set
-    auto result = resolveApiKey("HOME");
+    // PATH is universally present on both Unix and Windows
+    auto result = resolveApiKey("PATH");
     REQUIRE(result.has_value());
     CHECK(!result->empty());
 }
@@ -313,7 +313,7 @@ TEST_CASE("agent.config.resolve_provider_api_key_stored_takes_priority")
 TEST_CASE("agent.config.resolve_provider_api_key_env_fallback")
 {
     // When stored key is empty, should fall back to env var
-    auto result = resolveProviderApiKey("", "HOME");
+    auto result = resolveProviderApiKey("", "PATH");
     REQUIRE(result.has_value());
     CHECK(!result->empty());
 }

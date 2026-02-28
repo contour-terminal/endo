@@ -182,6 +182,11 @@ void AgentTracer::writeError(std::string_view code,
     writeLine(doc);
 }
 
+void AgentTracer::close()
+{
+    _stream.close();
+}
+
 auto AgentTracer::path() const noexcept -> std::filesystem::path const&
 {
     return _path;
