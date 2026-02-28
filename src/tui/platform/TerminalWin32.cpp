@@ -41,6 +41,13 @@ auto Terminal::initialize() -> VoidResult
     if (auto result = _output->initialize(); !result)
         return result;
 
+    // In mock mode, skip input initialization and capability queries.
+    if (_mockMode)
+    {
+        _initialized = true;
+        return {};
+    }
+
     // Initialize input (raw mode, protocols)
     if (auto result = _input.initialize(); !result)
         return result;
@@ -63,8 +70,11 @@ void Terminal::shutdown()
     if (!_initialized)
         return;
 
-    gActiveInput = nullptr;
-    _input.shutdown();
+    if (!_mockMode)
+    {
+        gActiveInput = nullptr;
+        _input.shutdown();
+    }
     _initialized = false;
 }
 
@@ -80,6 +90,9 @@ auto Terminal::output() noexcept -> TerminalOutput&
 
 auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
 {
+    if (_mockMode)
+        return {};
+
     auto events = _input.poll(timeoutMs);
 
     // Consume protocol-level response events internally — do not pass to application
@@ -88,6 +101,11 @@ auto Terminal::poll(int timeoutMs) -> std::vector<InputEvent>
         {
             auto const scheme = (csr->mode == 2) ? ColorScheme::Light : ColorScheme::Dark;
             handleColorSchemeReport(scheme);
+            return true;
+        }
+        if (auto const* fe = std::get_if<FocusEvent>(&event))
+        {
+            handleFocusEvent(fe->focused);
             return true;
         }
         if (std::holds_alternative<CursorPositionReport>(event))
@@ -112,13 +130,13 @@ auto Terminal::rows() const noexcept -> int
 
 void Terminal::suspend()
 {
-    if (_initialized)
+    if (_initialized && !_mockMode)
         _input.suspend();
 }
 
 void Terminal::resume()
 {
-    if (_initialized)
+    if (_initialized && !_mockMode)
         _input.resume();
 }
 
@@ -129,6 +147,13 @@ auto Terminal::isSuspended() const noexcept -> bool
 
 auto Terminal::queryCursorPosition() -> std::pair<int, int>
 {
+    if (_mockMode)
+    {
+        if (auto* mock = dynamic_cast<MockTerminalOutput*>(_output.get()))
+            return { mock->cursorRow() + 1, mock->cursorCol() + 1 }; // Convert 0-based to 1-based
+        return { 0, 0 };
+    }
+
     _output->requestCursorPosition();
     _output->flush();
 
@@ -165,6 +190,9 @@ auto Terminal::queryCursorPosition() -> std::pair<int, int>
 
 auto Terminal::queryCellSize() -> std::pair<int, int>
 {
+    if (_mockMode)
+        return { 0, 0 };
+
     _output->requestCellSize();
     _output->flush();
 
