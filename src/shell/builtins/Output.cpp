@@ -237,6 +237,10 @@ void Shell::builtinDisplayResult(CoreVM::Params& context)
             config.useColor = useColor;
             config.showIcons = _lsIcons;
             config.showDirectorySlash = _lsDirectorySlash;
+            // Let the name column auto-grow for FileInfo records (ls output)
+            auto* firstElem = reinterpret_cast<CoreVM::TypedObject*>(static_cast<uintptr_t>(obj->getSlot(0)));
+            if (firstElem->type->id == CoreVM::BuiltinTypeId::FileInfo)
+                config.autoGrowColumn = 0;
             if (useColor)
             {
                 if (auto size = _tty.getSize(); size.has_value())
