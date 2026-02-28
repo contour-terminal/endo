@@ -56,7 +56,7 @@ class TestEnvironmentProvider final: public EnvironmentProvider
     [[nodiscard]] std::expected<void, PlatformError> changeDirectory(std::filesystem::path const& path) override
     {
         auto const resolved = path.is_absolute() ? path : std::filesystem::path(_currentDirectory) / path;
-        auto const pathStr = resolved.lexically_normal().string();
+        auto const pathStr = resolved.lexically_normal().generic_string();
         if (!_validPaths.empty() && !_validPaths.contains(pathStr))
             return std::unexpected(PlatformError::FileNotFound);
         _currentDirectory = pathStr;
