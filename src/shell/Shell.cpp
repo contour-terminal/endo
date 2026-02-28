@@ -1848,9 +1848,15 @@ int Shell::runAgentHeadless(agent::AgentRunOptions const& options)
     auto* provider = _agentProviderFactory->activeProvider();
     if (!provider)
     {
-        std::print(stderr,
-                   "endo agent run: no AI provider configured or authenticated.\n"
-                   "Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n");
+        if (!agentConfig.activeProvider.empty())
+            std::print(stderr,
+                       "endo agent run: provider '{}' is not available.\n"
+                       "Check your configuration or run `endo agent status` for details.\n",
+                       agentConfig.activeProvider);
+        else
+            std::print(stderr,
+                       "endo agent run: no AI provider configured or authenticated.\n"
+                       "Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n");
         return EXIT_FAILURE;
     }
 
@@ -2397,9 +2403,19 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
         auto& out = prompt.terminal().output();
         auto const errorStyle = tui::Style { .fg = theme.agentColors.errorText };
         auto const mutedStyle = tui::Style { .fg = theme.agentColors.statusText };
-        out.writeText("No AI provider configured or authenticated.\n", errorStyle);
-        out.writeText("Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n",
-                      mutedStyle);
+        if (!agentConfig.activeProvider.empty())
+        {
+            out.writeText(
+                std::format("Provider '{}' is not available.\n", agentConfig.activeProvider), errorStyle);
+            out.writeText("Check your configuration or run `endo agent status` for details.\n", mutedStyle);
+        }
+        else
+        {
+            out.writeText("No AI provider configured or authenticated.\n", errorStyle);
+            out.writeText(
+                "Run `endo agent login` or configure a provider in ~/.config/endo/init.endo.\n",
+                mutedStyle);
+        }
         out.flush();
         return;
     }

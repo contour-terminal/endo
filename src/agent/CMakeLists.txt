@@ -84,6 +84,13 @@ add_library(endo-agent STATIC
     tools/AskUserTool.hpp tools/AskUserTool.cpp
     tools/DiffRenderer.hpp tools/DiffRenderer.cpp
 
+    # Local inference (pure logic — no llama.cpp dependency)
+    providers/local/ChatTemplate.hpp providers/local/ChatTemplate.cpp
+    providers/local/GbnfGrammar.hpp providers/local/GbnfGrammar.cpp
+    providers/local/ModelRegistry.hpp providers/local/ModelRegistry.cpp
+    providers/local/ToolCallParser.hpp providers/local/ToolCallParser.cpp
+    providers/local/ModelsCommand.hpp providers/local/ModelsCommand.cpp
+
     # MCP
     mcp/McpError.hpp
     mcp/Transport.hpp
@@ -94,6 +101,15 @@ add_library(endo-agent STATIC
     mcp/McpToolAdapter.hpp mcp/McpToolAdapter.cpp
 )
 
+# llama.cpp-dependent sources (local LLM inference, non-Emscripten only)
+if(ENDO_HAS_LOCAL_LLM)
+    target_sources(endo-agent PRIVATE
+        providers/local/ModelManager.hpp providers/local/ModelManager.cpp
+        providers/local/LlamaCppProvider.hpp providers/local/LlamaCppProvider.cpp
+    )
+    target_compile_definitions(endo-agent PUBLIC ENDO_HAS_LOCAL_LLM=1)
+endif()
+
 target_link_libraries(endo-agent PUBLIC
     endo-http
     endo-platform
@@ -102,6 +118,14 @@ target_link_libraries(endo-agent PUBLIC
     yaml-cpp::yaml-cpp
     crispy::core
 )
+if(ENDO_HAS_LOCAL_LLM)
+    target_link_libraries(endo-agent PUBLIC llama)
+    # CPM-built llama.cpp exposes a plain 'ggml' target; system packages
+    # provide ggml::ggml transitively through the llama target.
+    if(TARGET ggml AND NOT TARGET ggml::ggml)
+        target_link_libraries(endo-agent PUBLIC ggml)
+    endif()
+endif()
 target_include_directories(endo-agent PUBLIC ${CMAKE_SOURCE_DIR}/src)
 
 # Unit tests
@@ -179,6 +203,12 @@ add_executable(test-endo-agent
 
     # UI tests
     ui/ToolStatusComponent_test.cpp
+
+    # Local inference tests
+    providers/local/ChatTemplate_test.cpp
+    providers/local/GbnfGrammar_test.cpp
+    providers/local/ModelRegistry_test.cpp
+    providers/local/ToolCallParser_test.cpp
 
     # MCP tests
     mcp/JsonRpc_test.cpp

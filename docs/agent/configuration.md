@@ -50,7 +50,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `agent_provider` | string | Active provider: `"claude"`, `"openai"`, `"gemini"`, `"openai_compat"`. If not set, auto-detects from authenticated providers. |
+| `agent_provider` | string | Active provider: `"claude"`, `"openai"`, `"gemini"`, `"openai_compat"`, `"local"`. If not set, auto-detects from authenticated providers. |
 | `agent_prompt_indicator` | string | Character(s) shown at the agent prompt (default: `"❯"`) |
 | `agent_max_tool_result_size` | int | Max bytes from a single tool call before truncation (default: 30720) |
 | `agent_log_tool_uses` | bool | Print tool invocations to the terminal (default: `true`) |
@@ -61,7 +61,7 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 |----------|------|-------------|
 | `agent_claude_api_key` | string | API key (alternative to `endo agent login claude`) |
 | `agent_claude_api_key_env` | string | Environment variable holding the API key (default: `"ANTHROPIC_API_KEY"`) |
-| `agent_claude_model` | string | Model identifier (default: `"claude-sonnet-4-5-20250929"`) |
+| `agent_claude_model` | string | Model identifier (default: `"claude-sonnet-4-6"`) |
 | `agent_claude_max_tokens` | int | Maximum output tokens per request (default: 8192) |
 | `agent_claude_thinking_mode` | string | Thinking/reasoning mode: `"off"`, `"normal"`, `"extended"` (default: `"normal"`) |
 | `agent_claude_prompt_caching` | bool | Enable prompt caching (default: `true`) |
@@ -98,6 +98,25 @@ Properties can also be read as expressions (e.g., `print agent_provider`).
 | `agent_gemini_model` | string | Model identifier (default: `"gemini-2.5-flash"`) |
 | `agent_gemini_max_tokens` | int | Maximum output tokens per request (default: 8192) |
 | `agent_gemini_thinking_mode` | string | Thinking/reasoning mode (default: `"off"`) |
+
+### Local (llama.cpp)
+
+The local provider runs inference on your machine using GGUF models via llama.cpp. No API
+key is required -- authentication is based on having a valid model path configured.
+See [Local LLM Inference](local-llm.md) for the full setup guide.
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `agent_local_model_path` | string | Path to the GGUF model file (required for local provider) |
+| `agent_local_model_dir` | string | Directory for model storage (default: `"~/.local/share/endo/models/"`) |
+| `agent_local_gpu_layers` | int | GPU layers to offload (-1 = all available, 0 = CPU only; default: -1) |
+| `agent_local_context_size` | int | Context window size in tokens (default: 32768) |
+| `agent_local_threads` | int | CPU threads for inference (0 = auto-detect; default: 0) |
+| `agent_local_batch_size` | int | Batch size for prompt evaluation (default: 512) |
+| `agent_local_temperature` | int | Sampling temperature as percentage, e.g. 70 = 0.7 (default: 70) |
+| `agent_local_flash_attention` | bool | Enable flash attention if supported by hardware (default: `true`) |
+| `agent_local_max_tokens` | int | Maximum output tokens per request (default: 4096) |
+| `agent_local_chat_template` | string | Chat template override (empty = auto-detect from GGUF metadata) |
 
 ### Plan Mode
 
@@ -139,22 +158,26 @@ agent_blocked_pattern <- ["rm -rf /"; ":(){ :|:& };:"]
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `agent_error_recovery_action` | string | Action when a shell command fails: `"ask"` (default), `"analyze"`, `"ignore"` |
+| `agent_error_recovery_action` | string | Action when a shell command fails: `"ask"`, `"analyze"`, `"ignore"` (default) |
 | `agent_error_recovery_model` | string | Model for error analysis (empty = use active agent model) |
 
 ```endo
-# Automatically analyze failed commands without asking
-agent_error_recovery_action <- "analyze"
+# Enable interactive error recovery prompt on command failure
+agent_error_recovery_action <- "ask"
+
+# Or automatically analyze failed commands without asking
+# agent_error_recovery_action <- "analyze"
 
 # Use a faster/cheaper model for error analysis
 agent_error_recovery_model <- "claude-haiku-4-5-20251001"
 ```
 
-When set to `"ask"` (default), a prompt appears after each failed command offering to analyze
-the error. Options include "Analyze (always)" and "Ignore (always)" to set session-level
-overrides. Error analysis uses the Contour terminal's Semantic Block Query extension (DEC
-Mode 2034) to capture the failed command's output. Non-Contour terminals gracefully skip
-error recovery (no prompts appear).
+By default, error recovery is disabled (`"ignore"`). Set to `"ask"` to show a prompt after each
+failed command offering to analyze the error, or `"analyze"` to automatically analyze without
+asking. When using `"ask"`, options include "Analyze (always)" and "Ignore (always)" to set
+session-level overrides. Error analysis uses the Contour terminal's Semantic Block Query
+extension (DEC Mode 2034) to capture the failed command's output. Non-Contour terminals
+gracefully skip error recovery (no prompts appear).
 
 ### Tracing
 
@@ -244,10 +267,16 @@ agent_web_search_cx <- "your-cx-id"
 ```endo
 # ~/.config/endo/init.endo
 
-# Agent provider and model
+# Agent provider and model (cloud)
 agent_provider <- "claude"
-agent_claude_model <- "claude-sonnet-4-5-20250929"
+agent_claude_model <- "claude-sonnet-4-6"
 agent_log_tool_uses <- true
+
+# -- Or use a local model instead --
+# agent_provider <- "local"
+# agent_local_model_path <- "~/.local/share/endo/models/qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+# agent_local_gpu_layers <- -1
+# agent_local_context_size <- 32768
 
 # Plan mode
 agent_plan_mode_enabled <- true
@@ -281,4 +310,5 @@ agent_web_search_engine <- "duckduckgo"
 ## Further Reading
 
 - [Overview](index.md) -- What the agent is and how to get started
+- [Local LLM Inference](local-llm.md) -- Offline inference with llama.cpp, model management
 - [Tools & Commands](tools.md) -- Built-in tools, slash commands, plan mode

@@ -422,7 +422,7 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 }
                 return std::make_unique<ast::ExprStmt>(std::move(expr));
             }
-            else if ((_lexer.currentLiteral() == "ps" || _lexer.currentLiteral() == "ls"
+            else if ((_lexer.currentLiteral() == "ls" || _lexer.currentLiteral() == "ps"
                       || _lexer.currentLiteral() == "jobs")
                      && [this]() {
                             // Peek at next token to decide F# vs shell routing.
@@ -469,7 +469,16 @@ std::unique_ptr<ast::Statement> Parser::parseStmt()
                 auto const cmdLoc = _lexer.currentRange();
                 _lexer.nextToken(); // consume cmd -> restores peeked next token
 
-                if (_lexer.currentToken() == Token::Identifier && !_lexer.currentLiteral().starts_with("-"))
+                if (_lexer.currentToken() == Token::Tilde)
+                {
+                    // Tilde-expanded path argument: construct AST directly with TildeExpr.
+                    auto cmdIdent = std::make_unique<ast::IdentifierExpr>(cmdLit);
+                    cmdIdent->location = cmdLoc;
+                    auto tildeExpr = parseTildeExpansion(); // consumes tilde token
+                    expr = std::make_unique<ast::ApplicationExpr>(std::move(cmdIdent), std::move(tildeExpr));
+                }
+                else if (_lexer.currentToken() == Token::Identifier
+                         && !_lexer.currentLiteral().starts_with("-"))
                 {
                     // Unquoted path argument: construct AST directly.
                     // F# mode can't be used because the F# lexer would re-lex
@@ -6251,17 +6260,15 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             consumeNewlines();
 
             std::vector<ast::SeqYield> yields;
-            while (_lexer.currentToken() != Token::BraceClose
-                   && _lexer.currentToken() != Token::EndOfInput)
+            while (_lexer.currentToken() != Token::BraceClose && _lexer.currentToken() != Token::EndOfInput)
             {
                 // Each element: yield expr | yield! expr
                 if (_lexer.currentToken() != Token::Yield)
                 {
-                    _report.syntaxErrorWithSuggestions(
-                        currentLocation(),
-                        {},
-                        currentContextSnippet(),
-                        "Expected 'yield' or 'yield!' inside seq block.");
+                    _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                       {},
+                                                       currentContextSnippet(),
+                                                       "Expected 'yield' or 'yield!' inside seq block.");
                     return nullptr;
                 }
                 _lexer.nextToken(); // consume 'yield'
@@ -6278,13 +6285,15 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 if (!value)
                 {
                     if (isSplice)
-                        _report.syntaxErrorWithSuggestions(
-                            currentLocation(), {}, currentContextSnippet(),
-                            "Expected expression after 'yield!'.");
+                        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                           {},
+                                                           currentContextSnippet(),
+                                                           "Expected expression after 'yield!'.");
                     else
-                        _report.syntaxErrorWithSuggestions(
-                            currentLocation(), {}, currentContextSnippet(),
-                            "Expected expression after 'yield'.");
+                        _report.syntaxErrorWithSuggestions(currentLocation(),
+                                                           {},
+                                                           currentContextSnippet(),
+                                                           "Expected expression after 'yield'.");
                     return nullptr;
                 }
 

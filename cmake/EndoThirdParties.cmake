@@ -45,6 +45,9 @@ macro(EndoThirdPartiesSummary2)
         if(ENABLE_STATIC_LINKING)
             message(STATUS "mbedTLS             ${THIRDPARTY_BUILTIN_mbedtls}")
         endif()
+        if(ENDO_HAS_LOCAL_LLM)
+            message(STATUS "llama.cpp           ${THIRDPARTY_BUILTIN_llama_cpp}")
+        endif()
     endif()
     message(STATUS "------------------------------------------------------------------------------")
 endmacro()
@@ -276,6 +279,40 @@ if(NOT EMSCRIPTEN)
         target_include_directories(stb_image INTERFACE "${stb_SOURCE_DIR}")
     endif()
     set(THIRDPARTY_BUILTIN_stb "CPM (master)")
+endif()
+
+# ==============================================================================
+# llama.cpp - Local LLM inference library
+# ==============================================================================
+if(NOT EMSCRIPTEN)
+    if(NOT ENABLE_STATIC_LINKING)
+        find_package(llama QUIET)
+    endif()
+    if(TARGET llama)
+        set(THIRDPARTY_BUILTIN_llama_cpp "system package")
+        set(ENDO_HAS_LOCAL_LLM ON)
+    else()
+        CPMAddPackage(
+            NAME llama_cpp
+            GITHUB_REPOSITORY ggml-org/llama.cpp
+            GIT_TAG b5460
+            OPTIONS
+                "LLAMA_BUILD_TESTS OFF"
+                "LLAMA_BUILD_EXAMPLES OFF"
+                "LLAMA_BUILD_SERVER OFF"
+                "LLAMA_CURL OFF"
+                "BUILD_SHARED_LIBS OFF"
+                # GPU backends are auto-detected by llama.cpp's own CMake (CUDA, Vulkan, Metal)
+            EXCLUDE_FROM_ALL YES
+        )
+        if(llama_cpp_ADDED)
+            set(THIRDPARTY_BUILTIN_llama_cpp "CPM (b5460)")
+            set(ENDO_HAS_LOCAL_LLM ON)
+        else()
+            set(THIRDPARTY_BUILTIN_llama_cpp "not found")
+            set(ENDO_HAS_LOCAL_LLM OFF)
+        endif()
+    endif()
 endif()
 
 # ==============================================================================

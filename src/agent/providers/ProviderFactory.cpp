@@ -10,6 +10,12 @@
 #include <agent/providers/GeminiProvider.hpp>
 #include <agent/providers/OpenAiProvider.hpp>
 
+#if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
+    #include <agent/providers/local/ChatTemplate.hpp>
+    #include <agent/providers/local/ModelManager.hpp>
+    #include <agent/providers/local/LlamaCppProvider.hpp>
+#endif
+
 namespace endo::agent
 {
 
@@ -267,15 +273,49 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
                            std::make_unique<CopilotProvider>(httpClient, std::move(providerConfig)));
     }
 
-    // Set active provider: prefer config.activeProvider if authenticated, otherwise first available
+#if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
+    // Try to create local llama.cpp provider (requires a model path).
+    if (!config.local.modelPath.empty())
+    {
+        _modelManager = std::make_unique<local::ModelManager>(
+            config.local.modelDir, config.local.gpuLayers, config.local.flashAttention);
+
+        if (auto error = _modelManager->loadModel(config.local.modelPath); !error)
+        {
+            auto providerConfig = LlamaCppProviderConfig {
+                .contextSize = config.local.contextSize,
+                .batchSize = config.local.batchSize,
+                .temperature = config.local.temperature,
+                .topP = config.local.topP,
+                .topK = config.local.topK,
+                .repeatPenalty = config.local.repeatPenalty,
+                .maxTokens = config.local.maxTokens,
+                .flashAttention = config.local.flashAttention,
+            };
+            if (!config.local.chatTemplate.empty())
+            {
+                providerConfig.chatTemplateOverride =
+                    local::chatTemplateFromString(config.local.chatTemplate);
+                providerConfig.useChatTemplateOverride = true;
+            }
+            _providers.emplace(
+                "local", std::make_unique<LlamaCppProvider>(*_modelManager, std::move(providerConfig)));
+        }
+    }
+#endif
+
+    // Set active provider: honor explicit choice, auto-detect only when unset.
     if (_providers.contains(config.activeProvider))
     {
         _activeProviderName = config.activeProvider;
     }
-    else if (!_providers.empty())
+    else if (config.activeProvider.empty() && !_providers.empty())
     {
+        // No explicit preference — pick the first authenticated provider.
         _activeProviderName = _providers.begin()->first;
     }
+    // Otherwise: user explicitly requested a provider that isn't available.
+    // Leave _activeProviderName empty so the caller can report the error.
 }
 
 auto ProviderFactory::activeProvider() -> LlmProvider*
@@ -399,6 +439,34 @@ auto ProviderFactory::createProvider() const -> std::optional<OwnedProvider>
             return OwnedProvider { .httpClient = std::move(httpClient), .provider = std::move(provider) };
         }
     }
+#if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
+    else if (_activeProviderName == "local")
+    {
+        if (_modelManager && _modelManager->isLoaded())
+        {
+            auto providerConfig = LlamaCppProviderConfig {
+                .contextSize = _config.local.contextSize,
+                .batchSize = _config.local.batchSize,
+                .temperature = _config.local.temperature,
+                .topP = _config.local.topP,
+                .topK = _config.local.topK,
+                .repeatPenalty = _config.local.repeatPenalty,
+                .maxTokens = _config.local.maxTokens,
+                .flashAttention = _config.local.flashAttention,
+            };
+            if (!_config.local.chatTemplate.empty())
+            {
+                providerConfig.chatTemplateOverride =
+                    local::chatTemplateFromString(_config.local.chatTemplate);
+                providerConfig.useChatTemplateOverride = true;
+            }
+            // Local provider does not need an HttpClient — set it to nullptr.
+            auto provider =
+                std::make_unique<LlamaCppProvider>(*_modelManager, std::move(providerConfig));
+            return OwnedProvider { .httpClient = nullptr, .provider = std::move(provider) };
+        }
+    }
+#endif
 
     return std::nullopt;
 }

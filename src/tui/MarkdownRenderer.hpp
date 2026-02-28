@@ -4,12 +4,28 @@
 #include <tui/GenericSyntaxHighlighter.hpp>
 #include <tui/TerminalOutput.hpp>
 
+#include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace tui
 {
+
+/// @brief Visual style for table rendering.
+enum class TableRenderStyle : std::uint8_t
+{
+    Bordered, ///< Box-drawing borders (default).
+    Compact,  ///< Bold header + underline separator, space-separated columns, no vertical borders.
+    Plain,    ///< No borders or emphasis — plain text only.
+};
+
+/// @brief Optional callback for per-cell styling in table rendering.
+///
+/// Returns a custom Style for the cell at (row, col), or nullopt for the default.
+/// @p row is 0-based data row index (headers are not passed through the callback).
+using CellStyleFn = std::function<std::optional<Style>(size_t row, size_t col, std::string_view text)>;
 
 /// @brief Theme for markdown rendering with terminal styles.
 struct MarkdownTheme
@@ -74,6 +90,14 @@ class MarkdownRenderer
     /// @param width Maximum table width in columns (0 = unconstrained).
     void setMaxWidth(int width) noexcept;
 
+    /// @brief Sets the visual style for table rendering.
+    /// @param style The desired table render style.
+    void setTableRenderStyle(TableRenderStyle style) noexcept;
+
+    /// @brief Sets a per-cell style callback for custom table cell coloring.
+    /// @param fn The callback, or nullptr to clear.
+    void setCellStyleCallback(CellStyleFn fn);
+
     /// @brief Returns the default theme with sensible terminal colors.
     [[nodiscard]] static auto defaultTheme() -> MarkdownTheme;
 
@@ -86,6 +110,8 @@ class MarkdownRenderer
     bool _streaming = false;
     bool _fullWidthMode = false;
     int _maxWidth = 0; ///< Maximum width for table rendering (0 = unconstrained).
+    TableRenderStyle _tableRenderStyle = TableRenderStyle::Bordered; ///< Visual table style.
+    CellStyleFn _cellStyleFn;                                        ///< Optional per-cell style callback.
     bool _inCodeBlock = false;
     bool _inThinkBlock = false;
     std::string _codeFence; ///< The fence string (e.g. "```") that opened the current code block.
@@ -122,6 +148,11 @@ class MarkdownRenderer
     /// @brief Renders a fully parsed table with box-drawing borders.
     /// @param table The parsed table to render.
     void renderTable(struct ParsedTable const& table);
+
+    /// @brief Renders a table in compact style (bold header + underline, no vertical borders).
+    /// @param table The parsed table to render.
+    /// @param showHeader Whether to bold the header and render an underline separator.
+    void renderTableCompact(struct ParsedTable const& table, bool showHeader);
 
     /// @brief Renders a heading line.
     /// @param level The heading level (1-6).

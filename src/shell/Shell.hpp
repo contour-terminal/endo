@@ -369,7 +369,7 @@ class Shell final: public SignalCallback
 
     std::unique_ptr<tui::SemanticBlockClient> _semanticBlockClient;
     agent::ErrorRecoveryAction _sessionErrorRecoveryOverride =
-        agent::ErrorRecoveryAction::Ask; ///< Session-level override (set by user choice).
+        agent::ErrorRecoveryAction::Ignore; ///< Session-level override (set by user choice).
     bool _hasSessionOverride = false;    ///< Whether the user made a session-level choice.
 
     std::unique_ptr<http::HttpClient> _agentHttpClient;

@@ -52,6 +52,7 @@ static constexpr std::array providerValues = {
     EnumValueEntry { "openai", "OpenAI" },
     EnumValueEntry { "gemini", "Google Gemini" },
     EnumValueEntry { "openai_compat", "OpenAI-compatible endpoint" },
+    EnumValueEntry { "local", "Local model (llama.cpp)" },
 };
 
 static constexpr std::array boolValues = {
@@ -440,6 +441,58 @@ static constexpr std::array agentProperties = {
         "agent_web_search_max_results", CoreVM::LiteralType::Number,
         "Max web search results per query",
         "**agent_web_search_max_results** -- property\n\nMaximum number of web search results per query.",
+    },
+    // --- Local inference ---
+    PropertyDescriptor {
+        "agent_local_model_path", CoreVM::LiteralType::String,
+        "Path to local GGUF model file",
+        "**agent_local_model_path** -- property\n\nSets the path to a local GGUF model file for offline inference.",
+    },
+    PropertyDescriptor {
+        "agent_local_model_dir", CoreVM::LiteralType::String,
+        "Directory for downloaded models",
+        "**agent_local_model_dir** -- property\n\nSets the directory where downloaded models are stored.",
+    },
+    PropertyDescriptor {
+        "agent_local_gpu_layers", CoreVM::LiteralType::Number,
+        "GPU layers to offload (-1 = all, 0 = CPU only)",
+        "**agent_local_gpu_layers** -- property\n\nNumber of model layers to offload to GPU (-1 = all, 0 = CPU only).",
+    },
+    PropertyDescriptor {
+        "agent_local_context_size", CoreVM::LiteralType::Number,
+        "Context window size in tokens",
+        "**agent_local_context_size** -- property\n\nSets the context window size in tokens for local inference.",
+    },
+    PropertyDescriptor {
+        "agent_local_threads", CoreVM::LiteralType::Number,
+        "CPU threads for inference (0 = auto)",
+        "**agent_local_threads** -- property\n\nNumber of CPU threads for local inference (0 = auto-detect).",
+    },
+    PropertyDescriptor {
+        "agent_local_batch_size", CoreVM::LiteralType::Number,
+        "Batch size for prompt evaluation",
+        "**agent_local_batch_size** -- property\n\nBatch size for prompt evaluation in local inference.",
+    },
+    PropertyDescriptor {
+        "agent_local_temperature", CoreVM::LiteralType::Number,
+        "Sampling temperature (value * 100, e.g. 70 = 0.7)",
+        "**agent_local_temperature** -- property\n\nSampling temperature for local inference (integer, value * 100).",
+    },
+    PropertyDescriptor {
+        "agent_local_flash_attention", CoreVM::LiteralType::Boolean,
+        "Enable Flash Attention",
+        "**agent_local_flash_attention** -- property\n\nEnables or disables Flash Attention for local inference.",
+        false, boolValues,
+    },
+    PropertyDescriptor {
+        "agent_local_max_tokens", CoreVM::LiteralType::Number,
+        "Maximum tokens to generate",
+        "**agent_local_max_tokens** -- property\n\nMaximum number of tokens to generate per response.",
+    },
+    PropertyDescriptor {
+        "agent_local_chat_template", CoreVM::LiteralType::String,
+        "Chat template override (empty = auto-detect)",
+        "**agent_local_chat_template** -- property\n\nOverrides the chat template format (chatml, llama3, mistral, gemma, phi3, qwen2). Empty uses auto-detection from GGUF metadata.",
     },
     // --- Error recovery ---
     PropertyDescriptor {

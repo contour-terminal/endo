@@ -55,6 +55,24 @@ struct CopilotConfig
     ThinkingMode thinkingMode = ThinkingMode::Off; ///< Thinking/reasoning mode.
 };
 
+/// Configuration for the local llama.cpp inference provider.
+struct LocalConfig
+{
+    std::string modelPath;                                         ///< Path to GGUF model file.
+    std::string modelDir = "~/.local/share/endo/models/";          ///< Directory for model storage.
+    int32_t gpuLayers = -1;                                        ///< GPU layers to offload (-1 = all, 0 = CPU only).
+    size_t contextSize = 32768;                                    ///< Context window size in tokens.
+    int32_t threads = 0;                                           ///< Number of threads (0 = auto-detect).
+    size_t batchSize = 512;                                        ///< Batch size for prompt evaluation.
+    float temperature = 0.7f;                                      ///< Sampling temperature.
+    float topP = 0.9f;                                             ///< Top-p (nucleus) sampling.
+    int32_t topK = 40;                                             ///< Top-k sampling.
+    float repeatPenalty = 1.1f;                                    ///< Repetition penalty.
+    bool flashAttention = true;                                    ///< Enable flash attention if supported.
+    size_t maxTokens = 4096;                                       ///< Maximum output tokens per request.
+    std::string chatTemplate;                                      ///< Chat template override (empty = auto-detect).
+};
+
 /// Configuration for agent plan mode.
 struct PlanModeConfig
 {
@@ -87,9 +105,9 @@ struct SessionConfig
 /// @brief Default action for error recovery on failed shell commands.
 enum class ErrorRecoveryAction : std::uint8_t
 {
-    Ask,     ///< Ask the user via QuestionComponent (default).
+    Ask,     ///< Ask the user via QuestionComponent.
     Analyze, ///< Automatically analyze without asking.
-    Ignore,  ///< Do nothing on command failure.
+    Ignore,  ///< Do nothing on command failure (default).
 };
 
 /// @brief Converts an ErrorRecoveryAction to its string representation.
@@ -103,25 +121,25 @@ enum class ErrorRecoveryAction : std::uint8_t
         case ErrorRecoveryAction::Analyze: return "analyze";
         case ErrorRecoveryAction::Ignore: return "ignore";
     }
-    return "ask";
+    return "ignore";
 }
 
 /// @brief Parses an ErrorRecoveryAction from a string.
 /// @param str The string to parse ("ask", "analyze", or "ignore").
-/// @return The corresponding action (defaults to Ask for unknown strings).
+/// @return The corresponding action (defaults to Ignore for unknown strings).
 [[nodiscard]] constexpr auto errorRecoveryActionFromString(std::string_view str) -> ErrorRecoveryAction
 {
     if (str == "analyze")
         return ErrorRecoveryAction::Analyze;
     if (str == "ignore")
         return ErrorRecoveryAction::Ignore;
-    return ErrorRecoveryAction::Ask;
+    return ErrorRecoveryAction::Ignore;
 }
 
 /// @brief Configuration for error recovery suggestions on failed shell commands.
 struct ErrorRecoveryConfig
 {
-    ErrorRecoveryAction action = ErrorRecoveryAction::Ask; ///< Default action on command failure.
+    ErrorRecoveryAction action = ErrorRecoveryAction::Ignore; ///< Default action on command failure.
     std::string model; ///< Model to use for error analysis (empty = use active agent model).
 };
 
@@ -136,6 +154,7 @@ struct AgentConfig
     OpenAiConfig openaiCompat; ///< OpenAI-compatible provider (Ollama, vLLM, LM Studio).
     GeminiConfig gemini;       ///< Google Gemini configuration.
     CopilotConfig copilot;     ///< GitHub Copilot configuration.
+    LocalConfig local;         ///< Local llama.cpp inference configuration.
 
     size_t maxToolResultSize = 30720; ///< Maximum size in bytes for tool result content before truncation.
     bool logToolUses = true;          ///< Whether to log tool invocations to the terminal in agent mode.

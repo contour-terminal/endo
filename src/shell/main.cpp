@@ -26,6 +26,7 @@
 #include "Shell.hpp"
 #include <agent/RunCommand.hpp>
 #include <agent/auth/LoginCommand.hpp>
+#include <agent/providers/local/ModelsCommand.hpp>
 #include <agent/tracing/TraceReplay.hpp>
 
 using namespace std::string_view_literals;
@@ -62,6 +63,7 @@ Agent Commands:
   agent status              Show configured providers and active selection
   agent switch [PROVIDER]   Switch the active LLM provider
   agent logout [PROVIDER]   Remove stored credentials for a provider (OAuth and API key)
+  agent models <subcmd>     Manage local GGUF models (list, download, remove, info)
   agent trace replay <FILE> Replay a tool trace JSONL file
 
 Agent Options:
@@ -305,6 +307,8 @@ int main(int argc, char const* argv[])
             std::print(stderr, "Usage: {} agent trace replay <FILE>\n", programName);
             return EXIT_FAILURE;
         }
+        if (subcommand == "models")
+            return endo::agent::local::runModelsCommand(args.subspan(3));
         if (subcommand == "run")
         {
             auto const runArgs = args.subspan(3);
@@ -320,7 +324,7 @@ int main(int argc, char const* argv[])
             return shell.runAgentHeadless(*parsedRun);
         }
         std::print(stderr, "Unknown agent command: {}\n", subcommand);
-        std::print(stderr, "Available commands: login, status, logout, trace, run\n");
+        std::print(stderr, "Available commands: login, status, logout, models, trace, run\n");
         return EXIT_FAILURE;
     }
 

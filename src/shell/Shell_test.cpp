@@ -2071,9 +2071,9 @@ TEST_CASE("shell.redirect.herestring_with_variable")
 TEST_CASE("shell.redirect.stderr_to_stdout")
 {
     TestShell shell;
-    // Run ls on nonexistent file - stderr should go to stdout via 2>&1
-    // Note: This test relies on ls outputting error to stderr
-    shell("ls /nonexistent_path_12345 2>&1");
+    // Run stat on nonexistent file - stderr should go to stdout via 2>&1
+    // Note: This test relies on stat outputting error to stderr
+    shell("stat /nonexistent_path_12345 2>&1");
     // Should have some output (the error message)
     CHECK(!shell.output().empty());
 }
@@ -2082,7 +2082,7 @@ TEST_CASE("shell.redirect.fd_to_file")
 {
     TestShell shell;
     // Redirect stderr (fd 2) to a file
-    shell("ls /nonexistent_path_12345 2> /tmp/endo_test_stderr.txt");
+    shell("stat /nonexistent_path_12345 2> /tmp/endo_test_stderr.txt");
     // Verify the error was written to the file
     std::ifstream file("/tmp/endo_test_stderr.txt");
     std::string content;

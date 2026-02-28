@@ -85,4 +85,5 @@ insights that the agent should remember.
 ## Further Reading
 
 - [Overview](index.md) -- What the agent is and how to get started
-- [Configuration](configuration.md) -- `agent.yml` reference, MCP servers, web search
+- [Configuration](configuration.md) -- `init.endo` reference, MCP servers, web search
+- [Local LLM Inference](local-llm.md) -- Offline inference with llama.cpp, model management

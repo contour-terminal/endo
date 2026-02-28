@@ -39,13 +39,18 @@ and connect to external tool servers via [MCP](configuration.md#mcp-server-confi
 
 | Provider | Default Model | Context Window |
 |----------|---------------|----------------|
-| **Claude** (Anthropic) | `claude-sonnet-4-5-20250929` | 200,000 tokens |
+| **Claude** (Anthropic) | `claude-sonnet-4-6` | 200,000 tokens |
 | **OpenAI** | `gpt-4o` | 128,000 tokens |
 | **Google Gemini** | `gemini-2.5-flash` | 1,000,000 tokens |
 | **OpenAI-compatible** | `gpt-4o` | 128,000 tokens |
+| **Local** (llama.cpp) | Any GGUF model | Configurable (default: 32,768) |
 
 The OpenAI-compatible provider works with local inference servers such as Ollama, vLLM,
 and LM Studio.
+
+The **local** provider runs inference entirely on your machine via
+[llama.cpp](https://github.com/ggml-org/llama.cpp) -- no API key or internet connection
+required. See [Local LLM Inference](local-llm.md) for setup instructions.
 
 ## CLI Commands
 
@@ -63,6 +68,26 @@ endo agent status
 endo agent logout
 endo agent logout gemini
 ```
+
+### Local Model Management
+
+Download, list, and manage GGUF models for local inference:
+
+```bash
+# List available and downloaded models
+endo agent models list
+
+# Download a curated model
+endo agent models download qwen2.5-coder-7b
+
+# Show detailed model information
+endo agent models info qwen2.5-coder-7b
+
+# Remove a downloaded model
+endo agent models remove qwen2.5-coder-7b
+```
+
+See [Local LLM Inference](local-llm.md) for the full guide.
 
 ## Entering and Exiting Agent Mode
 
@@ -83,4 +108,5 @@ directly -- the agent decides when to invoke tools on your behalf.
 ## Further Reading
 
 - [Configuration](configuration.md) -- `init.endo` reference, MCP servers, web search
+- [Local LLM Inference](local-llm.md) -- Offline inference with llama.cpp, model management
 - [Tools & Commands](tools.md) -- Built-in tools, slash commands, plan mode

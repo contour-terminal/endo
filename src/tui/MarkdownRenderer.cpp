@@ -6,6 +6,7 @@
 #include <tui/MarkdownTable.hpp>
 #include <tui/Theme.hpp>
 
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -139,6 +140,16 @@ void MarkdownRenderer::setFullWidthMode(bool enabled) noexcept
 void MarkdownRenderer::setMaxWidth(int width) noexcept
 {
     _maxWidth = width;
+}
+
+void MarkdownRenderer::setTableRenderStyle(TableRenderStyle style) noexcept
+{
+    _tableRenderStyle = style;
+}
+
+void MarkdownRenderer::setCellStyleCallback(CellStyleFn fn)
+{
+    _cellStyleFn = std::move(fn);
 }
 
 void MarkdownRenderer::render(std::string_view markdown)
@@ -655,6 +666,17 @@ void MarkdownRenderer::flushTable()
 
 void MarkdownRenderer::renderTable(ParsedTable const& table)
 {
+    if (_tableRenderStyle == TableRenderStyle::Compact)
+    {
+        renderTableCompact(table, /*showHeader=*/true);
+        return;
+    }
+    if (_tableRenderStyle == TableRenderStyle::Plain)
+    {
+        renderTableCompact(table, /*showHeader=*/false);
+        return;
+    }
+
     auto widths = computeColumnWidths(table);
     auto const border = BorderChars::fromStyle(BorderStyle::Rounded);
 
@@ -768,6 +790,131 @@ void MarkdownRenderer::renderTable(ParsedTable const& table)
 
     // Bottom border
     renderHLine(border.bottomLeft, border.bottomT, border.bottomRight);
+}
+
+void MarkdownRenderer::renderTableCompact(ParsedTable const& table, bool showHeader)
+{
+    auto widths = computeColumnWidths(table);
+
+    if (_maxWidth > 0 && table.columnCount >= 2)
+    {
+        // Compact overhead: 2 (indent) + 2*(N-1) (gaps).
+        auto const overhead = 2 + (2 * (static_cast<int>(table.columnCount) - 1));
+        auto fixedTotal = 0;
+        for (std::size_t col = 0; col + 1 < table.columnCount; ++col)
+            fixedTotal += widths[col];
+
+        // Shrink only the last column to fit the terminal width; minimum 3 chars.
+        auto const lastCol = static_cast<int>(table.columnCount) - 1;
+        auto const available = _maxWidth - overhead - fixedTotal;
+        if (available >= 3 && available < widths[static_cast<std::size_t>(lastCol)])
+            widths[static_cast<std::size_t>(lastCol)] = available;
+    }
+
+    constexpr auto indent = "  ";
+    constexpr auto gap = "  ";
+
+    // Helper: render a single physical line of a (possibly wrapped) row.
+    auto renderPhysicalLine = [&](std::vector<std::string> const& cellTexts,
+                                  Style const& cellStyle,
+                                  std::size_t rowIdx) {
+        _output.writeRaw(indent);
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            auto const& rawText = (col < cellTexts.size()) ? cellTexts[col] : std::string {};
+            auto const alignment =
+                (col < table.alignments.size()) ? table.alignments[col] : TableAlignment::Left;
+            auto const renderedWidth = inlineDisplayWidth(rawText);
+
+            // Truncate as last-resort guard.
+            auto const text =
+                (renderedWidth > widths[col]) ? truncateToDisplayWidth(rawText, widths[col]) : rawText;
+            auto const finalWidth = (renderedWidth > widths[col]) ? inlineDisplayWidth(text) : renderedWidth;
+            auto const padding = std::max(0, widths[col] - finalWidth);
+
+            auto leftPad = 0;
+            auto rightPad = 0;
+            switch (alignment)
+            {
+                case TableAlignment::Left: rightPad = padding; break;
+                case TableAlignment::Right: leftPad = padding; break;
+                case TableAlignment::Center:
+                    leftPad = padding / 2;
+                    rightPad = padding - leftPad;
+                    break;
+            }
+
+            _output.writeRaw(std::string(static_cast<std::size_t>(leftPad), ' '));
+
+            // Determine cell style: callback overrides default.
+            auto const customStyle = _cellStyleFn ? _cellStyleFn(rowIdx, col, rawText) : std::nullopt;
+            auto const& effectiveStyle = customStyle ? *customStyle : cellStyle;
+
+            renderInline(text, &effectiveStyle);
+            _output.writeRaw(std::string(static_cast<std::size_t>(rightPad), ' '));
+            if (col + 1 < table.columnCount)
+                _output.writeRaw(gap);
+        }
+        _output.writeRaw("\n");
+    };
+
+    // Helper: wrap cells and render potentially multi-line row.
+    auto renderRow = [&](std::vector<std::string> const& cells, Style const& cellStyle, std::size_t rowIdx) {
+        if (_maxWidth <= 0)
+        {
+            renderPhysicalLine(cells, cellStyle, rowIdx);
+            return;
+        }
+
+        // Wrap each cell and find the maximum number of physical lines.
+        auto wrappedCells = std::vector<std::vector<std::string>> {};
+        wrappedCells.reserve(table.columnCount);
+        auto maxLines = std::size_t { 1 };
+
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            auto const& text = (col < cells.size()) ? cells[col] : std::string {};
+            auto wrapped = wrapText(text, widths[col]);
+            maxLines = std::max(maxLines, wrapped.size());
+            wrappedCells.push_back(std::move(wrapped));
+        }
+
+        for (std::size_t line = 0; line < maxLines; ++line)
+        {
+            auto lineTexts = std::vector<std::string>(table.columnCount);
+            for (std::size_t col = 0; col < table.columnCount; ++col)
+            {
+                if (col < wrappedCells.size() && line < wrappedCells[col].size())
+                    lineTexts[col] = wrappedCells[col][line];
+            }
+            renderPhysicalLine(lineTexts, cellStyle, rowIdx);
+        }
+    };
+
+    // Header row.
+    if (!table.headers.empty())
+    {
+        auto const headerStyle = showHeader ? _theme.tableHeader : _theme.tableCell;
+        renderRow(table.headers, headerStyle, std::numeric_limits<std::size_t>::max());
+    }
+
+    // Underline separator.
+    if (showHeader)
+    {
+        _output.writeRaw(indent);
+        for (std::size_t col = 0; col < table.columnCount; ++col)
+        {
+            auto const underline = std::string(static_cast<std::size_t>(widths[col]), '-');
+            _output.writeText(underline, _theme.tableBorder);
+            if (col + 1 < table.columnCount)
+                _output.writeRaw(gap);
+        }
+        _output.writeRaw("\n");
+    }
+
+    // Data rows.
+    for (std::size_t rowIdx = 0; rowIdx < table.rows.size(); ++rowIdx)
+        renderRow(table.rows[rowIdx], _theme.tableCell, rowIdx);
 }
 
 void MarkdownRenderer::renderHeading(int level, std::string_view text)

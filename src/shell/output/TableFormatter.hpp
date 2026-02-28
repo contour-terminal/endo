@@ -27,6 +27,7 @@ struct TableConfig
     bool showDirectorySlash = true;          ///< Append trailing '/' to directory names
     int maxColumnWidth = 40;                 ///< Max width per column
     int terminalWidth = 0;                   ///< Terminal width in columns (0 = no constraint)
+    int autoGrowColumn = -1;                 ///< Column index exempt from maxColumnWidth (-1 = none)
 };
 
 /// Checks if a TypedObject is a non-empty list where all elements are Product-type records.

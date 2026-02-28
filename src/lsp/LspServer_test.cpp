@@ -1585,7 +1585,7 @@ TEST_CASE("E2E.known_command_no_command_not_found_diagnostic", "[lsp][e2e][comma
                                    { "uri", "file:///test.endo" },
                                    { "languageId", "endo" },
                                    { "version", 1 },
-                                   { "text", "ls -la" },
+                                   { "text", "date --version" },
                                } },
                          }),
         sendRequest("shutdown", json::object(), 2),

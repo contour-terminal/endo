@@ -81,6 +81,38 @@ namespace
             config.thinkingMode = thinkingModeFromString(node["thinking_mode"].as<std::string>());
     }
 
+    void parseLocalConfig(YAML::Node const& node, LocalConfig& config)
+    {
+        if (!node || !node.IsMap())
+            return;
+        if (node["model_path"])
+            config.modelPath = node["model_path"].as<std::string>();
+        if (node["model_dir"])
+            config.modelDir = node["model_dir"].as<std::string>();
+        if (node["gpu_layers"])
+            config.gpuLayers = node["gpu_layers"].as<int32_t>();
+        if (node["context_size"])
+            config.contextSize = node["context_size"].as<size_t>();
+        if (node["threads"])
+            config.threads = node["threads"].as<int32_t>();
+        if (node["batch_size"])
+            config.batchSize = node["batch_size"].as<size_t>();
+        if (node["temperature"])
+            config.temperature = node["temperature"].as<float>();
+        if (node["top_p"])
+            config.topP = node["top_p"].as<float>();
+        if (node["top_k"])
+            config.topK = node["top_k"].as<int32_t>();
+        if (node["repeat_penalty"])
+            config.repeatPenalty = node["repeat_penalty"].as<float>();
+        if (node["flash_attention"])
+            config.flashAttention = node["flash_attention"].as<bool>();
+        if (node["max_tokens"])
+            config.maxTokens = node["max_tokens"].as<size_t>();
+        if (node["chat_template"])
+            config.chatTemplate = node["chat_template"].as<std::string>();
+    }
+
     void parsePlanModeConfig(YAML::Node const& node, PlanModeConfig& config)
     {
         if (!node || !node.IsMap())
@@ -158,6 +190,7 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
         parseOpenAiConfig(root["openai_compat"], config.openaiCompat);
         parseGeminiConfig(root["gemini"], config.gemini);
         parseCopilotConfig(root["copilot"], config.copilot);
+        parseLocalConfig(root["local"], config.local);
 
         if (root["max_tool_result_size"])
             config.maxToolResultSize = root["max_tool_result_size"].as<size_t>();
@@ -167,14 +200,6 @@ auto loadAgentConfig(std::filesystem::path const& path) -> std::expected<AgentCo
         parsePlanModeConfig(root["plan_mode"], config.planMode);
         parseExploreConfig(root["explore"], config.explore);
         parseTraceConfig(root["trace"], config.trace);
-
-        if (auto const& er = root["error_recovery"]; er && er.IsMap())
-        {
-            if (er["action"])
-                config.errorRecovery.action = errorRecoveryActionFromString(er["action"].as<std::string>());
-            if (er["model"])
-                config.errorRecovery.model = er["model"].as<std::string>();
-        }
 
         return config;
     }

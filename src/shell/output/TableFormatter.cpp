@@ -75,30 +75,68 @@ namespace
         }
     }
 
-    /// Truncates a string to a maximum width, adding ellipsis if needed.
+    /// Returns the display width (visual columns) of a UTF-8 string.
+    int displayWidth(std::string const& str)
+    {
+        int width = 0;
+        for (size_t i = 0; i < str.size();)
+        {
+            auto const byte = static_cast<unsigned char>(str[i]);
+            if (byte < 0x80)
+            {
+                ++width;
+                i += 1;
+            } // ASCII
+            else if (byte < 0xC0)
+            {
+                i += 1;
+            } // continuation byte (skip)
+            else if (byte < 0xE0)
+            {
+                ++width;
+                i += 2;
+            } // 2-byte sequence
+            else if (byte < 0xF0)
+            {
+                ++width;
+                i += 3;
+            } // 3-byte sequence (includes …)
+            else
+            {
+                width += 2;
+                i += 4;
+            } // 4-byte sequence (emoji, typically 2 cols)
+        }
+        return width;
+    }
+
+    /// Truncates a string to a maximum display width, adding ellipsis if needed.
     std::string truncate(std::string const& str, int maxWidth)
     {
-        if (maxWidth <= 0 || static_cast<int>(str.size()) <= maxWidth)
+        if (maxWidth <= 0 || displayWidth(str) <= maxWidth)
             return str;
         if (maxWidth <= 3)
             return str.substr(0, static_cast<size_t>(maxWidth));
+        // Take maxWidth-1 characters (assuming ASCII prefix) and append ellipsis
         return str.substr(0, static_cast<size_t>(maxWidth - 1)) + "\u2026"; // …
     }
 
-    /// Pads a string to a given width with trailing spaces (left-aligned).
+    /// Pads a string to a given display width with trailing spaces (left-aligned).
     std::string padRight(std::string const& str, int width)
     {
-        if (static_cast<int>(str.size()) >= width)
+        auto const dw = displayWidth(str);
+        if (dw >= width)
             return str;
-        return str + std::string(static_cast<size_t>(width) - str.size(), ' ');
+        return str + std::string(static_cast<size_t>(width - dw), ' ');
     }
 
-    /// Pads a string to a given width with leading spaces (right-aligned).
+    /// Pads a string to a given display width with leading spaces (right-aligned).
     std::string padLeft(std::string const& str, int width)
     {
-        if (static_cast<int>(str.size()) >= width)
+        auto const dw = displayWidth(str);
+        if (dw >= width)
             return str;
-        return std::string(static_cast<size_t>(width) - str.size(), ' ') + str;
+        return std::string(static_cast<size_t>(width - dw), ' ') + str;
     }
 
     /// Returns true if a column should be right-aligned based on its field type
@@ -273,8 +311,9 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             auto cell = fieldValueToString(slotVal, fields[col], runner);
             if (config.showDirectorySlash && col == 0 && isDir)
                 cell += '/';
-            cell = truncate(cell, config.maxColumnWidth);
-            auto cellDisplayWidth = static_cast<int>(cell.size());
+            if (static_cast<int>(col) != config.autoGrowColumn)
+                cell = truncate(cell, config.maxColumnWidth);
+            auto cellDisplayWidth = displayWidth(cell);
             if (decorateFiles && config.showIcons && col == 0)
                 cellDisplayWidth += IconDisplayWidth;
             colWidths[col] = std::max(colWidths[col], cellDisplayWidth);
@@ -283,9 +322,10 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
         rows.push_back(std::move(row));
     }
 
-    // Cap column widths at maxColumnWidth
-    for (auto& w: colWidths)
-        w = std::min(w, config.maxColumnWidth);
+    // Cap column widths at maxColumnWidth (auto-grow column is exempt)
+    for (size_t col = 0; col < colWidths.size(); ++col)
+        if (static_cast<int>(col) != config.autoGrowColumn)
+            colWidths[col] = std::min(colWidths[col], config.maxColumnWidth);
 
     // Terminal-width-aware shrinking
     if (config.terminalWidth > 0)
@@ -314,6 +354,16 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
                 w = newW;
             }
         }
+    }
+
+    // After terminal-width shrinking, truncate auto-grow column cells to fit the final width
+    if (config.autoGrowColumn >= 0 && config.autoGrowColumn < static_cast<int>(numCols))
+    {
+        auto const col = static_cast<size_t>(config.autoGrowColumn);
+        auto const iconOffset = (decorateFiles && config.showIcons && col == 0) ? IconDisplayWidth : 0;
+        auto const maxWidth = colWidths[col] - iconOffset;
+        for (auto& row: rows)
+            row[col] = truncate(row[col], maxWidth);
     }
 
     std::string result;
@@ -354,7 +404,7 @@ std::string formatRecordTable(CoreVM::TypedObject* listHead,
             // Padding must use the plain-text length, not the SGR-inflated length.
             auto const colored = colorizePermissions(cellText);
             out += colored;
-            auto const padding = width - static_cast<int>(cellText.size());
+            auto const padding = width - displayWidth(cellText);
             if (padding > 0)
                 out += std::string(static_cast<size_t>(padding), ' ');
         }

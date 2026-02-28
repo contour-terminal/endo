@@ -109,6 +109,7 @@ nav:
   - AI Agent:
     - Overview: agent/index.md
     - Configuration: agent/configuration.md
+    - Local LLM Inference: agent/local-llm.md
     - Tools & Commands: agent/tools.md
   - Roadmap:
     - Overview: roadmap/index.md

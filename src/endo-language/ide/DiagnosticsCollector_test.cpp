@@ -68,8 +68,8 @@ TEST_CASE("DiagnosticsCollector.path_command_no_diagnostic", "[diagnostics][comm
     // cmd.exe is always in PATH on Windows
     auto diagnostics = collectDiagnostics("cmd /c dir");
 #else
-    // ls should be in PATH on any Linux system
-    auto diagnostics = collectDiagnostics("ls -la");
+    // date should be in PATH on any Linux system
+    auto diagnostics = collectDiagnostics("date --version");
 #endif
     CHECK(diagnostics.empty());
 }
