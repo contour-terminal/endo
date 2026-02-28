@@ -304,15 +304,18 @@ ProviderFactory::ProviderFactory(http::HttpClient const& httpClient, AgentConfig
     }
 #endif
 
-    // Set active provider: prefer config.activeProvider if authenticated, otherwise first available
+    // Set active provider: honor explicit choice, auto-detect only when unset.
     if (_providers.contains(config.activeProvider))
     {
         _activeProviderName = config.activeProvider;
     }
-    else if (!_providers.empty())
+    else if (config.activeProvider.empty() && !_providers.empty())
     {
+        // No explicit preference — pick the first authenticated provider.
         _activeProviderName = _providers.begin()->first;
     }
+    // Otherwise: user explicitly requested a provider that isn't available.
+    // Leave _activeProviderName empty so the caller can report the error.
 }
 
 auto ProviderFactory::activeProvider() -> LlmProvider*

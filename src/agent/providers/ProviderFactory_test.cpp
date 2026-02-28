@@ -96,7 +96,7 @@ TEST_CASE("agent.factory.switch_provider")
     unsetTestEnv("ENDO_TEST_SWITCH_GEMINI");
 }
 
-TEST_CASE("agent.factory.fallback_when_active_not_available")
+TEST_CASE("agent.factory.no_fallback_when_explicit_provider_not_available")
 {
     setTestEnv("ENDO_TEST_FALLBACK_KEY", "test-key");
 
@@ -112,11 +112,34 @@ TEST_CASE("agent.factory.fallback_when_active_not_available")
     endo::http::HttpClient httpClient;
     auto factory = ProviderFactory(httpClient, config);
 
-    // Should fall back to the only authenticated provider
-    CHECK(factory.activeProvider() != nullptr);
-    CHECK(factory.activeProviderName() == "openai");
+    // Explicit provider not available — must NOT silently fall back to another.
+    CHECK(factory.activeProvider() == nullptr);
+    CHECK(factory.activeProviderName().empty());
 
     unsetTestEnv("ENDO_TEST_FALLBACK_KEY");
+}
+
+TEST_CASE("agent.factory.auto_detect_when_no_preference")
+{
+    setTestEnv("ENDO_TEST_AUTODETECT_KEY", "test-key");
+
+    auto config = AgentConfig {};
+    config.activeProvider = ""; // No explicit preference — auto-detect.
+    config.claude.apiKeyEnv = "ENDO_TEST_NONEXISTENT_9";
+    config.claude.authPreference = "api_key";
+    config.openai.apiKeyEnv = "ENDO_TEST_AUTODETECT_KEY";
+    config.gemini.apiKeyEnv = "ENDO_TEST_NONEXISTENT_10";
+    config.gemini.authPreference = "api_key";
+    config.openaiCompat.baseUrl = "";
+
+    endo::http::HttpClient httpClient;
+    auto factory = ProviderFactory(httpClient, config);
+
+    // No preference set — should auto-detect the first authenticated provider.
+    CHECK(factory.activeProvider() != nullptr);
+    CHECK(!factory.activeProviderName().empty());
+
+    unsetTestEnv("ENDO_TEST_AUTODETECT_KEY");
 }
 
 TEST_CASE("agent.factory.openai_compat_no_key_required")
