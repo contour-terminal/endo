@@ -61,10 +61,10 @@ namespace
             .variants = {{
                 {
                     .quantization = "Q4_K_M",
-                    .url = "https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-GGUF/resolve/main/Qwen3-Coder-30B-A3B-Q4_K_M.gguf",
-                    .fileSizeBytes = 17'000'000'000,
+                    .url = "https://huggingface.co/unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/main/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+                    .fileSizeBytes = 18'600'000'000,
                     .ramRequired = 24'000'000'000,
-                    .filename = "qwen3-coder-30b-a3b-q4_k_m.gguf",
+                    .filename = "qwen3-coder-30b-a3b-instruct-q4_k_m.gguf",
                 },
             }},
             .supportsToolUse = true,

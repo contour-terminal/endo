@@ -3,6 +3,9 @@
 
 #include <http/HttpClient.hpp>
 
+#include <tui/MarkdownRenderer.hpp>
+#include <tui/TerminalOutput.hpp>
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -76,23 +79,19 @@ namespace
         });
     }
 
+    /// Status column index in the models table.
+    constexpr std::size_t statusColumnIndex = 3;
+
     /// Runs `endo agent models list`.
     auto runList() -> int
     {
-        auto const c = getColors();
         auto const models = curatedModels();
         auto const localModels = discoverLocalModels(modelStorageDir());
 
-        std::print("\n{}Available Models:{}\n\n", c.bold, c.reset);
-        std::print("  {}{:<24}{:<10}{:<10}{:<16}{}{}\n",
-                   c.bold,
-                   "Name",
-                   "Size",
-                   "RAM",
-                   "Status",
-                   "Description",
-                   c.reset);
-        std::print("  {}{:─<24}{:─<10}{:─<10}{:─<16}{:─<30}{}\n", c.dim, "", "", "", "", "", c.reset);
+        // Build a GFM pipe table as markdown.
+        auto md = std::string { "## Available Models\n\n"
+                                "| Name | Size | RAM | Status | Description |\n"
+                                "|------|------|-----|--------|-------------|\n" };
 
         for (auto const& model: models)
         {
@@ -101,25 +100,22 @@ namespace
 
             auto const& variant = model.variants.front();
             auto const downloaded = isModelDownloaded(variant);
-            auto const statusColor = downloaded ? c.green : c.dim;
-            auto const statusText = downloaded ? "downloaded"sv : "not installed"sv;
+            auto const* const statusText = downloaded ? "downloaded" : "not installed";
 
             auto const sizeStr =
                 variant.parts.empty()
                     ? formatBytes(variant.fileSizeBytes)
                     : std::format("{} ({}p)", formatBytes(variant.fileSizeBytes), variant.parts.size());
 
-            std::print("  {:<24}{:<10}{:<10}{}{:<16}{}{}\n",
-                       model.name,
-                       sizeStr,
-                       formatBytes(variant.ramRequired),
-                       statusColor,
-                       statusText,
-                       c.reset,
-                       model.description);
+            md += std::format("| {} | {} | {} | {} | {} |\n",
+                              model.name,
+                              sizeStr,
+                              formatBytes(variant.ramRequired),
+                              statusText,
+                              model.description);
         }
 
-        // Show any additional local models not in the curated list.
+        // Additional local models not in the curated list.
         for (auto const& local: localModels)
         {
             auto const isCurated = std::ranges::any_of(models, [&](auto const& m) {
@@ -132,18 +128,40 @@ namespace
                     local.splitPaths.empty()
                         ? formatBytes(local.fileSizeBytes)
                         : std::format("{} ({}p)", formatBytes(local.fileSizeBytes), local.splitPaths.size());
-                std::print("  {:<24}{:<10}{:<10}{}{:<16}{}{}\n",
-                           local.filename,
-                           sizeStr,
-                           "",
-                           c.green,
-                           "downloaded",
-                           c.reset,
-                           "(custom model)");
+                md += std::format("| {} | {} | | downloaded | (custom model) |\n", local.filename, sizeStr);
             }
         }
 
-        std::print("\n{}Use: endo agent models download <name> [--quant Q4_K_M]{}\n\n", c.dim, c.reset);
+        md += "\nUse: endo agent models download <name> [--quant Q4_K_M]\n";
+
+        // Render using MarkdownRenderer with compact table style.
+        auto output = tui::TerminalOutput {};
+        (void) output.initialize();
+        auto renderer = tui::MarkdownRenderer(output);
+        renderer.setTableRenderStyle(tui::TableRenderStyle::Compact);
+        renderer.setMaxWidth(output.columns());
+
+        auto greenStyle = tui::Style {};
+        greenStyle.fg = tui::RgbColor { .r = 0, .g = 180, .b = 0 };
+
+        auto dimStyle = tui::Style {};
+        dimStyle.dim = true;
+
+        renderer.setCellStyleCallback(
+            [&](size_t /*row*/, size_t col, std::string_view text) -> std::optional<tui::Style> {
+                if (col == statusColumnIndex)
+                {
+                    if (text == "downloaded")
+                        return greenStyle;
+                    if (text == "not installed")
+                        return dimStyle;
+                }
+                return std::nullopt;
+            });
+
+        renderer.render(md);
+        output.flush();
+
         return EXIT_SUCCESS;
     }
 
