@@ -3,14 +3,17 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
 
-    #include <llama.h>
-
     #include <algorithm>
     #include <array>
     #include <cstring>
     #include <format>
     #include <string>
     #include <utility>
+
+    #include <ggml.h>
+    #include <llama.h>
+
+    #include <agent/tracing/AgentTracer.hpp>
 
 namespace endo::agent::local
 {
@@ -22,8 +25,7 @@ namespace
     {
         // llama.cpp provides the chat template string in GGUF metadata.
         auto buf = std::array<char, 2048> {};
-        auto const len =
-            llama_model_meta_val_str(model, "tokenizer.chat_template", buf.data(), buf.size());
+        auto const len = llama_model_meta_val_str(model, "tokenizer.chat_template", buf.data(), buf.size());
         if (len <= 0)
             return ChatTemplateFormat::Generic;
 
@@ -49,10 +51,8 @@ namespace
     {
         // Models known to support tool calling well.
         static constexpr auto toolUseArchitectures = std::array {
-            std::string_view { "llama" },
-            std::string_view { "qwen2" },
-            std::string_view { "qwen2_moe" },
-            std::string_view { "mistral" },
+            std::string_view { "llama" },     std::string_view { "qwen2" },
+            std::string_view { "qwen2_moe" }, std::string_view { "mistral" },
             std::string_view { "command-r" },
         };
         return std::ranges::any_of(toolUseArchitectures, [&](auto const& a) { return a == arch; });
@@ -67,11 +67,25 @@ namespace
             return {};
         return std::string(buf.data(), static_cast<size_t>(len));
     }
+
+    /// Callback for redirecting llama.cpp log output to a trace log file.
+    void llamaLogCallback(ggml_log_level /*level*/, char const* text, void* userData)
+    {
+        auto* stream = static_cast<std::ofstream*>(userData);
+        if (stream && stream->is_open())
+            *stream << text << std::flush;
+    }
 } // namespace
 
 ModelManager::ModelManager(std::filesystem::path modelDir, int32_t gpuLayers, bool flashAttention):
     _modelDir(std::move(modelDir)), _gpuLayers(gpuLayers), _flashAttention(flashAttention)
 {
+    // Redirect llama.cpp log output to a trace log file to avoid corrupting the TUI.
+    auto const logDir = endo::agent::resolveTraceLogDirectory();
+    std::filesystem::create_directories(logDir);
+    _logStream.open(logDir / "llama.log", std::ios::app);
+    llama_log_set(&llamaLogCallback, &_logStream);
+
     // Initialize llama.cpp backend (safe to call multiple times).
     llama_backend_init();
 }
@@ -86,8 +100,11 @@ ModelManager::ModelManager(ModelManager&& other) noexcept:
     _gpuLayers(other._gpuLayers),
     _flashAttention(other._flashAttention),
     _model(std::exchange(other._model, nullptr)),
-    _info(std::move(other._info))
+    _info(std::move(other._info)),
+    _logStream(std::move(other._logStream))
 {
+    // Re-register callback to point at our _logStream (moved-from other's is invalid).
+    llama_log_set(&llamaLogCallback, &_logStream);
 }
 
 auto ModelManager::operator=(ModelManager&& other) noexcept -> ModelManager&
@@ -100,6 +117,8 @@ auto ModelManager::operator=(ModelManager&& other) noexcept -> ModelManager&
         _flashAttention = other._flashAttention;
         _model = std::exchange(other._model, nullptr);
         _info = std::move(other._info);
+        _logStream = std::move(other._logStream);
+        llama_log_set(&llamaLogCallback, &_logStream);
     }
     return *this;
 }

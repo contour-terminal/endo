@@ -3,14 +3,15 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
 
-    #include <agent/providers/local/ChatTemplate.hpp>
-
     #include <cstdint>
     #include <expected>
     #include <filesystem>
+    #include <fstream>
     #include <optional>
     #include <string>
     #include <vector>
+
+    #include <agent/providers/local/ChatTemplate.hpp>
 
 // Forward declarations for llama.cpp types.
 struct llama_model;
@@ -21,15 +22,15 @@ namespace endo::agent::local
 /// Information about a loaded GGUF model.
 struct LoadedModelInfo
 {
-    std::filesystem::path path;       ///< Full path to the GGUF file.
-    std::string name;                 ///< Model name from GGUF metadata.
-    std::string architecture;         ///< Architecture (e.g. "llama", "qwen2").
-    size_t parameterCount = 0;        ///< Number of parameters.
-    size_t fileSizeBytes = 0;         ///< File size in bytes.
-    size_t contextLength = 0;         ///< Maximum context length from metadata.
+    std::filesystem::path path;                                    ///< Full path to the GGUF file.
+    std::string name;                                              ///< Model name from GGUF metadata.
+    std::string architecture;                                      ///< Architecture (e.g. "llama", "qwen2").
+    size_t parameterCount = 0;                                     ///< Number of parameters.
+    size_t fileSizeBytes = 0;                                      ///< File size in bytes.
+    size_t contextLength = 0;                                      ///< Maximum context length from metadata.
     ChatTemplateFormat chatTemplate = ChatTemplateFormat::Generic; ///< Detected chat template.
-    bool supportsToolUse = false;     ///< Whether the model supports tool calling.
-    bool supportsVision = false;      ///< Whether the model has a vision encoder.
+    bool supportsToolUse = false; ///< Whether the model supports tool calling.
+    bool supportsVision = false;  ///< Whether the model has a vision encoder.
 };
 
 /// Manages GGUF model discovery, loading, and lifecycle.
@@ -80,6 +81,7 @@ class ModelManager
     bool _flashAttention = true;
     llama_model* _model = nullptr;
     LoadedModelInfo _info;
+    std::ofstream _logStream; ///< Log file stream for redirected llama.cpp output.
 };
 
 } // namespace endo::agent::local
