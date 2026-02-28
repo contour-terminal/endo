@@ -166,6 +166,10 @@ namespace
     auto getAuthSource(AgentConfig const& config, std::string_view provider, OAuthStore const& oauthStore)
         -> std::string
     {
+        // Local provider: show model path as the "source".
+        if (provider == "local")
+            return config.local.modelPath.empty() ? std::string {} : "model: " + config.local.modelPath;
+
         // Check OAuth first.
         auto const* oauthCreds = [&]() -> OAuthCredentials const* {
             if (provider == "claude" && oauthStore.claude.has_value())
@@ -214,6 +218,10 @@ namespace
                                      std::string_view provider,
                                      OAuthStore const& oauthStore) -> bool
     {
+        // Local provider is "authenticated" if a model path is configured.
+        if (provider == "local")
+            return !config.local.modelPath.empty();
+
         // Check OAuth.
         if (provider == "claude" && oauthStore.claude.has_value() && !oauthStore.claude->accessToken.empty())
             return true;
@@ -627,7 +635,7 @@ auto runStatusCommand() -> int
     std::print("{}{:─<16}{:─<18}{:─<14}{}\n", dim, "", "", "", reset);
 
     auto const allProviders =
-        std::array { "claude"sv, "openai"sv, "gemini"sv, "copilot"sv, "openai_compat"sv };
+        std::array { "claude"sv, "openai"sv, "gemini"sv, "copilot"sv, "openai_compat"sv, "local"sv };
 
     for (auto const& provider: allProviders)
     {

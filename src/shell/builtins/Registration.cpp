@@ -1047,7 +1047,7 @@ void Shell::registerAgentConfigBuiltins()
         .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.activeProvider)); })
         .onSet([this](CoreVM::Params& args) {
             auto const& name = args.getString(1);
-            if (name == "claude" || name == "openai" || name == "gemini" || name == "openai_compat")
+            if (name == "claude" || name == "openai" || name == "gemini" || name == "openai_compat" || name == "local")
             {
                 agentConfig.activeProvider = std::string(name);
                 _agentProviderFactory.reset();
@@ -1350,6 +1350,48 @@ void Shell::registerAgentConfigBuiltins()
     _runtime.registerProperty("agent_error_recovery_model", CoreVM::LiteralType::String)
         .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.errorRecovery.model)); })
         .onSet([this](CoreVM::Params& args) { agentConfig.errorRecovery.model = std::string(args.getString(1)); });
+
+    // --- Local llama.cpp provider ---
+
+    _runtime.registerProperty("agent_local_model_path", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.local.modelPath)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.modelPath = std::string(args.getString(1)); _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_model_dir", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.local.modelDir)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.modelDir = std::string(args.getString(1)); _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_gpu_layers", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.local.gpuLayers)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.gpuLayers = static_cast<int32_t>(args.getInt(1)); _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_context_size", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.local.contextSize)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.local.contextSize = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
+
+    _runtime.registerProperty("agent_local_threads", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.local.threads)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.threads = static_cast<int32_t>(args.getInt(1)); _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_batch_size", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.local.batchSize)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.local.batchSize = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
+
+    _runtime.registerProperty("agent_local_temperature", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(static_cast<int64_t>(agentConfig.local.temperature * 100))); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.temperature = static_cast<float>(args.getInt(1)) / 100.0f; _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_flash_attention", CoreVM::LiteralType::Boolean)
+        .onGet([this](CoreVM::Params& args) { args.setResult(agentConfig.local.flashAttention); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.flashAttention = args.getBool(1); _agentProviderFactory.reset(); });
+
+    _runtime.registerProperty("agent_local_max_tokens", CoreVM::LiteralType::Number)
+        .onGet([this](CoreVM::Params& args) { args.setResult(static_cast<CoreVM::CoreNumber>(agentConfig.local.maxTokens)); })
+        .onSet([this](CoreVM::Params& args) { auto const n = args.getInt(1); if (n > 0) { agentConfig.local.maxTokens = static_cast<size_t>(n); _agentProviderFactory.reset(); } });
+
+    _runtime.registerProperty("agent_local_chat_template", CoreVM::LiteralType::String)
+        .onGet([this](CoreVM::Params& args) { args.setResult(std::string(agentConfig.local.chatTemplate)); })
+        .onSet([this](CoreVM::Params& args) { agentConfig.local.chatTemplate = std::string(args.getString(1)); _agentProviderFactory.reset(); });
     // clang-format on
 }
 

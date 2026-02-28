@@ -10,6 +10,10 @@
 #include <agent/AgentConfig.hpp>
 #include <agent/providers/LlmProvider.hpp>
 
+#if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
+    #include <agent/local/ModelManager.hpp>
+#endif
+
 namespace endo::http
 {
 class HttpClient;
@@ -66,6 +70,11 @@ class ProviderFactory
     std::unordered_map<std::string, std::unique_ptr<LlmProvider>> _providers;
     std::string _activeProviderName;
     AgentConfig _config; ///< Saved config for createProvider().
+
+#if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
+    /// Shared model manager for local inference (model weights are thread-safe for reads).
+    std::unique_ptr<local::ModelManager> _modelManager;
+#endif
 };
 
 } // namespace endo::agent

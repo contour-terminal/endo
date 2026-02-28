@@ -567,7 +567,7 @@ Integrated Contour terminal emulator's Semantic Block Query VT extension (DEC Mo
 
 ### Local Model Inference — llama.cpp (Phase 3)
 
-**Status:** Not started | **Effort:** Very high
+**Status:** Complete | **Effort:** Very high
 
 Enable fully offline, privacy-preserving LLM inference by integrating llama.cpp as a
 local model backend. Adds a `LlamaCppProvider` implementing the `LlmProvider` interface.
