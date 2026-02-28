@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include <catch2/catch_test_macros.hpp>
 
-#include <agent/local/ChatTemplate.hpp>
+#include <agent/providers/local/ChatTemplate.hpp>
 
 using namespace endo::agent;
 using namespace endo::agent::local;

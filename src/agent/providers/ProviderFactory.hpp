@@ -11,7 +11,7 @@
 #include <agent/providers/LlmProvider.hpp>
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
-    #include <agent/local/ModelManager.hpp>
+    #include <agent/providers/local/ModelManager.hpp>
 #endif
 
 namespace endo::http

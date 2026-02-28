@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include <agent/local/GbnfGrammar.hpp>
+#include <agent/providers/local/GbnfGrammar.hpp>
 
 namespace endo::agent::local
 {

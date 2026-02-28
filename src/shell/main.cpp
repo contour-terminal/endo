@@ -26,7 +26,7 @@
 #include "Shell.hpp"
 #include <agent/RunCommand.hpp>
 #include <agent/auth/LoginCommand.hpp>
-#include <agent/local/ModelsCommand.hpp>
+#include <agent/providers/local/ModelsCommand.hpp>
 #include <agent/tracing/TraceReplay.hpp>
 
 using namespace std::string_view_literals;

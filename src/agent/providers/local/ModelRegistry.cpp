@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <format>
 
-#include <agent/local/ModelRegistry.hpp>
+#include <agent/providers/local/ModelRegistry.hpp>
 
 namespace endo::agent::local
 {

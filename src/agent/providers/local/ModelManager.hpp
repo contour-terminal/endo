@@ -3,7 +3,7 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
 
-    #include <agent/local/ChatTemplate.hpp>
+    #include <agent/providers/local/ChatTemplate.hpp>
 
     #include <cstdint>
     #include <expected>

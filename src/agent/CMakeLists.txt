@@ -85,11 +85,11 @@ add_library(endo-agent STATIC
     tools/DiffRenderer.hpp tools/DiffRenderer.cpp
 
     # Local inference (pure logic — no llama.cpp dependency)
-    local/ChatTemplate.hpp local/ChatTemplate.cpp
-    local/GbnfGrammar.hpp local/GbnfGrammar.cpp
-    local/ModelRegistry.hpp local/ModelRegistry.cpp
-    local/ToolCallParser.hpp local/ToolCallParser.cpp
-    local/ModelsCommand.hpp local/ModelsCommand.cpp
+    providers/local/ChatTemplate.hpp providers/local/ChatTemplate.cpp
+    providers/local/GbnfGrammar.hpp providers/local/GbnfGrammar.cpp
+    providers/local/ModelRegistry.hpp providers/local/ModelRegistry.cpp
+    providers/local/ToolCallParser.hpp providers/local/ToolCallParser.cpp
+    providers/local/ModelsCommand.hpp providers/local/ModelsCommand.cpp
 
     # MCP
     mcp/McpError.hpp
@@ -104,8 +104,8 @@ add_library(endo-agent STATIC
 # llama.cpp-dependent sources (local LLM inference, non-Emscripten only)
 if(ENDO_HAS_LOCAL_LLM)
     target_sources(endo-agent PRIVATE
-        local/ModelManager.hpp local/ModelManager.cpp
-        providers/LlamaCppProvider.hpp providers/LlamaCppProvider.cpp
+        providers/local/ModelManager.hpp providers/local/ModelManager.cpp
+        providers/local/LlamaCppProvider.hpp providers/local/LlamaCppProvider.cpp
     )
     target_compile_definitions(endo-agent PUBLIC ENDO_HAS_LOCAL_LLM=1)
 endif()
@@ -205,10 +205,10 @@ add_executable(test-endo-agent
     ui/ToolStatusComponent_test.cpp
 
     # Local inference tests
-    local/ChatTemplate_test.cpp
-    local/GbnfGrammar_test.cpp
-    local/ModelRegistry_test.cpp
-    local/ToolCallParser_test.cpp
+    providers/local/ChatTemplate_test.cpp
+    providers/local/GbnfGrammar_test.cpp
+    providers/local/ModelRegistry_test.cpp
+    providers/local/ToolCallParser_test.cpp
 
     # MCP tests
     mcp/JsonRpc_test.cpp

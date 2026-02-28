@@ -4,7 +4,7 @@
 #include <string>
 #include <string_view>
 
-#include <agent/local/ToolCallParser.hpp>
+#include <agent/providers/local/ToolCallParser.hpp>
 #include <nlohmann/json.hpp>
 
 namespace endo::agent::local

@@ -3,8 +3,8 @@
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
 
-    #include <agent/local/ChatTemplate.hpp>
-    #include <agent/local/ToolCallParser.hpp>
+    #include <agent/providers/local/ChatTemplate.hpp>
+    #include <agent/providers/local/ToolCallParser.hpp>
 
     #include <llama.h>
 

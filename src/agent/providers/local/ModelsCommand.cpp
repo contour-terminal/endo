@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "ModelsCommand.hpp"
 
-#include <agent/local/ModelRegistry.hpp>
+#include <agent/providers/local/ModelRegistry.hpp>
 
 #include <algorithm>
 #include <cstdlib>

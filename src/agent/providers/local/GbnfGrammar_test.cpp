@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-#include <agent/local/GbnfGrammar.hpp>
+#include <agent/providers/local/GbnfGrammar.hpp>
 
 using namespace endo::agent;
 using namespace endo::agent::local;

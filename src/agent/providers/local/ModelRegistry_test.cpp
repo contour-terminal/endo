@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <fstream>
 
-#include <agent/local/ModelRegistry.hpp>
+#include <agent/providers/local/ModelRegistry.hpp>
 
 using namespace endo::agent::local;
 

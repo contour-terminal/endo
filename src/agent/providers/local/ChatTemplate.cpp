@@ -3,7 +3,7 @@
 #include <cctype>
 #include <format>
 
-#include <agent/local/ChatTemplate.hpp>
+#include <agent/providers/local/ChatTemplate.hpp>
 #include <nlohmann/json.hpp>
 
 namespace endo::agent::local

@@ -11,9 +11,9 @@
 #include <agent/providers/OpenAiProvider.hpp>
 
 #if defined(ENDO_HAS_LOCAL_LLM) && ENDO_HAS_LOCAL_LLM
-    #include <agent/local/ChatTemplate.hpp>
-    #include <agent/local/ModelManager.hpp>
-    #include <agent/providers/LlamaCppProvider.hpp>
+    #include <agent/providers/local/ChatTemplate.hpp>
+    #include <agent/providers/local/ModelManager.hpp>
+    #include <agent/providers/local/LlamaCppProvider.hpp>
 #endif
 
 namespace endo::agent
