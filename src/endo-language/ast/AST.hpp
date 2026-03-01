@@ -900,15 +900,15 @@ enum class ResourceMode : uint8_t
 
 struct LetBindingStmt final: public Statement
 {
-    bool isExported;                        ///< True for `let export`
-    bool isMutable;                         ///< True for `let mut`
-    bool isRecursive;                       ///< True for `let rec`
+    bool isExported;                                ///< True for `let export`
+    bool isMutable;                                 ///< True for `let mut`
+    bool isRecursive;                               ///< True for `let rec`
     ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
-    std::string name;                       ///< Binding/function name
-    std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
-    std::optional<TypePtr> returnType;      ///< Return type (functions) or binding type (simple bindings)
-    std::unique_ptr<Expr> value;            ///< Value expression or function body
-    std::vector<AndBinding> andBindings;    ///< Additional mutually recursive bindings (`and` keyword)
+    std::string name;                               ///< Binding/function name
+    std::vector<TypedParameter> parameters;         ///< Function parameters with optional type annotations
+    std::optional<TypePtr> returnType;   ///< Return type (functions) or binding type (simple bindings)
+    std::unique_ptr<Expr> value;         ///< Value expression or function body
+    std::vector<AndBinding> andBindings; ///< Additional mutually recursive bindings (`and` keyword)
     std::unique_ptr<pattern::Pattern> destructurePattern; ///< Optional pattern for `let (x, y) = expr`
     std::unique_ptr<PropertyAccessor> getter;             ///< `with get () = expr`
     std::unique_ptr<PropertyAccessor> setter;             ///< `and set (value) = expr`
@@ -978,13 +978,13 @@ struct ExprStmt final: public Statement
 /// the body expression following `in`.
 struct LetInExpr final: public Expr
 {
-    bool isRecursive;                       ///< True for `let rec`
+    bool isRecursive;                               ///< True for `let rec`
     ResourceMode resourceMode = ResourceMode::None; ///< Resource management mode
-    std::string name;                       ///< Binding/function name
-    std::vector<TypedParameter> parameters; ///< Function parameters with optional type annotations
-    std::optional<TypePtr> returnType;      ///< Optional return type annotation
-    std::unique_ptr<Expr> value;            ///< Value expression or function body
-    std::unique_ptr<Expr> body;             ///< Body expression evaluated with the binding in scope
+    std::string name;                               ///< Binding/function name
+    std::vector<TypedParameter> parameters;         ///< Function parameters with optional type annotations
+    std::optional<TypePtr> returnType;              ///< Optional return type annotation
+    std::unique_ptr<Expr> value;                    ///< Value expression or function body
+    std::unique_ptr<Expr> body;                     ///< Body expression evaluated with the binding in scope
     std::unique_ptr<pattern::Pattern>
         destructurePattern; ///< Optional pattern for `let (x, y) = expr in body`
 
@@ -1265,7 +1265,7 @@ struct BoolLiteralExpr final: public Expr
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
 
-/// Size literal expression: `42_B`, `1_KB`, `5_MB`, `2_GB`, `1_TB`
+/// Size literal expression: `42B`, `1KB`, `5MB`, `2GB`, `1TB`
 ///
 /// Stores the size in bytes. The suffix determines the multiplier applied at parse time.
 struct SizeLiteralExpr final: public Expr
@@ -1273,6 +1273,18 @@ struct SizeLiteralExpr final: public Expr
     int64_t bytes;
 
     explicit SizeLiteralExpr(int64_t b): bytes(b) {}
+
+    void accept(Visitor& visitor) const override { visitor.visit(*this); }
+};
+
+/// TimeSpan literal expression: `100ms`, `5s`, `2min`, `1h`
+///
+/// Stores the duration in milliseconds. The suffix determines the multiplier applied at parse time.
+struct TimeSpanLiteralExpr final: public Expr
+{
+    int64_t milliseconds;
+
+    explicit TimeSpanLiteralExpr(int64_t ms): milliseconds(ms) {}
 
     void accept(Visitor& visitor) const override { visitor.visit(*this); }
 };
@@ -1637,8 +1649,8 @@ struct LazyExpr final: public Expr
 /// A single yield in a seq expression.
 struct SeqYield
 {
-    bool isSplice;                 ///< yield (false) vs yield! (true)
-    std::unique_ptr<Expr> value;   ///< The yielded expression
+    bool isSplice;               ///< yield (false) vs yield! (true)
+    std::unique_ptr<Expr> value; ///< The yielded expression
 };
 
 /// Seq expression: `seq { yield e1; yield! e2 }`

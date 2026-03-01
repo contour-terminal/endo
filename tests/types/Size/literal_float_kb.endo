@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size literal with float kilobytes
+# expect: 3.5 KB
+
+print 3584B

@@ -3,4 +3,4 @@
 # description: Size literal in megabytes
 # expect: 5 MB
 
-print 5_MB
+print 5MB

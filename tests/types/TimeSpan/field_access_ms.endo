@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TimeSpan field access milliseconds
+# expect: 5000
+
+let t = 5s
+
+print t.milliseconds

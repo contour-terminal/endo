@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TimeSpan value in let binding
+# expect: 2m
+
+let t = 2min
+
+print t

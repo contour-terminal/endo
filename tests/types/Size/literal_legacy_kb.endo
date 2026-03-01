@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size literal with legacy underscore KB syntax
+# expect: 1 KB
+
+print 1KB

@@ -89,21 +89,29 @@ $"{{literal braces}}"   # produces: {literal braces}
 ### 2.7 Size Literals
 
 Size literals represent byte counts and produce a `Size` value.
-They are formed by an integer followed by a unit suffix:
+They are formed by an integer or float followed by a unit suffix:
 
 ```endo
-42_B        # 42 bytes
-1_KB        # 1 kilobyte  (1024 bytes)
-5_MB        # 5 megabytes (5 * 1024^2 bytes)
-2_GB        # 2 gigabytes (2 * 1024^3 bytes)
-1_TB        # 1 terabyte  (1 * 1024^4 bytes)
+42B         # 42 bytes
+1KB         # 1 kilobyte  (1024 bytes)
+5MB         # 5 megabytes (5 * 1024^2 bytes)
+2GB         # 2 gigabytes (2 * 1024^3 bytes)
+1TB         # 1 terabyte  (1 * 1024^4 bytes)
+```
+
+Float values are supported for all units except `B` (which requires whole numbers):
+
+```endo
+3.5KB       # 3584 bytes (3.5 * 1024)
+1.5MB       # 1572864 bytes (1.5 * 1024^2)
+1.0B        # 1 byte (whole float OK)
 ```
 
 Size values display in the most appropriate unit (e.g., `1536` bytes displays as `1.5 KB`).
 The raw byte count is accessible via the `.bytes` field:
 
 ```endo
-let s = 10_MB
+let s = 10MB
 print s           # 10 MB
 print s.bytes     # 10485760
 ```
@@ -112,8 +120,43 @@ Size values support comparison operators:
 
 <!-- endo-no-check -->
 ```endo
-1_KB < 1_MB       # true
-1_KB == Size.fromBytes 1024  # true
+1KB < 1MB       # true
+1KB == Size.fromBytes 1024  # true
+```
+
+### 2.8 TimeSpan Literals
+
+TimeSpan literals represent durations and produce a `TimeSpan` value.
+They are formed by an integer or float followed by a unit suffix:
+
+```endo
+100ms       # 100 milliseconds
+5s          # 5 seconds (5000 ms)
+2min        # 2 minutes (120000 ms)
+1h          # 1 hour (3600000 ms)
+```
+
+Float values are supported for all units except `ms` (which requires whole numbers):
+
+```endo
+1.5h        # 1h 30m (5400000 ms)
+2.5s        # 2s 500ms (2500 ms)
+1.0ms       # 1ms (whole float OK)
+```
+
+The raw millisecond count is accessible via the `.milliseconds` field:
+
+```endo
+let t = 5s
+print t               # 5s
+print t.milliseconds  # 5000
+```
+
+TimeSpan values support comparison operators:
+
+<!-- endo-no-check -->
+```endo
+1s < 1min   # true
 ```
 
 ---

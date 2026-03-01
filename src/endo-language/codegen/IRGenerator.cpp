@@ -5418,7 +5418,8 @@ void IRGenerator::visit(ast::LetBindingStmt const& node)
                         || dynamic_cast<ast::RecordUpdateExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::ListComprehensionExpr const*>(node.value.get()) != nullptr
                         || dynamic_cast<ast::UnionConstructorExpr const*>(node.value.get()) != nullptr
-                        || dynamic_cast<ast::SizeLiteralExpr const*>(node.value.get()) != nullptr;
+                        || dynamic_cast<ast::SizeLiteralExpr const*>(node.value.get()) != nullptr
+                        || dynamic_cast<ast::TimeSpanLiteralExpr const*>(node.value.get()) != nullptr;
 
     // Reject compound types for export — only scalars (string, number, float, bool) are allowed.
     // Users should compose with |> join ":" to convert lists before exporting.
@@ -5878,17 +5879,20 @@ void IRGenerator::visit(ast::BinaryExpr const& node)
     if (checkWrappedType(left, "left") || checkWrappedType(right, "right"))
         return;
 
-    // Size auto-unwrapping: extract .bytes for comparison/arithmetic
-    auto const unwrapSize = [&](CoreVM::Value*& operand) {
+    // Size/TimeSpan auto-unwrapping: extract .bytes/.milliseconds for comparison/arithmetic
+    auto const unwrapSizedType = [&](CoreVM::Value*& operand) {
         if (auto const typeId = getObjectTypeId(operand))
         {
             if (*typeId == CoreVM::BuiltinTypeId::Size)
                 operand =
                     _builder.createObjGetSlot(operand, _builder.get(CoreVM::CoreNumber(0)), "size.bytes");
+            else if (*typeId == CoreVM::BuiltinTypeId::TimeSpan)
+                operand = _builder.createObjGetSlot(
+                    operand, _builder.get(CoreVM::CoreNumber(0)), "timespan.milliseconds");
         }
     };
-    unwrapSize(left);
-    unwrapSize(right);
+    unwrapSizedType(left);
+    unwrapSizedType(right);
 
     // String concatenation: if + operator and either operand is a string, concat
     if (node.op == ast::BinaryOp::Add
@@ -8284,6 +8288,12 @@ void IRGenerator::visit(ast::SizeLiteralExpr const& node)
 {
     if (tryGenerateNativeCall("size_from_bytes", { _builder.get(CoreVM::CoreNumber(node.bytes)) }))
         annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::Size);
+}
+
+void IRGenerator::visit(ast::TimeSpanLiteralExpr const& node)
+{
+    if (tryGenerateNativeCall("timespan_from_ms", { _builder.get(CoreVM::CoreNumber(node.milliseconds)) }))
+        annotateObjectTypeId(_result, CoreVM::BuiltinTypeId::TimeSpan);
 }
 
 void IRGenerator::visit(ast::ParenExpr const& node)

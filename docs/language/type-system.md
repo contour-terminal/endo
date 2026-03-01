@@ -205,7 +205,7 @@ Represents byte quantities with human-readable display.
 
 **Constructors:** `Size.fromBytes`, `Size.fromKB`, `Size.fromMB`, `Size.fromGB`, `Size.fromTB`
 
-**Literals:** `42_B`, `1_KB`, `5_MB`, `2_GB`, `1_TB`
+**Literals:** `42B`, `1KB`, `5MB`, `2GB`, `1TB`, `3.5KB`
 
 #### `DateTime`
 
@@ -232,6 +232,8 @@ Represents a duration of time with millisecond precision.
 | `milliseconds` | `int` | Duration in milliseconds |
 
 **Constructors:** `TimeSpan.fromMilliseconds`, `TimeSpan.fromSeconds`, `TimeSpan.fromMinutes`, `TimeSpan.fromHours`, `TimeSpan.fromDays`
+
+**Literals:** `100ms`, `5s`, `2min`, `1h`, `1.5h`
 
 #### `FileInfo`
 

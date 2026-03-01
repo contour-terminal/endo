@@ -3,4 +3,4 @@
 # description: Access bytes field on Size literal
 # expect: 1048576
 
-print 1_MB.bytes
+print 1MB.bytes

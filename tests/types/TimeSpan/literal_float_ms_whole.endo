@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: TimeSpan literal with float ms whole number
+# expect: 1ms
+
+print 1ms
