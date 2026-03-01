@@ -720,6 +720,40 @@ void IndirectCallInstr::accept(InstructionVisitor& v)
 }
 
 // }}}
+// {{{ IndirectTailCallInstr
+IndirectTailCallInstr::IndirectTailCallInstr(Value* callable,
+                                             std::vector<Value*> args,
+                                             const std::string& name):
+    Instr(
+        LiteralType::Void,
+        [&]() {
+            std::vector<Value*> ops;
+            ops.reserve(1 + args.size());
+            ops.push_back(callable);
+            ops.insert(ops.end(), args.begin(), args.end());
+            return ops;
+        }(),
+        name)
+{
+}
+
+std::string IndirectTailCallInstr::to_string() const
+{
+    return formatOne("iutcall");
+}
+
+std::unique_ptr<Instr> IndirectTailCallInstr::clone()
+{
+    std::vector<Value*> args(operands().begin() + 1, operands().end());
+    return std::make_unique<IndirectTailCallInstr>(callable(), std::move(args), name());
+}
+
+void IndirectTailCallInstr::accept(InstructionVisitor& v)
+{
+    v.visit(*this);
+}
+
+// }}}
 // {{{ FunctionRefInstr
 std::string FunctionRefInstr::to_string() const
 {

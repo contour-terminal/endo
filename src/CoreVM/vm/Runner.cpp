@@ -261,6 +261,51 @@ TypedObject* Runner::allocObject(uint16_t typeId)
     return obj;
 }
 
+TypedObject* Runner::createPartialCallable(TypedObject* callable, std::vector<Value> const& partialArgs)
+{
+    // Original callable: slot 0 = funcId, slots 1..N = captures
+    auto const oldCaptureCount = static_cast<size_t>(callable->type->slotCount - 1);
+    auto const newSlotCount = static_cast<uint16_t>(1 + oldCaptureCount + partialArgs.size());
+
+    // Register a dynamic PartialCallable type if needed
+    auto& registry = const_cast<Program*>(_program)->mutableTypeRegistry();
+    auto typeName = std::format("PartialCallable_{}", newSlotCount);
+    auto const* existingType = registry.getByName(typeName);
+    uint16_t typeId = 0;
+    if (existingType)
+    {
+        typeId = existingType->id;
+    }
+    else
+    {
+        // Create fields for the partial callable (slot 0 = funcId, rest = captures/args)
+        std::vector<FieldInfo> fields;
+        fields.reserve(newSlotCount);
+        for (uint16_t i = 0; i < newSlotCount; ++i)
+            fields.push_back(
+                FieldInfo { .name = std::format("slot{}", i), .offset = static_cast<uint8_t>(i) });
+        auto* desc = registry.registerProductType(typeName, std::move(fields));
+        // Override slotCount since registerProductType sets it to fields.size()
+        desc->slotCount = newSlotCount;
+        typeId = desc->id;
+    }
+
+    auto* partial = allocObject(typeId);
+
+    // Copy funcId
+    partial->setSlot(0, callable->getSlot(0));
+
+    // Copy existing captures
+    for (size_t i = 0; i < oldCaptureCount; ++i)
+        partial->setSlot(static_cast<uint8_t>(1 + i), callable->getSlot(static_cast<uint8_t>(1 + i)));
+
+    // Append new partial args
+    for (size_t i = 0; i < partialArgs.size(); ++i)
+        partial->setSlot(static_cast<uint8_t>(1 + oldCaptureCount + i), partialArgs[i]);
+
+    return partial;
+}
+
 TypedObject* Runner::makeNilList(LiteralType elemType)
 {
     auto* obj = allocObject(BuiltinTypeId::List);
@@ -560,6 +605,7 @@ Runner::RunResult Runner::loopWithResult()
 
         // indirect user call
         label(IUCALL),
+        label(IUTCALL),
 
         // lazy evaluation
         label(LFORCE),
@@ -1646,6 +1692,23 @@ Runner::RunResult Runner::loopWithResult()
 
             // Determine capture count: slotCount - 1 (slot 0 = funcId, rest = captures)
             auto const captureCount = static_cast<size_t>(callable->type->slotCount - 1);
+            auto const totalSupplied = captureCount + argc;
+            auto const expectedArity = _program->function(funcId)->parameterCount();
+
+            // Under-application: produce a partial Callable instead of calling
+            if (expectedArity > 0 && totalSupplied < expectedArity)
+            {
+                pop(); // callable
+                TypedObject* partial = nullptr;
+                {
+                    std::vector<Value> partialArgs(argc);
+                    for (auto i = argc; i > 0; --i)
+                        partialArgs[i - 1] = pop();
+                    partial = createPartialCallable(callable, partialArgs);
+                } // partialArgs destructed before computed goto
+                push(reinterpret_cast<Value>(partial));
+                next;
+            }
 
             // Pop callable from stack
             pop();
@@ -1698,6 +1761,94 @@ Runner::RunResult Runner::loopWithResult()
             pc = codeBase;
         }
 #endif
+        jump;
+    }
+    instr(IUTCALL)
+    {
+        // Indirect tail call via Callable object. Reuses current frame.
+        // Stack before: [..., arg0, arg1, ..., argM, callable_ptr]
+        // A = explicit argc (M)
+        bool iutcall_underApplied = false;
+        {
+            auto const argc = static_cast<size_t>(A);
+
+            auto* callable = getObject(-1);
+            if (!callable)
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("null object dereference in IUTCALL"));
+            }
+
+            auto funcId = static_cast<uint16_t>(callable->getSlot(0));
+            auto const captureCount = static_cast<size_t>(callable->type->slotCount - 1);
+            auto const totalSupplied = captureCount + argc;
+            auto const expectedArity = _program->function(funcId)->parameterCount();
+
+            // Under-application: produce partial Callable and return via URET-like path
+            if (expectedArity > 0 && totalSupplied < expectedArity)
+            {
+                pop(); // callable
+                TypedObject* partial = nullptr;
+                {
+                    std::vector<Value> partialArgs(argc);
+                    for (auto i = argc; i > 0; --i)
+                        partialArgs[i - 1] = pop();
+                    partial = createPartialCallable(callable, partialArgs);
+                } // partialArgs destructed before computed goto
+                // Return via URET-like logic (pop frame, push partial as return value)
+                if (!_callStack.empty())
+                {
+                    auto const& frame = _callStack.back();
+                    _ip = frame.ip;
+                    _function = frame.function;
+                    _fp = frame.fp;
+                    auto argsBase = frame.argsBase;
+                    _callStack.pop_back();
+                    _stack.discard(_stack.size() - argsBase);
+                    push(reinterpret_cast<Value>(partial));
+                }
+                else
+                {
+                    push(reinterpret_cast<Value>(partial));
+                }
+                iutcall_underApplied = true;
+            }
+            else
+            {
+                // Full application — tail call
+                pop(); // callable
+                {
+                    std::vector<Value> savedArgs(argc);
+                    for (auto i = argc; i > 0; --i)
+                        savedArgs[i - 1] = pop();
+
+                    for (size_t i = 0; i < captureCount; ++i)
+                        _stack[_fp + i] = callable->getSlot(static_cast<uint8_t>(1 + i));
+                    for (size_t i = 0; i < argc; ++i)
+                        _stack[_fp + captureCount + i] = savedArgs[i];
+                } // savedArgs destructed before computed goto
+
+                _stack.discard(_stack.size() - _fp - totalSupplied);
+                _function = _program->function(funcId);
+            }
+        }
+        // All std::vector instances are now destructed; safe for computed goto.
+        if (iutcall_underApplied)
+        {
+            // Resume in restored caller frame
+            codeBase = _function->code().data();
+            pc = codeBase + _ip;
+        }
+        else
+        {
+            // Tail call: jump to start of target function
+#if defined(COREVM_DIRECT_THREADED_VM)
+            COREVM_ASSERT(false, "IUTCALL not yet supported with direct-threaded VM");
+#else
+            codeBase = _function->code().data();
+            pc = codeBase;
+#endif
+        }
         jump;
     }
     // }}}

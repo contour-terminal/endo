@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF indirect dispatch — filter with predicate parameter via IUCALL
+# expect: [2; 4]
+
+let is_even (x: int) = x % 2 == 0
+
+let myfilter (pred: int -> bool) (xs: list<int>) = filter pred xs
+
+print (myfilter is_even [1; 2; 3; 4; 5])

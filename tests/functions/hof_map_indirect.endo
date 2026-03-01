@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF indirect dispatch — map with function parameter via IUCALL
+# expect: [2; 4; 6]
+
+let double (x: int) = x * 2
+
+let mymap (f: int -> int) (xs: list<int>) = map f xs
+
+print (mymap double [1; 2; 3])

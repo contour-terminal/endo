@@ -84,6 +84,7 @@ class FunctionCallInstr;
 class FunctionRetInstr;
 class TailCallInstr;
 class IndirectCallInstr;
+class IndirectTailCallInstr;
 
 // Lazy evaluation
 class FunctionRefInstr;
@@ -266,6 +267,7 @@ class InstructionVisitor
 
     // indirect function calls
     virtual void visit(IndirectCallInstr& instr) = 0;
+    virtual void visit(IndirectTailCallInstr& instr) = 0;
 
     // lazy evaluation
     virtual void visit(FunctionRefInstr& instr) = 0;
@@ -597,6 +599,10 @@ class Runner
 
     RunResult loopWithResult();
 
+    /// Creates a partial Callable by merging existing captures with new partial args.
+    /// Used by IUCALL/IUTCALL when fewer arguments are supplied than the function expects.
+    TypedObject* createPartialCallable(TypedObject* callable, std::vector<Value> const& partialArgs);
+
     /// Create a RuntimeError at the current instruction's source location
     [[nodiscard]] RuntimeError makeError(std::string message) const;
 
@@ -805,6 +811,20 @@ class ConstantPool
         return functionId < _functionLocationTables.size() ? _functionLocationTables[functionId] : empty;
     }
 
+    /// Stores the parameter count for a compiled function.
+    void setFunctionParameterCount(size_t functionId, size_t count)
+    {
+        if (_functionParamCounts.size() <= functionId)
+            _functionParamCounts.resize(functionId + 1, 0);
+        _functionParamCounts[functionId] = count;
+    }
+
+    /// Retrieves the parameter count for a compiled function.
+    [[nodiscard]] size_t getFunctionParameterCount(size_t functionId) const
+    {
+        return functionId < _functionParamCounts.size() ? _functionParamCounts[functionId] : 0;
+    }
+
     [[nodiscard]] const std::vector<MatchDef>& getMatchDefs() const { return _matchDefs; }
 
     [[nodiscard]] const std::vector<std::string>& getNativeFunctionSignatures() const
@@ -839,6 +859,7 @@ class ConstantPool
     std::vector<std::pair<std::string, std::string>> _modules;
     std::vector<std::pair<std::string, Code>> _functions;
     std::vector<LocationTable> _functionLocationTables;
+    std::vector<size_t> _functionParamCounts;
     std::vector<MatchDef> _matchDefs;
     std::vector<std::string> _nativeFunctionSignatures;
 
@@ -857,6 +878,9 @@ class Program
     const ConstantPool& constants() const noexcept { return _cp; }
 
     ConstantPool& constants() noexcept { return _cp; }
+
+    /// Provides mutable access to the type registry for runtime type registration.
+    TypeRegistry& mutableTypeRegistry() noexcept { return _cp.typeRegistry(); }
 
     // accessors to linked data
     const Match* match(size_t index) const { return _matches[index].get(); }
@@ -930,6 +954,12 @@ class Function
     [[nodiscard]] std::vector<uint64_t>& directThreadedCode() noexcept { return _directThreadedCode; }
 #endif
 
+    /// Number of parameters expected by this function (for partial application detection).
+    [[nodiscard]] size_t parameterCount() const noexcept { return _parameterCount; }
+
+    /// Sets the number of parameters expected by this function.
+    void setParameterCount(size_t count) { _parameterCount = count; }
+
     void disassemble() const noexcept;
 
     /// Set the sparse location table (only stores locations when they change)
@@ -944,6 +974,7 @@ class Function
     Program* _program {};
     std::string _name;
     size_t _stackSize {};
+    size_t _parameterCount {};
     std::vector<Instruction> _code;
     std::unique_ptr<std::vector<std::pair<size_t, SourceLocation>>> _locationTable;
 #if defined(COREVM_DIRECT_THREADED_VM)
@@ -1840,6 +1871,28 @@ class IndirectCallInstr: public Instr
     void accept(InstructionVisitor& v) override;
 };
 
+/// Indirect tail call through a Callable object. Same semantics as IndirectCallInstr
+/// but reuses the current frame (no CallFrame push). Result type is Void since
+/// tail calls transfer control and don't produce a value in the current frame.
+class IndirectTailCallInstr: public Instr
+{
+  public:
+    /// @param callable The Callable object value to invoke.
+    /// @param args The explicit arguments to pass (captures are inside the callable).
+    /// @param name Optional IR name.
+    IndirectTailCallInstr(Value* callable, std::vector<Value*> args, const std::string& name);
+
+    /// The callable object operand.
+    [[nodiscard]] Value* callable() const { return operand(0); }
+
+    /// Number of explicit arguments (excluding the callable).
+    [[nodiscard]] size_t argc() const { return operands().size() - 1; }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
 class CastInstr: public Instr
 {
   public:
@@ -2303,6 +2356,7 @@ class IsSameInstruction: public InstructionVisitor
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
     void visit(IndirectCallInstr& instr) override;
+    void visit(IndirectTailCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;
@@ -2834,6 +2888,9 @@ class IRBuilder
     IndirectCallInstr* createIndirectCall(Value* callable,
                                           std::vector<Value*> args,
                                           const std::string& name = "");
+    IndirectTailCallInstr* createIndirectTailCall(Value* callable,
+                                                  std::vector<Value*> args,
+                                                  const std::string& name = "");
 
     // Lazy evaluation
     FunctionRefInstr* createFunctionRef(IRFunction* function, const std::string& name = "");
@@ -3485,6 +3542,7 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
     void visit(IndirectCallInstr& instr) override;
+    void visit(IndirectTailCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;

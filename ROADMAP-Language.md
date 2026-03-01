@@ -434,7 +434,7 @@ Consult this section to determine what to work on next.
 - [x] Nested list comprehensions: `[for x in xs -> for y in ys -> (x, y)]`
 - [x] Indirect function calls (IUCALL): Callable object type packages function ID + captures; enables compiled HOFs via `IUCALL` opcode
 
-### Phase 11 — Future Enhancements
-- [ ] Indirect tail calls (`IUTCALL`): tail-position optimization for indirect function calls
-- [ ] Runtime partial application: Callable with arity tracking for partial application through indirect calls
-- [ ] Builtin HOF indirect dispatch: optionally compile `map`/`filter`/`fold` via IUCALL instead of inline IR codegen
+### Phase 11 — IUTCALL, Runtime Partial Application, HOF Indirect Dispatch
+- [x] Indirect tail calls (`IUTCALL`): tail-position optimization for indirect function calls via `IndirectTailCallInstr` IR instruction and `IUTCALL` VM opcode
+- [x] Runtime partial application: Callable with arity tracking — under-application produces a new Callable with merged captures instead of crashing
+- [x] Builtin HOF indirect dispatch: `map`/`filter`/`fold`/`reduce`/`each` use `IUCALL` for Callable parameters via `applyHOFFunction` helper, with return type casting for correct boolean dispatch

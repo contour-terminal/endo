@@ -50,6 +50,7 @@ void Program::setup()
     for (size_t i = 0; i < functions.size(); ++i)
     {
         Function* fn = createFunction(functions[i].first, functions[i].second);
+        fn->setParameterCount(_cp.getFunctionParameterCount(i));
         auto const& locationTable = _cp.getFunctionLocationTable(i);
         if (!locationTable.empty())
             fn->setLocationTable(locationTable);

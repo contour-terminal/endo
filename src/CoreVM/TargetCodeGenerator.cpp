@@ -224,6 +224,9 @@ void TargetCodeGenerator::generate(IRFunction* function)
 
     _cp.getFunction(_functionId).second = std::move(_code);
 
+    // Store parameter count for runtime partial application detection
+    _cp.setFunctionParameterCount(_functionId, function->parameterCount());
+
     // Store the sparse location table for this function
     if (!_locationTable.empty())
         _cp.setFunctionLocationTable(_functionId, std::move(_locationTable));
@@ -497,6 +500,22 @@ void TargetCodeGenerator::visit(IndirectCallInstr& instr)
         emitInstr(Opcode::DISCARD, 1);
         pop(1);
     }
+}
+
+void TargetCodeGenerator::visit(IndirectTailCallInstr& instr)
+{
+    // Push explicit arguments first, then the callable object
+    auto const argc = static_cast<Operand>(instr.argc());
+    for (auto const i: std::views::iota(1uz, instr.operands().size()))
+        emitLoad(instr.operand(i));
+
+    // Push callable last (stack: [args..., callable])
+    emitLoad(instr.callable());
+
+    // Emit IUTCALL argc (explicit arg count, not counting the callable)
+    emitInstr(Opcode::IUTCALL, argc);
+
+    // IUTCALL transfers control — no stack tracking adjustment needed (like UTCALL)
 }
 
 void TargetCodeGenerator::visit(FunctionRefInstr& instr)
