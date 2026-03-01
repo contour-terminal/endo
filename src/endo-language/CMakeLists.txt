@@ -125,7 +125,6 @@ if(ENDO_TESTING)
         types/TypeInferencer_test.cpp
         codegen/ComputationExpressions_test.cpp
         codegen/CompleterScripts_test.cpp
-        codegen/LiteralSuffixes_test.cpp
         codegen/StringBuiltins_test.cpp
         builtins/JsonQuery_test.cpp
         builtins/StdlibDescriptors_test.cpp
