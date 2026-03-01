@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed HOF with indirect call — recursive user-defined function
+# expect: 15
+
+let double (x: int) = x * 2
+
+let rec apply_n (f: int -> int) (n: int) (x: int) =
+    if n == 0 then x
+    else apply_n f (n - 1) (f x)
+
+print (apply_n double 0 15)

@@ -112,6 +112,12 @@ std::string formatMarkdown(CoreVM::TypedObject const& obj, [[maybe_unused]] Core
     return content ? std::string(*content) : "";
 }
 
+std::string formatCallable(CoreVM::TypedObject const& obj, [[maybe_unused]] CoreVM::Runner* /*runner*/)
+{
+    auto const funcId = static_cast<int64_t>(obj.getSlot(0));
+    return std::format("<callable #{}>", funcId);
+}
+
 std::string formatDateTime(CoreVM::TypedObject const& obj, [[maybe_unused]] CoreVM::Runner* /*runner*/)
 {
     auto const year = static_cast<int>(obj.getSlot(0));
@@ -200,7 +206,7 @@ std::string formatSum(CoreVM::TypedObject const& obj, CoreVM::Runner* runner)
 void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
 {
     // Compile-time check: update this when adding new builtin type IDs
-    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 16,
+    static_assert(CoreVM::BuiltinTypeId::LastBuiltin == 17,
                   "New BuiltinTypeId added — update registerBuiltinFormatters() with a formatter");
 
     // Helper to set formatFn on a builtin type descriptor
@@ -226,6 +232,7 @@ void registerBuiltinFormatters(CoreVM::TypeRegistry& registry)
     setFormatter(CoreVM::BuiltinTypeId::Lazy, formatLazy);
     setFormatter(CoreVM::BuiltinTypeId::Seq, formatSeq);
     setFormatter(CoreVM::BuiltinTypeId::FileHandle, formatFileHandle);
+    setFormatter(CoreVM::BuiltinTypeId::Callable, formatCallable);
 
     // Runtime assertion: all builtins 1..LastBuiltin must have a formatter
     for (uint16_t id = 1; id <= CoreVM::BuiltinTypeId::LastBuiltin; ++id)

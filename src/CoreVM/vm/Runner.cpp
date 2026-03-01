@@ -558,6 +558,9 @@ Runner::RunResult Runner::loopWithResult()
         label(URET),
         label(UTCALL),
 
+        // indirect user call
+        label(IUCALL),
+
         // lazy evaluation
         label(LFORCE),
     };
@@ -1613,6 +1616,82 @@ Runner::RunResult Runner::loopWithResult()
         }
 #if defined(COREVM_DIRECT_THREADED_VM)
         COREVM_ASSERT(false, "UTCALL not yet supported with direct-threaded VM");
+#else
+        {
+            codeBase = _function->code().data();
+            pc = codeBase;
+        }
+#endif
+        jump;
+    }
+    // }}}
+    // {{{ indirect user call (IUCALL)
+    instr(IUCALL)
+    {
+        // Indirect call via Callable object.
+        // Stack before: [..., arg0, arg1, ..., argM, callable_ptr]
+        // A = explicit argc (M)
+        {
+            auto const argc = static_cast<size_t>(A);
+
+            auto* callable = getObject(-1);
+            if (!callable)
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("null object dereference in IUCALL"));
+            }
+
+            // Read function ID from slot 0
+            auto funcId = static_cast<uint16_t>(callable->getSlot(0));
+
+            // Determine capture count: slotCount - 1 (slot 0 = funcId, rest = captures)
+            auto const captureCount = static_cast<size_t>(callable->type->slotCount - 1);
+
+            // Pop callable from stack
+            pop();
+
+            // Save explicit args to a temp buffer
+            std::vector<Value> savedArgs(argc);
+            for (auto i = argc; i > 0; --i)
+                savedArgs[i - 1] = pop();
+
+            // Push captures from callable slots 1..N
+            for (size_t i = 0; i < captureCount; ++i)
+                push(callable->getSlot(static_cast<uint8_t>(1 + i)));
+
+            // Push explicit args back
+            for (auto const& arg: savedArgs)
+                push(arg);
+
+            auto const totalArgc = captureCount + argc;
+
+            if (_callStack.size() >= MaxCallDepth)
+            {
+                _ip = get_pc();
+                return std::unexpected(makeError("call stack overflow (exceeded maximum call depth)"));
+            }
+
+            // Save caller state
+            incr_pc();
+            _ip = get_pc();
+
+            auto argsBase = _stack.size() - totalArgc;
+
+            _callStack.push_back(CallFrame {
+                .ip = _ip,
+                .function = _function,
+                .fp = _fp,
+                .argsBase = argsBase,
+            });
+
+            // Set up callee frame
+            _fp = argsBase;
+
+            // Switch to the target function
+            _function = _program->function(funcId);
+        }
+#if defined(COREVM_DIRECT_THREADED_VM)
+        COREVM_ASSERT(false, "IUCALL not yet supported with direct-threaded VM");
 #else
         {
             codeBase = _function->code().data();

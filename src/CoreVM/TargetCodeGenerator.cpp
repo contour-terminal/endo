@@ -474,6 +474,31 @@ void TargetCodeGenerator::visit(TailCallInstr& instr)
     // UTCALL transfers control — no stack tracking adjustment needed
 }
 
+void TargetCodeGenerator::visit(IndirectCallInstr& instr)
+{
+    // Push explicit arguments first, then the callable object
+    auto const argc = static_cast<Operand>(instr.argc());
+    for (auto const i: std::views::iota(1uz, instr.operands().size()))
+        emitLoad(instr.operand(i));
+
+    // Push callable last (stack: [args..., callable])
+    emitLoad(instr.callable());
+
+    // Emit IUCALL argc (explicit arg count, not counting the callable)
+    emitInstr(Opcode::IUCALL, argc);
+
+    // IUCALL pops callable + argc args, pushes 1 return value
+    pop(argc + 1);
+    push(&instr);
+
+    // If the result is unused, discard it
+    if (!instr.isUsed())
+    {
+        emitInstr(Opcode::DISCARD, 1);
+        pop(1);
+    }
+}
+
 void TargetCodeGenerator::visit(FunctionRefInstr& instr)
 {
     // Resolve the IRFunction to its runtime function ID and push it as a number

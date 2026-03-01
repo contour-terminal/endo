@@ -560,7 +560,7 @@ std::optional<CoreVM::LiteralType> IRGenerator::mapTypeToLiteralType(TypePtr con
     if (type->isOption() || type->isResult() || type->isTuple())
         return CoreVM::LiteralType::Object;
     if (type->isFunction())
-        return CoreVM::LiteralType::String; // Function references stored as string names
+        return CoreVM::LiteralType::Object; // Function references stored as Callable objects
     if (type->isList())
         return CoreVM::LiteralType::Object;
     if (type->isRecord() || type->isUnion())
@@ -626,14 +626,15 @@ void IRGenerator::applyInferredTypes(std::string const& name, FSharpFunction& fu
     auto const& inferred = it->second;
 
     // Fill in missing parameter type annotations from inference results.
-    // Apply any concrete, fully-resolved, non-function type (primitives, list, option, result, tuple,
-    // record, union). This enables UCALL compilation for functions with complex-typed parameters,
-    // supporting non-tail recursion via the call stack. Unresolved type variables and function types
-    // are excluded — polymorphic and higher-order functions continue to use AST inlining.
+    // Apply any concrete, fully-resolved type (primitives, list, option, result, tuple,
+    // record, union, function). This enables UCALL compilation for functions with complex-typed
+    // parameters, supporting non-tail recursion via the call stack. Function types are compiled
+    // via Callable objects and IUCALL. Unresolved type variables are excluded — polymorphic
+    // functions continue to use AST inlining.
     for (size_t i = 0; i < func.parameterTypes.size() && i < inferred.paramTypes.size(); ++i)
     {
         if (!func.parameterTypes[i].has_value() && !inferred.paramTypes[i]->isTypeVar()
-            && !inferred.paramTypes[i]->isFunction() && collectTypeVars(inferred.paramTypes[i]).empty()
+            && collectTypeVars(inferred.paramTypes[i]).empty()
             && mapTypeToLiteralType(inferred.paramTypes[i]).has_value())
         {
             func.parameterTypes[i] = inferred.paramTypes[i];
@@ -1116,11 +1117,66 @@ void IRGenerator::annotateParameterFromType(CoreVM::Value* storage, TypePtr cons
             annotateObjectTypeId(storage, tupleTypeId);
         }
     }
+    else if (type->isFunction())
+    {
+        annotateObjectTypeId(storage, CoreVM::BuiltinTypeId::Callable);
+    }
 }
 
 void IRGenerator::propagateAllAnnotations(CoreVM::Value* source, CoreVM::Value* dest)
 {
     _annotations.propagateAll(source, dest);
+}
+
+CoreVM::Value* IRGenerator::createCallableObject(FSharpFunction const& func, std::string const& funcName)
+{
+    if (!func.compiledFunction)
+        return nullptr;
+
+    // Get the capture order from the function (already sorted alphabetically)
+    auto const& captureOrder = func.captureOrder;
+    auto const captureCount = static_cast<uint16_t>(captureOrder.size());
+
+    // Get the function reference (resolved to a runtime function ID by TargetCodeGenerator)
+    auto* funcRef = _builder.createFunctionRef(func.compiledFunction, funcName + ".funcRef");
+
+    // Register a custom product type for this callable's layout
+    auto callableTypeId = _builder.program()->allocateCustomTypeId();
+    auto const slotCount = static_cast<uint16_t>(captureCount + 1);
+
+    CoreVM::IRProgram::CustomProductType customType;
+    customType.name = std::format("Callable_{}", funcName);
+    customType.assignedId = callableTypeId;
+    customType.fields.push_back({ "funcId", 0, CoreVM::LiteralType::Number });
+    for (uint16_t i = 0; i < captureCount; ++i)
+        customType.fields.push_back(
+            { captureOrder[i], static_cast<uint8_t>(i + 1), CoreVM::LiteralType::Void });
+    customType.slotCount = slotCount;
+    _builder.program()->addCustomProductType(std::move(customType));
+
+    // Build the Callable object: OALLOC + OSETSLOT for funcId + captures
+    auto* typeIdVal = _builder.get(CoreVM::CoreNumber(callableTypeId));
+    auto* slot0 = _builder.get(CoreVM::CoreNumber(0));
+
+    CoreVM::Value* obj = _builder.createObjAlloc(typeIdVal, funcName + ".callable");
+    obj = _builder.createObjSetSlot(obj, slot0, funcRef, funcName + ".callable.funcId");
+
+    // Store captures into slots 1..N
+    for (uint16_t i = 0; i < captureCount; ++i)
+    {
+        auto const& capName = captureOrder[i];
+        CoreVM::Value* capStorage = nullptr;
+        if (_compilingFunction)
+            capStorage = lookupFSharpVariable(capName);
+        if (!capStorage)
+            capStorage = func.capturedBindings.at(capName);
+        auto* capValue = _builder.createLoad(capStorage, "cap." + capName + ".load");
+        auto* slotIdx = _builder.get(CoreVM::CoreNumber(static_cast<int64_t>(1 + i)));
+        obj = _builder.createObjSetSlot(obj, slotIdx, capValue, funcName + ".callable.cap." + capName);
+    }
+
+    annotateObjectTypeId(obj, callableTypeId);
+    return obj;
 }
 
 std::optional<uint16_t> IRGenerator::resolveObjectTypeId(CoreVM::Value* val) const
@@ -7393,6 +7449,21 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                 // Fallback: try native runtime function (e.g., add_mcp_server)
                 if (tryGenerateNativeCall(funcIdent->name, args))
                     return;
+
+                // Check if the identifier is a Callable parameter (function-typed parameter
+                // inside a compiled function body). If so, emit an indirect call.
+                if (auto* callableStorage = lookupFSharpVariable(funcIdent->name))
+                {
+                    if (getObjectTypeId(callableStorage).value_or(0) == CoreVM::BuiltinTypeId::Callable)
+                    {
+                        // Load the Callable object from the parameter alloca
+                        auto* callableVal =
+                            _builder.createLoad(callableStorage, funcIdent->name + ".callable.load");
+                        _result = _builder.createIndirectCall(callableVal, args, funcIdent->name + ".iucall");
+                        return;
+                    }
+                }
+
                 reportTypeError("Undefined function: {}", std::string_view(funcIdent->name));
                 return;
             }
@@ -7499,10 +7570,12 @@ void IRGenerator::generatePartialApplication(FSharpFunction const* func,
                                              std::string const& funcName,
                                              std::vector<CoreVM::Value*> const& args)
 {
-    // Partial application: validate supplied argument types
+    // Partial application: validate supplied argument types.
+    // Skip function-typed parameters — they carry ConstantString (function name) values.
     for (size_t i = 0; i < args.size(); ++i)
     {
-        if (i < func->parameterTypes.size() && func->parameterTypes[i])
+        if (i < func->parameterTypes.size() && func->parameterTypes[i]
+            && !(*func->parameterTypes[i])->isFunction())
         {
             if (!validateTypeAnnotation(*func->parameterTypes[i],
                                         args[i],
@@ -7703,10 +7776,12 @@ void IRGenerator::generateRecursiveCall(FSharpFunction const* func,
 
     // Case A: First (external) call to recursive function — set up loop
 
-    // Validate parameter type annotations at entry point
+    // Validate parameter type annotations at entry point.
+    // Skip function-typed parameters — they carry ConstantString (function name) values.
     for (size_t i = 0; i < func->parameters.size(); ++i)
     {
-        if (i < func->parameterTypes.size() && func->parameterTypes[i])
+        if (i < func->parameterTypes.size() && func->parameterTypes[i]
+            && !(*func->parameterTypes[i])->isFunction())
         {
             if (!validateTypeAnnotation(*func->parameterTypes[i],
                                         args[i],
@@ -7797,10 +7872,13 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     // If this function was compiled as a separate IRFunction, emit a function call instruction
     if (func->compiledFunction)
     {
-        // Validate parameter type annotations before the call
+        // Validate parameter type annotations before the call.
+        // Skip function-typed parameters — they carry ConstantString (function name) values
+        // that will be wrapped into Callable objects below.
         for (size_t i = 0; i < func->parameters.size(); ++i)
         {
-            if (i < func->parameterTypes.size() && func->parameterTypes[i])
+            if (i < func->parameterTypes.size() && func->parameterTypes[i]
+                && !(*func->parameterTypes[i])->isFunction())
             {
                 if (!validateTypeAnnotation(
                         *func->parameterTypes[i],
@@ -7830,7 +7908,47 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
             }
             fullArgs.push_back(_builder.createLoad(capStorage, "cap." + capName));
         }
-        fullArgs.insert(fullArgs.end(), args.begin(), args.end());
+
+        // For function-typed parameters, wrap the argument in a Callable object.
+        // This packages the function ID + captures so the callee can use IUCALL.
+        for (size_t i = 0; i < args.size(); ++i)
+        {
+            if (i < func->parameterTypes.size() && func->parameterTypes[i]
+                && (*func->parameterTypes[i])->isFunction())
+            {
+                // The argument should be a reference to a named function — wrap it in a Callable.
+                // Check if it's a ConstantString naming a known function.
+                if (auto const* constStr = dynamic_cast<CoreVM::ConstantString*>(args[i]))
+                {
+                    auto argFuncName = constStr->get();
+                    // Compile the argument function on-demand if not yet compiled
+                    if (auto it = _fsharpFunctions.find(argFuncName); it != _fsharpFunctions.end())
+                    {
+                        auto& argFunc = it->second;
+                        if (!argFunc.compiledFunction)
+                        {
+                            applyInferredTypes(argFuncName, argFunc);
+                            compileFunctionBody(argFuncName, argFunc);
+                        }
+                        if (argFunc.compiledFunction)
+                        {
+                            auto* callableObj = createCallableObject(argFunc, argFuncName);
+                            if (callableObj)
+                            {
+                                fullArgs.push_back(callableObj);
+                                continue;
+                            }
+                        }
+                    }
+                }
+                // If the arg is already a Callable (Object-typed), pass through directly
+                fullArgs.push_back(args[i]);
+            }
+            else
+            {
+                fullArgs.push_back(args[i]);
+            }
+        }
 
         // Emit tail call (UTCALL) when in tail position inside a function compilation,
         // otherwise emit regular function call (UCALL).
@@ -7898,8 +8016,10 @@ void IRGenerator::generateFSharpCall(FSharpFunction const* func,
     // Bind arguments to parameter names (with type annotation validation)
     for (size_t i = 0; i < func->parameters.size(); ++i)
     {
-        // Validate parameter type annotation if present
-        if (i < func->parameterTypes.size() && func->parameterTypes[i])
+        // Validate parameter type annotation if present.
+        // Skip function-typed parameters — they carry ConstantString (function name) values.
+        if (i < func->parameterTypes.size() && func->parameterTypes[i]
+            && !(*func->parameterTypes[i])->isFunction())
         {
             if (!validateTypeAnnotation(*func->parameterTypes[i],
                                         args[i],
@@ -7969,11 +8089,6 @@ void IRGenerator::compileFunctionBody(std::string const& name, FSharpFunction& f
         !func.parameters.empty() && func.parameterTypes.size() == func.parameters.size()
         && std::ranges::all_of(func.parameterTypes, [](auto const& t) { return t.has_value(); });
     if (!func.parameters.empty() && !allParamsTyped)
-        return;
-
-    // Functions with function-typed parameters must use AST inlining so that
-    // functionRefs tracking can resolve higher-order function calls.
-    if (std::ranges::any_of(func.parameterTypes, [](auto const& t) { return t && (*t)->isFunction(); }))
         return;
 
     // Functions whose body is a lambda cannot be compiled as separate IRFunctions because the inner

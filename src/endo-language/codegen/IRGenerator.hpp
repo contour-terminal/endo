@@ -816,6 +816,13 @@ class IRGenerator final: public ast::Visitor
     /// from a type-system TypePtr to an IR value. Used for compiled function parameters.
     void annotateParameterFromType(CoreVM::Value* storage, TypePtr const& type);
 
+    /// Creates a Callable object for indirect function calls (IUCALL).
+    /// Packages a function ID + captured variables into a product type object.
+    /// @param func The function to wrap in a Callable.
+    /// @param funcName The function name (for IR naming).
+    /// @return The Callable object value, or nullptr on failure.
+    CoreVM::Value* createCallableObject(FSharpFunction const& func, std::string const& funcName);
+
     /// Resolves the object type ID for a value, first checking annotations then tracing the IR chain.
     /// Needed because emitTuple2/emitTuple3 don't annotate their results.
     [[nodiscard]] std::optional<uint16_t> resolveObjectTypeId(CoreVM::Value* val) const;

@@ -62,7 +62,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Operator-driven inference: `x + y` infers `int`, `x +. y` infers `float`, `x ++ y` infers `str`
 - [x] Recursive function inference: `let rec fact n = ...` infers `n: int` from body
 - [x] Let-polymorphism: `let id x = x` can be used at multiple types
-- [~] Complex type inference: list, option, result, function types inferred but not yet applied to compilation (requires handler compilation improvements)
+- [x] Complex type inference: list, option, result, tuple, record, union, and function types inferred and applied to compilation (indirect calls via IUCALL for HOFs)
 
 ## Functions
 
@@ -211,7 +211,7 @@ This document tracks the implementation status of F# language features as define
 - [x] `sortBy`, `groupBy` — key-based list sorting and grouping (hybrid IR + native)
 - [x] `nth`, `last` — indexed list access returning `option<T>`
 - [x] `replicate` — create list of N copies of a value
-- [ ] `fetch` — HTTP GET request, returns `result<str, str>`
+- [x] `fetch` — HTTP GET request, returns `result<str, str>`
 - [x] `Json.query` — extract values from JSON strings using dotted path syntax (`.key`, `[]` for array iteration); returns `list<string>`
 - [ ] `Json.parse`, `Json.stringify` — JSON serialization/deserialization
 - [x] `split`, `join`, `trim`, `contains`, `startsWith`, `endsWith`, `toLower`, `toUpper`, `replace` — string operations
@@ -432,3 +432,9 @@ Consult this section to determine what to work on next.
 - [x] Non-tail recursion support: complex-typed parameters now compile via UCALL, enabling non-tail recursive calls
 - [x] `$(...)` command substitution in F# expression context: `let user = $(whoami)` bridging shell and F#
 - [x] Nested list comprehensions: `[for x in xs -> for y in ys -> (x, y)]`
+- [x] Indirect function calls (IUCALL): Callable object type packages function ID + captures; enables compiled HOFs via `IUCALL` opcode
+
+### Phase 11 — Future Enhancements
+- [ ] Indirect tail calls (`IUTCALL`): tail-position optimization for indirect function calls
+- [ ] Runtime partial application: Callable with arity tracking for partial application through indirect calls
+- [ ] Builtin HOF indirect dispatch: optionally compile `map`/`filter`/`fold` via IUCALL instead of inline IR codegen
