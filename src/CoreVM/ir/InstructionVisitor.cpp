@@ -137,6 +137,7 @@ IS_SAME_INSTR_IMPL(TailCallInstr)
 
 // Indirect function calls
 IS_SAME_INSTR_IMPL(IndirectCallInstr)
+IS_SAME_INSTR_IMPL(IndirectTailCallInstr)
 
 // Lazy evaluation
 IS_SAME_INSTR_IMPL(FunctionRefInstr)

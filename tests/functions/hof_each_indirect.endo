@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF indirect dispatch — each with function parameter via IUCALL
+# expect: 1
+# expect: 2
+# expect: 3
+# expect:
+
+let show (x: int) = println x
+
+let myeach (f: int -> unit) (xs: list<int>) = each f xs
+
+myeach show [1; 2; 3]

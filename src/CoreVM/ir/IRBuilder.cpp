@@ -1081,6 +1081,14 @@ IndirectCallInstr* IRBuilder::createIndirectCall(Value* callable,
         insert<IndirectCallInstr>(callable, std::move(args), makeName(name.empty() ? "iucall" : name)));
 }
 
+IndirectTailCallInstr* IRBuilder::createIndirectTailCall(Value* callable,
+                                                         std::vector<Value*> args,
+                                                         const std::string& name)
+{
+    return static_cast<IndirectTailCallInstr*>(
+        insert<IndirectTailCallInstr>(callable, std::move(args), makeName(name.empty() ? "iutcall" : name)));
+}
+
 // }}}
 // {{{ Lazy evaluation
 

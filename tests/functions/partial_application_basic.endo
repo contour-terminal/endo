@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Runtime partial application — supply fewer args to get a new Callable
+# expect: 8
+
+let add (x: int) (y: int) = x + y
+
+let add5 = add 5
+
+print (add5 3)

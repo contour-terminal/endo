@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: HOF indirect dispatch — fold with function parameter via IUCALL
+# expect: 10
+
+let add (x: int) (y: int) = x + y
+
+let mysum (f: int -> int -> int) (xs: list<int>) = fold 0 f xs
+
+print (mysum add [1; 2; 3; 4])

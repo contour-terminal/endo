@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Partial application used in a pipeline
+# expect: 25
+
+let multiply (x: int) (y: int) = x * y
+
+let times5 = multiply 5
+
+print (5 |> times5)

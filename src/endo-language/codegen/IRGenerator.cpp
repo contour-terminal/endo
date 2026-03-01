@@ -7459,7 +7459,20 @@ void IRGenerator::visit(ast::ApplicationExpr const& node)
                         // Load the Callable object from the parameter alloca
                         auto* callableVal =
                             _builder.createLoad(callableStorage, funcIdent->name + ".callable.load");
-                        _result = _builder.createIndirectCall(callableVal, args, funcIdent->name + ".iucall");
+
+                        if (_inTailPosition && _compilingFunction)
+                        {
+                            // Indirect tail call — reuse current frame
+                            _builder.createIndirectTailCall(callableVal, args, funcIdent->name + ".iutcall");
+                            auto* unreachable = _builder.createBlock("iutcall.unreachable");
+                            _builder.setInsertPoint(unreachable);
+                            _result = nullptr;
+                        }
+                        else
+                        {
+                            _result =
+                                _builder.createIndirectCall(callableVal, args, funcIdent->name + ".iucall");
+                        }
                         return;
                     }
                 }

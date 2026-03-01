@@ -452,6 +452,17 @@ class IRGenerator final: public ast::Visitor
                                 std::string const& funcName,
                                 std::vector<CoreVM::Value*> const& args);
 
+    /// Applies a HOF's function argument to the given args, dispatching via IUCALL for Callable
+    /// parameters or falling back to generateFSharpCall for statically known functions.
+    /// @param expectedReturnType If set, cast the indirect call result to this type (needed
+    ///        because IUCALL returns Void, but toBool/convertToString dispatch on IR type).
+    void applyHOFFunction(std::string const& funcParamName,
+                          FSharpFunction const* func,
+                          std::string const& funcName,
+                          std::vector<CoreVM::Value*> const& args,
+                          std::string const& label,
+                          std::optional<CoreVM::LiteralType> expectedReturnType = std::nullopt);
+
     /// Generates IR for `map f xs` — applies f to each element, returns new list.
     void generateMapIR(std::string const& funcName, CoreVM::Value* listValue);
 

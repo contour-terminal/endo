@@ -156,7 +156,8 @@ enum Opcode : uint16_t
     UTCALL, // UTCALL function_id, argc ; tail-call user function (reuse current frame)
 
     // indirect user call (callable object on stack)
-    IUCALL, // IUCALL argc             ; indirect call via Callable object on stack
+    IUCALL,  // IUCALL argc             ; indirect call via Callable object on stack
+    IUTCALL, // IUTCALL argc            ; indirect tail call via Callable object on stack
 
     // lazy evaluation
     LFORCE, // LFORCE                  ; force lazy value at top of stack
@@ -361,7 +362,8 @@ constexpr inline unsigned getPrice(Opcode opcode)
         case Opcode::CALL:
         case Opcode::UCALL:
         case Opcode::UTCALL:
-        case Opcode::IUCALL: return 8;
+        case Opcode::IUCALL:
+        case Opcode::IUTCALL: return 8;
         case Opcode::URET: return 1;
         default: return 1;
     }

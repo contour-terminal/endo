@@ -15,6 +15,54 @@
 namespace endo
 {
 
+void IRGenerator::applyHOFFunction(std::string const& funcParamName,
+                                   FSharpFunction const* func,
+                                   std::string const& funcName,
+                                   std::vector<CoreVM::Value*> const& args,
+                                   std::string const& label,
+                                   std::optional<CoreVM::LiteralType> expectedReturnType)
+{
+    // Check if the function parameter is a Callable object (function-typed parameter
+    // inside a compiled function body). If so, emit an indirect call via IUCALL.
+    if (auto* storage = lookupFSharpVariable(funcParamName))
+    {
+        if (getObjectTypeId(storage).value_or(0) == CoreVM::BuiltinTypeId::Callable)
+        {
+            auto* callableVal = _builder.createLoad(storage, label + ".callable.load");
+            _result = _builder.createIndirectCall(callableVal, args, label + ".iucall");
+
+            // IndirectCallInstr returns Void type. Cast the result to the correct IR type
+            // via store/load so downstream operations (toBool, convertToString) dispatch
+            // correctly. Prefer the compiled function's return type; fall back to the
+            // caller-specified expectedReturnType for Callable parameters where func
+            // metadata is unavailable.
+            auto returnType = (func && func->compiledReturnType != CoreVM::LiteralType::Void)
+                                  ? func->compiledReturnType
+                                  : expectedReturnType.value_or(CoreVM::LiteralType::Void);
+            if (returnType != CoreVM::LiteralType::Void)
+            {
+                auto* castAlloca = createAllocaInEntryBlock(returnType, label + ".ret.cast");
+                _builder.createStore(castAlloca, _result);
+                _result = _builder.createLoad(castAlloca, label + ".ret.load");
+            }
+
+            // Propagate return annotations from the compiled function metadata
+            if (func && func->compiledReturnInnerType)
+                annotateInnerType(_result, *func->compiledReturnInnerType);
+            if (func && func->compiledReturnObjectTypeId)
+                annotateObjectTypeId(_result, *func->compiledReturnObjectTypeId);
+            if (func && func->compiledReturnListElementTypeId)
+                annotateListElementTypeId(_result, *func->compiledReturnListElementTypeId);
+            if (func && func->compiledReturnListElementLiteralType)
+                annotateListElementLiteralType(_result, *func->compiledReturnListElementLiteralType);
+            return;
+        }
+    }
+
+    // Fall back to static dispatch via generateFSharpCall
+    generateFSharpCall(func, funcName, args);
+}
+
 void IRGenerator::generateBuiltinHOFCall(FSharpFunction const* func,
                                          std::string const& /*funcName*/,
                                          std::vector<CoreVM::Value*> const& args)
@@ -173,15 +221,20 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
-    // Resolve the function to call
+    // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
     if (auto ref = lookupFSharpFunctionRef(funcParamName))
         funcName = *ref;
     auto const* func = lookupFSharpFunction(funcName);
     if (!func)
     {
-        reportTypeError("map: function argument '{}' not found", std::string_view(funcParamName));
-        return;
+        // Allow Callable parameters (function-typed) to proceed with indirect dispatch
+        if (auto* storage = lookupFSharpVariable(funcParamName);
+            !storage || getObjectTypeId(storage).value_or(0) != CoreVM::BuiltinTypeId::Callable)
+        {
+            reportTypeError("map: function argument '{}' not found", std::string_view(funcParamName));
+            return;
+        }
     }
 
     // Allocas for phase 1 (forward iteration building reversed accumulator)
@@ -232,7 +285,7 @@ void IRGenerator::generateMapIR(std::string const& funcParamName, CoreVM::Value*
     // Propagate element type annotation through load (for field access in lambda body)
     if (auto elemTypeId = getObjectTypeId(elemAlloca))
         annotateObjectTypeId(elemLoad, *elemTypeId);
-    generateFSharpCall(func, funcName, { elemLoad });
+    applyHOFFunction(funcParamName, func, funcName, { elemLoad }, "map");
     auto* mapped = _result;
     if (!mapped)
     {
@@ -316,15 +369,19 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
-    // Resolve the predicate function
+    // Resolve the predicate function (may be null for Callable parameters)
     auto predName = predParamName;
     if (auto ref = lookupFSharpFunctionRef(predParamName))
         predName = *ref;
     auto const* pred = lookupFSharpFunction(predName);
     if (!pred)
     {
-        reportTypeError("filter: predicate argument '{}' not found", std::string_view(predParamName));
-        return;
+        if (auto* storage = lookupFSharpVariable(predParamName);
+            !storage || getObjectTypeId(storage).value_or(0) != CoreVM::BuiltinTypeId::Callable)
+        {
+            reportTypeError("filter: predicate argument '{}' not found", std::string_view(predParamName));
+            return;
+        }
     }
 
     // Allocas
@@ -387,7 +444,7 @@ void IRGenerator::generateFilterIR(std::string const& predParamName, CoreVM::Val
     // Propagate element type annotation through load (for field access in lambda body)
     if (auto elemTypeId = getObjectTypeId(elemAlloca))
         annotateObjectTypeId(elemLoad, *elemTypeId);
-    generateFSharpCall(pred, predName, { elemLoad });
+    applyHOFFunction(predParamName, pred, predName, { elemLoad }, "filter", CoreVM::LiteralType::Boolean);
     auto* predResult = _result;
     if (!predResult)
     {
@@ -469,15 +526,19 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
-    // Resolve the function to call
+    // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
     if (auto ref = lookupFSharpFunctionRef(funcParamName))
         funcName = *ref;
     auto const* func = lookupFSharpFunction(funcName);
     if (!func)
     {
-        reportTypeError("fold: function argument '{}' not found", std::string_view(funcParamName));
-        return;
+        if (auto* storage = lookupFSharpVariable(funcParamName);
+            !storage || getObjectTypeId(storage).value_or(0) != CoreVM::BuiltinTypeId::Callable)
+        {
+            reportTypeError("fold: function argument '{}' not found", std::string_view(funcParamName));
+            return;
+        }
     }
 
     // Allocas
@@ -524,7 +585,7 @@ void IRGenerator::generateFoldIR(CoreVM::Value* initValue,
     auto* elemLoad = _builder.createLoad(elemAlloca, "fold.elem.load");
     if (auto elemTypeId = getObjectTypeId(elemAlloca))
         annotateObjectTypeId(elemLoad, *elemTypeId);
-    generateFSharpCall(func, funcName, { accLoad, elemLoad });
+    applyHOFFunction(funcParamName, func, funcName, { accLoad, elemLoad }, "fold");
     auto* newAcc = _result;
     if (!newAcc)
     {
@@ -545,15 +606,19 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     auto* slot0 = _builder.get(CoreVM::CoreNumber(0)); // head
     auto* slot1 = _builder.get(CoreVM::CoreNumber(1)); // tail
 
-    // Resolve the function to call
+    // Resolve the function to call (may be null for Callable parameters)
     auto funcName = funcParamName;
     if (auto ref = lookupFSharpFunctionRef(funcParamName))
         funcName = *ref;
     auto const* func = lookupFSharpFunction(funcName);
     if (!func)
     {
-        reportTypeError("reduce: function argument '{}' not found", std::string_view(funcParamName));
-        return;
+        if (auto* storage = lookupFSharpVariable(funcParamName);
+            !storage || getObjectTypeId(storage).value_or(0) != CoreVM::BuiltinTypeId::Callable)
+        {
+            reportTypeError("reduce: function argument '{}' not found", std::string_view(funcParamName));
+            return;
+        }
     }
 
     // Allocas
@@ -626,7 +691,7 @@ void IRGenerator::generateReduceIR(std::string const& funcParamName, CoreVM::Val
     auto* elemLoad = _builder.createLoad(elemAlloca, "reduce.elem.load");
     if (auto elemTypeId = getObjectTypeId(elemAlloca))
         annotateObjectTypeId(elemLoad, *elemTypeId);
-    generateFSharpCall(func, funcName, { accLoad, elemLoad });
+    applyHOFFunction(funcParamName, func, funcName, { accLoad, elemLoad }, "reduce");
     auto* newAcc = _result;
     if (!newAcc)
     {
@@ -992,8 +1057,12 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
         func = lookupFSharpFunction(funcName);
         if (!func)
         {
-            reportTypeError("each: function argument '{}' not found", std::string_view(funcParamName));
-            return;
+            if (auto* storage = lookupFSharpVariable(funcParamName);
+                !storage || getObjectTypeId(storage).value_or(0) != CoreVM::BuiltinTypeId::Callable)
+            {
+                reportTypeError("each: function argument '{}' not found", std::string_view(funcParamName));
+                return;
+            }
         }
     }
 
@@ -1051,7 +1120,7 @@ void IRGenerator::generateEachIR(std::string const& funcParamName, CoreVM::Value
     }
     else
     {
-        generateFSharpCall(func, funcName, { elemLoad });
+        applyHOFFunction(funcParamName, func, funcName, { elemLoad }, "each");
         if (!_result)
         {
             reportTypeError("each: failed to apply function to element");
@@ -1972,8 +2041,7 @@ void IRGenerator::generateSeqTakeIR(CoreVM::Value* countValue, CoreVM::Value* se
 
     auto* revElemReload = _builder.createLoad(revElemTmp, "seq.take.rev.elem.reload");
     auto* revAccReload = _builder.createLoad(revAccTmp, "seq.take.rev.acc.reload");
-    auto* revCons =
-        emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "seq.take.rev.cons");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "seq.take.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);
@@ -2076,8 +2144,7 @@ void IRGenerator::generateToListIR(CoreVM::Value* seqValue)
 
     auto* revElemReload = _builder.createLoad(revElemTmp, "toList.rev.elem.reload");
     auto* revAccReload = _builder.createLoad(revAccTmp, "toList.rev.acc.reload");
-    auto* revCons =
-        emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "toList.rev.cons");
+    auto* revCons = emitListCons(revElemReload, revAccReload, CoreVM::LiteralType::Void, "toList.rev.cons");
 
     _builder.createStore(revAccStorage, revCons);
     _builder.createBr(revCondBlock);

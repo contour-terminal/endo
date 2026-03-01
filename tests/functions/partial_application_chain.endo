@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Chained partial application — apply one arg at a time
+# expect: 6
+
+let add3 (x: int) (y: int) (z: int) = x + y + z
+
+let f = add3 1
+
+let g = f 2
+
+print (g 3)
