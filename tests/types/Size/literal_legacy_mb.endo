@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Size literal with legacy underscore MB syntax
+# expect: 5 MB
+
+print 5MB
