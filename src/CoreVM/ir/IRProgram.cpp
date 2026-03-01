@@ -88,4 +88,14 @@ void IRProgram::removeFunction(IRFunction* function)
 // template ConstantRegExp* IRProgram::get<ConstantRegExp, util::RegExp>(
 //     std::vector<std::unique_ptr<ConstantRegExp>>&, util::RegExp&&);
 
+IRBuiltinFunction* IRProgram::getBuiltinFunction(const NativeCallback& cb)
+{
+    for (const auto& builtinFunction: _builtinFunctions)
+        if (builtinFunction->signature() == cb.signature())
+            return builtinFunction.get();
+
+    _builtinFunctions.emplace_back(std::make_unique<IRBuiltinFunction>(cb));
+    return _builtinFunctions.back().get();
+}
+
 } // namespace CoreVM

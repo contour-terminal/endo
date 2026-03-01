@@ -91,4 +91,16 @@ std::string Value::to_string() const
     return "Value " + _name + " of type " + tos(_type);
 }
 
+// IRBuiltinFunction out-of-line definitions (constructor/signature need NativeCallback which is in a
+// separate header from ir/Value.hpp)
+IRBuiltinFunction::IRBuiltinFunction(const NativeCallback& cb):
+    Constant(cb.signature().returnType(), cb.signature().name()), _native(cb)
+{
+}
+
+const Signature& IRBuiltinFunction::signature() const
+{
+    return _native.signature();
+}
+
 } // namespace CoreVM
