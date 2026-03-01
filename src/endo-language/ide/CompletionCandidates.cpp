@@ -20,7 +20,53 @@ namespace
     {
         if (prefix.empty())
             return true;
-        return name.size() >= prefix.size() && name.substr(0, prefix.size()) == prefix;
+        return name.starts_with(prefix);
+    }
+
+    /// @brief Checks if text is a valid numeric prefix for a compound literal.
+    /// Accepts digits with optional decimal point and underscore separators.
+    [[nodiscard]] bool isNumericPrefix(std::string_view text)
+    {
+        if (text.empty())
+            return false;
+        bool hasDigit = false;
+        bool hasDot = false;
+        for (auto const ch: text)
+        {
+            if (ch >= '0' && ch <= '9')
+                hasDigit = true;
+            else if (ch == '.' && !hasDot)
+                hasDot = true;
+            else if (ch == '_')
+                continue;
+            else
+                return false;
+        }
+        return hasDigit;
+    }
+
+    /// @brief Resolves a compound type literal string to its type name.
+    /// Returns "Size" for size literals (e.g., "15.5MB", "100KB"),
+    /// "TimeSpan" for timespan literals (e.g., "500ms", "3.5s"), or empty string.
+    [[nodiscard]] std::string resolveCompoundLiteralType(std::string_view text)
+    {
+        // Size suffixes (check longest first to avoid "B" matching "KB")
+        for (auto const* const suffix: { "TB", "GB", "MB", "KB", "B" })
+        {
+            auto const len = std::string_view(suffix).size();
+            if (text.size() > len && text.ends_with(suffix)
+                && isNumericPrefix(text.substr(0, text.size() - len)))
+                return "Size";
+        }
+        // TimeSpan suffixes (check "min" before "ms" before "s")
+        for (auto const* const suffix: { "min", "ms", "h", "s" })
+        {
+            auto const len = std::string_view(suffix).size();
+            if (text.size() > len && text.ends_with(suffix)
+                && isNumericPrefix(text.substr(0, text.size() - len)))
+                return "TimeSpan";
+        }
+        return {};
     }
 
     /// @brief Formats a function signature description from symbol info.
@@ -215,6 +261,18 @@ std::vector<CompletionCandidate> dotAccessCandidates(
                             "_." + field.name, field.name, "field: " + field.typeName, CompletionKind::Field);
                 }
             }
+        }
+    }
+    else if (auto const compoundType = resolveCompoundLiteralType(objectPart); !compoundType.empty())
+    {
+        // Compound type literal (e.g., "15.5MB" → Size, "500ms" → TimeSpan)
+        if (auto const fieldsIt = recordFields.find(compoundType); fieldsIt != recordFields.end())
+        {
+            for (auto const& field: fieldsIt->second)
+                addCandidate(objectPart + "." + field.name,
+                             field.name,
+                             compoundType + "." + field.name + ": " + field.typeName,
+                             CompletionKind::Field);
         }
     }
     else if (objectPart.find('.') != std::string::npos)
