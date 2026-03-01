@@ -83,6 +83,7 @@ class CastInstr;
 class FunctionCallInstr;
 class FunctionRetInstr;
 class TailCallInstr;
+class IndirectCallInstr;
 
 // Lazy evaluation
 class FunctionRefInstr;
@@ -262,6 +263,9 @@ class InstructionVisitor
     virtual void visit(VCmpLEInstr& instr) = 0;
     virtual void visit(VCmpGTInstr& instr) = 0;
     virtual void visit(VCmpGEInstr& instr) = 0;
+
+    // indirect function calls
+    virtual void visit(IndirectCallInstr& instr) = 0;
 
     // lazy evaluation
     virtual void visit(FunctionRefInstr& instr) = 0;
@@ -638,10 +642,10 @@ class Runner
     /// Saved call frame for returning from UCALL via URET.
     struct CallFrame
     {
-        size_t ip;                //!< Saved instruction pointer (resume position in caller)
-        const Function* function; //!< Caller's function
-        size_t fp;                //!< Caller's frame pointer
-        size_t argsBase;          //!< Stack position where callee's args start (for cleanup on return)
+        size_t ip;                      //!< Saved instruction pointer (resume position in caller)
+        const Function* function;       //!< Caller's function
+        size_t fp;                      //!< Caller's frame pointer
+        size_t argsBase;                //!< Stack position where callee's args start (for cleanup on return)
         TypedObject* lazyObj = nullptr; //!< Non-null when forcing a lazy value (for caching result in URET)
     };
 
@@ -1805,13 +1809,31 @@ class LazyForceInstr: public Instr
   public:
     /// @param lazyObj The lazy object value to force.
     /// @param name Optional IR name for the result.
-    LazyForceInstr(Value* lazyObj, const std::string& name):
-        Instr(LiteralType::Void, { lazyObj }, name)
-    {
-    }
+    LazyForceInstr(Value* lazyObj, const std::string& name): Instr(LiteralType::Void, { lazyObj }, name) {}
 
     /// The lazy object operand.
     [[nodiscard]] Value* lazyObj() const { return operand(0); }
+
+    [[nodiscard]] std::string to_string() const override;
+    [[nodiscard]] std::unique_ptr<Instr> clone() override;
+    void accept(InstructionVisitor& v) override;
+};
+
+/// Indirect call through a Callable object. The callable is resolved at runtime
+/// to a function ID + captured variables. Operand 0 = callable, operands 1..N = explicit args.
+class IndirectCallInstr: public Instr
+{
+  public:
+    /// @param callable The Callable object value to invoke.
+    /// @param args The explicit arguments to pass (captures are inside the callable).
+    /// @param name Optional IR name for the result.
+    IndirectCallInstr(Value* callable, std::vector<Value*> args, const std::string& name);
+
+    /// The callable object operand.
+    [[nodiscard]] Value* callable() const { return operand(0); }
+
+    /// Number of explicit arguments (excluding the callable).
+    [[nodiscard]] size_t argc() const { return operands().size() - 1; }
 
     [[nodiscard]] std::string to_string() const override;
     [[nodiscard]] std::unique_ptr<Instr> clone() override;
@@ -2280,6 +2302,7 @@ class IsSameInstruction: public InstructionVisitor
     void visit(FunctionCallInstr& instr) override;
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
+    void visit(IndirectCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;
@@ -2806,6 +2829,11 @@ class IRBuilder
     VCmpLEInstr* createVCmpLE(Value* lhs, Value* rhs, const std::string& name = "");
     VCmpGTInstr* createVCmpGT(Value* lhs, Value* rhs, const std::string& name = "");
     VCmpGEInstr* createVCmpGE(Value* lhs, Value* rhs, const std::string& name = "");
+
+    // Indirect function calls (via Callable objects)
+    IndirectCallInstr* createIndirectCall(Value* callable,
+                                          std::vector<Value*> args,
+                                          const std::string& name = "");
 
     // Lazy evaluation
     FunctionRefInstr* createFunctionRef(IRFunction* function, const std::string& name = "");
@@ -3456,6 +3484,7 @@ class TargetCodeGenerator: public InstructionVisitor
     void visit(FunctionCallInstr& instr) override;
     void visit(FunctionRetInstr& instr) override;
     void visit(TailCallInstr& instr) override;
+    void visit(IndirectCallInstr& instr) override;
 
     // terminator
     void visit(CondBrInstr& instr) override;

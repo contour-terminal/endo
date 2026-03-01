@@ -190,6 +190,9 @@ static InstructionInfo instructionInfos[] = {
     IIDEF(URET, V, 0, Void),    // stack change handled dynamically (returns to caller frame)
     IIDEF(UTCALL, II, 0, Void), // stack change handled dynamically (tail call, reuses frame)
 
+    // indirect user call (via Callable object)
+    IIDEF(IUCALL, I, 0, Void), // stack change handled dynamically (pops callable + argc args, pushes 1)
+
     // lazy evaluation
     IIDEF(LFORCE, V, 0, Void), // consumes lazy obj, pushes result (net 0)
 };
@@ -215,6 +218,9 @@ int getStackChange(Instruction instr)
         case Opcode::UTCALL:
             // Tail call: handled dynamically (reuses frame). For static analysis treat as 0.
             return 0;
+        case Opcode::IUCALL:
+            // Pops callable + argc explicit args, pushes 1 return value: net = 1 - argc - 1
+            return -operandA(instr);
         default: return instructionInfos[opc].stackChange;
     }
 }

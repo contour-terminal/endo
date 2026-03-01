@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed HOF with indirect call (IUCALL) — named function, no captures
+# expect: 10
+
+let double (x: int) = x * 2
+
+let apply (f: int -> int) (x: int) = f x
+
+print (apply double 5)

@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# description: Typed HOF with indirect call — closure argument capturing a variable
+# expect: 15
+
+let factor = 3
+
+let multiply (x: int) = x * factor
+
+let apply (f: int -> int) (x: int) = f x
+
+print (apply multiply 5)

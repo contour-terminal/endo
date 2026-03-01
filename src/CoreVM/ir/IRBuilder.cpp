@@ -1071,6 +1071,17 @@ VCmpGEInstr* IRBuilder::createVCmpGE(Value* lhs, Value* rhs, const std::string& 
 }
 
 // }}}
+// {{{ Indirect function calls
+
+IndirectCallInstr* IRBuilder::createIndirectCall(Value* callable,
+                                                 std::vector<Value*> args,
+                                                 const std::string& name)
+{
+    return static_cast<IndirectCallInstr*>(
+        insert<IndirectCallInstr>(callable, std::move(args), makeName(name.empty() ? "iucall" : name)));
+}
+
+// }}}
 // {{{ Lazy evaluation
 
 FunctionRefInstr* IRBuilder::createFunctionRef(IRFunction* function, const std::string& name)

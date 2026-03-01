@@ -270,6 +270,19 @@ void TypeRegistry::registerBuiltins()
     };
     addType(std::move(fileHandleType));
 
+    // Callable: Product type for indirect function calls (funcId + captures)
+    // Base type with 1 slot (funcId only, zero captures). Per-site types with
+    // captures are registered dynamically via allocateCustomTypeId().
+    auto callableType = std::make_unique<TypeDescriptor>();
+    callableType->kind = TypeKind::Product;
+    callableType->id = BuiltinTypeId::Callable;
+    callableType->name = "Callable";
+    callableType->slotCount = 1; // slot 0 = function ID (zero-capture base)
+    callableType->fields = {
+        { "funcId", 0, LiteralType::Number },
+    };
+    addType(std::move(callableType));
+
     // Update _nextId to be after the builtin type IDs
     _nextId = std::max(_nextId, static_cast<uint16_t>(BuiltinTypeId::LastBuiltin + 1));
 }
