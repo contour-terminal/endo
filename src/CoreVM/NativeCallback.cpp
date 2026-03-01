@@ -64,4 +64,26 @@ void NativeCallback::invoke(Params& args) const
     _function(args);
 }
 
+// Out-of-line Params definitions that require Function/Program to be complete types.
+
+void Params::setResult(const Function* fn)
+{
+    _argv[0] = _caller->program()->indexOf(fn);
+}
+
+void Params::setResult(const char* str)
+{
+    _argv[0] = (Value) _caller->newString(str);
+}
+
+void Params::setResult(std::string str)
+{
+    _argv[0] = (Value) _caller->newString(std::move(str));
+}
+
+Function* Params::getFunction(size_t offset) const
+{
+    return _caller->program()->function(static_cast<size_t>(at(offset)));
+}
+
 } // namespace CoreVM
