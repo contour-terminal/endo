@@ -3,4 +3,4 @@
 # description: Size literal in gigabytes
 # expect: 2 GB
 
-print 2_GB
+print 2GB

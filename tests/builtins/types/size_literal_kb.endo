@@ -3,4 +3,4 @@
 # description: Size literal in kilobytes
 # expect: 1 KB
 
-print 1_KB
+print 1KB

@@ -277,7 +277,7 @@ This document tracks the implementation status of F# language features as define
 - [x] Octal: `0o755`
 - [x] Binary: `0b1010`
 - [x] Scientific notation: `1e10`
-- [ ] Numeric literal suffixes: `1kb`, `1mb`, `1gb`, `1tb` (byte sizes); `1ms`, `1s`, `1min`, `1h` (durations)
+- [x] Numeric literal suffixes: `1KB`, `1MB`, `1GB`, `1TB` (byte sizes); `1ms`, `1s`, `1min`, `1h` (durations) — including float support (`3.5KB`, `1.5h`)
 - [x] Comments: `#`, `//`, `(* ... *)`
 - [x] `true`/`false` as native boolean token literals (`Token::True`/`Token::False`), removing shell builtin variants
 - [x] Shell mode: digit-leading tokens with non-digit suffixes lexed as single `Identifier` (e.g., git SHAs `3a4b5c6`, filenames `3.txt`)
@@ -349,7 +349,7 @@ Consult this section to determine what to work on next.
 - [x] Bare range expressions: `1..10`, `1..2..10` as standalone expressions
 - [x] Optional else in if-expressions: `if cond then expr` returns unit when false
 - [x] Mutable assignment as expression (`MutAssignExpr`): `x <- 42` usable in expression context
-- [ ] Numeric literal suffixes: byte sizes (`kb`, `mb`, `gb`, `tb`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time
+- [x] Numeric literal suffixes: byte sizes (`B`, `KB`, `MB`, `GB`, `TB`) and durations (`ms`, `s`, `min`, `h`) resolved at compile time — including float support
 
 ### Phase 6.3a — Output Recognition Files
 - [x] YAML definition file format (`command.endo-output.yml`) with JSON and fields parser types

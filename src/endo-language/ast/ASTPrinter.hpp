@@ -75,6 +75,7 @@ class ASTPrinter: public Visitor
     void visit(FloatLiteralExpr const& node) override;
     void visit(BoolLiteralExpr const& node) override;
     void visit(SizeLiteralExpr const& node) override;
+    void visit(TimeSpanLiteralExpr const& node) override;
     void visit(BreakExpr const& node) override;
     void visit(ContinueExpr const& node) override;
     void visit(ParenExpr const& node) override;

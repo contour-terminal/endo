@@ -1784,15 +1784,30 @@ void SourceFormatter::visit(ast::SizeLiteralExpr const& node)
     constexpr int64_t GB = MB * 1024;
     constexpr int64_t TB = GB * 1024;
     if (node.bytes >= TB && node.bytes % TB == 0)
-        emit(std::to_string(node.bytes / TB) + "_TB");
+        emit(std::to_string(node.bytes / TB) + "TB");
     else if (node.bytes >= GB && node.bytes % GB == 0)
-        emit(std::to_string(node.bytes / GB) + "_GB");
+        emit(std::to_string(node.bytes / GB) + "GB");
     else if (node.bytes >= MB && node.bytes % MB == 0)
-        emit(std::to_string(node.bytes / MB) + "_MB");
+        emit(std::to_string(node.bytes / MB) + "MB");
     else if (node.bytes >= KB && node.bytes % KB == 0)
-        emit(std::to_string(node.bytes / KB) + "_KB");
+        emit(std::to_string(node.bytes / KB) + "KB");
     else
-        emit(std::to_string(node.bytes) + "_B");
+        emit(std::to_string(node.bytes) + "B");
+}
+
+void SourceFormatter::visit(ast::TimeSpanLiteralExpr const& node)
+{
+    constexpr int64_t H = 3600000;
+    constexpr int64_t MIN = 60000;
+    constexpr int64_t S = 1000;
+    if (node.milliseconds >= H && node.milliseconds % H == 0)
+        emit(std::to_string(node.milliseconds / H) + "h");
+    else if (node.milliseconds >= MIN && node.milliseconds % MIN == 0)
+        emit(std::to_string(node.milliseconds / MIN) + "min");
+    else if (node.milliseconds >= S && node.milliseconds % S == 0)
+        emit(std::to_string(node.milliseconds / S) + "s");
+    else
+        emit(std::to_string(node.milliseconds) + "ms");
 }
 
 void SourceFormatter::visit(ast::BreakExpr const& /*node*/)

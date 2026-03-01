@@ -3,4 +3,4 @@
 # description: Size equality comparison
 # expect: true
 
-print (1_KB == Size.fromBytes 1024)
+print (1KB == Size.fromBytes 1024)

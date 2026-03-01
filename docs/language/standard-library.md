@@ -962,23 +962,29 @@ The `Size` type represents byte quantities with human-readable display formattin
 Size values can be written directly using numeric suffixes:
 
 ```endo
-print 42_B    # => 42 B
+print 42B     # => 42 B
 ```
 
 ```endo
-print 1_KB    # => 1 KB
+print 1KB     # => 1 KB
 ```
 
 ```endo
-print 5_MB    # => 5 MB
+print 5MB     # => 5 MB
 ```
 
 ```endo
-print 2_GB    # => 2 GB
+print 2GB     # => 2 GB
 ```
 
 ```endo
-print 1_TB    # => 1 TB
+print 1TB     # => 1 TB
+```
+
+Float values are supported (except for `B`, which requires whole numbers):
+
+```endo
+print 3.5KB   # => 3.5 KB
 ```
 
 #### `Size.fromBytes`
@@ -1036,7 +1042,7 @@ print (Size.fromTB 1)   # => 1 TB
 Access the raw byte count via the `.bytes` field:
 
 ```endo
-print (1_KB).bytes   # => 1024
+print (1KB).bytes   # => 1024
 ```
 
 #### Size Comparison
@@ -1044,11 +1050,11 @@ print (1_KB).bytes   # => 1024
 Size values support comparison operators:
 
 ```endo
-print (1_KB < 1_MB)   # => true
+print (1KB < 1MB)   # => true
 ```
 
 ```endo
-print (1_KB == Size.fromBytes 1024)   # => true
+print (1KB == Size.fromBytes 1024)   # => true
 ```
 
 ---
@@ -1105,6 +1111,36 @@ print (formatDateTime 1700000000)   # 2023-11-14 22:13:20
 The `TimeSpan` type represents a duration of time with millisecond precision and human-readable display formatting.
 
 **Record fields:** `milliseconds: int`
+
+#### TimeSpan Literals
+
+TimeSpan values can be written directly using numeric suffixes:
+
+```endo
+print 100ms   # => 100ms
+```
+
+```endo
+print 5s      # => 5s
+```
+
+```endo
+print 2min    # => 2m
+```
+
+```endo
+print 1h      # => 1h
+```
+
+Float values are supported (except for `ms`, which requires whole numbers):
+
+```endo
+print 1.5h    # => 1h 30m
+```
+
+```endo
+print 2.5s    # => 2s 500ms
+```
 
 #### `TimeSpan.fromMilliseconds`
 
@@ -1171,8 +1207,8 @@ Pauses execution for the given TimeSpan duration.
 
 <!-- endo-no-check -->
 ```endo
-sleep (TimeSpan.fromMilliseconds 100)
-TimeSpan.fromSeconds 1 |> sleep
+sleep 100ms
+1s |> sleep
 ```
 
 #### `formatTimeSpan`

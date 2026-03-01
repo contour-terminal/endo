@@ -3,4 +3,4 @@
 # description: Cross-unit Size comparison
 # expect: true
 
-print (1_MB == Size.fromKB 1024)
+print (1MB == Size.fromKB 1024)

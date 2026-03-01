@@ -3,4 +3,4 @@
 # description: Size greater-than-or-equal comparison
 # expect: true
 
-print (1_TB >= 1_GB)
+print (1TB >= 1GB)

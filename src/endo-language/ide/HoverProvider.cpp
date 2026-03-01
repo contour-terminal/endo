@@ -328,7 +328,8 @@ namespace
               "**Fields:** `bytes`\n\n"
               "```endo\nSize.fromBytes 1024  // 1 KB\n"
               "Size.fromKB 5       // 5 KB\n"
-              "1_MB                 // size literal: 1 MB\n"
+              "1MB                  // size literal: 1 MB\n"
+              "3.5KB                // float literal: 3584 bytes\n"
               "s.bytes              // raw byte count\n```" },
             { "Size.fromBytes", "`Size.fromBytes` : `int -> Size`\n\nCreates a Size from a raw byte count." },
             { "Size.fromKB",
@@ -342,8 +343,12 @@ namespace
             { "TimeSpan",
               "`TimeSpan` \u2014 Record type for time durations\n\n"
               "**Fields:** `milliseconds: int`\n\n"
-              "```endo\nTimeSpan.fromSeconds 5   // 5s\n"
-              "TimeSpan.fromMinutes 2   // 2m\n"
+              "```endo\n100ms                    // 100 milliseconds\n"
+              "5s                       // 5 seconds\n"
+              "2min                     // 2 minutes\n"
+              "1h                       // 1 hour\n"
+              "1.5h                     // 1h 30m\n"
+              "TimeSpan.fromSeconds 5   // 5s\n"
               "t.milliseconds           // raw millisecond count\n```" },
             { "TimeSpan.fromMilliseconds",
               "`TimeSpan.fromMilliseconds` : `int -> TimeSpan`\n\nCreates a TimeSpan from "

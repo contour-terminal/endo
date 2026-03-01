@@ -3,4 +3,4 @@
 # description: Size inequality comparison
 # expect: true
 
-print (1_KB != 2_KB)
+print (1KB != 2KB)

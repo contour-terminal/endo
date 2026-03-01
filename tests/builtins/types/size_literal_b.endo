@@ -3,4 +3,4 @@
 # description: Size literal in bytes
 # expect: 42 B
 
-print 42_B
+print 42B

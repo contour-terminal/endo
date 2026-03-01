@@ -136,10 +136,18 @@ seq_yield       = "yield" [ "!" ] expression ;
 
 literal         = integer_literal
                 | float_literal
+                | size_literal
+                | timespan_literal
                 | string_literal
                 | "true" | "false"
                 | "()"
                 ;
+
+size_literal    = ( integer_literal | float_literal ) size_suffix ;
+size_suffix     = "B" | "KB" | "MB" | "GB" | "TB" ;
+
+timespan_literal = ( integer_literal | float_literal ) timespan_suffix ;
+timespan_suffix  = "ms" | "s" | "min" | "h" ;
 
 list_expression = "[" [ list_elements ] "]" ;
 list_elements   = expression { ";" expression } [ ";" ]

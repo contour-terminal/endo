@@ -3,4 +3,4 @@
 # description: Size literal in terabytes
 # expect: 1 TB
 
-print 1_TB
+print 1TB

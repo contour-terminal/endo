@@ -3,4 +3,4 @@
 # description: Size less-than comparison
 # expect: true
 
-print (1_KB < 1_MB)
+print (1KB < 1MB)

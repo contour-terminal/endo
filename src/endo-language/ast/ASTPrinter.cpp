@@ -808,15 +808,30 @@ void ASTPrinter::visit(SizeLiteralExpr const& node)
     constexpr int64_t GB = MB * 1024;
     constexpr int64_t TB = GB * 1024;
     if (node.bytes >= TB && node.bytes % TB == 0)
-        _result += std::to_string(node.bytes / TB) + "_TB";
+        _result += std::to_string(node.bytes / TB) + "TB";
     else if (node.bytes >= GB && node.bytes % GB == 0)
-        _result += std::to_string(node.bytes / GB) + "_GB";
+        _result += std::to_string(node.bytes / GB) + "GB";
     else if (node.bytes >= MB && node.bytes % MB == 0)
-        _result += std::to_string(node.bytes / MB) + "_MB";
+        _result += std::to_string(node.bytes / MB) + "MB";
     else if (node.bytes >= KB && node.bytes % KB == 0)
-        _result += std::to_string(node.bytes / KB) + "_KB";
+        _result += std::to_string(node.bytes / KB) + "KB";
     else
-        _result += std::to_string(node.bytes) + "_B";
+        _result += std::to_string(node.bytes) + "B";
+}
+
+void ASTPrinter::visit(TimeSpanLiteralExpr const& node)
+{
+    constexpr int64_t H = 3600000;
+    constexpr int64_t MIN = 60000;
+    constexpr int64_t S = 1000;
+    if (node.milliseconds >= H && node.milliseconds % H == 0)
+        _result += std::to_string(node.milliseconds / H) + "h";
+    else if (node.milliseconds >= MIN && node.milliseconds % MIN == 0)
+        _result += std::to_string(node.milliseconds / MIN) + "min";
+    else if (node.milliseconds >= S && node.milliseconds % S == 0)
+        _result += std::to_string(node.milliseconds / S) + "s";
+    else
+        _result += std::to_string(node.milliseconds) + "ms";
 }
 
 void ASTPrinter::visit(BreakExpr const& /*node*/)

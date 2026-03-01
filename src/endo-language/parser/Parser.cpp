@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -5785,6 +5786,77 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
                 auto originalText = std::string(lit);
                 auto const value = std::stod(lit);
                 _lexer.nextToken();
+
+                // Check for size/timespan suffix on float literal
+                if (_lexer.currentToken() == Token::Identifier)
+                {
+                    auto const& suffix = _lexer.currentLiteral();
+                    // Size suffixes
+                    if (suffix == "B" || suffix == "KB" || suffix == "MB" || suffix == "GB" || suffix == "TB")
+                    {
+                        int64_t multiplier = 0;
+                        bool isBaseUnit = false;
+                        if (suffix == "B")
+                        {
+                            multiplier = 1;
+                            isBaseUnit = true;
+                        }
+                        else if (suffix == "KB")
+                            multiplier = 1024;
+                        else if (suffix == "MB")
+                            multiplier = int64_t { 1024 } * 1024;
+                        else if (suffix == "GB")
+                            multiplier = int64_t { 1024 } * 1024 * 1024;
+                        else if (suffix == "TB")
+                            multiplier = int64_t { 1024 } * 1024 * 1024 * 1024;
+                        if (isBaseUnit && value != std::floor(value))
+                        {
+                            _report.syntaxErrorWithSuggestions(
+                                currentLocation(),
+                                { "Use a larger unit like KB or MB for fractional values" },
+                                std::format("{}B", originalText),
+                                "Fractional byte value is not allowed; B requires a whole number");
+                            return std::make_unique<ast::SizeLiteralExpr>(0);
+                        }
+                        _lexer.nextToken();
+                        auto sizeNode =
+                            std::make_unique<ast::SizeLiteralExpr>(static_cast<int64_t>(value * multiplier));
+                        sizeNode->location = loc;
+                        return sizeNode;
+                    }
+                    // TimeSpan suffixes
+                    if (suffix == "ms" || suffix == "s" || suffix == "min" || suffix == "h")
+                    {
+                        int64_t multiplier = 0;
+                        bool isBaseUnit = false;
+                        if (suffix == "ms")
+                        {
+                            multiplier = 1;
+                            isBaseUnit = true;
+                        }
+                        else if (suffix == "s")
+                            multiplier = 1000;
+                        else if (suffix == "min")
+                            multiplier = 60000;
+                        else if (suffix == "h")
+                            multiplier = 3600000;
+                        if (isBaseUnit && value != std::floor(value))
+                        {
+                            _report.syntaxErrorWithSuggestions(
+                                currentLocation(),
+                                { "Use a larger unit like s or min for fractional values" },
+                                std::format("{}ms", originalText),
+                                "Fractional millisecond value is not allowed; ms requires a whole number");
+                            return std::make_unique<ast::TimeSpanLiteralExpr>(0);
+                        }
+                        _lexer.nextToken();
+                        auto tsNode = std::make_unique<ast::TimeSpanLiteralExpr>(
+                            static_cast<int64_t>(value * multiplier));
+                        tsNode->location = loc;
+                        return tsNode;
+                    }
+                }
+
                 auto node = std::make_unique<ast::FloatLiteralExpr>(value, std::move(originalText));
                 node->location = loc;
                 return node;
@@ -5813,27 +5885,45 @@ std::unique_ptr<ast::Expr> Parser::parseFSharpPrimary()
             }
             _lexer.nextToken();
 
-            // Check for size literal suffix: 1_B, 1_KB, 1_MB, 1_GB, 1_TB
+            // Check for size literal suffix: B, KB, MB, GB, TB (also legacy _B, _KB, etc.)
             if (_lexer.currentToken() == Token::Identifier)
             {
                 auto const& suffix = _lexer.currentLiteral();
-                int64_t multiplier = 0;
-                if (suffix == "_B")
-                    multiplier = 1;
-                else if (suffix == "_KB")
-                    multiplier = 1024;
-                else if (suffix == "_MB")
-                    multiplier = int64_t { 1024 } * 1024;
-                else if (suffix == "_GB")
-                    multiplier = int64_t { 1024 } * 1024 * 1024;
-                else if (suffix == "_TB")
-                    multiplier = int64_t { 1024 } * 1024 * 1024 * 1024;
-                if (multiplier > 0)
+                int64_t sizeMultiplier = 0;
+                if (suffix == "B" || suffix == "_B")
+                    sizeMultiplier = 1;
+                else if (suffix == "KB" || suffix == "_KB")
+                    sizeMultiplier = 1024;
+                else if (suffix == "MB" || suffix == "_MB")
+                    sizeMultiplier = int64_t { 1024 } * 1024;
+                else if (suffix == "GB" || suffix == "_GB")
+                    sizeMultiplier = int64_t { 1024 } * 1024 * 1024;
+                else if (suffix == "TB" || suffix == "_TB")
+                    sizeMultiplier = int64_t { 1024 } * 1024 * 1024 * 1024;
+                if (sizeMultiplier > 0)
                 {
                     _lexer.nextToken();
-                    auto sizeNode = std::make_unique<ast::SizeLiteralExpr>(value * multiplier);
+                    auto sizeNode = std::make_unique<ast::SizeLiteralExpr>(value * sizeMultiplier);
                     sizeNode->location = loc;
                     return sizeNode;
+                }
+
+                // Check for timespan literal suffix: ms, s, min, h
+                int64_t tsMultiplier = 0;
+                if (suffix == "ms")
+                    tsMultiplier = 1;
+                else if (suffix == "s")
+                    tsMultiplier = 1000;
+                else if (suffix == "min")
+                    tsMultiplier = 60000;
+                else if (suffix == "h")
+                    tsMultiplier = 3600000;
+                if (tsMultiplier > 0)
+                {
+                    _lexer.nextToken();
+                    auto tsNode = std::make_unique<ast::TimeSpanLiteralExpr>(value * tsMultiplier);
+                    tsNode->location = loc;
+                    return tsNode;
                 }
             }
 
