@@ -252,6 +252,34 @@ TEST_CASE("Completer.collectRecordInfo.no_type_for_anonymous_record", "[completi
     CHECK(info.variableTypes.count("r") == 0);
 }
 
+TEST_CASE("Completer.collectRecordInfo.size_literal_maps_to_Size_type", "[completion][completer]")
+{
+    auto info = collectRecordInfo("let x = 15.5MB");
+    REQUIRE(info.variableTypes.count("x") == 1);
+    CHECK(info.variableTypes.at("x") == "Size");
+}
+
+TEST_CASE("Completer.collectRecordInfo.size_literal_int_maps_to_Size_type", "[completion][completer]")
+{
+    auto info = collectRecordInfo("let s = 100KB");
+    REQUIRE(info.variableTypes.count("s") == 1);
+    CHECK(info.variableTypes.at("s") == "Size");
+}
+
+TEST_CASE("Completer.collectRecordInfo.timespan_literal_maps_to_TimeSpan_type", "[completion][completer]")
+{
+    auto info = collectRecordInfo("let t = 500ms");
+    REQUIRE(info.variableTypes.count("t") == 1);
+    CHECK(info.variableTypes.at("t") == "TimeSpan");
+}
+
+TEST_CASE("Completer.collectRecordInfo.timespan_seconds_maps_to_TimeSpan_type", "[completion][completer]")
+{
+    auto info = collectRecordInfo("let d = 3.5s");
+    REQUIRE(info.variableTypes.count("d") == 1);
+    CHECK(info.variableTypes.at("d") == "TimeSpan");
+}
+
 // =============================================================================
 // Builtin argument completion integration tests
 // =============================================================================

@@ -250,6 +250,87 @@ TEST_CASE("CompletionCandidates.dotAccess.typed_variable_TimeSpan", "[completion
     CHECK(!hasCandidate(candidates, "x.map"));
 }
 
+// =============================================================================
+// Compound type literal dot-access tests (Size, TimeSpan)
+// =============================================================================
+
+TEST_CASE("CompletionCandidates.dotAccess.size_literal_float_shows_only_size_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["Size"] = { { "bytes", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" }, { "cpu", "float" }, { "command", "string" } };
+    auto candidates = dotAccessCandidates("15.5MB", "", fields, {}, {}, testModuleFunctions());
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "15.5MB.bytes"));
+    CHECK(!hasCandidate(candidates, "15.5MB.pid"));
+    CHECK(!hasCandidate(candidates, "15.5MB.map"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.size_literal_int_shows_only_size_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["Size"] = { { "bytes", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" } };
+    auto candidates = dotAccessCandidates("100KB", "", fields, {}, {}, testModuleFunctions());
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "100KB.bytes"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.size_literal_filter_by_prefix", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["Size"] = { { "bytes", "int" } };
+    auto candidates = dotAccessCandidates("15.5MB", "b", fields);
+    REQUIRE(candidates.size() == 1);
+    CHECK(candidates[0].text == "15.5MB.bytes");
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.size_literal_all_suffixes", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["Size"] = { { "bytes", "int" } };
+    for (auto const* const suffix: { "B", "KB", "MB", "GB", "TB" })
+    {
+        auto literal = std::string("100") + suffix;
+        auto candidates = dotAccessCandidates(literal, "", fields);
+        REQUIRE(candidates.size() == 1);
+        CHECK(hasCandidate(candidates, literal + ".bytes"));
+    }
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_shows_only_timespan_fields", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    fields["ProcessInfo"] = { { "pid", "int" } };
+    auto candidates = dotAccessCandidates("500ms", "", fields, {}, {}, testModuleFunctions());
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "500ms.milliseconds"));
+    CHECK(!hasCandidate(candidates, "500ms.pid"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_float_seconds", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    auto candidates = dotAccessCandidates("3.5s", "", fields);
+    REQUIRE(candidates.size() == 1);
+    CHECK(hasCandidate(candidates, "3.5s.milliseconds"));
+}
+
+TEST_CASE("CompletionCandidates.dotAccess.timespan_literal_all_suffixes", "[completion]")
+{
+    std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;
+    fields["TimeSpan"] = { { "milliseconds", "int" } };
+    for (auto const* const suffix: { "ms", "s", "min", "h" })
+    {
+        auto literal = std::string("100") + suffix;
+        auto candidates = dotAccessCandidates(literal, "", fields);
+        REQUIRE(candidates.size() == 1);
+        CHECK(hasCandidate(candidates, literal + ".milliseconds"));
+    }
+}
+
 TEST_CASE("CompletionCandidates.dotAccess.stdlib_function_not_qualifiable", "[completion]")
 {
     std::unordered_map<std::string, std::vector<RecordFieldInfo>> fields;

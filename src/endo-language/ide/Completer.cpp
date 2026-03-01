@@ -89,6 +89,14 @@ DocumentRecordInfo collectRecordInfo(std::string const& source)
                     if (!recordExpr->typeName.empty())
                         result.variableTypes[letStmt->name] = recordExpr->typeName;
                 }
+                else if (dynamic_cast<ast::SizeLiteralExpr const*>(letStmt->value.get()))
+                {
+                    result.variableTypes[letStmt->name] = "Size";
+                }
+                else if (dynamic_cast<ast::TimeSpanLiteralExpr const*>(letStmt->value.get()))
+                {
+                    result.variableTypes[letStmt->name] = "TimeSpan";
+                }
             }
         }
     };
