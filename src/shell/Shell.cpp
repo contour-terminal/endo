@@ -2417,6 +2417,7 @@ void Shell::runAgentMode(std::optional<std::string> initialMessage)
                           mutedStyle);
         }
         out.flush();
+        out.setInlineRoomReserved(0); // Prevent prompt from overwriting error text
         return;
     }
 

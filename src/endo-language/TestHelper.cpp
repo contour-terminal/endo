@@ -758,6 +758,47 @@ bool executesWithResult(std::string const& source, int64_t expectedExitCode, std
     return result.has_value() && result->exitCode == expectedExitCode && result->output == expectedOutput;
 }
 
+ExecutionResult executeInteractive(std::string const& source)
+{
+    auto& testRuntime = TestRuntime::instance();
+    testRuntime.clearErrors();
+    testRuntime.clearOutput();
+
+    // Parse with auto-display enabled (simulates interactive shell)
+    Parser parser(testRuntime.runtime, testRuntime.report, std::make_unique<StringSource>(source));
+    parser.setAutoDisplay(true);
+    auto ast = parser.parse();
+    if (!ast || testRuntime.hasErrors())
+        return std::unexpected(TestError::ParseFailed);
+
+    // Generate IR
+    auto ir = IRGenerator::generate(*ast, testRuntime.report, testRuntime.runtime);
+    if (!ir || testRuntime.hasErrors())
+        return std::unexpected(TestError::IRGenerationFailed);
+
+    // Generate target code
+    CoreVM::TargetCodeGenerator codegen;
+    auto targetProgram = codegen.generate(ir.get());
+    if (!targetProgram)
+        return std::unexpected(TestError::CodeGenerationFailed);
+
+    builtins::registerBuiltinFormatters(targetProgram->constants().typeRegistry());
+
+    if (!targetProgram->link(&testRuntime.runtime, &testRuntime.report))
+        return std::unexpected(TestError::LinkFailed);
+
+    auto const* fn = targetProgram->findFunction("@main");
+    if (!fn)
+        return std::unexpected(TestError::FunctionNotFound);
+
+    CoreVM::Runner::Globals globals;
+    CoreVM::Runner runner(fn, nullptr, &globals, CoreVM::RuntimeConfig::defaultConfig(), nullptr);
+    auto const exitNonZero = runner.run();
+    auto const exitCode = exitNonZero ? 1 : 0;
+
+    return TestExecutionSuccess { .exitCode = exitCode, .output = testRuntime.output() };
+}
+
 // =============================================================================
 // Multi-prompt (REPL session) test helpers
 // =============================================================================

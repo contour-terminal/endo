@@ -2400,3 +2400,87 @@ TEST_CASE("Parser.FSharp.multiline_pipeline_known_binding_multistep")
     auto* innerPipeline = dynamic_cast<endo::ast::PipelineExpr*>(outerPipeline->value.get());
     REQUIRE(innerPipeline != nullptr);
 }
+
+// =============================================================================
+// Builtin Property as Bare Expression Tests
+// =============================================================================
+
+TEST_CASE("Parser.Property.bare_property_parsed_as_expr", "[parser][property]")
+{
+    // A registered builtin property name at statement level should produce
+    // an ExprStmt(IdentifierExpr), not a ProgramCall (shell command).
+    auto ast = parse("shell_prompt_preset");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(firstStmt);
+    REQUIRE(exprStmt != nullptr);
+
+    auto* identExpr = dynamic_cast<endo::ast::IdentifierExpr*>(exprStmt->expr.get());
+    REQUIRE(identExpr != nullptr);
+    CHECK(identExpr->name == "shell_prompt_preset");
+}
+
+TEST_CASE("Parser.Property.bare_property_not_program_call", "[parser][property]")
+{
+    // Verify the property does NOT parse as a ProgramCall (shell command).
+    auto ast = parse("shell_ls_icons");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* progCall = dynamic_cast<endo::ast::ProgramCall*>(firstStmt);
+    CHECK(progCall == nullptr);
+
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(firstStmt);
+    CHECK(exprStmt != nullptr);
+}
+
+TEST_CASE("Parser.Property.assignment_via_left_arrow", "[parser][property]")
+{
+    // property <- value should produce a MutAssignStmt.
+    auto ast = parse(R"(shell_prompt_preset <- "lambda-clean")");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* mutAssign = dynamic_cast<endo::ast::MutAssignStmt*>(firstStmt);
+    REQUIRE(mutAssign != nullptr);
+    CHECK(mutAssign->name == "shell_prompt_preset");
+}
+
+TEST_CASE("Parser.Property.pipeline", "[parser][property]")
+{
+    // property |> function should produce an ExprStmt wrapping a PipelineExpr.
+    auto ast = parse("shell_prompt_preset |> print");
+    REQUIRE(ast != nullptr);
+
+    auto* firstStmt = getFirstStatement(ast.get());
+    REQUIRE(firstStmt != nullptr);
+
+    auto* exprStmt = dynamic_cast<endo::ast::ExprStmt*>(firstStmt);
+    REQUIRE(exprStmt != nullptr);
+
+    auto* pipeline = dynamic_cast<endo::ast::PipelineExpr*>(exprStmt->expr.get());
+    REQUIRE(pipeline != nullptr);
+}
+
+TEST_CASE("Parser.Property.interactive_display_number", "[parser][property]")
+{
+    // In interactive mode (auto-display), a bare numeric property should display its value.
+    // shell_prompt_duration_threshold is a Number property; the test runtime's no-op getter
+    // returns 0, which display_result renders as "0".
+    auto result = executeInteractive("shell_prompt_duration_threshold");
+    REQUIRE(result.has_value());
+    CHECK(result->output == "0\n");
+}
+
+TEST_CASE("Parser.Property.print_property_via_pipeline", "[parser][property]")
+{
+    // Verify property value can flow through a pipeline.
+    CHECK(executesSuccessfully("shell_prompt_duration_threshold |> print"));
+}

@@ -738,7 +738,8 @@ bool IRGenerator::isUnitProducingExprImpl(ast::Expr const* expr,
         if (visited.contains(name))
             return false;
         for (auto const* cb: _runtime.builtins())
-            if (cb->signature().name() == name && cb->signature().returnType() == CoreVM::LiteralType::Void)
+            if (cb->signature().name() == name && cb->signature().args().empty()
+                && cb->signature().returnType() == CoreVM::LiteralType::Void)
                 return true;
         if (auto const* func = lookupFSharpFunction(name))
         {

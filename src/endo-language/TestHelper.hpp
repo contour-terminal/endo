@@ -170,6 +170,10 @@ bool executesWithExitCode(std::string const& source, int64_t expectedExitCode);
 /// Returns true if execution succeeds with expected exit code AND output.
 bool executesWithResult(std::string const& source, int64_t expectedExitCode, std::string_view expectedOutput);
 
+/// Executes source code with auto-display enabled (simulating interactive REPL mode).
+/// Bare expressions at statement level will have their results displayed.
+ExecutionResult executeInteractive(std::string const& source);
+
 // =============================================================================
 // Multi-prompt (REPL session) test helpers
 // =============================================================================
